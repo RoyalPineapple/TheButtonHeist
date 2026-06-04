@@ -34,7 +34,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testContainerSubtreeSelectsMatchingContainer() throws {
         let interface = try select(InterfaceQuery(
-            subtree: .container(ContainerMatcher(stableId: "semantic_actions__actions"))
+            subtree: .container(ContainerMatcher(containerName: "semantic_actions__actions"))
         ))
         XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit", "Cancel"])
     }
@@ -65,7 +65,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testMissingSubtreeReportsTypedError() {
         XCTAssertThrowsError(try select(InterfaceQuery(
-            subtree: .container(ContainerMatcher(stableId: "missing"))
+            subtree: .container(ContainerMatcher(containerName: "missing"))
         ))) { error in
             XCTAssertEqual(error as? InterfaceSelectionError, .subtreeNotFound)
         }
@@ -83,24 +83,24 @@ final class InterfaceSelectorTests: XCTestCase {
         let submit = makeElement(label: "Submit", identifier: "submit_button", traits: [.button])
         let cancel = makeElement(label: "Cancel", identifier: "cancel_button", traits: [.button])
         let footer = makeElement(label: "Footer")
-        let primaryGroup = makeActionsContainer(stableId: "semantic_actions__actions")
+        let primaryGroup = makeActionsContainer(containerName: "semantic_actions__actions")
 
         var nodes: [TestInterfaceNode] = [
             .element(header),
-            .container(primaryGroup, stableId: "semantic_actions__actions", children: [.element(submit), .element(cancel)]),
+            .container(primaryGroup, containerName: "semantic_actions__actions", children: [.element(submit), .element(cancel)]),
             .element(footer),
         ]
 
         if includeDuplicateGroup {
             let archive = makeElement(label: "Archive", identifier: "archive_button", traits: [.button])
-            let secondaryGroup = makeActionsContainer(stableId: "semantic_actions__secondary_actions", y: 160)
-            nodes.insert(.container(secondaryGroup, stableId: "semantic_actions__secondary_actions", children: [.element(archive)]), at: 2)
+            let secondaryGroup = makeActionsContainer(containerName: "semantic_actions__secondary_actions", y: 160)
+            nodes.insert(.container(secondaryGroup, containerName: "semantic_actions__secondary_actions", children: [.element(archive)]), at: 2)
         }
 
         return makeInterface(nodes: nodes)
     }
 
-    private static func makeActionsContainer(stableId _: String, y: Double = 40) -> AccessibilityContainer {
+    private static func makeActionsContainer(containerName _: String, y: Double = 40) -> AccessibilityContainer {
         AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
             frame: AccessibilityRect(x: 0, y: y, width: 200, height: 100)
@@ -109,7 +109,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     private enum TestInterfaceNode {
         case element(HeistElement)
-        case container(AccessibilityContainer, stableId: HeistContainer, children: [TestInterfaceNode])
+        case container(AccessibilityContainer, containerName: ContainerName, children: [TestInterfaceNode])
     }
 
     private static func makeInterface(nodes: [TestInterfaceNode]) -> Interface {
@@ -127,8 +127,8 @@ final class InterfaceSelectorTests: XCTestCase {
                     actions: element.actions
                 ))
                 return .element(makeAccessibilityElement(element), traversalIndex: index)
-            case .container(let container, let stableId, let children):
-                containerAnnotations.append(InterfaceContainerAnnotation(path: path, stableId: stableId))
+            case .container(let container, let containerName, let children):
+                containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
                 return .container(
                     container,
                     children: children.enumerated().map { offset, child in

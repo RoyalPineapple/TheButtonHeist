@@ -34,10 +34,18 @@ extension FenceResponse {
             return lines.joined(separator: "\n")
         case .action(let command, let result, let expectation):
             return compactActionResult(command: command, result, expectation: expectation)
-        case .screenshot(let path, let payload, _):
-            return "screenshot: \(path) (\(Int(payload.width))x\(Int(payload.height)))"
-        case .screenshotData(let payload, _):
-            return "screenshot: \(Int(payload.width))x\(Int(payload.height))"
+        case .screenshot(let path, let payload, let options):
+            return Self.compactScreenshot(
+                summary: "screenshot: \(path) (\(Int(payload.width))x\(Int(payload.height)))",
+                payload: payload,
+                options: options
+            )
+        case .screenshotData(let payload, let options):
+            return Self.compactScreenshot(
+                summary: "screenshot: \(Int(payload.width))x\(Int(payload.height))",
+                payload: payload,
+                options: options
+            )
         case .heistExecution(let plan, let result, let accessibilityTrace):
             return compactHeistFormatted(
                 plan: plan,
@@ -78,6 +86,21 @@ extension FenceResponse {
             text += "\nhint: \(hint)"
         }
         return text
+    }
+
+    private static func compactScreenshot(
+        summary: String,
+        payload: ScreenPayload,
+        options: ScreenshotResponseOptions
+    ) -> String {
+        guard options.includeInterface else { return summary }
+        var lines = [summary]
+        if let interface = payload.interface {
+            lines.append(compactInterface(interface, detail: .full))
+        } else {
+            lines.append("interface: unavailable")
+        }
+        return lines.joined(separator: "\n")
     }
 
 }

@@ -12,11 +12,11 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Choosing Tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` to project from a container. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection and direct viewport/debug commands, including `scroll` and `scroll_to_edge` through the `container` argument. It is not a semantic target and is not recorded into heists. Viewport/debug commands are directly executable, but are not durable heist primitives. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
 **Acting**: `activate` is your primary semantic control tool. It performs the element's primary accessibility activation behavior; named actions such as `"increment"`, `"decrement"`, or custom accessibility actions go through the same semantic route. Use `type_text` for keyboard input.
 
-Use direct gesture tools such as `swipe`, `drag`, and `one_finger_tap` only when the gesture itself is the product intent. Use `scroll` when viewport movement is the subject of the command.
+Use direct gesture tools such as `swipe`, `drag`, and `one_finger_tap` only when the gesture itself is the product intent. Use `scroll` when viewport movement is the subject of the command; do not author it into heists.
 
 **Finding**: semantic actions resolve and reveal targets internally. Use `scroll_to_visible` when your intent is explicit viewport positioning or inspection. Use `wait` when you know a specific semantic predicate should become true.
 
@@ -125,7 +125,7 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 ## Recording Heists
 
-`start_heist` / `stop_heist` compose successful interactions into a replayable semantic .heist test. The recording is not a playback log: read commands and failed actions produce no steps, pre-action viewport movement is dropped when semantic intent can be derived, and explicit expectations are kept only after they pass.
+`start_heist` / `stop_heist` compose successful interactions into a replayable semantic .heist test. The recording is not a playback log: observation commands produce no steps except `wait`, failed actions produce no steps, viewport/debug commands produce no steps, and explicit expectations are kept only after they pass.
 
 **Prime the interface first.** Call `get_interface` before your first action. The recorder derives portable matchers from current element data.
 

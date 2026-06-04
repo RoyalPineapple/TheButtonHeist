@@ -27,7 +27,7 @@ extension Screen {
             _ element: AccessibilityElement,
             heistId: HeistId,
             contentSpaceOrigin: CGPoint? = nil,
-            scrollContainer: HeistContainer = "test_scroll"
+            scrollContainer: ContainerName = "test_scroll"
         ) {
             self.element = element
             self.heistId = heistId
@@ -73,7 +73,7 @@ extension Screen {
         return Screen(
             elements: screenElements,
             hierarchy: hierarchy,
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: heistIdByElement,
             elementRefs: elementRefs,
             firstResponderHeistId: firstResponderHeistId,

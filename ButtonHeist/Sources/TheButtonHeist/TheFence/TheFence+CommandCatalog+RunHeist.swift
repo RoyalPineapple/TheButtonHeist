@@ -1,9 +1,12 @@
-import TheScore
+enum HeistRuntimeCommand: String, CaseIterable, FenceCommandFamilyCase {
+    static let family: FenceCommandFamily = .heistRuntime
 
-extension TheFence.Command {
-    static var runHeistCommandDescriptor: FenceCommandDescriptor {
-        commandDescriptor(
-            .runHeist, requestDecoder: TheFence.decodeRunHeistCommandRequest,
+    case runHeist = "run_heist"
+
+    var descriptor: FenceCommandDescriptor {
+        TheFence.Command.commandDescriptor(
+            command, family: Self.family,
+            requestDecoder: TheFence.decodeRunHeistCommandRequest,
             parameters: [
                 param(.version, .integer, required: true),
                 param(

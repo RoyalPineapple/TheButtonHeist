@@ -10,6 +10,59 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(Set(descriptorCommands), Set(TheFence.Command.allCases))
     }
 
+    func testCommandFamiliesHaveNoDuplicateRawValuesAndCoverEveryCommand() {
+        let familyDescriptors = FenceCommandRegistry.families.flatMap(\.descriptors)
+        let familyCommands = familyDescriptors.map(\.command)
+
+        XCTAssertEqual(familyCommands.count, TheFence.Command.allCases.count)
+        XCTAssertEqual(Set(familyCommands), Set(TheFence.Command.allCases))
+        XCTAssertEqual(familyCommands.count, Set(familyCommands).count)
+        XCTAssertEqual(
+            familyDescriptors.map(\.family),
+            familyDescriptors.map { $0.command.family }
+        )
+    }
+
+    func testCommandFamilyMembershipAndDerivedCapabilities() {
+        XCTAssertEqual(TheFence.Command.ping.family, .session)
+        XCTAssertEqual(TheFence.Command.getInterface.family, .observation)
+        XCTAssertEqual(TheFence.Command.wait.family, .observation)
+        XCTAssertEqual(TheFence.Command.activate.family, .semanticAction)
+        XCTAssertEqual(TheFence.Command.oneFingerTap.family, .spatialAction)
+        XCTAssertEqual(TheFence.Command.scroll.family, .viewportDebug)
+        XCTAssertEqual(TheFence.Command.scrollToVisible.family, .viewportDebug)
+        XCTAssertEqual(TheFence.Command.scrollToEdge.family, .viewportDebug)
+        XCTAssertEqual(TheFence.Command.runHeist.family, .heistRuntime)
+        XCTAssertEqual(TheFence.Command.startHeist.family, .heistRecording)
+
+        let wait = TheFence.Command.wait.descriptor
+        XCTAssertTrue(wait.isObservation)
+        XCTAssertFalse(wait.isSemanticAction)
+        XCTAssertFalse(wait.isSpatialAction)
+        XCTAssertFalse(wait.isNormalRecordable)
+        XCTAssertTrue(wait.recordsHeistStep)
+        XCTAssertTrue(wait.isDurableHeistPrimitive)
+
+        let activate = TheFence.Command.activate.descriptor
+        XCTAssertTrue(activate.isSemanticAction)
+        XCTAssertTrue(activate.isNormalRecordable)
+        XCTAssertTrue(activate.recordsHeistStep)
+        XCTAssertTrue(activate.isDurableHeistPrimitive)
+
+        let tap = TheFence.Command.oneFingerTap.descriptor
+        XCTAssertTrue(tap.isSpatialAction)
+        XCTAssertTrue(tap.isNormalRecordable)
+        XCTAssertTrue(tap.isDurableHeistPrimitive)
+    }
+
+    func testGeneratedCommandReferenceDisplaysFamilyAndRecordability() {
+        let reference = FenceCommandReference.commandMarkdown()
+
+        XCTAssertTrue(reference.contains("| Command | Family | CLI | MCP | Recordable | Durable | Description |"), reference)
+        XCTAssertTrue(reference.contains("| `wait` | `observation` |"), reference)
+        XCTAssertTrue(reference.contains("| `scroll` | `viewportDebug` |"), reference)
+    }
+
     func testRunHeistDescriptorAdvertisesPublicJSONPlanStepTypes() {
         let descriptor = TheFence.Command.descriptor(for: .runHeist)
         let body = descriptor.parameters.first { $0.key == "body" }
@@ -67,9 +120,9 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertTrue(tap.localizedCaseInsensitiveContains("explicit mechanical/spatial tap"), tap)
         XCTAssertTrue(tap.localizedCaseInsensitiveContains("ordinary accessible controls should use the semantic command path"), tap)
 
-        XCTAssertTrue(scroll.localizedCaseInsensitiveContains("explicit viewport operation"), scroll)
+        XCTAssertTrue(scroll.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scroll)
         XCTAssertTrue(scrollToVisible.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToVisible)
-        XCTAssertTrue(scrollToEdge.localizedCaseInsensitiveContains("explicit viewport operation"), scrollToEdge)
+        XCTAssertTrue(scrollToEdge.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToEdge)
     }
 
     @ButtonHeistActor
@@ -88,7 +141,7 @@ final class WireCommandParityTests: XCTestCase {
     func testEveryHeistExecutableCommandLowersToTheSameClientMessageAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in TheFence.Command.heistExecutableCases {
+        for command in TheFence.Command.durableHeistPrimitiveCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
             let singleMessages = try fence.executableActionMessages(for: singleRequest)
@@ -109,7 +162,7 @@ final class WireCommandParityTests: XCTestCase {
     func testEveryPlaybackStepLowersToTheSameClientMessageAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in TheFence.Command.heistExecutableCases {
+        for command in TheFence.Command.durableHeistPrimitiveCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
             let singleMessages = try fence.executableActionMessages(for: singleRequest)
@@ -124,6 +177,28 @@ final class WireCommandParityTests: XCTestCase {
                 String(reflecting: singleMessages),
                 command.rawValue
             )
+        }
+    }
+
+    @ButtonHeistActor
+    func testViewportDebugCommandsAreDirectlyExecutableButNotDurableOrRecordable() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for command in [TheFence.Command.scroll, .scrollToVisible, .scrollToEdge] {
+            let descriptor = command.descriptor
+            XCTAssertEqual(descriptor.family, .viewportDebug, command.rawValue)
+            XCTAssertTrue(descriptor.isViewportDebug, command.rawValue)
+            XCTAssertFalse(descriptor.isNormalRecordable, command.rawValue)
+            XCTAssertFalse(descriptor.recordsHeistStep, command.rawValue)
+            XCTAssertFalse(descriptor.isDurableHeistPrimitive, command.rawValue)
+            XCTAssertEqual(descriptor.cliExposure, .directCommand, command.rawValue)
+            XCTAssertEqual(descriptor.mcpExposure, .directTool, command.rawValue)
+
+            let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
+            XCTAssertFalse(try fence.executableActionMessages(for: request).isEmpty, command.rawValue)
+            XCTAssertThrowsError(try fence.heistStep(for: request), command.rawValue) { error in
+                XCTAssertTrue("\(error)".contains("not a durable heist primitive"), "\(error)")
+            }
         }
     }
 

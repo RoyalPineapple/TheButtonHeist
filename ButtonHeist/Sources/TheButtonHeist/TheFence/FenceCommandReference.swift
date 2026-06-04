@@ -21,16 +21,18 @@ public enum FenceCommandReference {
             "",
             "## Summary",
             "",
-            "| Command | CLI | MCP | Heist | Description |",
-            "|---------|-----|-----|-------|-------------|",
+            "| Command | Family | CLI | MCP | Recordable | Durable | Description |",
+            "|---------|--------|-----|-----|------------|---------|-------------|",
         ]
 
         for descriptor in sortedDescriptors {
             let columns = [
                 "`\(descriptor.command.rawValue)`",
+                "`\(descriptor.family.rawValue)`",
                 cliExposureSummary(descriptor),
                 mcpExposureSummary(descriptor.mcpExposure),
-                yesNo(descriptor.isHeistExecutable),
+                yesNo(descriptor.recordsHeistStep),
+                yesNo(descriptor.isDurableHeistPrimitive),
                 markdownCell(firstLine(of: descriptor.description)),
             ]
             lines.append("| \(columns.joined(separator: " | ")) |")
@@ -58,13 +60,17 @@ public enum FenceCommandReference {
             "",
             "## Summary",
             "",
-            "| Tool | Description |",
-            "|------|-------------|",
+            "| Tool | Family | Recordable | Description |",
+            "|------|--------|------------|-------------|",
         ]
 
         for descriptor in sortedDescriptors {
+            let command = descriptor.command.rawValue
+            let family = descriptor.family.rawValue
+            let recordable = yesNo(descriptor.recordsHeistStep)
+            let description = markdownCell(firstLine(of: descriptor.description))
             lines.append(
-                "| `\(descriptor.command.rawValue)` | \(markdownCell(firstLine(of: descriptor.description))) |"
+                "| `\(command)` | `\(family)` | \(recordable) | \(description) |"
             )
         }
 
@@ -83,9 +89,11 @@ public enum FenceCommandReference {
             "",
             descriptor.description,
             "",
+            "- Family: `\(descriptor.family.rawValue)`",
             "- CLI: \(cliExposureDetail(descriptor))",
             "- MCP: \(mcpExposureDetail(descriptor.mcpExposure))",
-            "- Heist: \(yesNo(descriptor.isHeistExecutable))",
+            "- Recordable: \(yesNo(descriptor.recordsHeistStep))",
+            "- Durable heist primitive: \(yesNo(descriptor.isDurableHeistPrimitive))",
             "- Connection before dispatch: \(yesNo(descriptor.requiresConnectionBeforeDispatch))",
         ]
 
@@ -100,6 +108,9 @@ public enum FenceCommandReference {
             "### `\(descriptor.command.rawValue)`",
             "",
             descriptor.description,
+            "",
+            "- Family: `\(descriptor.family.rawValue)`",
+            "- Recordable: \(yesNo(descriptor.recordsHeistStep))",
         ]
 
         lines.append(contentsOf: ["", "Parameters:", ""])

@@ -125,7 +125,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testCustomActionTargetRejectsContainerField() throws {
         let data = Data("""
         {
-          "container": {"stableId": "toolbar"},
+          "container": {"containerName": "toolbar"},
           "actionName": "Dismiss"
         }
         """.utf8)
@@ -308,10 +308,18 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollTargetRejectsPublicContainerHandle() throws {
-        let data = Data(#"{"container":{"stableId":"main_scroll"},"direction":"up"}"#.utf8)
+    func testScrollTargetAcceptsContainerNameString() throws {
+        let data = Data(#"{"container":"main_scroll","direction":"up"}"#.utf8)
+        let decoded = try decoder.decode(ScrollTarget.self, from: data)
+
+        XCTAssertEqual(decoded.selection, .container("main_scroll"))
+        XCTAssertEqual(decoded.direction, .up)
+    }
+
+    func testScrollTargetRejectsContainerObject() throws {
+        let data = Data(#"{"container":{"containerName":"main_scroll"},"direction":"up"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains("target an element inside the intended scroll region"), "\(error)")
+            XCTAssertTrue("\(error)".contains("Expected to decode String"), "\(error)")
         }
     }
 
@@ -322,19 +330,19 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollTargetRejectsStableIdPayloadKey() throws {
-        let data = Data(#"{"direction":"down","stableId":"main_scroll"}"#.utf8)
+    func testScrollTargetRejectsContainerNamePayloadKey() throws {
+        let data = Data(#"{"direction":"down","containerName":"main_scroll"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll target field "stableId""#])
+            assertDecodingError(error, contains: [#"Unknown scroll target field "containerName""#])
         }
     }
 
     func testScrollRequestEnvelopeRejectsUnknownPayloadKey() throws {
         let data = Data("""
-        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scroll","payload":{"direction":"down","stableId":"main_scroll"}}
+        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scroll","payload":{"direction":"down","containerName":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll target field "stableId""#])
+            assertDecodingError(error, contains: [#"Unknown scroll target field "containerName""#])
         }
     }
 
@@ -353,10 +361,18 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollToEdgeTargetRejectsPublicContainerHandle() throws {
-        let data = Data(#"{"container":{"stableId":"main_scroll"},"edge":"bottom"}"#.utf8)
+    func testScrollToEdgeTargetAcceptsContainerNameString() throws {
+        let data = Data(#"{"container":"main_scroll","edge":"bottom"}"#.utf8)
+        let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
+
+        XCTAssertEqual(decoded.selection, .container("main_scroll"))
+        XCTAssertEqual(decoded.edge, .bottom)
+    }
+
+    func testScrollToEdgeTargetRejectsContainerObject() throws {
+        let data = Data(#"{"container":{"containerName":"main_scroll"},"edge":"bottom"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains("target an element inside the intended scroll region"), "\(error)")
+            XCTAssertTrue("\(error)".contains("Expected to decode String"), "\(error)")
         }
     }
 
@@ -367,19 +383,19 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollToEdgeTargetRejectsStableIdPayloadKey() throws {
-        let data = Data(#"{"edge":"bottom","stableId":"main_scroll"}"#.utf8)
+    func testScrollToEdgeTargetRejectsContainerNamePayloadKey() throws {
+        let data = Data(#"{"edge":"bottom","containerName":"main_scroll"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "stableId""#])
+            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "containerName""#])
         }
     }
 
     func testScrollToEdgeRequestEnvelopeRejectsUnknownPayloadKey() throws {
         let data = Data("""
-        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToEdge","payload":{"edge":"bottom","containerId":"main_scroll"}}
+        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToEdge","payload":{"edge":"bottom","unexpected":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "containerId""#])
+            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "unexpected""#])
         }
     }
 
@@ -465,7 +481,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testSubtreeSelectorContainerUsesToolSchemaShape() throws {
         let selector = SubtreeSelector.container(
-            ContainerMatcher(stableId: "semantic_actions", type: .semanticGroup, label: "Actions"),
+            ContainerMatcher(containerName: "semantic_actions", type: .semanticGroup, label: "Actions"),
             ordinal: 1
         )
 
@@ -474,10 +490,17 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(payload["ordinal"] as? Int, 1)
         let container = try XCTUnwrap(payload["container"] as? [String: Any])
         XCTAssertNil(payload["element"])
-        XCTAssertEqual(container["stableId"] as? String, "semantic_actions")
+        XCTAssertEqual(container["containerName"] as? String, "semantic_actions")
         XCTAssertEqual(container["type"] as? String, "semanticGroup")
         XCTAssertEqual(container["label"] as? String, "Actions")
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
+    }
+
+    func testSubtreeSelectorContainerAcceptsContainerNameString() throws {
+        let data = Data(#"{"container":"semantic_actions"}"#.utf8)
+        let decoded = try decoder.decode(SubtreeSelector.self, from: data)
+
+        XCTAssertEqual(decoded, .container(ContainerMatcher(containerName: "semantic_actions")))
     }
 
     func testSubtreeSelectorElementRejectsHeistIdField() {

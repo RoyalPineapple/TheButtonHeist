@@ -307,12 +307,12 @@ final class TheStash {
         }?.key
     }
 
-    func liveContainerStableId(for container: AccessibilityContainer) -> HeistContainer? {
-        liveCapture.containerStableIds[container]
+    func liveContainerName(for container: AccessibilityContainer) -> ContainerName? {
+        liveCapture.containerNames[container]
     }
 
-    func liveContainerStableId(forPath path: TreePath) -> HeistContainer? {
-        liveCapture.containerStableIdsByPath[path]
+    func liveContainerName(forPath path: TreePath) -> ContainerName? {
+        liveCapture.containerNamesByPath[path]
     }
 
     func liveScrollableContainerView(forPath path: TreePath) -> UIView? {

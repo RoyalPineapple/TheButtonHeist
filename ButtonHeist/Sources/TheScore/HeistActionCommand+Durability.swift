@@ -26,8 +26,13 @@ public extension HeistActionCommand {
                 return "drag duration \(String(describing: target.duration)) is not a durable heist action"
             }
             return nil
+        case .viewportScroll:
+            return "scroll is a viewport debug command, not a durable heist action"
+        case .viewportScrollToVisible:
+            return "scroll_to_visible is a viewport debug command, not a durable heist action"
+        case .viewportScrollToEdge:
+            return "scroll_to_edge is a viewport debug command, not a durable heist action"
         case .activate, .increment, .decrement, .customAction, .typeText, .mechanicalTap,
-             .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge,
              .editAction, .setPasteboard, .dismissKeyboard:
             return nil
         }

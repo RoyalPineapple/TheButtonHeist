@@ -138,15 +138,15 @@ final class WireConverterTests: XCTestCase {
         .element(element)
     }
 
-    /// Build a test tree container node with a fixed stableId.
+    /// Build a test tree container node with a fixed containerName.
     private func wireContainer(
-        stableId: HeistContainer,
+        containerName: ContainerName,
         type: AccessibilityContainer.ContainerType = .list,
         frame: CGRect = .zero,
         children: [TestInterfaceNode]
     ) -> TestInterfaceNode {
         .container(
-            stableId,
+            containerName,
             AccessibilityContainer(
                 type: type,
                 frame: AccessibilityRect(
@@ -178,8 +178,8 @@ final class WireConverterTests: XCTestCase {
                     actions: WireConversion.convert(element.element).actions
                 ))
                 return .element(element.element, traversalIndex: index)
-            case .container(let stableId, let container, let children):
-                containerAnnotations.append(InterfaceContainerAnnotation(path: path, stableId: stableId))
+            case .container(let containerName, let container, let children):
+                containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
                 return .container(
                     container,
                     children: children.enumerated().map { index, child in
@@ -581,7 +581,7 @@ final class WireConverterTests: XCTestCase {
         let beforeTree = [wireLeaf(element)]
         let afterTree = [
             wireContainer(
-                stableId: "list_0",
+                containerName: "list_0",
                 type: .list,
                 frame: CGRect(x: 0, y: 0, width: 320, height: 100),
                 children: [wireLeaf(element)]

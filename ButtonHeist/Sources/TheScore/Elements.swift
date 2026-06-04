@@ -1,7 +1,7 @@
 import Foundation
 
-/// Button Heist container handle carried over the wire as a string.
-public typealias HeistContainer = String
+/// Button Heist's generated name for a container in the current interface capture.
+public typealias ContainerName = String
 
 // MARK: - Slugify
 

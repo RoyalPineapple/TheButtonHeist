@@ -12,7 +12,7 @@ extension TheBurglar {
     // MARK: - Build Screen From Parse
 
     /// Build a Screen value from a ParseResult. Pure: no mutable state. This
-    /// pass assigns heistIds, resolves context, computes container stable IDs,
+    /// pass assigns heistIds, resolves context, computes container names,
     /// and detects first responder state.
     static func buildScreen(from result: ParseResult) -> Screen {
         let hierarchy = screenCoordinateHierarchy(from: result)
@@ -34,12 +34,12 @@ extension TheBurglar {
             scrollableContainerViews: scrollViews,
             scrollableContainerViewsByPath: result.scrollViewsByPath
         )
-        let containerStableIdIndex = buildContainerStableIdIndex(
+        let containerNameIndex = buildContainerNameIndex(
             hierarchy: hierarchy,
             identityContext: identityContext
         )
-        let containerStableIds = containerStableIdIndex.byContainer
-        let containerStableIdsByPath = containerStableIdIndex.byPath
+        let containerNames = containerNameIndex.byContainer
+        let containerNamesByPath = containerNameIndex.byPath
 
         let baseHeistIds = TheStash.IdAssignment.assign(elements)
         let resolvedHeistIds = baseHeistIds
@@ -57,7 +57,7 @@ extension TheBurglar {
             let entry = Screen.ScreenElement(
                 heistId: heistId,
                 scrollContentLocation: context.flatMap {
-                    scrollContentLocation(for: $0, containerStableIdsByPath: containerStableIdsByPath)
+                    scrollContentLocation(for: $0, containerNamesByPath: containerNamesByPath)
                 },
                 element: parsedElement
             )
@@ -87,8 +87,8 @@ extension TheBurglar {
         return Screen(
             elements: screenElements,
             hierarchy: hierarchy,
-            containerStableIds: containerStableIds,
-            containerStableIdsByPath: containerStableIdsByPath,
+            containerNames: containerNames,
+            containerNamesByPath: containerNamesByPath,
             heistIdByElement: heistIdByElement,
             heistIdByElementPath: heistIdByElementPath,
             elementRefs: elementRefs,
@@ -147,11 +147,11 @@ extension TheBurglar {
 
     private static func scrollContentLocation(
         for context: ElementContext,
-        containerStableIdsByPath: [TreePath: HeistContainer]
+        containerNamesByPath: [TreePath: ContainerName]
     ) -> Screen.ScrollContentLocation? {
         guard let origin = context.contentSpaceOrigin,
               let scrollContainerPath = context.scrollContainerPath,
-              let scrollContainer = containerStableIdsByPath[scrollContainerPath]
+              let scrollContainer = containerNamesByPath[scrollContainerPath]
         else { return nil }
         return Screen.ScrollContentLocation(
             origin: origin,
@@ -159,22 +159,22 @@ extension TheBurglar {
         )
     }
 
-    // MARK: - Container StableId Index
+    // MARK: - Container Name Index
 
-    private static func buildContainerStableIdIndex(
+    private static func buildContainerNameIndex(
         hierarchy: [AccessibilityHierarchy],
         identityContext: ContainerIdentityContext
-    ) -> ContainerStableIdIndex {
-        let candidates = hierarchy.compactMapSubtrees { node, path -> ContainerStableIdCandidate? in
+    ) -> ContainerNameIndex {
+        let candidates = hierarchy.compactMapSubtrees { node, path -> ContainerNameCandidate? in
             guard case .container(let container, _) = node else { return nil }
             let contentFrame = identityContext.contentFramesByPath[path]
                 ?? identityContext.contentFrames[container]
                 ?? container.frame.cgRect
-            let readableName = stableId(
+            let readableName = containerName(
                 for: container,
                 contentFrame: contentFrame
             )
-            return ContainerStableIdCandidate(
+            return ContainerNameCandidate(
                 path: path,
                 container: container,
                 node: node,
@@ -188,30 +188,30 @@ extension TheBurglar {
                 .keys
         )
 
-        var byContainer: [AccessibilityContainer: HeistContainer] = [:]
-        var byPath: [TreePath: HeistContainer] = [:]
+        var byContainer: [AccessibilityContainer: ContainerName] = [:]
+        var byPath: [TreePath: ContainerName] = [:]
         for candidate in candidates {
-            let stableId: HeistContainer
+            let containerName: ContainerName
             if duplicateReadableNames.contains(candidate.readableName) {
-                stableId = captureLocalContainerId(
+                containerName = captureLocalContainerId(
                     readableName: candidate.readableName,
                     node: candidate.node,
                     path: candidate.path
                 )
             } else {
-                stableId = candidate.readableName
+                containerName = candidate.readableName
             }
-            byContainer[candidate.container] = stableId
-            byPath[candidate.path] = stableId
+            byContainer[candidate.container] = containerName
+            byPath[candidate.path] = containerName
         }
-        return ContainerStableIdIndex(byContainer: byContainer, byPath: byPath)
+        return ContainerNameIndex(byContainer: byContainer, byPath: byPath)
     }
 
     static func captureLocalContainerId(
-        readableName: HeistContainer,
+        readableName: ContainerName,
         node: AccessibilityHierarchy,
         path: TreePath
-    ) -> HeistContainer {
+    ) -> ContainerName {
         "\(readableName)-\(containerHash(node: node, path: path))"
     }
 
@@ -237,16 +237,16 @@ extension TheBurglar {
         }
     }
 
-    private struct ContainerStableIdCandidate {
+    private struct ContainerNameCandidate {
         let path: TreePath
         let container: AccessibilityContainer
         let node: AccessibilityHierarchy
-        let readableName: HeistContainer
+        let readableName: ContainerName
     }
 
-    private struct ContainerStableIdIndex {
-        let byContainer: [AccessibilityContainer: HeistContainer]
-        let byPath: [TreePath: HeistContainer]
+    private struct ContainerNameIndex {
+        let byContainer: [AccessibilityContainer: ContainerName]
+        let byPath: [TreePath: ContainerName]
     }
 
     private struct ContainerIdentityPayload: Encodable {

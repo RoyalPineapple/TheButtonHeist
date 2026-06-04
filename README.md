@@ -122,7 +122,7 @@ Semantic commands are the inside route. Use `activate`, `type_text`, custom acti
 
 `activate` means accessibility activation. Button Heist asks the target element to perform its accessibility activation behavior. When UIKit exposes activation through a fresh activation point, delivering through that point is still part of `activate`. The command is "activate this accessible element." It is not a coordinate gesture.
 
-Viewport commands are the lookout. Use `scroll`, `scroll_to_visible`, screenshots, and hierarchy inspection when the viewport itself is the subject: what is visible, where a scroll view sits, or what a human would see right now. They are not setup steps for normal semantic actions.
+Viewport commands are the lookout. Use `scroll`, `scroll_to_visible`, screenshots, and hierarchy inspection when the viewport itself is the subject: what is visible, where a scroll view sits, or what a human would see right now. They are directly executable debug commands, not durable heist primitives, and they are not setup steps for normal semantic actions.
 
 Mechanical gestures are the lockpicks, not the front door. Use `one_finger_tap`, `long_press`, `swipe`, and `drag` for maps, canvases, drawing surfaces, games, custom controls, or any product behavior where the gesture itself is the intent. For standard buttons, fields, menus, and other accessible controls, prefer semantic commands.
 
@@ -412,8 +412,8 @@ Canonical examples live in [examples/](examples/).
 
 ## What Breaks A Heist?
 
-A heist fails when the accessibility contract fails or the explicit viewport
-command cannot be fulfilled. Common failures are:
+A command or heist fails when the accessibility contract fails or an explicit
+viewport/debug command cannot be fulfilled. Common failures are:
 
 - target missing
 - target ambiguous

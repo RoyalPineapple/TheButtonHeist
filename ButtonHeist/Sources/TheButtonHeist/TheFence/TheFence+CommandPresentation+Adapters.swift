@@ -53,7 +53,9 @@ private extension TheFence.Command {
         let width = descriptors.map(\.command.rawValue.count).max() ?? 0
 
         return descriptors.map { descriptor in
-            "  \(padded(descriptor.command.rawValue, to: width))  \(oneLineDescription(descriptor.description))"
+            let family = "[\(descriptor.family.rawValue)]"
+            let recordable = descriptor.recordsHeistStep ? "recordable" : "not-recorded"
+            return "  \(padded(descriptor.command.rawValue, to: width))  \(family) \(recordable)  \(oneLineDescription(descriptor.description))"
         }
     }
 

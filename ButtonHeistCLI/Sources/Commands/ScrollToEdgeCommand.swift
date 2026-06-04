@@ -19,6 +19,9 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var element: ElementTargetOptions
 
+    @Option(name: .long, help: "Current-capture containerName from get_interface")
+    var container: String?
+
     @Option(
         name: .shortAndLong,
         help: "Edge to scroll to: \(Self.catalogAllowedValuesDescription(for: .edge))"
@@ -29,17 +32,32 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
+    func validate() throws {
+        if let container, container.isEmpty {
+            throw ValidationError("--container must not be empty")
+        }
+        if container != nil, try element.hasTarget {
+            throw ValidationError("--container cannot be combined with element target options")
+        }
+    }
+
     @ButtonHeistActor
     mutating func run() async throws {
         guard let scrollEdge = Self.catalogCanonicalStringValue(edge, for: .edge) else {
             throw ValidationError("Invalid edge '\(edge)'. Valid: \(Self.catalogAllowedValuesDescription(for: .edge))")
         }
 
-        let request: CLIRequestParameters = [
+        var request: CLIRequestParameters = [
             .edge: .string(scrollEdge),
             .timeout: .double(timeoutOption.timeout),
         ]
-        let target = try element.parsedTarget()
+        let target: ElementTarget?
+        if let container {
+            request.set(.container, container)
+            target = nil
+        } else {
+            target = try element.parsedTarget()
+        }
 
         try await CLIRunner.run(
             connection: connection,

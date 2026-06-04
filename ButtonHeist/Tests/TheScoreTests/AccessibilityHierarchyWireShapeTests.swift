@@ -54,7 +54,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
             testElement(header),
             testContainer(
                 makeTestAccessibilityContainer(type: .list, frameY: 50, frameWidth: 320, frameHeight: 400),
-                stableId: "list_0",
+                containerName: "list_0",
                 children: [testElement(row)]
             ),
         ])
@@ -72,7 +72,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         XCTAssertEqual(elements.count, 2)
         XCTAssertNil(elements.first?["heistId"], "heistId must never appear on the wire")
         let containers = try XCTUnwrap(annotations["containers"] as? [[String: Any]])
-        XCTAssertEqual(containers.first?["stableId"] as? String, "list_0")
+        XCTAssertEqual(containers.first?["containerName"] as? String, "list_0")
     }
 
     func testNestedInterfaceRoundTripsThroughCanonicalHierarchy() throws {
@@ -84,11 +84,11 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
                     frameWidth: 320,
                     frameHeight: 480
                 ),
-                stableId: "scroll",
+                containerName: "scroll",
                 children: [
                     testContainer(
                         makeTestAccessibilityContainer(type: .landmark, frameWidth: 320, frameHeight: 100),
-                        stableId: "landmark",
+                        containerName: "landmark",
                         children: [testElement(element)]
                     ),
                 ]

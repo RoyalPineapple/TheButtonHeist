@@ -76,21 +76,21 @@ Runtime admission and lint are separate:
 - `.recordingQuality` lint flags recordings that read like transcripts instead of
   compact semantic tests.
 - `.strictTest` lint treats missing expectations, mechanical commands,
-  pre-action viewport movement before semantic actions, and empty branches as
+  viewport/debug action steps, and empty branches as
   test quality failures.
 
-Mechanical and viewport commands are explicit escape hatches. Use the namespace
-to make that intent visible:
+Mechanical commands are explicit escape hatches. Use the namespace to make that
+intent visible:
 
 ```swift
 Mechanical.Tap(x: 120, y: 400)
-Viewport.Scroll(.down)
-Viewport.ScrollToVisible(.label("Checkout"))
 ```
 
-Normal semantic actions do not need pre-action viewport movement. `Activate`, `TypeText`,
-`Increment`, `Decrement`, custom actions, and rotors own reveal, element inflation,
-and live geometry through the runtime pipeline.
+Viewport/debug commands such as `scroll`, `scroll_to_edge`, and
+`scroll_to_visible` are direct inspection commands, not durable Swift Heist
+primitives. Normal semantic actions do not need pre-action viewport movement.
+`Activate`, `TypeText`, `Increment`, `Decrement`, custom actions, and rotors own
+reveal, element inflation, and live geometry through the runtime pipeline.
 
 ```swift
 CustomAction("Archive", on: .label("Message"))
@@ -139,6 +139,7 @@ Swift Heist does not preserve:
 - arbitrary helper functions or closure structure
 - comments, whitespace, imports, or local constants
 - hidden pre-action viewport movement for semantic actions
+- viewport/debug commands as durable action steps
 - arbitrary dynamic code over the wire
 - generic variables beyond scoped `target_ref` and string refs
 

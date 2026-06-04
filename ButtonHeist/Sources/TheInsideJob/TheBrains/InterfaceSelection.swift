@@ -14,7 +14,7 @@ enum InterfaceSelectionError: Error, Equatable {
         case .subtreeNotFound:
             return """
                 get_interface subtree matched no nodes; refine subtree using a container \
-                stableId/type/label/identifier or a leaf matcher from get_interface.
+                containerName/type/label/identifier or a leaf matcher from get_interface.
                 """
         case .subtreeOrdinalOutOfRange(let ordinal, let candidateCount, let candidates):
             let range = candidateCount == 1 ? "0" : "0...\(candidateCount - 1)"
@@ -194,7 +194,7 @@ private extension AccessibilityContainer {
         [
             "container",
             subtreeSummaryRequiredField("type", typeName.rawValue),
-            subtreeSummaryField("stableId", annotation?.stableId),
+            subtreeSummaryField("containerName", annotation?.containerName),
             subtreeSummaryField("identifier", containerIdentifier),
             subtreeSummaryField("label", containerLabel),
             subtreeSummaryField("value", containerValue),

@@ -18,6 +18,12 @@ extension TheFence {
     }
 
     func heistStep(for request: ParsedRequest) throws -> HeistStep {
+        guard request.command.descriptor.isDurableHeistPrimitive else {
+            throw HeistStepPlanBuildError(
+                message: "command \"\(request.command.rawValue)\" is not a durable heist primitive"
+            )
+        }
+
         let messages = try executableActionMessages(for: request)
         guard let message = messages.first, messages.count == 1 else {
             let commandName = request.command.rawValue

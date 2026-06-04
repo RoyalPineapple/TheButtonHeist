@@ -184,7 +184,7 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
 }
 
 @Test
-func canonicalSwiftRendererSeparatesSemanticMechanicalAndViewportActions() throws {
+func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
     let plan = HeistPlan(body: [
         .action(try ActionStep(command: .performCustomAction(CustomActionTarget(
             elementTarget: .predicate(.label("Message")),
@@ -198,7 +198,6 @@ func canonicalSwiftRendererSeparatesSemanticMechanicalAndViewportActions() throw
         .action(try ActionStep(command: .oneFingerTap(TapTarget(
             selection: .coordinate(ScreenPoint(x: 12, y: 34))
         )))),
-        .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
     ])
 
     #expect(plan.runtimeAdmissionFailures().isEmpty)
@@ -209,8 +208,6 @@ func canonicalSwiftRendererSeparatesSemanticMechanicalAndViewportActions() throw
         Rotor("Headings", on: .label("Article"), direction: .next)
 
         Mechanical.Tap(x: 12, y: 34)
-
-        Viewport.Scroll(.down)
     }
     """)
 }
@@ -254,6 +251,62 @@ func nonDurableActionShapeFailsAdmissionAndRenderingWithSameReason() throws {
     } catch let error as HeistCanonicalSwiftDSLError {
         #expect(error == .unsupportedAction(reason))
     }
+}
+
+@Test
+func viewportDebugActionsAreNotDurableHeistDSL() throws {
+    let commands: [HeistActionCommand] = [
+        .viewportScroll(ScrollTarget(direction: .down)),
+        .viewportScroll(ScrollTarget(selection: .element(.predicate(.label("List"))), direction: .down)),
+        .viewportScroll(ScrollTarget(selection: .container("scrollable_0_0_40_50"), direction: .down)),
+        .viewportScrollToVisible(.target(.label("Checkout"))),
+        .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
+        .viewportScrollToEdge(ScrollToEdgeTarget(selection: .element(.predicate(.label("List"))), edge: .bottom)),
+        .viewportScrollToEdge(ScrollToEdgeTarget(selection: .container("scrollable_0_0_40_50"), edge: .bottom)),
+    ]
+
+    for command in commands {
+        let plan = HeistPlan(body: [.action(try ActionStep(command: command))])
+        let reason = try #require(command.durableHeistActionFailure)
+
+        #expect(reason.contains("viewport debug command"))
+        #expect(plan.runtimeAdmissionFailures().contains {
+            $0.contract == "durable heist action support"
+                && $0.observed == reason
+        })
+
+        do {
+            _ = try plan.canonicalSwiftDSL()
+            Issue.record("Expected containerName viewport action to fail canonical rendering")
+        } catch let error as HeistCanonicalSwiftDSLError {
+            #expect(error == .unsupportedAction(reason))
+        }
+    }
+
+    let jsonPlan = try JSONDecoder().decode(HeistPlan.self, from: Data("""
+    {
+      "version": 2,
+      "body": [
+        {
+          "type": "action",
+          "action": {
+            "command": {
+              "type": "scroll",
+              "payload": {
+                "container": "scrollable_0_0_40_50",
+                "direction": "down"
+              }
+            }
+          }
+        }
+      ]
+    }
+    """.utf8))
+
+    #expect(jsonPlan.runtimeAdmissionFailures().contains {
+        $0.contract == "durable heist action support"
+            && $0.observed == "scroll is a viewport debug command, not a durable heist action"
+    })
 }
 
 private let fullASTJSON = """

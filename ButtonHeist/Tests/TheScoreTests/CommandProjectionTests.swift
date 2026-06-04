@@ -44,8 +44,16 @@ final class CommandProjectionTests: XCTestCase {
         )
         XCTAssertEqual(ScrollTarget().selection, .visibleContainer)
         XCTAssertEqual(
+            ScrollTarget(selection: .container("main_scroll")).selection,
+            .container("main_scroll")
+        )
+        XCTAssertEqual(
             ScrollToEdgeTarget(selection: .element(.predicate(ElementPredicate(label: "row")))).selection,
             .element(.predicate(ElementPredicate(label: "row")))
+        )
+        XCTAssertEqual(
+            ScrollToEdgeTarget(selection: .container("main_scroll")).selection,
+            .container("main_scroll")
         )
     }
 

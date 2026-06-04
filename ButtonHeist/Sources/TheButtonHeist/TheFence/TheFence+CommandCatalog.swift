@@ -1,6 +1,84 @@
 import Foundation
 import TheScore
 
+public enum FenceCommandFamily: String, Sendable, CaseIterable {
+    case session
+    case observation
+    case semanticAction
+    case spatialAction
+    case viewportDebug
+    case heistRuntime
+    case heistRecording
+}
+
+protocol FenceCommandFamilyCase: RawRepresentable, CaseIterable, Sendable
+where RawValue == String, AllCases: Sequence, AllCases.Element == Self {
+    static var family: FenceCommandFamily { get }
+    static var descriptors: [FenceCommandDescriptor] { get }
+    var command: TheFence.Command { get }
+    var descriptor: FenceCommandDescriptor { get }
+}
+
+extension FenceCommandFamilyCase {
+    var command: TheFence.Command {
+        guard let command = TheFence.Command(rawValue: rawValue) else {
+            preconditionFailure("Fence command family case \(Self.self).\(rawValue) does not map to TheFence.Command")
+        }
+        return command
+    }
+}
+
+extension FenceCommandFamilyCase where AllCases: Sequence, AllCases.Element == Self {
+    static var descriptors: [FenceCommandDescriptor] {
+        allCases.map(\.descriptor)
+    }
+}
+
+struct FenceCommandFamilyRegistration: Sendable {
+    let family: FenceCommandFamily
+    let descriptors: [FenceCommandDescriptor]
+}
+
+enum FenceCommandRegistry {
+    static let families: [FenceCommandFamilyRegistration] = [
+        .init(family: SessionCommand.family, descriptors: SessionCommand.descriptors),
+        .init(family: ObservationCommand.family, descriptors: ObservationCommand.descriptors),
+        .init(family: SemanticActionCommand.family, descriptors: SemanticActionCommand.descriptors),
+        .init(family: SpatialActionCommand.family, descriptors: SpatialActionCommand.descriptors),
+        .init(family: ViewportDebugCommand.family, descriptors: ViewportDebugCommand.descriptors),
+        .init(family: HeistRuntimeCommand.family, descriptors: HeistRuntimeCommand.descriptors),
+        .init(family: HeistRecordingCommand.family, descriptors: HeistRecordingCommand.descriptors),
+    ]
+
+    static let descriptors: [FenceCommandDescriptor] = TheFence.Command.allCases.map(descriptor(for:))
+
+    static func family(for command: TheFence.Command) -> FenceCommandFamily {
+        descriptor(for: command).family
+    }
+
+    static func descriptor(for command: TheFence.Command) -> FenceCommandDescriptor {
+        guard let descriptor = descriptorLookup[command] else {
+            preconditionFailure("Missing descriptor for \(command.rawValue)")
+        }
+        return descriptor
+    }
+
+    private static let descriptorLookup: [TheFence.Command: FenceCommandDescriptor] = {
+        let familyDescriptors = families.flatMap(\.descriptors)
+        let commandCounts = Dictionary(grouping: familyDescriptors, by: \.command).mapValues(\.count)
+        let duplicates = commandCounts.filter { $0.value > 1 }.keys.map(\.rawValue).sorted()
+        precondition(duplicates.isEmpty, "Duplicate Fence command descriptors: \(duplicates.joined(separator: ", "))")
+
+        let missing = Set(TheFence.Command.allCases).subtracting(commandCounts.keys).map(\.rawValue).sorted()
+        precondition(missing.isEmpty, "Missing Fence command descriptors: \(missing.joined(separator: ", "))")
+
+        let extra = Set(commandCounts.keys).subtracting(TheFence.Command.allCases).map(\.rawValue).sorted()
+        precondition(extra.isEmpty, "Unknown Fence command descriptors: \(extra.joined(separator: ", "))")
+
+        return Dictionary(uniqueKeysWithValues: familyDescriptors.map { ($0.command, $0) })
+    }()
+}
+
 extension TheFence {
 
     public enum Command: String, CaseIterable, Sendable {
@@ -35,9 +113,9 @@ extension TheFence {
 
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
+    public let family: FenceCommandFamily
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
-    public let isHeistExecutable: Bool
     public let requiresConnectionBeforeDispatch: Bool
     public let parameters: [FenceParameterSpec]
     public let mcpAnnotations: MCPToolAnnotationSpec?
@@ -45,7 +123,47 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     let requestDecoder: TheFence.RequestDecoder
 
     public var isPublicRequestContract: Bool {
-        cliExposure != .notExposed || mcpExposure != .notExposed || isHeistExecutable
+        cliExposure != .notExposed || mcpExposure != .notExposed || isDurableHeistPrimitive
+    }
+
+    public var isObservation: Bool {
+        family == .observation
+    }
+
+    public var isViewportDebug: Bool {
+        family == .viewportDebug
+    }
+
+    public var isSemanticAction: Bool {
+        family == .semanticAction
+    }
+
+    public var isSpatialAction: Bool {
+        family == .spatialAction
+    }
+
+    public var isNormalRecordable: Bool {
+        switch family {
+        case .semanticAction, .spatialAction:
+            return true
+        case .session, .observation, .viewportDebug, .heistRuntime, .heistRecording:
+            return false
+        }
+    }
+
+    public var recordsHeistStep: Bool {
+        isNormalRecordable || command == .wait
+    }
+
+    public var isDurableHeistPrimitive: Bool {
+        switch family {
+        case .semanticAction, .spatialAction:
+            return true
+        case .observation:
+            return command == .wait
+        case .session, .viewportDebug, .heistRuntime, .heistRecording:
+            return false
+        }
     }
 
     public var elementTargetParameterKeys: [String] {
@@ -90,20 +208,20 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
 
     init(
         command: TheFence.Command,
+        family: FenceCommandFamily,
         requestDecoder: @escaping TheFence.RequestDecoder,
         cliExposure: CLIExposure,
         mcpExposure: MCPExposure,
-        isHeistExecutable: Bool,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec],
         mcpAnnotations: MCPToolAnnotationSpec? = nil,
         description: String
     ) {
         self.command = command
+        self.family = family
         self.requestDecoder = requestDecoder
         self.cliExposure = cliExposure
         self.mcpExposure = mcpExposure
-        self.isHeistExecutable = isHeistExecutable
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.parameters = parameters
         self.mcpAnnotations = mcpAnnotations
@@ -113,9 +231,9 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         // Decoder closures are intentionally excluded: command identity owns the routing entrypoint.
         lhs.command == rhs.command &&
+            lhs.family == rhs.family &&
             lhs.cliExposure == rhs.cliExposure &&
             lhs.mcpExposure == rhs.mcpExposure &&
-            lhs.isHeistExecutable == rhs.isHeistExecutable &&
             lhs.requiresConnectionBeforeDispatch == rhs.requiresConnectionBeforeDispatch &&
             lhs.parameters == rhs.parameters &&
             lhs.mcpAnnotations == rhs.mcpAnnotations &&
@@ -124,52 +242,33 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
 }
 
 public extension TheFence.Command {
-    var descriptor: FenceCommandDescriptor { Self.descriptor(for: self) }
+    var descriptor: FenceCommandDescriptor { FenceCommandRegistry.descriptor(for: self) }
 
-    static var descriptors: [FenceCommandDescriptor] { allCases.map(descriptor(for:)) }
+    var family: FenceCommandFamily { FenceCommandRegistry.family(for: self) }
+
+    static var descriptors: [FenceCommandDescriptor] { FenceCommandRegistry.descriptors }
 
     static var cliDirectCommandDescriptors: [FenceCommandDescriptor] {
         descriptors.filter { $0.cliExposure == .directCommand }
     }
 
-    static var heistExecutableCases: [Self] {
-        heistExecutableCommandDescriptors.map(\.command)
+    static var durableHeistPrimitiveCases: [Self] {
+        descriptors.filter(\.isDurableHeistPrimitive).map(\.command)
     }
 
 }
 
 extension TheFence.Command {
     static func descriptor(for command: Self) -> FenceCommandDescriptor {
-        guard let descriptor = descriptorLookup[command] else {
-            preconditionFailure("Missing descriptor for \(command.rawValue)")
-        }
-        return descriptor
-    }
-
-    private static let descriptorLookup: [Self: FenceCommandDescriptor] = {
-        Dictionary(uniqueKeysWithValues: commandDescriptors.map { ($0.command, $0) })
-    }()
-
-    private static var commandDescriptors: [FenceCommandDescriptor] {
-        commandDescriptorsWithoutRunHeist + [runHeistCommandDescriptor]
-    }
-
-    private static var commandDescriptorsWithoutRunHeist: [FenceCommandDescriptor] {
-        sessionCommandDescriptors
-            + observationCommandDescriptors
-            + actionCommandDescriptors
-    }
-
-    static var heistExecutableCommandDescriptors: [FenceCommandDescriptor] {
-        commandDescriptorsWithoutRunHeist.filter(\.isHeistExecutable)
+        FenceCommandRegistry.descriptor(for: command)
     }
 
     static func commandDescriptor(
         _ command: Self,
+        family: FenceCommandFamily,
         requestDecoder: @escaping TheFence.RequestDecoder,
         cliExposure: CLIExposure = .directCommand,
         mcpExposure: MCPExposure = .directTool,
-        isHeistExecutable: Bool = false,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec] = [],
         mcpAnnotations: MCPToolAnnotationSpec? = nil,
@@ -177,10 +276,10 @@ extension TheFence.Command {
     ) -> FenceCommandDescriptor {
         FenceCommandDescriptor(
             command: command,
+            family: family,
             requestDecoder: requestDecoder,
             cliExposure: cliExposure,
             mcpExposure: mcpExposure,
-            isHeistExecutable: isHeistExecutable,
             requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
             mcpAnnotations: mcpAnnotations,

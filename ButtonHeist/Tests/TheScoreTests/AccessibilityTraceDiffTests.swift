@@ -49,12 +49,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
     func testNodeDiffIsTreeDiff() {
         let before = makeTestInterface(nodes: [
-            testContainer(makeContainer(), stableId: "section", children: [
+            testContainer(makeContainer(), containerName: "section", children: [
                 testElement(makeElement(label: "Menu", traits: [.header])),
             ]),
         ])
         let after = makeTestInterface(nodes: [
-            testContainer(makeContainer(), stableId: "section", children: [
+            testContainer(makeContainer(), containerName: "section", children: [
                 testElement(makeElement(label: "Checkout", traits: [.header])),
             ]),
         ])
@@ -66,13 +66,13 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
     func testFunctionalElementMoveDoesNotReportRemoveInsertChurn() {
         let before = makeTestInterface(nodes: [
-            testContainer(makeContainer(), stableId: "list", children: [
+            testContainer(makeContainer(), containerName: "list", children: [
                 testElement(makeElement(label: "Pasta", traits: [.button])),
                 testElement(makeElement(label: "Sauce", traits: [.button])),
             ]),
         ])
         let after = makeTestInterface(nodes: [
-            testContainer(makeContainer(), stableId: "list", children: [
+            testContainer(makeContainer(), containerName: "list", children: [
                 testElement(makeElement(label: "Sauce", traits: [.button])),
                 testElement(makeElement(label: "Pasta", traits: [.button])),
             ]),
@@ -87,7 +87,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
         let beforeInterface = makeTestInterface(
             nodes: [
-                testContainer(makeContainer(), stableId: "main", children: [
+                testContainer(makeContainer(), containerName: "main", children: [
                     testElement(makeElement(label: "Menu", traits: [.header])),
                     testElement(makeElement(label: "Total", value: "$5.00", traits: [.staticText])),
                 ]),
@@ -96,7 +96,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
         let afterInterface = makeTestInterface(
             nodes: [
-                testContainer(makeContainer(), stableId: "main", children: [
+                testContainer(makeContainer(), containerName: "main", children: [
                     testElement(makeElement(label: "Menu", traits: [.header])),
                     testElement(makeElement(label: "Total", value: "$7.00", traits: [.staticText])),
                 ]),

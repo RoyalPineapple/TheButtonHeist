@@ -245,7 +245,8 @@ capture are not the authority.
 
 Explicit viewport messages such as `scroll`, `scrollToEdge`, and
 `scrollToVisible` expose viewport state because moving the viewport is the
-requested behavior.
+requested behavior. They are direct viewport/debug commands, not durable heist
+primitives.
 
 ### Screen Capture
 

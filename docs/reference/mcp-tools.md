@@ -4,40 +4,43 @@ _Generated from `TheFence.Command.descriptors`._
 
 ## Summary
 
-| Tool | Description |
-|------|-------------|
-| `activate` | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
-| `connect` | Establish or switch the active connection to a Button Heist app. |
-| `dismiss_keyboard` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
-| `drag` | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
-| `edit_action` | Perform an edit action on the current first responder. |
-| `get_interface` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
-| `get_pasteboard` | Read text from the general pasteboard. |
-| `get_screen` | Capture a PNG screenshot with optional inline data and interface state. |
-| `get_session_state` | Inspect connection, device, and last-action session state. |
-| `list_devices` | List discovered iOS devices and configured connection targets. |
-| `list_targets` | List configured connection targets and the default target. |
-| `long_press` | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
-| `one_finger_tap` | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
-| `ping` | Check connection health without reading accessibility state. |
-| `play_heist` | Play back a heist file and return step diagnostics on failure. |
-| `rotor` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
-| `run_heist` | Execute an inline typed heist plan. |
-| `scroll` | Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
-| `scroll_to_edge` | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
-| `scroll_to_visible` | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
-| `set_pasteboard` | Write text to the general pasteboard from within the app. |
-| `start_heist` | Start composing successful interactions into a semantic heist test. |
-| `stop_heist` | Stop heist recording and save a deterministic semantic heist fixture. |
-| `swipe` | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
-| `type_text` | Type non-empty text, optionally after inflating a semantic target. |
-| `wait` | Wait until an accessibility predicate is satisfied within timeout by evaluating settled semantic observations. |
+| Tool | Family | Recordable | Description |
+|------|--------|------------|-------------|
+| `activate` | `semanticAction` | yes | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
+| `connect` | `session` | no | Establish or switch the active connection to a Button Heist app. |
+| `dismiss_keyboard` | `semanticAction` | yes | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
+| `drag` | `spatialAction` | yes | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
+| `edit_action` | `semanticAction` | yes | Perform an edit action on the current first responder. |
+| `get_interface` | `observation` | no | Read the app accessibility hierarchy, optionally scoped to a subtree. |
+| `get_pasteboard` | `observation` | no | Read text from the general pasteboard. |
+| `get_screen` | `observation` | no | Capture a PNG screenshot with optional inline data and interface state. |
+| `get_session_state` | `session` | no | Inspect connection, device, and last-action session state. |
+| `list_devices` | `session` | no | List discovered iOS devices and configured connection targets. |
+| `list_targets` | `session` | no | List configured connection targets and the default target. |
+| `long_press` | `spatialAction` | yes | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
+| `one_finger_tap` | `spatialAction` | yes | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
+| `ping` | `session` | no | Check connection health without reading accessibility state. |
+| `play_heist` | `heistRecording` | no | Play back a heist file and return step diagnostics on failure. |
+| `rotor` | `semanticAction` | yes | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
+| `run_heist` | `heistRuntime` | no | Execute an inline typed heist plan. |
+| `scroll` | `viewportDebug` | no | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
+| `scroll_to_edge` | `viewportDebug` | no | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
+| `scroll_to_visible` | `viewportDebug` | no | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
+| `set_pasteboard` | `semanticAction` | yes | Write text to the general pasteboard from within the app. |
+| `start_heist` | `heistRecording` | no | Start composing successful interactions into a semantic heist test. |
+| `stop_heist` | `heistRecording` | no | Stop heist recording and save a deterministic semantic heist fixture. |
+| `swipe` | `spatialAction` | yes | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
+| `type_text` | `semanticAction` | yes | Type non-empty text, optionally after inflating a semantic target. |
+| `wait` | `observation` | yes | Wait until an accessibility predicate is satisfied within timeout by evaluating settled semantic observations. |
 
 ## Details
 
 ### `activate`
 
 Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions.
+
+- Family: `semanticAction`
+- Recordable: yes
 
 Parameters:
 
@@ -53,6 +56,9 @@ Parameters:
 
 Establish or switch the active connection to a Button Heist app.
 
+- Family: `session`
+- Recordable: no
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -65,6 +71,9 @@ Parameters:
 
 Dismiss the on-screen keyboard through the current first responder or keyboard action path.
 
+- Family: `semanticAction`
+- Recordable: yes
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -75,6 +84,9 @@ Parameters:
 ### `drag`
 
 Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint.
+
+- Family: `spatialAction`
+- Recordable: yes
 
 Parameters:
 
@@ -90,6 +102,9 @@ Parameters:
 
 Perform an edit action on the current first responder.
 
+- Family: `semanticAction`
+- Recordable: yes
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -101,6 +116,11 @@ Parameters:
 ### `get_interface`
 
 Read the app accessibility hierarchy, optionally scoped to a subtree.
+
+containerName is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection and viewport/debug commands. It is not a semantic target and is not recorded into heists.
+
+- Family: `observation`
+- Recordable: no
 
 Parameters:
 
@@ -118,6 +138,9 @@ Parameters:
 
 Read text from the general pasteboard.
 
+- Family: `observation`
+- Recordable: no
+
 Parameters:
 
 _None._
@@ -125,6 +148,9 @@ _None._
 ### `get_screen`
 
 Capture a PNG screenshot with optional inline data and interface state.
+
+- Family: `observation`
+- Recordable: no
 
 Parameters:
 
@@ -138,6 +164,9 @@ Parameters:
 
 Inspect connection, device, and last-action session state.
 
+- Family: `session`
+- Recordable: no
+
 Parameters:
 
 _None._
@@ -145,6 +174,9 @@ _None._
 ### `list_devices`
 
 List discovered iOS devices and configured connection targets.
+
+- Family: `session`
+- Recordable: no
 
 Parameters:
 
@@ -154,6 +186,9 @@ _None._
 
 List configured connection targets and the default target.
 
+- Family: `session`
+- Recordable: no
+
 Parameters:
 
 _None._
@@ -161,6 +196,9 @@ _None._
 ### `long_press`
 
 Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration.
+
+- Family: `spatialAction`
+- Recordable: yes
 
 Parameters:
 
@@ -176,6 +214,9 @@ Parameters:
 
 Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path.
 
+- Family: `spatialAction`
+- Recordable: yes
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -189,6 +230,9 @@ Parameters:
 
 Check connection health without reading accessibility state.
 
+- Family: `session`
+- Recordable: no
+
 Parameters:
 
 _None._
@@ -196,6 +240,9 @@ _None._
 ### `play_heist`
 
 Play back a heist file and return step diagnostics on failure.
+
+- Family: `heistRecording`
+- Recordable: no
 
 Parameters:
 
@@ -206,6 +253,9 @@ Parameters:
 ### `rotor`
 
 Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor.
+
+- Family: `semanticAction`
+- Recordable: yes
 
 Parameters:
 
@@ -222,6 +272,9 @@ Parameters:
 
 Execute an inline typed heist plan.
 
+- Family: `heistRuntime`
+- Recordable: no
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -231,26 +284,34 @@ Parameters:
 
 ### `scroll`
 
-Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
+Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName.
+
+- Family: `viewportDebug`
+- Recordable: no
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
+| `container` | `string` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
 ### `scroll_to_edge`
 
-Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
+Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge.
+
+- Family: `viewportDebug`
+- Recordable: no
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
+| `container` | `string` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
@@ -258,6 +319,9 @@ Parameters:
 ### `scroll_to_visible`
 
 Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry.
+
+- Family: `viewportDebug`
+- Recordable: no
 
 Parameters:
 
@@ -271,6 +335,9 @@ Parameters:
 
 Write text to the general pasteboard from within the app.
 
+- Family: `semanticAction`
+- Recordable: yes
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -283,6 +350,9 @@ Parameters:
 
 Start composing successful interactions into a semantic heist test.
 
+- Family: `heistRecording`
+- Recordable: no
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -294,6 +364,9 @@ Parameters:
 
 Stop heist recording and save a deterministic semantic heist fixture.
 
+- Family: `heistRecording`
+- Recordable: no
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -303,6 +376,9 @@ Parameters:
 ### `swipe`
 
 Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.
+
+- Family: `spatialAction`
+- Recordable: yes
 
 Parameters:
 
@@ -320,6 +396,9 @@ Parameters:
 
 Type non-empty text, optionally after inflating a semantic target.
 
+- Family: `semanticAction`
+- Recordable: yes
+
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
@@ -332,6 +411,9 @@ Parameters:
 ### `wait`
 
 Wait until an accessibility predicate is satisfied within timeout by evaluating settled semantic observations.
+
+- Family: `observation`
+- Recordable: yes
 
 Parameters:
 

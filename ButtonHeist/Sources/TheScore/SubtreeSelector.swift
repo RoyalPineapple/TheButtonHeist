@@ -43,7 +43,21 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
                 ordinal: ordinal
             ))
         } else {
-            self = .container(try container.decode(ContainerMatcher.self, forKey: .container), ordinal: ordinal)
+            let containerDecoder = try container.superDecoder(forKey: .container)
+            let stringContainer = try? containerDecoder.singleValueContainer()
+            if let stringContainer,
+               let containerName = try? stringContainer.decode(String.self) {
+                guard !containerName.isEmpty else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .container,
+                        in: container,
+                        debugDescription: "container name must be non-empty"
+                    )
+                }
+                self = .container(ContainerMatcher(containerName: containerName), ordinal: ordinal)
+            } else {
+                self = .container(try ContainerMatcher(from: containerDecoder), ordinal: ordinal)
+            }
         }
     }
 
