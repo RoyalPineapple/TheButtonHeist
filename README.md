@@ -133,10 +133,9 @@ buttonheist play_heist --input search-flow.heist --junit search-flow.xml
 A Swift-authored heist:
 
 ```swift
-import ButtonHeistDSL
-import TheScore
+import ThePlans
 
-let heist = try Heist("searchFlow") {
+let heist = try HeistPlan("searchFlow") {
     TypeText("milk", into: .label("Search"))
         .expect(.present(.element(label: "Search", value: "milk")), timeout: .seconds(2))
 
@@ -366,7 +365,8 @@ macOS client outside it, and CLI/MCP fronts for humans and agents.
 |---|---|
 | `TheFence` | Shared command contract for CLI and MCP |
 | `TheHandoff` | Device discovery, target resolution, TLS connection, and session state |
-| `TheScore` | Wire models, traces, predicates, results, and heist data shared across boundaries |
+| `ThePlans` | Pure heist language: plan AST, Swift DSL, JSON, validation, canonical rendering, and source compilation |
+| `TheScore` | Wire models, traces, predicates, and results shared across boundaries |
 | `ButtonHeistCLI` | Command-line adapter |
 | `ButtonHeistMCP` | MCP adapter for agents |
 | `HeistStore` / `ScreenshotStore` | Deterministic heist and screenshot artifacts |

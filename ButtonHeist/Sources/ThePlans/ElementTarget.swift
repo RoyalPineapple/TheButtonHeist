@@ -52,7 +52,7 @@ extension ElementTarget: CustomStringConvertible {
 // MARK: - ElementTarget Codable (flat wire format)
 
 extension ElementTarget: Codable {
-    enum CodingKeys: String, CodingKey {
+    public enum CodingKeys: String, CodingKey {
         case label, identifier, value, traits, excludeTraits
         case ordinal
 
@@ -83,7 +83,7 @@ extension ElementTarget: Codable {
         self = try Self.decodeFlat(from: decoder, shouldRejectUnknownKeys: true)
     }
 
-    static func decodeSubtreeElement(from decoder: Decoder, ordinal: Int?) throws -> ElementTarget {
+    public static func decodeSubtreeElement(from decoder: Decoder, ordinal: Int?) throws -> ElementTarget {
         try decodeFlat(
             from: decoder,
             externalOrdinal: ordinal,

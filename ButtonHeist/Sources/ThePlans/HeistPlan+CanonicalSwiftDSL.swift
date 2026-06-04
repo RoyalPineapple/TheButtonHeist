@@ -1,5 +1,4 @@
 import Foundation
-import TheScore
 
 public enum HeistCanonicalSwiftDSLError: Error, Sendable, Equatable, CustomStringConvertible {
     case unsupportedAction(String)
@@ -31,7 +30,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
     func render(_ plan: HeistPlan) throws -> String {
         let definitions = try renderDefinitions(plan.definitions, path: [], indent: 0)
         let body = try render(steps: plan.body, indent: 1, environment: .empty)
-        let heistHeader = plan.name.map { "try Heist(\(quote($0))) {" } ?? "try Heist {"
+        let heistHeader = plan.name.map { "try HeistPlan(\(quote($0))) {" } ?? "try HeistPlan {"
         let heist = """
         \(heistHeader)
         \(body)
@@ -78,7 +77,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return line("Fail(\(quote(fail.message)))", indent)
         case .heist(let plan):
             let body = try render(steps: plan.body, indent: indent + 1, environment: environment)
-            let header = plan.name.map { "try Heist(\(quote($0))) {" } ?? "try Heist {"
+            let header = plan.name.map { "try HeistPlan(\(quote($0))) {" } ?? "try HeistPlan {"
             return """
             \(line(header, indent))
             \(body)

@@ -51,11 +51,11 @@ struct HeistReportProjection {
     private static func actionProjection(for outcome: HeistExecutionStepResult) -> HeistActionReportProjection? {
         guard outcome.kind == .action else { return nil }
         if let actionCommand = outcome.actionCommand {
-            guard let fenceCommand = TheFence.Command(clientWireType: actionCommand.wireType) else {
-                preconditionFailure("Missing Fence command for admitted heist action \(actionCommand.wireType.rawValue)")
+            guard let fenceCommand = TheFence.Command(clientWireType: actionCommand.clientWireType) else {
+                preconditionFailure("Missing Fence command for admitted heist action \(actionCommand.clientWireType.rawValue)")
             }
             return HeistActionReportProjection(
-                commandName: actionCommand.wireType.rawValue,
+                commandName: actionCommand.clientWireType.rawValue,
                 fenceCommand: fenceCommand,
                 target: actionCommand.reportTarget,
                 actionResult: outcome.actionResult,

@@ -253,16 +253,16 @@ struct HeistPlanTraversal {
         guard let resolved = context.definitionScope.resolve(path: invoke.path) else { return }
         let resolvedName = resolved.qualifiedName
         guard !context.invocationStack.contains(resolvedName),
-              let environment = try? context.environment.binding(argument: invoke.argument, to: resolved.plan.parameter)
+              let environment = try? context.environment.binding(argument: invoke.argument, to: resolved.definition.parameter)
         else { return }
         walk(
-            steps: resolved.plan.body,
+            steps: resolved.definition.body,
             path: "\(invokeContext.path).body",
             depth: context.depth + 1,
             allowsCollectionLoops: context.allowsCollectionLoops,
-            scope: context.scope.binding(parameter: resolved.plan.parameter),
+            scope: context.scope.binding(parameter: resolved.definition.parameter),
             environment: environment,
-            definitionScope: HeistDefinitionScope(definitions: resolved.plan.definitions, pathPrefix: resolved.namePath),
+            definitionScope: HeistDefinitionScope(definitions: resolved.definition.definitions, pathPrefix: resolved.namePath),
             invocationStack: context.invocationStack + [resolvedName],
             visitor: &visitor
         )
@@ -445,30 +445,30 @@ struct HeistDefinitionScope {
         guard let direct = definitions.first(where: { $0.name == first }) else { return nil }
         return resolve(
             remaining: Array(path.dropFirst()),
-            plan: direct,
+            definition: direct,
             namePath: pathPrefix + [first]
         )
     }
 
     private func resolve(
         remaining: [String],
-        plan: HeistPlan,
+        definition: HeistPlan,
         namePath: [String]
     ) -> ResolvedHeistDefinition? {
         guard let next = remaining.first else {
-            return ResolvedHeistDefinition(plan: plan, qualifiedName: namePath.joined(separator: "."), namePath: namePath)
+            return ResolvedHeistDefinition(definition: definition, qualifiedName: namePath.joined(separator: "."), namePath: namePath)
         }
-        guard let child = plan.definitions.first(where: { $0.name == next }) else { return nil }
+        guard let child = definition.definitions.first(where: { $0.name == next }) else { return nil }
         return resolve(
             remaining: Array(remaining.dropFirst()),
-            plan: child,
+            definition: child,
             namePath: namePath + [next]
         )
     }
 }
 
 struct ResolvedHeistDefinition {
-    let plan: HeistPlan
+    let definition: HeistPlan
     let qualifiedName: String
     let namePath: [String]
 }

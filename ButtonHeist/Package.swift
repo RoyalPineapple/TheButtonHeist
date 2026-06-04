@@ -8,21 +8,31 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
+        .library(name: "ThePlans", targets: ["ThePlans"]),
         .library(name: "TheScore", targets: ["TheScore"]),
         .library(name: "ButtonHeistDSL", targets: ["ButtonHeistDSL"]),
+        .executable(name: "heist-plan", targets: ["HeistPlanTool"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
         .package(path: "../submodules/AccessibilitySnapshotBH"),
+        .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
         .package(url: "https://github.com/apple/swift-certificates", .upToNextMinor(from: "1.18.0")),
         .package(url: "https://github.com/apple/swift-crypto", .upToNextMinor(from: "3.15.0")),
     ],
     targets: [
         .target(
+            name: "ThePlans",
+            dependencies: [],
+            path: "Sources/ThePlans",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .target(
             name: "TheScore",
             dependencies: [
+                "ThePlans",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "Sources/TheScore",
@@ -30,8 +40,17 @@ let package = Package(
         ),
         .target(
             name: "ButtonHeistDSL",
-            dependencies: ["TheScore"],
+            dependencies: ["ThePlans"],
             path: "Sources/ButtonHeistDSL",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .executableTarget(
+            name: "HeistPlanTool",
+            dependencies: [
+                "ThePlans",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Sources/HeistPlanTool",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         // Swift implementation of TheInsideJob
@@ -71,6 +90,12 @@ let package = Package(
             name: "TheScoreTests",
             dependencies: ["TheScore"],
             path: "Tests/TheScoreTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .testTarget(
+            name: "ThePlansTests",
+            dependencies: ["ThePlans"],
+            path: "Tests/ThePlansTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(

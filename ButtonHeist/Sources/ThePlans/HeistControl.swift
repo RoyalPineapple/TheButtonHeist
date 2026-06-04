@@ -1,5 +1,3 @@
-import TheScore
-
 public extension Double {
     static func seconds(_ value: Double) -> Double {
         value

@@ -4,10 +4,10 @@ import Foundation
 
 /// Canonical ordered automation contract.
 ///
-/// Swift DSL source, dynamic agent JSON, recordings, and playback all converge
+/// Swift DSL source, dynamic agent JSON, live composition, and run-heist all converge
 /// on this value. DSL syntax is source authoring; `HeistPlan` is the product
 /// contract executed by the runtime. The plan stores semantic structure; it
-/// does not observe UI state, settle, report, record, or dispatch actions.
+/// does not observe UI state, settle, report, compose live interactions, or dispatch actions.
 public struct HeistPlan: Codable, Sendable, Equatable {
     public static let currentVersion = 2
 
@@ -386,21 +386,6 @@ public struct ActionStep: Codable, Sendable, Equatable {
         self.expectationValidationFailure = expectationValidationFailure
     }
 
-    @_disfavoredOverload
-    public init(
-        command: ClientMessage,
-        expectation: WaitStep? = nil,
-        expectationWaiver: String? = nil,
-        expectationValidationFailure: String? = nil
-    ) throws {
-        try self.init(
-            command: HeistActionCommand(clientMessage: command),
-            expectation: expectation,
-            expectationWaiver: expectationWaiver,
-            expectationValidationFailure: expectationValidationFailure
-        )
-    }
-
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case command, expectation
         case expectationWaiver = "without_expectation"
@@ -731,7 +716,7 @@ public enum HeistPlanError: Error, Sendable, Equatable {
 
 @_spi(ButtonHeistInternals) public extension HeistPlan {
     func heistDefinition(at path: [String]) -> HeistPlan? {
-        HeistDefinitionScope(definitions: definitions).resolve(path: path)?.plan
+        HeistDefinitionScope(definitions: definitions).resolve(path: path)?.definition
     }
 }
 

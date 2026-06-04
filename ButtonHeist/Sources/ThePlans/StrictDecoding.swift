@@ -1,19 +1,19 @@
-struct ScoreUnknownCodingKey: CodingKey {
-    var stringValue: String
-    var intValue: Int?
+public struct ScoreUnknownCodingKey: CodingKey {
+    public var stringValue: String
+    public var intValue: Int?
 
-    init(stringValue: String) {
+    public init(stringValue: String) {
         self.stringValue = stringValue
         intValue = nil
     }
 
-    init?(intValue: Int) {
+    public init?(intValue: Int) {
         stringValue = "\(intValue)"
         self.intValue = intValue
     }
 }
 
-extension Decoder {
+public extension Decoder {
     func rejectUnknownKeys<K>(
         allowed keyType: K.Type,
         additional allowedFieldNames: Set<String> = [],

@@ -55,6 +55,14 @@ struct ToolSyncTests {
             return properties["containerName"] != nil
         })
     }
+
+    @Test("run_heist schema includes adapter source_file convenience")
+    func runHeistSchemaIncludesAdapterSourceFileConvenience() throws {
+        let tool = try #require(ToolDefinitions.all.first { $0.name == "run_heist" })
+
+        #expect(schemaValue(at: ["properties", "source_file", "type"], in: tool.inputSchema) == .string("string"))
+        #expect(schemaValue(at: ["properties", "entry", "type"], in: tool.inputSchema) == .string("string"))
+    }
 }
 
 private func schemaValue(at path: [String], in root: Value) -> Value? {

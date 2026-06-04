@@ -63,7 +63,7 @@ extension TheFence {
     }
 
     func sendAndAwaitHeistExecution(
-        _ plan: TheScore.HeistPlan,
+        _ plan: HeistPlan,
         timeout: TimeInterval
     ) async throws -> HeistExecutionResult {
         guard handoff.isConnected else { throw FenceError.notConnected }

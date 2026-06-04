@@ -61,7 +61,7 @@ func strictValidationRequiresSemanticActionExpectation() throws {
 }
 
 @Test
-func recordingQualityAllowsExplicitExpectationWaiver() throws {
+func `composition quality allows explicit expectation waiver`() throws {
     let plan = HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
@@ -69,12 +69,12 @@ func recordingQualityAllowsExplicitExpectationWaiver() throws {
         )),
     ])
 
-    #expect(plan.lint(.recordingQuality).isEmpty)
+    #expect(plan.lint(.compositionQuality).isEmpty)
     #expect(plan.lint(.strictTest).isEmpty)
 }
 
 @Test
-    func lintFlagsMechanicalCommandsAndViewportSetup() throws {
+func lintFlagsMechanicalCommandsAndViewportSetup() throws {
     let plan = HeistPlan(body: [
         .action(try ActionStep(command: .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
         .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
@@ -92,12 +92,12 @@ func recordingQualityAllowsExplicitExpectationWaiver() throws {
 }
 
 @Test
-    func lintReportsTypeTextWithoutTarget() throws {
+func lintReportsTypeTextWithoutTarget() throws {
     let plan = HeistPlan(body: [
         .action(try ActionStep(command: .typeText(TypeTextTarget(text: "milk")))),
     ])
 
-    let findings = plan.lint(.recordingQuality)
+    let findings = plan.lint(.compositionQuality)
 
     #expect(findings == [
         HeistPlanLintFinding(
@@ -259,7 +259,7 @@ func runtimeAdmissionRejectsStringRefThatLowersToInvalidCommandPayload() throws 
 
     let failures = plan.runtimeAdmissionFailures()
 
-    #expect(failures.contains { $0.contract.contains("direct Fence command contract") })
+    #expect(failures.contains { $0.contract.contains("heist action payload contract") })
     #expect(failures.contains { $0.observed.contains("text must be non-empty") })
 }
 
@@ -506,7 +506,7 @@ func runtimeAdmissionValidatesInvokedBodiesWithBoundArguments() throws {
 
     let failures = plan.runtimeAdmissionFailures()
 
-    #expect(failures.contains { $0.contract.contains("direct Fence command contract") })
+    #expect(failures.contains { $0.contract.contains("heist action payload contract") })
     #expect(failures.contains { $0.observed.contains("text must be non-empty") })
 }
 

@@ -2,9 +2,12 @@ import Foundation
 import MCP
 import ButtonHeist
 import TheScore
+import ThePlans
 
 @main
 struct ButtonHeistMCPServer {
+    typealias SwiftHeistCompiler = (_ source: URL, _ entry: String) throws -> HeistPlan
+
     static func main() async throws {
         let (fence, idleMonitor) = await setUp()
 
@@ -45,7 +48,7 @@ struct ButtonHeistMCPServer {
     ) async -> CallTool.Result {
         defer { idleMonitor.resetTimer() }
         do {
-            let arguments = try decodeArguments(params.arguments)
+            let arguments = try decodeArguments(params.arguments, forTool: params.name)
             let routed = TheFence.Command.routeToolCall(named: params.name)
             let command: TheFence.Command
             switch routed {
@@ -63,11 +66,57 @@ struct ButtonHeistMCPServer {
         }
     }
 
-    private static func decodeArguments(_ arguments: [String: Value]?) throws -> TheFence.CommandArgumentEnvelope {
+    static func decodeArguments(
+        _ arguments: [String: Value]?,
+        forTool toolName: String? = nil,
+        compileSwiftFile: SwiftHeistCompiler = { source, entry in
+            try HeistSourceCompiler().compileSwiftFile(source, entry: entry)
+        }
+    ) throws -> TheFence.CommandArgumentEnvelope {
+        if toolName == TheFence.Command.runHeist.rawValue,
+           let sourceValue = arguments?["source_file"] {
+            return try decodeSwiftRunHeistArguments(
+                arguments ?? [:],
+                sourceValue: sourceValue,
+                compileSwiftFile: compileSwiftFile
+            )
+        }
+
         var values: [String: HeistValue] = [:]
         for (key, value) in arguments ?? [:] {
             values[key] = try heistValue(from: value, field: key)
         }
+        return TheFence.CommandArgumentEnvelope(values: values)
+    }
+
+    private static func decodeSwiftRunHeistArguments(
+        _ arguments: [String: Value],
+        sourceValue: Value,
+        compileSwiftFile: SwiftHeistCompiler
+    ) throws -> TheFence.CommandArgumentEnvelope {
+        guard case .string(let sourceFile) = sourceValue,
+              !sourceFile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw SchemaValidationError(field: "source_file", observed: "invalid", expected: "non-empty string")
+        }
+        guard case .string(let entry)? = arguments["entry"],
+              !entry.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw SchemaValidationError(field: "entry", observed: "missing", expected: "non-empty string")
+        }
+
+        do {
+            let plan = try compileSwiftFile(
+                URL(fileURLWithPath: sourceFile),
+                entry
+            )
+            return try runHeistArguments(for: plan)
+        } catch {
+            throw MCPAdapterError(message: "failed to compile Swift heist source: \(error)")
+        }
+    }
+
+    private static func runHeistArguments(for plan: HeistPlan) throws -> TheFence.CommandArgumentEnvelope {
+        let data = try JSONEncoder().encode(plan)
+        let values = try JSONDecoder().decode([String: HeistValue].self, from: data)
         return TheFence.CommandArgumentEnvelope(values: values)
     }
 
@@ -121,4 +170,10 @@ struct ButtonHeistMCPServer {
         return .init(content: content, isError: response.isFailure)
     }
 
+}
+
+struct MCPAdapterError: Error, CustomStringConvertible {
+    let message: String
+
+    var description: String { message }
 }
