@@ -250,24 +250,27 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(screen.liveCapture.heistIdByElement[second], "row_button_2")
     }
 
-    func testBuildScreenRestoresScreenCoordinateGeometryFromLiveSourceObject() throws {
+    func testBuildScreenRestoresScreenCoordinateGeometryFromParseRootOffset() throws {
+        let parseRootOffset = CGPoint(x: 180, y: 24)
         let rootLocalFrame = CGRect(x: 64, y: 372, width: 155, height: 72)
-        let screenFrame = CGRect(x: 244, y: 396, width: 155, height: 72)
-        let screenActivationPoint = CGPoint(x: 321.5, y: 432)
+        let screenFrame = rootLocalFrame.offsetBy(dx: parseRootOffset.x, dy: parseRootOffset.y)
+        let rootLocalActivationPoint = CGPoint(x: 141.5, y: 408)
+        let screenActivationPoint = CGPoint(
+            x: rootLocalActivationPoint.x + parseRootOffset.x,
+            y: rootLocalActivationPoint.y + parseRootOffset.y
+        )
         let parsedElement = makeElement(
             label: "Confirm",
             traits: .button,
-            frame: rootLocalFrame
+            frame: rootLocalFrame,
+            activationPoint: rootLocalActivationPoint
         )
-        let sourceObject = NSObject()
-        sourceObject.accessibilityFrame = screenFrame
-        sourceObject.accessibilityActivationPoint = screenActivationPoint
 
         let result = TheBurglar.ParseResult(
             hierarchy: [.element(parsedElement, traversalIndex: 0)],
-            objects: [parsedElement: sourceObject],
-            objectsByPath: [TreePath([0]): sourceObject],
-            scrollViews: [:]
+            objects: [:],
+            scrollViews: [:],
+            screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -282,6 +285,49 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(projected.frameHeight, screenFrame.size.height)
         XCTAssertEqual(projected.activationPointX, screenActivationPoint.x)
         XCTAssertEqual(projected.activationPointY, screenActivationPoint.y)
+    }
+
+    func testBuildScreenRestoresPathGeometryFromParseRootOffset() throws {
+        let parseRootOffset = CGPoint(x: 20, y: 30)
+        let pathElement = AccessibilityElement(
+            description: "Path Button",
+            label: "Path Button",
+            value: nil,
+            traits: .button,
+            identifier: nil,
+            hint: nil,
+            userInputLabels: nil,
+            shape: .path([
+                .move(to: AccessibilityPoint(x: 10, y: 10)),
+                .line(to: AccessibilityPoint(x: 50, y: 10)),
+                .quadCurve(
+                    to: AccessibilityPoint(x: 50, y: 50),
+                    control: AccessibilityPoint(x: 60, y: 25)
+                ),
+            ]),
+            activationPoint: AccessibilityPoint(x: 30, y: 30),
+            usesDefaultActivationPoint: false,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: true
+        )
+        let result = TheBurglar.ParseResult(
+            hierarchy: [.element(pathElement, traversalIndex: 0)],
+            objects: [:],
+            scrollViews: [:],
+            screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
+        )
+
+        let screen = TheBurglar.buildScreen(from: result)
+        let translated = try XCTUnwrap(screen.liveCapture.hierarchy.sortedElements.first)
+
+        guard case .path(let elements) = translated.shape else {
+            return XCTFail("Expected translated path")
+        }
+        XCTAssertEqual(elements.first, .move(to: AccessibilityPoint(x: 30, y: 40)))
+        XCTAssertEqual(translated.bhResolvedActivationPoint, CGPoint(x: 50, y: 60))
     }
 
     // MARK: - Content space origin
@@ -337,13 +383,15 @@ final class TheBurglarApplyTests: XCTestCase {
         label: String? = nil,
         value: String? = nil,
         traits: UIAccessibilityTraits = .none,
-        frame: CGRect = .zero
+        frame: CGRect = .zero,
+        activationPoint: CGPoint? = nil
     ) -> AccessibilityElement {
         .make(
             label: label,
             value: value,
             traits: traits,
             shape: .frame(AccessibilityRect(frame)),
+            activationPoint: activationPoint,
             respondsToUserInteraction: false
         )
     }
