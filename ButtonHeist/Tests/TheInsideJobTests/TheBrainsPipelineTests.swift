@@ -272,6 +272,68 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.settleTimeMs, 300)
     }
 
+    // MARK: - Wait Evidence Path
+
+    func testWaitSuccessEvidenceUsesSettledObservationTrace() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let beforeScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Before"), "before"),
+        ])
+        let matchedScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Before"), "before"),
+            (makeElement(label: "Loaded"), "loaded"),
+        ])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .changed(.appeared(ElementPredicate(label: "Loaded"))),
+                timeout: 1
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(beforeScreen, scope: .discovery)
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(matchedScreen, scope: .discovery)
+
+        let receipt = await receiptTask.value
+        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Before"])
+        XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Before", "Loaded"])
+        guard case .elementsChanged? = trace.endpointDeltaProjection else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDeltaProjection))")
+        }
+    }
+
+    func testWaitTimeoutEvidenceUsesLastSettledObservationTrace() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let observedScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Known"), "known"),
+        ])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .changed(.appeared(ElementPredicate(label: "Missing"))),
+                timeout: 0.05
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(observedScreen, scope: .discovery)
+
+        let receipt = await receiptTask.value
+        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+
+        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
+        XCTAssertTrue(receipt.actionResult.message?.contains("last observed: known: 1 elements") == true)
+    }
+
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
         seedScreen(elements: [("Menu", .header, "menu_header")])
         let before = brains.postActionObservation.captureSemanticState()
@@ -542,6 +604,21 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) {
         brains.stash.installScreenForTesting(makeScreen(elements: elements))
+    }
+
+    private func waitForSettledSemanticWaiter(
+        on stash: TheStash,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        for _ in 0..<50 where stash.semanticObservationStream.settledWaiterCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
+    }
+
+    private func makeElement(label: String) -> AccessibilityElement {
+        AccessibilityElement.make(label: label, respondsToUserInteraction: false)
     }
 
     private func makeScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) -> Screen {

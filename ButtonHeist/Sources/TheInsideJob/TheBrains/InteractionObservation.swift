@@ -11,6 +11,28 @@ final class InteractionObservation {
     private let stash: TheStash
     private let postActionObservation: PostActionObservation
 
+    private struct PostActionSettleEvidence {
+        let outcome: SettleSession.Outcome
+        let visibleEvent: SettledSemanticObservationEvent?
+
+        var didSettleCleanly: Bool {
+            outcome.outcome.didSettleCleanly
+        }
+
+        var timeMs: Int {
+            outcome.outcome.timeMs
+        }
+    }
+
+    private struct FinalSemanticEvidence {
+        let state: PostActionObservation.BeforeState
+        let trace: AccessibilityTrace
+
+        var capture: AccessibilityTrace.Capture? {
+            trace.captures.last
+        }
+    }
+
     init(stash: TheStash, postActionObservation: PostActionObservation) {
         self.stash = stash
         self.postActionObservation = postActionObservation
@@ -49,58 +71,56 @@ final class InteractionObservation {
         before: PostActionObservation.BeforeState,
         settleOutcome: SettleSession.Outcome? = nil
     ) async -> ActionResult {
-        let settledObservation = await stash.semanticObservationStream.settlePostActionObservation(
-            baselineTripwireSignal: before.tripwireSignal,
-            settleOutcome: settleOutcome
-        )
-        let didSettle = settledObservation.settle.outcome.didSettleCleanly
-        if case .cancelled(let cancelMs) = settledObservation.settle.outcome {
-            return InteractionObservationProjection.failedActionResult(
-                method: method, capture: before.capture, message: "cancelled after \(cancelMs)ms",
-                payload: payload, subjectEvidence: subjectEvidence, settled: false,
-                settleTimeMs: cancelMs
-            )
+        let settleEvidence = await settleAfterAction(before: before, outcome: settleOutcome)
+        if let cancelled = cancelledActionResult(
+            method: method,
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            before: before,
+            settleEvidence: settleEvidence
+        ) {
+            return cancelled
         }
 
-        guard let visibleEvent = settledObservation.event else {
-            return InteractionObservationProjection.failedActionResult(
-                method: method, capture: before.capture, message: "Could not parse post-action accessibility tree",
-                payload: payload, subjectEvidence: subjectEvidence, settled: didSettle,
-                settleTimeMs: settledObservation.settle.outcome.timeMs
-            )
-        }
-
-        let finalState = await semanticStateAfterDiscovery(after: visibleEvent.sequence)
-            ?? postActionObservation.captureSemanticState(from: visibleEvent.observation)
-        let finalClassification = ScreenClassifier.classify(
-            before: before.screenSnapshot,
-            after: finalState.screenSnapshot
-        )
-        let trace = postActionObservation.makeAccessibilityTrace(
-            afterInterface: finalState.interface,
-            parentCapture: before.capture,
-            classification: finalClassification,
-            transient: InteractionObservationProjection.transientElements(
-                settleResult: settledObservation.settle,
+        guard let finalEvidence = await finalSemanticEvidence(
+            before: before,
+            settleEvidence: settleEvidence
+        ) else {
+            return postActionParseFailureResult(
+                method: method,
+                payload: payload,
+                subjectEvidence: subjectEvidence,
                 before: before,
-                final: finalState,
-                classification: finalClassification
-            )
-        )
-
-        guard let postCapture = trace.captures.last else {
-            let resolvedPayload = success ? (afterStatePayload?(finalState) ?? payload) : payload
-            return InteractionObservationProjection.failedActionResult(
-                method: method, capture: before.capture, message: message,
-                payload: resolvedPayload, subjectEvidence: subjectEvidence
+                settleEvidence: settleEvidence
             )
         }
 
-        let resolvedPayload = success ? (afterStatePayload?(finalState) ?? payload) : payload
-        return InteractionObservationProjection.actionResult(
-            method: method, capture: postCapture, message: message, payload: resolvedPayload,
-            errorKind: errorKind, accessibilityTrace: trace, subjectEvidence: subjectEvidence,
-            settled: didSettle, settleTimeMs: settledObservation.settle.outcome.timeMs, success: success
+        let resolvedPayload = actionPayload(
+            success: success,
+            payload: payload,
+            afterStatePayload: afterStatePayload,
+            finalState: finalEvidence.state
+        )
+
+        guard finalEvidence.capture != nil else {
+            return InteractionObservationProjection.failedActionResult(
+                method: method,
+                capture: before.capture,
+                message: message,
+                payload: resolvedPayload,
+                subjectEvidence: subjectEvidence
+            )
+        }
+
+        return buildActionResult(
+            success: success,
+            method: method,
+            message: message,
+            payload: resolvedPayload,
+            errorKind: errorKind,
+            subjectEvidence: subjectEvidence,
+            finalEvidence: finalEvidence,
+            settleEvidence: settleEvidence
         )
     }
 
@@ -243,6 +263,133 @@ final class InteractionObservation {
             timeout: 2.0
         ) else { return nil }
         return postActionObservation.captureSemanticState(from: event.observation)
+    }
+
+    private func settleAfterAction(
+        before: PostActionObservation.BeforeState,
+        outcome: SettleSession.Outcome?
+    ) async -> PostActionSettleEvidence {
+        let settledObservation = await stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: before.tripwireSignal,
+            settleOutcome: outcome
+        )
+        return PostActionSettleEvidence(
+            outcome: settledObservation.settle,
+            visibleEvent: settledObservation.event
+        )
+    }
+
+    private func finalSemanticEvidence(
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionSettleEvidence
+    ) async -> FinalSemanticEvidence? {
+        guard let visibleEvent = settleEvidence.visibleEvent else { return nil }
+        let finalState = await captureFinalSemanticState(after: visibleEvent)
+        let trace = buildPostActionTrace(
+            before: before,
+            final: finalState,
+            settleEvidence: settleEvidence
+        )
+        return FinalSemanticEvidence(state: finalState, trace: trace)
+    }
+
+    private func captureFinalSemanticState(
+        after visibleEvent: SettledSemanticObservationEvent
+    ) async -> PostActionObservation.BeforeState {
+        await semanticStateAfterDiscovery(after: visibleEvent.sequence)
+            ?? postActionObservation.captureSemanticState(from: visibleEvent.observation)
+    }
+
+    private func buildPostActionTrace(
+        before: PostActionObservation.BeforeState,
+        final: PostActionObservation.BeforeState,
+        settleEvidence: PostActionSettleEvidence
+    ) -> AccessibilityTrace {
+        let classification = ScreenClassifier.classify(
+            before: before.screenSnapshot,
+            after: final.screenSnapshot
+        )
+        return postActionObservation.makeAccessibilityTrace(
+            afterInterface: final.interface,
+            parentCapture: before.capture,
+            classification: classification,
+            transient: InteractionObservationProjection.transientElements(
+                settleResult: settleEvidence.outcome,
+                before: before,
+                final: final,
+                classification: classification
+            )
+        )
+    }
+
+    private func actionPayload(
+        success: Bool,
+        payload: ResultPayload?,
+        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)?,
+        finalState: PostActionObservation.BeforeState
+    ) -> ResultPayload? {
+        success ? (afterStatePayload?(finalState) ?? payload) : payload
+    }
+
+    private func cancelledActionResult(
+        method: ActionMethod,
+        payload: ResultPayload?,
+        subjectEvidence: ActionSubjectEvidence?,
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionSettleEvidence
+    ) -> ActionResult? {
+        guard case .cancelled(let cancelMs) = settleEvidence.outcome.outcome else { return nil }
+        return InteractionObservationProjection.failedActionResult(
+            method: method,
+            capture: before.capture,
+            message: "cancelled after \(cancelMs)ms",
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            settled: false,
+            settleTimeMs: cancelMs
+        )
+    }
+
+    private func postActionParseFailureResult(
+        method: ActionMethod,
+        payload: ResultPayload?,
+        subjectEvidence: ActionSubjectEvidence?,
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionSettleEvidence
+    ) -> ActionResult {
+        InteractionObservationProjection.failedActionResult(
+            method: method,
+            capture: before.capture,
+            message: "Could not parse post-action accessibility tree",
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            settled: settleEvidence.didSettleCleanly,
+            settleTimeMs: settleEvidence.timeMs
+        )
+    }
+
+    private func buildActionResult(
+        success: Bool,
+        method: ActionMethod,
+        message: String?,
+        payload: ResultPayload?,
+        errorKind: ErrorKind?,
+        subjectEvidence: ActionSubjectEvidence?,
+        finalEvidence: FinalSemanticEvidence,
+        settleEvidence: PostActionSettleEvidence
+    ) -> ActionResult {
+        InteractionObservationProjection.actionResult(
+            method: method,
+            capture: finalEvidence.capture ?? finalEvidence.state.capture,
+            message: message,
+            payload: payload,
+            errorKind: errorKind,
+            accessibilityTrace: finalEvidence.trace,
+            subjectEvidence: subjectEvidence,
+            settled: settleEvidence.didSettleCleanly,
+            settleTimeMs: settleEvidence.timeMs,
+            success: success
+        )
     }
 
     private func waitReceipt(
