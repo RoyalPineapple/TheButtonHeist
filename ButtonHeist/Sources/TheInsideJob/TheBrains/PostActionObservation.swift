@@ -28,6 +28,28 @@ final class PostActionObservation {
         let settledObservationSequence: UInt64?
     }
 
+    struct SettleEvidence {
+        let outcome: SettleSession.Outcome
+        let visibleEvent: SettledSemanticObservationEvent?
+
+        var didSettleCleanly: Bool {
+            outcome.outcome.didSettleCleanly
+        }
+
+        var timeMs: Int {
+            outcome.outcome.timeMs
+        }
+    }
+
+    struct FinalEvidence {
+        let state: BeforeState
+        let trace: AccessibilityTrace
+
+        var capture: AccessibilityTrace.Capture? {
+            trace.captures.last
+        }
+    }
+
     init(stash: TheStash, safecracker: TheSafecracker, tripwire: TheTripwire, navigation: Navigation) {
         self.stash = stash
         self.safecracker = safecracker
@@ -41,6 +63,39 @@ final class PostActionObservation {
             tripwireSignal: observation.tripwireSignal,
             settledObservationSequence: observation.sequence
         )
+    }
+
+    func semanticObservation(from event: SettledSemanticObservationEvent) -> HeistSemanticObservation {
+        let current = captureSemanticState(from: event.observation)
+        return InteractionObservationProjection.semanticObservation(event: event, state: current)
+    }
+
+    func settleEvidence(
+        before: BeforeState,
+        outcome: SettleSession.Outcome?
+    ) async -> SettleEvidence {
+        let settledObservation = await stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: before.tripwireSignal,
+            settleOutcome: outcome
+        )
+        return SettleEvidence(
+            outcome: settledObservation.settle,
+            visibleEvent: settledObservation.event
+        )
+    }
+
+    func finalSemanticEvidence(
+        before: BeforeState,
+        settleEvidence: SettleEvidence
+    ) async -> FinalEvidence? {
+        guard let visibleEvent = settleEvidence.visibleEvent else { return nil }
+        let finalState = await captureFinalSemanticState(after: visibleEvent)
+        let trace = buildPostActionTrace(
+            before: before,
+            final: finalState,
+            settleEvidence: settleEvidence
+        )
+        return FinalEvidence(state: finalState, trace: trace)
     }
 
     func captureSemanticState(
@@ -139,6 +194,42 @@ final class PostActionObservation {
             hash: after.capture.hash
         )
         return AccessibilityTrace(captures: [parent.capture, capture])
+    }
+
+    private func semanticStateAfterDiscovery(after sequence: UInt64?) async -> BeforeState? {
+        guard let event = await stash.observeSettledSemanticObservation(
+            scope: .discovery,
+            after: sequence,
+            timeout: 2.0
+        ) else { return nil }
+        return captureSemanticState(from: event.observation)
+    }
+
+    private func captureFinalSemanticState(after visibleEvent: SettledSemanticObservationEvent) async -> BeforeState {
+        await semanticStateAfterDiscovery(after: visibleEvent.sequence)
+            ?? captureSemanticState(from: visibleEvent.observation)
+    }
+
+    private func buildPostActionTrace(
+        before: BeforeState,
+        final: BeforeState,
+        settleEvidence: SettleEvidence
+    ) -> AccessibilityTrace {
+        let classification = ScreenClassifier.classify(
+            before: before.screenSnapshot,
+            after: final.screenSnapshot
+        )
+        return makeAccessibilityTrace(
+            afterInterface: final.interface,
+            parentCapture: before.capture,
+            classification: classification,
+            transient: InteractionObservationProjection.transientElements(
+                settleResult: settleEvidence.outcome,
+                before: before,
+                final: final,
+                classification: classification
+            )
+        )
     }
 
     private func makeCaptureContext(tripwireSignal: TheTripwire.TripwireSignal? = nil) -> AccessibilityTrace.Context {
