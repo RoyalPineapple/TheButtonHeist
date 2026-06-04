@@ -53,6 +53,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let plan = HeistPlan(body: [.conditional(conditional)])
         let childResult = HeistExecutionStepResult(
             index: 0,
+            path: "$.body[0].conditional.cases[0].body[0]",
             kind: .action,
             actionResult: ActionResult(success: true, method: .activate),
             expectation: ExpectationResult(met: true, predicate: expected),
@@ -73,7 +74,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         selectedCaseIndex: 0,
                         elapsedMs: 1
                     ),
-                    childResults: [childResult]
+                    children: [childResult]
                 ),
             ],
             totalTimingMs: 1
@@ -160,9 +161,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         selectedCaseIndex: 0,
                         elapsedMs: 1
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].conditional.cases[0].body[0]",
                             kind: .action,
                             actionResult: ActionResult(
                                 success: false,

@@ -24,7 +24,7 @@ final class HeistStoreTests: XCTestCase {
         try heistStore.appendStep(
             try activateStep(label: "Pay", traits: [.button])
         )
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
 
         XCTAssertFalse(heistStore.isRecordingHeist)
         XCTAssertEqual(heist.version, HeistPlan.currentVersion)
@@ -60,7 +60,7 @@ final class HeistStoreTests: XCTestCase {
     func testRejectsFinishWhenIdle() async {
         let heistStore = makeHeistStore()
 
-        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
             guard case StorageError.heistRecording(.notRecording) = error else {
                 return XCTFail("Expected notRecording, got \(error)")
             }
@@ -72,7 +72,7 @@ final class HeistStoreTests: XCTestCase {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "empty", app: "com.example.app")
 
-        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
             guard case StorageError.heistRecording(.noValidSteps) = error else {
                 return XCTFail("Expected noValidSteps, got \(error)")
             }
@@ -93,7 +93,7 @@ final class HeistStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: abandonedPath.path))
         try heistStore.startRecording(identifier: "new", app: "com.example.app")
         try heistStore.appendStep(try activateStep(label: "New"))
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body[0], try activateStep(label: "New"))
     }
 
@@ -109,7 +109,7 @@ final class HeistStoreTests: XCTestCase {
         try handle.write(contentsOf: Data("not-json\n".utf8))
         try handle.close()
 
-        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
             guard case StorageError.heistRecording(.stepReadFailed(let failedPath, let reason)) = error else {
                 return XCTFail("Expected stepReadFailed, got \(error)")
             }
@@ -135,7 +135,7 @@ final class HeistStoreTests: XCTestCase {
             args: ["target": targetArgumentValue(label: "Go")]
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [try activateStep(label: "Go")])
     }
 
@@ -159,7 +159,7 @@ final class HeistStoreTests: XCTestCase {
             )
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             try activateStep(
                 label: "Save",
@@ -195,7 +195,7 @@ final class HeistStoreTests: XCTestCase {
             )
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             try activateStep(
                 label: "Delete",
@@ -229,7 +229,7 @@ final class HeistStoreTests: XCTestCase {
             )
         )
 
-        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
             guard case StorageError.heistRecording(.noValidSteps) = error else {
                 return XCTFail("Expected noValidSteps, got \(error)")
             }
@@ -250,7 +250,7 @@ final class HeistStoreTests: XCTestCase {
             ]
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             try activateStep(label: "Save"),
         ])
@@ -281,7 +281,7 @@ final class HeistStoreTests: XCTestCase {
             dispatchedResponse: .interface(Interface(timestamp: Date(), tree: []))
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [try activateStep(label: "Delete")])
     }
 
@@ -300,7 +300,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: ActionResult(success: true, method: .wait)
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             .wait(WaitStep(predicate: .state(.present(ElementPredicate(label: "Ready"))), timeout: 4)),
         ])
@@ -322,7 +322,7 @@ final class HeistStoreTests: XCTestCase {
             args: ["target": targetArgumentValue(label: "Delete")]
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [try activateStep(label: "Delete")])
     }
 
@@ -342,7 +342,7 @@ final class HeistStoreTests: XCTestCase {
             args: ["target": targetArgumentValue(label: "Delete")]
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [try activateStep(label: "Delete")])
     }
 
@@ -368,7 +368,7 @@ final class HeistStoreTests: XCTestCase {
             args: ["target": targetArgumentValue(label: "Delete")]
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [try activateStep(label: "Delete")])
     }
 
@@ -389,7 +389,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: ActionResult(success: false, method: .activate, errorKind: .elementNotFound)
         )
 
-        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
             guard case StorageError.heistRecording(.noValidSteps) = error else {
                 return XCTFail("Expected noValidSteps, got \(error)")
             }
@@ -423,7 +423,7 @@ final class HeistStoreTests: XCTestCase {
             )
         )
 
-        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
             guard case StorageError.heistRecording(.noValidSteps) = error else {
                 return XCTFail("Expected noValidSteps, got \(error)")
             }
@@ -458,7 +458,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
             guard case StorageError.heistRecording(.noValidSteps) = error else {
                 return XCTFail("Expected noValidSteps, got \(error)")
             }
@@ -476,7 +476,7 @@ final class HeistStoreTests: XCTestCase {
             args: ["direction": .string("down")]
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
         ])
@@ -499,7 +499,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: ActionResult(success: true, method: .syntheticTap)
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
             .action(try ActionStep(command: .oneFingerTap(TapTarget(
@@ -531,7 +531,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             try activateStep(label: "Delete", traits: [.button]),
         ])
@@ -571,7 +571,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             try activateStep(label: "Delete", traits: [.button]),
         ])
@@ -599,7 +599,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             .action(try ActionStep(command: .oneFingerTap(TapTarget(
                 selection: .element(.predicate(ElementPredicate(label: "Caption")))
@@ -631,7 +631,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             .action(try ActionStep(command: .activate(
                 .predicate(ElementPredicate(label: "Delete"), ordinal: 1)
@@ -662,7 +662,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             try activateStep(
                 label: "Delete",
@@ -698,7 +698,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             .action(try ActionStep(
                 command: .typeText(TypeTextTarget(
@@ -736,7 +736,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             try activateStep(
                 label: "Wi-Fi",
@@ -781,7 +781,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             try activateStep(
                 label: "Continue",
@@ -813,7 +813,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
             guard case StorageError.heistRecording(.noValidSteps) = error else {
                 return XCTFail("Expected noValidSteps, got \(error)")
             }
@@ -844,7 +844,7 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try heistStore.finishRecording()
+        let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
             .action(try ActionStep(command: .oneFingerTap(TapTarget(
                 selection: .coordinate(ScreenPoint(x: 20, y: 30))
@@ -892,6 +892,30 @@ private func presentPredicateArgumentValue(label: String) -> HeistValue {
 }
 
 @ButtonHeistActor
+private var testRecordingLifecycles: [ObjectIdentifier: FenceHeistRecordingLifecycle] = [:]
+
+@ButtonHeistActor
+private func recordingLifecycle(for heistStore: HeistStore) -> FenceHeistRecordingLifecycle {
+    let key = ObjectIdentifier(heistStore)
+    if let lifecycle = testRecordingLifecycles[key] {
+        return lifecycle
+    }
+    let lifecycle = FenceHeistRecordingLifecycle()
+    lifecycle.begin()
+    testRecordingLifecycles[key] = lifecycle
+    return lifecycle
+}
+
+@ButtonHeistActor
+private func finishRecording(_ heistStore: HeistStore) throws -> HeistPlan {
+    let key = ObjectIdentifier(heistStore)
+    guard let lifecycle = testRecordingLifecycles.removeValue(forKey: key) else {
+        return try heistStore.finishRecording()
+    }
+    return try lifecycle.finish(using: heistStore)
+}
+
+@ButtonHeistActor
 private func recordHeistStep(
     _ heistStore: HeistStore,
     command: TheFence.Command,
@@ -922,7 +946,7 @@ private func recordHeistStep(
         dispatchedResponse: dispatched,
         validatedResponse: validated
     ).effect()
-    try heistStore.applyRecordingEffect(effect)
+    try recordingLifecycle(for: heistStore).apply(effect, to: heistStore)
 }
 
 private func defaultRecordingResponse(

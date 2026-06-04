@@ -2,8 +2,10 @@ import TheScore
 
 enum HeistRecordingEffect {
     case ignore
-    case dropPendingViewportSetup
-    case append([HeistStep])
+    case discardDeferredSetup
+    case deferUntilFinish([HeistStep])
+    case appendReplacingDeferredSetup([HeistStep])
+    case appendAfterDeferredSetup([HeistStep])
 }
 
 /// Projects a validated interaction response into a durable heist recording
@@ -15,15 +17,6 @@ struct HeistRecordingComposition {
     let request: TheFence.ParsedRequest
     let dispatchedResponse: FenceResponse
     let validatedResponse: FenceResponse
-
-    func steps() throws -> [HeistStep] {
-        switch try effect() {
-        case .append(let steps):
-            return steps
-        case .ignore, .dropPendingViewportSetup:
-            return []
-        }
-    }
 
     func effect() throws -> HeistRecordingEffect {
         guard request.command.descriptor.isHeistExecutable else { return .ignore }
@@ -52,18 +45,20 @@ struct HeistRecordingComposition {
         }
 
         if case .wait(let target) = message {
-            return .append([.wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))])
+            return .appendAfterDeferredSetup([
+                .wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)),
+            ])
         }
 
         if case .scrollToVisible = message {
-            return .ignore
+            return .discardDeferredSetup
         }
 
         guard !HeistRecordingEffectPolicy.hasUnrecordableSemanticEvidence(
             message,
             actionResult: dispatchedReceipt.actionResult
         ) else {
-            return .dropPendingViewportSetup
+            return .discardDeferredSetup
         }
 
         let normalizedCommand = RecordingActionNormalization.normalizedCommand(
@@ -75,16 +70,44 @@ struct HeistRecordingComposition {
             actionResult: dispatchedReceipt.actionResult,
             finalReceipt: finalReceipt
         )
-        return .append([.action(try ActionStep(
+        let step = HeistStep.action(try ActionStep(
             command: normalizedCommand,
             expectation: expectation
-        ))])
+        ))
+        return HeistRecordingEffectPolicy.recordedActionEffect(
+            command: normalizedCommand,
+            expectation: expectation,
+            step: step
+        )
     }
 }
 
 enum HeistRecordingEffectPolicy {
     static func unrecordedSemanticEffect(for request: TheFence.ParsedRequest) -> HeistRecordingEffect {
-        request.consumesPendingViewportSetup ? .dropPendingViewportSetup : .ignore
+        request.discardsDeferredSetup ? .discardDeferredSetup : .ignore
+    }
+
+    static func recordedActionEffect(
+        command: ClientMessage,
+        expectation: WaitStep?,
+        step: HeistStep
+    ) -> HeistRecordingEffect {
+        switch command {
+        case .scroll where expectation == nil,
+             .scrollToEdge where expectation == nil:
+            return .deferUntilFinish([step])
+        case .activate, .increment, .decrement, .performCustomAction, .rotor:
+            return .appendReplacingDeferredSetup([step])
+        case .typeText(let target) where target.elementTarget != nil:
+            return .appendReplacingDeferredSetup([step])
+        case .scrollToVisible:
+            return .discardDeferredSetup
+        case .oneFingerTap, .longPress, .swipe, .drag, .scroll, .scrollToEdge,
+             .typeText, .editAction, .setPasteboard, .resignFirstResponder,
+             .clientHello, .authenticate, .requestInterface, .ping, .status,
+             .getPasteboard, .requestScreen, .wait, .heistPlan:
+            return .appendAfterDeferredSetup([step])
+        }
     }
 
     static func hasUnrecordableSemanticEvidence(
@@ -371,13 +394,13 @@ enum RecordingTargetSelection {
 }
 
 private extension TheFence.ParsedRequest {
-    var consumesPendingViewportSetup: Bool {
-        executableMessages?.contains { $0.consumesPendingViewportSetup } == true
+    var discardsDeferredSetup: Bool {
+        executableMessages?.contains { $0.discardsDeferredSetup } == true
     }
 }
 
 private extension ClientMessage {
-    var consumesPendingViewportSetup: Bool {
+    var discardsDeferredSetup: Bool {
         requiresMinimumSemanticRecordingTarget
     }
 

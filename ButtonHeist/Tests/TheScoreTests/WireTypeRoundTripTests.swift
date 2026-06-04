@@ -662,24 +662,54 @@ final class WireTypeRoundTripTests: XCTestCase {
                         limit: 10,
                         iterationCount: 3
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate, message: "activated"),
-                            durationMs: 50
+                            path: "$.body[0].for_each_element.iterations[0]",
+                            kind: .forEachIteration,
+                            message: "iteration 0 target ordinal 0",
+                            durationMs: 50,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_element.iterations[0].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .activate, message: "activated"),
+                                    durationMs: 50
+                                ),
+                            ]
                         ),
                         HeistExecutionStepResult(
                             index: 1,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate, message: "activated"),
-                            durationMs: 45
+                            path: "$.body[0].for_each_element.iterations[1]",
+                            kind: .forEachIteration,
+                            message: "iteration 1 target ordinal 1",
+                            durationMs: 45,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_element.iterations[1].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .activate, message: "activated"),
+                                    durationMs: 45
+                                ),
+                            ]
                         ),
                         HeistExecutionStepResult(
                             index: 2,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate, message: "activated"),
-                            durationMs: 40
+                            path: "$.body[0].for_each_element.iterations[2]",
+                            kind: .forEachIteration,
+                            message: "iteration 2 target ordinal 2",
+                            durationMs: 40,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_element.iterations[2].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .activate, message: "activated"),
+                                    durationMs: 40
+                                ),
+                            ]
                         ),
                     ]
                 ),
@@ -697,12 +727,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(step.forEachResult?.limit, 10)
         XCTAssertEqual(step.forEachResult?.iterationCount, 3)
         XCTAssertNil(step.forEachResult?.failureReason)
-        XCTAssertEqual(step.childResults?.count, 3)
+        XCTAssertEqual(step.children.map(\.kind), [.forEachIteration, .forEachIteration, .forEachIteration])
+        XCTAssertEqual(step.children.first?.children.first?.actionResult?.method, .activate)
         XCTAssertFalse(step.isFailure)
 
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let steps = try XCTUnwrap(payload["steps"] as? [[String: Any]])
         XCTAssertEqual(steps.first?["kind"] as? String, "for_each")
+        XCTAssertNil(steps.first?["childResults"])
+        XCTAssertNotNil(steps.first?["children"])
     }
 
     func testHeistExecutionResultRoundTripPreservesForEachFailure() throws {
@@ -734,7 +767,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertTrue(step.isFailure)
     }
 
-    func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildResults() throws {
+    func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildren() throws {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
         let result = HeistExecutionResult(
             steps: [
@@ -755,9 +788,10 @@ final class WireTypeRoundTripTests: XCTestCase {
                         elapsedMs: 2,
                         lastObservedSummary: "screen: login; known: 3 elements"
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].conditional.cases[0].body[0]",
                             kind: .action,
                             actionResult: ActionResult(
                                 success: false,
@@ -782,8 +816,8 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decodedStep.caseSelection?.cases.first?.predicate, predicate)
         XCTAssertEqual(decodedStep.caseSelection?.cases.first?.result.met, true)
         XCTAssertEqual(decodedStep.caseSelection?.selectedCaseIndex, 0)
-        XCTAssertEqual(decodedStep.childResults?.first?.actionResult?.errorKind, .actionFailed)
-        XCTAssertTrue(decodedStep.childResults?.first?.isFailure == true)
+        XCTAssertEqual(decodedStep.children.first?.actionResult?.errorKind, .actionFailed)
+        XCTAssertTrue(decodedStep.children.first?.isFailure == true)
     }
 
     // MARK: - HeistCustomContent

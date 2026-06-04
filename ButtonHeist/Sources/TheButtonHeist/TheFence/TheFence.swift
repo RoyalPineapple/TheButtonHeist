@@ -94,6 +94,7 @@ public final class TheFence {
 
     // Lifecycle owners
     let playback = FencePlaybackLifecycle()
+    let heistRecording = FenceHeistRecordingLifecycle()
 
     public init(configuration: Configuration) {
         self.config = configuration

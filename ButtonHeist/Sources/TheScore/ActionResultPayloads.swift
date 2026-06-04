@@ -186,8 +186,8 @@ public struct ActionResult: Codable, Sendable {
     /// not a transport-level error (those surface as thrown errors).
     public let success: Bool
     /// Identifies the delivered action behavior. Activation-point delivery for
-    /// `activate` still reports `.activate`; explicit mechanical taps report
-    /// the mechanical tap method.
+    /// `activate` still reports `.activate`.
+    /// Explicit mechanical tap commands report the mechanical tap method.
     public let method: ActionMethod
     public let message: String?
     /// Typed error classification (nil on success)
