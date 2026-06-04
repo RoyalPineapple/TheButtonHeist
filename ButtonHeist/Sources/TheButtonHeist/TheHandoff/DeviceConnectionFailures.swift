@@ -34,126 +34,151 @@ enum DisconnectReason: Error, LocalizedError {
     }
 
     var errorDescription: String? {
-        switch self {
-        case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
-        case .bufferOverflow:
-            return "Server exceeded max buffer size"
-        case .eventBacklogOverflow(let maxEvents):
-            return "Connection event backlog exceeded \(maxEvents) buffered events"
-        case .serverClosed:
-            return "Connection closed by server"
-        case .authFailed(let reason):
-            return "Auth failed: \(reason)"
-        case .authApprovalPending(let message):
-            return "Auth approval pending: \(message)"
-        case .sessionLocked(let message):
-            return "Session locked: \(message)"
-        case .protocolMismatch(let message):
-            return "Protocol mismatch: \(message)"
-        case .localDisconnect:
-            return "Disconnected by client"
-        case .certificateMismatch:
-            return "Server certificate fingerprint does not match expected value"
-        case .missingFingerprint:
-            return "No TLS fingerprint available for non-loopback device — cannot establish secure connection"
-        }
+        diagnostic.cause
     }
 
     var failureCode: String {
-        switch self {
-        case .networkError:
-            return "transport.network_error"
-        case .bufferOverflow:
-            return "transport.buffer_overflow"
-        case .eventBacklogOverflow:
-            return "transport.event_backlog_overflow"
-        case .serverClosed:
-            return "transport.server_closed"
-        case .authFailed:
-            return "auth.failed"
-        case .authApprovalPending:
-            return "auth.approval_pending"
-        case .sessionLocked:
-            return "session.locked"
-        case .protocolMismatch:
-            return "protocol.mismatch"
-        case .localDisconnect:
-            return "client.local_disconnect"
-        case .certificateMismatch:
-            return "tls.certificate_mismatch"
-        case .missingFingerprint:
-            return "tls.missing_fingerprint"
-        }
+        diagnostic.errorCode
     }
 
     var phase: FailurePhase {
-        switch self {
-        case .networkError, .bufferOverflow, .eventBacklogOverflow, .serverClosed:
-            return .transport
-        case .authFailed, .authApprovalPending:
-            return .authentication
-        case .sessionLocked:
-            return .session
-        case .protocolMismatch:
-            return .protocolNegotiation
-        case .localDisconnect:
-            return .client
-        case .certificateMismatch, .missingFingerprint:
-            return .tls
-        }
+        diagnostic.phase
     }
 
     var retryable: Bool {
-        switch self {
-        case .networkError, .eventBacklogOverflow, .serverClosed, .sessionLocked, .authApprovalPending:
-            return true
-        case .bufferOverflow, .authFailed, .protocolMismatch, .localDisconnect,
-             .certificateMismatch, .missingFingerprint:
-            return false
-        }
+        diagnostic.retryable
     }
 
     var hint: String? {
+        diagnostic.hint
+    }
+
+    var diagnostic: HandoffFailureDiagnostic {
         switch self {
-        case .networkError, .serverClosed:
-            return "Check that the app is still running and reachable, then retry."
+        case .networkError(let error):
+            return HandoffFailureDiagnostic(
+                operation: .transport,
+                target: nil,
+                cause: "Network error: \(error.localizedDescription)",
+                errorCode: "transport.network_error",
+                phase: .transport,
+                retryable: true,
+                hint: "Check that the app is still running and reachable, then retry."
+            )
         case .bufferOverflow:
-            return "Request a smaller payload or narrow the interface query before retrying."
-        case .eventBacklogOverflow:
-            return "Reconnect and retry after reducing event volume or response size."
+            return HandoffFailureDiagnostic(
+                operation: .transport,
+                target: nil,
+                cause: "Server exceeded max buffer size",
+                errorCode: "transport.buffer_overflow",
+                phase: .transport,
+                retryable: false,
+                hint: "Request a smaller payload or narrow the interface query before retrying."
+            )
+        case .eventBacklogOverflow(let maxEvents):
+            return HandoffFailureDiagnostic(
+                operation: .transport,
+                target: nil,
+                cause: "Connection event backlog exceeded \(maxEvents) buffered events",
+                errorCode: "transport.event_backlog_overflow",
+                phase: .transport,
+                retryable: true,
+                hint: "Reconnect and retry after reducing event volume or response size."
+            )
+        case .serverClosed:
+            return HandoffFailureDiagnostic(
+                operation: .transport,
+                target: nil,
+                cause: "Connection closed by server",
+                errorCode: "transport.server_closed",
+                phase: .transport,
+                retryable: true,
+                hint: "Check that the app is still running and reachable, then retry."
+            )
         case .authFailed(let reason):
+            let hint: String?
             if reason.localizedCaseInsensitiveContains("configured token") {
-                return "Retry with the configured token."
+                hint = "Retry with the configured token."
+            } else if reason.localizedCaseInsensitiveContains("retry without") {
+                hint = "Retry without a token to request a fresh session."
+            } else {
+                hint = nil
             }
-            if reason.localizedCaseInsensitiveContains("retry without") {
-                return "Retry without a token to request a fresh session."
-            }
-            return nil
-        case .authApprovalPending:
-            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
-        case .sessionLocked:
-            return "Wait for the current driver to disconnect or for the session to time out. " +
-                "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
-        case .protocolMismatch:
-            return "Rebuild or reinstall so the CLI, MCP server, and iOS app use the same Button Heist version."
+            return HandoffFailureDiagnostic(
+                operation: .connection,
+                target: nil,
+                cause: "Auth failed: \(reason)",
+                errorCode: "auth.failed",
+                phase: .authentication,
+                retryable: false,
+                hint: hint
+            )
+        case .authApprovalPending(let message):
+            return HandoffFailureDiagnostic(
+                operation: .connection,
+                target: nil,
+                cause: "Auth approval pending: \(message)",
+                errorCode: "auth.approval_pending",
+                phase: .authentication,
+                retryable: true,
+                hint: "Waiting for approval on the device. Tap Allow on the iOS device to continue."
+            )
+        case .sessionLocked(let message):
+            return HandoffFailureDiagnostic(
+                operation: .connection,
+                target: nil,
+                cause: "Session locked: \(message)",
+                errorCode: "session.locked",
+                phase: .session,
+                retryable: true,
+                hint: "Wait for the current driver to disconnect or for the session to time out. " +
+                    "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
+            )
+        case .protocolMismatch(let message):
+            return HandoffFailureDiagnostic(
+                operation: .connection,
+                target: nil,
+                cause: "Protocol mismatch: \(message)",
+                errorCode: "protocol.mismatch",
+                phase: .protocolNegotiation,
+                retryable: false,
+                hint: "Rebuild or reinstall so the CLI, MCP server, and iOS app use the same Button Heist version."
+            )
         case .localDisconnect:
-            return nil
+            return HandoffFailureDiagnostic(
+                operation: .connection,
+                target: nil,
+                cause: "Disconnected by client",
+                errorCode: "client.local_disconnect",
+                phase: .client,
+                retryable: false,
+                hint: nil
+            )
         case .certificateMismatch:
-            return "Refresh the configured device fingerprint before reconnecting."
+            return HandoffFailureDiagnostic(
+                operation: .transport,
+                target: nil,
+                cause: "Server certificate fingerprint does not match expected value",
+                errorCode: "tls.certificate_mismatch",
+                phase: .tls,
+                retryable: false,
+                hint: "Refresh the configured device fingerprint before reconnecting."
+            )
         case .missingFingerprint:
-            return "Use a loopback simulator target or configure the device's TLS certificate fingerprint."
+            return HandoffFailureDiagnostic(
+                operation: .transport,
+                target: nil,
+                cause: "No TLS fingerprint available for non-loopback device — cannot establish secure connection",
+                errorCode: "tls.missing_fingerprint",
+                phase: .tls,
+                retryable: false,
+                hint: "Use a loopback simulator target or configure the device's TLS certificate fingerprint."
+            )
         }
     }
 
     var connectionFailureMessage: String {
-        let base = "connection failed in \(phase.rawValue): observed \(observedCause)"
-        guard let hint else { return base }
-        return "\(base); \(hint)"
-    }
-
-    private var observedCause: String {
-        errorDescription ?? localizedDescription
+        HandoffFailureFormatter.connectionFailureMessage(for: diagnostic)
     }
 }
 

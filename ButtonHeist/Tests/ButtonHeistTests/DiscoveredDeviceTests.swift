@@ -164,6 +164,41 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertEqual(device.deviceName, "Office iPhone")
     }
 
+    func testExplicitConnectionTypeDoesNotDependOnIdPrefix() {
+        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1234)
+        let device = DiscoveredDevice(
+            id: "00008120-1111111111111111",
+            name: "Alpha Phone (USB)",
+            endpoint: endpoint,
+            displayDeviceName: "Alpha Phone",
+            connectionType: .usb
+        )
+
+        XCTAssertEqual(device.connectionType, .usb)
+        XCTAssertEqual(device.deviceName, "Alpha Phone")
+    }
+
+    func testDisplayNameDisambiguatesWithoutChangingResolutionIdentity() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let first = DiscoveredDevice(
+            id: "first",
+            name: "DemoApp#abc123",
+            endpoint: endpoint,
+            displayDeviceName: "Office iPhone"
+        )
+        let second = DiscoveredDevice(
+            id: "second",
+            name: "DemoApp#def456",
+            endpoint: endpoint,
+            displayDeviceName: "Office iPhone"
+        )
+
+        XCTAssertEqual(first.displayName(among: [first, second]), "DemoApp (Office iPhone) [abc123]")
+        XCTAssertTrue(first.matches(resolutionQuery: "DemoApp"))
+        XCTAssertTrue(first.matches(resolutionQuery: "Office iPhone"))
+        XCTAssertTrue(first.matches(resolutionQuery: "abc"))
+    }
+
     // MARK: - Filter Matching
 
     func testMatchesByName() {

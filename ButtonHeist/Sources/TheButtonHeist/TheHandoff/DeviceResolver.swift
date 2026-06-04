@@ -1,74 +1,97 @@
 import Foundation
 
-/// Encapsulates the stabilize-then-probe device resolution algorithm.
-/// Used by both TheHandoff (framework) and DeviceConnector (CLI) to avoid duplication.
+/// Requested device target for resolution.
+///
+/// This is the one value `DeviceResolver` answers. It may be automatic
+/// selection, an advertised-device query, or a direct loopback endpoint.
+struct DeviceResolutionTarget: Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
+        case automatic
+        case query(String)
+        case direct(DiscoveredDevice)
+    }
+
+    let kind: Kind
+
+    init(filter: String?) {
+        guard let filter else {
+            self.kind = .automatic
+            return
+        }
+
+        let query = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            self.kind = .automatic
+            return
+        }
+
+        if let directDevice = DiscoveredDevice.directConnectTarget(from: query) {
+            self.kind = .direct(directDevice)
+            return
+        }
+
+        self.kind = .query(query)
+    }
+
+    var diagnosticName: String {
+        switch kind {
+        case .automatic:
+            return "(none)"
+        case .query(let query):
+            return query
+        case .direct(let device):
+            return device.name
+        }
+    }
+}
+
+/// Resolves the requested target to exactly one discovered device.
+///
+/// Resolution answers only "which discovered device should we connect to?"
+/// It does not open sockets, probe reachability, send messages, or apply
+/// authentication/session policy.
 @ButtonHeistActor
 struct DeviceResolver {
-    let filter: String?
+    let target: DeviceResolutionTarget
     let discoveryTimeout: UInt64
-    let reachabilityTimeout: TimeInterval
     let getDiscoveredDevices: () -> [DiscoveredDevice]
 
     init(
         filter: String?,
         discoveryTimeout: UInt64,
-        reachabilityTimeout: TimeInterval = 1.0,
         getDiscoveredDevices: @escaping () -> [DiscoveredDevice]
     ) {
-        self.filter = filter
+        self.target = DeviceResolutionTarget(filter: filter)
         self.discoveryTimeout = discoveryTimeout
-        self.reachabilityTimeout = reachabilityTimeout
         self.getDiscoveredDevices = getDiscoveredDevices
     }
 
-    /// Wait for the discovery list to stabilize, then probe each device for
-    /// reachability; return the first reachable match for `filter`, or (if
-    /// `filter` is nil) the single device when exactly one is reachable.
-    ///
-    /// Throws `HandoffConnectionError.noMatchingDevice` when no filter is supplied and
-    /// multiple reachable devices exist (ambiguous selection), or when a filter
-    /// is supplied with no matches. Throws `.noDeviceFound` if nothing appears
-    /// before `discoveryTimeout` elapses. A `127.0.0.1:PORT` filter bypasses
-    /// discovery entirely via `DiscoveredDevice.directConnectTarget`.
     func resolve() async throws -> DiscoveredDevice {
-        if let directDevice = DiscoveredDevice.directConnectTarget(from: filter) {
+        if case .direct(let directDevice) = target.kind {
             return directDevice
         }
 
         let start = DispatchTime.now().uptimeNanoseconds
-        var lastSignature = ""
-        var stableAt = start
-        var lastProbeAt: UInt64?
-        let probeInterval: UInt64 = 1_000_000_000
 
         while true {
-            let now = DispatchTime.now().uptimeNanoseconds
             let discovered = getDiscoveredDevices()
-            let signature = Self.discoverySignature(for: discovered)
-
-            if signature != lastSignature {
-                lastSignature = signature
-                stableAt = now
-            }
-
-            let stabilized = !discovered.isEmpty && now - stableAt >= 500_000_000
-            let shouldProbe = stabilized && (lastProbeAt == nil || now - (lastProbeAt ?? 0) >= probeInterval)
-            if shouldProbe {
-                lastProbeAt = now
-                let reachable = await discovered.reachable(timeout: reachabilityTimeout)
-                if let device = Self.selectDevice(from: reachable, filter: filter) {
+            if !discovered.isEmpty {
+                switch Self.selection(from: discovered, target: target) {
+                case .selected(let device):
                     return device
-                }
-                if filter == nil, reachable.count > 1 {
-                    throw HandoffConnectionError.noMatchingDevice(
-                        filter: "(none)",
-                        available: reachable.map { $0.name }
+                case .ambiguous(let matches):
+                    throw HandoffConnectionError.ambiguousDeviceTarget(
+                        filter: target.diagnosticName,
+                        matches: matches.map(\.resolutionDiagnosticLabel)
                     )
+                case .missing:
+                    break
                 }
             }
 
+            let now = DispatchTime.now().uptimeNanoseconds
             if now - start > discoveryTimeout {
-                return try await finalSelection()
+                return try finalSelection()
             }
 
             guard await Task.cancellableSleep(nanoseconds: 100_000_000) else {
@@ -77,38 +100,71 @@ struct DeviceResolver {
         }
     }
 
-    private func finalSelection() async throws(HandoffConnectionError) -> DiscoveredDevice {
-        let reachable = await getDiscoveredDevices().reachable(timeout: reachabilityTimeout)
-        if let device = Self.selectDevice(from: reachable, filter: filter) {
+    private func finalSelection() throws(HandoffConnectionError) -> DiscoveredDevice {
+        let discovered = getDiscoveredDevices()
+        guard !discovered.isEmpty else {
+            throw .noDeviceFound
+        }
+
+        switch Self.selection(from: discovered, target: target) {
+        case .selected(let device):
             return device
-        }
-
-        if filter == nil, reachable.count > 1 {
-            throw HandoffConnectionError.noMatchingDevice(
-                filter: "(none)",
-                available: reachable.map { $0.name }
+        case .ambiguous(let matches):
+            throw .ambiguousDeviceTarget(
+                filter: target.diagnosticName,
+                matches: matches.map(\.resolutionDiagnosticLabel)
+            )
+        case .missing:
+            throw .noMatchingDevice(
+                filter: target.diagnosticName,
+                available: discovered.map(\.resolutionDiagnosticLabel)
             )
         }
-
-        if let filter {
-            throw HandoffConnectionError.noMatchingDevice(
-                filter: filter,
-                available: reachable.map { $0.name }
-            )
-        }
-
-        throw HandoffConnectionError.noDeviceFound
     }
 
     static func selectDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {
-        if let filter {
-            return devices.first(matching: filter)
+        let target = DeviceResolutionTarget(filter: filter)
+        if case .direct(let directDevice) = target.kind {
+            return directDevice
         }
-        guard devices.count == 1 else { return nil }
-        return devices[0]
+        guard case .selected(let device) = selection(from: devices, target: target) else {
+            return nil
+        }
+        return device
     }
 
-    static func discoverySignature(for devices: [DiscoveredDevice]) -> String {
-        devices.map(\.id).sorted().joined(separator: "|")
+    private enum Selection {
+        case selected(DiscoveredDevice)
+        case missing
+        case ambiguous([DiscoveredDevice])
+    }
+
+    private static func selection(
+        from devices: [DiscoveredDevice],
+        target: DeviceResolutionTarget
+    ) -> Selection {
+        switch target.kind {
+        case .direct(let device):
+            return .selected(device)
+        case .automatic:
+            switch devices.count {
+            case 0:
+                return .missing
+            case 1:
+                return .selected(devices[0])
+            default:
+                return .ambiguous(devices)
+            }
+        case .query(let query):
+            let matches = devices.filter { $0.matches(resolutionQuery: query) }
+            switch matches.count {
+            case 0:
+                return .missing
+            case 1:
+                return .selected(matches[0])
+            default:
+                return .ambiguous(matches)
+            }
+        }
     }
 }
