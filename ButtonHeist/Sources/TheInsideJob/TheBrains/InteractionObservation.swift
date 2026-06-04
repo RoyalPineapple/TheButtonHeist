@@ -77,7 +77,7 @@ final class InteractionObservation {
             before: before,
             settleEvidence: settleEvidence
         )
-        return InteractionObservationProjection.postActionResult(
+        let projectionInput = InteractionObservationProjection.PostActionResultInput(
             success: success,
             method: method,
             message: message,
@@ -89,6 +89,7 @@ final class InteractionObservation {
             settleEvidence: settleEvidence,
             finalEvidence: finalEvidence
         )
+        return InteractionObservationProjection.postActionResult(projectionInput)
     }
 
     func waitForPredicate(

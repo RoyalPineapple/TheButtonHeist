@@ -48,7 +48,20 @@ enum SemanticObservationTiming {
         let sawFutureObservation: Bool
     }
 
-    static func clampedWaitTimeout(_ timeout: Double) -> Double {
+    struct PostActionResultInput {
+        let success: Bool
+        let method: ActionMethod
+        let message: String?
+        let payload: ResultPayload?
+        let afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)?
+        let errorKind: ErrorKind?
+        let subjectEvidence: ActionSubjectEvidence?
+        let before: PostActionObservation.BeforeState
+        let settleEvidence: PostActionObservation.SettleEvidence
+        let finalEvidence: PostActionObservation.FinalEvidence?
+    }
+
+    nonisolated static func clampedWaitTimeout(_ timeout: Double) -> Double {
         max(0, min(timeout, 30))
     }
 
@@ -118,63 +131,52 @@ enum SemanticObservationTiming {
         )
     }
 
-    static func postActionResult(
-        success: Bool,
-        method: ActionMethod,
-        message: String?,
-        payload: ResultPayload?,
-        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)?,
-        errorKind: ErrorKind?,
-        subjectEvidence: ActionSubjectEvidence?,
-        before: PostActionObservation.BeforeState,
-        settleEvidence: PostActionObservation.SettleEvidence,
-        finalEvidence: PostActionObservation.FinalEvidence?
-    ) -> ActionResult {
+    static func postActionResult(_ input: PostActionResultInput) -> ActionResult {
         if let cancelled = cancelledActionResult(
-            method: method,
-            payload: payload,
-            subjectEvidence: subjectEvidence,
-            before: before,
-            settleEvidence: settleEvidence
+            method: input.method,
+            payload: input.payload,
+            subjectEvidence: input.subjectEvidence,
+            before: input.before,
+            settleEvidence: input.settleEvidence
         ) {
             return cancelled
         }
 
-        guard let finalEvidence else {
+        guard let finalEvidence = input.finalEvidence else {
             return postActionParseFailureResult(
-                method: method,
-                payload: payload,
-                subjectEvidence: subjectEvidence,
-                before: before,
-                settleEvidence: settleEvidence
+                method: input.method,
+                payload: input.payload,
+                subjectEvidence: input.subjectEvidence,
+                before: input.before,
+                settleEvidence: input.settleEvidence
             )
         }
 
-        let resolvedPayload = success
-            ? (afterStatePayload?(finalEvidence.state) ?? payload)
-            : payload
+        let resolvedPayload = input.success
+            ? (input.afterStatePayload?(finalEvidence.state) ?? input.payload)
+            : input.payload
 
         guard finalEvidence.capture != nil else {
             return failedActionResult(
-                method: method,
-                capture: before.capture,
-                message: message,
+                method: input.method,
+                capture: input.before.capture,
+                message: input.message,
                 payload: resolvedPayload,
-                subjectEvidence: subjectEvidence
+                subjectEvidence: input.subjectEvidence
             )
         }
 
         return actionResult(
-            method: method,
+            method: input.method,
             capture: finalEvidence.capture ?? finalEvidence.state.capture,
-            message: message,
+            message: input.message,
             payload: resolvedPayload,
-            errorKind: errorKind,
+            errorKind: input.errorKind,
             accessibilityTrace: finalEvidence.trace,
-            subjectEvidence: subjectEvidence,
-            settled: settleEvidence.didSettleCleanly,
-            settleTimeMs: settleEvidence.timeMs,
-            success: success
+            subjectEvidence: input.subjectEvidence,
+            settled: input.settleEvidence.didSettleCleanly,
+            settleTimeMs: input.settleEvidence.timeMs,
+            success: input.success
         )
     }
 
