@@ -118,6 +118,22 @@ public extension AccessibilityPredicateExpr {
     }
 }
 
+public extension ChangePredicateExpr {
+    static func updated(
+        _ element: ElementPredicateTemplate? = nil,
+        property: ElementProperty? = nil,
+        from: StringExpr? = nil,
+        to: StringExpr? = nil
+    ) -> ChangePredicateExpr {
+        .updated(ElementUpdatePredicateExpr(
+            element: element,
+            property: property,
+            from: from,
+            to: to
+        ))
+    }
+}
+
 public extension AccessibilityPredicate.Change {
     static func updated(
         _ element: ElementPredicate? = nil,

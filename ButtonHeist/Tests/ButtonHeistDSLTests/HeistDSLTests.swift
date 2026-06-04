@@ -30,6 +30,158 @@ func actionExpectationAttachesWaitStep() throws {
 }
 
 @Test
+func `Chained screen and state expectations compose into one action expectation`() throws {
+    let forward = try Heist {
+        Activate(.label("Search"))
+            .expect(.changed(.screen()))
+            .expect(.present(.label("Results")), timeout: .seconds(5))
+    }.plan
+    let reversed = try Heist {
+        Activate(.label("Search"))
+            .expect(.present(.label("Results")), timeout: .seconds(5))
+            .expect(.changed(.screen()))
+    }.plan
+    let expected = HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.label("Search")),
+            expectation: WaitStep(
+                predicate: .changed(.screen(where: .present(.label("Results")))),
+                timeout: 5
+            )
+        )),
+    ])
+
+    #expect(forward == expected)
+    #expect(reversed == expected)
+    #expect(forward.body.count == 1)
+    #expect(forward.runtimeAdmissionFailures().isEmpty)
+}
+
+@Test
+func `Chained state expectations compose with all`() throws {
+    let heist = try Heist {
+        Activate(.label("Save"))
+            .expect(.present(.label("A")))
+            .expect(.present(.label("B")))
+    }
+
+    #expect(heist.plan == HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.label("Save")),
+            expectation: WaitStep(predicate: .state(.all([
+                .present(.label("A")),
+                .present(.label("B")),
+            ])))
+        )),
+    ]))
+}
+
+@Test
+func `Chained state expectation joins existing screen where clause`() throws {
+    let forward = try Heist {
+        Activate(.label("Search"))
+            .expect(.changed(.screen(where: .present(.label("Results")))))
+            .expect(.present(.label("Filter")))
+    }.plan
+    let reversed = try Heist {
+        Activate(.label("Search"))
+            .expect(.present(.label("Filter")))
+            .expect(.changed(.screen(where: .present(.label("Results")))))
+    }.plan
+
+    let expected = HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.label("Search")),
+            expectation: WaitStep(predicate: .changed(.screen(where: .all([
+                .present(.label("Results")),
+                .present(.label("Filter")),
+            ]))))
+        )),
+    ])
+
+    #expect(forward == expected)
+    #expect(reversed == expected)
+}
+
+@Test
+func `Different explicit chained expectation timeouts fail admission`() throws {
+    let heist = try Heist {
+        Activate(.label("Save"))
+            .expect(.present(.label("A")), timeout: .seconds(1))
+            .expect(.present(.label("B")), timeout: .seconds(2))
+    }
+
+    #expect(heist.plan.runtimeAdmissionFailures().contains {
+        $0.contract == "action expectation composition must be supported and unambiguous"
+            && $0.observed.contains("multiple explicit expectation timeouts")
+    })
+}
+
+@Test
+func `Unsupported chained change expectations fail admission without replacement`() throws {
+    let heist = try Heist {
+        Activate(.label("Save"))
+            .expect(.changed(.elements))
+            .expect(.changed(.screen()))
+    }
+
+    #expect(heist.plan.body == [
+        .action(try ActionStep(
+            command: .activate(.label("Save")),
+            expectation: WaitStep(predicate: .changed(.elements)),
+            expectationValidationFailure: "unsupported expectation composition: changed(elements_changed) + changed(screen_changed)"
+        )),
+    ])
+    #expect(heist.plan.runtimeAdmissionFailures().contains {
+        $0.contract == "action expectation composition must be supported and unambiguous"
+            && $0.observed.contains("unsupported expectation composition")
+    })
+}
+
+@Test
+func `String heist search flow preserves query ref in composed post activation expectation JSON`() throws {
+    enum SearchScreen {
+        static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
+            TypeText(query, into: .label("Search"))
+                .expect(.present(.value(query)), timeout: .seconds(1))
+
+            Activate(.label("Search"))
+                .expect(.changed(.screen()))
+                .expect(.present(.label(query)), timeout: .seconds(5))
+        }
+    }
+
+    let heist = try Heist("searchFlow") {
+        try SearchScreen.search("milk")
+    }
+    let searchDefinition = try #require(heist.plan.definitions.first?.definitions.first)
+
+    #expect(searchDefinition.body == [
+        .action(try ActionStep(
+            command: .typeText(text: .ref("query"), target: .target(.label("Search"))),
+            expectation: WaitStep(predicate: .present(.value(.ref("query"))), timeout: 1)
+        )),
+        .action(try ActionStep(
+            command: .activate(.target(.label("Search"))),
+            expectation: WaitStep(
+                predicate: .changed(.screen(where: .present(.label(.ref("query"))))),
+                timeout: 5
+            )
+        )),
+    ])
+    #expect(heist.plan.runtimeAdmissionFailures().isEmpty)
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let data = try encoder.encode(heist.plan)
+    let json = String(data: data, encoding: .utf8)!
+    let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
+
+    #expect(decoded == heist.plan)
+    #expect(json.contains(#""label_ref":"query""#))
+}
+
+@Test
 func actionWithoutExpectationAttachesExplicitWaiver() throws {
     let heist = try Heist {
         Activate(.label("Optional"))

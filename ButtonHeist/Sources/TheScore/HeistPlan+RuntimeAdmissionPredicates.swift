@@ -12,6 +12,8 @@ extension HeistPlanRuntimeAdmissionValidator {
             validatePredicate(predicate, path: path, depth: depth)
         case .state(let state):
             validateStatePredicate(state, path: path, depth: depth, scope: scope)
+        case .changed(let change):
+            validateChangePredicate(change, path: path, depth: depth, scope: scope)
         }
     }
 
@@ -80,6 +82,35 @@ extension HeistPlanRuntimeAdmissionValidator {
             for (index, child) in states.enumerated() {
                 validateStatePredicate(child, path: "\(path).states[\(index)]", depth: depth + 1, scope: scope)
             }
+        }
+    }
+
+    mutating func validateChangePredicate(
+        _ change: ChangePredicateExpr,
+        path: String,
+        depth: Int,
+        scope: HeistReferenceScope
+    ) {
+        checkPredicateDepth(depth, path: path)
+        switch change {
+        case .screen(let state):
+            if let state {
+                validateStatePredicate(state, path: "\(path).where", depth: depth + 1, scope: scope)
+            }
+        case .appeared(let predicate), .disappeared(let predicate):
+            validateElementPredicate(predicate, path: "\(path).element", scope: scope)
+        case .updated(let update):
+            if let element = update.element {
+                validateElementPredicate(element, path: "\(path).element", scope: scope)
+            }
+            if let from = update.from {
+                validateString(from, path: "\(path).from", scope: scope)
+            }
+            if let to = update.to {
+                validateString(to, path: "\(path).to", scope: scope)
+            }
+        case .elements:
+            break
         }
     }
 
