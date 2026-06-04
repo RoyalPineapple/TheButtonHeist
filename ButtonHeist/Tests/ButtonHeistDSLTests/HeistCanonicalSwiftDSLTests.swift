@@ -100,7 +100,7 @@ func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
 }
 
 @Test
-func `Canonical Swift renderer preserves composed expectation with string ref`() throws {
+func `canonical Swift renderer preserves composed expectation with string ref`() throws {
     enum SearchScreen {
         static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))

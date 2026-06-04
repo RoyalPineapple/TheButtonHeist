@@ -30,7 +30,7 @@ func actionExpectationAttachesWaitStep() throws {
 }
 
 @Test
-func `Chained screen and state expectations compose into one action expectation`() throws {
+func `chained screen and state expectations compose into one action expectation`() throws {
     let forward = try Heist {
         Activate(.label("Search"))
             .expect(.changed(.screen()))
@@ -58,7 +58,7 @@ func `Chained screen and state expectations compose into one action expectation`
 }
 
 @Test
-func `Chained state expectations compose with all`() throws {
+func `chained state expectations compose with all`() throws {
     let heist = try Heist {
         Activate(.label("Save"))
             .expect(.present(.label("A")))
@@ -77,7 +77,7 @@ func `Chained state expectations compose with all`() throws {
 }
 
 @Test
-func `Chained state expectation joins existing screen where clause`() throws {
+func `chained state expectation joins existing screen where clause`() throws {
     let forward = try Heist {
         Activate(.label("Search"))
             .expect(.changed(.screen(where: .present(.label("Results")))))
@@ -104,7 +104,7 @@ func `Chained state expectation joins existing screen where clause`() throws {
 }
 
 @Test
-func `Different explicit chained expectation timeouts fail admission`() throws {
+func `different explicit chained expectation timeouts fail admission`() throws {
     let heist = try Heist {
         Activate(.label("Save"))
             .expect(.present(.label("A")), timeout: .seconds(1))
@@ -118,7 +118,7 @@ func `Different explicit chained expectation timeouts fail admission`() throws {
 }
 
 @Test
-func `Unsupported chained change expectations fail admission without replacement`() throws {
+func `unsupported chained change expectations fail admission without replacement`() throws {
     let heist = try Heist {
         Activate(.label("Save"))
             .expect(.changed(.elements))
@@ -139,7 +139,7 @@ func `Unsupported chained change expectations fail admission without replacement
 }
 
 @Test
-func `String heist search flow preserves query ref in composed post activation expectation JSON`() throws {
+func `string heist search flow preserves query ref in composed post activation expectation JSON`() throws {
     enum SearchScreen {
         static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
