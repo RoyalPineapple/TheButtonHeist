@@ -22,8 +22,7 @@ extension FenceResponse {
             var line = "  [\(row.index)] \(row.commandName)"
             if let failureMessage = row.failureMessage {
                 line += " -> error: \(failureMessage)"
-            }
-            else if let delta = row.delta {
+            } else if let delta = row.delta {
                 line += " -> \(Self.compactDeltaKind(delta))"
             }
             if let expectation = row.expectation {
