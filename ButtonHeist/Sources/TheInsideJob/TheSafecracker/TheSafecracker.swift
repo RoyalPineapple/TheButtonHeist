@@ -5,7 +5,7 @@ import TheScore
 
 /// Facade for debug input injection.
 ///
-/// Semantic actionability lives in TheBrains. This type exposes the low-level
+/// Element inflation lives in TheBrains. This type exposes the low-level
 /// keyboard, edit, and coordinate/touch escape hatches used after a command has
 /// resolved to concrete runtime input.
 @MainActor

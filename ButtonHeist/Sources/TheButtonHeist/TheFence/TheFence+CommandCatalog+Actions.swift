@@ -87,7 +87,7 @@ extension TheFence.Command {
                 .typeText, requestDecoder: TheFence.decodeTypeTextRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + [param(.text, .string, required: true, minLength: 1)] + FenceParameterBlocks.expectation,
-                description: "Type non-empty text, optionally after making a semantic target actionable."
+                description: "Type non-empty text, optionally after inflating a semantic target."
             ),
             commandDescriptor(
                 .editAction, requestDecoder: TheFence.decodeEditActionRequest,

@@ -136,7 +136,7 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
             severity: mode == .strictTest ? .error : .warning,
             path: path,
             message: "Pre-action viewport movement immediately precedes a semantic action",
-            suggestion: "Remove the viewport movement; semantic actions own reveal and actionability"
+            suggestion: "Remove the viewport movement; semantic actions own reveal and element inflation"
         )
     }
 

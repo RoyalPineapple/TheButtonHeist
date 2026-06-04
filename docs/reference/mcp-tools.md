@@ -30,7 +30,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `start_heist` | Start composing successful interactions into a semantic heist test. |
 | `stop_heist` | Stop heist recording and save a deterministic semantic heist fixture. |
 | `swipe` | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
-| `type_text` | Type non-empty text, optionally after making a semantic target actionable. |
+| `type_text` | Type non-empty text, optionally after inflating a semantic target. |
 | `wait` | Wait until an accessibility predicate is satisfied within timeout by evaluating settled semantic observations. |
 
 ## Details
@@ -318,7 +318,7 @@ Parameters:
 
 ### `type_text`
 
-Type non-empty text, optionally after making a semantic target actionable.
+Type non-empty text, optionally after inflating a semantic target.
 
 Parameters:
 

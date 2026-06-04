@@ -1606,10 +1606,10 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .increment)
         XCTAssertEqual(liveObject.incrementCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
-            "semantic actionability failed [geometryNotActionable]",
+            "element inflation failed [geometryNotActionable]",
             "method=increment",
             "label=\"Geometry Missing\"",
-            "fresh live geometry from semantic actionability",
+            "fresh live geometry from element inflation",
         ])
     }
 
@@ -1870,7 +1870,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertNil(dispatchedPoint, "Known-only targets must not dispatch their stored activation point")
         XCTAssertDiagnostic(result.message, contains: [
-            "semantic actionability failed [noRevealPath]",
+            "element inflation failed [noRevealPath]",
             "known target \"Below Fold\"",
             "no content-space position",
         ])

@@ -1,7 +1,7 @@
 #if canImport(UIKit) && DEBUG
 import UIKit
 
-extension SemanticActionability {
+extension ElementInflation {
 
     static func liveGeometrySummary(_ liveTarget: TheStash.LiveActionTarget) -> String {
         "liveFrame=\(formatRect(liveTarget.frame)) "

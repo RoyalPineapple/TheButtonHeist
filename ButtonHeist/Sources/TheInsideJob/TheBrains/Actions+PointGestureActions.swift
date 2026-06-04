@@ -7,7 +7,7 @@ import TheScore
 extension Actions {
 
     /// Unified pipeline for gestures that target a screen point:
-    /// semantic selector → actionable target (if element target) → point → gesture.
+    /// semantic selector → inflated target (if element target) → point → gesture.
     func performPointAction(
         selection: GesturePointSelection,
         method: ActionMethod,
@@ -100,19 +100,19 @@ extension Actions {
         end: UnitPoint,
         duration: GestureDuration
     ) async -> TheSafecracker.InteractionResult {
-        let actionableTarget: SemanticActionability.SemanticActionableTarget
-        switch await navigation.actionability.makeActionable(
+        let inflatedTarget: ElementInflation.InflatedElementTarget
+        switch await navigation.elementInflation.inflate(
             for: elementTarget,
             method: .syntheticSwipe,
             deallocatedBoundary: "gesture action"
         ) {
-        case .actionable(let target):
-            actionableTarget = target
+        case .inflated(let target):
+            inflatedTarget = target
         case .failed(let failure):
             return failure.interactionResult(commandMethod: .syntheticSwipe)
         }
         let frame: CGRect
-        switch resolveGestureFrame(for: actionableTarget, method: .syntheticSwipe) {
+        switch resolveGestureFrame(for: inflatedTarget, method: .syntheticSwipe) {
         case .success(let liveFrame):
             frame = liveFrame
         case .failure(let result):
@@ -130,7 +130,7 @@ extension Actions {
             return failure
         }
         return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
-            .withSubjectEvidence(actionableTarget.subjectEvidence(source: .elementGestureTarget))
+            .withSubjectEvidence(inflatedTarget.subjectEvidence(source: .elementGestureTarget))
     }
 
     private func performResolvedSwipe(

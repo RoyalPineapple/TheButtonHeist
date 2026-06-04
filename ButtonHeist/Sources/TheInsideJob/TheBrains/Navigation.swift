@@ -20,7 +20,7 @@ final class Navigation {
     let stash: TheStash
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
-    let actionability: SemanticActionability
+    let elementInflation: ElementInflation
 
     /// Last dispatched swipe direction per swipeable target key.
     var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
@@ -35,7 +35,7 @@ final class Navigation {
         self.stash = stash
         self.safecracker = safecracker
         self.tripwire = tripwire
-        self.actionability = SemanticActionability(
+        self.elementInflation = ElementInflation(
             stash: stash,
             safecracker: safecracker,
             tripwire: tripwire

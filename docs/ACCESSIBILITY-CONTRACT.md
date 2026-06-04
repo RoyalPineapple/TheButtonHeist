@@ -19,8 +19,8 @@ flowchart LR
 ```
 
 Semantic intent enters the runtime. Button Heist owns target resolution, reveal,
-actionability, action execution, settling, and evidence. The result is settled
-semantic evidence, not a mechanical playback log.
+element inflation, action execution, settling, and evidence. The result is
+settled semantic evidence, not a mechanical playback log.
 
 ## Boundaries
 
@@ -29,7 +29,7 @@ semantic evidence, not a mechanical playback log.
 | `AccessibilityPredicate` | Condition algebra for waits, expectations, and control-flow cases | Target resolution, viewport movement, command execution |
 | `AccessibilityTrace` | Observed accessibility captures and capture-chain identity | Independent delta truth, repair policy, report formatting |
 | `InteractionObservation` | Before/body/after evidence coordination for actions and waits | Command payload design, report adapters, recording policy |
-| `SemanticActionability` | Semantic target to actionable live target | Public viewport instructions, predicate evaluation, durable selector choice |
+| `ElementInflation` | Semantic target to inflated live target | Public viewport instructions, predicate evaluation, durable selector choice |
 | `HeistPlan` | Durable semantic program AST | Arbitrary Swift source, native loop preservation, runtime state |
 | `HeistRecordingComposition` | Successful interaction evidence to durable heist step | Dispatch, validation, target resolution, storage policy |
 
@@ -45,8 +45,8 @@ All executable routes enter the same machine:
    produces either a single command or a `HeistPlan`.
 2. The runtime observes settled before-state when the route performs an action
    or evaluates a wait.
-3. Semantic actionability resolves the target, reveals it if needed, acquires
-   fresh live actionability evidence, and executes the accessibility operation.
+3. Element inflation resolves the target, reveals it if needed, acquires fresh
+   live inflation evidence, and executes the accessibility operation.
 4. The runtime waits for settled semantic evidence.
 5. Reports, JSON, compact output, recordings, and later repair artifacts project
    from the resulting trace and execution result.
@@ -72,4 +72,3 @@ The product contract is healthy when these cases hold:
 - Timeout diagnostics say which contract was not satisfied and what command or
   target shape is valid next.
 - `AccessibilityTrace` captures are the source of truth; deltas are projections.
-

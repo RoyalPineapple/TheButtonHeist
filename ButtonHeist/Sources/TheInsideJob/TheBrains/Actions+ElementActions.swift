@@ -11,23 +11,23 @@ extension Actions {
     // MARK: - Element Action Pipeline
 
     /// Unified pipeline for actions that target an element:
-    /// semantic selector → reveal plan → fresh live geometry → actionable target.
+    /// semantic selector → reveal plan → fresh live geometry → inflated target.
     func performElementAction(
         target: ElementTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
         deallocatedBoundary: String = "element action",
         preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.InteractionResult?)? = nil,
-        action: @MainActor (SemanticActionability.SemanticActionableTarget) async -> TheSafecracker.InteractionResult
+        action: @MainActor (ElementInflation.InflatedElementTarget) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
-        switch await navigation.actionability.makeActionable(
+        switch await navigation.elementInflation.inflate(
             for: target,
             method: method,
             deallocatedBoundary: deallocatedBoundary
         ) {
         case .failed(let failure):
             return failure.interactionResult(commandMethod: method)
-        case .actionable(let context):
+        case .inflated(let context):
             if let failure = preflight?(context.screenElement) {
                 return failure
             }
@@ -45,7 +45,7 @@ extension Actions {
     }
 
     private func interactivityFailure(
-        _ context: SemanticActionability.SemanticActionableTarget,
+        _ context: ElementInflation.InflatedElementTarget,
         method: ActionMethod,
         requireInteractive: Bool
     ) -> TheSafecracker.InteractionResult? {
@@ -83,13 +83,13 @@ extension Actions {
             await ActivationPolicy(
                 accessibilityActivate: stash.activate,
                 refreshAndResolve: {
-                    switch await self.navigation.actionability.makeActionableAfterActivationRetryRefresh(
+                    switch await self.navigation.elementInflation.inflateAfterActivationRetryRefresh(
                         for: context.target
                     ) {
-                    case .actionable(let actionableTarget):
+                    case .inflated(let inflatedTarget):
                         return .resolved(
-                            screenElement: actionableTarget.screenElement,
-                            liveTarget: actionableTarget.liveTarget
+                            screenElement: inflatedTarget.screenElement,
+                            liveTarget: inflatedTarget.liveTarget
                         )
                     case .failed(let failure):
                         return .failure(failure.interactionResult(commandMethod: .activate))

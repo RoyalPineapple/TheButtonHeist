@@ -413,13 +413,13 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .scrollToVisible)
-        XCTAssertTrue(result.message?.contains("semantic actionability failed [notFound]") == true)
+        XCTAssertTrue(result.message?.contains("element inflation failed [notFound]") == true)
         XCTAssertTrue(result.message?.contains("No match for") == true)
         XCTAssertTrue(result.message?.contains("Missing Button") == true)
         XCTAssertFalse(result.message?.contains("get_interface") == true)
     }
 
-    func testSemanticActionabilityNamesNoRevealPathFailure() async {
+    func testElementInflationNamesNoRevealPathFailure() async {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
         installScreenWithOffViewportEntry(
@@ -427,17 +427,17 @@ final class TheBrainsScrollTests: XCTestCase {
             offViewport: [(offscreen, "offscreen_button", nil)]
         )
 
-        let result = await brains.navigation.actionability.makeActionable(
+        let result = await brains.navigation.elementInflation.inflate(
             for: .predicate(ElementPredicate(label: "Offscreen")),
             method: .activate,
-            deallocatedBoundary: "test actionability"
+            deallocatedBoundary: "test inflation"
         )
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected semantic actionability failure, got \(result)")
+            return XCTFail("Expected element inflation failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.noRevealPath)
-        XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
+        XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.noRevealPath)
+        XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("has no content-space position"))
     }
 
@@ -451,17 +451,17 @@ final class TheBrainsScrollTests: XCTestCase {
             offscreen: (offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200), scrollView),
             includeLiveScrollAncestor: false
         )
-        let result = await brains.navigation.actionability.makeActionable(
+        let result = await brains.navigation.elementInflation.inflate(
             for: .predicate(ElementPredicate(label: "Offscreen")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected no-reveal-path actionability failure, got \(result)")
+            return XCTFail("Expected no-reveal-path inflation failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.noRevealPath)
-        XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
+        XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.noRevealPath)
+        XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("no live scrollable ancestor"))
     }
 
@@ -496,20 +496,20 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViews: [:]
         ))
 
-        let result = await brains.navigation.actionability.makeActionable(
+        let result = await brains.navigation.elementInflation.inflate(
             for: .predicate(ElementPredicate(label: "Escaped")),
             method: .scrollToVisible,
-            deallocatedBoundary: "test actionability"
+            deallocatedBoundary: "test inflation"
         )
 
         guard case .failed(let failure) = result else {
             return XCTFail("Expected no-reveal-path failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.noRevealPath)
-        XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
+        XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.noRevealPath)
+        XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
     }
 
-    func testActionabilityRequiresActivationPointOnScreenWhenFrameIntersectsViewport() async {
+    func testInflationRequiresActivationPointOnScreenWhenFrameIntersectsViewport() async {
         let elementFrame = CGRect(x: 24, y: -24, width: 180, height: 44)
         let object = UIButton(type: .system)
         object.accessibilityLabel = "Escaped"
@@ -536,20 +536,20 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViews: [:]
         ))
 
-        let result = await brains.navigation.actionability.makeActionable(
+        let result = await brains.navigation.elementInflation.inflate(
             for: .predicate(ElementPredicate(label: "Escaped")),
             method: .scrollToVisible,
-            deallocatedBoundary: "test actionability"
+            deallocatedBoundary: "test inflation"
         )
 
         guard case .failed(let failure) = result else {
             return XCTFail("Expected not-actionable failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.geometryNotActionable)
-        XCTAssertTrue(failure.message.contains("semantic actionability failed [geometryNotActionable]"))
+        XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.geometryNotActionable)
+        XCTAssertTrue(failure.message.contains("element inflation failed [geometryNotActionable]"))
     }
 
-    func testElementActionsConsumeSemanticActionabilityFailureBeforeDispatch() async {
+    func testElementActionsConsumeElementInflationFailureBeforeDispatch() async {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
         installScreenWithOffViewportEntry(
@@ -570,7 +570,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(didDispatch)
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, ActionMethod.activate)
-        XCTAssertTrue(result.message?.contains("semantic actionability failed [noRevealPath]") == true)
+        XCTAssertTrue(result.message?.contains("element inflation failed [noRevealPath]") == true)
     }
 
     func testTargetedActionDoesNotRecoverFromStaleOffscreenSnapshotAfterFreshScreenChange() async throws {
@@ -775,7 +775,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .scrollToVisible)
         XCTAssertTrue(
-            result.message?.contains("semantic actionability failed [ambiguous]") ?? false,
+            result.message?.contains("element inflation failed [ambiguous]") ?? false,
             "Expected classified ambiguity diagnostic, got \(String(describing: result.message))"
         )
         XCTAssertTrue(
@@ -860,7 +860,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         brains.stash.installScreenForTesting(knownScreen)
 
-        let result = await brains.navigation.actionability.makeActionable(
+        let result = await brains.navigation.elementInflation.inflate(
             for: .predicate(ElementPredicate(label: "Jump Target")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
@@ -870,7 +870,7 @@ final class TheBrainsScrollTests: XCTestCase {
             return XCTFail("Expected post-reveal ambiguity failure, got \(result)")
         }
         XCTAssertTrue(
-            failure.message.contains("semantic actionability failed [ambiguous]"),
+            failure.message.contains("element inflation failed [ambiguous]"),
             "Expected classified post-reveal ambiguity diagnostic, got \(failure.message)"
         )
         XCTAssertTrue(

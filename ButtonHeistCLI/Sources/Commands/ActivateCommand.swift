@@ -6,8 +6,8 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
         commandName: Self.cliCommandName,
         abstract: "Perform primary accessibility activation on a semantic UI element",
         discussion: """
-            This is the primary way to interact with UI elements. It uses an \
-            accessibility actionability path: resolves the element, reveals it when \
+            This is the primary way to interact with UI elements. It uses the \
+            element inflation path: resolves the element, reveals it when \
             needed, acquires fresh accessibility geometry, then dispatches the \
             primary accessibility activation policy.
 

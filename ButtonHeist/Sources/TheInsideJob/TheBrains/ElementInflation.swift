@@ -10,7 +10,7 @@ import TheScore
 /// It does not choose matchers, dispatch actions, or evaluate post-action
 /// expectations.
 @MainActor
-final class SemanticActionability {
+final class ElementInflation {
 
     let stash: TheStash
     let safecracker: TheSafecracker
@@ -29,18 +29,18 @@ final class SemanticActionability {
         self.tripwire = tripwire
     }
 
-    struct SemanticActionableTarget {
+    struct InflatedElementTarget {
         let target: ElementTarget
         let screenElement: TheStash.ScreenElement
         let liveTarget: TheStash.LiveActionTarget
     }
 
-    enum SemanticActionabilityResult {
-        case actionable(SemanticActionableTarget)
-        case failed(SemanticActionabilityFailure)
+    enum ElementInflationResult {
+        case inflated(InflatedElementTarget)
+        case failed(ElementInflationFailure)
     }
 
-    enum SemanticActionabilityFailureStep: String {
+    enum ElementInflationFailureStep: String {
         case notFound
         case ambiguous
         case noRevealPath
@@ -48,32 +48,32 @@ final class SemanticActionability {
         case geometryNotActionable
     }
 
-    struct SemanticActionabilityFailure: Error {
-        let failedStep: SemanticActionabilityFailureStep
+    struct ElementInflationFailure: Error {
+        let failedStep: ElementInflationFailureStep
         let failureKind: TheSafecracker.FailureKind?
         let message: String
 
-        static func notFound(_ message: String) -> SemanticActionabilityFailure {
+        static func notFound(_ message: String) -> ElementInflationFailure {
             .init(.notFound, failureKind: .targetUnavailable, message: message)
         }
-        static func ambiguous(_ message: String) -> SemanticActionabilityFailure {
+        static func ambiguous(_ message: String) -> ElementInflationFailure {
             .init(.ambiguous, failureKind: .targetUnavailable, message: message)
         }
-        static func noRevealPath(_ message: String) -> SemanticActionabilityFailure {
+        static func noRevealPath(_ message: String) -> ElementInflationFailure {
             .init(.noRevealPath, failureKind: nil, message: message)
         }
 
         static func staleRefresh(
             _ message: String,
             failureKind: TheSafecracker.FailureKind? = nil
-        ) -> SemanticActionabilityFailure {
+        ) -> ElementInflationFailure {
             .init(.staleRefresh, failureKind: failureKind, message: message)
         }
 
         static func geometryNotActionable(
             _ message: String,
             failureKind: TheSafecracker.FailureKind? = nil
-        ) -> SemanticActionabilityFailure {
+        ) -> ElementInflationFailure {
             .init(.geometryNotActionable, failureKind: failureKind, message: message)
         }
 
@@ -82,7 +82,7 @@ final class SemanticActionability {
         }
 
         private init(
-            _ step: SemanticActionabilityFailureStep,
+            _ step: ElementInflationFailureStep,
             failureKind: TheSafecracker.FailureKind?,
             message: String
         ) {
@@ -90,7 +90,7 @@ final class SemanticActionability {
             self.failureKind = failureKind
             self.message = message.contains("[\(step.rawValue)]")
                 ? message
-                : "semantic actionability failed [\(step.rawValue)]: \(message)"
+                : "element inflation failed [\(step.rawValue)]: \(message)"
         }
     }
 
@@ -99,11 +99,11 @@ final class SemanticActionability {
         return bounds.insetBy(dx: bounds.width * comfortMarginFraction, dy: bounds.height * comfortMarginFraction)
     }
 
-    func makeActionable(
+    func inflate(
         for target: ElementTarget,
         method: ActionMethod,
         deallocatedBoundary: String
-    ) async -> SemanticActionabilityResult {
+    ) async -> ElementInflationResult {
         // Source screens derive only semantic identity. Reveal and geometry
         // authority always come from the current live graph.
         var didRevealTarget = false
@@ -143,9 +143,9 @@ final class SemanticActionability {
             )
         }
         switch freshTarget {
-        case .success(let actionableTarget):
+        case .success(let inflatedTarget):
             return await placeElementActivationPoint(
-                actionableTarget,
+                inflatedTarget,
                 method: method,
                 didRevealTarget: didRevealTarget
             )
@@ -154,11 +154,11 @@ final class SemanticActionability {
         }
     }
 
-    func makeActionableAfterActivationRetryRefresh(
+    func inflateAfterActivationRetryRefresh(
         for target: ElementTarget
-    ) async -> SemanticActionabilityResult {
+    ) async -> ElementInflationResult {
         recordVisibleObservationForActivationRetry()
-        return await makeActionable(
+        return await inflate(
             for: target,
             method: .activate,
             deallocatedBoundary: "activation retry"
@@ -170,17 +170,17 @@ final class SemanticActionability {
     }
 
     private func placeElementActivationPoint(
-        _ actionableTarget: SemanticActionableTarget,
+        _ inflatedTarget: InflatedElementTarget,
         method: ActionMethod,
         didRevealTarget: Bool
-    ) async -> SemanticActionabilityResult {
-        let liveTarget = actionableTarget.liveTarget
+    ) async -> ElementInflationResult {
+        let liveTarget = inflatedTarget.liveTarget
         guard !Self.interactionComfortZone.contains(liveTarget.activationPoint) else {
-            return .actionable(actionableTarget)
+            return .inflated(inflatedTarget)
         }
         guard !didRevealTarget else {
             if ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) {
-                return .actionable(actionableTarget)
+                return .inflated(inflatedTarget)
             }
             return .failed(.geometryNotActionable(
                 "target \(Navigation.ScrollTargetDescription(liveTarget.screenElement).description) "
@@ -205,7 +205,7 @@ final class SemanticActionability {
         )
         switch placement {
         case .success(false):
-            return .actionable(actionableTarget)
+            return .inflated(inflatedTarget)
         case .failure(let failure):
             return .failed(failure)
         case .success(true):
@@ -213,13 +213,13 @@ final class SemanticActionability {
         }
 
         switch resolveFreshElementTarget(
-            target: actionableTarget.target,
+            target: inflatedTarget.target,
             method: method,
             deallocatedBoundary: "activation point placement"
         ) {
         case .success(let refreshedTarget):
             if ScreenMetrics.current.bounds.contains(refreshedTarget.liveTarget.activationPoint) {
-                return .actionable(refreshedTarget)
+                return .inflated(refreshedTarget)
             }
             return .failed(.geometryNotActionable(
                 "target \(Navigation.ScrollTargetDescription(refreshedTarget.screenElement).description) "
@@ -235,7 +235,7 @@ final class SemanticActionability {
         target: ElementTarget,
         method: ActionMethod,
         deallocatedBoundary: String
-    ) -> Result<SemanticActionableTarget, SemanticActionabilityFailure> {
+    ) -> Result<InflatedElementTarget, ElementInflationFailure> {
         let screenElement: TheStash.ScreenElement
         switch stash.resolveVisibleTarget(target) {
         case .resolved(let target):
@@ -250,7 +250,7 @@ final class SemanticActionability {
 
         switch stash.resolveLiveActionTarget(for: screenElement) {
         case .resolved(let liveTarget):
-            return .success(SemanticActionableTarget(
+            return .success(InflatedElementTarget(
                 target: target,
                 screenElement: screenElement,
                 liveTarget: liveTarget
@@ -279,7 +279,7 @@ final class SemanticActionability {
         for liveTarget: TheStash.LiveActionTarget,
         description: String,
         method: ActionMethod
-    ) -> SemanticActionabilityFailure {
+    ) -> ElementInflationFailure {
         if ScreenMetrics.current.bounds.intersects(liveTarget.frame) {
             return .geometryNotActionable(
                 "target \(description) has an activation point outside the screen; "
@@ -295,10 +295,10 @@ final class SemanticActionability {
         _ activationPoint: CGPoint,
         in scrollView: UIScrollView?,
         method: ActionMethod,
-        noScrollViewFailure: SemanticActionabilityFailure,
+        noScrollViewFailure: ElementInflationFailure,
         unsafeProgrammaticScrollMessage: String?,
         scrollFailedMessage: String
-    ) async -> Result<Bool, SemanticActionabilityFailure> {
+    ) async -> Result<Bool, ElementInflationFailure> {
         if Self.interactionComfortZone.contains(activationPoint) {
             return .success(false)
         }
@@ -332,15 +332,15 @@ final class SemanticActionability {
         return .success(true)
     }
 
-    func makeFirstResponderActionable(method: ActionMethod) async -> SemanticActionabilityFailure? {
+    func inflateFirstResponder(method: ActionMethod) async -> ElementInflationFailure? {
         guard let screenElement = stash.firstResponderScreenElement(),
               let target = firstResponderTarget(for: screenElement) else { return nil }
-        switch await makeActionable(
+        switch await inflate(
             for: target,
             method: method,
-            deallocatedBoundary: "first responder actionability"
+            deallocatedBoundary: "first responder inflation"
         ) {
-        case .actionable:
+        case .inflated:
             return nil
         case .failed(let failure):
             return failure
@@ -353,7 +353,7 @@ final class SemanticActionability {
 
 }
 
-extension SemanticActionability.SemanticActionableTarget {
+extension ElementInflation.InflatedElementTarget {
     @MainActor
     func subjectEvidence(source: ActionSubjectEvidence.Source) -> ActionSubjectEvidence {
         ActionSubjectEvidence(
