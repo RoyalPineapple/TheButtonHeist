@@ -129,16 +129,12 @@ final class InteractionObservation {
 
     func waitForPredicate(
         _ step: WaitStep,
-        initialTrace: AccessibilityTrace? = nil,
-        after sequence: UInt64? = nil,
-        evaluateCurrent: Bool = true
+        initialTrace: AccessibilityTrace? = nil
     ) async -> HeistWaitReceipt {
         do {
             return await waitForPredicate(
                 try step.resolve(in: .empty),
-                initialTrace: initialTrace,
-                after: sequence,
-                evaluateCurrent: evaluateCurrent
+                initialTrace: initialTrace
             )
         } catch {
             let predicate = InteractionObservationProjection.unresolvedWaitPredicate()
@@ -161,67 +157,77 @@ final class InteractionObservation {
 
     func waitForPredicate(
         _ step: ResolvedWaitStep,
-        initialTrace: AccessibilityTrace? = nil,
-        after sequence: UInt64? = nil,
-        evaluateCurrent: Bool = true
+        initialTrace: AccessibilityTrace? = nil
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = InteractionObservationProjection.clampedWaitTimeout(step.timeout)
-        var lastTrace: AccessibilityTrace?
-        var lastObservationSummary: String?
-        var observedSequence: UInt64? = sequence
-        var lastEvaluation = ExpectationResult(
-            met: false, predicate: step.predicate, actual: "no settled semantic observation available"
-        )
+        var state = WaitPredicateState(predicate: step.predicate)
 
-        func record(_ initialTraceResult: InteractionObservationProjection.InitialTraceResult) {
-            lastTrace = initialTraceResult.trace
-            lastObservationSummary = initialTraceResult.summary
-            lastEvaluation = initialTraceResult.expectation
-            observedSequence = stash.latestSettledSemanticObservationEvent?.sequence
-        }
-
-        func record(_ evaluation: WaitEvaluation) {
-            lastTrace = evaluation.observation.accessibilityTrace
-            lastObservationSummary = evaluation.observation.summary
-            lastEvaluation = evaluation.expectation
-            observedSequence = evaluation.observation.event.sequence
-        }
-
-        if evaluateCurrent, let initialTraceResult = InteractionObservationProjection.initialTraceResult(
+        if let initialTraceResult = InteractionObservationProjection.initialTraceResult(
             for: step,
             initialTrace: initialTrace,
             timeout: timeout
         ) {
-            record(initialTraceResult)
+            state.record(
+                initialTraceResult,
+                latestSequence: stash.latestSettledSemanticObservationEvent?.sequence
+            )
             if initialTraceResult.shouldReturn {
-                return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
-                                   expectation: lastEvaluation, start: start, success: lastEvaluation.met)
+                return waitReceipt(
+                    for: step,
+                    state: state,
+                    start: start,
+                    success: state.lastEvaluation.met
+                )
             }
-        } else if evaluateCurrent,
-                  let initial = await nextWaitEvaluation(
-                    for: step, after: observedSequence, timeout: 0
-                  ) {
-            record(initial)
-            if lastEvaluation.met {
-                return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
-                                   expectation: lastEvaluation, start: start, success: true)
+        } else if step.predicate.requiresFutureSettledBaseline {
+            guard let baseline = await changedPredicateBaseline(
+                scope: step.predicate.observationScope,
+                timeout: min(timeout, defaultSemanticObservationTimeout)
+            ) else {
+                return waitReceipt(
+                    for: step,
+                    state: state,
+                    start: start,
+                    success: false
+                )
+            }
+            state.changeBaseline = baseline
+            state.observedSequence = baseline.sequence
+        } else if let initial = await nextWaitEvaluation(
+            for: step, after: state.observedSequence, timeout: 0
+        ) {
+            state.record(initial)
+            if state.lastEvaluation.met {
+                return waitReceipt(for: step, state: state, start: start, success: true)
             }
         } else if timeout == 0,
                   let observation = await nextWaitEvaluation(
-                    for: step, after: observedSequence, timeout: 0
+                    for: step, after: state.observedSequence, timeout: 0
                   ) {
-            record(observation)
-            return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
-                               expectation: lastEvaluation, start: start, success: lastEvaluation.met)
+            state.record(observation)
+            return waitReceipt(
+                for: step,
+                state: state,
+                start: start,
+                success: state.lastEvaluation.met
+            )
         } else if timeout == 0 {
-            return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
-                               expectation: lastEvaluation, start: start, success: false)
+            return waitReceipt(
+                for: step,
+                state: state,
+                start: start,
+                success: false
+            )
         }
 
         guard timeout > 0 else {
-            return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
-                               expectation: lastEvaluation, start: start, success: false)
+            return waitReceipt(
+                for: step,
+                state: state,
+                start: start,
+                success: false
+            )
         }
 
         let deadline = start + timeout
@@ -229,26 +235,82 @@ final class InteractionObservation {
             let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
             guard let observation = await nextWaitEvaluation(
                 for: step,
-                after: observedSequence,
+                after: state.observedSequence,
                 timeout: min(remaining, defaultSemanticObservationTimeout)
             ) else {
                 continue
             }
 
-            record(observation)
-            if lastEvaluation.met {
-                return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
-                                   expectation: lastEvaluation, start: start, success: true)
+            state.record(observation)
+            if state.lastEvaluation.met {
+                return waitReceipt(for: step, state: state, start: start, success: true)
             }
         }
 
-        return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
-                           expectation: lastEvaluation, start: start, success: false)
+        return waitReceipt(
+            for: step,
+            state: state,
+            start: start,
+            success: false
+        )
     }
 
-    func waitForPredicateAfterCurrentSettledSequence(_ step: WaitStep) async -> HeistWaitReceipt {
-        await waitForPredicate(
-            step, after: stash.latestSettledSemanticObservationEvent?.sequence, evaluateCurrent: false
+    func waitForPredicateCases(
+        _ cases: [ResolvedPredicateCase],
+        timeout rawTimeout: Double
+    ) async -> HeistCaseSelectionResult {
+        let start = CFAbsoluteTimeGetCurrent()
+        let timeout = InteractionObservationProjection.clampedWaitTimeout(rawTimeout)
+        let scope = cases.observationScope
+        let requiresChangeBaseline = cases.contains { $0.predicate.requiresFutureSettledBaseline }
+        var observedSequence: UInt64?
+        var changeBaselineSequence: UInt64?
+        var lastSelection = PredicateCaseSelection.unevaluated(cases)
+        var lastSummary: String?
+
+        repeat {
+            let remaining = max(0, start + timeout - CFAbsoluteTimeGetCurrent())
+            guard let observation = await observeSemanticState(
+                scope: scope,
+                after: observedSequence,
+                timeout: min(remaining, defaultSemanticObservationTimeout)
+            ) else {
+                if timeout == 0 { break }
+                continue
+            }
+
+            observedSequence = observation.event.sequence
+            lastSummary = observation.summary
+            if requiresChangeBaseline, changeBaselineSequence == nil {
+                changeBaselineSequence = observation.event.sequence
+            }
+
+            lastSelection = PredicateCaseSelection.evaluate(
+                cases,
+                observation: observation,
+                changeBaselineSequence: changeBaselineSequence
+            )
+
+            if lastSelection.selectedCaseIndex != nil {
+                return HeistCaseSelectionResult(
+                    cases: lastSelection.cases,
+                    selectedCaseIndex: lastSelection.selectedCaseIndex,
+                    elapsedMs: elapsedMillisecondsSince(start),
+                    timeout: rawTimeout,
+                    lastObservedSummary: observation.summary
+                )
+            }
+
+            if timeout == 0 { break }
+        } while CFAbsoluteTimeGetCurrent() < start + timeout
+
+        return HeistCaseSelectionResult(
+            cases: lastSelection.cases,
+            selectedCaseIndex: nil,
+            elapsedMs: elapsedMillisecondsSince(start),
+            timeout: rawTimeout,
+            timedOut: true,
+            lastObservedSummary: lastSummary
         )
     }
 
@@ -257,6 +319,24 @@ final class InteractionObservation {
     ) -> HeistSemanticObservation {
         let current = postActionObservation.captureSemanticState(from: event.observation)
         return InteractionObservationProjection.semanticObservation(event: event, state: current)
+    }
+
+    private func elapsedMillisecondsSince(_ start: CFAbsoluteTime) -> Int {
+        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+    }
+
+    private func changedPredicateBaseline(
+        scope: SemanticObservationScope,
+        timeout: Double
+    ) async -> SettledSemanticObservationEvent? {
+        if let latest = stash.latestSettledSemanticObservationEvent {
+            return latest
+        }
+        return await stash.observeSettledSemanticObservation(
+            scope: scope,
+            after: nil,
+            timeout: timeout
+        )
     }
 
     private func semanticStateAfterDiscovery(after sequence: UInt64?) async -> PostActionObservation.BeforeState? {
@@ -401,13 +481,23 @@ final class InteractionObservation {
         observationSummary: String? = nil,
         expectation: ExpectationResult,
         start: CFAbsoluteTime,
-        success: Bool
+        success: Bool,
+        changeBaseline: SettledSemanticObservationEvent? = nil,
+        sawFutureObservation: Bool = false
     ) -> HeistWaitReceipt {
         let summary = observationSummary
         let elapsed = InteractionObservationProjection.elapsedSeconds(since: start)
         let presenceMessage = success || summary == nil
             ? nil
             : stash.presenceWaitTimeoutMessage(for: step.predicate, elapsed: elapsed)
+        let settledDiagnostics = success ? nil : InteractionObservationProjection.SettledWaitDiagnostics(
+            baseline: changeBaseline.map(InteractionObservationProjection.SettledEventSummary.init(event:)),
+            last: stash.latestSettledSemanticObservationEvent.map(
+                InteractionObservationProjection.SettledEventSummary.init(event:)
+            ),
+            lastDelta: trace?.endpointDeltaProjection ?? stash.latestSettledSemanticObservationEvent?.delta,
+            sawFutureObservation: sawFutureObservation
+        )
         return InteractionObservationProjection.waitReceipt(
             for: step,
             trace: trace,
@@ -415,7 +505,26 @@ final class InteractionObservation {
             expectation: expectation,
             elapsed: elapsed,
             success: success,
-            presenceTimeoutMessage: presenceMessage
+            presenceTimeoutMessage: presenceMessage,
+            settledDiagnostics: settledDiagnostics
+        )
+    }
+
+    private func waitReceipt(
+        for step: ResolvedWaitStep,
+        state: WaitPredicateState,
+        start: CFAbsoluteTime,
+        success: Bool
+    ) -> HeistWaitReceipt {
+        waitReceipt(
+            for: step,
+            trace: state.lastTrace,
+            observationSummary: state.lastObservationSummary,
+            expectation: state.lastEvaluation,
+            start: start,
+            success: success,
+            changeBaseline: state.changeBaseline,
+            sawFutureObservation: state.sawFutureObservation
         )
     }
 
@@ -435,6 +544,111 @@ final class InteractionObservation {
 }
 
 private typealias WaitEvaluation = (observation: HeistSemanticObservation, expectation: ExpectationResult)
+
+private struct WaitPredicateState {
+    var lastTrace: AccessibilityTrace?
+    var lastObservationSummary: String?
+    var observedSequence: UInt64?
+    var changeBaseline: SettledSemanticObservationEvent?
+    var sawFutureObservation = false
+    var lastEvaluation: ExpectationResult
+
+    init(predicate: AccessibilityPredicate) {
+        lastEvaluation = ExpectationResult(
+            met: false,
+            predicate: predicate,
+            actual: "no settled semantic observation available"
+        )
+    }
+
+    mutating func record(
+        _ initialTraceResult: InteractionObservationProjection.InitialTraceResult,
+        latestSequence: UInt64?
+    ) {
+        lastTrace = initialTraceResult.trace
+        lastObservationSummary = initialTraceResult.summary
+        lastEvaluation = initialTraceResult.expectation
+        observedSequence = latestSequence
+    }
+
+    mutating func record(_ evaluation: WaitEvaluation) {
+        lastTrace = evaluation.observation.accessibilityTrace
+        lastObservationSummary = evaluation.observation.summary
+        lastEvaluation = evaluation.expectation
+        observedSequence = evaluation.observation.event.sequence
+        sawFutureObservation = changeBaseline
+            .map { evaluation.observation.event.sequence > $0.sequence } ?? false
+    }
+}
+
+struct PredicateCaseSelection {
+    let cases: [HeistCaseMatchResult]
+    let selectedCaseIndex: Int?
+
+    static func unevaluated(_ cases: [ResolvedPredicateCase]) -> PredicateCaseSelection {
+        PredicateCaseSelection(
+            cases: cases.map {
+                HeistCaseMatchResult(
+                    predicate: $0.predicate,
+                    result: ExpectationResult(
+                        met: false,
+                        predicate: $0.predicate,
+                        actual: "no settled accessibility state observed"
+                    )
+                )
+            },
+            selectedCaseIndex: nil
+        )
+    }
+
+    static func evaluate(
+        _ cases: [ResolvedPredicateCase],
+        observation: HeistSemanticObservation,
+        changeBaselineSequence: UInt64? = nil
+    ) -> PredicateCaseSelection {
+        let evaluatedCases = cases.map {
+            HeistCaseMatchResult(
+                predicate: $0.predicate,
+                result: caseResult(
+                    for: $0.predicate,
+                    observation: observation,
+                    changeBaselineSequence: changeBaselineSequence
+                )
+            )
+        }
+        return PredicateCaseSelection(
+            cases: evaluatedCases,
+            selectedCaseIndex: evaluatedCases.firstIndex(where: \.result.met)
+        )
+    }
+
+    private static func caseResult(
+        for predicate: AccessibilityPredicate,
+        observation: HeistSemanticObservation,
+        changeBaselineSequence: UInt64?
+    ) -> ExpectationResult {
+        if predicate.requiresFutureSettledBaseline,
+           let changeBaselineSequence,
+           observation.event.sequence <= changeBaselineSequence {
+            return ExpectationResult(
+                met: false,
+                predicate: predicate,
+                actual: "change predicate requires future settled observation after baseline"
+            )
+        }
+        return predicate.evaluate(
+            currentElements: observation.state.interface.projectedElements,
+            delta: observation.delta
+        )
+    }
+}
+
+private extension AccessibilityPredicate {
+    var requiresFutureSettledBaseline: Bool {
+        if case .changed = self { return true }
+        return false
+    }
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

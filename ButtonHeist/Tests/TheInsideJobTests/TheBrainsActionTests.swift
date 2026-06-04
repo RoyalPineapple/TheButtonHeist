@@ -2326,11 +2326,15 @@ final class TheBrainsActionTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> TheBrains.HeistExecutionRuntime {
-        var remainingObservations = observations
-        var remainingUnavailableObservations = unavailableObservationCount
-        var previousObservation: SettledSemanticObservation?
-        var previousCapture: AccessibilityTrace.Capture?
-        var nextObservationSequence: UInt64 = 0
+        let observationSource = ScriptedHeistObservationSource(
+            observations: observations,
+            unavailableObservationCount: unavailableObservationCount,
+            observedScopes: observedScopes,
+            observedTimeouts: observedTimeouts,
+            file: file,
+            line: line
+        )
+
         return TheBrains.HeistExecutionRuntime(
             execute: { command in
                 if let execute {
@@ -2358,7 +2362,7 @@ final class TheBrainsActionTests: XCTestCase {
                         return HeistWaitReceipt(actionResult: result, expectation: expectation)
                     }
                 }
-                let state = remainingObservations.first
+                let state = observationSource.currentState
                 let trace = state.map { AccessibilityTrace(capture: $0.capture) }
                 let met = waitStep.predicate.evaluate(
                     currentElements: state?.interface.projectedElements ?? [],
@@ -2373,47 +2377,45 @@ final class TheBrainsActionTests: XCTestCase {
                 )
                 return HeistWaitReceipt(actionResult: result, expectation: met)
             },
+            waitForCases: { cases, timeout in
+                let start = CFAbsoluteTimeGetCurrent()
+                let scope = cases.observationScope
+                var selected = PredicateCaseSelection.unevaluated(cases)
+                var changeBaselineSequence: UInt64?
+                var lastSummary: String?
+                let deadline = start + timeout
+                repeat {
+                    let observation = observationSource.next(
+                        scope: scope,
+                        timeout: min(max(0, deadline - CFAbsoluteTimeGetCurrent()), 1.0)
+                    )
+                    guard let observation else {
+                        if timeout == 0 { break }
+                        continue
+                    }
+                    lastSummary = observation.summary
+                    if changeBaselineSequence == nil {
+                        changeBaselineSequence = observation.event.sequence
+                    }
+                    selected = PredicateCaseSelection.evaluate(
+                        cases,
+                        observation: observation,
+                        changeBaselineSequence: changeBaselineSequence
+                    )
+                    if selected.selectedCaseIndex != nil || timeout == 0 { break }
+                } while CFAbsoluteTimeGetCurrent() < deadline
+
+                return HeistCaseSelectionResult(
+                    cases: selected.cases,
+                    selectedCaseIndex: selected.selectedCaseIndex,
+                    elapsedMs: Int((CFAbsoluteTimeGetCurrent() - start) * 1000),
+                    timeout: timeout,
+                    timedOut: selected.selectedCaseIndex == nil,
+                    lastObservedSummary: lastSummary
+                )
+            },
             observeSemanticState: { scope, _, timeout in
-                observedScopes?(scope)
-                observedTimeouts?(timeout)
-                if remainingUnavailableObservations > 0 {
-                    remainingUnavailableObservations -= 1
-                    return nil
-                }
-                guard !remainingObservations.isEmpty else {
-                    XCTFail("Expected scripted heist case observation", file: file, line: line)
-                    return nil
-                }
-                let state = remainingObservations.removeFirst()
-                nextObservationSequence += 1
-                let settledObservation = SettledSemanticObservation(
-                    sequence: nextObservationSequence,
-                    scope: scope,
-                    screen: .empty,
-                    tripwireSignal: .empty
-                )
-                let trace = if let previousCapture {
-                    AccessibilityTrace(captures: [previousCapture, state.capture])
-                } else {
-                    AccessibilityTrace(capture: state.capture)
-                }
-                let event = SettledSemanticObservationEvent(
-                    sequence: nextObservationSequence,
-                    scope: scope,
-                    observation: settledObservation,
-                    previous: previousObservation,
-                    trace: trace,
-                    delta: trace.endpointDeltaProjection
-                )
-                previousObservation = settledObservation
-                previousCapture = trace.captures.last
-                return HeistSemanticObservation(
-                    event: event,
-                    state: state,
-                    accessibilityTrace: trace,
-                    delta: event.delta,
-                    summary: "known: \(state.interface.projectedElements.count) elements"
-                )
+                observationSource.next(scope: scope, timeout: timeout)
             }
         )
     }
@@ -2461,6 +2463,85 @@ final class TheBrainsActionTests: XCTestCase {
             }
         }
         return await operation()
+    }
+}
+
+@MainActor
+private final class ScriptedHeistObservationSource {
+    private var remainingObservations: [PostActionObservation.BeforeState]
+    private var remainingUnavailableObservations: Int
+    private var previousObservation: SettledSemanticObservation?
+    private var previousCapture: AccessibilityTrace.Capture?
+    private var nextObservationSequence: UInt64 = 0
+    private let observedScopes: (@MainActor (SemanticObservationScope) -> Void)?
+    private let observedTimeouts: (@MainActor (Double?) -> Void)?
+    private let file: StaticString
+    private let line: UInt
+
+    init(
+        observations: [PostActionObservation.BeforeState],
+        unavailableObservationCount: Int,
+        observedScopes: (@MainActor (SemanticObservationScope) -> Void)?,
+        observedTimeouts: (@MainActor (Double?) -> Void)?,
+        file: StaticString,
+        line: UInt
+    ) {
+        remainingObservations = observations
+        remainingUnavailableObservations = unavailableObservationCount
+        self.observedScopes = observedScopes
+        self.observedTimeouts = observedTimeouts
+        self.file = file
+        self.line = line
+    }
+
+    var currentState: PostActionObservation.BeforeState? {
+        remainingObservations.first
+    }
+
+    func next(
+        scope: SemanticObservationScope,
+        timeout: Double?
+    ) -> HeistSemanticObservation? {
+        observedScopes?(scope)
+        observedTimeouts?(timeout)
+        if remainingUnavailableObservations > 0 {
+            remainingUnavailableObservations -= 1
+            return nil
+        }
+        guard !remainingObservations.isEmpty else {
+            XCTFail("Expected scripted heist case observation", file: file, line: line)
+            return nil
+        }
+        let state = remainingObservations.removeFirst()
+        nextObservationSequence += 1
+        let settledObservation = SettledSemanticObservation(
+            sequence: nextObservationSequence,
+            scope: scope,
+            screen: .empty,
+            tripwireSignal: .empty
+        )
+        let trace = if let previousCapture {
+            AccessibilityTrace(captures: [previousCapture, state.capture])
+        } else {
+            AccessibilityTrace(capture: state.capture)
+        }
+        let event = SettledSemanticObservationEvent(
+            sequence: nextObservationSequence,
+            scope: scope,
+            observation: settledObservation,
+            previous: previousObservation,
+            trace: trace,
+            delta: trace.endpointDeltaProjection
+        )
+        previousObservation = settledObservation
+        previousCapture = trace.captures.last
+        return HeistSemanticObservation(
+            event: event,
+            state: state,
+            accessibilityTrace: trace,
+            delta: event.delta,
+            summary: "known: \(state.interface.projectedElements.count) elements"
+        )
     }
 }
 

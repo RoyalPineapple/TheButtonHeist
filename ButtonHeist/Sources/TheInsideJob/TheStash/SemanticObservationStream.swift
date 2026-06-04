@@ -18,6 +18,10 @@ struct SettledSemanticObservationEvent {
     let previous: SettledSemanticObservation?
     let trace: AccessibilityTrace
     let delta: AccessibilityTrace.Delta?
+
+    var currentCaptureRef: AccessibilityTrace.CaptureRef? {
+        trace.captures.last.map(AccessibilityTrace.CaptureRef.init(capture:))
+    }
 }
 
 @MainActor
@@ -142,6 +146,13 @@ final class SemanticObservationStream {
 
         if let latest = cleanEvent(scope: scope, after: requiredSequence) {
             return latest
+        }
+
+        if isActive {
+            await waitForNextCycle(scope: scope, after: baselineCycle())
+            if let latest = cleanEvent(scope: scope, after: requiredSequence) {
+                return latest
+            }
         }
 
         return await waitForNextSettledEvent(scope: scope, after: requiredSequence, timeout: timeout)
