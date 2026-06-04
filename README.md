@@ -6,51 +6,113 @@
 
 # Interface out. Agents in. Clean escape.
 
-Button Heist lets you write programs against an app's accessibility contract.
+Button Heist turns the app's accessibility contract into a rich, programmable
+world model: interactive, reliable, and durable.
 
-Every iOS app has a second interface: the one VoiceOver uses.
+Every iOS app already exposes a semantic control plane: the interface VoiceOver
+uses. It is not a screenshot. It is not a pile of rectangles. It is labels,
+roles, values, states, actions, focus, structure, and change.
 
-It describes the app in the language users depend on: labels, roles, values, states, actions. That interface is a contract: if users can do something visually, the app should expose it semantically.
+That interface is the contract. If users can do something visually, the app
+should expose the same intent semantically. Button Heist keeps that contract
+live, acts through it, and returns settled evidence about what changed.
+It makes the route VoiceOver proves real available to agents, tests, recordings,
+audits, and repair.
 
-Button Heist executes against that interface as the app's accessibility contract.
+Agents already reason in intent. Tests need durable assertions. Recordings need
+to remember purpose, not mechanics. Accessibility audits need proof that the
+semantic interface works. Button Heist connects those jobs through one runtime.
 
-It turns the VoiceOver route into an executable route for agents and durable tests:
-semantic intent in, settled evidence out.
-
-VoiceOver already gives the app a semantic interface. Agents already reason in intent. Tests already need durable contracts. Button Heist connects those existing contracts through one runtime.
-
-Link `TheInsideJob` into a debug build, connect over MCP or CLI, and the agent runs the job by intent. Activate the Login button. Type into the Email field. Run a custom action. Move through a rotor. Assert that the screen changed.
+Link `TheInsideJob` into a debug build, connect over MCP or CLI, and the agent
+runs the job by intent. Activate the Login button. Type into the Email field.
+Run a custom action. Move through a rotor. Assert that the screen changed.
 
 No blind taps for ordinary controls. No screenshot parsing loops pretending to understand the app. Every job leaves evidence: what ran, what changed, and whether the expectation held.
 
-An agent run, an integration test, an accessibility audit, and a recording are not four separate systems. They are the same job at different times. If a flow works through the VoiceOver interface, the app works and its accessibility contract held. If it fails, the same evidence shows what broke and gives repair a semantic place to start.
+```mermaid
+flowchart LR
+    Contract["Accessibility contract"] --> Model["Semantic world model"]
+    Model --> Intent["Intent"]
+    Intent --> Runtime["Action or wait runtime"]
+    Runtime --> Evidence["Settled evidence"]
+    Evidence --> Model
+    Evidence --> Output["Report, test, recording, audit, or repair"]
+```
 
-## The difference
+Agent automation, integration tests, accessibility audits, recordings, replay,
+and repair are not separate systems. They are the same job at different times.
+If a flow works through the accessibility contract, the app works and the
+contract held. If it fails, the same evidence shows what broke and gives repair
+a semantic place to start.
 
-A coordinate-based tool can tell the agent that a tap landed:
+## See The Job
+
+One direct command:
+
+```bash
+buttonheist activate \
+  --label "Continue" \
+  --traits button \
+  --expect '{"type":"screen_changed"}'
+```
+
+One heist plan:
+
+```text
+activate "Login"
+expect screen changed
+wait for "Dashboard"
+```
+
+One recording becoming a test:
+
+```bash
+buttonheist start_heist --identifier login-flow --app com.example.app
+buttonheist type_text "user@example.com" \
+  --label "Email" \
+  --expect '{"type":"element_updated","element":{"label":"Email"},"property":"value","to":"user@example.com"}'
+buttonheist activate \
+  --label "Login" \
+  --traits button \
+  --expect '{"type":"screen_changed"}'
+buttonheist stop_heist --output login-flow.heist
+buttonheist play_heist --input login-flow.heist --junit login-flow.xml
+```
+
+All three routes enter the same runtime and come back with settled semantic
+evidence. The full examples live in [examples/](examples/).
+
+## The Take
+
+A geometry-first route can tell the agent that a tap landed:
 
 ```
 → tap(x: 201, y: 456)
 ← "Tapped successfully"
 ```
 
-Button Heist tells the agent what changed after the move:
+Button Heist tells the agent what the app became after the move:
 
 ```
-→ activate(label: "Login", traits: ["button"])
-← screen changed
-  - textfield_email
-  - textfield_password
-  - button_login
-  + header_dashboard "Dashboard" header
-  + button_settings "Settings" button
+→ activate target={"label":"Sign In","traits":["button"]} expect={"type":"screen_changed"}
+← account_home | activate: screen changed
+  6 elements
+  [0] "Account Home" header
+  [1] "Checking balance":"$1,248.32" staticText
+  [2] "Recent transfer":"Coffee Roasters, $6.42" staticText
+  [3] "Send Money" button
+  [4] "Deposit Check" button
+  [5] "Settings" button
 ```
 
-The first tool says the tap landed.
+The first receipt says the move happened.
 
-Button Heist brings back evidence. The agent starts the next step from the changed interface, not from another full-screen read.
+Button Heist brings back state. The agent starts the next step from the changed
+interface, not from another round of guessing.
 
-That is the line between Button Heist and locator-first automation. Other tools often use accessibility to find a view, compute a frame, and drive the screen. Button Heist treats the accessibility interface as the interface: the thing agents act through, observe through, record through, replay through, and validate.
+That is the line: accessibility is not metadata on the way to a tap. It is the
+control plane. Button Heist acts through it, observes through it, records through
+it, replays through it, and validates through it.
 
 ## Choose the Route
 
@@ -66,13 +128,14 @@ Mechanical gestures are the lockpicks, not the front door. Use `one_finger_tap`,
 
 Recordings are the getaway plan. A good heist records "activate the Delete button and expect it to disappear." It does not preserve pre-action viewport movement or coordinate mechanics when semantic intent is available. Recorded flows should survive layout movement and fail when the app's accessible contract changes.
 
-## Not Button Heist
+## When Pixels Are The Job
 
-Button Heist is not coordinate playback, screenshot parsing, scroll scripting,
-or Selenium-for-iOS. Those approaches can be useful when pixels are the product
-surface. They are not the default path for buttons, fields, menus, toggles,
-links, custom accessibility actions, or heist programs. If the app exposes an
-accessible contract, Button Heist acts through that contract.
+Pixels are sometimes the product surface: maps, canvases, drawing tools, games,
+and custom gesture regions. Button Heist has explicit routes for those jobs.
+
+They stay explicit. The default path for buttons, fields, menus, toggles, links,
+custom accessibility actions, rotors, and heist programs is semantic. If the app
+exposes an accessibility contract, Button Heist acts through that contract.
 
 ## Quick Start
 
@@ -200,11 +263,14 @@ contain semantic action intent and a semantic expectation.
 
 ## How the Job Runs
 
-Coordinate-based tools turn intent into geometry: read the tree, extract frames, tap a point, read again.
+Button Heist treats each interaction as a transaction against the app's semantic
+world model.
 
-Button Heist keeps the live accessibility hierarchy in reach. It resolves semantic targets, performs actions, and returns the UI change that followed.
+It resolves the target, performs the action through the accessibility contract,
+waits for the interface to settle, and returns the semantic change that followed.
 
-That changes the loop. Every action goes through the contract. Every result comes back as evidence.
+That changes the loop. Every action goes through the contract. Every result
+comes back as evidence.
 
 ### 1. Results: trace-backed evidence after every action
 
@@ -242,28 +308,25 @@ tree node with path, kind, status, duration, action details when applicable,
 expectation details when applicable, and selected branch or loop context when
 applicable. If a step fails, the heist stops at that point.
 
-The Swift authoring form reads like a small program against the app's semantic
-contract:
+The Swift authoring form should read like a small program against the app's
+semantic contract:
 
 ```swift
-try Heist("searchFlow") {
-    TypeText("milk", into: .label("Search"))
-        .expect(.present(ElementPredicate.element(label: "Search", value: "milk")), timeout: .seconds(2))
-
-    Activate(.label("Search"))
-        .expect(.changed(.screen()), timeout: .seconds(5))
+try Heist("loginFlow") {
+    Activate(.label("Login"))
+        .expect(.changed(.screen()))
 
     WaitFor(timeout: .seconds(5)) {
-        Case(.present(.label("Results"))) {
-            Warn("Search results loaded")
+        Case(.present(.label("Dashboard"))) {
+            Warn("Login completed")
         }
 
-        Case(.present(.label("No Results"))) {
-            Fail("Expected search results")
+        Case(.present(.label("Login Failed"))) {
+            Fail("Login failed")
         }
 
         Else {
-            Fail("Search did not settle")
+            Fail("Login did not settle")
         }
     }
 }
@@ -328,11 +391,16 @@ The job does not disappear into tool-call history. It comes back as a replayable
 
 ## The Accessibility Contract
 
-Button Heist does not treat accessibility as metadata to scrape and discard. It makes the Accessibility Contract executable.
+Button Heist does not treat accessibility as metadata to scrape and discard. It
+makes the accessibility contract executable.
 
-That matters. A coordinate tool can tap a button with no label and report success. Button Heist cannot pretend the app is accessible when the semantic interface is missing or wrong. If an agent cannot find the control by label, trait, value, or action, that is signal.
+That matters. If the semantic interface is missing or wrong, Button Heist should
+not paper over it with a lucky gesture. If an agent cannot find the control by
+label, trait, value, state, or action, that is signal.
 
-One contract. Three payoffs: agents move faster, tests get stronger, VoiceOver users get the interface they were promised.
+One contract. Many payoffs: agents move faster, tests get stronger, recordings
+become durable, repairs get evidence, and VoiceOver users get the interface they
+were promised.
 
 The formal product contract, boundary map, and conformance cases live in
 [docs/ACCESSIBILITY-CONTRACT.md](docs/ACCESSIBILITY-CONTRACT.md). Recording and
@@ -391,7 +459,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 |------|------|
 | **TheInsideJob** | iOS framework embedded in the app. Hosts the TLS TCP server, optional Bonjour advertisement, accessibility hierarchy, and command dispatch |
 | **TheSafecracker** | Touch, gesture, text-entry, and edit-action execution through synthetic events |
-| **TheStash** | Semantic memory, target resolution, current capture annotations, and wire conversion. Live view pointers stay inside |
+| **TheStash** | Semantic world model, target resolution, current capture annotations, and wire conversion. Live view pointers stay inside |
 | **TheBurglar** | Accessibility hierarchy parsing, topology detection, and scroll-container discovery |
 | **TheBrains** | Action execution, scroll orchestration, delta generation, waits, and exploration |
 | **TheGetaway** | Message dispatch, encoding/decoding, transport wiring, and response state |
