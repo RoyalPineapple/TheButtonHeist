@@ -2346,10 +2346,7 @@ final class TheBrainsActionTests: XCTestCase {
                     return self.heistWaitReceipt(for: waitStep, result: await wait(waitStep, initialTrace))
                 }
                 if let initialTrace {
-                    let expectation = waitStep.predicate.evaluate(
-                        currentElements: initialTrace.captures.last?.interface.projectedElements ?? [],
-                        delta: initialTrace.endpointDeltaProjection
-                    )
+                    let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: initialTrace)
                     if expectation.met || waitStep.timeout == 0 {
                         let result = ActionResult(
                             success: expectation.met,
@@ -2363,7 +2360,8 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 let state = observationSource.currentState
                 let trace = state.map { AccessibilityTrace(capture: $0.capture) }
-                let met = waitStep.predicate.evaluate(
+                let met = PredicateEvaluation.evaluate(
+                    waitStep.predicate,
                     currentElements: state?.interface.projectedElements ?? [],
                     delta: trace?.endpointDeltaProjection
                 )

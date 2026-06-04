@@ -274,6 +274,46 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Wait Evidence Path
 
+    func testWaitCurrentSuccessUsesSettledObservationEvidence() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let matchedScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Home"), "home"),
+        ])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .state(.present(ElementPredicate(label: "Home"))),
+                timeout: 1
+            ))
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(matchedScreen)
+
+        let receipt = await receiptTask.value
+        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Home"])
+        XCTAssertEqual(receipt.expectation.met, true)
+    }
+
+    func testWaitCurrentTimeoutWithoutSettledObservationFails() async {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+
+        let receipt = await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+            predicate: .state(.present(ElementPredicate(label: "Home"))),
+            timeout: 0.01
+        ))
+
+        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertEqual(receipt.expectation.met, false)
+        XCTAssertTrue(receipt.actionResult.message?.contains("no settled semantic observation available") == true)
+    }
+
     func testWaitSuccessEvidenceUsesSettledObservationTrace() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }

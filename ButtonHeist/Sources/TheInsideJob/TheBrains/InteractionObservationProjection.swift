@@ -12,6 +12,10 @@ struct HeistSemanticObservation {
     let summary: String
 }
 
+enum SemanticObservationTiming {
+    static let defaultTimeout: Double = 1
+}
+
 @MainActor enum InteractionObservationProjection { // swiftlint:disable:this agent_main_actor_value_type
     struct InitialTraceResult {
         let trace: AccessibilityTrace
@@ -114,38 +118,78 @@ struct HeistSemanticObservation {
         )
     }
 
+    static func postActionResult(
+        success: Bool,
+        method: ActionMethod,
+        message: String?,
+        payload: ResultPayload?,
+        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)?,
+        errorKind: ErrorKind?,
+        subjectEvidence: ActionSubjectEvidence?,
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionObservation.SettleEvidence,
+        finalEvidence: PostActionObservation.FinalEvidence?
+    ) -> ActionResult {
+        if let cancelled = cancelledActionResult(
+            method: method,
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            before: before,
+            settleEvidence: settleEvidence
+        ) {
+            return cancelled
+        }
+
+        guard let finalEvidence else {
+            return postActionParseFailureResult(
+                method: method,
+                payload: payload,
+                subjectEvidence: subjectEvidence,
+                before: before,
+                settleEvidence: settleEvidence
+            )
+        }
+
+        let resolvedPayload = success
+            ? (afterStatePayload?(finalEvidence.state) ?? payload)
+            : payload
+
+        guard finalEvidence.capture != nil else {
+            return failedActionResult(
+                method: method,
+                capture: before.capture,
+                message: message,
+                payload: resolvedPayload,
+                subjectEvidence: subjectEvidence
+            )
+        }
+
+        return actionResult(
+            method: method,
+            capture: finalEvidence.capture ?? finalEvidence.state.capture,
+            message: message,
+            payload: resolvedPayload,
+            errorKind: errorKind,
+            accessibilityTrace: finalEvidence.trace,
+            subjectEvidence: subjectEvidence,
+            settled: settleEvidence.didSettleCleanly,
+            settleTimeMs: settleEvidence.timeMs,
+            success: success
+        )
+    }
+
     static func initialTraceResult(
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace?,
         timeout: Double
     ) -> InitialTraceResult? {
         guard let initialTrace else { return nil }
-        let expectation = evaluate(step.predicate, in: initialTrace)
+        let expectation = PredicateEvaluation.evaluate(step.predicate, in: initialTrace)
         return InitialTraceResult(
             trace: initialTrace,
             summary: traceSummary(initialTrace),
             expectation: expectation,
             shouldReturn: expectation.met || timeout == 0
-        )
-    }
-
-    static func evaluate(
-        _ predicate: AccessibilityPredicate,
-        in observation: HeistSemanticObservation
-    ) -> ExpectationResult {
-        predicate.evaluate(
-            currentElements: observation.state.interface.projectedElements,
-            delta: observation.delta
-        )
-    }
-
-    static func evaluate(
-        _ predicate: AccessibilityPredicate,
-        in trace: AccessibilityTrace
-    ) -> ExpectationResult {
-        predicate.evaluate(
-            currentElements: trace.captures.last?.interface.projectedElements ?? [],
-            delta: trace.endpointDeltaProjection
         )
     }
 
@@ -285,6 +329,43 @@ struct HeistSemanticObservation {
         case .screenChanged:
             return "screen_changed"
         }
+    }
+
+    private static func cancelledActionResult(
+        method: ActionMethod,
+        payload: ResultPayload?,
+        subjectEvidence: ActionSubjectEvidence?,
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionObservation.SettleEvidence
+    ) -> ActionResult? {
+        guard case .cancelled(let cancelMs) = settleEvidence.outcome.outcome else { return nil }
+        return failedActionResult(
+            method: method,
+            capture: before.capture,
+            message: "cancelled after \(cancelMs)ms",
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            settled: false,
+            settleTimeMs: cancelMs
+        )
+    }
+
+    private static func postActionParseFailureResult(
+        method: ActionMethod,
+        payload: ResultPayload?,
+        subjectEvidence: ActionSubjectEvidence?,
+        before: PostActionObservation.BeforeState,
+        settleEvidence: PostActionObservation.SettleEvidence
+    ) -> ActionResult {
+        failedActionResult(
+            method: method,
+            capture: before.capture,
+            message: "Could not parse post-action accessibility tree",
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            settled: settleEvidence.didSettleCleanly,
+            settleTimeMs: settleEvidence.timeMs
+        )
     }
 }
 
