@@ -87,7 +87,7 @@ struct StartupConfiguration: Equatable, Sendable {
             plistKey: .token,
             env: env,
             plist: plist,
-            fallbackSource: .generated,
+            absentSource: .generated,
             warnings: &warnings
         )
         let instanceId = resolveString(
@@ -95,7 +95,7 @@ struct StartupConfiguration: Equatable, Sendable {
             plistKey: .instanceId,
             env: env,
             plist: plist,
-            fallbackSource: .generated,
+            absentSource: .generated,
             warnings: &warnings
         )
         let preferredPort = resolvePort(env: env, plist: plist, warnings: &warnings)
@@ -126,7 +126,7 @@ struct StartupConfiguration: Equatable, Sendable {
         plistKey: StartupInfoPlistKey,
         env: [String: String],
         plist: [String: Any],
-        fallbackSource: StartupConfigurationSource,
+        absentSource: StartupConfigurationSource,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<String?> {
         if let envValue = env[envKey.rawValue] {
@@ -143,7 +143,7 @@ struct StartupConfiguration: Equatable, Sendable {
             warnings.append(.emptyValueIgnored(key: plistKey.rawValue, source: .infoPlist))
         }
 
-        return ResolvedStartupValue(value: nil, source: fallbackSource)
+        return ResolvedStartupValue(value: nil, source: absentSource)
     }
 
     private static func resolvePort(

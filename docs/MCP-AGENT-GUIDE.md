@@ -125,7 +125,7 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 ## Recording Heists
 
-`start_heist` / `stop_heist` compose successful interactions into a replayable semantic .heist test. The recording is not a playback log: read commands and failed actions produce no steps, viewport setup is dropped when semantic intent can be derived, and explicit expectations are kept only after they pass.
+`start_heist` / `stop_heist` compose successful interactions into a replayable semantic .heist test. The recording is not a playback log: read commands and failed actions produce no steps, pre-action viewport movement is dropped when semantic intent can be derived, and explicit expectations are kept only after they pass.
 
 **Prime the interface first.** Call `get_interface` before your first action. The recorder derives portable matchers from current element data.
 

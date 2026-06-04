@@ -6,7 +6,7 @@ public enum CandidateTier: Int, Sendable, Equatable, Comparable {
     case identityOnly
     case identityWithState
     case stateOnly
-    case ordinalFallback
+    case ordinalDisambiguation
 
     public static func < (lhs: CandidateTier, rhs: CandidateTier) -> Bool {
         lhs.rawValue < rhs.rawValue
@@ -170,7 +170,7 @@ public enum MinimumPredicateSelector {
         let ordinalCandidate = PredicateCandidate(
             predicate: strongestSemanticCandidate.predicate,
             atoms: strongestSemanticCandidate.atoms,
-            tier: .ordinalFallback
+            tier: .ordinalDisambiguation
         )
         return MinimumPredicateSelection(
             contextElementId: contextElementId,
@@ -249,7 +249,7 @@ public enum MinimumPredicateSelector {
         case (false, true):
             return .stateOnly
         case (false, false):
-            return .ordinalFallback
+            return .ordinalDisambiguation
         }
     }
 

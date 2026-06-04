@@ -9,7 +9,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `activate` | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
 | `connect` | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
-| `drag` | Drag using exactly one typed intent: elementToPoint or pointToPoint. |
+| `drag` | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
 | `edit_action` | Perform an edit action on the current first responder. |
 | `get_interface` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | Read text from the general pasteboard. |
@@ -17,7 +17,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_session_state` | Inspect connection, device, and last-action session state. |
 | `list_devices` | List discovered iOS devices and configured connection targets. |
 | `list_targets` | List configured connection targets and the default target. |
-| `long_press` | Long-press an explicit point or semantic element for a resolved duration. |
+| `long_press` | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
 | `one_finger_tap` | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
 | `ping` | Check connection health without reading accessibility state. |
 | `play_heist` | Play back a heist file and return step diagnostics on failure. |
@@ -25,13 +25,13 @@ _Generated from `TheFence.Command.descriptors`._
 | `run_heist` | Execute an inline typed heist plan. |
 | `scroll` | Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
 | `scroll_to_edge` | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
-| `scroll_to_visible` | Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry. |
+| `scroll_to_visible` | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | Write text to the general pasteboard from within the app. |
 | `start_heist` | Start composing successful interactions into a semantic heist test. |
 | `stop_heist` | Stop heist recording and save a deterministic semantic heist fixture. |
-| `swipe` | Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
+| `swipe` | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
 | `type_text` | Type non-empty text, optionally after making a semantic target actionable. |
-| `wait` | Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions. |
+| `wait` | Wait until an accessibility predicate is satisfied within timeout by evaluating settled semantic observations. |
 
 ## Details
 
@@ -74,7 +74,7 @@ Parameters:
 
 ### `drag`
 
-Drag using exactly one typed intent: elementToPoint or pointToPoint.
+Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint.
 
 Parameters:
 
@@ -160,7 +160,7 @@ _None._
 
 ### `long_press`
 
-Long-press an explicit point or semantic element for a resolved duration.
+Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration.
 
 Parameters:
 
@@ -257,7 +257,7 @@ Parameters:
 
 ### `scroll_to_visible`
 
-Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry.
+Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry.
 
 Parameters:
 
@@ -302,7 +302,7 @@ Parameters:
 
 ### `swipe`
 
-Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.
+Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.
 
 Parameters:
 
@@ -331,7 +331,7 @@ Parameters:
 
 ### `wait`
 
-Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions.
+Wait until an accessibility predicate is satisfied within timeout by evaluating settled semantic observations.
 
 Parameters:
 

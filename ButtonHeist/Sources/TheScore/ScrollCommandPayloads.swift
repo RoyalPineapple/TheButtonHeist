@@ -96,8 +96,9 @@ extension ScrollTarget: Codable {
 }
 
 /// Target for one-shot scroll-to-visible.
-/// The element must be known (in the registry with a content-space position).
-/// Jumps directly to the element's position — no iterative search.
+/// The element must be present in semantic state with a content-space position.
+/// Jumps directly to the element's position; it is an explicit viewport command,
+/// not setup for ordinary semantic actions.
 public struct ScrollToVisibleTarget: Sendable, Equatable {
     /// Element to scroll into view. Must be a known element with a recorded position.
     public let elementTarget: ElementTarget

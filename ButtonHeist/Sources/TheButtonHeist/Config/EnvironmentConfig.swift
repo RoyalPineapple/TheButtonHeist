@@ -81,7 +81,8 @@ public struct EnvironmentConfig: Sendable {
     }
 
     /// Resolve configuration with an explicit user-provided config path.
-    /// Missing or malformed explicit config files are diagnostic failures, not search fallbacks.
+    /// Missing or malformed explicit config files are diagnostic failures, not
+    /// alternate config searches.
     public static func resolve(
         deviceFilter: String? = nil,
         token: String? = nil,

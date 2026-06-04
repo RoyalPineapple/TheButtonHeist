@@ -6,7 +6,8 @@ import Foundation
 ///
 /// Swift DSL source, dynamic agent JSON, recordings, and playback all converge
 /// on this value. DSL syntax is source authoring; `HeistPlan` is the product
-/// contract executed by the runtime.
+/// contract executed by the runtime. The plan stores semantic structure; it
+/// does not observe UI state, settle, report, record, or dispatch actions.
 public struct HeistPlan: Codable, Sendable, Equatable {
     public static let currentVersion = 2
 

@@ -2,15 +2,15 @@
 
 The CLI is the terminal adapter for Button Heist. It routes through
 `TheFence.Command`, the same product command contract used by JSON-lines stdin,
-MCP, batches, and heist playback.
+MCP, heist execution, and playback.
 
 This README covers build, targeting, and common workflows. It does not maintain
-a hand-written command or parameter registry.
+a hand-written command or parameter catalog.
 
 Generated references:
 
 - [Command Reference](../docs/reference/commands.md) - canonical commands,
-  CLI exposure, batch/playback eligibility, and parameters
+  CLI exposure, heist/playback eligibility, and parameters
 - [MCP Tool Reference](../docs/reference/mcp-tools.md) - MCP adapter tools
 - [API](../docs/API.md) - product invariants and integration context
 
@@ -100,7 +100,7 @@ JSON requests on stdin.
 ```bash
 buttonheist json_lines
 echo '{"command":"get_interface"}' | buttonheist json_lines
-echo '{"command":"run_batch","steps":[{"command":"activate","target":{"label":"Sign In","traits":["button"]}}]}' | buttonheist json_lines
+echo '{"command":"run_heist","version":2,"body":[{"type":"action","action":{"command":{"type":"activate","payload":{"label":"Sign In","traits":["button"]}}}}]}' | buttonheist json_lines
 ```
 
 JSON-lines mode auto-reconnects after connection loss, then the next command

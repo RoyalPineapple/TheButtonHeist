@@ -19,6 +19,9 @@ struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unc
 // MARK: - HeistStore
 
 /// Stores deterministic heist recordings.
+///
+/// The store appends recording effects handed to it. It does not classify
+/// commands, infer semantic intent, or resolve targets.
 @ButtonHeistActor
 final class HeistStore {
 

@@ -1,12 +1,15 @@
 # Button Heist Architecture
 
-Button Heist is a small contract wrapped around a lot of iOS machinery:
-agents read an accessibility capture, act through a typed command, and use the
-returned delta to decide the next step.
+Button Heist lets callers write programs against an app's accessibility
+contract. Semantic intent enters the runtime; Button Heist owns target
+resolution, reveal, actionability, action execution, settling, and evidence;
+callers receive settled semantic evidence for validation, recording, reporting,
+or the next step.
 
-This document names the load-bearing contracts. For exhaustive command shapes,
-wire payloads, and per-module implementation notes, use the generated or
-reference docs linked at the end.
+This document names the load-bearing runtime pieces. The canonical product
+contract and conformance cases live in [Accessibility Contract](ACCESSIBILITY-CONTRACT.md).
+For exhaustive command shapes, wire payloads, and per-module implementation
+notes, use the generated or reference docs linked at the end.
 
 ## Product Contracts
 
@@ -124,6 +127,8 @@ failure points at the accessibility contract that changed.
 
 ## Reference Docs
 
+- [Accessibility Contract](ACCESSIBILITY-CONTRACT.md) - canonical product
+  contract, boundary map, pipeline, and conformance cases.
 - [API Reference](API.md) - public APIs, CLI, MCP tool contract, and command
   catalog notes.
 - [Wire Protocol](WIRE-PROTOCOL.md) - TheScore envelopes, transport messages,
@@ -131,4 +136,8 @@ failure points at the accessibility contract that changed.
 - [MCP Agent Guide](MCP-AGENT-GUIDE.md) - practical tool-use patterns for
   agents.
 - [Heist Format](HEIST-FORMAT.md) - replayable session file format.
+- [Recording Contract](RECORDING-CONTRACT.md) - how runtime evidence becomes
+  durable semantic heist steps.
+- [Semantic Actionability](SEMANTIC-ACTIONABILITY.md) - semantic target to
+  actionable live target boundary.
 - [Auth](AUTH.md) - authentication, approval, and session locking.

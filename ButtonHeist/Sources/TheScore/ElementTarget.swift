@@ -8,7 +8,7 @@ import Foundation
 /// excludeTraits); `ordinal` disambiguates among matches. Predicate fields use
 /// case-insensitive equality with typography folding — exact-or-miss.
 /// On miss, the resolver returns structured suggestions; there is no
-/// substring fallback.
+/// substring matching path.
 public enum ElementTarget: Sendable, Equatable, Hashable {
     /// Element predicate: label, identifier, value, traits, excludeTraits.
     /// `ordinal` is a 0-based selection index into the list of matches

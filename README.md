@@ -6,8 +6,7 @@
 
 # Interface out. Agents in. Clean escape.
 
-Button Heist is a runtime for programming against an iOS app's accessibility
-contract.
+Button Heist lets you write programs against an app's accessibility contract.
 
 Every iOS app has a second interface: the one VoiceOver uses.
 
@@ -65,7 +64,7 @@ Viewport commands are the lookout. Use `scroll`, `scroll_to_visible`, screenshot
 
 Mechanical gestures are the lockpicks, not the front door. Use `one_finger_tap`, `long_press`, `swipe`, and `drag` for maps, canvases, drawing surfaces, games, custom controls, or any product behavior where the gesture itself is the intent. For standard buttons, fields, menus, and other accessible controls, prefer semantic commands.
 
-Recordings are the getaway plan. A good heist records "activate the Delete button and expect it to disappear." It does not preserve viewport setup or coordinate mechanics when semantic intent is available. Recorded flows should survive layout movement and fail when the app's accessible contract changes.
+Recordings are the getaway plan. A good heist records "activate the Delete button and expect it to disappear." It does not preserve pre-action viewport movement or coordinate mechanics when semantic intent is available. Recorded flows should survive layout movement and fail when the app's accessible contract changes.
 
 ## Not Button Heist
 
@@ -334,6 +333,14 @@ Button Heist does not treat accessibility as metadata to scrape and discard. It 
 That matters. A coordinate tool can tap a button with no label and report success. Button Heist cannot pretend the app is accessible when the semantic interface is missing or wrong. If an agent cannot find the control by label, trait, value, or action, that is signal.
 
 One contract. Three payoffs: agents move faster, tests get stronger, VoiceOver users get the interface they were promised.
+
+The formal product contract, boundary map, and conformance cases live in
+[docs/ACCESSIBILITY-CONTRACT.md](docs/ACCESSIBILITY-CONTRACT.md). Recording and
+semantic actionability have their own focused contracts:
+[docs/RECORDING-CONTRACT.md](docs/RECORDING-CONTRACT.md) and
+[docs/SEMANTIC-ACTIONABILITY.md](docs/SEMANTIC-ACTIONABILITY.md).
+
+Canonical examples live in [examples/](examples/).
 
 ## What Breaks A Heist?
 

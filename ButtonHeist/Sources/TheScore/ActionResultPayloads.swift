@@ -185,9 +185,9 @@ public struct ActionResult: Codable, Sendable {
     /// the action reached the server but the handler reported failure — it is
     /// not a transport-level error (those surface as thrown errors).
     public let success: Bool
-    /// Identifies the delivered action behavior (for example, `.activate` or
-    /// `.syntheticTap`). Useful when diagnosing why an action succeeded but had
-    /// no visible effect.
+    /// Identifies the delivered action behavior. Activation-point delivery for
+    /// `activate` still reports `.activate`; explicit mechanical taps report
+    /// the mechanical tap method.
     public let method: ActionMethod
     public let message: String?
     /// Typed error classification (nil on success)

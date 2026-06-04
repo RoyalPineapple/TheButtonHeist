@@ -78,8 +78,8 @@ extension SimpleSocketServer {
         })
     }
 
-    /// Extract the remote host from an NWConnection using typed Network framework values.
-    /// Checks the connection endpoint directly (always available), with currentPath as fallback.
+    /// Extract the remote host from an NWConnection using typed Network framework
+    /// values. Checks the connection endpoint directly first, then currentPath.
     nonisolated private static func extractRemoteHost(from connection: NWConnection) -> NWEndpoint.Host? {
         if case .hostPort(let host, _) = connection.endpoint {
             return host

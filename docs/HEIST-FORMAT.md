@@ -40,8 +40,8 @@ in the plan contract.
 
 Definitions are named `HeistPlan` values stored inside another plan. They are
 local to the containing plan and exported through that namespace only. There is
-no import mechanism, global registry, remote lookup, or arbitrary Swift source
-execution over the wire.
+no import mechanism, global lookup table, remote lookup, or arbitrary Swift
+source execution over the wire.
 
 ```json
 {
@@ -464,8 +464,9 @@ Viewport movement:
 }
 ```
 
-Semantic actions do not require `scroll_to_visible` setup. Recording drops
-viewport setup when a semantic action intent can be derived.
+Semantic actions do not require `scroll_to_visible` before they run. Recording
+drops pre-action viewport movement when a semantic action intent can be
+derived.
 
 ## Runtime Admission And Lint
 
@@ -478,7 +479,7 @@ Lint is quality guidance for authored or recorded tests:
 | Mode | Purpose |
 |------|---------|
 | `recordingQuality` | Warns when recordings look like fragile transcripts. |
-| `strictTest` | Fails missing expectations, mechanical commands, viewport setup, and empty branches. |
+| `strictTest` | Fails missing expectations, mechanical commands, pre-action viewport movement, and empty branches. |
 
 Lint returns structured findings with severity, step path, message, and a fix
 suggestion. It does not replace runtime admission.
@@ -489,7 +490,7 @@ The durable heist AST is small on purpose. It does not support:
 
 - unbounded loops, sleeps, retries, catch/recover, or arbitrary polling loops
 - preserving native Swift `for` loops as runtime loops
-- hidden viewport setup for semantic actions
+- hidden pre-action viewport movement for semantic actions
 - arbitrary dynamic code or source execution over the wire
 - generic variables or expression evaluation beyond typed string and target refs
 - geometry, runtime IDs, capture-local IDs, or scroll container handles as
@@ -501,6 +502,9 @@ The durable heist AST is small on purpose. It does not support:
 
 Recording composes completed interactions and settled semantic evidence into
 semantic action intent plus validated semantic expectation.
+
+See [Recording Contract](RECORDING-CONTRACT.md) for the focused recording
+rules.
 
 Rules:
 
