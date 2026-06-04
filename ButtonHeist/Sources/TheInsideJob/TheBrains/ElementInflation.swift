@@ -315,7 +315,7 @@ final class ElementInflation {
             }
             return .failure(.geometryNotActionable(unsafeProgrammaticScrollMessage))
         }
-        guard safecracker.scrollToMakeActivationPointVisible(
+        guard safecracker.scrollToMakeScreenPointVisible(
             activationPoint,
             in: scrollView,
             animated: false,

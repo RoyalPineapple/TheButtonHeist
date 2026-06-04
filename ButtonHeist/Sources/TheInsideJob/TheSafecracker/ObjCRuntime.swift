@@ -80,7 +80,7 @@ enum ObjCRuntime {
             target.perform(selector, with: arg)?.takeUnretainedValue() as? R
         }
 
-        // MARK: - Escape Hatch
+        // MARK: - Raw IMP Dispatch
 
         /// Raw IMP cast to a `@convention(c)` type. Use for signatures that
         /// don't fit the `call` overloads (mixed object + value args, etc.).

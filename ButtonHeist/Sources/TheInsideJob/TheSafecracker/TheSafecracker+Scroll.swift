@@ -3,10 +3,10 @@
 import UIKit
 import TheScore
 
-/// TheSafecracker scroll primitives — pure UIScrollView manipulation.
+/// TheSafecracker scroll primitives — UIScrollView and screen-coordinate mechanics.
 /// Takes a scroll view and movement parameters, produces offset changes.
-/// No element awareness, no TheStash reference. TheStash finds the
-/// scroll view from the accessibility hierarchy and passes it here.
+/// Callers resolve any semantic target, container, or reveal policy before
+/// entering this file.
 extension TheSafecracker {
 
     /// Points of overlap retained between page scrolls so users keep context.
@@ -54,10 +54,10 @@ extension TheSafecracker {
         return true
     }
 
-    /// Scrolls so a live accessibility activation point lands in the preferred
-    /// screen rect when possible, otherwise at least inside the minimum screen rect.
-    func scrollToMakeActivationPointVisible(
-        _ activationPoint: CGPoint,
+    /// Scrolls so a live screen point lands in the preferred screen rect when
+    /// possible, otherwise at least inside the minimum screen rect.
+    func scrollToMakeScreenPointVisible(
+        _ screenPoint: CGPoint,
         in scrollView: UIScrollView,
         animated: Bool = true,
         preferredScreenRect: CGRect,
@@ -65,7 +65,7 @@ extension TheSafecracker {
     ) -> Bool {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
 
-        let pointInContent = scrollView.convert(activationPoint, from: nil)
+        let pointInContent = scrollView.convert(screenPoint, from: nil)
         let currentOffset = scrollView.contentOffset
         let fullVisibleRect = visibleRect(in: scrollView, at: currentOffset)
         let preferredVisibleRect = usableVisibleRect(

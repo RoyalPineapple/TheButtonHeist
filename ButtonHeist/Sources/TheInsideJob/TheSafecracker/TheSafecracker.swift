@@ -3,11 +3,11 @@
 import UIKit
 import TheScore
 
-/// Facade for debug input injection.
+/// Facade for mechanical input injection.
 ///
-/// Element inflation lives in TheBrains. This type exposes the low-level
-/// keyboard, edit, and coordinate/touch escape hatches used after a command has
-/// resolved to concrete runtime input.
+/// Element inflation and semantic-vs-mechanical policy live in TheBrains. This
+/// type exposes low-level keyboard, edit, scroll, and coordinate/touch
+/// primitives used after a command has resolved to concrete runtime input.
 @MainActor
 final class TheSafecracker {
 
