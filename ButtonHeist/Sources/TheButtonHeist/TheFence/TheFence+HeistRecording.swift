@@ -18,7 +18,7 @@ extension TheFence {
             throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
         }
         let heist = try heistRecording.finish(using: heistStore)
-        try HeistStore.writeHeist(heist, to: resolvedURL)
+        try HeistFileIO.write(heist, to: resolvedURL)
         return .heistStopped(path: resolvedURL.path, stepCount: heist.body.count)
     }
 }

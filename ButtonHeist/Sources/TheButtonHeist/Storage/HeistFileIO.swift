@@ -2,11 +2,9 @@ import Foundation
 
 import TheScore
 
-extension HeistStore {
+enum HeistFileIO {
 
-    // MARK: - Heist File I/O
-
-    static func writeHeist(_ heist: HeistPlan, to path: URL) throws {
+    static func write(_ heist: HeistPlan, to path: URL) throws {
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -21,7 +19,7 @@ extension HeistStore {
         }
     }
 
-    static func readHeist(from path: URL) throws -> HeistPlan {
+    static func read(from path: URL) throws -> HeistPlan {
         do {
             let data = try Data(contentsOf: path)
             let decoder = JSONDecoder()
@@ -39,9 +37,9 @@ extension HeistStore {
             ))
         }
     }
+}
 
-    // MARK: - Private Heist I/O
-
+extension HeistStore {
     func readSteps(from path: URL) throws -> [HeistStep] {
         let data: Data
         do {

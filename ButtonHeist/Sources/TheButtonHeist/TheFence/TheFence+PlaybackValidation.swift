@@ -10,7 +10,7 @@ extension TheFence {
     @ButtonHeistActor
     func readHeistPlayback(contentsOf url: URL) throws -> HeistPlaybackContract {
         do {
-            return try validateHeistPlayback(HeistStore.readHeist(from: url))
+            return try validateHeistPlayback(HeistFileIO.read(from: url))
         } catch StorageError.heistRecording(.heistReadFailed(_, let reason))
             where reason.contains("Unsupported heist plan version") {
             throw FenceError.invalidRequest(reason)
