@@ -20,42 +20,42 @@ extension Actions {
         selection: GesturePointSelection,
         method: ActionMethod
     ) async -> GestureResolution<ResolvedGesturePoint> {
-        let actionableTarget: SemanticActionability.SemanticActionableTarget?
+        let inflatedTarget: ElementInflation.InflatedElementTarget?
         switch selection {
         case .element(let target):
-            switch await navigation.actionability.makeActionable(
+            switch await navigation.elementInflation.inflate(
                 for: target,
                 method: method,
                 deallocatedBoundary: "gesture action"
             ) {
-            case .actionable(let target):
-                actionableTarget = target
+            case .inflated(let target):
+                inflatedTarget = target
             case .failed(let failure):
                 return .failure(failure.interactionResult(commandMethod: method))
             }
         case .coordinate:
-            actionableTarget = nil
+            inflatedTarget = nil
         }
-        return resolveGesturePoint(from: actionableTarget, selection: selection, method: method)
+        return resolveGesturePoint(from: inflatedTarget, selection: selection, method: method)
     }
 
     func resolveGesturePoint(
-        from actionableTarget: SemanticActionability.SemanticActionableTarget?,
+        from inflatedTarget: ElementInflation.InflatedElementTarget?,
         selection: GesturePointSelection,
         method: ActionMethod
     ) -> GestureResolution<ResolvedGesturePoint> {
         switch selection {
         case .element:
-            guard let actionableTarget else {
+            guard let inflatedTarget else {
                 return .failure(.failure(method, message: "No target specified", failureKind: .targetUnavailable))
             }
-            let point = actionableTarget.liveTarget.activationPoint
+            let point = inflatedTarget.liveTarget.activationPoint
             if let failure = geometryFailure(method: method, field: "point", point: point) {
                 return .failure(failure)
             }
             return .success(ResolvedGesturePoint(
                 point: point,
-                subjectEvidence: actionableTarget.subjectEvidence(source: .elementGestureTarget)
+                subjectEvidence: inflatedTarget.subjectEvidence(source: .elementGestureTarget)
             ))
         case .coordinate(let screenPoint):
             let point = screenPoint.cgPoint
@@ -67,10 +67,10 @@ extension Actions {
     }
 
     func resolveGestureFrame(
-        for actionableTarget: SemanticActionability.SemanticActionableTarget,
+        for inflatedTarget: ElementInflation.InflatedElementTarget,
         method: ActionMethod
     ) -> GestureResolution<CGRect> {
-        let frame = actionableTarget.liveTarget.frame
+        let frame = inflatedTarget.liveTarget.frame
         if let message = GeometryValidation.validateRect(frame, field: "frame") {
             return .failure(.failure(
                 method,

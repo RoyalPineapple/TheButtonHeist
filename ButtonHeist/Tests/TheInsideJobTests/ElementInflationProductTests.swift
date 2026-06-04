@@ -19,7 +19,7 @@ private extension AccessibilityTrace.Delta {
 }
 
 @MainActor
-final class SemanticActionabilityProductTests: XCTestCase {
+final class ElementInflationProductTests: XCTestCase {
 
     private var brains: TheBrains!
 
@@ -97,7 +97,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         ])
     }
 
-    func testMissingRevealPathFailsAsActionabilityDiagnostic() async throws {
+    func testMissingRevealPathFailsAsInflationDiagnostic() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "unrevealable_submit",
             label: "Submit Order"
@@ -115,7 +115,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertDiagnostic(result.message, contains: [
-            "semantic actionability failed [noRevealPath]",
+            "element inflation failed [noRevealPath]",
             "no live scrollable ancestor",
         ])
         XCTAssertFalse(result.message?.localizedCaseInsensitiveContains("scroll first") ?? false)

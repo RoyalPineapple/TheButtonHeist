@@ -11,7 +11,7 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 | [API](API.md) | Product API invariants and integration contracts; generated references own commands and parameters |
 | [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md) | Source authoring boundary between Swift DSL, HeistPlan, and `.heist` JSON |
 | [Recording Contract](RECORDING-CONTRACT.md) | How successful runtime evidence becomes durable semantic heist steps |
-| [Semantic Actionability](SEMANTIC-ACTIONABILITY.md) | Runtime boundary from semantic targets to actionable live targets |
+| [Element Inflation](ELEMENT-INFLATION.md) | Runtime boundary from semantic targets to inflated live targets |
 | [Command Reference](reference/commands.md) | Generated command names, CLI exposure, heist/playback eligibility, and parameters |
 | [MCP Tool Reference](reference/mcp-tools.md) | Generated MCP tool surface projected from TheFence |
 | [Wire Protocol](WIRE-PROTOCOL.md) | Raw TheScore transport: envelopes, handshake, authentication, TLS transport, and wire-only examples |

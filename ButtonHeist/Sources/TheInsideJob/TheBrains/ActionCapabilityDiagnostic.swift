@@ -28,7 +28,7 @@ import AccessibilitySnapshotParser
             includeLiveState: true,
             missingLiveObjectState: isInflated ? "deallocated" : "notInflated"
         )
-        return "\(boundary) failed: observed \(observed); live target became stale during semantic actionability."
+        return "\(boundary) failed: observed \(observed); live target became stale during element inflation."
     }
 
     static func unsupportedElementAction(
@@ -112,7 +112,7 @@ import AccessibilitySnapshotParser
     ) -> String {
         "gesture target unavailable: observed method=\(method.rawValue) phase=targeting "
             + "\(formatElement(element)) visible=\(isVisible); "
-            + "element-derived gesture points require fresh live geometry from semantic actionability."
+            + "element-derived gesture points require fresh live geometry from element inflation."
     }
 
     // MARK: - Private Helpers

@@ -2,9 +2,9 @@
 
 Button Heist lets callers write programs against an app's accessibility
 contract. Semantic intent enters the runtime; Button Heist owns target
-resolution, reveal, actionability, action execution, settling, and evidence;
-callers receive settled semantic evidence for validation, recording, reporting,
-or the next step.
+resolution, reveal, element inflation, action execution, settling, and
+evidence; callers receive settled semantic evidence for validation, recording,
+reporting, or the next step.
 
 This document names the load-bearing runtime pieces. The canonical product
 contract and conformance cases live in [Accessibility Contract](ACCESSIBILITY-CONTRACT.md).
@@ -138,6 +138,6 @@ failure points at the accessibility contract that changed.
 - [Heist Format](HEIST-FORMAT.md) - replayable session file format.
 - [Recording Contract](RECORDING-CONTRACT.md) - how runtime evidence becomes
   durable semantic heist steps.
-- [Semantic Actionability](SEMANTIC-ACTIONABILITY.md) - semantic target to
-  actionable live target boundary.
+- [Element Inflation](ELEMENT-INFLATION.md) - semantic target to inflated live
+  target boundary.
 - [Auth](AUTH.md) - authentication, approval, and session locking.

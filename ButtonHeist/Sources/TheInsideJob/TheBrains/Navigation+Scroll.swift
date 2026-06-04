@@ -12,7 +12,7 @@ import TheScore
 // concrete flows:
 //
 // - `Navigation+PageScroll.swift`: one-page and edge scroll commands.
-// - `Navigation+ScrollToVisible.swift`: explicit viewport wrapper over SemanticActionability.
+// - `Navigation+ScrollToVisible.swift`: explicit viewport wrapper over ElementInflation.
 // - `Navigation+ScrollSettleProof.swift`: the explicit moved/unchanged proof.
 // - `Navigation+ScrollContainers.swift`: live container resolution.
 

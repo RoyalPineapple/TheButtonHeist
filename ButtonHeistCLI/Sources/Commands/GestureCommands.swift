@@ -78,8 +78,7 @@ struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
         abstract: "Explicit mechanical/spatial one-finger tap",
         discussion: """
             Performs an explicit mechanical/spatial gesture. Element-targeted \
-            gestures use the semantic \
-            actionability path: resolve, reveal, acquire fresh accessibility \
+            gestures use the element inflation path: resolve, reveal, acquire fresh accessibility \
             geometry, then dispatch the gesture. Coordinate gestures are \
             explicit viewport actions.
 

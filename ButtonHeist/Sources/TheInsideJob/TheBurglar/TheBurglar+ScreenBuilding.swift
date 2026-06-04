@@ -101,7 +101,7 @@ extension TheBurglar {
     }
 
     /// The snapshot parser emits geometry in its parsing root's local
-    /// coordinate space. Button Heist's world model and wire/actionability
+    /// coordinate space. Button Heist's world model and wire/element-inflation
     /// surfaces need UIKit accessibility screen coordinates, so restore those by
     /// applying each parse root's screen offset at the parser boundary.
     private static func screenCoordinateHierarchy(from result: ParseResult) -> [AccessibilityHierarchy] {

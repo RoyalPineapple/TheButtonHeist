@@ -82,7 +82,7 @@ cannot be created.
 ## Semantic Targeting
 
 Element-targeted semantic commands abstract viewport mechanics. Callers provide
-identity, not coordinates. Button Heist owns the actionability loop:
+identity, not coordinates. Button Heist owns the element inflation loop:
 
 1. Resolve the semantic target against current accessibility state.
 2. Reveal it if viewport movement is required.
@@ -91,7 +91,7 @@ identity, not coordinates. Button Heist owns the actionability loop:
 5. Dispatch through the command-specific action path.
 
 This applies to activation, adjustable actions, named custom actions, text
-focus, and targeted gestures. If identity, actionability, or live geometry
+focus, and targeted gestures. If identity, element inflation, or live geometry
 cannot be proven, the command fails with diagnostics instead of acting on stale
 state.
 

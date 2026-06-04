@@ -89,7 +89,7 @@ Viewport.ScrollToVisible(.label("Checkout"))
 ```
 
 Normal semantic actions do not need pre-action viewport movement. `Activate`, `TypeText`,
-`Increment`, `Decrement`, custom actions, and rotors own reveal, actionability,
+`Increment`, `Decrement`, custom actions, and rotors own reveal, element inflation,
 and live geometry through the runtime pipeline.
 
 ```swift
@@ -128,8 +128,8 @@ and re-evaluates the matched collection. If the policy-backed identity/order
 of the matched collection is unchanged, the next body uses the next ordinal. If
 identity/order changed, the next body resets to ordinal `0`. State-only
 mutations do not reset ordinal scheduling. Each body action still resolves the
-live `ElementTarget` through the normal command/actionability pipeline, so
-out-of-range or non-actionable targets fail with normal command diagnostics.
+live `ElementTarget` through the normal command and element inflation pipeline, so
+out-of-range or non-inflated targets fail with normal command diagnostics.
 
 ## Explicit Non-Goals
 

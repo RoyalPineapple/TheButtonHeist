@@ -9,7 +9,7 @@ semantic Button Heist tests. Swift DSL source, recorded heists, agent-authored
 JSON, and playback all converge on this value.
 
 The plan is not a transcript of viewport mechanics. Normal heists express
-semantic intent and semantic outcomes; Button Heist owns reveal, actionability,
+semantic intent and semantic outcomes; Button Heist owns reveal, element inflation,
 settlement, live geometry, and diagnostics at replay time.
 
 ## Structure
@@ -217,7 +217,7 @@ Target fields:
 
 Ordinal is not durable identity. It only selects among the current semantic
 match set at runtime. Normal semantic actions re-resolve targets through
-Button Heist actionability; users do not move the viewport first or provide
+Button Heist element inflation; users do not move the viewport first or provide
 viewport handles.
 
 ## Predicates

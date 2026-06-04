@@ -9,23 +9,23 @@ final class ActivationPolicyTests: XCTestCase {
 
     private final class ActivationObject: NSObject {}
 
-    func testSemanticActionabilityFailureMapsNoRevealPathToCommandMethod() {
-        let result = SemanticActionability.SemanticActionabilityFailure.noRevealPath("target has no reveal path")
+    func testElementInflationFailureMapsNoRevealPathToCommandMethod() {
+        let result = ElementInflation.ElementInflationFailure.noRevealPath("target has no reveal path")
             .interactionResult(commandMethod: .activate)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.message, "semantic actionability failed [noRevealPath]: target has no reveal path")
+        XCTAssertEqual(result.message, "element inflation failed [noRevealPath]: target has no reveal path")
     }
 
-    func testSemanticActionabilityFailurePreservesElementNotFoundMethod() {
-        let result = SemanticActionability.SemanticActionabilityFailure.notFound("no such element")
+    func testElementInflationFailurePreservesElementNotFoundMethod() {
+        let result = ElementInflation.ElementInflationFailure.notFound("no such element")
             .interactionResult(commandMethod: .activate)
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.failureKind, .targetUnavailable)
-        XCTAssertEqual(result.message, "semantic actionability failed [notFound]: no such element")
+        XCTAssertEqual(result.message, "element inflation failed [notFound]: no such element")
     }
 
     func testAccessibilityActivateSuccessStopsPolicy() async {
@@ -93,7 +93,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .failure(.failure(.activate, message: "retry actionability failed"))
+                .failure(.failure(.activate, message: "retry inflation failed"))
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -103,7 +103,7 @@ final class ActivationPolicyTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.message, "retry actionability failed")
+        XCTAssertEqual(result.message, "retry inflation failed")
         XCTAssertEqual(activateCount, 1)
         XCTAssertTrue(dispatchedPoints.isEmpty)
     }

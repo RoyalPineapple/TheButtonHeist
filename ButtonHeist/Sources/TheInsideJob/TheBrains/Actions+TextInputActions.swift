@@ -9,7 +9,7 @@ extension Actions {
     // MARK: - Edit / Pasteboard / Responder
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {
-        if let failure = await navigation.actionability.makeFirstResponderActionable(method: .editAction) {
+        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .editAction) {
             return failure.interactionResult(commandMethod: .editAction)
         }
         let success = safecracker.performEditAction(target.action)
@@ -24,7 +24,7 @@ extension Actions {
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult {
-        if let failure = await navigation.actionability.makeFirstResponderActionable(method: .setPasteboard) {
+        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .setPasteboard) {
             return failure.interactionResult(commandMethod: .setPasteboard)
         }
         UIPasteboard.general.string = target.text
@@ -41,7 +41,7 @@ extension Actions {
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
-        if let failure = await navigation.actionability.makeFirstResponderActionable(method: .resignFirstResponder) {
+        if let failure = await navigation.elementInflation.inflateFirstResponder(method: .resignFirstResponder) {
             return failure.interactionResult(commandMethod: .resignFirstResponder)
         }
         let success = safecracker.resignFirstResponder()
@@ -129,14 +129,14 @@ extension Actions {
 
         let liveTarget: TheStash.LiveActionTarget
         let subjectEvidence: ActionSubjectEvidence
-        switch await navigation.actionability.makeActionable(
+        switch await navigation.elementInflation.inflate(
             for: elementTarget,
             method: .typeText,
             deallocatedBoundary: "text input focus"
         ) {
-        case .actionable(let actionableTarget):
-            liveTarget = actionableTarget.liveTarget
-            subjectEvidence = actionableTarget.subjectEvidence(source: .textInputTarget)
+        case .inflated(let inflatedTarget):
+            liveTarget = inflatedTarget.liveTarget
+            subjectEvidence = inflatedTarget.subjectEvidence(source: .textInputTarget)
         case .failed(let failure):
             return .failed(failure.interactionResult(commandMethod: .typeText))
         }
