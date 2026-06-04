@@ -15,22 +15,27 @@ extension TheBurglar {
     /// pass assigns heistIds, resolves context, computes container stable IDs,
     /// and detects first responder state.
     static func buildScreen(from result: ParseResult) -> Screen {
-        let indexedElements = result.hierarchy.pathIndexedElements
+        let hierarchy = screenCoordinateHierarchy(from: result)
+        let scrollViews = scrollViewsByContainerForCurrentCapture(
+            hierarchy: hierarchy,
+            scrollViewsByPath: result.scrollViewsByPath
+        ).merging(result.scrollViews, uniquingKeysWith: { current, _ in current })
+        let indexedElements = hierarchy.pathIndexedElements
         let elements = indexedElements.map(\.element)
         let contextsByPath = buildElementContextsByPath(
-            hierarchy: result.hierarchy,
-            scrollableContainerViews: result.scrollViews,
+            hierarchy: hierarchy,
+            scrollableContainerViews: scrollViews,
             scrollableContainerViewsByPath: result.scrollViewsByPath,
             elementObjects: result.objects,
             elementObjectsByPath: result.objectsByPath
         )
         let identityContext = buildContainerIdentityContext(
-            hierarchy: result.hierarchy,
-            scrollableContainerViews: result.scrollViews,
+            hierarchy: hierarchy,
+            scrollableContainerViews: scrollViews,
             scrollableContainerViewsByPath: result.scrollViewsByPath
         )
         let containerStableIdIndex = buildContainerStableIdIndex(
-            hierarchy: result.hierarchy,
+            hierarchy: hierarchy,
             identityContext: identityContext
         )
         let containerStableIds = containerStableIdIndex.byContainer
@@ -81,7 +86,7 @@ extension TheBurglar {
         }
         return Screen(
             elements: screenElements,
-            hierarchy: result.hierarchy,
+            hierarchy: hierarchy,
             containerStableIds: containerStableIds,
             containerStableIdsByPath: containerStableIdsByPath,
             heistIdByElement: heistIdByElement,
@@ -93,6 +98,51 @@ extension TheBurglar {
             scrollableContainerViews: scrollableViewRefs,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
         )
+    }
+
+    /// The snapshot parser emits geometry in its parsing root's local
+    /// coordinate space. Button Heist's world model and wire/actionability
+    /// surfaces need UIKit accessibility screen coordinates, so restore those by
+    /// applying each parse root's screen offset at the parser boundary.
+    private static func screenCoordinateHierarchy(from result: ParseResult) -> [AccessibilityHierarchy] {
+        result.hierarchy.enumerated().map { index, node in
+            screenCoordinateNode(
+                node,
+                path: TreePath([index]),
+                inheritedOffset: .zero,
+                screenCoordinateOffsetsByPath: result.screenCoordinateOffsetsByPath
+            )
+        }
+    }
+
+    private static func screenCoordinateNode(
+        _ node: AccessibilityHierarchy,
+        path: TreePath,
+        inheritedOffset: CGPoint,
+        screenCoordinateOffsetsByPath: [TreePath: CGPoint]
+    ) -> AccessibilityHierarchy {
+        let offset = screenCoordinateOffsetsByPath[path] ?? inheritedOffset
+        switch node {
+        case .element(let element, let traversalIndex):
+            return .element(
+                element.translatedBy(x: offset.x, y: offset.y),
+                traversalIndex: traversalIndex
+            )
+
+        case .container(let container, let children):
+            let mappedChildren = children.enumerated().map { childIndex, child in
+                screenCoordinateNode(
+                    child,
+                    path: path.appending(childIndex),
+                    inheritedOffset: offset,
+                    screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath
+                )
+            }
+            return .container(
+                container.translatedBy(x: offset.x, y: offset.y),
+                children: mappedChildren
+            )
+        }
     }
 
     private static func scrollContentLocation(
@@ -204,6 +254,112 @@ extension TheBurglar {
         let subtree: AccessibilityHierarchy
     }
 
+}
+
+private extension AccessibilityElement {
+    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityElement {
+        AccessibilityElement(
+            description: description,
+            label: label,
+            value: value,
+            traits: traits,
+            identifier: identifier,
+            hint: hint,
+            userInputLabels: userInputLabels,
+            shape: shape.translatedBy(x: x, y: y),
+            activationPoint: activationPoint.translatedBy(x: x, y: y),
+            usesDefaultActivationPoint: usesDefaultActivationPoint,
+            customActions: customActions,
+            customContent: customContent,
+            customRotors: customRotors.map { $0.translatedBy(x: x, y: y) },
+            accessibilityLanguage: accessibilityLanguage,
+            respondsToUserInteraction: respondsToUserInteraction
+        )
+    }
+}
+
+private extension AccessibilityElement.CustomRotor {
+    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityElement.CustomRotor {
+        AccessibilityElement.CustomRotor(
+            name: name,
+            resultMarkers: resultMarkers.map { $0.translatedBy(x: x, y: y) },
+            limit: limit
+        )
+    }
+}
+
+private extension AccessibilityElement.CustomRotor.ResultMarker {
+    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityElement.CustomRotor.ResultMarker {
+        AccessibilityElement.CustomRotor.ResultMarker(
+            elementDescription: elementDescription,
+            rangeDescription: rangeDescription,
+            shape: shape?.translatedBy(x: x, y: y)
+        )
+    }
+}
+
+private extension AccessibilityContainer {
+    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityContainer {
+        AccessibilityContainer(
+            type: type,
+            frame: frame.translatedBy(x: x, y: y),
+            isModalBoundary: isModalBoundary,
+            customActions: customActions
+        )
+    }
+}
+
+private extension AccessibilityShape {
+    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityShape {
+        switch self {
+        case .frame(let rect):
+            return .frame(rect.translatedBy(x: x, y: y))
+        case .path(let elements):
+            return .path(elements.map { $0.translatedBy(x: x, y: y) })
+        }
+    }
+}
+
+private extension AccessibilityPathElement {
+    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityPathElement {
+        switch self {
+        case .move(let point):
+            return .move(to: point.translatedBy(x: x, y: y))
+        case .line(let point):
+            return .line(to: point.translatedBy(x: x, y: y))
+        case .quadCurve(let point, let control):
+            return .quadCurve(
+                to: point.translatedBy(x: x, y: y),
+                control: control.translatedBy(x: x, y: y)
+            )
+        case .curve(let point, let control1, let control2):
+            return .curve(
+                to: point.translatedBy(x: x, y: y),
+                control1: control1.translatedBy(x: x, y: y),
+                control2: control2.translatedBy(x: x, y: y)
+            )
+        case .closeSubpath:
+            return .closeSubpath
+        }
+    }
+}
+
+private extension AccessibilityRect {
+    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityRect {
+        AccessibilityRect(
+            origin: origin.translatedBy(x: x, y: y),
+            size: size
+        )
+    }
+}
+
+private extension AccessibilityPoint {
+    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityPoint {
+        AccessibilityPoint(
+            x: self.x + Double(x),
+            y: self.y + Double(y)
+        )
+    }
 }
 
 #endif // DEBUG

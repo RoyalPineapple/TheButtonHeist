@@ -20,6 +20,30 @@ struct HeistSemanticObservation {
         let shouldReturn: Bool
     }
 
+    struct SettledEventSummary {
+        let sequence: UInt64
+        let hash: String?
+
+        init(event: SettledSemanticObservationEvent) {
+            sequence = event.sequence
+            hash = event.currentCaptureRef?.hash
+        }
+
+        var description: String {
+            if let hash {
+                return "sequence \(sequence), hash \(hash)"
+            }
+            return "sequence \(sequence), hash unavailable"
+        }
+    }
+
+    struct SettledWaitDiagnostics {
+        let baseline: SettledEventSummary?
+        let last: SettledEventSummary?
+        let lastDelta: AccessibilityTrace.Delta?
+        let sawFutureObservation: Bool
+    }
+
     static func clampedWaitTimeout(_ timeout: Double) -> Double {
         max(0, min(timeout, 30))
     }
@@ -166,7 +190,8 @@ struct HeistSemanticObservation {
         expectation: ExpectationResult,
         elapsed: String,
         success: Bool,
-        presenceTimeoutMessage: String? = nil
+        presenceTimeoutMessage: String? = nil,
+        settledDiagnostics: SettledWaitDiagnostics? = nil
     ) -> HeistWaitReceipt {
         var builder = ActionResultBuilder(method: .wait)
         builder.accessibilityTrace = trace
@@ -177,7 +202,8 @@ struct HeistSemanticObservation {
                 expectation: expectation,
                 observationSummary: observationSummary,
                 elapsed: elapsed,
-                presenceTimeoutMessage: presenceTimeoutMessage
+                presenceTimeoutMessage: presenceTimeoutMessage,
+                settledDiagnostics: settledDiagnostics
             )
 
         let actionResult = success
@@ -205,31 +231,60 @@ struct HeistSemanticObservation {
         expectation: ExpectationResult,
         observationSummary: String?,
         elapsed: String,
-        presenceTimeoutMessage: String?
+        presenceTimeoutMessage: String?,
+        settledDiagnostics: SettledWaitDiagnostics?
     ) -> String {
+        let diagnostics = settledDiagnostics.map(settledDiagnosticsMessage) ?? []
         guard let observationSummary else {
-            return [
+            return ([
                 "timed out after \(elapsed)s waiting for heist predicate",
                 "expected: \(step.predicate.description)",
                 "last result: \(expectation.actual ?? "not met")",
                 "last observed: no settled semantic observation available",
-            ].joined(separator: "; ")
+            ] + diagnostics).joined(separator: "; ")
         }
 
         if let presenceTimeoutMessage {
-            return presenceTimeoutMessage
+            return ([presenceTimeoutMessage] + diagnostics).joined(separator: "; ")
         }
 
-        return [
+        return ([
             "timed out after \(elapsed)s waiting for heist predicate",
             "expected: \(step.predicate.description)",
             "last result: \(expectation.actual ?? "not met")",
             "last observed: \(observationSummary)",
-        ].joined(separator: "; ")
+        ] + diagnostics).joined(separator: "; ")
     }
 
     static func elapsedSeconds(since start: CFAbsoluteTime) -> String {
         String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+    }
+
+    private static func settledDiagnosticsMessage(_ diagnostics: SettledWaitDiagnostics) -> [String] {
+        var parts: [String] = []
+        if let baseline = diagnostics.baseline {
+            parts.append("baseline: \(baseline.description)")
+        }
+        if let last = diagnostics.last {
+            parts.append("last settled: \(last.description)")
+        }
+        parts.append("last delta: \(deltaSummary(diagnostics.lastDelta))")
+        if diagnostics.baseline != nil, !diagnostics.sawFutureObservation {
+            parts.append("no future settled observation arrived after baseline")
+        }
+        return parts
+    }
+
+    private static func deltaSummary(_ delta: AccessibilityTrace.Delta?) -> String {
+        guard let delta else { return "none" }
+        switch delta {
+        case .noChange:
+            return "no_change"
+        case .elementsChanged:
+            return "elements_changed"
+        case .screenChanged:
+            return "screen_changed"
+        }
     }
 }
 

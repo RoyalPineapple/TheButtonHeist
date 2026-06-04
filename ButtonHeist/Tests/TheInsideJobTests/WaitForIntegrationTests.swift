@@ -326,7 +326,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertNil(result.errorKind)
     }
 
-    // MARK: - wait_for_change trace truth
+    // MARK: - Changed wait trace truth
 
     func testWaitForChangeElementAppearedAlreadyPresentStillRequiresObservedChange() async throws {
         let label = addLabel("WaitForChange-AlreadyPresent")
@@ -385,6 +385,28 @@ final class WaitForIntegrationTests: XCTestCase {
         }
     }
 
+    func testWaitForChangeElementDisappearedOnNextEventReturnsThroughChangePath() async throws {
+        let label = addLabel("WaitForChange-Removed")
+        let didObserveBaseline = await waitForSettledVisibleObservation()
+        XCTAssertTrue(didObserveBaseline)
+
+        mutateVisibleHierarchy {
+            label.removeFromSuperview()
+        }
+
+        let result = await changedWait(
+            expectation: .changed(.disappeared(ElementPredicate(label: "WaitForChange-Removed"))),
+            timeout: 5.0
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "missing wait message")
+        XCTAssertEqual(result.method, .wait)
+        XCTAssertTrue(result.message?.contains("predicate met after") == true, result.message ?? "missing wait message")
+        guard case .elementsChanged = result.accessibilityTrace?.endpointDeltaProjection else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        }
+    }
+
     func testWaitForChangeElementsChangedRequiresFutureSettledDelta() async throws {
         let changed = addLabel("WaitForChange-ElementsChanged")
         defer { changed.removeFromSuperview() }
@@ -400,6 +422,34 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(result.message?.contains("expected: changed(elements_changed)") == true)
+    }
+
+    func testWaitForChangeTimeoutZeroPerformsOneBoundedSettledCheck() async throws {
+        let baseline = addLabel("WaitForChange-TimeoutZeroBaseline")
+        defer { baseline.removeFromSuperview() }
+        let didObserveBaseline = await waitForSettledVisibleObservation()
+        XCTAssertTrue(didObserveBaseline)
+
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = await changedWait(
+            expectation: .changed(.appeared(ElementPredicate(label: "WaitForChange-TimeoutZeroMissing"))),
+            timeout: 0
+        )
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+        let message = try XCTUnwrap(result.message)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .wait)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertLessThan(elapsed, 1.0)
+        XCTAssertTrue(
+            message.contains("expected: changed(element_appeared(predicate(label=\"WaitForChange-TimeoutZeroMissing\")))"),
+            "Unexpected message: \(message)"
+        )
+        XCTAssertTrue(message.contains("baseline: sequence "), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("last settled: sequence "), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("last delta:"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("no future settled observation arrived after baseline"), "Unexpected message: \(message)")
     }
 
     func testWaitForChangeVisibleUpdatePreservesKnownOffViewportMemory() async throws {

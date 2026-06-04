@@ -38,6 +38,7 @@ final class TheBurglar {
         let containerObjectsByPath: [TreePath: NSObject]
         let scrollViews: [AccessibilityContainer: UIView]
         let scrollViewsByPath: [TreePath: UIView]
+        let screenCoordinateOffsetsByPath: [TreePath: CGPoint]
 
         init(
             hierarchy: [AccessibilityHierarchy],
@@ -45,7 +46,8 @@ final class TheBurglar {
             objectsByPath: [TreePath: NSObject] = [:],
             containerObjectsByPath: [TreePath: NSObject] = [:],
             scrollViews: [AccessibilityContainer: UIView],
-            scrollViewsByPath: [TreePath: UIView] = [:]
+            scrollViewsByPath: [TreePath: UIView] = [:],
+            screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:]
         ) {
             self.hierarchy = hierarchy
             self.objects = objects
@@ -53,6 +55,7 @@ final class TheBurglar {
             self.containerObjectsByPath = containerObjectsByPath
             self.scrollViews = scrollViews
             self.scrollViewsByPath = scrollViewsByPath
+            self.screenCoordinateOffsetsByPath = screenCoordinateOffsetsByPath
         }
     }
 
@@ -86,6 +89,7 @@ final class TheBurglar {
         var objectsByPath: [TreePath: NSObject] = [:]
         var containerObjectsByPath: [TreePath: NSObject] = [:]
         var scrollViewsByPath: [TreePath: UIView] = [:]
+        var screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:]
 
         let isMultiWindow = windows.count > 1
 
@@ -129,9 +133,11 @@ final class TheBurglar {
                 }
 
                 for (localIndex, root) in captured.enumerated() {
+                    let rootPath = rootPathPrefix(localIndex)
+                    screenCoordinateOffsetsByPath[rootPath] = rootView.convert(.zero, to: nil)
                     Self.collect(
                         root,
-                        at: rootPathPrefix(localIndex),
+                        at: rootPath,
                         objects: &objects,
                         objectsByPath: &objectsByPath,
                         containerObjectsByPath: &containerObjectsByPath,
@@ -156,7 +162,8 @@ final class TheBurglar {
                 hierarchy: allHierarchy,
                 scrollViewsByPath: scrollViewsByPath
             ),
-            scrollViewsByPath: scrollViewsByPath
+            scrollViewsByPath: scrollViewsByPath,
+            screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath
         )
     }
 
@@ -217,7 +224,7 @@ final class TheBurglar {
         }
     }
 
-    private static func scrollViewsByContainerForCurrentCapture(
+    static func scrollViewsByContainerForCurrentCapture(
         hierarchy: [AccessibilityHierarchy],
         scrollViewsByPath: [TreePath: UIView]
     ) -> [AccessibilityContainer: UIView] {
