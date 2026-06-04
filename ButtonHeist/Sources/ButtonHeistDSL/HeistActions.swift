@@ -369,69 +369,6 @@ public enum Mechanical {
     }
 }
 
-public enum Viewport {
-    public struct Scroll: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectation: WaitStep?
-        public let expectationWaiver: String?
-
-        public init(_ direction: ScrollDirection) {
-            self.init(command: .viewportScroll(ScrollTarget(direction: direction)))
-        }
-
-        public init(_ direction: ScrollDirection, in target: ElementTarget) {
-            self.init(command: .viewportScroll(ScrollTarget(elementTarget: target, direction: direction)))
-        }
-
-        init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
-            self.command = command
-            self.expectation = expectation
-            self.expectationWaiver = expectationWaiver
-        }
-    }
-
-    public struct ScrollToVisible: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectation: WaitStep?
-        public let expectationWaiver: String?
-
-        @_disfavoredOverload
-        public init(_ target: ElementTarget) {
-            self.init(.target(target))
-        }
-
-        public init(_ target: ElementTargetExpr) {
-            self.init(command: .viewportScrollToVisible(target))
-        }
-
-        init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
-            self.command = command
-            self.expectation = expectation
-            self.expectationWaiver = expectationWaiver
-        }
-    }
-
-    public struct ScrollToEdge: HeistActionContent {
-        public let command: HeistActionCommand
-        public let expectation: WaitStep?
-        public let expectationWaiver: String?
-
-        public init(_ edge: ScrollEdge) {
-            self.init(command: .viewportScrollToEdge(ScrollToEdgeTarget(edge: edge)))
-        }
-
-        public init(_ edge: ScrollEdge, in target: ElementTarget) {
-            self.init(command: .viewportScrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
-        }
-
-        init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
-            self.command = command
-            self.expectation = expectation
-            self.expectationWaiver = expectationWaiver
-        }
-    }
-}
-
 private func makeActionStep(
     _ command: HeistActionCommand,
     expectation: WaitStep? = nil,

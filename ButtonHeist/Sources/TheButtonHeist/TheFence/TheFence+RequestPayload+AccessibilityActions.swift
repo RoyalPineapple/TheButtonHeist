@@ -18,7 +18,8 @@ extension TheFence {
         let target = try input.requiredElementTarget(command: .activate)
         let actionName = try input.optionalNonEmptyString("action")
         let count = try input.countArgument()
-        return clientActionDispatch(
+        return appInteractionDispatch(
+            SemanticActionCommand.activate,
             try Self.accessibilityClientMessages(
                 target: target,
                 actionName: actionName,

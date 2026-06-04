@@ -1,79 +1,118 @@
 import TheScore
 
-extension TheFence.Command {
-    static var actionCommandDescriptors: [FenceCommandDescriptor] {
-        [
-            commandDescriptor(
-                .oneFingerTap, requestDecoder: TheFence.decodeOneFingerTapRequest,
-                isHeistExecutable: true,
+enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCommand, PayloadCheckedHeistPrimitiveCommand {
+    case oneFingerTap = "one_finger_tap"
+    case longPress = "long_press"
+    case swipe
+    case drag
+
+    var descriptor: FenceCommandDescriptor {
+        switch self {
+        case .oneFingerTap:
+            return TheFence.Command.commandDescriptor(
+                command, family: .spatialAction,
+                requestDecoder: TheFence.decodeOneFingerTapRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial tap. An element target supplies live geometry; "
                     + "ordinary accessible controls should use the semantic command path."
-            ),
-            commandDescriptor(
-                .longPress, requestDecoder: TheFence.decodeLongPressRequest,
-                isHeistExecutable: true,
+            )
+        case .longPress:
+            return TheFence.Command.commandDescriptor(
+                command, family: .spatialAction,
+                requestDecoder: TheFence.decodeLongPressRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial long press on a point "
                     + "or element-relative point for a resolved duration."
-            ),
-            commandDescriptor(
-                .swipe, requestDecoder: TheFence.decodeSwipeRequest,
-                isHeistExecutable: true,
+            )
+        case .swipe:
+            return TheFence.Command.commandDescriptor(
+                command, family: .spatialAction,
+                requestDecoder: TheFence.decodeSwipeRequest,
                 parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial swipe using exactly one typed intent: "
                     + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
-            ),
-            commandDescriptor(
-                .drag, requestDecoder: TheFence.decodeDragRequest,
-                isHeistExecutable: true,
+            )
+        case .drag:
+            return TheFence.Command.commandDescriptor(
+                command, family: .spatialAction,
+                requestDecoder: TheFence.decodeDragRequest,
                 parameters: FenceParameterBlocks.dragIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial drag using exactly one typed intent: "
                     + "elementToPoint or pointToPoint."
-            ),
-            commandDescriptor(
-                .scroll, requestDecoder: TheFence.decodeScrollRequest,
-                isHeistExecutable: true,
+            )
+        }
+    }
+}
+
+enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCommand {
+    case scroll
+    case scrollToVisible = "scroll_to_visible"
+    case scrollToEdge = "scroll_to_edge"
+
+    var descriptor: FenceCommandDescriptor {
+        switch self {
+        case .scroll:
+            return TheFence.Command.commandDescriptor(
+                command, family: .viewportDebug,
+                requestDecoder: TheFence.decodeScrollRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.container, .string),
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Explicit viewport operation: scroll one page in the visible viewport, "
+                description: "Explicit viewport/debug operation: scroll one page in the visible viewport, "
                     + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
                     + "within a current containerName."
-            ),
-            commandDescriptor(
-                .scrollToVisible, requestDecoder: TheFence.decodeScrollToVisibleRequest,
-                isHeistExecutable: true,
+            )
+        case .scrollToVisible:
+            return TheFence.Command.commandDescriptor(
+                command, family: .viewportDebug,
+                requestDecoder: TheFence.decodeScrollToVisibleRequest,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
                 description: "Explicit viewport/debug operation: move the viewport until a "
                     + "semantic target is visible and report its fresh geometry."
-            ),
-            commandDescriptor(
-                .scrollToEdge, requestDecoder: TheFence.decodeScrollToEdgeRequest,
-                isHeistExecutable: true,
+            )
+        case .scrollToEdge:
+            return TheFence.Command.commandDescriptor(
+                command, family: .viewportDebug,
+                requestDecoder: TheFence.decodeScrollToEdgeRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.container, .string),
                     param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Explicit viewport operation: scroll the visible viewport, "
+                description: "Explicit viewport/debug operation: scroll the visible viewport, "
                     + "a semantic target's owning scroll ancestor, or for direct debug requests, "
                     + "a current containerName, to a requested edge."
-            ),
-            commandDescriptor(
-                .activate, requestDecoder: TheFence.decodeActivateRequest,
-                isHeistExecutable: true,
+            )
+        }
+    }
+}
+
+enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCommand, HeistPrimitiveCommand {
+    case activate
+    case rotor
+    case typeText = "type_text"
+    case editAction = "edit_action"
+    case setPasteboard = "set_pasteboard"
+    case dismissKeyboard = "dismiss_keyboard"
+
+    var descriptor: FenceCommandDescriptor {
+        switch self {
+        case .activate:
+            return TheFence.Command.commandDescriptor(
+                command, family: .semanticAction,
+                requestDecoder: TheFence.decodeActivateRequest,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.action, .string), FenceParameterBlocks.incrementCount] + FenceParameterBlocks.expectation,
                 description: "Perform primary accessibility activation on a semantic UI element, "
                     + "or one of its named accessibility actions."
-            ),
-            commandDescriptor(
-                .rotor, requestDecoder: TheFence.decodeRotorRequest,
-                isHeistExecutable: true,
+            )
+        case .rotor:
+            return TheFence.Command.commandDescriptor(
+                command, family: .semanticAction,
+                requestDecoder: TheFence.decodeRotorRequest,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.rotor, .string),
                     param(.rotorIndex, .integer, minimum: 0),
@@ -86,36 +125,35 @@ extension TheFence.Command {
                 description: "Move through an element rotor by direction. The server holds the rotor cursor "
                     + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
                     + "and drops the cursor."
-            ),
-            commandDescriptor(
-                .typeText, requestDecoder: TheFence.decodeTypeTextRequest,
-                isHeistExecutable: true,
+            )
+        case .typeText:
+            return TheFence.Command.commandDescriptor(
+                command, family: .semanticAction,
+                requestDecoder: TheFence.decodeTypeTextRequest,
                 parameters: FenceParameterBlocks.elementTarget + [param(.text, .string, required: true, minLength: 1)] + FenceParameterBlocks.expectation,
                 description: "Type non-empty text, optionally after inflating a semantic target."
-            ),
-            commandDescriptor(
-                .editAction, requestDecoder: TheFence.decodeEditActionRequest,
-                isHeistExecutable: true,
+            )
+        case .editAction:
+            return TheFence.Command.commandDescriptor(
+                command, family: .semanticAction,
+                requestDecoder: TheFence.decodeEditActionRequest,
                 parameters: [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + FenceParameterBlocks.expectation,
                 description: "Perform an edit action on the current first responder."
-            ),
-            commandDescriptor(
-                .setPasteboard, requestDecoder: TheFence.decodeSetPasteboardRequest,
-                isHeistExecutable: true,
+            )
+        case .setPasteboard:
+            return TheFence.Command.commandDescriptor(
+                command, family: .semanticAction,
+                requestDecoder: TheFence.decodeSetPasteboardRequest,
                 parameters: [param(.text, .string, required: true)] + FenceParameterBlocks.expectation,
                 description: "Write text to the general pasteboard from within the app."
-            ),
-            commandDescriptor(
-                .getPasteboard, requestDecoder: TheFence.decodeGetPasteboardRequest,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
-                description: "Read text from the general pasteboard."
-            ),
-            commandDescriptor(
-                .dismissKeyboard, requestDecoder: TheFence.decodeDismissKeyboardRequest,
-                isHeistExecutable: true,
+            )
+        case .dismissKeyboard:
+            return TheFence.Command.commandDescriptor(
+                command, family: .semanticAction,
+                requestDecoder: TheFence.decodeDismissKeyboardRequest,
                 parameters: FenceParameterBlocks.expectation,
                 description: "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
-            ),
-        ]
+            )
+        }
     }
 }

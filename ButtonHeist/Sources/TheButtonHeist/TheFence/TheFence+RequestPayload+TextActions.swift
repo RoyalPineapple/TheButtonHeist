@@ -17,7 +17,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        clientActionDispatch([.resignFirstResponder])
+        appInteractionDispatch(SemanticActionCommand.dismissKeyboard, [.resignFirstResponder])
     }
 
     static func decodeTypeTextRequest(
@@ -26,10 +26,13 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        try decodedExecutablePayload(.typeText(TypeTextTarget(
-            text: input.nonEmptyString("text"),
-            elementTarget: input.decodedElementTarget()
-        )))
+        try appInteractionDispatch(
+            SemanticActionCommand.typeText,
+            [.typeText(TypeTextTarget(
+                text: input.nonEmptyString("text"),
+                elementTarget: input.decodedElementTarget()
+            ))]
+        )
     }
 
     static func decodeEditActionRequest(
@@ -38,9 +41,12 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        try decodedExecutablePayload(.editAction(EditActionTarget(
-            action: input.requiredSchemaEnum("action", as: EditAction.self)
-        )))
+        try appInteractionDispatch(
+            SemanticActionCommand.editAction,
+            [.editAction(EditActionTarget(
+                action: input.requiredSchemaEnum("action", as: EditAction.self)
+            ))]
+        )
     }
 
     static func decodeSetPasteboardRequest(
@@ -49,8 +55,11 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        try decodedExecutablePayload(.setPasteboard(SetPasteboardTarget(
-            text: input.requiredSchemaString("text")
-        )))
+        try appInteractionDispatch(
+            SemanticActionCommand.setPasteboard,
+            [.setPasteboard(SetPasteboardTarget(
+                text: input.requiredSchemaString("text")
+            ))]
+        )
     }
 }

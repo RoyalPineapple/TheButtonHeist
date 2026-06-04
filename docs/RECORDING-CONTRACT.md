@@ -22,21 +22,23 @@ Every interaction during recording has one explicit effect:
 |--------|---------|
 | append | Store one or more durable heist steps. |
 | drop pending viewport movement | Discard incomplete viewport movement when later semantic intent failed to record. |
-| ignore | Leave recording state unchanged, usually for pure reads. |
+| ignore | Leave recording state unchanged, usually for observations or direct viewport/debug commands. |
 
 ## What Records
 
 - Successful semantic actions record semantic commands with minimum durable
   targets from settled evidence.
+- `wait` records as an assertion primitive.
+- Durable spatial actions record only when their payload passes durability
+  checks.
 - Passed explicit expectations record as action expectations.
 - Clear settled evidence can infer expectations such as target absence,
   current value/state, or screen change when no more precise outcome exists.
-- Explicit mechanical or viewport commands record only when the gesture or
-  viewport state is the user's durable intent.
 
 ## What Does Not Record
 
-- Read and inspection commands.
+- Observation and inspection commands.
+- Direct viewport/debug commands.
 - Failed actions.
 - Actions with unmet explicit expectations.
 - `scroll_to_visible` as setup for later semantic commands.

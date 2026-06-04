@@ -21,16 +21,16 @@ public enum FenceCommandReference {
             "",
             "## Summary",
             "",
-            "| Command | CLI | MCP | Heist | Description |",
-            "|---------|-----|-----|-------|-------------|",
+            "| Command | Family | CLI | MCP | Description |",
+            "|---------|--------|-----|-----|-------------|",
         ]
 
         for descriptor in sortedDescriptors {
             let columns = [
                 "`\(descriptor.command.rawValue)`",
+                "`\(descriptor.family.rawValue)`",
                 cliExposureSummary(descriptor),
                 mcpExposureSummary(descriptor.mcpExposure),
-                yesNo(descriptor.isHeistExecutable),
                 markdownCell(firstLine(of: descriptor.description)),
             ]
             lines.append("| \(columns.joined(separator: " | ")) |")
@@ -58,13 +58,16 @@ public enum FenceCommandReference {
             "",
             "## Summary",
             "",
-            "| Tool | Description |",
-            "|------|-------------|",
+            "| Tool | Family | Description |",
+            "|------|--------|-------------|",
         ]
 
         for descriptor in sortedDescriptors {
+            let command = descriptor.command.rawValue
+            let family = descriptor.family.rawValue
+            let description = markdownCell(firstLine(of: descriptor.description))
             lines.append(
-                "| `\(descriptor.command.rawValue)` | \(markdownCell(firstLine(of: descriptor.description))) |"
+                "| `\(command)` | `\(family)` | \(description) |"
             )
         }
 
@@ -83,9 +86,9 @@ public enum FenceCommandReference {
             "",
             descriptor.description,
             "",
+            "- Family: `\(descriptor.family.rawValue)`",
             "- CLI: \(cliExposureDetail(descriptor))",
             "- MCP: \(mcpExposureDetail(descriptor.mcpExposure))",
-            "- Heist: \(yesNo(descriptor.isHeistExecutable))",
             "- Connection before dispatch: \(yesNo(descriptor.requiresConnectionBeforeDispatch))",
         ]
 
@@ -100,6 +103,8 @@ public enum FenceCommandReference {
             "### `\(descriptor.command.rawValue)`",
             "",
             descriptor.description,
+            "",
+            "- Family: `\(descriptor.family.rawValue)`",
         ]
 
         lines.append(contentsOf: ["", "Parameters:", ""])

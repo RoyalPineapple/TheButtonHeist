@@ -18,6 +18,12 @@ extension TheFence {
     }
 
     func heistStep(for request: ParsedRequest) throws -> HeistStep {
+        guard request.command.heistPrimitiveCommand != nil else {
+            throw HeistStepPlanBuildError(
+                message: "command \"\(request.command.rawValue)\" is not a heist primitive"
+            )
+        }
+
         let messages = try executableActionMessages(for: request)
         guard let message = messages.first, messages.count == 1 else {
             let commandName = request.command.rawValue
@@ -34,6 +40,10 @@ extension TheFence {
                 predicate: target.predicate,
                 timeout: target.resolvedTimeout
             ))
+        }
+
+        if request.command.payloadCheckedHeistPrimitiveCommand != nil {
+            try validatePayloadCheckedHeistPrimitive(message, commandName: request.command.rawValue)
         }
 
         return .action(try ActionStep(
@@ -81,5 +91,16 @@ private extension TheFence {
             predicate: expectation,
             timeout: request.expectationPayload.postActionValidationTimeout ?? 10
         )
+    }
+
+    func validatePayloadCheckedHeistPrimitive(_ message: ClientMessage, commandName: String) throws {
+        let command = try HeistActionCommand(clientMessage: message)
+        if let failure = command.durableHeistActionFailure {
+            throw HeistStepPlanBuildError(
+                message: """
+                command "\(commandName)" is not accepted by the heist primitive payload gate: \(failure)
+                """
+            )
+        }
     }
 }

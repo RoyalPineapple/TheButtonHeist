@@ -245,7 +245,8 @@ capture are not the authority.
 
 Explicit viewport messages such as `scroll`, `scrollToEdge`, and
 `scrollToVisible` expose viewport state because moving the viewport is the
-requested behavior.
+requested behavior. They are direct viewport/debug commands, not durable heist
+primitives.
 
 ### Screen Capture
 
@@ -264,7 +265,7 @@ media only through explicit, size-bounded opt-ins.
 ```
 
 The host evaluates the predicate against the current settled accessibility
-observation first, then waits for later settled observations until the
+state first, then waits for later settled accessibility state until the
 predicate is true or the timeout expires. Absence predicates are satisfied by
 current absence.
 

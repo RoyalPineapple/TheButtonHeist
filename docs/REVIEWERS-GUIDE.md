@@ -22,9 +22,9 @@ The generated command reference is the source of truth for the full command cont
 
 ## Why So Many Commands?
 
-The `TheFence.Command` enum is the source of truth for the public command contract; CLI and MCP project from the same Fence-owned contract. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll operations, text editing, heist replay, etc.).
+The `TheFence.Command` enum is the flat public command-key adapter; command families are the source of truth for product meaning. CLI and MCP project from the same Fence-owned descriptors, and each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll operations, text editing, heist replay, etc.).
 
-Both interfaces expose canonical command names. Semantic operations like `activate`, `type_text`, and `get_interface` stay top-level; mechanical gestures and viewport commands remain explicit routes.
+Both interfaces expose canonical command names. Semantic operations like `activate`, `type_text`, and `get_interface` stay top-level; mechanical gestures remain explicit action routes, and viewport commands remain direct debug routes.
 
 ## TheFence and TheHandoff
 

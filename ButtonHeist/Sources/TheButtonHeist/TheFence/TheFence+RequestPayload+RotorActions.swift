@@ -24,11 +24,14 @@ extension TheFence {
         } else {
             .automatic
         }
-        return try Self.decodedExecutablePayload(.rotor(RotorTarget(
-            elementTarget: input.requiredElementTarget(command: .rotor),
-            selection: selection,
-            direction: input.schemaEnum("direction", as: RotorDirection.self)
-                ?? Command.rotor.descriptor.requiredDefaultEnumValue(for: .direction, as: RotorDirection.self)
-        )))
+        return try appInteractionDispatch(
+            SemanticActionCommand.rotor,
+            [.rotor(RotorTarget(
+                elementTarget: input.requiredElementTarget(command: .rotor),
+                selection: selection,
+                direction: input.schemaEnum("direction", as: RotorDirection.self)
+                    ?? Command.rotor.descriptor.requiredDefaultEnumValue(for: .direction, as: RotorDirection.self)
+            ))]
+        )
     }
 }
