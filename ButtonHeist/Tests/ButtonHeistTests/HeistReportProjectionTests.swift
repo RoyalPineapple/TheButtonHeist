@@ -33,6 +33,29 @@ final class HeistReportProjectionTests: XCTestCase {
         XCTAssertEqual(projection.nodes.first?.action?.commandName, "activate")
     }
 
+    func testProjectionUsesExecutionTreeInsteadOfPlanSiblingRematch() throws {
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    path: "$.body[9]",
+                    kind: .action,
+                    actionCommand: .activate(.target(.predicate(ElementPredicate(label: "Delete")))),
+                    actionResult: ActionResult(success: true, method: .activate),
+                    durationMs: 5
+                ),
+            ],
+            totalTimingMs: 5
+        )
+
+        let projection = HeistReportProjection(plan: HeistPlan(body: []), result: result)
+
+        XCTAssertEqual(projection.nodes.map(\.path), ["$.body[9]"])
+        XCTAssertEqual(projection.nodes.first?.kind, .action)
+        XCTAssertEqual(projection.nodes.first?.action?.commandName, "activate")
+        XCTAssertEqual(projection.nodes.first?.action?.target, .predicate(ElementPredicate(label: "Delete")))
+    }
+
     func testFailedActionSkipsLaterSibling() throws {
         let plan = HeistPlan(body: [
             try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Delete"))))),
@@ -271,7 +294,7 @@ final class HeistReportProjectionTests: XCTestCase {
                 HeistExecutionStepResult(
                     index: 0,
                     path: "$.body[0]",
-                    kind: .forEach,
+                    kind: .forEachElement,
                     message: "for_each completed 2 iteration(s) from 2 matched element(s)",
                     durationMs: 20,
                     forEachResult: HeistForEachResult(matchedCount: 2, limit: 20, iterationCount: 2),
@@ -338,7 +361,7 @@ final class HeistReportProjectionTests: XCTestCase {
                 HeistExecutionStepResult(
                     index: 0,
                     path: "$.body[0]",
-                    kind: .forEach,
+                    kind: .forEachString,
                     message: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"",
                     durationMs: 30,
                     stopsHeist: true,
@@ -574,7 +597,7 @@ final class HeistReportTreeProjectionTests: XCTestCase {
                 HeistExecutionStepResult(
                     index: 0,
                     path: "$.body[0]",
-                    kind: .forEach,
+                    kind: .forEachString,
                     message: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"",
                     durationMs: 30,
                     stopsHeist: true,

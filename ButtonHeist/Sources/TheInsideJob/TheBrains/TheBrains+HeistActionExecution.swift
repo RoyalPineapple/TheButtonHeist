@@ -21,6 +21,7 @@ extension TheBrains {
                 index: index,
                 path: path,
                 kind: .action,
+                actionCommand: step.command,
                 message: "could not resolve heist action command: \(error)",
                 durationMs: elapsedMilliseconds(since: start),
                 stopsHeist: true
@@ -39,6 +40,7 @@ extension TheBrains {
             index: index,
             path: path,
             kind: .action,
+            actionCommand: step.command,
             actionResult: actionResult,
             expectationActionResult: expectationReceipt?.actionResult,
             expectation: expectationReceipt?.expectation,

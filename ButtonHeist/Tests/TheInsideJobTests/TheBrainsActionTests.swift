@@ -1265,7 +1265,7 @@ final class TheBrainsActionTests: XCTestCase {
         let forEachResult = try XCTUnwrap(step.forEachResult)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.kind, .forEach)
+        XCTAssertEqual(step.kind, .forEachElement)
         XCTAssertEqual(forEachResult.matchedCount, 0)
         XCTAssertEqual(forEachResult.limit, 20)
         XCTAssertEqual(forEachResult.iterationCount, 0)
@@ -1509,7 +1509,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(heist.failedIndex, 0)
-        XCTAssertEqual(heist.steps.map(\.kind), [.forEach, .skipped])
+        XCTAssertEqual(heist.steps.map(\.kind), [.forEachElement, .skipped])
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 1)
         XCTAssertEqual(forEachResult.failureReason, "iteration 0 failed")

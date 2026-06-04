@@ -2736,7 +2736,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 HeistExecutionStepResult(
                     index: 0,
                     path: "$.body[0]",
-                    kind: .forEach,
+                    kind: .forEachElement,
                     message: "for_each completed 2 iteration(s) from 2 matched element(s)",
                     durationMs: 20,
                     forEachResult: HeistForEachResult(
