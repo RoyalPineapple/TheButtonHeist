@@ -608,6 +608,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .action,
+                    actionCommand: .activate(.target(.predicate(ElementPredicate(label: "Save")))),
                     actionResult: ActionResult(
                         success: false,
                         method: .activate,
@@ -638,6 +639,8 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.failedIndex, 0)
         XCTAssertEqual(decoded.steps.count, 2)
         XCTAssertTrue(decoded.steps[0].stopsHeist)
+        XCTAssertEqual(decoded.steps[0].actionCommand?.wireType, .activate)
+        XCTAssertEqual(decoded.steps[0].actionCommand?.reportTarget, .predicate(ElementPredicate(label: "Save")))
         XCTAssertEqual(decoded.steps[0].actionResult?.method, .activate)
         XCTAssertEqual(decoded.steps[0].actionResult?.errorKind, .elementNotFound)
         XCTAssertEqual(
@@ -654,7 +657,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             steps: [
                 HeistExecutionStepResult(
                     index: 0,
-                    kind: .forEach,
+                    kind: .forEachElement,
                     message: "matched 3 of 10",
                     durationMs: 500,
                     forEachResult: HeistForEachResult(
@@ -722,7 +725,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
         XCTAssertNil(decoded.failedIndex)
         let step = try XCTUnwrap(decoded.steps.first)
-        XCTAssertEqual(step.kind, .forEach)
+        XCTAssertEqual(step.kind, .forEachElement)
         XCTAssertEqual(step.forEachResult?.matchedCount, 3)
         XCTAssertEqual(step.forEachResult?.limit, 10)
         XCTAssertEqual(step.forEachResult?.iterationCount, 3)
@@ -733,7 +736,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let steps = try XCTUnwrap(payload["steps"] as? [[String: Any]])
-        XCTAssertEqual(steps.first?["kind"] as? String, "for_each")
+        XCTAssertEqual(steps.first?["kind"] as? String, "for_each_element")
         XCTAssertNil(steps.first?["childResults"])
         XCTAssertNotNil(steps.first?["children"])
     }
@@ -743,7 +746,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             steps: [
                 HeistExecutionStepResult(
                     index: 0,
-                    kind: .forEach,
+                    kind: .forEachElement,
                     durationMs: 200,
                     stopsHeist: true,
                     forEachResult: HeistForEachResult(

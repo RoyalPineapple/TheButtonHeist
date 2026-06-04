@@ -29,6 +29,14 @@ struct HeistReportAdapterRow {
         case .skipped, .failed:
             break
         }
+        if node.children.contains(where: { $0.status == .failed }) {
+            switch node.kind {
+            case .conditional, .waitForCases, .forEachIteration, .heist, .invoke:
+                return nil
+            case .action, .wait, .forEachElement, .forEachString, .warn, .fail:
+                break
+            }
+        }
         if let message = node.message {
             return message
         }

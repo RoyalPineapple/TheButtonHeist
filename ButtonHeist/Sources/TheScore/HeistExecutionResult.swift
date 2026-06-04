@@ -25,6 +25,8 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
     case conditional
     case waitForCases
     case forEach = "for_each"
+    case forEachElement = "for_each_element"
+    case forEachString = "for_each_string"
     case forEachIteration = "for_each_iteration"
     case warn
     case fail
@@ -40,6 +42,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
     /// Sibling-local step index retained for compact summaries and older adapters.
     public let index: Int
     public let kind: HeistExecutionStepKind
+    public let actionCommand: HeistActionCommand?
     public let actionResult: ActionResult?
     public let expectationActionResult: ActionResult?
     public let expectation: ExpectationResult?
@@ -55,6 +58,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         index: Int,
         path: String? = nil,
         kind: HeistExecutionStepKind,
+        actionCommand: HeistActionCommand? = nil,
         actionResult: ActionResult? = nil,
         expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
@@ -69,6 +73,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         self.path = path ?? "$.body[\(index)]"
         self.index = index
         self.kind = kind
+        self.actionCommand = actionCommand
         self.actionResult = actionResult
         self.expectationActionResult = expectationActionResult
         self.expectation = expectation
@@ -95,7 +100,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         if kind == .action, actionResult == nil { return true }
         if kind == .wait, actionResult?.success != true { return true }
         if kind == .waitForCases, caseSelection?.timedOut == true, caseSelection?.elseRan != true { return true }
-        if kind == .forEach, forEachResult?.failureReason != nil { return true }
+        if [.forEach, .forEachElement, .forEachString].contains(kind), forEachResult?.failureReason != nil { return true }
         if children.contains(where: \.isFailure) { return true }
         return false
     }
@@ -104,6 +109,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         case path
         case index
         case kind
+        case actionCommand
         case actionResult
         case expectationActionResult
         case expectation
@@ -122,6 +128,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         index = try container.decode(Int.self, forKey: .index)
         path = try container.decodeIfPresent(String.self, forKey: .path) ?? "$.body[\(index)]"
         kind = try container.decode(HeistExecutionStepKind.self, forKey: .kind)
+        actionCommand = try container.decodeIfPresent(HeistActionCommand.self, forKey: .actionCommand)
         actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
         expectationActionResult = try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult)
         expectation = try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
@@ -141,6 +148,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         try container.encode(path, forKey: .path)
         try container.encode(index, forKey: .index)
         try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(actionCommand, forKey: .actionCommand)
         try container.encodeIfPresent(actionResult, forKey: .actionResult)
         try container.encodeIfPresent(expectationActionResult, forKey: .expectationActionResult)
         try container.encodeIfPresent(expectation, forKey: .expectation)

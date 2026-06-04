@@ -426,7 +426,7 @@ final class MockConnection: TransportReachabilityConnecting {
         HeistExecutionStepResult(
             index: index,
             path: path,
-            kind: .forEach,
+            kind: .forEachElement,
             message: "mock for_each did not match elements",
             durationMs: heistStepDurationMs,
             forEachResult: HeistForEachResult(
@@ -446,7 +446,7 @@ final class MockConnection: TransportReachabilityConnecting {
         HeistExecutionStepResult(
             index: index,
             path: path,
-            kind: .forEach,
+            kind: .forEachString,
             message: "mock for_each_string completed \(forEach.values.count) iteration(s)",
             durationMs: heistStepDurationMs,
             forEachResult: HeistForEachResult(
