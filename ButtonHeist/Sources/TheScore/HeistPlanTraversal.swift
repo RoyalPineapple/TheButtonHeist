@@ -14,6 +14,7 @@ struct HeistTraversalContext {
 
 protocol HeistPlanTraversalVisitor {
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext)
+    mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext)
     mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext)
     mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext)
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext)
@@ -32,6 +33,7 @@ protocol HeistPlanTraversalVisitor {
 
 extension HeistPlanTraversalVisitor {
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {}
+    mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {}
     mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {}
     mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext) {}
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {}
@@ -70,6 +72,7 @@ struct HeistPlanTraversal {
             path: "$.definitions",
             depth: 1,
             definitionScope: context.definitionScope,
+            parentContext: context,
             visitor: &visitor
         )
         walk(
@@ -224,6 +227,7 @@ struct HeistPlanTraversal {
             path: "\(heistContext.path).definitions",
             depth: context.depth + 1,
             definitionScope: heistContext.definitionScope,
+            parentContext: heistContext,
             visitor: &visitor
         )
         walk(
@@ -307,8 +311,10 @@ struct HeistPlanTraversal {
         path: String,
         depth: Int,
         definitionScope: HeistDefinitionScope,
+        parentContext: HeistTraversalContext,
         visitor: inout V
     ) {
+        visitor.visitDefinitions(definitions, context: parentContext.child(path: path, depth: depth))
         for (index, definition) in definitions.enumerated() {
             let currentDefinitionPath = definitionScope.pathPrefix + [definition.name ?? ""]
             let currentDefinitionName = currentDefinitionPath.joined(separator: ".")
@@ -342,6 +348,7 @@ struct HeistPlanTraversal {
                 path: "\(definitionContext.path).definitions",
                 depth: depth + 1,
                 definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: currentDefinitionPath),
+                parentContext: definitionContext,
                 visitor: &visitor
             )
             walk(
@@ -360,10 +367,14 @@ struct HeistPlanTraversal {
 }
 
 extension HeistTraversalContext {
-    func child(path: String, definitionScope: HeistDefinitionScope? = nil) -> HeistTraversalContext {
+    func child(
+        path: String,
+        depth: Int? = nil,
+        definitionScope: HeistDefinitionScope? = nil
+    ) -> HeistTraversalContext {
         HeistTraversalContext(
             path: path,
-            depth: depth,
+            depth: depth ?? self.depth,
             stepIndex: stepIndex,
             nextStep: nextStep,
             allowsCollectionLoops: allowsCollectionLoops,
