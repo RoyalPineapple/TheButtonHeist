@@ -12,11 +12,17 @@ Not the one you see. The one VoiceOver uses.
 
 It describes the app in the language users depend on: labels, roles, values, states, actions. That interface is a contract: if users can do something visually, the app should expose it semantically.
 
-Button Heist turns that contract into an inside route for agents, tests, and validation: a control surface built from meaning, not pixels.
+Button Heist treats that interface the way a person would: as the app.
+
+It turns the VoiceOver route into a programmable control plane for agents and durable tests: a control surface built from meaning, not pixels.
+
+VoiceOver already gives the app a semantic interface. Agents already reason in intent. Tests already need durable contracts. Button Heist connects those existing contracts through one runtime.
 
 Link `TheInsideJob` into a debug build, connect over MCP or CLI, and the agent runs the job by intent. Activate the Login button. Type into the Email field. Run a custom action. Move through a rotor. Assert that the screen changed.
 
 No blind taps for ordinary controls. No screenshot parsing loops pretending to understand the app. Every job leaves evidence: what ran, what changed, and whether the expectation held.
+
+An agent run, an integration test, an accessibility audit, and a recording are not four separate systems. They are the same job at different times. If a flow works through the VoiceOver interface, the app works and its accessibility contract held. If it fails, the same evidence shows what broke and gives repair a semantic place to start.
 
 ## The difference
 
@@ -42,6 +48,8 @@ Button Heist tells the agent what changed after the move:
 The first tool says the tap landed.
 
 Button Heist brings back evidence. The agent starts the next step from the changed interface, not from another full-screen read.
+
+That is the line between Button Heist and locator-first automation. Other tools often use accessibility to find a view, compute a frame, and drive the screen. Button Heist treats the accessibility interface as the interface: the thing agents act through, observe through, record through, replay through, and validate.
 
 ## Choose the Route
 
