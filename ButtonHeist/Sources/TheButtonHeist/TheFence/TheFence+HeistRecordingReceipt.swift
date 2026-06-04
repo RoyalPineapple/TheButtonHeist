@@ -12,7 +12,7 @@ extension TheFence {
         guard playback.isIdle else { return }
         guard heistStore.isRecordingHeist else { return }
 
-        let effect: HeistRecordingComposition.Effect
+        let effect: HeistRecordingEffect
         do {
             effect = try HeistRecordingComposition(
                 request: request,
