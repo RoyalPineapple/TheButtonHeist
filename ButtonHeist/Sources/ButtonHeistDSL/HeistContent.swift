@@ -197,7 +197,7 @@ public struct HeistDef<Input>: Sendable {
 
     public init<Content: HeistContent>(
         _ path: String,
-        parameter: String,
+        parameter: String = "input",
         @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
     ) where Input == String {
         let components = Self.pathComponents(path)
@@ -210,7 +210,7 @@ public struct HeistDef<Input>: Sendable {
 
     public init<Content: HeistContent>(
         _ path: String,
-        parameter: String,
+        parameter: String = "input",
         @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
     ) where Input == ElementTarget {
         let components = Self.pathComponents(path)

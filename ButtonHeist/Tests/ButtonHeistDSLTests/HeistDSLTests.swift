@@ -448,6 +448,60 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
 }
 
 @Test
+func `string heist definitions default parameter to input`() throws {
+    let search = HeistDef<String>("SearchScreen.search") { query in
+        TypeText(query, into: .label("Search"))
+    }
+
+    let heist = try Heist {
+        try search("milk")
+    }
+
+    #expect(heist.plan.definitions == [
+        HeistPlan(name: "SearchScreen", definitions: [
+            HeistPlan(
+                name: "search",
+                parameter: .strings(name: "input"),
+                body: [
+                    .action(try ActionStep(
+                        command: .typeText(text: .ref("input"), target: .target(.label("Search")))
+                    )),
+                ]
+            ),
+        ], body: []),
+    ])
+    #expect(heist.plan.runtimeAdmissionFailures().isEmpty)
+}
+
+@Test
+func `element target heist definitions default parameter to input`() throws {
+    let delete = HeistDef<ElementTarget>("Rows.delete") { row in
+        Activate(row)
+            .expect(.absent(row), timeout: .seconds(2))
+    }
+
+    let heist = try Heist {
+        try delete(.label("Delete"))
+    }
+
+    #expect(heist.plan.definitions == [
+        HeistPlan(name: "Rows", definitions: [
+            HeistPlan(
+                name: "delete",
+                parameter: .elementTargets(name: "input"),
+                body: [
+                    .action(try ActionStep(
+                        command: .activate(.ref("input")),
+                        expectation: WaitStep(predicate: .absent(.ref("input")), timeout: 2)
+                    )),
+                ]
+            ),
+        ], body: []),
+    ])
+    #expect(heist.plan.runtimeAdmissionFailures().isEmpty)
+}
+
+@Test
 func heistDefinitionsPreserveConflictingDuplicatesForAdmission() throws {
     let first = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
         Activate(.label(item))
