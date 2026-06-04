@@ -17,7 +17,7 @@ That interface is the contract. If users can do something visually, the app
 should expose the same intent semantically. Button Heist keeps that contract
 live, acts through it, and returns settled evidence about what changed.
 It makes the route VoiceOver proves real available to agents, tests, recordings,
-audits, and repair.
+and audits.
 
 Agents already reason in intent. Tests need durable assertions. Recordings need
 to remember purpose, not mechanics. Accessibility audits need proof that the
@@ -36,14 +36,14 @@ flowchart LR
     Intent --> Runtime["Action or wait runtime"]
     Runtime --> Evidence["Settled evidence"]
     Evidence --> Model
-    Evidence --> Output["Report, test, recording, audit, or repair"]
+    Evidence --> Output["Report, test, recording, or audit"]
 ```
 
-Agent automation, integration tests, accessibility audits, recordings, replay,
-and repair are not separate systems. They are the same job at different times.
+Agent automation, integration tests, accessibility audits, recordings, and
+replay are not separate systems. They are the same job at different times.
 If a flow works through the accessibility contract, the app works and the
-contract held. If it fails, the same evidence shows what broke and gives repair
-a semantic place to start.
+contract held. If it fails, the same evidence shows what broke and where the
+contract failed.
 
 ## See The Job
 
@@ -399,7 +399,7 @@ not paper over it with a lucky gesture. If an agent cannot find the control by
 label, trait, value, state, or action, that is signal.
 
 One contract. Many payoffs: agents move faster, tests get stronger, recordings
-become durable, repairs get evidence, and VoiceOver users get the interface they
+become durable, audits get evidence, and VoiceOver users get the interface they
 were promised.
 
 The formal product contract, boundary map, and conformance cases live in
