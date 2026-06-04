@@ -1,27 +1,23 @@
-import TheScore
+import ThePlans
 
 public struct HeistRunRequest: Sendable, Equatable {
-    public let plan: HeistPlan
-
-    public init(_ heist: Heist) {
-        self.plan = heist.plan
-    }
+    public let heistPlan: HeistPlan
 
     public init(_ plan: HeistPlan) {
-        self.plan = plan
+        self.heistPlan = plan
     }
 }
 
 public func runHeist<Result: Sendable>(
-    _ heist: Heist,
+    _ plan: HeistPlan,
     using execute: @Sendable (HeistPlan) async throws -> Result
 ) async throws -> Result {
-    try await execute(heist.plan)
+    try await execute(plan)
 }
 
 public func runHeist<Result: Sendable>(
     @HeistBuilder _ content: () throws -> some HeistContent,
     using execute: @Sendable (HeistPlan) async throws -> Result
 ) async throws -> Result {
-    try await runHeist(try Heist(content), using: execute)
+    try await runHeist(try HeistPlan(content), using: execute)
 }

@@ -14,7 +14,7 @@ func decodedJSONRendersCanonicalSwiftDSLForFullAST() throws {
 
 @Test
 func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
-    let swiftPlan = try Heist {
+    let swiftPlan = try HeistPlan {
         Activate(.label("Sign In"))
             .expect(.present(.label("Home")), timeout: .seconds(5))
 
@@ -53,7 +53,7 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
         Warn("done")
 
         Fail("stop")
-    }.plan
+    }
     let jsonData = try JSONEncoder().encode(swiftPlan)
     let jsonPlan = try JSONDecoder().decode(HeistPlan.self, from: jsonData)
 
@@ -74,9 +74,9 @@ func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
         }
     }
 
-    let plan = try Heist("purchaseFlow") {
+    let plan = try HeistPlan("purchaseFlow") {
         try LibraryScreen.addToCart("Milk")
-    }.plan
+    }
 
     #expect(try plan.canonicalSwiftDSL() == """
     enum LibraryScreen {
@@ -93,7 +93,7 @@ func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
         }
     }
 
-    try Heist("purchaseFlow") {
+    try HeistPlan("purchaseFlow") {
         LibraryScreen.addToCart("Milk")
     }
     """)
@@ -112,9 +112,9 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
         }
     }
 
-    let plan = try Heist("searchFlow") {
+    let plan = try HeistPlan("searchFlow") {
         try SearchScreen.search("milk")
-    }.plan
+    }
 
     #expect(try plan.canonicalSwiftDSL() == """
     enum SearchScreen {
@@ -127,7 +127,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
         }
     }
 
-    try Heist("searchFlow") {
+    try HeistPlan("searchFlow") {
         SearchScreen.search("milk")
     }
     """)
@@ -173,7 +173,7 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
 
     #expect(plan.runtimeAdmissionFailures().isEmpty)
     #expect(try plan.canonicalSwiftDSL() == """
-    try Heist {
+    try HeistPlan {
         SetPasteboard("milk")
 
         Edit(.paste)
@@ -202,7 +202,7 @@ func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
 
     #expect(plan.runtimeAdmissionFailures().isEmpty)
     #expect(try plan.canonicalSwiftDSL() == """
-    try Heist {
+    try HeistPlan {
         CustomAction("Archive", on: .label("Message"))
 
         Rotor("Headings", on: .label("Article"), direction: .next)
@@ -224,7 +224,7 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
     #expect(command.durableHeistActionFailure == nil)
     #expect(plan.runtimeAdmissionFailures().isEmpty)
     #expect(try plan.canonicalSwiftDSL() == """
-    try Heist {
+    try HeistPlan {
         Mechanical.Swipe(.label("Carousel"), from: UnitPoint(x: 0.8, y: 0.5), to: UnitPoint(x: 0.2, y: 0.5))
     }
     """)
@@ -285,7 +285,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
 
     let jsonPlan = try JSONDecoder().decode(HeistPlan.self, from: Data("""
     {
-      "version": 2,
+      "version": 1,
       "body": [
         {
           "type": "action",
@@ -311,7 +311,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
 
 private let fullASTJSON = """
 {
-  "version": 2,
+  "version": 1,
   "body": [
     {
       "type": "action",
@@ -422,7 +422,7 @@ private let fullASTJSON = """
 
 private let invalidElementLoopParameterJSON = """
 {
-  "version": 2,
+  "version": 1,
   "body": [
     {
       "type": "for_each_element",
@@ -449,7 +449,7 @@ private let invalidElementLoopParameterJSON = """
 
 private let invalidStringLoopParameterJSON = """
 {
-  "version": 2,
+  "version": 1,
   "body": [
     {
       "type": "for_each_string",
@@ -477,7 +477,7 @@ private let invalidStringLoopParameterJSON = """
 """
 
 private let fullCanonicalSwiftDSL = """
-try Heist {
+try HeistPlan {
     Activate(.label("Sign In"))
         .expect(.present(.label("Home")), timeout: .seconds(5))
 

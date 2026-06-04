@@ -1,5 +1,14 @@
 import Foundation
 
+public enum HeistActionCommandType: String, Codable, Sendable, CaseIterable, Equatable, CustomStringConvertible {
+    case activate, increment, decrement, performCustomAction, rotor
+    case oneFingerTap, longPress, swipe, drag
+    case typeText, editAction, setPasteboard
+    case scroll, scrollToVisible, scrollToEdge, resignFirstResponder
+
+    public var description: String { rawValue }
+}
+
 public enum HeistActionCommand: Codable, Sendable, Equatable {
     case activate(ElementTargetExpr)
     case increment(ElementTargetExpr)
@@ -22,50 +31,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         case type, payload
     }
 
-    public init(clientMessage: ClientMessage) throws {
-        switch clientMessage {
-        case .activate(let target):
-            self = .activate(.target(target))
-        case .increment(let target):
-            self = .increment(.target(target))
-        case .decrement(let target):
-            self = .decrement(.target(target))
-        case .performCustomAction(let target):
-            self = .customAction(name: target.actionName, target: .target(target.elementTarget))
-        case .rotor(let target):
-            self = .rotor(selection: target.selection, target: .target(target.elementTarget), direction: target.direction)
-        case .typeText(let target):
-            self = .typeText(
-                text: .literal(target.text),
-                target: target.elementTarget.map(ElementTargetExpr.target)
-            )
-        case .oneFingerTap(let target):
-            self = .mechanicalTap(target)
-        case .longPress(let target):
-            self = .mechanicalLongPress(target)
-        case .swipe(let target):
-            self = .mechanicalSwipe(target)
-        case .drag(let target):
-            self = .mechanicalDrag(target)
-        case .scroll(let target):
-            self = .viewportScroll(target)
-        case .scrollToVisible(let target):
-            self = .viewportScrollToVisible(.target(target.elementTarget))
-        case .scrollToEdge(let target):
-            self = .viewportScrollToEdge(target)
-        case .editAction(let target):
-            self = .editAction(target)
-        case .setPasteboard(let target):
-            self = .setPasteboard(target)
-        case .resignFirstResponder:
-            self = .dismissKeyboard
-        case .clientHello, .authenticate, .requestInterface, .ping, .status,
-             .getPasteboard, .requestScreen, .wait, .heistPlan:
-            throw HeistExpressionError.unsupportedHeistActionCommand(clientMessage.wireType.rawValue)
-        }
-    }
-
-    public var wireType: ClientWireMessageType {
+    public var wireType: HeistActionCommandType {
         switch self {
         case .activate: return .activate
         case .increment: return .increment
@@ -86,62 +52,75 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         }
     }
 
-    public func resolve(in environment: HeistExecutionEnvironment) throws -> ClientMessage {
+    func assertResolvedPayloadAdmissible(in environment: HeistExecutionEnvironment) throws {
         switch self {
         case .activate(let target):
-            return .activate(try target.resolve(in: environment))
+            try roundTrip(try target.resolve(in: environment))
         case .increment(let target):
-            return .increment(try target.resolve(in: environment))
+            try roundTrip(try target.resolve(in: environment))
         case .decrement(let target):
-            return .decrement(try target.resolve(in: environment))
+            try roundTrip(try target.resolve(in: environment))
         case .customAction(let name, let target):
-            return .performCustomAction(CustomActionTarget(
+            try roundTrip(CustomActionTarget(
                 elementTarget: try target.resolve(in: environment),
                 actionName: name
             ))
         case .rotor(let selection, let target, let direction):
-            return .rotor(RotorTarget(
+            try roundTrip(RotorTarget(
                 elementTarget: try target.resolve(in: environment),
                 selection: selection,
                 direction: direction
             ))
         case .typeText(let text, let target):
             let resolvedText = try text.resolve(in: environment)
-            return .typeText(try TypeTextTarget(
+            try roundTrip(TypeTextTarget(
                 validatingText: resolvedText,
                 elementTarget: try target?.resolve(in: environment)
             ))
         case .mechanicalTap(let target):
-            return .oneFingerTap(target)
+            try roundTrip(target)
         case .mechanicalLongPress(let target):
-            return .longPress(target)
+            try roundTrip(target)
         case .mechanicalSwipe(let target):
-            return .swipe(target)
+            try roundTrip(target)
         case .mechanicalDrag(let target):
-            return .drag(target)
+            try roundTrip(target)
         case .viewportScroll(let target):
-            return .scroll(target)
+            try roundTrip(target)
         case .viewportScrollToVisible(let target):
-            return .scrollToVisible(ScrollToVisibleTarget(elementTarget: try target.resolve(in: environment)))
+            try roundTrip(ScrollToVisibleTarget(elementTarget: try target.resolve(in: environment)))
         case .viewportScrollToEdge(let target):
-            return .scrollToEdge(target)
+            try roundTrip(target)
         case .editAction(let target):
-            return .editAction(target)
+            try roundTrip(target)
         case .setPasteboard(let target):
-            return .setPasteboard(target)
+            try roundTrip(target)
         case .dismissKeyboard:
-            return .resignFirstResponder
+            break
         }
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist action command")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let type = try container.decode(ClientWireMessageType.self, forKey: .type)
+        let typeString = try container.decode(String.self, forKey: .type)
+        guard let type = HeistActionCommandType(rawValue: typeString) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "command \"\(typeString)\" is not a heist action command"
+            )
+        }
         let payloadDecoder = container.contains(.payload) ? try container.superDecoder(forKey: .payload) : nil
         func payload() throws -> Decoder {
             guard let payloadDecoder else {
-                throw DecodingError.missingPayload(key: CodingKeys.payload, type: type, codingPath: container.codingPath)
+                throw DecodingError.keyNotFound(
+                    CodingKeys.payload,
+                    .init(
+                        codingPath: container.codingPath,
+                        debugDescription: "Missing payload for heist action command type \(type.rawValue)"
+                    )
+                )
             }
             return payloadDecoder
         }
@@ -187,13 +166,6 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
                 ))
             }
             self = .dismissKeyboard
-        case .clientHello, .authenticate, .requestInterface, .ping, .status,
-             .getPasteboard, .requestScreen, .wait, .heistPlan:
-            throw DecodingError.dataCorruptedError(
-                forKey: .type,
-                in: container,
-                debugDescription: "command \"\(type.rawValue)\" is not a heist action command"
-            )
         }
     }
 
@@ -230,6 +202,11 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         }
     }
 
+}
+
+private func roundTrip<T: Codable>(_ payload: T) throws {
+    let data = try JSONEncoder().encode(payload)
+    _ = try JSONDecoder().decode(T.self, from: data)
 }
 
 // MARK: - Heist Action Command Payloads

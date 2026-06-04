@@ -1,7 +1,7 @@
 import Foundation
 
 public enum HeistPlanLintMode: Sendable, Equatable {
-    case recordingQuality
+    case compositionQuality
     case strictTest
 }
 
@@ -191,7 +191,7 @@ private extension HeistStep {
 private extension HeistPlanLintMode {
     var requiresExpectationFinding: Bool {
         switch self {
-        case .recordingQuality, .strictTest:
+        case .compositionQuality, .strictTest:
             return true
         }
     }

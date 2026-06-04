@@ -1,3 +1,4 @@
+import ThePlans
 import Foundation
 
 // MARK: - Coding Keys
@@ -133,7 +134,7 @@ extension ClientMessage {
         case .scrollToVisible: return .scrollToVisible(try ScrollToVisibleTarget(from: try payload()))
         case .scrollToEdge: return .scrollToEdge(try ScrollToEdgeTarget(from: try payload()))
         case .wait: return .wait(try WaitTarget(from: try payload()))
-        case .heistPlan: return .heistPlan(try TheScore.HeistPlan(from: try payload()))
+        case .heistPlan: return .heistPlan(try HeistPlan(from: try payload()))
         }
     }
 

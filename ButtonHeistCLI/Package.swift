@@ -19,6 +19,7 @@ let package = Package(
             name: "ButtonHeistCLIExe",
             dependencies: [
                 .product(name: "ButtonHeist", package: "ButtonHeist"),
+                .product(name: "ThePlans", package: "ButtonHeist"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources",
@@ -32,6 +33,7 @@ let package = Package(
             dependencies: [
                 .target(name: "ButtonHeistCLIExe"),
                 .product(name: "ButtonHeist", package: "ButtonHeist"),
+                .product(name: "ThePlans", package: "ButtonHeist"),
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "Tests",

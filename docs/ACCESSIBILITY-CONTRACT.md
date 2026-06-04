@@ -41,7 +41,7 @@ recording intent survived.
 
 All executable routes enter the same machine:
 
-1. Direct CLI/MCP command, Swift DSL, `.heist` JSON, playback, or recording
+1. Direct CLI/MCP command, Swift DSL, `.json` plan IR, `.heist` artifact, playback, or recording
    produces either a single command or a `HeistPlan`.
 2. The runtime observes settled before-state when the route performs an action
    or evaluates a wait.

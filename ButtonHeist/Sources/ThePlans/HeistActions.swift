@@ -1,5 +1,3 @@
-import TheScore
-
 public protocol HeistActionContent: HeistContent {
     var command: HeistActionCommand { get }
     var expectation: WaitStep? { get }

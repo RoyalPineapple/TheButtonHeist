@@ -412,7 +412,7 @@ private extension HeistStep {
 
 private extension HeistActionCommand {
     var fenceCommandForInspection: TheFence.Command {
-        switch wireType {
+        switch clientWireType {
         case .activate: return .activate
         case .increment: return .activate
         case .decrement: return .activate

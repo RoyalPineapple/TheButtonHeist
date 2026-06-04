@@ -129,7 +129,7 @@ extension ScrollTarget: Codable {
 /// Jumps directly to the element's position; it is an explicit viewport command,
 /// not setup for ordinary semantic actions.
 public struct ScrollToVisibleTarget: Sendable, Equatable {
-    /// Element to scroll into view. Must be a known element with a recorded position.
+    /// Element to scroll into view. Must be a known element with a captured position.
     public let elementTarget: ElementTarget
     public init(elementTarget: ElementTarget) {
         self.elementTarget = elementTarget

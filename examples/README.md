@@ -5,7 +5,7 @@ These examples show the same product contract through three surfaces:
 - [Semantic command](semantic-command.md): one direct command with expectation.
 - [Heist program](heist-program.swift): Swift DSL as a semantic program.
 - [Recording becomes a test](recording-becomes-test.md): live execution becoming
-  a durable `.heist` fixture.
+  a generated `.heist` package artifact.
 
 Each example follows the same machine:
 
@@ -16,4 +16,3 @@ accessibility contract
 -> settled semantic evidence
 -> next step, report, or recording
 ```
-

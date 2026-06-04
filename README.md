@@ -70,7 +70,7 @@ Use Button Heist to:
 - Drive a debug iOS app from an agent over MCP.
 - Run semantic UI commands from a CLI.
 - Compose multi-step heist plans with waits and expectations.
-- Record successful interactions as durable `.heist` tests.
+- Compose successful interactions into generated `.heist` artifacts.
 - Replay those tests in CI with failure diagnostics and JUnit output.
 - Validate that the accessibility contract actually supports the product flow.
 
@@ -133,10 +133,9 @@ buttonheist play_heist --input search-flow.heist --junit search-flow.xml
 A Swift-authored heist:
 
 ```swift
-import ButtonHeistDSL
-import TheScore
+import ThePlans
 
-let heist = try Heist("searchFlow") {
+let heist = try HeistPlan("searchFlow") {
     TypeText("milk", into: .label("Search"))
         .expect(.present(.element(label: "Search", value: "milk")), timeout: .seconds(2))
 
@@ -210,8 +209,10 @@ commands. Each action can carry an expectation. Each wait evaluates settled
 semantic state. If a step fails, the heist stops at the point where the contract
 failed.
 
-The `.heist` format is the durable wire form. Swift DSL source is the authoring
-form. See [docs/HEIST-FORMAT.md](docs/HEIST-FORMAT.md) and
+Swift DSL source is the authoring form. Raw `HeistPlan` JSON is explicit
+`.json` IR for debug, import, and export. `.heist` is a generated package
+artifact containing `manifest.json` and canonical `plan.json`. See
+[docs/HEIST-FORMAT.md](docs/HEIST-FORMAT.md) and
 [docs/SWIFT-HEIST-AUTHORING.md](docs/SWIFT-HEIST-AUTHORING.md).
 
 ## Recordings
@@ -366,7 +367,8 @@ macOS client outside it, and CLI/MCP fronts for humans and agents.
 |---|---|
 | `TheFence` | Shared command contract for CLI and MCP |
 | `TheHandoff` | Device discovery, target resolution, TLS connection, and session state |
-| `TheScore` | Wire models, traces, predicates, results, and heist data shared across boundaries |
+| `ThePlans` | Pure heist language: plan AST, Swift DSL, JSON, validation, canonical rendering, and source compilation |
+| `TheScore` | Wire models, traces, predicates, and results shared across boundaries |
 | `ButtonHeistCLI` | Command-line adapter |
 | `ButtonHeistMCP` | MCP adapter for agents |
 | `HeistStore` / `ScreenshotStore` | Deterministic heist and screenshot artifacts |

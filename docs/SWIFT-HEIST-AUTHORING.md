@@ -5,25 +5,26 @@ DSL like product code: it can use helper functions, local variables, comments,
 and formatting to make a heist easy to read and maintain. Durable loops must
 use Button Heist's explicit `ForEach` primitives, not native Swift `for`.
 
-`HeistPlan` is the execution model. A Swift DSL file builds a `HeistPlan`; a
-`.heist` JSON file stores and transports a `HeistPlan`. JSON is the wire and
-storage artifact, not the source authoring surface.
+`HeistPlan` is the execution model. A Swift DSL file builds a `HeistPlan`;
+standalone `.json` files are explicit raw HeistPlan IR for debug, import, and
+export; generated `.heist` package directories store `manifest.json` and
+canonical `plan.json`.
 
-Decoding `.heist` JSON reconstructs an executable `HeistPlan` with the body,
-targets, arguments, and expectations required for playback. `ButtonHeistDSL`
-can render that AST back to canonical Swift DSL. Canonical rendering preserves
-semantic meaning, not arbitrary authorship details. In particular, JSON does
-not recover:
+Decoding `.json` IR or a `.heist` package reconstructs an executable
+`HeistPlan` with the body, targets, arguments, and expectations required for
+runtime execution. `ThePlans` can render that AST back to canonical Swift DSL.
+Canonical rendering preserves semantic meaning, not arbitrary authorship
+details. In particular, JSON does not recover:
 
 - helper functions or builder structure
 - comments
 - local variables, constants, or their names
 - source grouping, whitespace, formatting, or review intent
 
-At runtime, Button Heist executes only `HeistPlan`. The Swift DSL is an
-authoring convenience that produces a plan; JSON is a durable representation of
-that plan. Swift DSL and JSON are two projections of the same AST. That AST
-belongs to the broader [Accessibility Contract](ACCESSIBILITY-CONTRACT.md):
+At runtime, Button Heist executes only `HeistPlan`. The Swift DSL is the source
+authoring language; `.json` is raw IR; `.heist` is a generated package artifact.
+Swift DSL and canonical plan JSON are two projections of the same AST. That
+AST belongs to the broader [Accessibility Contract](ACCESSIBILITY-CONTRACT.md):
 semantic intent enters the runtime and settled semantic evidence comes back.
 
 Reusable heist helpers that should survive JSON must be written as heist
@@ -39,7 +40,7 @@ enum LibraryScreen {
     }
 }
 
-Heist("purchaseFlow") {
+try HeistPlan("purchaseFlow") {
     LibraryScreen.addToCart("Milk")
     LibraryScreen.addToCart("Bread")
 }
@@ -53,7 +54,7 @@ source grouping, comments, or local constants.
 Semantic actions should describe user intent and expected semantic outcome:
 
 ```swift
-Heist {
+try HeistPlan {
     TypeText("milk", into: .label("Search"))
         .expect(.present(.element(label: "Search", value: "milk")))
 
@@ -73,8 +74,8 @@ Activate(.label("Optional"))
 Runtime admission and lint are separate:
 
 - Runtime admission rejects plans that cannot safely execute.
-- `.recordingQuality` lint flags recordings that read like transcripts instead of
-  compact semantic tests.
+- `.compositionQuality` lint flags composed plans that read like transcripts
+  instead of compact semantic tests.
 - `.strictTest` lint treats missing expectations, mechanical commands,
   viewport/debug action steps, and empty branches as
   test quality failures.
