@@ -1270,7 +1270,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.limit, 20)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertNil(forEachResult.failureReason)
-        XCTAssertNil(step.children)
+        XCTAssertTrue(step.children.isEmpty)
         XCTAssertEqual(observedScopes, [.discovery])
     }
 
@@ -1309,7 +1309,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.limit, 1)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertEqual(forEachResult.failureReason, "matched 2 element(s), exceeding for_each limit 1")
-        XCTAssertNil(step.children)
+        XCTAssertTrue(step.children.isEmpty)
     }
 
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
@@ -1350,7 +1350,8 @@ final class TheBrainsActionTests: XCTestCase {
             .activate(.predicate(matching, ordinal: 1)),
             .activate(.predicate(matching, ordinal: 2)),
         ])
-        XCTAssertEqual(step.children.map(\.kind), [.action, .action, .action])
+        XCTAssertEqual(step.children.map(\.kind), [.forEachIteration, .forEachIteration, .forEachIteration])
+        XCTAssertEqual(step.children.flatMap(\.children).map(\.kind), [.action, .action, .action])
         XCTAssertEqual(plan.body, originalBody)
     }
 
@@ -1512,7 +1513,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 1)
         XCTAssertEqual(forEachResult.failureReason, "iteration 0 failed")
-        XCTAssertEqual(forEachStep.children.map(\.kind), [.action])
+        XCTAssertEqual(forEachStep.children.map(\.kind), [.forEachIteration])
+        XCTAssertEqual(forEachStep.children.first?.children.map(\.kind), [.action])
     }
 
     func testHeistForEachExpectationUsesCurrentSemanticTarget() async throws {
