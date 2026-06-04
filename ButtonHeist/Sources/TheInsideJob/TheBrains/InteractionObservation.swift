@@ -192,8 +192,7 @@ final class InteractionObservation {
                     success: false
                 )
             }
-            state.changeBaseline = baseline
-            state.observedSequence = baseline.sequence
+            state.recordChangeBaseline(semanticObservation(from: baseline))
         } else if let initial = await nextWaitEvaluation(
             for: step, after: state.observedSequence, timeout: 0
         ) {
@@ -578,6 +577,13 @@ private struct WaitPredicateState {
         observedSequence = evaluation.observation.event.sequence
         sawFutureObservation = changeBaseline
             .map { evaluation.observation.event.sequence > $0.sequence } ?? false
+    }
+
+    mutating func recordChangeBaseline(_ observation: HeistSemanticObservation) {
+        changeBaseline = observation.event
+        lastTrace = observation.accessibilityTrace
+        lastObservationSummary = observation.summary
+        observedSequence = observation.event.sequence
     }
 }
 
