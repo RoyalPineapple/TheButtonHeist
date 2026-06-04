@@ -217,7 +217,7 @@ final class TheBurglar {
         }
     }
 
-    private static func scrollViewsByContainerForCurrentCapture(
+    static func scrollViewsByContainerForCurrentCapture(
         hierarchy: [AccessibilityHierarchy],
         scrollViewsByPath: [TreePath: UIView]
     ) -> [AccessibilityContainer: UIView] {

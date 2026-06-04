@@ -15,22 +15,27 @@ extension TheBurglar {
     /// pass assigns heistIds, resolves context, computes container stable IDs,
     /// and detects first responder state.
     static func buildScreen(from result: ParseResult) -> Screen {
-        let indexedElements = result.hierarchy.pathIndexedElements
+        let hierarchy = screenCoordinateHierarchy(from: result)
+        let scrollViews = scrollViewsByContainerForCurrentCapture(
+            hierarchy: hierarchy,
+            scrollViewsByPath: result.scrollViewsByPath
+        ).merging(result.scrollViews, uniquingKeysWith: { current, _ in current })
+        let indexedElements = hierarchy.pathIndexedElements
         let elements = indexedElements.map(\.element)
         let contextsByPath = buildElementContextsByPath(
-            hierarchy: result.hierarchy,
-            scrollableContainerViews: result.scrollViews,
+            hierarchy: hierarchy,
+            scrollableContainerViews: scrollViews,
             scrollableContainerViewsByPath: result.scrollViewsByPath,
             elementObjects: result.objects,
             elementObjectsByPath: result.objectsByPath
         )
         let identityContext = buildContainerIdentityContext(
-            hierarchy: result.hierarchy,
-            scrollableContainerViews: result.scrollViews,
+            hierarchy: hierarchy,
+            scrollableContainerViews: scrollViews,
             scrollableContainerViewsByPath: result.scrollViewsByPath
         )
         let containerStableIdIndex = buildContainerStableIdIndex(
-            hierarchy: result.hierarchy,
+            hierarchy: hierarchy,
             identityContext: identityContext
         )
         let containerStableIds = containerStableIdIndex.byContainer
@@ -81,7 +86,7 @@ extension TheBurglar {
         }
         return Screen(
             elements: screenElements,
-            hierarchy: result.hierarchy,
+            hierarchy: hierarchy,
             containerStableIds: containerStableIds,
             containerStableIdsByPath: containerStableIdsByPath,
             heistIdByElement: heistIdByElement,
@@ -93,6 +98,126 @@ extension TheBurglar {
             scrollableContainerViews: scrollableViewRefs,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
         )
+    }
+
+    /// The snapshot parser emits geometry in its parsing root's local
+    /// coordinate space. Button Heist's world model and wire/actionability
+    /// surfaces need UIKit accessibility screen coordinates, so restore those
+    /// from the live source objects at the parser boundary.
+    private static func screenCoordinateHierarchy(from result: ParseResult) -> [AccessibilityHierarchy] {
+        result.hierarchy.enumerated().map { index, node in
+            screenCoordinateNode(
+                node,
+                path: TreePath([index]),
+                elementObjectsByPath: result.objectsByPath,
+                containerObjectsByPath: result.containerObjectsByPath
+            )
+        }
+    }
+
+    private static func screenCoordinateNode(
+        _ node: AccessibilityHierarchy,
+        path: TreePath,
+        elementObjectsByPath: [TreePath: NSObject],
+        containerObjectsByPath: [TreePath: NSObject]
+    ) -> AccessibilityHierarchy {
+        switch node {
+        case .element(let element, let traversalIndex):
+            let object = elementObjectsByPath[path]
+            return .element(
+                screenCoordinateElement(element, object: object),
+                traversalIndex: traversalIndex
+            )
+
+        case .container(let container, let children):
+            let object = containerObjectsByPath[path]
+            let mappedChildren = children.enumerated().map { childIndex, child in
+                screenCoordinateNode(
+                    child,
+                    path: path.appending(childIndex),
+                    elementObjectsByPath: elementObjectsByPath,
+                    containerObjectsByPath: containerObjectsByPath
+                )
+            }
+            return .container(
+                screenCoordinateContainer(container, object: object),
+                children: mappedChildren
+            )
+        }
+    }
+
+    private static func screenCoordinateElement(
+        _ element: AccessibilityElement,
+        object: NSObject?
+    ) -> AccessibilityElement {
+        guard let object else { return element }
+        return AccessibilityElement(
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            traits: element.traits,
+            identifier: element.identifier,
+            hint: element.hint,
+            userInputLabels: element.userInputLabels,
+            shape: screenCoordinateShape(for: object, fallback: element.shape),
+            activationPoint: screenCoordinateActivationPoint(for: object, fallback: element.activationPoint),
+            usesDefaultActivationPoint: element.usesDefaultActivationPoint,
+            customActions: element.customActions,
+            customContent: element.customContent,
+            customRotors: element.customRotors,
+            accessibilityLanguage: element.accessibilityLanguage,
+            respondsToUserInteraction: element.respondsToUserInteraction
+        )
+    }
+
+    private static func screenCoordinateContainer(
+        _ container: AccessibilityContainer,
+        object: NSObject?
+    ) -> AccessibilityContainer {
+        guard let object else { return container }
+        return AccessibilityContainer(
+            type: container.type,
+            frame: screenCoordinateFrame(for: object, fallback: container.frame),
+            isModalBoundary: container.isModalBoundary,
+            customActions: container.customActions
+        )
+    }
+
+    private static func screenCoordinateShape(
+        for object: NSObject,
+        fallback: AccessibilityShape
+    ) -> AccessibilityShape {
+        if let path = object.accessibilityPath, path.bhHasFiniteBounds {
+            return .path(AccessibilityPathElement.elements(from: path.cgPath))
+        }
+        return .frame(screenCoordinateFrame(for: object, fallback: fallback.frame.accessibilityRect))
+    }
+
+    private static func screenCoordinateActivationPoint(
+        for object: NSObject,
+        fallback: AccessibilityPoint
+    ) -> AccessibilityPoint {
+        let point = object.accessibilityActivationPoint
+        guard point.x.isFinite, point.y.isFinite else { return fallback }
+        return AccessibilityPoint(point)
+    }
+
+    private static func screenCoordinateFrame(
+        for object: NSObject,
+        fallback: AccessibilityRect
+    ) -> AccessibilityRect {
+        let accessibilityFrame = object.accessibilityFrame
+        if accessibilityFrame.bhIsFiniteAccessibilityRect, !accessibilityFrame.isEmpty {
+            return AccessibilityRect(accessibilityFrame)
+        }
+
+        if let view = object as? UIView {
+            let frame = view.convert(view.bounds, to: nil)
+            if frame.bhIsFiniteAccessibilityRect, !frame.isEmpty {
+                return AccessibilityRect(frame)
+            }
+        }
+        return fallback
     }
 
     private static func scrollContentLocation(
@@ -204,6 +329,27 @@ extension TheBurglar {
         let subtree: AccessibilityHierarchy
     }
 
+}
+
+private extension CGRect {
+    var accessibilityRect: AccessibilityRect {
+        AccessibilityRect(self)
+    }
+
+    var bhIsFiniteAccessibilityRect: Bool {
+        !isNull
+            && origin.x.isFinite
+            && origin.y.isFinite
+            && size.width.isFinite
+            && size.height.isFinite
+    }
+}
+
+private extension UIBezierPath {
+    var bhHasFiniteBounds: Bool {
+        guard !isEmpty else { return false }
+        return cgPath.boundingBoxOfPath.bhIsFiniteAccessibilityRect
+    }
 }
 
 #endif // DEBUG

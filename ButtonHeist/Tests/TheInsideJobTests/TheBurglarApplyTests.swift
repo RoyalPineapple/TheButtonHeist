@@ -250,6 +250,40 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(screen.liveCapture.heistIdByElement[second], "row_button_2")
     }
 
+    func testBuildScreenRestoresScreenCoordinateGeometryFromLiveSourceObject() throws {
+        let rootLocalFrame = CGRect(x: 64, y: 372, width: 155, height: 72)
+        let screenFrame = CGRect(x: 244, y: 396, width: 155, height: 72)
+        let screenActivationPoint = CGPoint(x: 321.5, y: 432)
+        let parsedElement = makeElement(
+            label: "Confirm",
+            traits: .button,
+            frame: rootLocalFrame
+        )
+        let sourceObject = NSObject()
+        sourceObject.accessibilityFrame = screenFrame
+        sourceObject.accessibilityActivationPoint = screenActivationPoint
+
+        let result = TheBurglar.ParseResult(
+            hierarchy: [.element(parsedElement, traversalIndex: 0)],
+            objects: [parsedElement: sourceObject],
+            objectsByPath: [TreePath([0]): sourceObject],
+            scrollViews: [:]
+        )
+
+        let screen = TheBurglar.buildScreen(from: result)
+        let element = try XCTUnwrap(screen.liveCapture.hierarchy.sortedElements.first)
+        let projected = try XCTUnwrap(TheStash.WireConversion.toInterface(from: screen).projectedElements.first)
+
+        XCTAssertEqual(element.shape.frame, screenFrame)
+        XCTAssertEqual(element.bhResolvedActivationPoint, screenActivationPoint)
+        XCTAssertEqual(projected.frameX, screenFrame.origin.x)
+        XCTAssertEqual(projected.frameY, screenFrame.origin.y)
+        XCTAssertEqual(projected.frameWidth, screenFrame.size.width)
+        XCTAssertEqual(projected.frameHeight, screenFrame.size.height)
+        XCTAssertEqual(projected.activationPointX, screenActivationPoint.x)
+        XCTAssertEqual(projected.activationPointY, screenActivationPoint.y)
+    }
+
     // MARK: - Content space origin
 
     func testPropagatesContentSpaceOriginForScrollableContainerChild() {
