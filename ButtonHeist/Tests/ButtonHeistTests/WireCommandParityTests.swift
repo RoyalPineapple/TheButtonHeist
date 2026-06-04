@@ -10,6 +10,81 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(Set(descriptorCommands), Set(TheFence.Command.allCases))
     }
 
+    func testCommandFamiliesHaveNoDuplicateRawValuesAndCoverEveryCommand() {
+        let familyDescriptors = FenceCommandRegistry.families.flatMap(\.descriptors)
+        let familyCommands = familyDescriptors.map(\.command)
+
+        XCTAssertEqual(familyCommands.count, TheFence.Command.allCases.count)
+        XCTAssertEqual(Set(familyCommands), Set(TheFence.Command.allCases))
+        XCTAssertEqual(familyCommands.count, Set(familyCommands).count)
+        XCTAssertEqual(
+            familyDescriptors.map(\.family),
+            familyDescriptors.map { $0.command.family }
+        )
+    }
+
+    func testCommandFamilyMembershipAndTypedGates() {
+        XCTAssertEqual(TheFence.Command.ping.family, .session)
+        XCTAssertEqual(TheFence.Command.getInterface.family, .observation)
+        XCTAssertEqual(TheFence.Command.wait.family, .assertion)
+        XCTAssertEqual(TheFence.Command.activate.family, .semanticAction)
+        XCTAssertEqual(TheFence.Command.oneFingerTap.family, .spatialAction)
+        XCTAssertEqual(TheFence.Command.scroll.family, .viewportDebug)
+        XCTAssertEqual(TheFence.Command.scrollToVisible.family, .viewportDebug)
+        XCTAssertEqual(TheFence.Command.scrollToEdge.family, .viewportDebug)
+        XCTAssertEqual(TheFence.Command.runHeist.family, .heistRuntime)
+        XCTAssertEqual(TheFence.Command.startHeist.family, .heistRecording)
+
+        XCTAssertNil(ObservationCommand(rawValue: TheFence.Command.wait.rawValue))
+        XCTAssertEqual(AssertionCommand.wait.command, .wait)
+        XCTAssertNotNil(TheFence.Command.wait.heistPrimitiveCommand)
+        XCTAssertNil(TheFence.Command.wait.appInteractionCommand)
+        XCTAssertNil(TheFence.Command.wait.payloadCheckedHeistPrimitiveCommand)
+
+        XCTAssertNotNil(TheFence.Command.activate.appInteractionCommand)
+        XCTAssertNotNil(TheFence.Command.activate.heistPrimitiveCommand)
+        XCTAssertNil(TheFence.Command.activate.payloadCheckedHeistPrimitiveCommand)
+
+        XCTAssertNotNil(TheFence.Command.oneFingerTap.appInteractionCommand)
+        XCTAssertNotNil(TheFence.Command.oneFingerTap.heistPrimitiveCommand)
+        XCTAssertNotNil(TheFence.Command.oneFingerTap.payloadCheckedHeistPrimitiveCommand)
+
+        XCTAssertNotNil(TheFence.Command.scroll.appInteractionCommand)
+        XCTAssertNotNil(TheFence.Command.scroll.viewportDebugCommand)
+        XCTAssertNil(TheFence.Command.scroll.heistPrimitiveCommand)
+        XCTAssertNil(TheFence.Command.scroll.payloadCheckedHeistPrimitiveCommand)
+    }
+
+    func testDescriptorDoesNotExposeBehaviorCapabilityFlags() throws {
+        let catalogSource = try String(
+            contentsOf: packageRoot()
+                .appendingPathComponent("Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift")
+        )
+        for removedFlag in [
+            "isNormalRecordable",
+            "recordsHeistStep",
+            "isDurableHeistPrimitive",
+            "isObservation",
+            "isViewportDebug",
+            "isSemanticAction",
+            "isSpatialAction",
+            "FenceCommandCapabilities",
+            "RecordableCommand",
+        ] {
+            XCTAssertFalse(catalogSource.contains(removedFlag), removedFlag)
+        }
+    }
+
+    func testGeneratedCommandReferenceDisplaysFamilyGrouping() {
+        let reference = FenceCommandReference.commandMarkdown()
+
+        XCTAssertTrue(reference.contains("| Command | Family | CLI | MCP | Description |"), reference)
+        XCTAssertTrue(reference.contains("| `wait` | `assertion` |"), reference)
+        XCTAssertTrue(reference.contains("| `scroll` | `viewportDebug` |"), reference)
+        XCTAssertFalse(reference.contains("Recordable"), reference)
+        XCTAssertFalse(reference.contains("Durable"), reference)
+    }
+
     func testRunHeistDescriptorAdvertisesPublicJSONPlanStepTypes() {
         let descriptor = TheFence.Command.descriptor(for: .runHeist)
         let body = descriptor.parameters.first { $0.key == "body" }
@@ -67,9 +142,9 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertTrue(tap.localizedCaseInsensitiveContains("explicit mechanical/spatial tap"), tap)
         XCTAssertTrue(tap.localizedCaseInsensitiveContains("ordinary accessible controls should use the semantic command path"), tap)
 
-        XCTAssertTrue(scroll.localizedCaseInsensitiveContains("explicit viewport operation"), scroll)
+        XCTAssertTrue(scroll.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scroll)
         XCTAssertTrue(scrollToVisible.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToVisible)
-        XCTAssertTrue(scrollToEdge.localizedCaseInsensitiveContains("explicit viewport operation"), scrollToEdge)
+        XCTAssertTrue(scrollToEdge.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToEdge)
     }
 
     @ButtonHeistActor
@@ -85,10 +160,10 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryHeistExecutableCommandLowersToTheSameClientMessageAsSingleCommand() async throws {
+    func testEveryHeistPrimitiveCommandLowersToTheSameClientMessageAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in TheFence.Command.heistExecutableCases {
+        for command in TheFence.Command.heistPrimitiveCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
             let singleMessages = try fence.executableActionMessages(for: singleRequest)
@@ -109,7 +184,7 @@ final class WireCommandParityTests: XCTestCase {
     func testEveryPlaybackStepLowersToTheSameClientMessageAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in TheFence.Command.heistExecutableCases {
+        for command in TheFence.Command.heistPrimitiveCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
             let singleMessages = try fence.executableActionMessages(for: singleRequest)
@@ -124,6 +199,28 @@ final class WireCommandParityTests: XCTestCase {
                 String(reflecting: singleMessages),
                 command.rawValue
             )
+        }
+    }
+
+    @ButtonHeistActor
+    func testViewportDebugCommandsAreDirectOnlyAndRejectedByHeistGate() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for command in [TheFence.Command.scroll, .scrollToVisible, .scrollToEdge] {
+            let descriptor = command.descriptor
+            XCTAssertEqual(descriptor.family, .viewportDebug, command.rawValue)
+            XCTAssertEqual(descriptor.cliExposure, .directCommand, command.rawValue)
+            XCTAssertEqual(descriptor.mcpExposure, .directTool, command.rawValue)
+            XCTAssertNotNil(command.appInteractionCommand, command.rawValue)
+            XCTAssertNotNil(command.viewportDebugCommand, command.rawValue)
+            XCTAssertNil(command.heistPrimitiveCommand, command.rawValue)
+            XCTAssertNil(command.payloadCheckedHeistPrimitiveCommand, command.rawValue)
+
+            let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
+            XCTAssertFalse(try fence.executableActionMessages(for: request).isEmpty, command.rawValue)
+            XCTAssertThrowsError(try fence.heistStep(for: request), command.rawValue) { error in
+                XCTAssertTrue("\(error)".contains("not a heist primitive"), "\(error)")
+            }
         }
     }
 
@@ -239,6 +336,13 @@ final class WireCommandParityTests: XCTestCase {
     private func encodedWireType(for message: ClientMessage) throws -> ClientWireMessageType {
         let data = try JSONEncoder().encode(message)
         return try JSONDecoder().decode(EncodedClientType.self, from: data).type
+    }
+
+    private func packageRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 
     private func heistStepValue(type: String, payload: [String: HeistValue]) -> HeistValue {

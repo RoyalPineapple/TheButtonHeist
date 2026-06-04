@@ -60,6 +60,13 @@ extension TheFence {
         }
     }
 
+    static func appInteractionDispatch<C: AppInteractionCommand>(
+        _: C,
+        _ messages: [ClientMessage]
+    ) -> DecodedRequestDispatch {
+        clientActionDispatch(messages)
+    }
+
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
         guard command.descriptor.isPublicRequestContract else {
             throw SchemaValidationError(

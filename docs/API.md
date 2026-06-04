@@ -97,7 +97,8 @@ state.
 
 Explicit viewport commands are different: `scroll`, `scroll_to_visible`, and
 `scroll_to_edge` expose viewport state because moving the viewport is the
-caller's intent.
+caller's intent. They are direct viewport/debug commands, not durable heist
+primitives.
 
 ## Element Identity
 

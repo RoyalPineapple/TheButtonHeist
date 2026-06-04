@@ -429,10 +429,11 @@ normal heist pipeline. Reports preserve the invocation boundary and child step
 results. A failed invocation stops its caller unless the caller's control flow
 handles the failure explicitly.
 
-## Mechanical And Viewport Escape Hatches
+## Mechanical Escape Hatches And Viewport Debug
 
-Mechanical gestures and viewport movement are explicit escape hatches. They are
-valid plan actions, but strict semantic-test validation flags them.
+Mechanical gestures are explicit escape hatches. They are valid durable plan
+actions when their payload passes durability checks, but strict semantic-test
+validation flags them.
 
 Coordinate gesture:
 
@@ -449,24 +450,12 @@ Coordinate gesture:
 }
 ```
 
-Viewport movement:
-
-```json
-{
-  "type": "action",
-  "action": {
-    "command": {
-      "type": "scroll",
-      "payload": { "direction": "down" }
-    },
-    "without_expectation": "Explicit viewport inspection"
-  }
-}
-```
-
-Semantic actions do not require `scroll_to_visible` before they run. Recording
-drops pre-action viewport movement when a semantic action intent can be
-derived.
+Viewport/debug commands such as `scroll`, `scroll_to_edge`, and
+`scroll_to_visible` are directly executable inspection commands, not durable
+heist primitives. Heist JSON and canonical Swift DSL reject them as action
+steps. Semantic actions do not require `scroll_to_visible` before they run.
+Recording drops pre-action viewport movement when a semantic action intent can
+be derived.
 
 ## Runtime Admission And Lint
 
@@ -479,7 +468,7 @@ Lint is quality guidance for authored or recorded tests:
 | Mode | Purpose |
 |------|---------|
 | `recordingQuality` | Warns when recordings look like fragile transcripts. |
-| `strictTest` | Fails missing expectations, mechanical commands, pre-action viewport movement, and empty branches. |
+| `strictTest` | Fails missing expectations, mechanical commands, viewport/debug action steps, and empty branches. |
 
 Lint returns structured findings with severity, step path, message, and a fix
 suggestion. It does not replace runtime admission.
@@ -491,6 +480,7 @@ The durable heist AST is small on purpose. It does not support:
 - unbounded loops, sleeps, retries, catch/recover, or arbitrary polling loops
 - preserving native Swift `for` loops as runtime loops
 - hidden pre-action viewport movement for semantic actions
+- viewport/debug commands as durable action steps
 - arbitrary dynamic code or source execution over the wire
 - generic variables or expression evaluation beyond typed string and target refs
 - geometry, runtime IDs, capture-local IDs, or containerNames as
@@ -508,14 +498,16 @@ rules.
 
 Rules:
 
-- Read commands are scratchpad and record no steps.
+- Observation commands are scratchpad and record no steps.
+- `wait` is an assertion primitive and records as a wait step.
 - Failed actions record no steps.
 - Unmet expectations record no steps.
+- Direct viewport/debug commands record no steps.
 - Scroll setup before semantic action records no setup step.
 - Coordinate gestures survive only when no semantic element intent exists.
 - Recorded heists should pass recording-quality lint.
 
 Recorded and authored heists must not depend on scroll position, geometry,
 runtime IDs, capture-local IDs, or containerNames as semantic identity. Direct
-viewport/debug commands may use a current `container` value, but heist JSON and
-canonical Swift DSL reject that capture-local selector.
+viewport/debug commands may use a current `container` value while inspecting the
+live interface, but those commands are not durable heist primitives.

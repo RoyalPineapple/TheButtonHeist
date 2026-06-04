@@ -19,7 +19,12 @@ struct HeistRecordingComposition {
     let validatedResponse: FenceResponse
 
     func effect() throws -> HeistRecordingEffect {
-        guard request.command.descriptor.isHeistExecutable else { return .ignore }
+        if request.command.viewportDebugCommand != nil {
+            return .discardDeferredSetup
+        }
+        guard request.command.heistPrimitiveCommand != nil else {
+            return .ignore
+        }
         guard let dispatchedReceipt = dispatchedResponse.heistRecordingReceipt,
               dispatchedReceipt.actionResult.success else {
             return HeistRecordingEffectPolicy.unrecordedSemanticEffect(for: request)

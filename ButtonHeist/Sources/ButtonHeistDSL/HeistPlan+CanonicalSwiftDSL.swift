@@ -237,12 +237,10 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return try render(mechanicalSwipe: target)
         case .mechanicalDrag(let target):
             return try render(mechanicalDrag: target)
-        case .viewportScroll(let target):
-            return try render(viewportScroll: target)
-        case .viewportScrollToVisible(let target):
-            return "Viewport.ScrollToVisible(\(try render(target: target, environment: environment)))"
-        case .viewportScrollToEdge(let target):
-            return try render(viewportScrollToEdge: target)
+        case .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
+            throw HeistCanonicalSwiftDSLError.unsupportedAction(
+                command.durableHeistActionFailure ?? "viewport debug command is not a durable heist action"
+            )
         case .editAction(let target):
             return "Edit(.\(target.action.rawValue))"
         case .setPasteboard(let target):
@@ -294,28 +292,6 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return "Mechanical.Drag(\(render(target: target)), to: \(render(point: end)))"
         case .pointToPoint(let start, let end):
             return "Mechanical.Drag(from: \(render(point: start)), to: \(render(point: end)))"
-        }
-    }
-
-    private func render(viewportScroll target: ScrollTarget) throws -> String {
-        switch target.selection {
-        case .visibleContainer:
-            return "Viewport.Scroll(.\(target.direction.rawValue))"
-        case .element(let element):
-            return "Viewport.Scroll(.\(target.direction.rawValue), in: \(render(target: element)))"
-        case .container:
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("scroll containerName is not a durable heist action")
-        }
-    }
-
-    private func render(viewportScrollToEdge target: ScrollToEdgeTarget) throws -> String {
-        switch target.selection {
-        case .visibleContainer:
-            return "Viewport.ScrollToEdge(.\(target.edge.rawValue))"
-        case .element(let element):
-            return "Viewport.ScrollToEdge(.\(target.edge.rawValue), in: \(render(target: element)))"
-        case .container:
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("scroll_to_edge containerName is not a durable heist action")
         }
     }
 

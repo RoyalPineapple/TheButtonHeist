@@ -530,7 +530,6 @@ final class TheBrainsActionTests: XCTestCase {
             ("tap", .oneFingerTap(TapTarget(selection: .element(target))), false),
             ("swipe", .swipe(SwipeTarget(selection: .elementDirection(target, .left))), false),
             ("type text", .typeText(TypeTextTarget(text: "hello", elementTarget: target)), false),
-            ("scroll", .scroll(ScrollTarget(elementTarget: target, direction: .down)), false),
             ("wait", .wait(WaitTarget(predicate: .state(.present(matcher)), timeout: 0.01)), true),
         ]
 
@@ -2277,7 +2276,7 @@ final class TheBrainsActionTests: XCTestCase {
             do {
                 step = .action(try ActionStep(command: command))
             } catch {
-                XCTFail("Expected heist executable command for \(command.wireType.rawValue): \(error)")
+                XCTFail("Expected heist primitive command for \(command.wireType.rawValue): \(error)")
                 return ActionResultBuilder(method: .heistPlan).failure(errorKind: .validationError)
             }
         }

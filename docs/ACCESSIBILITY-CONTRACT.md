@@ -53,7 +53,8 @@ All executable routes enter the same machine:
 
 No public route asks callers to manage ordinary viewport mechanics for semantic
 commands. Viewport and mechanical commands are explicit when viewport state or
-the physical gesture itself is the intent.
+the physical gesture itself is the intent. Viewport/debug commands are directly
+executable for inspection, but they are not durable heist primitives.
 
 ## Conformance Cases
 
@@ -66,8 +67,9 @@ The product contract is healthy when these cases hold:
 - Failed semantic actions do not leave partial viewport movement in recordings.
 - `wait` and action expectations use the same `AccessibilityPredicate`
   evaluator.
-- Recordings emit semantic actions plus expectations when evidence supports
-  them, and omit reads or failed actions.
+- Recordings emit semantic actions, durable spatial actions, waits, and
+  expectations when evidence supports them, and omit observations, viewport
+  debug, or failed actions.
 - Unknown JSON keys fail at the contract boundary.
 - Timeout diagnostics say which contract was not satisfied and what command or
   target shape is valid next.

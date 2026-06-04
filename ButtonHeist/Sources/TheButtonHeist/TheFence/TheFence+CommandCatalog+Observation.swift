@@ -1,10 +1,16 @@
 import TheScore
 
-extension TheFence.Command {
-    static var observationCommandDescriptors: [FenceCommandDescriptor] {
-        [
-            commandDescriptor(
-                .getInterface, requestDecoder: TheFence.decodeGetInterfaceRequest,
+enum ObservationCommand: String, CaseIterable, FenceCommand {
+    case getInterface = "get_interface"
+    case getScreen = "get_screen"
+    case getPasteboard = "get_pasteboard"
+
+    var descriptor: FenceCommandDescriptor {
+        switch self {
+        case .getInterface:
+            return TheFence.Command.commandDescriptor(
+                command, family: .observation,
+                requestDecoder: TheFence.decodeGetInterfaceRequest,
                 parameters: FenceParameterBlocks.elementFilter + [
                     FenceParameterBlocks.interfaceSubtree,
                     param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
@@ -17,21 +23,37 @@ extension TheFence.Command {
                     It is useful for inspection and viewport/debug commands. It is not a semantic target and is not \
                     recorded into heists.
                     """
-            ),
-            commandDescriptor(
-                .getScreen, requestDecoder: TheFence.decodeGetScreenRequest,
+            )
+        case .getScreen:
+            return TheFence.Command.commandDescriptor(
+                command, family: .observation,
+                requestDecoder: TheFence.decodeGetScreenRequest,
                 parameters: [param(.output, .string), param(.inlineData, .boolean), param(.includeInterface, .boolean)],
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "Capture a PNG screenshot with optional inline data and interface state."
-            ),
-            commandDescriptor(
-                .wait, requestDecoder: TheFence.decodeWaitRequest,
-                isHeistExecutable: true,
-                parameters: FenceParameterBlocks.wait,
+            )
+        case .getPasteboard:
+            return TheFence.Command.commandDescriptor(
+                command, family: .observation,
+                requestDecoder: TheFence.decodeGetPasteboardRequest,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
-                description: "Wait until an accessibility predicate is satisfied within timeout "
-                    + "by evaluating settled semantic observations."
-            ),
-        ]
+                description: "Read text from the general pasteboard."
+            )
+        }
+    }
+}
+
+enum AssertionCommand: String, CaseIterable, FenceCommand, HeistPrimitiveCommand {
+    case wait
+
+    var descriptor: FenceCommandDescriptor {
+        TheFence.Command.commandDescriptor(
+            command, family: .assertion,
+            requestDecoder: TheFence.decodeWaitRequest,
+            parameters: FenceParameterBlocks.wait,
+            mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
+            description: "Assert that an accessibility predicate is satisfied within timeout "
+                + "by evaluating settled accessibility state."
+        )
     }
 }

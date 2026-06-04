@@ -10,7 +10,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        decodedGestureAction(.oneFingerTap(try fence.decodeTapTarget(arguments)))
+        appInteractionDispatch(
+            SpatialActionCommand.oneFingerTap,
+            [.oneFingerTap(try fence.decodeTapTarget(arguments))]
+        )
     }
 
     static func decodeLongPressRequest(
@@ -19,7 +22,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        decodedGestureAction(.longPress(try fence.decodeLongPressTarget(arguments)))
+        appInteractionDispatch(
+            SpatialActionCommand.longPress,
+            [.longPress(try fence.decodeLongPressTarget(arguments))]
+        )
     }
 
     static func decodeSwipeRequest(
@@ -28,7 +34,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        decodedGestureAction(.swipe(try fence.decodeSwipeTarget(arguments)))
+        appInteractionDispatch(
+            SpatialActionCommand.swipe,
+            [.swipe(try fence.decodeSwipeTarget(arguments))]
+        )
     }
 
     static func decodeDragRequest(
@@ -37,10 +46,9 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        decodedGestureAction(.drag(try fence.decodeDragTarget(arguments)))
-    }
-
-    private static func decodedGestureAction(_ message: ClientMessage) -> DecodedRequestDispatch {
-        Self.clientActionDispatch([message])
+        appInteractionDispatch(
+            SpatialActionCommand.drag,
+            [.drag(try fence.decodeDragTarget(arguments))]
+        )
     }
 }
