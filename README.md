@@ -12,11 +12,11 @@ Not the one you see. The one VoiceOver uses.
 
 It describes the app in the language users depend on: labels, roles, values, states, actions. That interface is a contract: if users can do something visually, the app should expose it semantically.
 
-Button Heist turns that contract into an inside route for agents: a control surface built from meaning, not pixels.
+Button Heist turns that contract into an inside route for agents, tests, and validation: a control surface built from meaning, not pixels.
 
-Link one framework into a debug build, connect over MCP or CLI, and the agent operates the app by meaning. No coordinate math. No screenshot parsing loops. No blind taps.
+Link `TheInsideJob` into a debug build, connect over MCP or CLI, and the agent runs the job by intent. Activate the Login button. Type into the Email field. Run a custom action. Move through a rotor. Assert that the screen changed.
 
-Every job leaves evidence: deltas, expectations, and a replayable test trail.
+No blind taps for ordinary controls. No screenshot parsing loops pretending to understand the app. Every job leaves evidence: what ran, what changed, and whether the expectation held.
 
 ## The difference
 
@@ -27,7 +27,7 @@ A coordinate-based tool can tell the agent that a tap landed:
 ← "Tapped successfully"
 ```
 
-Button Heist tells the agent what the tap did:
+Button Heist tells the agent what changed after the move:
 
 ```
 → activate(label: "Login", traits: ["button"])
@@ -41,7 +41,21 @@ Button Heist tells the agent what the tap did:
 
 The first tool says the tap landed.
 
-Button Heist brings back evidence. The agent starts the next step from the new state, not from another full-screen read.
+Button Heist brings back evidence. The agent starts the next step from the changed interface, not from another full-screen read.
+
+## Choose the Route
+
+Button Heist gives the crew three routes in, and each has a job.
+
+Semantic commands are the inside route. Use `activate`, `type_text`, custom actions, rotors, and element-targeted heist steps for ordinary app controls and accessible workflows. Name the target by label, identifier, matcher, or predicate. Button Heist handles the screen work: resolve the target, reveal it through the owning scroll or container path when needed, acquire fresh live geometry, perform the accessibility operation, wait for the interface to settle, and report what changed.
+
+`activate` means accessibility activation. Button Heist asks the target element to perform its accessibility activation behavior. When UIKit exposes activation through a fresh activation point, delivering through that point is still part of `activate`. The command is "activate this accessible element," not "tap these coordinates."
+
+Viewport commands are the lookout. Use `scroll`, `scroll_to_visible`, screenshots, and hierarchy inspection when the viewport itself is the subject: what is visible, where a scroll view sits, or what a human would see right now. They are not setup steps for normal semantic actions.
+
+Mechanical gestures are the lockpicks, not the front door. Use `one_finger_tap`, `long_press`, `swipe`, and `drag` for maps, canvases, drawing surfaces, games, custom controls, or any product behavior where the gesture itself is the intent. For standard buttons, fields, menus, and other accessible controls, prefer semantic commands.
+
+Recordings are the getaway plan. A good heist records "activate the Delete button and expect it to disappear," not "scroll to this offset and tap this coordinate." Recorded flows should survive layout movement and fail when the app's accessible contract changes.
 
 ## Quick Start
 
