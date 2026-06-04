@@ -36,6 +36,7 @@ final class ConnectionPhaseTests: XCTestCase {
             (.timeout, "setup.timeout", .setup, true),
             (.noDeviceFound, "discovery.no_device_found", .discovery, true),
             (.noMatchingDevice(filter: "Demo", available: ["Other"]), "discovery.no_matching_device", .discovery, false),
+            (.ambiguousDeviceTarget(filter: "Demo", matches: ["Demo#one", "Demo#two"]), "discovery.ambiguous_device_target", .discovery, false),
         ]
 
         for (error, code, phase, retryable) in cases {

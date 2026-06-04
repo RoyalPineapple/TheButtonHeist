@@ -910,14 +910,8 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testConnectWithDiscoveryIgnoresStaleDevicesWithoutFilter() async throws {
-        let staleDevice = DiscoveredDevice(
-            id: "stale-device",
-            name: "AccessibilityTestApp#stale",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
-            certFingerprint: "sha256:stale"
-        )
-        let reachableDevice = DiscoveredDevice(
+    func testConnectWithDiscoveryDefaultSelectsSingleDiscoveredDevice() async throws {
+        let discoveredDevice = DiscoveredDevice(
             id: "reachable-device",
             name: "AccessibilityTestApp#live",
             endpoint: .hostPort(host: .ipv6(.loopback), port: 2),
@@ -926,7 +920,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         let handoff = TheHandoff()
         let mockDiscovery = MockDiscovery()
-        mockDiscovery.discoveredDevices = [staleDevice, reachableDevice]
+        mockDiscovery.discoveredDevices = [discoveredDevice]
         handoff.makeDiscovery = { mockDiscovery }
 
         var connectedDeviceID: String?
@@ -948,35 +942,25 @@ final class TheHandoffStateTests: XCTestCase {
             return connection
         }
 
-        let previousFactory = makeReachabilityConnection
-        makeReachabilityConnection = { device in
-            let connection = MockConnection()
-            if device.id == reachableDevice.id {
-                connection.emitTransportReadyOnConnect = true
-            }
-            return connection
-        }
-        defer { makeReachabilityConnection = previousFactory }
-
         try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
 
-        XCTAssertEqual(connectedDeviceID, reachableDevice.id)
-        XCTAssertEqual(handoff.connectedDevice, reachableDevice)
+        XCTAssertEqual(connectedDeviceID, discoveredDevice.id)
+        XCTAssertEqual(handoff.connectedDevice, discoveredDevice)
         XCTAssertTrue(handoff.isConnected)
     }
 
     @ButtonHeistActor
-    func testConnectWithDiscoveryReprobesDeviceThatBecomesReachableWithoutRediscovery() async throws {
-        let delayedDevice = DiscoveredDevice(
-            id: "delayed-device",
-            name: "AccessibilityTestApp#booting",
+    func testConnectWithDiscoveryDoesNotProbeReachabilityBeforeOpeningConnection() async throws {
+        let device = DiscoveredDevice(
+            id: "single-device",
+            name: "AccessibilityTestApp#single",
             endpoint: .hostPort(host: .ipv6(.loopback), port: 3),
-            certFingerprint: "sha256:delayed"
+            certFingerprint: "sha256:single"
         )
 
         let handoff = TheHandoff()
         let mockDiscovery = MockDiscovery()
-        mockDiscovery.discoveredDevices = [delayedDevice]
+        mockDiscovery.discoveredDevices = [device]
         handoff.makeDiscovery = { mockDiscovery }
 
         handoff.makeConnection = { _ in
@@ -996,35 +980,21 @@ final class TheHandoffStateTests: XCTestCase {
             return connection
         }
 
-        var probeAttempts = 0
         let previousFactory = makeReachabilityConnection
-        makeReachabilityConnection = { device in
-            let connection = MockConnection()
-            if device.id == delayedDevice.id {
-                if probeAttempts == 0 {
-                    connection.connectEventsOverride = [
-                        .disconnected(.serverClosed),
-                    ]
-                } else {
-                    connection.emitTransportReadyOnConnect = true
-                }
-                probeAttempts += 1
-            }
-            return connection
+        makeReachabilityConnection = { _ in
+            XCTFail("connectWithDiscovery target resolution should not probe reachability")
+            return MockConnection()
         }
         defer { makeReachabilityConnection = previousFactory }
 
-        let start = Date()
         try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
 
-        XCTAssertEqual(handoff.connectedDevice, delayedDevice)
+        XCTAssertEqual(handoff.connectedDevice, device)
         XCTAssertTrue(handoff.isConnected)
-        XCTAssertGreaterThanOrEqual(probeAttempts, 2)
-        XCTAssertLessThan(Date().timeIntervalSince(start), 4.5)
     }
 
     @ButtonHeistActor
-    func testConnectWithDiscoveryWithoutFilterThrowsWhenMultipleReachableDevicesExist() async throws {
+    func testConnectWithDiscoveryWithoutFilterThrowsWhenMultipleDiscoveredDevicesExist() async throws {
         let firstDevice = DiscoveredDevice(
             id: "first-device",
             name: "AccessibilityTestApp#first",
@@ -1043,42 +1013,15 @@ final class TheHandoffStateTests: XCTestCase {
         mockDiscovery.discoveredDevices = [firstDevice, secondDevice]
         handoff.makeDiscovery = { mockDiscovery }
 
-        let previousFactory = makeReachabilityConnection
-        makeReachabilityConnection = { _ in
-            let connection = MockConnection()
-            connection.emitTransportReadyOnConnect = true
-            connection.autoResponse = { message in
-                switch message {
-                case .status:
-                    return .status(StatusPayload(
-                        identity: StatusIdentity(
-                            appName: "AccessibilityTestApp",
-                            bundleIdentifier: "com.buttonheist.testapp",
-                            appBuild: "1",
-                            deviceName: "iPhone 16 Pro",
-                            systemVersion: "26.1",
-                            buttonHeistVersion: "5.0"
-                        ),
-                        session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-                    ))
-                default:
-                    XCTFail("Unexpected probe message: \(message)")
-                    return .error(ServerError(kind: .general, message: "unexpected"))
-                }
-            }
-            return connection
-        }
-        defer { makeReachabilityConnection = previousFactory }
-
         do {
             try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
-            XCTFail("Expected noMatchingDevice to be thrown")
+            XCTFail("Expected ambiguousDeviceTarget to be thrown")
         } catch let error as HandoffConnectionError {
-            guard case .noMatchingDevice(let filter, let available) = error else {
-                return XCTFail("Expected noMatchingDevice, got \(error)")
+            guard case .ambiguousDeviceTarget(let filter, let matches) = error else {
+                return XCTFail("Expected ambiguousDeviceTarget, got \(error)")
             }
             XCTAssertEqual(filter, "(none)")
-            XCTAssertEqual(available, [firstDevice.name, secondDevice.name])
+            XCTAssertEqual(matches, [firstDevice.name, secondDevice.name])
         }
     }
 
@@ -1126,19 +1069,15 @@ final class TheHandoffStateTests: XCTestCase {
             return MockConnection()
         }
 
-        let previousFactory = makeReachabilityConnection
-        makeReachabilityConnection = { _ in Self.makeReachableTransportConnection() }
-        defer { makeReachabilityConnection = previousFactory }
-
         do {
             try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
-            XCTFail("Expected noMatchingDevice to be thrown")
+            XCTFail("Expected ambiguousDeviceTarget to be thrown")
         } catch let error as HandoffConnectionError {
-            guard case .noMatchingDevice(let filter, let available) = error else {
-                return XCTFail("Expected noMatchingDevice, got \(error)")
+            guard case .ambiguousDeviceTarget(let filter, let matches) = error else {
+                return XCTFail("Expected ambiguousDeviceTarget, got \(error)")
             }
             XCTAssertEqual(filter, "(none)")
-            XCTAssertEqual(available, [firstDevice.name, secondDevice.name])
+            XCTAssertEqual(matches, [firstDevice.name, secondDevice.name])
         }
 
         XCTAssertFalse(existingConnection.isConnected)
@@ -1146,7 +1085,7 @@ final class TheHandoffStateTests: XCTestCase {
         assertDisconnected(handoff.connectionPhase)
         XCTAssertEqual(
             handoff.connectionDiagnosticFailure,
-            .noMatchingDevice(filter: "(none)", available: [firstDevice.name, secondDevice.name])
+            .ambiguousDeviceTarget(filter: "(none)", matches: [firstDevice.name, secondDevice.name])
         )
     }
 
@@ -1194,10 +1133,6 @@ final class TheHandoffStateTests: XCTestCase {
         let mockDiscovery = MockDiscovery()
         mockDiscovery.discoveredDevices = [replacementDevice]
         handoff.makeDiscovery = { mockDiscovery }
-
-        let previousFactory = makeReachabilityConnection
-        makeReachabilityConnection = { _ in Self.makeReachableTransportConnection() }
-        defer { makeReachabilityConnection = previousFactory }
 
         try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
 

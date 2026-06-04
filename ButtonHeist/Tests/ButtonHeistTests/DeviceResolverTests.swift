@@ -49,31 +49,6 @@ final class DeviceResolverTests: XCTestCase {
         XCTAssertNil(result)
     }
 
-    // MARK: - discoverySignature
-
-    @ButtonHeistActor
-    func testDiscoverySignatureEmpty() async {
-        let signature = DeviceResolver.discoverySignature(for: [])
-        XCTAssertEqual(signature, "")
-    }
-
-    @ButtonHeistActor
-    func testDiscoverySignatureSorted() async {
-        let devices = [
-            makeDevice(id: "bravo", name: "B"),
-            makeDevice(id: "alpha", name: "A"),
-        ]
-        let signature = DeviceResolver.discoverySignature(for: devices)
-        XCTAssertEqual(signature, "alpha|bravo")
-    }
-
-    @ButtonHeistActor
-    func testDiscoverySignatureSingleDevice() async {
-        let devices = [makeDevice(id: "only", name: "Single")]
-        let signature = DeviceResolver.discoverySignature(for: devices)
-        XCTAssertEqual(signature, "only")
-    }
-
     // MARK: - directConnectTarget fast path
 
     @ButtonHeistActor
@@ -110,22 +85,13 @@ final class DeviceResolverTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testResolveFilterWaitsForMatchingDeviceAfterReachableNonMatch() async throws {
-        let previousFactory = makeReachabilityConnection
-        makeReachabilityConnection = { _ in
-            let connection = MockConnection()
-            connection.emitTransportReadyOnConnect = true
-            return connection
-        }
-        defer { makeReachabilityConnection = previousFactory }
-
+    func testResolveFilterWaitsForMatchingDeviceAfterNonMatch() async throws {
         let otherDevice = makeDevice(id: "other", name: "OtherApp#aaa")
         let targetDevice = makeDevice(id: "target", name: "DemoApp#bbb")
         var discoveryCallCount = 0
         let resolver = DeviceResolver(
             filter: "DemoApp",
             discoveryTimeout: 2_000_000_000,
-            reachabilityTimeout: 0.01,
             getDiscoveredDevices: {
                 discoveryCallCount += 1
                 return discoveryCallCount < 8 ? [otherDevice] : [otherDevice, targetDevice]
@@ -135,6 +101,127 @@ final class DeviceResolverTests: XCTestCase {
         let device = try await resolver.resolve()
 
         XCTAssertEqual(device, targetDevice)
+    }
+
+    @ButtonHeistActor
+    func testResolveNoDevicesThrowsNoDeviceFound() async {
+        let resolver = DeviceResolver(
+            filter: nil,
+            discoveryTimeout: 0,
+            getDiscoveredDevices: { [] }
+        )
+
+        do {
+            _ = try await resolver.resolve()
+            XCTFail("Expected noDeviceFound")
+        } catch let error as HandoffConnectionError {
+            XCTAssertEqual(error, .noDeviceFound)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testResolveDefaultSelectsSingleDevice() async throws {
+        let device = makeDevice(id: "only", name: "DemoApp#one")
+        let resolver = DeviceResolver(
+            filter: nil,
+            discoveryTimeout: 0,
+            getDiscoveredDevices: { [device] }
+        )
+
+        let resolved = try await resolver.resolve()
+
+        XCTAssertEqual(resolved, device)
+    }
+
+    @ButtonHeistActor
+    func testResolveExplicitTargetSelectsSingleMatch() async throws {
+        let otherDevice = makeDevice(id: "other", name: "OtherApp#aaa")
+        let targetDevice = makeDevice(id: "target", name: "DemoApp#bbb")
+        let resolver = DeviceResolver(
+            filter: "DemoApp",
+            discoveryTimeout: 0,
+            getDiscoveredDevices: { [otherDevice, targetDevice] }
+        )
+
+        let resolved = try await resolver.resolve()
+
+        XCTAssertEqual(resolved, targetDevice)
+    }
+
+    @ButtonHeistActor
+    func testResolveDefaultRejectsAmbiguousDevices() async {
+        let devices = [
+            makeDevice(id: "first", name: "DemoApp#one"),
+            makeDevice(id: "second", name: "OtherApp#two"),
+        ]
+        let resolver = DeviceResolver(
+            filter: nil,
+            discoveryTimeout: 0,
+            getDiscoveredDevices: { devices }
+        )
+
+        do {
+            _ = try await resolver.resolve()
+            XCTFail("Expected ambiguousDeviceTarget")
+        } catch let error as HandoffConnectionError {
+            XCTAssertEqual(
+                error,
+                .ambiguousDeviceTarget(filter: "(none)", matches: devices.map(\.name))
+            )
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testResolveExplicitTargetRejectsAmbiguousMatches() async {
+        let devices = [
+            makeDevice(id: "first", name: "DemoApp#one"),
+            makeDevice(id: "second", name: "DemoApp#two"),
+        ]
+        let resolver = DeviceResolver(
+            filter: "DemoApp",
+            discoveryTimeout: 0,
+            getDiscoveredDevices: { devices }
+        )
+
+        do {
+            _ = try await resolver.resolve()
+            XCTFail("Expected ambiguousDeviceTarget")
+        } catch let error as HandoffConnectionError {
+            XCTAssertEqual(
+                error,
+                .ambiguousDeviceTarget(filter: "DemoApp", matches: devices.map(\.name))
+            )
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testResolveUnknownTargetThrowsNoMatchingDevice() async {
+        let devices = [
+            makeDevice(id: "first", name: "DemoApp#one"),
+        ]
+        let resolver = DeviceResolver(
+            filter: "Missing",
+            discoveryTimeout: 0,
+            getDiscoveredDevices: { devices }
+        )
+
+        do {
+            _ = try await resolver.resolve()
+            XCTFail("Expected noMatchingDevice")
+        } catch let error as HandoffConnectionError {
+            XCTAssertEqual(
+                error,
+                .noMatchingDevice(filter: "Missing", available: devices.map(\.name))
+            )
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
     }
 
     @ButtonHeistActor

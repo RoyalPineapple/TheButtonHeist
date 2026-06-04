@@ -16,73 +16,163 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
     case timeout
     case noDeviceFound
     case noMatchingDevice(filter: String, available: [String])
+    case ambiguousDeviceTarget(filter: String, matches: [String])
 
     var errorDescription: String? {
-        switch self {
-        case .connectionFailed(let message): return message
-        case .disconnected(.authFailed(let reason)): return "Authentication failed: \(reason)"
-        case .disconnected(.authApprovalPending(let message)): return "Authentication approval pending: \(message)"
-        case .disconnected(.sessionLocked(let message)): return "Session locked: \(message)"
-        case .disconnected(let reason): return reason.connectionFailureMessage
-        case .timeout: return "Connection timed out"
-        case .noDeviceFound: return "No device found"
-        case .noMatchingDevice(let filter, let available):
-            return "No device matching '\(filter)' (available: \(available.joined(separator: ", ")))"
-        }
+        HandoffFailureFormatter.message(for: diagnostic)
     }
 
     var failureCode: String {
-        switch self {
-        case .connectionFailed:
-            return "connection.failed"
-        case .disconnected(let reason):
-            return reason.failureCode
-        case .timeout:
-            return "setup.timeout"
-        case .noDeviceFound:
-            return "discovery.no_device_found"
-        case .noMatchingDevice:
-            return "discovery.no_matching_device"
-        }
+        diagnostic.errorCode
     }
 
     var phase: FailurePhase {
-        switch self {
-        case .connectionFailed:
-            return .transport
-        case .disconnected(let reason):
-            return reason.phase
-        case .timeout:
-            return .setup
-        case .noDeviceFound, .noMatchingDevice:
-            return .discovery
-        }
+        diagnostic.phase
     }
 
     var retryable: Bool {
-        switch self {
-        case .connectionFailed, .timeout, .noDeviceFound:
-            return true
-        case .disconnected(let reason):
-            return reason.retryable
-        case .noMatchingDevice:
-            return false
-        }
+        diagnostic.retryable
     }
 
     var hint: String? {
+        diagnostic.hint
+    }
+
+    var diagnostic: HandoffFailureDiagnostic {
         switch self {
-        case .connectionFailed:
-            return "Check that the app is running and reachable, then retry."
+        case .connectionFailed(let message):
+            return HandoffFailureDiagnostic(
+                operation: .connection,
+                target: nil,
+                cause: message,
+                errorCode: "connection.failed",
+                phase: .transport,
+                retryable: true,
+                hint: "Check that the app is running and reachable, then retry."
+            )
         case .disconnected(let reason):
-            return reason.hint
+            return reason.diagnostic
         case .timeout:
-            return "Check that the app is running with Button Heist enabled; use 'buttonheist list_devices' to see available devices."
+            return HandoffFailureDiagnostic(
+                operation: .connection,
+                target: nil,
+                cause: "Connection timed out",
+                errorCode: "setup.timeout",
+                phase: .setup,
+                retryable: true,
+                hint: "Check that the app is running with Button Heist enabled; use 'buttonheist list_devices' to see available devices."
+            )
         case .noDeviceFound:
-            return "Start the app and confirm it advertises a Button Heist session."
-        case .noMatchingDevice:
-            return "Check the device filter or target name against 'buttonheist list_devices'."
+            return HandoffFailureDiagnostic(
+                operation: .discovery,
+                target: nil,
+                cause: "No device found",
+                errorCode: "discovery.no_device_found",
+                phase: .discovery,
+                retryable: true,
+                hint: "Start the app and confirm it advertises a Button Heist session."
+            )
+        case .noMatchingDevice(let filter, let available):
+            return HandoffFailureDiagnostic(
+                operation: .resolution,
+                target: filter,
+                cause: "No matching device",
+                errorCode: "discovery.no_matching_device",
+                phase: .discovery,
+                retryable: false,
+                hint: "Check the device filter or target name against 'buttonheist list_devices'.",
+                candidates: available
+            )
+        case .ambiguousDeviceTarget(let filter, let matches):
+            return HandoffFailureDiagnostic(
+                operation: .resolution,
+                target: filter,
+                cause: "Ambiguous device target",
+                errorCode: "discovery.ambiguous_device_target",
+                phase: .discovery,
+                retryable: false,
+                hint: "Narrow the device target using a unique app name, device name, instance ID, installation ID, simulator UDID, or direct host:port.",
+                candidates: matches
+            )
         }
+    }
+}
+
+enum HandoffFailureOperation: String, Equatable, Sendable {
+    case discovery
+    case resolution
+    case connection
+    case transport
+}
+
+struct HandoffFailureDiagnostic: Equatable, Sendable {
+    let operation: HandoffFailureOperation
+    let target: String?
+    let cause: String
+    let errorCode: String
+    let phase: FailurePhase
+    let retryable: Bool
+    let hint: String?
+    let candidates: [String]
+
+    init(
+        operation: HandoffFailureOperation,
+        target: String?,
+        cause: String,
+        errorCode: String,
+        phase: FailurePhase,
+        retryable: Bool,
+        hint: String?,
+        candidates: [String] = []
+    ) {
+        self.operation = operation
+        self.target = target
+        self.cause = cause
+        self.errorCode = errorCode
+        self.phase = phase
+        self.retryable = retryable
+        self.hint = hint
+        self.candidates = candidates
+    }
+}
+
+enum HandoffFailureFormatter {
+    static func message(for diagnostic: HandoffFailureDiagnostic) -> String {
+        switch diagnostic.errorCode {
+        case "connection.failed":
+            return diagnostic.cause
+        case "setup.timeout":
+            return "Connection timed out"
+        case "discovery.no_device_found":
+            return "No device found"
+        case "discovery.no_matching_device":
+            let available = diagnostic.candidates.joined(separator: ", ")
+            return "No device matching '\(diagnostic.target ?? "(none)")' (available: \(available))"
+        case "discovery.ambiguous_device_target":
+            let matches = diagnostic.candidates.joined(separator: ", ")
+            return "Ambiguous device target '\(diagnostic.target ?? "(none)")' (matches: \(matches))"
+        case "auth.failed":
+            return diagnostic.cause.replacingPrefix("Auth failed:", with: "Authentication failed:")
+        case "auth.approval_pending":
+            return diagnostic.cause.replacingPrefix("Auth approval pending:", with: "Authentication approval pending:")
+        case "session.locked":
+            return diagnostic.cause
+        default:
+            return connectionFailureMessage(for: diagnostic)
+        }
+    }
+
+    static func connectionFailureMessage(for diagnostic: HandoffFailureDiagnostic) -> String {
+        let base = "connection failed in \(diagnostic.phase.rawValue): observed \(diagnostic.cause)"
+        guard let hint = diagnostic.hint else { return base }
+        return "\(base); \(hint)"
+    }
+}
+
+private extension String {
+    func replacingPrefix(_ prefix: String, with replacement: String) -> String {
+        guard hasPrefix(prefix) else { return self }
+        return replacement + String(dropFirst(prefix.count))
     }
 }
 

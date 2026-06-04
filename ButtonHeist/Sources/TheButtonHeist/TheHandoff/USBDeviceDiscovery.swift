@@ -54,7 +54,7 @@ final class USBDeviceDiscovery: DeviceDiscovering {
     }
 
     private func poll() async {
-        async let connectedDevicesTask = Self.discoverConnectedDevices()
+        async let connectedDevicesTask = Self.discoverConnectedUSBDevices()
         async let ipv6AddressTask = Self.findIPv6Tunnel()
         let connectedDevices = await connectedDevicesTask
         let ipv6Address = await ipv6AddressTask
@@ -80,8 +80,8 @@ final class USBDeviceDiscovery: DeviceDiscovering {
 
         var currentIDs = Set<String>()
 
-        for deviceName in connectedDevices {
-            let id = "usb-\(deviceName)"
+        for connectedDevice in connectedDevices {
+            let id = "usb-\(connectedDevice.identifier)"
             currentIDs.insert(id)
 
             if knownDevices[id] == nil {
@@ -95,11 +95,13 @@ final class USBDeviceDiscovery: DeviceDiscovering {
                 )
                 let device = DiscoveredDevice(
                     id: id,
-                    name: "\(deviceName) (USB)",
-                    endpoint: endpoint
+                    name: "\(connectedDevice.name) (USB)",
+                    endpoint: endpoint,
+                    displayDeviceName: connectedDevice.name,
+                    connectionType: .usb
                 )
                 knownDevices[id] = device
-                logger.info("USB device found: \(deviceName) at \(ipv6Address):\(self.port)")
+                logger.info("USB device found: \(connectedDevice.name) at \(ipv6Address):\(self.port)")
                 onEvent?(.found(device))
             }
         }
@@ -117,8 +119,13 @@ final class USBDeviceDiscovery: DeviceDiscovering {
 
 nonisolated extension USBDeviceDiscovery {
 
-    /// Run `xcrun devicectl list devices` and return names of connected devices.
-    private static func discoverConnectedDevices() async -> [String] {
+    struct ConnectedUSBDevice: Equatable {
+        let name: String
+        let identifier: String
+    }
+
+    /// Run `xcrun devicectl list devices` and return connected USB device identities.
+    private static func discoverConnectedUSBDevices() async -> [ConnectedUSBDevice] {
         guard let output = await runProcess(
             "/usr/bin/xcrun",
             arguments: ["devicectl", "list", "devices"],
@@ -127,12 +134,15 @@ nonisolated extension USBDeviceDiscovery {
             return []
         }
 
-        return parseConnectedDeviceNames(from: output)
+        return parseConnectedUSBDevices(from: output)
     }
 
     static func parseConnectedDeviceNames(from output: String) -> [String] {
-        var devices: [String] = []
+        parseConnectedUSBDevices(from: output).map(\.name)
+    }
 
+    static func parseConnectedUSBDevices(from output: String) -> [ConnectedUSBDevice] {
+        var devices: [ConnectedUSBDevice] = []
         for line in output.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
@@ -146,11 +156,14 @@ nonisolated extension USBDeviceDiscovery {
                 .map { $0.trimmingCharacters(in: .whitespaces) }
                 .filter { !$0.isEmpty }
 
-            guard let name = columns.first, !name.isEmpty else { continue }
+            guard columns.count >= 4 else { continue }
+            let name = columns[0]
+            let identifier = columns[2]
+            guard !name.isEmpty, !identifier.isEmpty else { continue }
             let hasConnectedState = columns.contains { $0.caseInsensitiveCompare("connected") == .orderedSame }
             guard hasConnectedState else { continue }
 
-            devices.append(name)
+            devices.append(ConnectedUSBDevice(name: name, identifier: identifier))
         }
 
         return devices

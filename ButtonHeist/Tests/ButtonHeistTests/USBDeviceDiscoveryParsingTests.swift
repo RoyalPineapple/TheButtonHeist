@@ -29,5 +29,22 @@ final class USBDeviceDiscoveryParsingTests: XCTestCase {
 
         XCTAssertEqual(names, ["Test Device 15 Pro Max"])
     }
+
+    func testParseConnectedUSBDevicesKeepsIdentifierSeparateFromName() {
+        let output = """
+            Name                 Hostname                                Identifier                              State
+            -------------------  --------------------------------------  --------------------------------------  -----------
+            Alpha Phone          alpha-phone.coredevice.local            00008120-1111111111111111              connected
+            """
+
+        let devices = USBDeviceDiscovery.parseConnectedUSBDevices(from: output)
+
+        XCTAssertEqual(devices, [
+            USBDeviceDiscovery.ConnectedUSBDevice(
+                name: "Alpha Phone",
+                identifier: "00008120-1111111111111111"
+            ),
+        ])
+    }
 }
 #endif

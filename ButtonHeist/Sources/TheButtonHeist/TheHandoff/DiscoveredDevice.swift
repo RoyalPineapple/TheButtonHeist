@@ -3,9 +3,16 @@ import Network
 
 import TheScore
 
-/// A discovered iOS device running TheInsideJob
+/// A discovered iOS device running TheInsideJob.
+///
+/// `id` is the discovery identity used to dedupe and resolve a concrete endpoint:
+/// Bonjour service name, USB device identifier, or direct `host:port`. `name` is
+/// the advertised service label. Human-facing display text is derived separately
+/// by `displayName(among:)` so target resolution does not depend on formatting.
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
+    /// Stable discovery key for this advertised endpoint.
     public let id: String
+    /// Advertised service label, usually `AppName#instanceId`.
     let name: String
     let endpoint: NWEndpoint
     /// Simulator UDID from Bonjour TXT record (nil on physical devices)
@@ -13,26 +20,33 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     /// Stable installation identifier from Bonjour TXT record
     let installationId: String?
     /// Human-readable device name from Bonjour TXT record
-    let displayDeviceName: String?
+    private let advertisedDeviceName: String?
     /// Instance identifier from Bonjour TXT record (human-readable label)
     let instanceId: String?
     /// TLS certificate fingerprint from Bonjour TXT record (sha256:hex)
     let certFingerprint: String?
+    /// Connection scope advertised or inferred at discovery time.
+    let connectionType: ConnectionScope
 
     public init(id: String, name: String, endpoint: NWEndpoint,
                 simulatorUDID: String? = nil,
                 installationId: String? = nil,
                 displayDeviceName: String? = nil,
                 instanceId: String? = nil,
-                certFingerprint: String? = nil) {
+                certFingerprint: String? = nil,
+                connectionType: ConnectionScope? = nil) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.simulatorUDID = simulatorUDID
         self.installationId = installationId
-        self.displayDeviceName = displayDeviceName
+        self.advertisedDeviceName = displayDeviceName
         self.instanceId = instanceId
         self.certFingerprint = certFingerprint
+        self.connectionType = connectionType ?? Self.inferConnectionType(
+            id: id,
+            simulatorUDID: simulatorUDID
+        )
     }
 
     /// Parse a "host:port" string and create a device. Returns nil on invalid input.
@@ -71,12 +85,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
             return nil
         }
         return DiscoveredDevice(host: host, port: port)
-    }
-
-    var connectionType: ConnectionScope {
-        if simulatorUDID != nil { return .simulator }
-        if id.hasPrefix("usb-") { return .usb }
-        return .network
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -125,6 +133,12 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return trimmed.isEmpty ? nil : trimmed.lowercased()
     }
 
+    private static func inferConnectionType(id: String, simulatorUDID: String?) -> ConnectionScope {
+        if simulatorUDID != nil { return .simulator }
+        if id.hasPrefix("usb-") { return .usb }
+        return .network
+    }
+
     /// Instance ID parsed from service name suffix (e.g., "a1b2c3d4").
     /// Service name format: "AppName#instanceId".
     var shortId: String? {
@@ -148,7 +162,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     /// Device name advertised through the TXT record.
     var deviceName: String {
-        displayDeviceName ?? ""
+        advertisedDeviceName ?? ""
     }
 
     var discoveryIdentity: String {
@@ -161,17 +175,48 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return "service|\(id)"
     }
 
-    /// Check if this device matches a filter string.
-    /// Matches case-insensitively: contains on name/appName/deviceName, prefix on shortId/instanceId/simulatorUDID.
+    var resolutionDiagnosticLabel: String {
+        guard !deviceName.isEmpty else { return name }
+        return "\(name) (\(deviceName))"
+    }
+
+    /// Check if this device matches a requested target query.
+    /// Matches case-insensitively: contains on service/app/device names, exact
+    /// or prefix on identifiers.
+    func matches(resolutionQuery query: String) -> Bool {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalizedQuery.isEmpty else { return false }
+
+        let nameMatches = [name, appName, deviceName]
+            .map { $0.lowercased() }
+            .contains { $0.contains(normalizedQuery) }
+
+        let identifierMatches = [shortId, installationId, instanceId, simulatorUDID, id]
+            .compactMap { $0?.lowercased() }
+            .contains { $0 == normalizedQuery || $0.hasPrefix(normalizedQuery) }
+
+        return nameMatches || identifierMatches
+    }
+
+    /// Backwards-compatible spelling for existing callers.
     func matches(filter: String) -> Bool {
-        let low = filter.lowercased()
-        return name.lowercased().contains(low) ||
-            appName.lowercased().contains(low) ||
-            deviceName.lowercased().contains(low) ||
-            (shortId?.lowercased().hasPrefix(low) ?? false) ||
-            (installationId?.lowercased().hasPrefix(low) ?? false) ||
-            (instanceId?.lowercased().hasPrefix(low) ?? false) ||
-            (simulatorUDID?.lowercased().hasPrefix(low) ?? false)
+        matches(resolutionQuery: filter)
+    }
+
+    /// Compute display text with disambiguation when multiple discovered
+    /// devices advertise the same app label.
+    func displayName(among devices: [DiscoveredDevice]) -> String {
+        let app = appName
+        let deviceSuffix = deviceName.isEmpty ? "" : " (\(deviceName))"
+        let sameAppDevices = devices.filter { $0.appName == app }
+
+        guard sameAppDevices.count > 1 else { return app }
+
+        let sameAppAndDevice = sameAppDevices.filter { $0.deviceName == deviceName }
+        if sameAppAndDevice.count > 1, let shortId {
+            return "\(app)\(deviceSuffix) [\(shortId)]"
+        }
+        return "\(app)\(deviceSuffix)"
     }
 }
 

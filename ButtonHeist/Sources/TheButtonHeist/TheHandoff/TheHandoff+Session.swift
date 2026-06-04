@@ -20,10 +20,9 @@ extension TheHandoff {
         let discoveryTimeout = UInt64(resolutionTimeout * 1_000_000_000)
         let device: DiscoveredDevice
         do {
-            device = try await resolveReachableDevice(
+            device = try await resolveTargetDevice(
                 filter: filter,
-                discoveryTimeout: discoveryTimeout,
-                reachabilityTimeout: resolutionTimeout
+                discoveryTimeout: discoveryTimeout
             )
         } catch {
             if startedDiscovery { stopDiscovery() }
@@ -66,28 +65,16 @@ extension TheHandoff {
 
     /// Compute display name with disambiguation when multiple devices have the same app.
     func displayName(for device: DiscoveredDevice) -> String {
-        let appName = device.appName
-        let deviceSuffix = device.deviceName.isEmpty ? "" : " (\(device.deviceName))"
-        let sameAppDevices = discoveredDevices.filter { $0.appName == appName }
-
-        guard sameAppDevices.count > 1 else { return appName }
-
-        let sameAppAndDevice = sameAppDevices.filter { $0.deviceName == device.deviceName }
-        if sameAppAndDevice.count > 1, let shortId = device.shortId {
-            return "\(appName)\(deviceSuffix) [\(shortId)]"
-        }
-        return "\(appName)\(deviceSuffix)"
+        device.displayName(among: discoveredDevices)
     }
 
-    private func resolveReachableDevice(
+    private func resolveTargetDevice(
         filter: String?,
-        discoveryTimeout: UInt64,
-        reachabilityTimeout: TimeInterval
+        discoveryTimeout: UInt64
     ) async throws -> DiscoveredDevice {
         let resolver = DeviceResolver(
             filter: filter,
             discoveryTimeout: discoveryTimeout,
-            reachabilityTimeout: reachabilityTimeout,
             getDiscoveredDevices: { [weak self] in self?.discoveredDevices ?? [] }
         )
         return try await resolver.resolve()

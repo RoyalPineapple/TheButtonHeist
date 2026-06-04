@@ -13,6 +13,7 @@ extension FenceError {
         case .timeout: self = .connectionTimeout
         case .noDeviceFound: self = .noDeviceFound
         case .noMatchingDevice(let filter, let available): self = .noMatchingDevice(filter: filter, available: available)
+        case .ambiguousDeviceTarget(let filter, let matches): self = .noMatchingDevice(filter: filter, available: matches)
         }
     }
 
