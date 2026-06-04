@@ -67,7 +67,7 @@ public extension FenceParameterKey {
     static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex")
     static let scale = Self("scale"), spread = Self("spread"), start = Self("start")
     static let startOffset = Self("startOffset")
-    static let stableId = Self("stableId")
+    static let containerName = Self("containerName")
     static let states = Self("states"), body = Self("body")
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
     static let timeout = Self("timeout"), version = Self("version")
@@ -95,7 +95,8 @@ func param(
     objectAdditionalProperties: Bool = false,
     arrayItemType: FenceParameterSpec.ParamType? = nil,
     arrayItemProperties: [FenceParameterSpec] = [],
-    arrayItemAdditionalProperties: Bool = false
+    arrayItemAdditionalProperties: Bool = false,
+    jsonSchemaPropertyOverride: HeistValue? = nil
 ) -> FenceParameterSpec {
     var schema: [String: HeistValue] = ["type": .string(type.jsonSchemaType)]
     if let enumValues { schema["enum"] = .array(enumValues.map { .string($0) }) }
@@ -132,7 +133,7 @@ func param(
         required: required,
         enumValues: enumValues,
         defaultValue: defaultValue,
-        jsonSchemaProperty: .object(schema),
+        jsonSchemaProperty: jsonSchemaPropertyOverride ?? .object(schema),
         objectProperties: objectProperties,
         arrayItemProperties: arrayItemProperties
     )
@@ -336,17 +337,36 @@ enum FenceParameterBlocks: Sendable {
     private static let subtreeElementProperties = matcherFields
 
     private static let subtreeContainerProperties: [FenceParameterSpec] = [
-        param(.stableId, .string),
+        param(.containerName, .string),
         param(.type, .string, enumValues: fenceEnumValues(ContainerTypeName.self)),
         param(.label, .string), param(.value, .string), param(.identifier, .string),
         param(.isModalBoundary, .boolean),
     ]
 
+    private static let subtreeContainer = param(
+        .container,
+        .object,
+        objectProperties: subtreeContainerProperties,
+        jsonSchemaPropertyOverride: .object([
+            "oneOf": .array([
+                .object([
+                    "type": .string(FenceParameterSpec.ParamType.string.jsonSchemaType),
+                    "minLength": .int(1),
+                ]),
+                .object([
+                    "type": .string(FenceParameterSpec.ParamType.object.jsonSchemaType),
+                    "properties": .object(FenceParameterSpec.jsonSchemaProperties(from: subtreeContainerProperties)),
+                    "additionalProperties": .bool(false),
+                ]),
+            ]),
+        ])
+    )
+
     static let interfaceSubtree: FenceParameterSpec = param(
         .subtree, .object,
         objectProperties: [
             param(.element, .object, objectProperties: subtreeElementProperties),
-            param(.container, .object, objectProperties: subtreeContainerProperties),
+            subtreeContainer,
             param(.ordinal, .integer, minimum: 0),
         ]
     )

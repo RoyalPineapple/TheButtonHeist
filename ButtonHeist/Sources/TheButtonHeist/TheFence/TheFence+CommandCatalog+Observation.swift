@@ -10,7 +10,13 @@ extension TheFence.Command {
                     param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
                 ],
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Read the app accessibility hierarchy, optionally scoped to a subtree."
+                description: """
+                    Read the app accessibility hierarchy, optionally scoped to a subtree.
+
+                    containerName is ButtonHeist's generated name for a container in the current interface capture. \
+                    It is useful for inspection and viewport/debug commands. It is not a semantic target and is not \
+                    recorded into heists.
+                    """
             ),
             commandDescriptor(
                 .getScreen, requestDecoder: TheFence.decodeGetScreenRequest,

@@ -163,7 +163,7 @@ func makeReceiptTestElement(
 
 enum ReceiptTestInterfaceNode {
     case element(HeistElement)
-    case container(AccessibilityContainer, stableId: HeistContainer? = nil, children: [ReceiptTestInterfaceNode])
+    case container(AccessibilityContainer, containerName: ContainerName? = nil, children: [ReceiptTestInterfaceNode])
 }
 
 func makeReceiptTestInterface(
@@ -191,8 +191,8 @@ func makeReceiptTestInterface(
                 actions: element.actions
             ))
             return .element(makeReceiptTestAccessibilityElement(element), traversalIndex: index)
-        case .container(let container, let stableId, let children):
-            containerAnnotations.append(InterfaceContainerAnnotation(path: path, stableId: stableId))
+        case .container(let container, let containerName, let children):
+            containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
             return .container(
                 container,
                 children: children.enumerated().map { index, child in

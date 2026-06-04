@@ -46,12 +46,12 @@ extension FenceResponse {
         return parts.joined(separator: " ")
     }
 
-    private static func nonEmpty(_ value: String?) -> String? {
+    static func nonEmpty(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         return value
     }
 
-    private static func quotedString(_ value: String) -> String {
+    static func quotedString(_ value: String) -> String {
         // Boundary try?: compact presentation escapes strings for display only;
         // failed JSON encoding falls back to a deterministic local escape.
         if let data = try? JSONEncoder().encode(value),
@@ -61,9 +61,9 @@ extension FenceResponse {
         return "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 
-    static func compactInterface(_ interface: Interface) -> String {
+    static func compactInterface(_ interface: Interface, detail: InterfaceDetail = .summary) -> String {
         var lines: [String] = ["\(interface.projectedElements.count) elements"]
-        lines.append(contentsOf: compactTreeLines(interface, detail: .summary))
+        lines.append(contentsOf: compactTreeLines(interface, detail: detail))
         return lines.joined(separator: "\n")
     }
 
@@ -111,7 +111,7 @@ extension FenceResponse {
             return [compactElementLine(projected, displayIndex: index, detail: detail)]
 
         case .container(let container, let children):
-            let header = "<\(compactContainerLine(container, annotation: containerAnnotations[path], detail: detail))>"
+            let header = compactContainerLine(container, annotation: containerAnnotations[path], detail: detail)
             let body = children.enumerated().flatMap { index, child in
                 indented(lines: compactTreeLines(
                     child,
@@ -140,29 +140,44 @@ extension FenceResponse {
         var parts: [String]
         switch container.type {
         case .semanticGroup(let label, let value, let identifier):
-            parts = ["semanticGroup"]
-            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
-            if let identifier, !identifier.isEmpty { parts.append("id=\"\(identifier)\"") }
-            if let label, !label.isEmpty { parts.append("\"\(label)\"") }
-            if let value, !value.isEmpty { parts.append("= \"\(value)\"") }
+            parts = ["group"]
+            if let label = nonEmpty(label) { parts.append("label=\(quotedString(label))") }
+            if let value = nonEmpty(value) { parts.append("value=\(quotedString(value))") }
+            if let identifier = nonEmpty(identifier) { parts.append("id=\(quotedString(identifier))") }
+            if let containerName = nonEmpty(annotation?.containerName) {
+                parts.append("containerName=\(quotedString(containerName))")
+            }
         case .list:
             parts = ["list"]
-            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            if let containerName = nonEmpty(annotation?.containerName) {
+                parts.append("containerName=\(quotedString(containerName))")
+            }
         case .landmark:
             parts = ["landmark"]
-            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            if let containerName = nonEmpty(annotation?.containerName) {
+                parts.append("containerName=\(quotedString(containerName))")
+            }
         case .dataTable(let rowCount, let columnCount):
-            parts = ["dataTable", "\(rowCount)x\(columnCount)"]
-            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
+            if let containerName = nonEmpty(annotation?.containerName) {
+                parts.append("containerName=\(quotedString(containerName))")
+            }
         case .tabBar:
-            parts = ["tabBar"]
-            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            parts = ["tab_bar"]
+            if let containerName = nonEmpty(annotation?.containerName) {
+                parts.append("containerName=\(quotedString(containerName))")
+            }
         case .scrollable(let contentSize):
-            parts = ["scrollable", "= \"\(Int(contentSize.width))x\(Int(contentSize.height))\""]
-            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            let frame = container.frame
+            parts = ["scrollable"]
+            if let containerName = nonEmpty(annotation?.containerName) {
+                parts.append("containerName=\(quotedString(containerName))")
+            }
+            parts.append("viewport=\(Int(frame.size.width))x\(Int(frame.size.height))")
+            parts.append("content=\(Int(contentSize.width))x\(Int(contentSize.height))")
         }
         if container.isModalBoundary {
-            parts.append("modal")
+            parts.append("modal=true")
         }
         if detail == .full {
             let frame = container.frame

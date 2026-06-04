@@ -303,11 +303,11 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: offscreen.3.contentSize,
             frame: offscreen.3.frame
         )
-        let scrollStableId = "known_offscreen_scroll"
+        let scrollContainerName = "known_offscreen_scroll"
         let offscreenEntry = Screen.ScreenElement(
             heistId: offscreen.1,
             contentSpaceOrigin: offscreen.2,
-            scrollContainerStableId: scrollStableId,
+            scrollContainerName: scrollContainerName,
             element: offscreen.0
         )
         brains.stash.installScreenForTesting(Screen(
@@ -320,7 +320,7 @@ final class TheBrainsScrollTests: XCTestCase {
                     .element(visible.0, traversalIndex: 0)
                 ])
             ],
-            containerStableIds: [scrollContainer: scrollStableId],
+            containerNames: [scrollContainer: scrollContainerName],
             heistIdByElement: [visible.0: visible.1],
             elementRefs: includeLiveScrollAncestor ? [
                 offscreenEntry.heistId: .init(object: nil, scrollView: offscreen.3)
@@ -338,10 +338,10 @@ final class TheBrainsScrollTests: XCTestCase {
         let visibleEntry = Screen.ScreenElement(
             heistId: "visible_element",
             contentSpaceOrigin: CGPoint(x: 0, y: 120),
-            scrollContainerStableId: "visible_scroll",
+            scrollContainerName: "visible_scroll",
             element: makeElement(label: "Visible")
         )
-        installLiveScrollTarget(visibleEntry, scrollView: scrollView, stableId: "visible_scroll")
+        installLiveScrollTarget(visibleEntry, scrollView: scrollView, containerName: "visible_scroll")
 
         let result = brains.stash.revealSemanticTarget(visibleEntry)
 
@@ -489,7 +489,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: [element: entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
@@ -529,7 +529,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: [element: entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
@@ -682,7 +682,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerStableIds: [container: "main_scroll"],
+            containerNames: [container: "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [container: .init(view: scrollView)]
@@ -702,7 +702,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerStableIds: [container: "main_scroll"],
+            containerNames: [container: "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [container: .init(view: scrollView)]
@@ -712,6 +712,76 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertTrue(result.success, "Expected default edge scroll to pick the only visible container: \(String(describing: result.message))")
         XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
+    }
+
+    func testScrollUsesNamedContainer() async {
+        let firstScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let secondScrollView = UIScrollView(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
+        secondScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let firstContainer = makeScrollableContainer(contentSize: firstScrollView.contentSize, frame: firstScrollView.frame)
+        let secondContainer = makeScrollableContainer(contentSize: secondScrollView.contentSize, frame: secondScrollView.frame)
+        brains.stash.installScreenForTesting(Screen(
+            elements: [:],
+            hierarchy: [
+                .container(firstContainer, children: []),
+                .container(secondContainer, children: []),
+            ],
+            containerNames: [
+                firstContainer: "first_scroll",
+                secondContainer: "second_scroll",
+            ],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [
+                firstContainer: .init(view: firstScrollView),
+                secondContainer: .init(view: secondScrollView),
+            ]
+        ))
+
+        let result = await brains.navigation.executeScroll(
+            ScrollTarget(selection: .container("second_scroll"), direction: .down)
+        )
+
+        XCTAssertTrue(result.success, "Expected named container scroll to succeed: \(String(describing: result.message))")
+        XCTAssertEqual(firstScrollView.contentOffset.y, 0, accuracy: 0.01)
+        XCTAssertGreaterThan(secondScrollView.contentOffset.y, 0)
+    }
+
+    func testScrollToEdgeUsesNamedContainer() async {
+        let firstScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        firstScrollView.contentOffset.y = 500
+        let secondScrollView = UIScrollView(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
+        secondScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        secondScrollView.contentOffset.y = 500
+        let firstContainer = makeScrollableContainer(contentSize: firstScrollView.contentSize, frame: firstScrollView.frame)
+        let secondContainer = makeScrollableContainer(contentSize: secondScrollView.contentSize, frame: secondScrollView.frame)
+        brains.stash.installScreenForTesting(Screen(
+            elements: [:],
+            hierarchy: [
+                .container(firstContainer, children: []),
+                .container(secondContainer, children: []),
+            ],
+            containerNames: [
+                firstContainer: "first_scroll",
+                secondContainer: "second_scroll",
+            ],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [
+                firstContainer: .init(view: firstScrollView),
+                secondContainer: .init(view: secondScrollView),
+            ]
+        ))
+
+        let result = await brains.navigation.executeScrollToEdge(
+            ScrollToEdgeTarget(selection: .container("second_scroll"), edge: .top)
+        )
+
+        XCTAssertTrue(result.success, "Expected named container edge scroll to succeed: \(String(describing: result.message))")
+        XCTAssertEqual(firstScrollView.contentOffset.y, 500, accuracy: 0.01)
+        XCTAssertEqual(secondScrollView.contentOffset.y, 0, accuracy: 0.01)
     }
 
     func testScrollWithoutElementReportsAmbiguousContainers() async {
@@ -724,7 +794,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 .container(firstContainer, children: []),
                 .container(secondContainer, children: []),
             ],
-            containerStableIds: [
+            containerNames: [
                 firstContainer: "first_scroll",
                 secondContainer: "second_scroll",
             ],
@@ -838,7 +908,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let knownEntry = TheStash.ScreenElement(
             heistId: "known_reveal_target",
             contentSpaceOrigin: CGPoint(x: 40, y: 900),
-            scrollContainerStableId: "known_scroll",
+            scrollContainerName: "known_scroll",
             element: knownElement
         )
         let scrollContainer = makeScrollableContainer(
@@ -848,7 +918,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let knownScreen = Screen(
             elements: [knownEntry.heistId: knownEntry],
             hierarchy: [.container(scrollContainer, children: [])],
-            containerStableIds: [scrollContainer: "known_scroll"],
+            containerNames: [scrollContainer: "known_scroll"],
             heistIdByElement: [:],
             elementRefs: [
                 knownEntry.heistId: .init(object: nil, scrollView: scrollView)
@@ -890,7 +960,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [screenElement.heistId: screenElement],
             hierarchy: [.element(screenElement.element, traversalIndex: 0)],
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: [screenElement.element: screenElement.heistId],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
@@ -917,7 +987,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: makeElement(label: "Item")
         )
-        installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "axis_scroll")
+        installLiveScrollTarget(screenElement, scrollView: scrollView, containerName: "axis_scroll")
 
         let result = await brains.navigation.executeScroll(
             ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Item")), direction: .down)
@@ -941,7 +1011,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: makeElement(label: "Item")
         )
-        installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "vertical_scroll")
+        installLiveScrollTarget(screenElement, scrollView: scrollView, containerName: "vertical_scroll")
 
         let result = await brains.navigation.executeScroll(
             ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Item")), direction: .down)
@@ -1215,7 +1285,7 @@ final class TheBrainsScrollTests: XCTestCase {
     private func installLiveScrollTarget(
         _ screenElement: TheStash.ScreenElement,
         scrollView: UIScrollView,
-        stableId: HeistContainer
+        containerName: ContainerName
     ) {
         let container = makeScrollableContainer(
             contentSize: scrollView.contentSize,
@@ -1224,7 +1294,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [screenElement.heistId: screenElement],
             hierarchy: [.element(screenElement.element, traversalIndex: 0)],
-            containerStableIds: [container: stableId],
+            containerNames: [container: containerName],
             heistIdByElement: [screenElement.element: screenElement.heistId],
             elementRefs: [
                 screenElement.heistId: .init(object: nil, scrollView: scrollView)

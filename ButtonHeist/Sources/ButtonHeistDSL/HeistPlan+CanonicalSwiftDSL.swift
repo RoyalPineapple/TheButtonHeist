@@ -303,6 +303,8 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return "Viewport.Scroll(.\(target.direction.rawValue))"
         case .element(let element):
             return "Viewport.Scroll(.\(target.direction.rawValue), in: \(render(target: element)))"
+        case .container:
+            throw HeistCanonicalSwiftDSLError.unsupportedAction("scroll containerName is not a durable heist action")
         }
     }
 
@@ -312,6 +314,8 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return "Viewport.ScrollToEdge(.\(target.edge.rawValue))"
         case .element(let element):
             return "Viewport.ScrollToEdge(.\(target.edge.rawValue), in: \(render(target: element)))"
+        case .container:
+            throw HeistCanonicalSwiftDSLError.unsupportedAction("scroll_to_edge containerName is not a durable heist action")
         }
     }
 

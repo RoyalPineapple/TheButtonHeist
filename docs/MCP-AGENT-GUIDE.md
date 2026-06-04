@@ -12,7 +12,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Choosing Tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` to project from a container. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection and direct viewport/debug commands, including `scroll` and `scroll_to_edge` through the `container` argument. It is not a semantic target, is not recorded into heists, and is rejected by heist JSON and canonical Swift DSL. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
 **Acting**: `activate` is your primary semantic control tool. It performs the element's primary accessibility activation behavior; named actions such as `"increment"`, `"decrement"`, or custom accessibility actions go through the same semantic route. Use `type_text` for keyboard input.
 

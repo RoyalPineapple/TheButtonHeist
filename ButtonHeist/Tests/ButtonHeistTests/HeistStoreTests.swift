@@ -466,7 +466,7 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testExplicitViewportScrollCanRecordWhenItIsTheRecordedIntent() async throws {
+    func testExplicitViewportScrollIsNotRecordedInNormalSemanticRecording() async throws {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "explicit-scroll", app: "com.example.app")
 
@@ -476,14 +476,15 @@ final class HeistStoreTests: XCTestCase {
             args: ["direction": .string("down")]
         )
 
-        let heist = try finishRecording(heistStore)
-        XCTAssertEqual(heist.body, [
-            .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
-        ])
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
     }
 
     @ButtonHeistActor
-    func testManualScrollBeforeMechanicalTapRecordsViewportAndMechanicalIntent() async throws {
+    func testManualScrollBeforeMechanicalTapRecordsOnlyMechanicalIntent() async throws {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "scroll-before-mechanical-tap", app: "com.example.app")
 
@@ -501,7 +502,6 @@ final class HeistStoreTests: XCTestCase {
 
         let heist = try finishRecording(heistStore)
         XCTAssertEqual(heist.body, [
-            .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
             .action(try ActionStep(command: .oneFingerTap(TapTarget(
                 selection: .coordinate(ScreenPoint(x: 20, y: 30))
             )))),
@@ -540,7 +540,7 @@ final class HeistStoreTests: XCTestCase {
         XCTAssertFalse(encoded.contains("frameX"))
         XCTAssertFalse(encoded.contains("activationPoint"))
         XCTAssertFalse(encoded.contains("heistId"))
-        XCTAssertFalse(encoded.contains("stableId"))
+        XCTAssertFalse(encoded.contains("containerName"))
         XCTAssertFalse(encoded.contains("capture"))
     }
 

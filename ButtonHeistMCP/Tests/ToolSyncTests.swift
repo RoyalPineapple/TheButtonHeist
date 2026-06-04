@@ -34,6 +34,45 @@ struct ToolSyncTests {
             seen.insert(tool.name)
         }
     }
+
+    @Test("get_interface subtree container accepts containerName string or matcher object")
+    func getInterfaceSubtreeContainerSchemaAcceptsStringOrObject() throws {
+        let tool = try #require(ToolDefinitions.all.first { $0.name == "get_interface" })
+        let oneOf = try #require(schemaValue(
+            at: ["properties", "subtree", "properties", "container", "oneOf"],
+            in: tool.inputSchema
+        )?.arrayValue)
+
+        #expect(oneOf.contains { schema in
+            schema.objectValue?["type"] == .string("string")
+                && schema.objectValue?["minLength"] == .int(1)
+        })
+        #expect(oneOf.contains { schema in
+            guard schema.objectValue?["type"] == .string("object"),
+                  case .object(let properties)? = schema.objectValue?["properties"] else {
+                return false
+            }
+            return properties["containerName"] != nil
+        })
+    }
+}
+
+private func schemaValue(at path: [String], in root: Value) -> Value? {
+    path.reduce(Optional(root)) { value, key in
+        value?.objectValue?[key]
+    }
+}
+
+private extension Value {
+    var objectValue: [String: Value]? {
+        guard case .object(let object) = self else { return nil }
+        return object
+    }
+
+    var arrayValue: [Value]? {
+        guard case .array(let array) = self else { return nil }
+        return array
+    }
 }
 
 private enum ToolSchemaLint {

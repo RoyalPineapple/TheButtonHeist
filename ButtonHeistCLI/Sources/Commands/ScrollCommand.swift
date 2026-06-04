@@ -19,6 +19,9 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var element: ElementTargetOptions
 
+    @Option(name: .long, help: "Current-capture containerName from get_interface")
+    var container: String?
+
     @Option(
         name: .shortAndLong,
         help: "Scroll direction: \(Self.catalogAllowedValuesDescription(for: .direction))"
@@ -29,17 +32,32 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
+    func validate() throws {
+        if let container, container.isEmpty {
+            throw ValidationError("--container must not be empty")
+        }
+        if container != nil, try element.hasTarget {
+            throw ValidationError("--container cannot be combined with element target options")
+        }
+    }
+
     @ButtonHeistActor
     mutating func run() async throws {
         guard let scrollDirection = Self.catalogCanonicalStringValue(direction, for: .direction) else {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
         }
 
-        let request: CLIRequestParameters = [
+        var request: CLIRequestParameters = [
             .direction: .string(scrollDirection),
             .timeout: .double(timeoutOption.timeout),
         ]
-        let target = try element.parsedTarget()
+        let target: ElementTarget?
+        if let container {
+            request.set(.container, container)
+            target = nil
+        } else {
+            target = try element.parsedTarget()
+        }
 
         try await CLIRunner.run(
             connection: connection,

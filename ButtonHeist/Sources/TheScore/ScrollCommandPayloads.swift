@@ -8,6 +8,7 @@ public enum ScrollDirection: String, Codable, Sendable, CaseIterable, Equatable 
 public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertible {
     case visibleContainer
     case element(ElementTarget)
+    case container(ContainerName)
 
     public var description: String {
         switch self {
@@ -15,6 +16,10 @@ public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertib
             return "visibleContainer"
         case .element(let target):
             return target.description
+        case .container(let containerName):
+            return ScoreDescription.call("container", [
+                "containerName=\(ScoreDescription.quoted(containerName))",
+            ])
         }
     }
 }
@@ -45,12 +50,28 @@ public struct ScrollTarget: Sendable, Equatable {
         guard case .element(let target) = selection else { return nil }
         return target
     }
+
+    private var containerName: ContainerName? {
+        guard case .container(let containerName) = selection else { return nil }
+        return containerName
+    }
+
+    private var selectionDescription: String? {
+        switch selection {
+        case .visibleContainer:
+            return nil
+        case .element(let target):
+            return target.description
+        case .container(let containerName):
+            return ScrollContainerSelection.container(containerName).description
+        }
+    }
 }
 
 extension ScrollTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("scroll", [
-            elementTarget?.description,
+            selectionDescription,
             ScoreDescription.valueField("direction", direction),
         ].compactMap { $0 })
     }
@@ -70,20 +91,27 @@ extension ScrollTarget: Codable {
             typeName: "scroll target"
         )
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasContainerTarget = container.contains(.container)
+        let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        if hasContainerTarget {
+        if let containerName, containerName.isEmpty {
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
                 in: container,
-                debugDescription: "ScrollTarget does not accept public container handles; target an element inside the intended scroll region"
+                debugDescription: "container name must be non-empty"
+            )
+        }
+        if containerName != nil, elementTarget != nil {
+            throw DecodingError.dataCorruptedError(
+                forKey: .container,
+                in: container,
+                debugDescription: "ScrollTarget requires either container or element target fields, not both"
             )
         }
         switch elementTarget {
         case .some(let elementTarget):
             self.selection = .element(elementTarget)
         case nil:
-            self.selection = .visibleContainer
+            self.selection = containerName.map(ScrollContainerSelection.container) ?? .visibleContainer
         }
         self.direction = try container.decode(ScrollDirection.self, forKey: .direction)
     }
@@ -91,6 +119,7 @@ extension ScrollTarget: Codable {
     public func encode(to encoder: Encoder) throws {
         if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(containerName, forKey: .container)
         try container.encode(direction, forKey: .direction)
     }
 }
@@ -165,12 +194,28 @@ public struct ScrollToEdgeTarget: Sendable, Equatable {
         guard case .element(let target) = selection else { return nil }
         return target
     }
+
+    private var containerName: ContainerName? {
+        guard case .container(let containerName) = selection else { return nil }
+        return containerName
+    }
+
+    private var selectionDescription: String? {
+        switch selection {
+        case .visibleContainer:
+            return nil
+        case .element(let target):
+            return target.description
+        case .container(let containerName):
+            return ScrollContainerSelection.container(containerName).description
+        }
+    }
 }
 
 extension ScrollToEdgeTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("scrollToEdge", [
-            elementTarget?.description,
+            selectionDescription,
             ScoreDescription.valueField("edge", edge),
         ].compactMap { $0 })
     }
@@ -190,20 +235,27 @@ extension ScrollToEdgeTarget: Codable {
             typeName: "scroll_to_edge target"
         )
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasContainerTarget = container.contains(.container)
+        let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        if hasContainerTarget {
+        if let containerName, containerName.isEmpty {
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
                 in: container,
-                debugDescription: "ScrollToEdgeTarget does not accept public container handles; target an element inside the intended scroll region"
+                debugDescription: "container name must be non-empty"
+            )
+        }
+        if containerName != nil, elementTarget != nil {
+            throw DecodingError.dataCorruptedError(
+                forKey: .container,
+                in: container,
+                debugDescription: "ScrollToEdgeTarget requires either container or element target fields, not both"
             )
         }
         switch elementTarget {
         case .some(let elementTarget):
             self.selection = .element(elementTarget)
         case nil:
-            self.selection = .visibleContainer
+            self.selection = containerName.map(ScrollContainerSelection.container) ?? .visibleContainer
         }
         self.edge = try container.decode(ScrollEdge.self, forKey: .edge)
     }
@@ -211,6 +263,7 @@ extension ScrollToEdgeTarget: Codable {
     public func encode(to encoder: Encoder) throws {
         if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(containerName, forKey: .container)
         try container.encode(edge, forKey: .edge)
     }
 }

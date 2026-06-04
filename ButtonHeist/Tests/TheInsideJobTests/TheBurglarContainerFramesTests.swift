@@ -128,7 +128,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
     }
 
     /// `coarseFrameHash` is a wire-format heistId fragment for container
-    /// stableIds (`list_...`, `landmark_...`, `tabBar_...`, etc.). After the
+    /// containerNames (`list_...`, `landmark_...`, `tabBar_...`, etc.). After the
     /// `sanitizedForJSON` pass, non-finite inputs become 0 but finite-but-huge
     /// values still flow through and would trap `Int(_:)`. Must use `safeInt`.
     func testCoarseFrameHashHandlesPathologicalFrame() {
@@ -191,13 +191,13 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             ]
         ))
         let interface = TheStash.WireConversion.toInterface(from: screen)
-        let stableIds = interface.annotations.containers.compactMap(\.stableId)
+        let containerNames = interface.annotations.containers.compactMap(\.containerName)
 
-        XCTAssertEqual(stableIds.count, 2)
-        XCTAssertEqual(Set(stableIds).count, 2)
-        XCTAssertTrue(stableIds.allSatisfy { $0.hasPrefix("scrollable_0_0_40_50-") })
-        XCTAssertTrue(screen.liveCapture.scrollView(forContainer: stableIds[0]) === firstScrollView)
-        XCTAssertTrue(screen.liveCapture.scrollView(forContainer: stableIds[1]) === secondScrollView)
+        XCTAssertEqual(containerNames.count, 2)
+        XCTAssertEqual(Set(containerNames).count, 2)
+        XCTAssertTrue(containerNames.allSatisfy { $0.hasPrefix("scrollable_0_0_40_50-") })
+        XCTAssertTrue(screen.liveCapture.scrollView(forContainer: containerNames[0]) === firstScrollView)
+        XCTAssertTrue(screen.liveCapture.scrollView(forContainer: containerNames[1]) === secondScrollView)
     }
 
     func testCaptureLocalContainerHashHandlesNonFiniteParserGeometry() {
@@ -210,15 +210,15 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             children: [.element(makeElement(label: "Row"), traversalIndex: 0)]
         )
 
-        let stableId = TheBurglar.captureLocalContainerId(
+        let containerName = TheBurglar.captureLocalContainerId(
             readableName: "list_0_0_0_50",
             node: node,
             path: TreePath([0])
         )
 
-        XCTAssertTrue(stableId.hasPrefix("list_0_0_0_50-"))
+        XCTAssertTrue(containerName.hasPrefix("list_0_0_0_50-"))
         XCTAssertEqual(
-            stableId,
+            containerName,
             TheBurglar.captureLocalContainerId(
                 readableName: "list_0_0_0_50",
                 node: node,
@@ -277,13 +277,13 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             ]
         ))
         let interface = TheStash.WireConversion.toInterface(from: screen)
-        let stableIds = interface.annotations.containers.compactMap(\.stableId)
-        let repeatedFrameIds = stableIds.filter { $0.hasPrefix("scrollable_0_0_40_50-") }
+        let containerNames = interface.annotations.containers.compactMap(\.containerName)
+        let repeatedFrameIds = containerNames.filter { $0.hasPrefix("scrollable_0_0_40_50-") }
 
-        XCTAssertEqual(stableIds.count, 4)
+        XCTAssertEqual(containerNames.count, 4)
         XCTAssertEqual(repeatedFrameIds.count, 3)
         XCTAssertEqual(Set(repeatedFrameIds).count, 3)
-        XCTAssertTrue(stableIds.contains("scrollable_0_0_120_50"))
+        XCTAssertTrue(containerNames.contains("scrollable_0_0_120_50"))
         let repeatedScrollViews = repeatedFrameIds.compactMap { screen.liveCapture.scrollView(forContainer: $0) }
         XCTAssertEqual(repeatedScrollViews.count, 3)
         XCTAssertEqual(Set(repeatedScrollViews.map(ObjectIdentifier.init)).count, 3)
@@ -304,7 +304,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         let interface = TheStash.WireConversion.toInterface(from: screen)
 
-        XCTAssertEqual(interface.annotations.containers.first?.stableId, "list_0_0_40_50")
+        XCTAssertEqual(interface.annotations.containers.first?.containerName, "list_0_0_40_50")
     }
 }
 

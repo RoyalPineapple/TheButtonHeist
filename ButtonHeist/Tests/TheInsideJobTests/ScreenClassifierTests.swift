@@ -234,7 +234,7 @@ final class ScreenClassifierTests: XCTestCase {
                 )
             }),
             hierarchy: hierarchy,
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, element in
                 (element, "element_\(index)")
             }),

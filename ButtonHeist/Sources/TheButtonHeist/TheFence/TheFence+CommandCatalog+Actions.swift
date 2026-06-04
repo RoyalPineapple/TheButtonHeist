@@ -38,10 +38,12 @@ extension TheFence.Command {
                 .scroll, requestDecoder: TheFence.decodeScrollRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + [
+                    param(.container, .string),
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
                 ] + FenceParameterBlocks.expectation,
                 description: "Explicit viewport operation: scroll one page in the visible viewport, "
-                    + "or within a semantic target's owning scroll ancestor."
+                    + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
+                    + "within a current containerName."
             ),
             commandDescriptor(
                 .scrollToVisible, requestDecoder: TheFence.decodeScrollToVisibleRequest,
@@ -54,10 +56,12 @@ extension TheFence.Command {
                 .scrollToEdge, requestDecoder: TheFence.decodeScrollToEdgeRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + [
+                    param(.container, .string),
                     param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
                 ] + FenceParameterBlocks.expectation,
                 description: "Explicit viewport operation: scroll the visible viewport, "
-                    + "or a semantic target's owning scroll ancestor, to a requested edge."
+                    + "a semantic target's owning scroll ancestor, or for direct debug requests, "
+                    + "a current containerName, to a requested edge."
             ),
             commandDescriptor(
                 .activate, requestDecoder: TheFence.decodeActivateRequest,

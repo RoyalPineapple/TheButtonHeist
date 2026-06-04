@@ -298,7 +298,7 @@ final class ElementInflationProductTests: XCTestCase {
     private func seedKnownOffscreenTarget(
         _ fixture: SemanticRevealFixture,
         in targetBrains: TheBrains? = nil,
-        scrollContainerOverride: HeistContainer? = nil
+        scrollContainerOverride: ContainerName? = nil
     ) throws {
         let targetBrains = targetBrains ?? brains!
         let screen = try XCTUnwrap(targetBrains.stash.recordVisibleSemanticObservation())
@@ -313,7 +313,7 @@ final class ElementInflationProductTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
             contentSpaceOrigin: fixture.contentOrigin,
-            scrollContainerStableId: scrollContainerOverride ?? firstScrollableStableId(in: screen),
+            scrollContainerName: scrollContainerOverride ?? firstScrollableContainerName(in: screen),
             element: element
         )
         var elements = screen.semantic.elements
@@ -321,8 +321,8 @@ final class ElementInflationProductTests: XCTestCase {
 
         let liveCapture = LiveCapture(
             hierarchy: screen.liveCapture.hierarchy,
-            containerStableIds: screen.liveCapture.containerStableIds,
-            containerStableIdsByPath: screen.liveCapture.containerStableIdsByPath,
+            containerNames: screen.liveCapture.containerNames,
+            containerNamesByPath: screen.liveCapture.containerNamesByPath,
             heistIdByElement: screen.liveCapture.heistIdByElement,
             heistIdByElementPath: screen.liveCapture.heistIdByElementPath,
             elementRefs: screen.liveCapture.elementRefs,
@@ -337,11 +337,11 @@ final class ElementInflationProductTests: XCTestCase {
         ))
     }
 
-    private func firstScrollableStableId(in screen: Screen) -> HeistContainer? {
+    private func firstScrollableContainerName(in screen: Screen) -> ContainerName? {
         for item in screen.liveCapture.hierarchy.containerPaths where item.container.isScrollable {
-            if let stableId = screen.liveCapture.containerStableIdsByPath[item.path]
-                ?? screen.liveCapture.containerStableIds[item.container] {
-                return stableId
+            if let containerName = screen.liveCapture.containerNamesByPath[item.path]
+                ?? screen.liveCapture.containerNames[item.container] {
+                return containerName
             }
         }
         return nil

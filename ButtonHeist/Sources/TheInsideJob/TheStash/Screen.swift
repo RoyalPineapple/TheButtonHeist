@@ -45,7 +45,7 @@ struct Screen: Equatable {
     ) {
         let liveCapture = LiveCapture(
             hierarchy: hierarchy,
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: [:],
             heistIdByElementPath: [:],
             elementRefs: elementRefs,
@@ -68,8 +68,8 @@ struct Screen: Equatable {
     init(
         elements: [HeistId: ScreenElement],
         hierarchy: [AccessibilityHierarchy],
-        containerStableIds: [AccessibilityContainer: HeistContainer],
-        containerStableIdsByPath: [TreePath: HeistContainer] = [:],
+        containerNames: [AccessibilityContainer: ContainerName],
+        containerNamesByPath: [TreePath: ContainerName] = [:],
         heistIdByElement: [AccessibilityElement: HeistId],
         heistIdByElementPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef] = [:],
@@ -81,8 +81,8 @@ struct Screen: Equatable {
     ) {
         let liveCapture = LiveCapture(
             hierarchy: hierarchy,
-            containerStableIds: containerStableIds,
-            containerStableIdsByPath: containerStableIdsByPath,
+            containerNames: containerNames,
+            containerNamesByPath: containerNamesByPath,
             heistIdByElement: heistIdByElement,
             heistIdByElementPath: heistIdByElementPath,
             elementRefs: elementRefs,
@@ -276,8 +276,8 @@ struct Screen: Equatable {
                     SemanticScreen.Container(
                         container: item.container,
                         path: item.path,
-                        stableId: liveCapture.containerStableIdsByPath[item.path]
-                            ?? liveCapture.containerStableIds[item.container],
+                        containerName: liveCapture.containerNamesByPath[item.path]
+                            ?? liveCapture.containerNames[item.container],
                         contentFrame: liveCapture.containerContentFrame(forPath: item.path)
                     )
                 )

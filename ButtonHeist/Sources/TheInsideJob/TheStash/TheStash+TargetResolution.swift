@@ -64,7 +64,7 @@ extension TheStash {
     }
 
     struct ContainerCandidateFacts {
-        let stableId: HeistContainer?
+        let containerName: ContainerName?
         let type: ContainerTypeName
         let label: String?
         let value: String?
@@ -73,7 +73,7 @@ extension TheStash {
 
         init(container: SemanticScreen.Container) {
             let accessibilityContainer = container.container
-            stableId = container.stableId
+            containerName = container.containerName
             type = accessibilityContainer.typeName
             label = accessibilityContainer.containerLabel
             value = accessibilityContainer.containerValue
@@ -169,7 +169,7 @@ extension TheStash {
             .compactMap { item -> SemanticScreen.Container? in
                 let annotation = InterfaceContainerAnnotation(
                     path: item.path,
-                    stableId: item.stableId
+                    containerName: item.containerName
                 )
                 guard item.container.matches(matcher, annotation: annotation) else { return nil }
                 return item

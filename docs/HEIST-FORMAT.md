@@ -33,8 +33,8 @@ settlement, live geometry, and diagnostics at replay time.
 | `body` | `[HeistStep]` | Ordered list of typed heist steps. The body must be non-empty unless the plan only provides definitions. |
 
 Unknown keys are rejected. There is no app identifier, source metadata,
-runtime ID, capture-local ID, scroll container handle, or stable viewport handle
-in the plan contract.
+runtime ID, capture-local element ID, or implicit viewport state in the root
+plan contract.
 
 ## Definitions and Invocations
 
@@ -493,7 +493,7 @@ The durable heist AST is small on purpose. It does not support:
 - hidden pre-action viewport movement for semantic actions
 - arbitrary dynamic code or source execution over the wire
 - generic variables or expression evaluation beyond typed string and target refs
-- geometry, runtime IDs, capture-local IDs, or scroll container handles as
+- geometry, runtime IDs, capture-local IDs, or containerNames as
   durable selectors
 - unknown JSON keys
 - mechanical commands in strict semantic tests unless explicitly waived
@@ -515,6 +515,7 @@ Rules:
 - Coordinate gestures survive only when no semantic element intent exists.
 - Recorded heists should pass recording-quality lint.
 
-Recorded heists must not depend on scroll position, geometry, runtime IDs,
-capture-local IDs, or public container handles unless the command is explicitly
-mechanical or viewport-shaped.
+Recorded and authored heists must not depend on scroll position, geometry,
+runtime IDs, capture-local IDs, or containerNames as semantic identity. Direct
+viewport/debug commands may use a current `container` value, but heist JSON and
+canonical Swift DSL reject that capture-local selector.

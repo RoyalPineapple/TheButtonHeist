@@ -273,8 +273,16 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.direction, "down")
     }
 
-    func testScrollCLIRejectsContainerStableId() {
-        XCTAssertThrowsError(try ScrollCommand.parse(["--stable-id", "main_scroll", "--direction", "up"]))
+    func testScrollCLIAcceptsContainerName() throws {
+        let command = try ScrollCommand.parse(["--container", "main_scroll", "--direction", "up"])
+
+        XCTAssertEqual(command.container, "main_scroll")
+        XCTAssertEqual(command.direction, "up")
+        XCTAssertFalse(try command.element.hasTarget)
+    }
+
+    func testScrollCLIRejectsContainerNameWithElementTarget() {
+        XCTAssertThrowsError(try ScrollCommand.parse(["--container", "main_scroll", "--label", "Item"]))
     }
 
     func testScrollCLIParsesDirection() throws {
@@ -288,6 +296,14 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertFalse(try command.element.hasTarget)
         XCTAssertEqual(command.edge, "top")
+    }
+
+    func testScrollToEdgeCLIAcceptsContainerName() throws {
+        let command = try ScrollToEdgeCommand.parse(["--container", "main_scroll", "--edge", "bottom"])
+
+        XCTAssertEqual(command.container, "main_scroll")
+        XCTAssertEqual(command.edge, "bottom")
+        XCTAssertFalse(try command.element.hasTarget)
     }
 
     func testSwipeCLIHelpUsesDescriptorDirectionValues() {

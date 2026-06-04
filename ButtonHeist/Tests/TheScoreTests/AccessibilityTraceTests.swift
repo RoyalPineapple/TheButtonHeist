@@ -293,7 +293,7 @@ final class AccessibilityTraceTests: XCTestCase {
 
     private func makeListInterface(_ labels: [String]) -> Interface {
         makeTestInterface(nodes: [
-            testContainer(makeTestAccessibilityContainer(), stableId: "category-grid", children: labels.map { label in
+            testContainer(makeTestAccessibilityContainer(), containerName: "category-grid", children: labels.map { label in
                 testElement(makeElement(
                     label: label,
                     traits: [.button]

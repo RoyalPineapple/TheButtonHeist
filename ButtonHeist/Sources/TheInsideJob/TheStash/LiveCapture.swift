@@ -15,8 +15,8 @@ import AccessibilitySnapshotParser
 /// exploration pages.
 struct LiveCapture: Equatable {
     let hierarchy: [AccessibilityHierarchy]
-    let containerStableIds: [AccessibilityContainer: HeistContainer]
-    let containerStableIdsByPath: [TreePath: HeistContainer]
+    let containerNames: [AccessibilityContainer: ContainerName]
+    let containerNamesByPath: [TreePath: ContainerName]
     let heistIdByElement: [AccessibilityElement: HeistId]
     let heistIdByElementPath: [TreePath: HeistId]
     let elementRefs: [HeistId: ElementRef]
@@ -25,12 +25,12 @@ struct LiveCapture: Equatable {
     let firstResponderHeistId: HeistId?
     let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
     let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
-    private let scrollableViewsByStableId: [HeistContainer: ScrollableViewRef]
+    private let scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]
 
     init(
         hierarchy: [AccessibilityHierarchy],
-        containerStableIds: [AccessibilityContainer: HeistContainer],
-        containerStableIdsByPath: [TreePath: HeistContainer] = [:],
+        containerNames: [AccessibilityContainer: ContainerName],
+        containerNamesByPath: [TreePath: ContainerName] = [:],
         heistIdByElement: [AccessibilityElement: HeistId],
         heistIdByElementPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef],
@@ -39,11 +39,11 @@ struct LiveCapture: Equatable {
         firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:],
-        scrollableViewsByStableId: [HeistContainer: ScrollableViewRef]? = nil
+        scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]? = nil
     ) {
         self.hierarchy = hierarchy
-        self.containerStableIds = containerStableIds
-        self.containerStableIdsByPath = containerStableIdsByPath
+        self.containerNames = containerNames
+        self.containerNamesByPath = containerNamesByPath
         self.heistIdByElement = heistIdByElement
         self.heistIdByElementPath = heistIdByElementPath
         self.elementRefs = elementRefs
@@ -52,10 +52,10 @@ struct LiveCapture: Equatable {
         self.firstResponderHeistId = firstResponderHeistId
         self.scrollableContainerViews = scrollableContainerViews
         self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
-        self.scrollableViewsByStableId = scrollableViewsByStableId ?? Self.scrollableViewsByStableId(
+        self.scrollableViewsByContainerName = scrollableViewsByContainerName ?? Self.scrollableViewsByContainerName(
             hierarchy: hierarchy,
-            containerStableIds: containerStableIds,
-            containerStableIdsByPath: containerStableIdsByPath,
+            containerNames: containerNames,
+            containerNamesByPath: containerNamesByPath,
             scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
@@ -63,7 +63,7 @@ struct LiveCapture: Equatable {
 
     static let empty = LiveCapture(
         hierarchy: [],
-        containerStableIds: [:],
+        containerNames: [:],
         heistIdByElement: [:],
         heistIdByElementPath: [:],
         elementRefs: [:],
@@ -97,8 +97,8 @@ struct LiveCapture: Equatable {
         elementRefs[heistId]?.scrollView
     }
 
-    func scrollView(forContainer stableId: HeistContainer) -> UIScrollView? {
-        scrollableViewsByStableId[stableId]?.view as? UIScrollView
+    func scrollView(forContainer containerName: ContainerName) -> UIScrollView? {
+        scrollableViewsByContainerName[containerName]?.view as? UIScrollView
     }
 
     func containerObject(forPath path: TreePath) -> NSObject? {
@@ -160,25 +160,25 @@ struct LiveCapture: Equatable {
         }
     }
 
-    private static func scrollableViewsByStableId(
+    private static func scrollableViewsByContainerName(
         hierarchy: [AccessibilityHierarchy],
-        containerStableIds: [AccessibilityContainer: HeistContainer],
-        containerStableIdsByPath: [TreePath: HeistContainer],
+        containerNames: [AccessibilityContainer: ContainerName],
+        containerNamesByPath: [TreePath: ContainerName],
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
-    ) -> [HeistContainer: ScrollableViewRef] {
-        var result: [HeistContainer: ScrollableViewRef] = [:]
-        var ambiguousIds = Set<HeistContainer>()
+    ) -> [ContainerName: ScrollableViewRef] {
+        var result: [ContainerName: ScrollableViewRef] = [:]
+        var ambiguousNames = Set<ContainerName>()
 
         for (container, path) in hierarchy.containerPaths {
             guard let ref = scrollableContainerViewsByPath[path] ?? scrollableContainerViews[container] else { continue }
-            guard let stableId = containerStableIdsByPath[path] ?? containerStableIds[container] else { continue }
-            guard !ambiguousIds.contains(stableId) else { continue }
-            if result[stableId] != nil {
-                result[stableId] = nil
-                ambiguousIds.insert(stableId)
+            guard let containerName = containerNamesByPath[path] ?? containerNames[container] else { continue }
+            guard !ambiguousNames.contains(containerName) else { continue }
+            if result[containerName] != nil {
+                result[containerName] = nil
+                ambiguousNames.insert(containerName)
             } else {
-                result[stableId] = ref
+                result[containerName] = ref
             }
         }
         return result

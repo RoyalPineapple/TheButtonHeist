@@ -42,13 +42,22 @@ final class ElementActionRequestContractTests: XCTestCase {
         )
     }
     @ButtonHeistActor
-    func testScrollRejectsContainerHandlesAtTypedBoundary() async {
+    func testScrollRejectsContainerObjectAtTypedBoundary() async {
         await assertExecutionError(
             command: .scroll,
             arguments: [
-                "container": .object(["stableId": .string("list")]),
+                "container": .object(["containerName": .string("list")]),
             ],
             contains: "schema validation failed for container"
+        )
+    }
+
+    @ButtonHeistActor
+    func testActivateRejectsContainerNameAsSemanticTarget() async {
+        await assertExecutionError(
+            command: .activate,
+            arguments: ["target": .object(["containerName": .string("main_scroll")])],
+            contains: "Unknown element target field \"containerName\""
         )
     }
 

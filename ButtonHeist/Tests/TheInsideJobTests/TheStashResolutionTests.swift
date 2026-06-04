@@ -83,7 +83,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.installScreenForTesting(Screen(
             elements: elements,
             hierarchy: hierarchyNodes,
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: heistIdByElement,
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
@@ -273,7 +273,7 @@ final class TheStashResolutionTests: XCTestCase {
                 "known": Screen.ScreenElement(heistId: "known", contentSpaceOrigin: nil, element: known),
             ],
             hierarchy: [.container(container, children: [.element(visible, traversalIndex: 0)])],
-            containerStableIds: [container: "main_scroll"],
+            containerNames: [container: "main_scroll"],
             heistIdByElement: [visible: "visible"],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
@@ -289,7 +289,7 @@ final class TheStashResolutionTests: XCTestCase {
             return XCTFail("Expected public interface to preserve visible container hierarchy")
         }
         XCTAssertEqual(children.count, 1)
-        XCTAssertEqual(publicInterface.annotations.containers.first?.stableId, "main_scroll")
+        XCTAssertEqual(publicInterface.annotations.containers.first?.containerName, "main_scroll")
         XCTAssertEqual(semanticInterface.annotations.containers, [])
     }
 
@@ -356,7 +356,7 @@ final class TheStashResolutionTests: XCTestCase {
                     path: .init(
                         container: container,
                         path: path,
-                        stableId: "semantic_actions__actions",
+                        containerName: "semantic_actions__actions",
                         contentFrame: CGRect(x: 0, y: 900, width: 240, height: 80)
                     ),
                 ]
@@ -365,13 +365,13 @@ final class TheStashResolutionTests: XCTestCase {
         ))
 
         let result = bagman.resolveContainerTarget(
-            ContainerMatcher(stableId: "semantic_actions__actions"),
+            ContainerMatcher(containerName: "semantic_actions__actions"),
             ordinal: nil
         )
         switch result {
         case .resolved(let resolved):
             XCTAssertEqual(resolved.path, path)
-            XCTAssertEqual(resolved.stableId, "semantic_actions__actions")
+            XCTAssertEqual(resolved.containerName, "semantic_actions__actions")
             XCTAssertEqual(resolved.contentFrame?.origin.y, 900)
         case .notFound, .ambiguous:
             XCTFail("Expected semantic container resolution, got \(result.diagnostics)")
@@ -391,7 +391,7 @@ final class TheStashResolutionTests: XCTestCase {
                             frame: AccessibilityRect(CGRect(x: 0, y: 120, width: 240, height: 80))
                         ),
                         path: primaryPath,
-                        stableId: "actions_primary",
+                        containerName: "actions_primary",
                         contentFrame: CGRect(x: 0, y: 120, width: 240, height: 80)
                     ),
                     secondaryPath: .init(
@@ -400,7 +400,7 @@ final class TheStashResolutionTests: XCTestCase {
                             frame: AccessibilityRect(CGRect(x: 0, y: 240, width: 240, height: 80))
                         ),
                         path: secondaryPath,
-                        stableId: "actions_secondary",
+                        containerName: "actions_secondary",
                         contentFrame: CGRect(x: 0, y: 240, width: 240, height: 80)
                     ),
                 ]
@@ -419,9 +419,9 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(facts.matchedCount, 2)
         XCTAssertEqual(facts.resolutionScope, .known)
         XCTAssertEqual(facts.candidates.map(\.identifier), ["primary", "secondary"])
-        XCTAssertEqual(facts.candidates.map(\.stableId), ["actions_primary", "actions_secondary"])
+        XCTAssertEqual(facts.candidates.map(\.containerName), ["actions_primary", "actions_secondary"])
         XCTAssertTrue(ambiguous.diagnostics.contains("container target is ambiguous across 2 containers"))
-        XCTAssertFalse(ambiguous.diagnostics.contains("stableId"))
+        XCTAssertFalse(ambiguous.diagnostics.contains("containerName"))
 
         let outOfRange = bagman.resolveContainerTarget(
             ContainerMatcher(type: .semanticGroup, label: "Actions"),
@@ -971,14 +971,14 @@ final class TheStashResolutionTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: "below_fold_button",
             contentSpaceOrigin: CGPoint(x: 0, y: 2_000),
-            scrollContainerStableId: "test_scroll",
+            scrollContainerName: "test_scroll",
             element: offScreen
         )
 
         bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [],
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
@@ -998,7 +998,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(offScreen, traversalIndex: 0)],
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: [offScreen: entry.heistId],
             elementRefs: [
                 entry.heistId: .init(object: object, scrollView: scrollView)
@@ -1036,7 +1036,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(visible, traversalIndex: 0)],
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: [visible: entry.heistId],
             elementRefs: [
                 entry.heistId: .init(object: object, scrollView: scrollView)
