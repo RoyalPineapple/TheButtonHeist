@@ -4,6 +4,7 @@ import Foundation
 
 import TheScore
 
+// PredicateWait stores main-actor closures and is constructed/used from main-actor observation code.
 @MainActor struct PredicateWait { // swiftlint:disable:this agent_main_actor_value_type
     typealias ObserveEvent = @MainActor (
         SemanticObservationScope,
