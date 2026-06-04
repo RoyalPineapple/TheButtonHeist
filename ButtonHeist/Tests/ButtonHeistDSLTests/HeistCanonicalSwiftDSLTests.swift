@@ -100,6 +100,40 @@ func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
 }
 
 @Test
+func `canonical Swift renderer preserves composed expectation with string ref`() throws {
+    enum SearchScreen {
+        static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
+            TypeText(query, into: .label("Search"))
+                .expect(.present(.value(query)), timeout: .seconds(1))
+
+            Activate(.label("Search"))
+                .expect(.changed(.screen()))
+                .expect(.present(.label(query)), timeout: .seconds(5))
+        }
+    }
+
+    let plan = try Heist("searchFlow") {
+        try SearchScreen.search("milk")
+    }.plan
+
+    #expect(try plan.canonicalSwiftDSL() == """
+    enum SearchScreen {
+        static let search = try! HeistDef<String>("SearchScreen.search", parameter: "query") { query in
+            TypeText(query, into: .label("Search"))
+                .expect(.present(.value(query)), timeout: .seconds(1))
+
+            Activate(.label("Search"))
+                .expect(.changed(.screen(where: .present(.label(query)))), timeout: .seconds(5))
+        }
+    }
+
+    try Heist("searchFlow") {
+        SearchScreen.search("milk")
+    }
+    """)
+}
+
+@Test
 func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
     let plan = HeistPlan(body: [
         .action(try ActionStep(command: .activate(.ref("target")))),

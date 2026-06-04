@@ -361,6 +361,14 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         if let waiver = action.expectationWaiver {
             addString(waiver, path: "\(path).without_expectation", role: "expectation waiver")
         }
+        if let failure = action.expectationValidationFailure {
+            fail(
+                path: "\(path).expectation",
+                contract: "action expectation composition must be supported and unambiguous",
+                observed: failure,
+                correction: "Use one change predicate plus optional state predicates, or split unrelated waits into explicit WaitFor steps."
+            )
+        }
     }
 
     mutating func validateCommand(

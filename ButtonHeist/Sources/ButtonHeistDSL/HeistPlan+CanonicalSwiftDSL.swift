@@ -420,6 +420,8 @@ private struct HeistCanonicalSwiftDSLRenderer {
         switch predicate {
         case .state(let state):
             return try render(state: state, environment: environment)
+        case .changed(let change):
+            return try ".changed(\(render(change: change, environment: environment)))"
         case .predicate(let predicate):
             return try render(predicate: predicate, environment: environment)
         }
@@ -482,12 +484,40 @@ private struct HeistCanonicalSwiftDSLRenderer {
         }
     }
 
+    private func render(change: ChangePredicateExpr, environment: RenderEnvironment) throws -> String {
+        switch change {
+        case .screen(let state):
+            if let state {
+                return try ".screen(where: \(render(state: state, environment: environment)))"
+            }
+            return ".screen()"
+        case .elements:
+            return ".elements"
+        case .appeared(let predicate):
+            return try ".appeared(\(render(predicate: predicate, environment: environment)))"
+        case .disappeared(let predicate):
+            return try ".disappeared(\(render(predicate: predicate, environment: environment)))"
+        case .updated(let update):
+            return try ".updated(\(render(update: update, environment: environment)))"
+        }
+    }
+
     private func render(update: ElementUpdatePredicate) -> String {
         let fields = [
             update.element.map { render(predicate: $0) },
             update.property.map { "property: .\($0.rawValue)" },
             update.from.map { "from: \(quote($0))" },
             update.to.map { "to: \(quote($0))" },
+        ].compactMap { $0 }
+        return fields.joined(separator: ", ")
+    }
+
+    private func render(update: ElementUpdatePredicateExpr, environment: RenderEnvironment) throws -> String {
+        let fields = try [
+            update.element.map { try render(predicate: $0, environment: environment) },
+            update.property.map { "property: .\($0.rawValue)" },
+            update.from.map { "from: \(try render(string: $0, environment: environment))" },
+            update.to.map { "to: \(try render(string: $0, environment: environment))" },
         ].compactMap { $0 }
         return fields.joined(separator: ", ")
     }

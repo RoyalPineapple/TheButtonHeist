@@ -364,11 +364,13 @@ public struct ActionStep: Codable, Sendable, Equatable {
     public let command: HeistActionCommand
     public let expectation: WaitStep?
     public let expectationWaiver: String?
+    let expectationValidationFailure: String?
 
     public init(
         command: HeistActionCommand,
         expectation: WaitStep? = nil,
-        expectationWaiver: String? = nil
+        expectationWaiver: String? = nil,
+        expectationValidationFailure: String? = nil
     ) throws {
         if let expectationWaiver {
             guard !expectationWaiver.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -381,18 +383,21 @@ public struct ActionStep: Codable, Sendable, Equatable {
         self.command = command
         self.expectation = expectation
         self.expectationWaiver = expectationWaiver
+        self.expectationValidationFailure = expectationValidationFailure
     }
 
     @_disfavoredOverload
     public init(
         command: ClientMessage,
         expectation: WaitStep? = nil,
-        expectationWaiver: String? = nil
+        expectationWaiver: String? = nil,
+        expectationValidationFailure: String? = nil
     ) throws {
         try self.init(
             command: HeistActionCommand(clientMessage: command),
             expectation: expectation,
-            expectationWaiver: expectationWaiver
+            expectationWaiver: expectationWaiver,
+            expectationValidationFailure: expectationValidationFailure
         )
     }
 
@@ -416,6 +421,12 @@ public struct ActionStep: Codable, Sendable, Equatable {
         try container.encode(command, forKey: .command)
         try container.encodeIfPresent(expectation, forKey: .expectation)
         try container.encodeIfPresent(expectationWaiver, forKey: .expectationWaiver)
+    }
+
+    public static func == (lhs: ActionStep, rhs: ActionStep) -> Bool {
+        lhs.command == rhs.command
+            && lhs.expectation == rhs.expectation
+            && lhs.expectationWaiver == rhs.expectationWaiver
     }
 }
 
