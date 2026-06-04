@@ -9,80 +9,126 @@ import UIKit
 // lazily-initialised C function pointer" — wrapping in an actor would be
 // incorrect (these are synchronous C entry points called from gesture
 // hot paths) and using a lock would add ceremony for a pattern that is
-// well-known to be safe in this exact shape. The escape hatch is narrowly
-// scoped to the IOKit bridge; do not introduce further
-// `nonisolated(unsafe)` declarations elsewhere without a comparable
-// justification.
+// well-known to be safe in this exact shape. This unsafe storage is narrowly
+// scoped to the IOKit bridge; do not introduce further `nonisolated(unsafe)`
+// declarations elsewhere without a comparable justification.
 
 extension TheSafecracker {
 
-    // MARK: - IOHIDEvent Construction
+    // MARK: - TouchEvent
 
-    /// Creates IOHIDEvent structures for touch injection (IOKit, dlsym).
-    final class IOHIDEventBuilder {
+    /// An assembled UIEvent ready to deliver to UIApplication.
+    /// Can only be constructed from `[SyntheticTouch]`, keeping the HID finger
+    /// data and touch array together behind this mechanical-input wrapper.
+    ///
+    /// `@MainActor` justification: wraps a UIEvent reference.
+    @MainActor struct TouchEvent { // swiftlint:disable:this agent_main_actor_value_type
+        let event: UIEvent
 
-        static func createEvent(for fingers: [SyntheticTouch]) -> UnsafeMutableRawPointer? {
-            let timestamp = mach_absolute_time()
-            let anyTouching = fingers.contains { $0.phase != .ended && $0.phase != .cancelled }
+        /// Package touches into a UIEvent with matching IOHIDEvent data.
+        init?(touches: [SyntheticTouch]) {
+            guard let event: UIEvent = ObjCRuntime.message("_touchesEvent", to: UIApplication.shared)?.call() else {
+                insideJobLogger.error("UIApplication doesn't respond to _touchesEvent")
+                return nil
+            }
+            ObjCRuntime.message("_clearTouches", to: event)?.call()
 
-            guard let handEvent = IOHIDEventCreateDigitizerEvent(
-                kCFAllocatorDefault,
-                timestamp,
-                UInt32(kIOHIDDigitizerTransducerTypeHand),
-                0,      // index
-                0,      // identity
-                anyTouching ? (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch) : (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch),
-                0,      // buttonMask
-                0, 0,   // x, y (hand doesn't need position)
-                0,      // z
-                0, 0,   // tipPressure, barrelPressure
-                0,      // twist
-                anyTouching,
-                anyTouching,
-                0       // options
-            ) else { return nil }
+            let hidEvent = SafecrackerIOHIDEventBuilder.createEvent(for: touches)
 
-            IOHIDEventSetFloatValue(handEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
-
-            for (index, finger) in fingers.enumerated() {
-                let isTouching = (finger.phase == .began || finger.phase == .moved || finger.phase == .stationary)
-                let eventMask: UInt32 = (finger.phase == .moved || finger.phase == .stationary)
-                    ? kIOHIDDigitizerEventPosition
-                    : (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch)
-
-                let fingerEvent = IOHIDEventCreateDigitizerFingerEventWithQuality(
-                    kCFAllocatorDefault,
-                    timestamp,
-                    UInt32(index + 1),        // index (1-based position)
-                    UInt32(index + 2),        // identity (unique per finger: 2, 3, 4...)
-                    eventMask,
-                    Float(finger.location.x),
-                    Float(finger.location.y),
-                    0,                    // z
-                    isTouching ? 1.0 : 0, // tipPressure (1.0 while touching)
-                    0,                    // twist
-                    5.0,                  // majorRadius (matches KIF)
-                    5.0,                  // minorRadius
-                    1.0,                  // quality
-                    1.0,                  // density
-                    1.0,                  // irregularity
-                    isTouching,           // range
-                    isTouching,           // touch
-                    0                     // options
-                )
-
-                if let fingerEvent = fingerEvent {
-                    IOHIDEventSetFloatValue(fingerEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
-                    IOHIDEventAppendEvent(handEvent, fingerEvent, 0)
+            if let hidEvent {
+                ObjCRuntime.message("_setHIDEvent:", to: event)?.call(hidEvent)
+                for syntheticTouch in touches {
+                    syntheticTouch.setHIDEvent(hidEvent)
                 }
             }
 
-            return handEvent
+            // `_addTouch:forDelayedDelivery:` mixes object and value args.
+            if let msg = ObjCRuntime.message("_addTouch:forDelayedDelivery:", to: event) {
+                typealias AddTouchFn = @convention(c) (AnyObject, Selector, UITouch, Bool) -> Void // swiftlint:disable:this nesting
+                let addTouch = msg.imp(as: AddTouchFn.self)
+                for syntheticTouch in touches {
+                    addTouch(event, msg.selector, syntheticTouch.touch, false)
+                }
+            }
+
+            self.event = event
+        }
+
+        /// Deliver to UIApplication.
+        func send() {
+            UIApplication.shared.sendEvent(event)
         }
     }
 }
 
-// MARK: - IOHIDEvent Constants (file-private, same file as IOHIDEventBuilder)
+// MARK: - IOHIDEvent Construction
+
+/// Creates IOHIDEvent structures for touch injection (IOKit, dlsym).
+/// Private to keep raw HID construction behind `TheSafecracker.TouchEvent`.
+@MainActor
+private final class SafecrackerIOHIDEventBuilder {
+
+    static func createEvent(for fingers: [TheSafecracker.SyntheticTouch]) -> UnsafeMutableRawPointer? {
+        let timestamp = mach_absolute_time()
+        let anyTouching = fingers.contains { $0.phase != .ended && $0.phase != .cancelled }
+
+        guard let handEvent = IOHIDEventCreateDigitizerEvent(
+            kCFAllocatorDefault,
+            timestamp,
+            UInt32(kIOHIDDigitizerTransducerTypeHand),
+            0,      // index
+            0,      // identity
+            kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch,
+            0,      // buttonMask
+            0, 0,   // x, y (hand doesn't need position)
+            0,      // z
+            0, 0,   // tipPressure, barrelPressure
+            0,      // twist
+            anyTouching,
+            anyTouching,
+            0       // options
+        ) else { return nil }
+
+        IOHIDEventSetFloatValue(handEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
+
+        for (index, finger) in fingers.enumerated() {
+            let isTouching = finger.phase == .began || finger.phase == .moved || finger.phase == .stationary
+            let eventMask: UInt32 = (finger.phase == .moved || finger.phase == .stationary)
+                ? kIOHIDDigitizerEventPosition
+                : (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch)
+
+            let fingerEvent = IOHIDEventCreateDigitizerFingerEventWithQuality(
+                kCFAllocatorDefault,
+                timestamp,
+                UInt32(index + 1),        // index (1-based position)
+                UInt32(index + 2),        // identity (unique per finger: 2, 3, 4...)
+                eventMask,
+                Float(finger.location.x),
+                Float(finger.location.y),
+                0,                    // z
+                isTouching ? 1.0 : 0, // tipPressure (1.0 while touching)
+                0,                    // twist
+                5.0,                  // majorRadius (matches KIF)
+                5.0,                  // minorRadius
+                1.0,                  // quality
+                1.0,                  // density
+                1.0,                  // irregularity
+                isTouching,           // range
+                isTouching,           // touch
+                0                     // options
+            )
+
+            if let fingerEvent = fingerEvent {
+                IOHIDEventSetFloatValue(fingerEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
+                IOHIDEventAppendEvent(handEvent, fingerEvent, 0)
+            }
+        }
+
+        return handEvent
+    }
+}
+
+// MARK: - IOHIDEvent Constants (file-private, same file as SafecrackerIOHIDEventBuilder)
 
 private let kIOHIDDigitizerTransducerTypeHand: Int = 3
 private let kIOHIDDigitizerEventRange: UInt32 = 1 << 0

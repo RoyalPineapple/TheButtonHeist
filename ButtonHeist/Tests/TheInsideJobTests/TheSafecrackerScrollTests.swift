@@ -122,15 +122,15 @@ final class TheSafecrackerScrollTests: XCTestCase {
                        "Second page scroll should add another 756")
     }
 
-    // MARK: - scrollToMakeActivationPointVisible
+    // MARK: - scrollToMakeScreenPointVisible
 
-    func testScrollToMakeActivationPointVisibleReturnsTrueWhenAlreadyInPreferredScreenRect() {
+    func testScrollToMakeScreenPointVisibleReturnsTrueWhenAlreadyInPreferredScreenRect() {
         let sv = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 1000),
             contentSize: CGSize(width: 400, height: 3000),
             contentOffset: .zero
         )
-        let result = safecracker.scrollToMakeActivationPointVisible(
+        let result = safecracker.scrollToMakeScreenPointVisible(
             CGPoint(x: 200, y: 300),
             in: sv,
             animated: false,
@@ -142,13 +142,13 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01)
     }
 
-    func testScrollToMakeActivationPointVisibleCentersPointInPreferredScreenRect() {
+    func testScrollToMakeScreenPointVisibleCentersPointInPreferredScreenRect() {
         let sv = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 1000),
             contentSize: CGSize(width: 400, height: 3000),
             contentOffset: .zero
         )
-        let result = safecracker.scrollToMakeActivationPointVisible(
+        let result = safecracker.scrollToMakeScreenPointVisible(
             CGPoint(x: 200, y: 888),
             in: sv,
             animated: false,
@@ -160,13 +160,13 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertEqual(sv.contentOffset.y, 468, accuracy: 0.01)
     }
 
-    func testScrollToMakeActivationPointVisibleReturnsFalseWhenClampLeavesPointOutsideMinimumRect() {
+    func testScrollToMakeScreenPointVisibleReturnsFalseWhenClampLeavesPointOutsideMinimumRect() {
         let sv = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 1000),
             contentSize: CGSize(width: 400, height: 3000),
             contentOffset: .zero
         )
-        let result = safecracker.scrollToMakeActivationPointVisible(
+        let result = safecracker.scrollToMakeScreenPointVisible(
             CGPoint(x: 200, y: -100),
             in: sv,
             animated: false,

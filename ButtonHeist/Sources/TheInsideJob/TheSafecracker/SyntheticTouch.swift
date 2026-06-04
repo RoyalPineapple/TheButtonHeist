@@ -5,7 +5,8 @@ import UIKit
 // MARK: - Touch Pipeline
 //
 // Type-safe pipeline for synthetic touch injection. The types enforce
-// the required call order — you can't skip steps or pass wrong args:
+// the required call order, so callers pass concrete screen geometry into
+// a touch event without semantic target policy:
 //
 //   TouchTarget.resolve(at:in:)  → TouchTarget
 //        ↓
@@ -26,8 +27,9 @@ extension TheSafecracker {
     /// On iOS 18+, SwiftUI routes gesture events through `UIKitGestureContainer`
     /// (a `UIResponder`, not `UIView`). Standard `hitTest:withEvent:` returns a
     /// rendering leaf that ignores touches. `resolve` walks the view hierarchy
-    /// with `_hitTestWithContext:` to find the actual gesture target — same
-    /// approach as KIF v3.11.2 (PR #1323).
+    /// with `_hitTestWithContext:` to find the UIKit responder target — same
+    /// approach as KIF v3.11.2 (PR #1323). This is view/responder hit testing,
+    /// not accessibility hierarchy inspection.
     ///
     /// The only way to get a `TouchTarget` is through `resolve(at:in:)`.
     ///
@@ -134,50 +136,6 @@ extension TheSafecracker {
         }
     }
 
-    // MARK: - TouchEvent
-
-    /// An assembled UIEvent ready to deliver to UIApplication.
-    /// Can only be constructed from `[SyntheticTouch]`, ensuring the
-    /// HID finger data always matches the touch array.
-    ///
-    /// `@MainActor` justification: wraps a UIEvent reference.
-    @MainActor struct TouchEvent { // swiftlint:disable:this agent_main_actor_value_type
-        let event: UIEvent
-
-        /// Package touches into a UIEvent with matching IOHIDEvent data.
-        init?(touches: [SyntheticTouch]) {
-            guard let event: UIEvent = ObjCRuntime.message("_touchesEvent", to: UIApplication.shared)?.call() else {
-                insideJobLogger.error("UIApplication doesn't respond to _touchesEvent")
-                return nil
-            }
-            ObjCRuntime.message("_clearTouches", to: event)?.call()
-
-            let hidEvent = IOHIDEventBuilder.createEvent(for: touches)
-
-            if let hidEvent {
-                ObjCRuntime.message("_setHIDEvent:", to: event)?.call(hidEvent)
-                for syntheticTouch in touches {
-                    syntheticTouch.setHIDEvent(hidEvent)
-                }
-            }
-
-            // Add touches to event (mixed object + value args — use imp)
-            if let msg = ObjCRuntime.message("_addTouch:forDelayedDelivery:", to: event) {
-                typealias AddTouchFn = @convention(c) (AnyObject, Selector, UITouch, Bool) -> Void // swiftlint:disable:this nesting
-                let addTouch = msg.imp(as: AddTouchFn.self)
-                for syntheticTouch in touches {
-                    addTouch(event, msg.selector, syntheticTouch.touch, false)
-                }
-            }
-
-            self.event = event
-        }
-
-        /// Deliver to UIApplication.
-        func send() {
-            UIApplication.shared.sendEvent(event)
-        }
-    }
 }
 
 #endif // DEBUG
