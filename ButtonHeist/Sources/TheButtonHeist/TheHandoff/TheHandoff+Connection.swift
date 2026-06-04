@@ -62,7 +62,11 @@ extension TheHandoff {
 
     /// Force-close the connection. Use when a timeout suggests the connection
     /// is dead but TCP hasn't noticed yet.
-    func forceDisconnect() {
+    func forceDisconnect(expectedAttemptID: UUID? = nil) {
+        if let expectedAttemptID,
+           connectionLifecycle.activeAttemptID != expectedAttemptID {
+            return
+        }
         guard isConnected else { return }
         handoffConnectionLogger.warning("Force-disconnecting stale connection")
         let reconnectDevice = connectedDevice
@@ -82,8 +86,8 @@ extension TheHandoff {
     }
 
     @discardableResult
-    func tickKeepalive() -> Int {
-        connectionLifecycle.tickKeepalive {
+    func tickKeepalive(expectedAttemptID: UUID? = nil) -> Int {
+        connectionLifecycle.tickKeepalive(expectedAttemptID: expectedAttemptID) {
             connection?.send(.ping, requestId: nil)
         }
     }
@@ -100,7 +104,7 @@ extension TheHandoff {
             connectionLifecycle.markConnected(
                 attemptID: attemptID,
                 device: device,
-                keepaliveTask: makeKeepaliveTask()
+                keepaliveTask: makeKeepaliveTask(attemptID: attemptID)
             )
         case .disconnected(let reason):
             handleDisconnectEvent(reason, attemptID: attemptID, device: device)
@@ -200,12 +204,12 @@ extension TheHandoff {
         }
     }
 
-    private func makeKeepaliveTask() -> Task<Void, Never> {
+    private func makeKeepaliveTask(attemptID: UUID) -> Task<Void, Never> {
         keepalive.makeTask(
-            tick: { [weak self] in self?.tickKeepalive() ?? 0 },
+            tick: { [weak self] in self?.tickKeepalive(expectedAttemptID: attemptID) ?? 0 },
             forceDisconnect: { [weak self] count in
                 handoffConnectionLogger.warning("No pong received for \(count) consecutive pings — forcing disconnect")
-                self?.forceDisconnect()
+                self?.forceDisconnect(expectedAttemptID: attemptID)
             }
         )
     }

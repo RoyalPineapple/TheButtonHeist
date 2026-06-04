@@ -2,7 +2,7 @@ import Foundation
 
 struct HandoffKeepalive {
     let interval: Duration = .seconds(5)
-    let maxMissedPongs = 6
+    let maxMissedPongs = 36
 
     func makeTask(
         tick: @escaping @ButtonHeistActor () -> Int,

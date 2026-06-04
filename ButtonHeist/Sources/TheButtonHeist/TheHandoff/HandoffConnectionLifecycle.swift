@@ -211,8 +211,9 @@ final class HandoffConnectionLifecycle {
     }
 
     @discardableResult
-    func tickKeepalive(sendPing: () -> Void) -> Int {
+    func tickKeepalive(expectedAttemptID: UUID? = nil, sendPing: () -> Void) -> Int {
         guard case .connected(var session) = phase else { return 0 }
+        if let expectedAttemptID, session.attemptID != expectedAttemptID { return 0 }
         sendPing()
         session.missedPongCount += 1
         let count = session.missedPongCount
