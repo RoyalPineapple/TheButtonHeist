@@ -116,12 +116,14 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
 
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {
         validatePlanHeader(plan, path: context.path, requiresName: false)
-        validateDefinitions(plan.definitions, path: "\(context.path).definitions")
+    }
+
+    mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {
+        validateDefinitions(definitions, path: context.path)
     }
 
     mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
         validatePlanHeader(plan, path: context.path, requiresName: true)
-        validateDefinitions(plan.definitions, path: "\(context.path).definitions")
     }
 
     mutating func visitStep(
@@ -200,7 +202,6 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
 
     mutating func visitHeist(_ plan: HeistPlan, context: HeistTraversalContext) {
         validatePlanHeader(plan, path: context.path, requiresName: false)
-        validateDefinitions(plan.definitions, path: "\(context.path).definitions")
         if plan.parameter != .none {
             fail(
                 path: "\(context.path).parameter",
