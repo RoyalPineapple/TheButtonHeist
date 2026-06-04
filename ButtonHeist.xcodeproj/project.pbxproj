@@ -55,7 +55,6 @@
 		1515553E1E30191FC8047F11 /* TheFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B92FA5985EAF1A5C7360207 /* TheFence.swift */; };
 		15ACCDAABA1FB72018B87121 /* TheBurglar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B68F25EE20E871B3447D1A /* TheBurglar.swift */; };
 		15E21D8057F2471052C0CE95 /* ScreenManifestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */; };
-		16BA5B1AD38563E63F26E057 /* TheFence+HeistReportAdapterRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE44BA2709FE113BA6B6871B /* TheFence+HeistReportAdapterRows.swift */; };
 		16F213C277658794D7E90DAC /* RuntimeLeaseObservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B2E011E256A57C07E586E5 /* RuntimeLeaseObservationTests.swift */; };
 		182D08F34A032A4555C8B88C /* TheFence+RequestPayload+ElementActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C563F9006A5994C60474596B /* TheFence+RequestPayload+ElementActions.swift */; };
 		182FD49F6D08E0E35666283B /* MuscleAuthenticationRequestDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5E1D8EDA975537DDF7B526 /* MuscleAuthenticationRequestDecoder.swift */; };
@@ -365,6 +364,7 @@
 		B7F0B3C7BB14E26193053BF1 /* MuscleApprovalPromptCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = C861188FFA33139A5AF11B46 /* MuscleApprovalPromptCallbacks.swift */; };
 		B875360A9AB2CBF5E492B187 /* TheFence+PlaybackValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11802D62239E7FC9B372574B /* TheFence+PlaybackValidation.swift */; };
 		B8BD58BF4E0C1B8FC2220CBE /* RotorResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C2D8CB221DAFAC4E1CE086 /* RotorResult.swift */; };
+		B8FA48DB0F7BC3B4582F4281 /* PublicResponseProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2E75F94A1D312C9A3C0483C /* PublicResponseProjection.swift */; };
 		B95536B7E5A8E22D64FD70D7 /* TheFenceTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CA15622C9C76309BC21D90 /* TheFenceTestHelpers.swift */; };
 		BA786D0DABF62FE4CD4AD724 /* PredicateCaseSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68BD5C6FDDA4773693F43D96 /* PredicateCaseSelection.swift */; };
 		BAAE9180129177F9E085C610 /* ElementInflationProductTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDE5B408A7D20418FE5AAB96 /* ElementInflationProductTests.swift */; };
@@ -1021,6 +1021,7 @@
 		B270D706A332CA587FAFDA9A /* Navigation+PresentationObstruction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Navigation+PresentationObstruction.swift"; sourceTree = "<group>"; };
 		B28FAA3B409D9A05DF2FAEB7 /* TLSCertificateFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSCertificateFacts.swift; sourceTree = "<group>"; };
 		B2B0AAC27093F5E93721E310 /* PostActionObservation+Testing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PostActionObservation+Testing.swift"; sourceTree = "<group>"; };
+		B2E75F94A1D312C9A3C0483C /* PublicResponseProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicResponseProjection.swift; sourceTree = "<group>"; };
 		B327E8A00585684B8DF1E7AE /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		B3587AF13D58E9B2840E15D6 /* ButtonHeistDSLTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistDSLTests-Info.plist"; sourceTree = "<group>"; };
 		B3B1A6858B71403D4DBB9655 /* InsideJobRuntimeLease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobRuntimeLease.swift; sourceTree = "<group>"; };
@@ -1070,7 +1071,6 @@
 		CDD59EB8684A62ABBB0EFEF4 /* TheTripwireTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheTripwireTests.swift; sourceTree = "<group>"; };
 		CDE5B408A7D20418FE5AAB96 /* ElementInflationProductTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementInflationProductTests.swift; sourceTree = "<group>"; };
 		CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+Capture.swift"; sourceTree = "<group>"; };
-		CE44BA2709FE113BA6B6871B /* TheFence+HeistReportAdapterRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+HeistReportAdapterRows.swift"; sourceTree = "<group>"; };
 		CF2F586190CE1CB11AC6617B /* TheSafecracker+TapDiagnostic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TapDiagnostic.swift"; sourceTree = "<group>"; };
 		D0BAD5A4EB504A85EF99890C /* TheInsideJob-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJob-Info.plist"; sourceTree = "<group>"; };
 		D0E65AC490BC5A169DC71987 /* TheFence+RequestPayload+AccessibilityActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+AccessibilityActions.swift"; sourceTree = "<group>"; };
@@ -1324,6 +1324,7 @@
 				40ECF9E5A1BABA984614D3AC /* FenceResponseModels.swift */,
 				89E49A108039D22AC0F4ECFC /* PlaybackFailure.swift */,
 				F4CC3DD5E8E5DA17F81344C6 /* PublicJSONSerializer.swift */,
+				B2E75F94A1D312C9A3C0483C /* PublicResponseProjection.swift */,
 				37797014C48E03154F0FB75C /* SchemaValidationError.swift */,
 				2B92FA5985EAF1A5C7360207 /* TheFence.swift */,
 				B52DC7DFD3B9768E788237C8 /* TheFence+CommandArguments.swift */,
@@ -1356,7 +1357,6 @@
 				89F7626DACBB1D629F4C94FC /* TheFence+HeistRecording.swift */,
 				58EB60355A7D9C5A76DB15EB /* TheFence+HeistRecordingComposition.swift */,
 				FCE342E70A5ADC170C389D78 /* TheFence+HeistRecordingReceipt.swift */,
-				CE44BA2709FE113BA6B6871B /* TheFence+HeistReportAdapterRows.swift */,
 				B6EF46D3FE620A1DF7165DDE /* TheFence+HeistReportProjection.swift */,
 				F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */,
 				CA752E01A8136738F8789715 /* TheFence+PendingRequestTrackers.swift */,
@@ -2629,6 +2629,7 @@
 				EA053394D81ED60D140F6DD2 /* FenceResponseModels.swift in Sources */,
 				461EB11D0643DAD4017607CC /* PlaybackFailure.swift in Sources */,
 				A49D71A6A794BCDA7B95070A /* PublicJSONSerializer.swift in Sources */,
+				B8FA48DB0F7BC3B4582F4281 /* PublicResponseProjection.swift in Sources */,
 				F27830B9AF754EF55A035891 /* SchemaValidationError.swift in Sources */,
 				E1C21596B113413BBFE23F51 /* TheFence+CommandArguments.swift in Sources */,
 				404A17F6C4541A3C8E1FA662 /* TheFence+CommandCatalog+Actions.swift in Sources */,
@@ -2660,7 +2661,6 @@
 				C43778106596E11B4A8FCA99 /* TheFence+HeistRecording.swift in Sources */,
 				852F0F6115A388E737D1EB6C /* TheFence+HeistRecordingComposition.swift in Sources */,
 				7F5596BFC02AC9752C3F424F /* TheFence+HeistRecordingReceipt.swift in Sources */,
-				16BA5B1AD38563E63F26E057 /* TheFence+HeistReportAdapterRows.swift in Sources */,
 				8AAA02123D35758F19396113 /* TheFence+HeistReportProjection.swift in Sources */,
 				E327E060E6709EE93A5BBEBB /* TheFence+ParameterSpec.swift in Sources */,
 				B3A7E0DD9341201CC97ED43F /* TheFence+PendingRequestTrackers.swift in Sources */,

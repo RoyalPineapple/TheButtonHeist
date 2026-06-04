@@ -4,38 +4,29 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactHeistFormatted(
-        plan: HeistPlan,
-        result: HeistExecutionResult,
-        netDelta: AccessibilityTrace.Delta?
-    ) -> String {
-        let projection = HeistReportProjection(plan: plan, result: result)
-        let checked = projection.summary.expectationsChecked
-        let met = projection.summary.expectationsMet
-        var text = "heist: \(result.completedStepCount) steps in \(result.totalTimingMs)ms"
-        let failedIndex = result.stoppedFailedIndex
-        if let failedIndex { text += " (failed at \(failedIndex))" }
-        if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
-        if let netDelta { text += " [net: \(Self.compactDeltaKind(netDelta))]" }
-        if let lastScreenId = projection.finalActionResultsInExecutionOrder.compactMap({
-            $0.accessibilityTrace?.endpointScreenIdProjection
-        }).last {
+    func compactHeistFormatted(_ projection: PublicHeistExecutionProjection) -> String {
+        var text = "heist: \(projection.completedSteps) steps in \(projection.totalTimingMs)ms"
+        if let failedIndex = projection.failedIndex {
+            text += " (failed at \(failedIndex))"
+        }
+        if let expectations = projection.expectations {
+            text += " [expectations: \(expectations.met)/\(expectations.checked)]"
+        }
+        if let netDelta = projection.netDelta {
+            text += " [net: \(Self.compactDeltaKind(netDelta))]"
+        }
+        if let lastScreenId = projection.finalScreenId {
             text = "\(lastScreenId) | \(text)"
         }
-        for row in HeistReportAdapterRow.rows(from: projection.nodes) {
+        for row in projection.compactLines {
             var line = "  [\(row.index)] \(row.commandName)"
-            if let actionResult = row.finalActionResult {
-                if !actionResult.success, let error = actionResult.message {
-                    line += " -> error: \(error)"
-                } else if let delta = actionResult.accessibilityTrace?.endpointDeltaProjection {
-                    let kind = Self.compactDeltaKind(delta)
-                    line += " -> \(kind)"
-                }
-            } else if let failureMessage = row.failureMessage {
+            if let failureMessage = row.failureMessage {
                 line += " -> error: \(failureMessage)"
+            } else if let delta = row.delta {
+                line += " -> \(Self.compactDeltaKind(delta))"
             }
-            if let met = row.node.expectationMet {
-                line += met ? " ✓" : " ✗"
+            if let expectation = row.expectation {
+                line += expectation.met ? " ✓" : " ✗"
             }
             text += "\n\(line)"
         }

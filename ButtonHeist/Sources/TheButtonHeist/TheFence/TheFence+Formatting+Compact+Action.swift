@@ -5,33 +5,36 @@ import TheScore
 extension FenceResponse {
 
     func compactActionResult(command: TheFence.Command, _ result: ActionResult, expectation: ExpectationResult?) -> String {
-        let commandName = command.rawValue
-        guard result.success else {
-            return Self.compactActionFailure(result, commandName: commandName)
+        let projection = PublicActionProjection(
+            commandName: command.rawValue,
+            result: result,
+            expectation: expectation
+        )
+        guard projection.status != .error else {
+            return Self.compactActionFailure(projection)
         }
 
         var text: String
-        switch result.payload {
-        case .rotor(let search):
+        if let search = projection.rotor {
             text = Self.compactRotor(search)
-        case .heistExecution(let heist):
+        } else if let heist = projection.heistExecution {
             text = "\(TheFence.Command.runHeist.rawValue): \(heist.steps.count) step(s)"
-        case .value, .none:
-            if let delta = result.accessibilityTrace?.endpointDeltaProjection {
-                text = Self.compactDelta(delta, method: commandName)
+        } else {
+            if let delta = projection.delta {
+                text = Self.compactDelta(delta, method: projection.commandName)
             } else {
-                text = "\(commandName): ok"
+                text = "\(projection.commandName): ok"
             }
         }
-        if let screenId = result.accessibilityTrace?.endpointScreenIdProjection {
+        if let screenId = projection.screenId {
             text = "\(screenId) | \(text)"
         }
-        if case .value(let value) = result.payload {
+        if let value = projection.value {
             text += "\nvalue: \"\(value)\""
         }
-        if let expectation, !expectation.met {
+        if let expectation = projection.expectation, expectation.status == .failed {
             text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
-            if let hint = Self.compactExpectationFailureHint(expectation) {
+            if let hint = expectation.failureHint {
                 text += "\nhint: \(hint)"
             }
         }
@@ -52,30 +55,14 @@ extension FenceResponse {
         return text
     }
 
-    private static func compactExpectationFailureHint(_ expectation: ExpectationResult) -> String? {
-        guard expectation.predicate == .changed(.screen()), expectation.actual == "elementsChanged" else {
-            return nil
-        }
-        return "screen_changed requires a screen-level transition; " +
-            "use elements_changed for same-screen element updates " +
-            "or wait when the UI may settle asynchronously"
-    }
-
-    private static func compactActionFailure(_ result: ActionResult, commandName: String) -> String {
-        let message = result.message ?? commandName
-        let errorCode = Self.actionFailureDetails(result)?.errorCode ?? compactActionErrorKind(result).rawValue
-        var text = "\(commandName): error[\(errorCode)]: \(message)"
-        if let screenId = result.accessibilityTrace?.endpointScreenIdProjection {
+    private static func compactActionFailure(_ projection: PublicActionProjection) -> String {
+        let message = projection.message ?? projection.commandName
+        let errorCode = projection.failure?.compactCode ?? ErrorKind.actionFailed.rawValue
+        var text = "\(projection.commandName): error[\(errorCode)]: \(message)"
+        if let screenId = projection.screenId {
             text = "\(screenId) | \(text)"
         }
         return text
-    }
-
-    private static func compactActionErrorKind(_ result: ActionResult) -> ErrorKind {
-        if let errorKind = result.errorKind {
-            return errorKind
-        }
-        return .actionFailed
     }
 
 }

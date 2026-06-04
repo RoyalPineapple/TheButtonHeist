@@ -41,6 +41,98 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(output, "one_finger_tap: ok")
     }
 
+    func testActionFailureWinsOverAttachedExpectationResult() {
+        let expectation = ExpectationResult(
+            met: false,
+            predicate: .state(.present(ElementPredicate(label: "Done"))),
+            actual: "not evaluated"
+        )
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(
+                success: false,
+                method: .activate,
+                message: "button disabled",
+                errorKind: .elementNotFound
+            ),
+            expectation: expectation
+        )
+
+        let json = publicJSONObject(response)
+
+        XCTAssertEqual(json["status"] as? String, "error")
+        XCTAssertEqual(json["errorClass"] as? String, "elementNotFound")
+        XCTAssertNil(json["expectation"])
+        XCTAssertEqual(response.compactFormatted(), "activate: error[elementNotFound]: button disabled")
+        XCTAssertEqual(response.humanFormatted(), "Error: button disabled")
+        XCTAssertTrue(response.isFailure)
+    }
+
+    func testActionFailureCodeAndClassComeFromOneProjection() {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(
+                success: false,
+                method: .activate,
+                message: "Could not access accessibility tree: no traversable app windows",
+                errorKind: .actionFailed
+            )
+        )
+
+        let json = publicJSONObject(response)
+        let compact = response.compactFormatted()
+
+        XCTAssertEqual(json["status"] as? String, "error")
+        XCTAssertEqual(json["errorClass"] as? String, "actionFailed")
+        XCTAssertEqual(json["errorCode"] as? String, "request.accessibility_tree_unavailable")
+        XCTAssertTrue(compact.contains("error[request.accessibility_tree_unavailable]"), compact)
+    }
+
+    func testExpectationFailureStatusAndHintAgreeAcrossJSONAndCompact() {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(success: true, method: .activate),
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .changed(.screen()),
+                actual: "elementsChanged"
+            )
+        )
+
+        let json = publicJSONObject(response)
+        let expectation = json["expectation"] as? [String: Any]
+        let compact = response.compactFormatted()
+
+        XCTAssertEqual(json["status"] as? String, "expectation_failed")
+        XCTAssertNil(json["errorClass"])
+        XCTAssertEqual(expectation?["met"] as? Bool, false)
+        XCTAssertEqual(expectation?["actual"] as? String, "elementsChanged")
+        XCTAssertTrue(compact.contains("[expectation FAILED: got elementsChanged]"), compact)
+        XCTAssertTrue(compact.contains("screen_changed requires a screen-level transition"), compact)
+        XCTAssertTrue(response.isFailure)
+    }
+
+    func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(success: true, method: .activate),
+            expectation: ExpectationResult(
+                met: true,
+                predicate: .state(.present(ElementPredicate(label: "Done"))),
+                actual: "matched"
+            )
+        )
+
+        let json = publicJSONObject(response)
+        let expectation = json["expectation"] as? [String: Any]
+
+        XCTAssertEqual(json["status"] as? String, "ok")
+        XCTAssertEqual(expectation?["met"] as? Bool, true)
+        XCTAssertEqual(response.compactFormatted(), "activate: ok")
+        XCTAssertTrue(response.humanFormatted().contains("[expectation met]"))
+        XCTAssertFalse(response.isFailure)
+    }
+
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
         let childAction = try HeistStep.action(ActionStep(
@@ -84,6 +176,41 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let output = FenceResponse.heistExecution(plan: plan, result: result).humanFormatted()
 
         XCTAssertTrue(output.contains("[expectations: 1/1 met]"), output)
+    }
+
+    func testHeistExpectationCountsAgreeAcrossPublicFormats() throws {
+        let expected = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let action = try HeistStep.action(ActionStep(
+            command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
+            expectation: WaitStep(predicate: expected, timeout: 1)
+        ))
+        let plan = HeistPlan(body: [action])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .action,
+                    actionResult: ActionResult(success: true, method: .activate),
+                    expectation: ExpectationResult(met: true, predicate: expected, actual: "matched"),
+                    durationMs: 5
+                ),
+            ],
+            totalTimingMs: 5
+        )
+        let response = FenceResponse.heistExecution(plan: plan, result: result)
+
+        let json = publicJSONObject(response)
+        let expectations = json["expectations"] as? [String: Any]
+        let report = json["report"] as? [String: Any]
+        let summary = report?["summary"] as? [String: Any]
+        let reportExpectations = summary?["expectations"] as? [String: Any]
+
+        XCTAssertEqual(expectations?["checked"] as? Int, 1)
+        XCTAssertEqual(expectations?["met"] as? Int, 1)
+        XCTAssertEqual(reportExpectations?["checked"] as? Int, 1)
+        XCTAssertEqual(reportExpectations?["met"] as? Int, 1)
+        XCTAssertTrue(response.compactFormatted().contains("[expectations: 1/1]"))
+        XCTAssertTrue(response.humanFormatted().contains("[expectations: 1/1 met]"))
     }
 
     func testCompactHeistFormattingReportsFailStepMessage() {
@@ -203,6 +330,189 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(action["commandName"] as? String, "activate")
         XCTAssertEqual(actionResult["status"] as? String, "error")
         XCTAssertEqual(actionResult["message"] as? String, "nested button failed")
+    }
+
+    func testPublicHeistJSONReportsSelectedElsePathAsTreeNodes() throws {
+        let elseStep = try HeistStep.action(ActionStep(
+            command: .activate(.target(.predicate(ElementPredicate(label: "Fallback"))))
+        ))
+        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let conditional = try ConditionalStep(
+            cases: [
+                PredicateCase(
+                    predicate: predicate,
+                    body: [try HeistStep.action(ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Home"))))))]
+                ),
+            ],
+            elseBody: [elseStep]
+        )
+        let plan = HeistPlan(body: [.conditional(conditional)])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .conditional,
+                    durationMs: 3,
+                    caseSelection: HeistCaseSelectionResult(
+                        cases: [
+                            HeistCaseMatchResult(
+                                predicate: predicate,
+                                result: ExpectationResult(met: false, predicate: predicate)
+                            ),
+                        ],
+                        selectedCaseIndex: nil,
+                        elapsedMs: 1,
+                        elseRan: true
+                    ),
+                    children: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            path: "$.body[0].conditional.else_body[0]",
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate),
+                            durationMs: 2
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 3
+        )
+
+        let json = publicJSONObject(.heistExecution(plan: plan, result: result))
+        let report = try XCTUnwrap(json["report"] as? [String: Any])
+        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let root = try XCTUnwrap(nodes.first)
+        let caseSelection = try XCTUnwrap(root["caseSelection"] as? [String: Any])
+        let children = try XCTUnwrap(root["children"] as? [[String: Any]])
+        let compact = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
+
+        XCTAssertEqual(root["kind"] as? String, "if")
+        XCTAssertEqual(caseSelection["elseRan"] as? Bool, true)
+        XCTAssertNil(caseSelection["selectedCaseIndex"])
+        XCTAssertEqual(children.first?["path"] as? String, "$.body[0].conditional.else_body[0]")
+        XCTAssertTrue(compact.contains("[0] if"), compact)
+        XCTAssertTrue(compact.contains("[1] activate"), compact)
+    }
+
+    func testPublicHeistOutputReportsForEachStructurally() throws {
+        let forEach = try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            body: [try HeistStep.action(ActionStep(command: .typeText(text: .ref("item"), target: nil)))]
+        )
+        let plan = HeistPlan(body: [.forEachString(forEach)])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    path: "$.body[0]",
+                    kind: .forEachString,
+                    message: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"",
+                    durationMs: 30,
+                    stopsHeist: true,
+                    forEachResult: HeistForEachResult(
+                        matchedCount: 2,
+                        limit: 2,
+                        iterationCount: 2,
+                        failureReason: "iteration 1 failed for value \"Eggs\""
+                    ),
+                    children: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            path: "$.body[0].for_each_string.iterations[0]",
+                            kind: .forEachIteration,
+                            message: "iteration 0 value \"Milk\"",
+                            durationMs: 5,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_string.iterations[0].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .typeText),
+                                    durationMs: 5
+                                ),
+                            ]
+                        ),
+                        HeistExecutionStepResult(
+                            index: 1,
+                            path: "$.body[0].for_each_string.iterations[1]",
+                            kind: .forEachIteration,
+                            message: "iteration 1 value \"Eggs\"",
+                            durationMs: 6,
+                            stopsHeist: true,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_string.iterations[1].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(
+                                        success: false,
+                                        method: .typeText,
+                                        message: "field missing",
+                                        errorKind: .elementNotFound
+                                    ),
+                                    durationMs: 6,
+                                    stopsHeist: true
+                                ),
+                            ]
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 30,
+            failedIndex: 0
+        )
+        let response = FenceResponse.heistExecution(plan: plan, result: result)
+
+        let json = publicJSONObject(response)
+        let report = try XCTUnwrap(json["report"] as? [String: Any])
+        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let root = try XCTUnwrap(nodes.first)
+        let forEachResult = try XCTUnwrap(root["forEachResult"] as? [String: Any])
+        let children = try XCTUnwrap(root["children"] as? [[String: Any]])
+        let compact = response.compactFormatted()
+
+        XCTAssertEqual(root["kind"] as? String, "for_each_string")
+        XCTAssertEqual(forEachResult["matchedCount"] as? Int, 2)
+        XCTAssertEqual(forEachResult["iterationCount"] as? Int, 2)
+        XCTAssertEqual(children.map { $0["kind"] as? String }, ["for_each_iteration", "for_each_iteration"])
+        XCTAssertTrue(compact.contains("[0] for_each_string -> error: for_each_string stopped"), compact)
+    }
+
+    func testPlaybackFailureUsesProjectedActionFirstSemantics() throws {
+        let failure = PlaybackFailure.actionFailed(
+            step: PlaybackFailure.FailedStep(command: .activate, target: nil),
+            result: ActionResult(
+                success: false,
+                method: .activate,
+                message: "button disabled",
+                errorKind: .elementNotFound
+            ),
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .state(.present(ElementPredicate(label: "Done"))),
+                actual: "not evaluated"
+            ),
+            interface: nil,
+            diagnosticCaptureFailure: nil
+        )
+        let response = FenceResponse.heistPlayback(
+            completedSteps: 0,
+            failedIndex: 0,
+            totalTimingMs: 4,
+            failure: failure
+        )
+
+        let json = publicJSONObject(response)
+        let publicFailure = try XCTUnwrap(json["failure"] as? [String: Any])
+        let actionResult = try XCTUnwrap(publicFailure["actionResult"] as? [String: Any])
+
+        XCTAssertEqual(json["status"] as? String, "error")
+        XCTAssertEqual(actionResult["status"] as? String, "error")
+        XCTAssertEqual(actionResult["errorClass"] as? String, "elementNotFound")
+        XCTAssertNil(actionResult["expectation"])
+        XCTAssertNil(publicFailure["expectation"])
+        XCTAssertEqual(response.compactFormatted(), "playback: 0 steps in 4ms (failed at 0) [activate: button disabled]")
     }
 
     func testCompactInterfaceRendersNestedContainersAndElements() {
