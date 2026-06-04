@@ -9,26 +9,8 @@ enum PublicResponseStatus: String {
     case partial
 }
 
-enum PublicResponseKind {
-    case ok
-    case error
-    case status
-    case pong
-    case devices
-    case interface
-    case action
-    case screenshot
-    case heistExecution
-    case sessionState
-    case targets
-    case heistStarted
-    case heistStopped
-    case heistPlayback
-}
-
 struct PublicResponseProjection {
     let status: PublicResponseStatus
-    let kind: PublicResponseKind
     let action: PublicActionProjection?
     let heist: PublicHeistExecutionProjection?
     let playback: PublicPlaybackProjection?
@@ -36,41 +18,41 @@ struct PublicResponseProjection {
     init(response: FenceResponse) {
         switch response {
         case .ok:
-            self.init(status: .ok, kind: .ok)
+            self.init(status: .ok)
         case .error:
-            self.init(status: .error, kind: .error)
+            self.init(status: .error)
         case .status:
-            self.init(status: .ok, kind: .status)
+            self.init(status: .ok)
         case .pong:
-            self.init(status: .ok, kind: .pong)
+            self.init(status: .ok)
         case .devices:
-            self.init(status: .ok, kind: .devices)
+            self.init(status: .ok)
         case .interface:
-            self.init(status: .ok, kind: .interface)
+            self.init(status: .ok)
         case .action(let command, let result, let expectation):
             let action = PublicActionProjection(
                 commandName: command.rawValue,
                 result: result,
                 expectation: expectation
             )
-            self.init(status: action.status, kind: .action, action: action)
+            self.init(status: action.status, action: action)
         case .screenshot, .screenshotData:
-            self.init(status: .ok, kind: .screenshot)
+            self.init(status: .ok)
         case .heistExecution(let plan, let result, let accessibilityTrace):
             let heist = PublicHeistExecutionProjection(
                 plan: plan,
                 result: result,
                 accessibilityTrace: accessibilityTrace
             )
-            self.init(status: heist.status, kind: .heistExecution, heist: heist)
+            self.init(status: heist.status, heist: heist)
         case .sessionState:
-            self.init(status: .ok, kind: .sessionState)
+            self.init(status: .ok)
         case .targets:
-            self.init(status: .ok, kind: .targets)
+            self.init(status: .ok)
         case .heistStarted:
-            self.init(status: .ok, kind: .heistStarted)
+            self.init(status: .ok)
         case .heistStopped:
-            self.init(status: .ok, kind: .heistStopped)
+            self.init(status: .ok)
         case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
             let playback = PublicPlaybackProjection(
                 completedSteps: completedSteps,
@@ -78,7 +60,7 @@ struct PublicResponseProjection {
                 totalTimingMs: totalTimingMs,
                 failure: failure
             )
-            self.init(status: playback.status, kind: .heistPlayback, playback: playback)
+            self.init(status: playback.status, playback: playback)
         }
     }
 
@@ -93,13 +75,11 @@ struct PublicResponseProjection {
 
     private init(
         status: PublicResponseStatus,
-        kind: PublicResponseKind,
         action: PublicActionProjection? = nil,
         heist: PublicHeistExecutionProjection? = nil,
         playback: PublicPlaybackProjection? = nil
     ) {
         self.status = status
-        self.kind = kind
         self.action = action
         self.heist = heist
         self.playback = playback
