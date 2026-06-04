@@ -75,16 +75,16 @@ extension GestureCLICommandContract {
 struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "One-finger tap by semantic element or explicit coordinates",
+        abstract: "Explicit mechanical/spatial one-finger tap",
         discussion: """
-            Performs a one-finger tap. Element-targeted taps use the semantic \
+            Performs an explicit mechanical/spatial gesture. Element-targeted \
+            gestures use the semantic \
             actionability path: resolve, reveal, acquire fresh accessibility \
-            geometry, then dispatch the tap. Coordinate taps are explicit \
-            viewport actions.
+            geometry, then dispatch the gesture. Coordinate gestures are \
+            explicit viewport actions.
 
-            Use one_finger_tap when you need precise coordinate-based taps \
-            or when the product intent is a tap rather than primary activation \
-            (for example, a specific point on a canvas or map).
+            Use one_finger_tap when the product intent is a spatial gesture \
+            itself, for example a specific point on a canvas or map.
             """
     )
 

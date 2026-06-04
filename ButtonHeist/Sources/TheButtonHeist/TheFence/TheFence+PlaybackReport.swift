@@ -22,7 +22,7 @@ private struct PlaybackReportProjection {
     func project() -> TheFence.PlaybackProjection {
         let projection = HeistReportProjection(plan: contract.plan, result: result)
         var failures: [PlaybackFailure] = []
-        let stepResults = projection.legacyFlatRows.map { row in
+        let stepResults = HeistReportAdapterRow.rows(from: projection.nodes).map { row in
             let failure = row.playbackFailure
             if let failure {
                 failures.append(failure)
@@ -40,7 +40,7 @@ private struct PlaybackReportProjection {
     }
 
     private func stepResult(
-        row: HeistReportFlatRow,
+        row: HeistReportAdapterRow,
         failure: PlaybackFailure?
     ) -> HeistPlaybackReport.StepResult {
         let reportOutcome: HeistPlaybackReport.Outcome
@@ -71,5 +71,33 @@ private struct PlaybackReportProjection {
         case .thrown:
             return .thrown
         }
+    }
+}
+
+private extension HeistReportAdapterRow {
+    var playbackFailure: PlaybackFailure? {
+        let failedStep: PlaybackFailure.FailedStep
+        if let fenceCommand {
+            failedStep = PlaybackFailure.FailedStep(command: fenceCommand, target: target)
+        } else {
+            failedStep = PlaybackFailure.FailedStep(commandName: commandName, target: target)
+        }
+        if let result = finalActionResult,
+           result.success == false || node.expectation?.met == false {
+            return .actionFailed(
+                step: failedStep,
+                result: result,
+                expectation: node.expectation,
+                interface: nil,
+                diagnosticCaptureFailure: nil
+            )
+        }
+        guard let failureMessage else { return nil }
+        return .fenceError(
+            step: failedStep,
+            message: failureMessage,
+            interface: nil,
+            diagnosticCaptureFailure: nil
+        )
     }
 }

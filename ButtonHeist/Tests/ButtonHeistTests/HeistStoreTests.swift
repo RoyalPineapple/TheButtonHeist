@@ -327,6 +327,188 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testManualScrollBeforeSemanticActionRecordsOnlySemanticAction() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "manual-scroll-setup", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .scroll,
+            args: ["direction": .string("down")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")]
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.body, [try activateStep(label: "Delete")])
+    }
+
+    @ButtonHeistActor
+    func testReadBetweenManualScrollAndSemanticActionPreservesSemanticRecording() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "scroll-read-semantic", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .scroll,
+            args: ["direction": .string("down")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .getInterface,
+            args: [:],
+            dispatchedResponse: .interface(Interface(timestamp: Date(), tree: []))
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")]
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.body, [try activateStep(label: "Delete")])
+    }
+
+    @ButtonHeistActor
+    func testManualScrollBeforeFailedSemanticActionDoesNotRecordScrollOnlyHeist() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "scroll-before-failed-semantic", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .scroll,
+            args: ["direction": .string("down")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")],
+            actionResult: ActionResult(success: false, method: .activate, errorKind: .elementNotFound)
+        )
+
+        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testManualScrollBeforeUnmetSemanticExpectationDoesNotRecordScrollOnlyHeist() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "scroll-before-unmet-expectation", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .scroll,
+            args: ["direction": .string("down")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: [
+                "target": targetArgumentValue(label: "Delete"),
+                "expect": .object([
+                    "type": .string("absent"),
+                    "element": targetArgumentValue(label: "Delete"),
+                ]),
+            ],
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .state(.absent(ElementPredicate(label: "Delete"))),
+                actual: "Delete still present"
+            )
+        )
+
+        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testManualScrollBeforeAmbiguousSemanticActionDoesNotRecordScrollOnlyHeist() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "scroll-before-ambiguous-semantic", app: "com.example.app")
+
+        let first = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let second = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let actionResult = semanticActionResult(
+            method: .activate,
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Delete")),
+            subject: first,
+            before: [first, second],
+            after: [first, second]
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .scroll,
+            args: ["direction": .string("down")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")],
+            actionResult: actionResult
+        )
+
+        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testExplicitViewportScrollCanRecordWhenItIsTheRecordedIntent() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "explicit-scroll", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .scroll,
+            args: ["direction": .string("down")]
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.body, [
+            .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testManualScrollBeforeMechanicalTapRecordsViewportAndMechanicalIntent() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "scroll-before-mechanical-tap", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .scroll,
+            args: ["direction": .string("down")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .oneFingerTap,
+            args: ["point": .object(["x": .double(20), "y": .double(30)])],
+            actionResult: ActionResult(success: true, method: .syntheticTap)
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.body, [
+            .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
+            .action(try ActionStep(command: .oneFingerTap(TapTarget(
+                selection: .coordinate(ScreenPoint(x: 20, y: 30))
+            )))),
+        ])
+    }
+
+    @ButtonHeistActor
     func testRecordingUsesMinimumMatcherFromSettledBeforeState() async throws {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "minimum-target", app: "com.example.app")
@@ -353,6 +535,13 @@ final class HeistStoreTests: XCTestCase {
         XCTAssertEqual(heist.body, [
             try activateStep(label: "Delete", traits: [.button]),
         ])
+        let encodedData = try JSONEncoder().encode(heist)
+        let encoded = try XCTUnwrap(String(bytes: encodedData, encoding: .utf8))
+        XCTAssertFalse(encoded.contains("frameX"))
+        XCTAssertFalse(encoded.contains("activationPoint"))
+        XCTAssertFalse(encoded.contains("heistId"))
+        XCTAssertFalse(encoded.contains("stableId"))
+        XCTAssertFalse(encoded.contains("capture"))
     }
 
     @ButtonHeistActor
@@ -525,6 +714,113 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRecordingInfersCurrentSelectionStateExpectation() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "selection-state", app: "com.example.app")
+
+        let before = makeReceiptTestElement(label: "Wi-Fi", traits: [.button])
+        let after = makeReceiptTestElement(label: "Wi-Fi", traits: [.button, .selected])
+        let actionResult = semanticActionResult(
+            method: .activate,
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Wi-Fi")),
+            subject: before,
+            before: [before],
+            after: [after]
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Wi-Fi")],
+            actionResult: actionResult
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.body, [
+            try activateStep(
+                label: "Wi-Fi",
+                expectation: WaitStep(
+                    predicate: .state(.present(ElementPredicate(label: "Wi-Fi", traits: [.selected]))),
+                    timeout: 10
+                )
+            ),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testRecordingInfersScreenChangeWhenNoPreciseTargetExpectationExists() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "screen-change", app: "com.example.app")
+
+        let continueButton = makeReceiptTestElement(label: "Continue", traits: [.button])
+        let nextHeader = makeReceiptTestElement(label: "Dashboard", traits: [.header])
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface([continueButton]),
+            after: makeReceiptTestInterface([continueButton, nextHeader]),
+            beforeScreenId: "login",
+            afterScreenId: "dashboard"
+        )
+        let actionResult = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityTrace: trace,
+            settled: true,
+            subjectEvidence: ActionSubjectEvidence(
+                source: .resolvedSemanticTarget,
+                target: .predicate(ElementPredicate(label: "Continue")),
+                element: continueButton,
+                settledObservationSequence: 1
+            )
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Continue")],
+            actionResult: actionResult
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.body, [
+            try activateStep(
+                label: "Continue",
+                expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
+            ),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testAmbiguousSemanticEvidenceRecordsNoStep() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "ambiguous-semantic-evidence", app: "com.example.app")
+
+        let first = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let second = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let actionResult = semanticActionResult(
+            method: .activate,
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Delete")),
+            subject: first,
+            before: [first, second],
+            after: [first, second]
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")],
+            actionResult: actionResult
+        )
+
+        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testCoordinateTapWithoutSemanticEvidenceRecordsMechanicalIntent() async throws {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "coordinate-tap", app: "com.example.app")
@@ -621,12 +917,12 @@ private func recordHeistStep(
         result: actionResult ?? defaultActionResult(for: command),
         expectation: expectation
     )
-    let steps = try HeistRecordingComposition(
+    let effect = try HeistRecordingComposition(
         request: parsed,
         dispatchedResponse: dispatched,
         validatedResponse: validated
-    ).steps()
-    try heistStore.appendRecordingSteps(steps)
+    ).effect()
+    try heistStore.applyRecordingEffect(effect)
 }
 
 private func defaultRecordingResponse(
@@ -640,8 +936,12 @@ private func defaultActionResult(for command: TheFence.Command) -> ActionResult 
     switch command {
     case .wait:
         return ActionResult(success: true, method: .wait)
+    case .scroll:
+        return ActionResult(success: true, method: .scroll)
     case .scrollToVisible:
         return ActionResult(success: true, method: .scrollToVisible)
+    case .scrollToEdge:
+        return ActionResult(success: true, method: .scrollToEdge)
     default:
         return ActionResult(success: true, method: .activate)
     }

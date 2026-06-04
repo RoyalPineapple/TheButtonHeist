@@ -4,19 +4,19 @@ import ButtonHeist
 struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Activate a UI element (primary interaction command)",
+        abstract: "Perform primary accessibility activation on a semantic UI element",
         discussion: """
             This is the primary way to interact with UI elements. It uses an \
-            semantic actionability path: resolves the element, reveals it when \
+            accessibility actionability path: resolves the element, reveals it when \
             needed, acquires fresh accessibility geometry, then dispatches the \
-            primary activation policy.
+            primary accessibility activation policy.
 
             Pass --action to invoke a named action instead of the default \
             activation: "increment", "decrement", or any custom action from \
             the element's actions array.
 
-            For explicit coordinate-based taps, \
-            use `buttonheist one_finger_tap` instead.
+            For explicit mechanical or spatial gestures, use the gesture \
+            commands such as `buttonheist one_finger_tap`.
 
             Examples:
               buttonheist activate -l "Log In"

@@ -717,17 +717,9 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case nestedForEachUnsupported
 }
 
-public extension HeistPlan {
+@_spi(ButtonHeistInternals) public extension HeistPlan {
     func heistDefinition(at path: [String]) -> HeistPlan? {
-        guard let first = path.first else { return nil }
-        guard let direct = definitions.first(where: { $0.name == first }) else { return nil }
-        return direct.heistDefinition(remaining: Array(path.dropFirst()))
-    }
-
-    private func heistDefinition(remaining: [String]) -> HeistPlan? {
-        guard let next = remaining.first else { return self }
-        guard let child = definitions.first(where: { $0.name == next }) else { return nil }
-        return child.heistDefinition(remaining: Array(remaining.dropFirst()))
+        HeistDefinitionScope(definitions: definitions).resolve(path: path)?.plan
     }
 }
 

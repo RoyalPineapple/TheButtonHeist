@@ -257,15 +257,16 @@ The raw wire response carries base64 PNG data plus a fresh visible interface.
 Public CLI/MCP adapters return artifact paths by default and include inline
 media only through explicit, size-bounded opt-ins.
 
-### Wait for Change
+### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"waitForChange","payload":{"expect":{"type":"screen_changed"},"timeout":30}}
+{"buttonHeistVersion":"<semver>","type":"wait","payload":{"predicate":{"type":"screen_changed"},"timeout":30}}
 ```
 
-With an expectation, the host checks the current settled state first, then
-waits for later settled captures until the predicate is true or the timeout
-expires. `element_disappeared` is satisfied by current absence.
+The host evaluates the predicate against the current settled accessibility
+observation first, then waits for later settled observations until the
+predicate is true or the timeout expires. Absence predicates are satisfied by
+current absence.
 
 ## Action Results
 

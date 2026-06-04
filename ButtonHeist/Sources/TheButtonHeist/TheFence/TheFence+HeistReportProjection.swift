@@ -1,6 +1,6 @@
 import Foundation
 
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 struct HeistReportProjection {
     let summary: HeistReportSummary
@@ -296,7 +296,7 @@ enum HeistReportStepKind: String {
     }
 }
 
-enum HeistReportStepStatus {
+enum HeistReportStepStatus: String {
     case passed
     case failed
     case skipped

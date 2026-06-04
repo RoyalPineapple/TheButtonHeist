@@ -5,22 +5,24 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 ## Core Loop
 
 1. **Read** — `get_interface` returns the app accessibility state with labels, values, traits, actions, and capture-local diagnostic annotations.
-2. **Act** — `activate`, `type_text`, `scroll`, `swipe`, and the other canonical action tools target semantic matcher fields (`ElementTarget` predicates). Always attach `expect` when you know what should change.
+2. **Act** — use semantic tools such as `activate`, `type_text`, custom actions, rotors, or `run_heist` for ordinary app controls. Always attach `expect` when you know what should change.
 3. **Read the response** — action responses carry trace-backed result evidence. If the delta answers your question, skip `get_interface`.
-4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true.
+4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation was not met, call `wait` with the same `AccessibilityPredicate`. The server checks the current settled state first, then watches settled observations until the predicate is true.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
 ## Choosing Tools
 
 **Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` to project from a container. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
-**Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. Use direct gesture tools such as `swipe`, `drag`, and `one_finger_tap` when you need a gesture. `scroll` pages through lists. Prefer `activate` over gesture tools — raw coordinates are fragile and don't record well.
+**Acting**: `activate` is your primary semantic control tool. It performs the element's primary accessibility activation behavior; named actions such as `"increment"`, `"decrement"`, or custom accessibility actions go through the same semantic route. Use `type_text` for keyboard input.
 
-**Finding**: semantic actions resolve and reveal targets internally. Use `scroll_to_visible` when your intent is explicit viewport positioning and `wait_for` when you know a specific element will appear.
+Use direct gesture tools such as `swipe`, `drag`, and `one_finger_tap` only when the gesture itself is the product intent. Use `scroll` when viewport movement is the subject of the command.
 
-**Waiting**: `wait_for_change` when the UI is updating asynchronously — network requests, timers, animations completing. Pass an expectation object to wait for the specific outcome: `expect={"type":"screen_changed"}` rides through loading spinners until the real navigation happens. With `expect`, the server first checks whether the current state already satisfies it, then blocks until a later settled scan does. With no expectation, returns on any tree change. This is the correct response when your action produced a transient state (spinner appeared, interactive elements disappeared) and you need the final result.
+**Finding**: semantic actions resolve and reveal targets internally. Use `scroll_to_visible` when your intent is explicit viewport positioning or inspection. Use `wait` when you know a specific semantic predicate should become true.
 
-For `wait_for_change`, `element_disappeared` means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
+**Waiting**: use `wait` when the UI is updating asynchronously — network requests, timers, animations completing. Pass an `AccessibilityPredicate` for the specific outcome: `predicate={"type":"screen_changed"}` rides through loading spinners until the real navigation happens. The server first checks whether the current settled state already satisfies it, then watches later settled observations until it does.
+
+For `element_disappeared`, the predicate means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
 
 **Composing**: `run_heist` for typed multi-step plans in a single call. Attach an action `expectation` step for inline verification.
 
@@ -103,12 +105,12 @@ xcrun simctl delete "$SIM_UDID"
 ## Async Changes
 
 For operations that take time (payments, network requests):
-1. `activate target={"label":"Pay","traits":["button"]} expect={"type":"screen_changed"}` — tap and declare intent
-2. Delta shows spinner, expectation not met → `wait_for_change expect={"type":"screen_changed"}` — server waits until the real screen arrives
+1. `activate target={"label":"Pay","traits":["button"]} expect={"type":"screen_changed"}` — perform accessibility activation and declare the expected outcome
+2. Delta shows spinner, expectation not met → `wait predicate={"type":"screen_changed"}` — server waits until the real screen arrives
 
 ## Expectations
 
-Every action is an opportunity to validate. Attaching `expect` costs nothing — the action runs the same way — but turns a blind tap into a verified assertion. Agents that use expectations routinely catch regressions as a side effect of navigation. Agents that don't are just clicking and hoping.
+Every action is an opportunity to validate. Attaching `expect` costs nothing — the action runs the same way — but turns a command into a verified assertion. Agents that use expectations routinely catch regressions as a side effect of navigation. Agents that do not use expectations are throwing away evidence.
 
 Before you act, ask: what should change? A toggle flips a value. A nav button changes the screen. A delete removes an element. Form that hypothesis, attach it, and let the result confirm or correct you. Unmet expectations are information, not errors — they tell you what actually happened so you can adapt.
 
@@ -123,13 +125,13 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 ## Recording Heists
 
-`start_heist` / `stop_heist` capture your session as a replayable .heist file. The recording is automatic: a recorded step exists only after the action succeeded and its explicit expectation was satisfied. Actions without explicit expectations keep the existing successful-action recording behavior.
+`start_heist` / `stop_heist` compose successful interactions into a replayable semantic .heist test. The recording is not a playback log: read commands and failed actions produce no steps, viewport setup is dropped when semantic intent can be derived, and explicit expectations are kept only after they pass.
 
 **Prime the interface first.** Call `get_interface` before your first action. The recorder derives portable matchers from current element data.
 
-**Attach expectations to every meaningful action.** Expectations are recorded with the step. A heist without expectations is a sequence of taps; a heist with expectations is a self-verifying test suite that validates on every replay.
+**Attach expectations to every meaningful action.** Expectations are recorded with the step. A heist without expectations is only a sequence of commands; a heist with expectations is a self-verifying test suite that validates on every replay.
 
-**One action, one purpose.** Each step should do exactly one thing and verify it. Don't chain five taps and check at the end — check after each one. This makes replay failures precise: step 7 failed means the 7th interaction broke.
+**One action, one purpose.** Each step should do exactly one thing and verify it. Do not chain five interactions and check at the end — check after each one. This makes replay failures precise: step 7 failed means the 7th interaction broke.
 
 **Read the delta before moving on.** If your expectation wasn't met, understand why before continuing. The recording skips actions with missed expectations, so continuing after one means the heist will omit that interaction.
 

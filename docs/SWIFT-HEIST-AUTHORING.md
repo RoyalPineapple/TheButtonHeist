@@ -24,6 +24,30 @@ At runtime, Button Heist executes only `HeistPlan`. The Swift DSL is an
 authoring convenience that produces a plan; JSON is a durable representation of
 that plan. Swift DSL and JSON are two projections of the same AST.
 
+Reusable heist helpers that should survive JSON must be written as heist
+definitions, not arbitrary Swift functions:
+
+```swift
+enum LibraryScreen {
+    static let addToCart = HeistDef<String>("addToCart", parameter: "item") { item in
+        Activate(.label(item))
+
+        Activate(.label("Add to Cart"))
+            .expect(.present(.label("Cart")))
+    }
+}
+
+Heist("purchaseFlow") {
+    LibraryScreen.addToCart("Milk")
+    LibraryScreen.addToCart("Bread")
+}
+```
+
+`HeistDef` values carry their definition dependency and invocation path into
+`HeistPlan`. Canonical Swift rendering can reproduce equivalent definitions
+and invocations, but it does not preserve arbitrary helper function names,
+source grouping, comments, or local constants.
+
 Semantic actions should describe user intent and expected semantic outcome:
 
 ```swift
@@ -103,3 +127,19 @@ identity/order changed, the next body resets to ordinal `0`. State-only
 mutations do not reset ordinal scheduling. Each body action still resolves the
 live `ElementTarget` through the normal command/actionability pipeline, so
 out-of-range or non-actionable targets fail with normal command diagnostics.
+
+## Explicit Non-Goals
+
+Swift Heist does not preserve:
+
+- native Swift loop intent unless the source used Button Heist `ForEach`
+- arbitrary helper functions or closure structure
+- comments, whitespace, imports, or local constants
+- hidden viewport setup for semantic actions
+- arbitrary dynamic code over the wire
+- generic variables beyond scoped `target_ref` and string refs
+
+The durable language intentionally excludes unbounded loops, sleeps, retries,
+catch/recover flow, and unknown JSON keys. Runtime admission rejects unsafe or
+unexecutable plans; lint reports quality issues such as missing expectations or
+mechanical commands in strict semantic tests.

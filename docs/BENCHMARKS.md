@@ -10,7 +10,7 @@ VoiceOver users don't tap coordinates. They navigate a semantic interface: label
 
 ## What Button Heist Does
 
-Button Heist exposes the iOS accessibility layer as an MCP server. Agents interact with UI elements by identity — name, role, state — not by position. The server resolves targeting, handles activation, and reports what changed as a compact delta. The agent says what it wants ("activate the Dark button"), not how to get there ("tap at pixel 234, 456").
+Button Heist exposes the iOS accessibility layer as an MCP server. Agents interact with UI elements by identity — name, role, state — not by position. The server resolves targeting, handles activation, and reports what changed as a compact delta. The agent says what it wants, such as activating the Dark button, not a pixel coordinate.
 
 Three properties make this work:
 

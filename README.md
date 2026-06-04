@@ -6,15 +6,17 @@
 
 # Interface out. Agents in. Clean escape.
 
-Every iOS app has a second interface.
+Button Heist is a runtime for programming against an iOS app's accessibility
+contract.
 
-Not the one you see. The one VoiceOver uses.
+Every iOS app has a second interface: the one VoiceOver uses.
 
 It describes the app in the language users depend on: labels, roles, values, states, actions. That interface is a contract: if users can do something visually, the app should expose it semantically.
 
 Button Heist treats that interface the way a person would: as the app.
 
-It turns the VoiceOver route into a programmable control plane for agents and durable tests: a control surface built from meaning, not pixels.
+It turns the VoiceOver route into an executable route for agents and durable tests:
+semantic intent in, settled evidence out.
 
 VoiceOver already gives the app a semantic interface. Agents already reason in intent. Tests already need durable contracts. Button Heist connects those existing contracts through one runtime.
 
@@ -57,13 +59,21 @@ Button Heist gives the crew three routes in, and each has a job.
 
 Semantic commands are the inside route. Use `activate`, `type_text`, custom actions, rotors, and element-targeted heist steps for ordinary app controls and accessible workflows. Name the target by label, identifier, matcher, or predicate. Button Heist handles the screen work: resolve the target, reveal it through the owning scroll or container path when needed, acquire fresh live geometry, perform the accessibility operation, wait for the interface to settle, and report what changed.
 
-`activate` means accessibility activation. Button Heist asks the target element to perform its accessibility activation behavior. When UIKit exposes activation through a fresh activation point, delivering through that point is still part of `activate`. The command is "activate this accessible element," not "tap these coordinates."
+`activate` means accessibility activation. Button Heist asks the target element to perform its accessibility activation behavior. When UIKit exposes activation through a fresh activation point, delivering through that point is still part of `activate`. The command is "activate this accessible element." It is not a coordinate gesture.
 
 Viewport commands are the lookout. Use `scroll`, `scroll_to_visible`, screenshots, and hierarchy inspection when the viewport itself is the subject: what is visible, where a scroll view sits, or what a human would see right now. They are not setup steps for normal semantic actions.
 
 Mechanical gestures are the lockpicks, not the front door. Use `one_finger_tap`, `long_press`, `swipe`, and `drag` for maps, canvases, drawing surfaces, games, custom controls, or any product behavior where the gesture itself is the intent. For standard buttons, fields, menus, and other accessible controls, prefer semantic commands.
 
-Recordings are the getaway plan. A good heist records "activate the Delete button and expect it to disappear," not "scroll to this offset and tap this coordinate." Recorded flows should survive layout movement and fail when the app's accessible contract changes.
+Recordings are the getaway plan. A good heist records "activate the Delete button and expect it to disappear." It does not preserve viewport setup or coordinate mechanics when semantic intent is available. Recorded flows should survive layout movement and fail when the app's accessible contract changes.
+
+## Not Button Heist
+
+Button Heist is not coordinate playback, screenshot parsing, scroll scripting,
+or Selenium-for-iOS. Those approaches can be useful when pixels are the product
+surface. They are not the default path for buttons, fields, menus, toggles,
+links, custom accessibility actions, or heist programs. If the app exposes an
+accessible contract, Button Heist acts through that contract.
 
 ## Quick Start
 
@@ -159,6 +169,36 @@ For the complete generated CLI command surface, see the
 [Command Reference](docs/reference/commands.md). For workflow context, see the
 [CLI README](ButtonHeistCLI/README.md).
 
+### First successful job
+
+Use this path when proving a fresh integration or the included BH Demo app:
+
+```bash
+# 1. Run the debug app with TheInsideJob linked.
+#    For BH Demo, launch the app from Xcode or a simulator build.
+
+# 2. Connect and read the semantic interface.
+$BH list_devices
+$BH get_interface
+
+# 3. Act through accessibility intent and declare the expected outcome.
+$BH activate --label "Continue" --traits button --expect '{"type":"screen_changed"}'
+
+# 4. Record a semantic heist test.
+$BH start_heist --identifier first-flow --app com.buttonheist.testapp
+$BH get_interface
+$BH activate --label "Continue" --traits button --expect '{"type":"screen_changed"}'
+$BH stop_heist --output first-flow.heist
+
+# 5. Replay the durable test.
+$BH play_heist --input first-flow.heist --junit first-flow.xml
+```
+
+The same shape works over MCP: call `get_interface`, perform semantic commands
+with expectations, then use `start_heist` / `stop_heist` / `play_heist`. The
+first useful response should show action evidence; the recorded heist should
+contain semantic action intent and a semantic expectation.
+
 ## How the Job Runs
 
 Coordinate-based tools turn intent into geometry: read the tree, extract frames, tap a point, read again.
@@ -171,8 +211,8 @@ That changes the loop. Every action goes through the contract. Every result come
 
 After every command, Button Heist returns one typed result payload. Accessibility
 traces are the source receipt; deltas are compact projections used for
-expectations and formatting. Tap "Login" and the response carries the capture
-chain plus derived screen context, not a second stored delta truth.
+expectations and formatting. Activate "Login" and the response carries the
+capture chain plus derived screen context, not a second stored delta truth.
 
 The agent does not need to re-read the screen to understand the result. Value updates include the element, property, old value, and new value. When nothing changes, the delta projection says `"noChange"`.
 
@@ -185,7 +225,7 @@ pass/fail inline:
 ```json
 {
   "command": "activate",
-  "target": {"heistId": "button_login"},
+  "target": {"label": "Login", "traits": ["button"]},
   "expect": {"type": "screen_changed"}
 }
 ```
@@ -198,7 +238,39 @@ The agent says what it expects. Button Heist says whether it happened.
 
 ### 3. Heists: typed multi-step plans
 
-`run_heist` sends a typed `HeistPlan` in one round trip. Each step gets its own result and optional expectation. If a step fails, the heist stops at that point:
+`run_heist` sends a typed `HeistPlan` in one round trip. Each step reports as a
+tree node with path, kind, status, duration, action details when applicable,
+expectation details when applicable, and selected branch or loop context when
+applicable. If a step fails, the heist stops at that point.
+
+The Swift authoring form reads like a small program against the app's semantic
+contract:
+
+```swift
+try Heist("searchFlow") {
+    TypeText("milk", into: .label("Search"))
+        .expect(.present(ElementPredicate.element(label: "Search", value: "milk")), timeout: .seconds(2))
+
+    Activate(.label("Search"))
+        .expect(.changed(.screen()), timeout: .seconds(5))
+
+    WaitFor(timeout: .seconds(5)) {
+        Case(.present(.label("Results"))) {
+            Warn("Search results loaded")
+        }
+
+        Case(.present(.label("No Results"))) {
+            Fail("Expected search results")
+        }
+
+        Else {
+            Fail("Search did not settle")
+        }
+    }
+}
+```
+
+The JSON transport is the same `HeistPlan` AST:
 
 ```json
 {
@@ -247,7 +319,7 @@ Two actions, two assertions, one round trip. If the email field does not update,
 
 ### 4. Replay: the contract in CI
 
-Button Heist can record a deterministic `.heist` fixture. Each step is stored as a semantic matcher: label, traits, and stable identifiers. `heistId` is a current-capture handle and recording clue, not durable replay identity.
+Button Heist can record a deterministic `.heist` fixture. Each step is stored as a semantic matcher: label, traits, stable identifiers, and ordinal only when disambiguation requires it. Capture-local annotations are recording evidence and diagnostics, not durable replay identity.
 
 Replay uses the same action path as live automation. If a label changes, a trait disappears, or a custom action is removed, the replay fails and surfaces the broken contract. JUnit XML output (`--junit`) puts those failures into CI.
 
@@ -257,11 +329,23 @@ The job does not disappear into tool-call history. It comes back as a replayable
 
 ## The Accessibility Contract
 
-Button Heist does not treat accessibility as metadata to scrape and discard. It makes the Accessibility Contract the control surface.
+Button Heist does not treat accessibility as metadata to scrape and discard. It makes the Accessibility Contract executable.
 
 That matters. A coordinate tool can tap a button with no label and report success. Button Heist cannot pretend the app is accessible when the semantic interface is missing or wrong. If an agent cannot find the control by label, trait, value, or action, that is signal.
 
 One contract. Three payoffs: agents move faster, tests get stronger, VoiceOver users get the interface they were promised.
+
+## What Breaks A Heist?
+
+A heist fails when the accessibility contract fails or the explicit viewport
+command cannot be fulfilled. Common failures are:
+
+- target missing
+- target ambiguous
+- accessibility action missing or wrong for the command
+- expectation unmet
+- semantic state cannot settle before timeout
+- viewport state unavailable when the command explicitly asks about viewport
 
 ## Benchmarks
 
@@ -284,7 +368,7 @@ Average result: **2.4x faster, 3.1x fewer turns, 3.1x lower cost.** The gap grow
 | Custom actions (order, complete, delete) | **3–5x** | Direct invocation vs visual menu navigation |
 | Multi-screen workflows | **2–3x** | Deltas eliminate redundant tree reads |
 | Scale (50+ actions) | **2.6x** | Per-action overhead compounds with task length |
-| Simple taps | ~1x | Both approaches handle simple buttons well |
+| Simple accessible controls | ~1x | Both approaches can operate on the simplest controls |
 
 The gap comes from the loop shape. Every action without a delta often means another full tree read. Over a 50-action workflow, that becomes 50 extra round trips and a lot of context spent on observation instead of progress. In the longest benchmark, Button Heist finished in under 8 minutes; the coordinate-based tool needed 20.
 
@@ -300,7 +384,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 |------|------|
 | **TheInsideJob** | iOS framework embedded in the app. Hosts the TLS TCP server, optional Bonjour advertisement, accessibility hierarchy, and command dispatch |
 | **TheSafecracker** | Touch, gesture, text-entry, and edit-action execution through synthetic events |
-| **TheStash** | Current element state, target resolution, `heistId` assignment, and wire conversion. Live view pointers stay inside |
+| **TheStash** | Semantic memory, target resolution, current capture annotations, and wire conversion. Live view pointers stay inside |
 | **TheBurglar** | Accessibility hierarchy parsing, topology detection, and scroll-container discovery |
 | **TheBrains** | Action execution, scroll orchestration, delta generation, waits, and exploration |
 | **TheGetaway** | Message dispatch, encoding/decoding, transport wiring, and response state |

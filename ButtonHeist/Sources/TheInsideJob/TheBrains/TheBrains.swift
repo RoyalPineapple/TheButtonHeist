@@ -24,7 +24,7 @@ final class TheBrains {
     let postActionObservation: PostActionObservation
     let interactionObservation: InteractionObservation
     var semanticObservationIsActive = false
-    private var waitForChangeInProgress = false
+    private var changedWaitInProgress = false
 
     enum InterfaceObservation {
         case success(Interface)
@@ -133,14 +133,14 @@ final class TheBrains {
         }
     }
 
-    func beginWaitForChange() -> Bool {
-        guard !waitForChangeInProgress else { return false }
-        waitForChangeInProgress = true
+    func beginChangedWait() -> Bool {
+        guard !changedWaitInProgress else { return false }
+        changedWaitInProgress = true
         return true
     }
 
-    func finishWaitForChange() {
-        waitForChangeInProgress = false
+    func finishChangedWait() {
+        changedWaitInProgress = false
     }
 }
 

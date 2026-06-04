@@ -7,7 +7,7 @@ extension TheSafecracker {
     // MARK: - Tap Receiver Diagnostic
 
     /// Observation-only snapshot of what UIKit's hit-test sees at a given screen
-    /// point. Used to enrich activate/tap failure messages without claiming
+    /// point. Used to enrich activation and gesture failure messages without claiming
     /// any AX-element-to-UIView mapping (there is none — AX elements are
     /// frequently synthetic NSObjects with no corresponding UIView).
     ///

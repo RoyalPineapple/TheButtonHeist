@@ -8,7 +8,7 @@ extension TheFence.Command {
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial tap. An element target supplies live geometry; "
-                    + "ordinary control activation should use activate."
+                    + "ordinary accessible controls should use the semantic command path."
             ),
             commandDescriptor(
                 .longPress, requestDecoder: TheFence.decodeLongPressRequest,

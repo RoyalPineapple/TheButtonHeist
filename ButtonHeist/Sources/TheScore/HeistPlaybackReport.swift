@@ -2,18 +2,18 @@ import Foundation
 
 // MARK: - Heist Playback Report
 
-/// Legacy flat rows from playing back a `.heist` file. These rows are derived
+/// Flat rows from playing back a `.heist` file. These rows are derived
 /// from the structured heist report projection and consumed by JUnit XML.
 public struct HeistPlaybackReport: Sendable, Equatable {
     /// Name derived from the input file (e.g. "navigation-flow" from "navigation-flow.heist").
     public let heistName: String
     /// Bundle identifier of the app the heist targets.
     public let app: String
-    /// Total number of legacy flat report rows for the executed playback path.
+    /// Total number of flat report rows for the executed playback path.
     public let totalStepCount: Int
     /// Total wall-clock time for the entire playback, in seconds.
     public let totalTimeSeconds: Double
-    /// Legacy flat step outcomes in execution order.
+    /// Flat step outcomes in execution order.
     public let steps: [StepResult]
 
     public init(
@@ -42,7 +42,7 @@ public struct HeistPlaybackReport: Sendable, Equatable {
 extension HeistPlaybackReport {
     /// The outcome of executing a single heist step.
     public struct StepResult: Sendable, Equatable {
-        /// 0-based display index in the legacy flat playback report.
+        /// 0-based display index in the flat playback report.
         public let index: Int
         /// Heist report action or structural step name.
         public let command: String

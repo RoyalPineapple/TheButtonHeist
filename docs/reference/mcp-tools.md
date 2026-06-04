@@ -18,7 +18,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `list_devices` | List discovered iOS devices and configured connection targets. |
 | `list_targets` | List configured connection targets and the default target. |
 | `long_press` | Long-press an explicit point or semantic element for a resolved duration. |
-| `one_finger_tap` | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary control activation should use activate. |
+| `one_finger_tap` | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
 | `ping` | Check connection health without reading accessibility state. |
 | `play_heist` | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
@@ -27,8 +27,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_edge` | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
 | `scroll_to_visible` | Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | Write text to the general pasteboard from within the app. |
-| `start_heist` | Start recording replayable heist steps from successful commands. |
-| `stop_heist` | Stop heist recording and save a deterministic heist fixture. |
+| `start_heist` | Start composing successful interactions into a semantic heist test. |
+| `stop_heist` | Stop heist recording and save a deterministic semantic heist fixture. |
 | `swipe` | Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
 | `type_text` | Type non-empty text, optionally after making a semantic target actionable. |
 | `wait` | Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions. |
@@ -174,7 +174,7 @@ Parameters:
 
 ### `one_finger_tap`
 
-Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary control activation should use activate.
+Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path.
 
 Parameters:
 
@@ -281,7 +281,7 @@ Parameters:
 
 ### `start_heist`
 
-Start recording replayable heist steps from successful commands.
+Start composing successful interactions into a semantic heist test.
 
 Parameters:
 
@@ -292,7 +292,7 @@ Parameters:
 
 ### `stop_heist`
 
-Stop heist recording and save a deterministic heist fixture.
+Stop heist recording and save a deterministic semantic heist fixture.
 
 Parameters:
 

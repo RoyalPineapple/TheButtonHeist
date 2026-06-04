@@ -370,7 +370,6 @@ struct HeistInspection {
     let commands: [TheFence.Command]
     let steps: [HeistStep]
     let executionResult: HeistExecutionResult
-    let results: [[String: Any]]
     let completedSteps: Int
     let failedIndex: Int?
     let totalTimingMs: Int
@@ -389,9 +388,6 @@ func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
         commands: plannedSteps.map(\.commandForInspection),
         steps: plannedSteps,
         executionResult: result,
-        results: projection.legacyFlatRows.compactMap { row in
-            row.response.map { publicJSONObject($0) }
-        },
         completedSteps: result.completedStepCount,
         failedIndex: result.stoppedFailedIndex,
         totalTimingMs: result.totalTimingMs,

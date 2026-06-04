@@ -63,21 +63,22 @@ buttonheist activate --label "Sign In" --traits button
 buttonheist type_text "user@example.com" --identifier emailField
 ```
 
-Semantic commands identify elements by current handles or matcher fields.
-Button Heist resolves the target, moves the viewport if needed, refreshes, and
-uses fresh live geometry before acting.
+Semantic commands identify elements by matcher fields. Button Heist resolves
+the target, moves the viewport if needed, refreshes, and uses fresh live
+geometry before acting.
 
 ### Viewport and Screenshots
 
 ```bash
-buttonheist scroll_to_visible --identifier submitButton
 buttonheist scroll --direction down
+buttonheist scroll_to_visible --identifier submitButton
 buttonheist get_screen --output screen.png
 ```
 
 Explicit viewport commands expose viewport state because moving the viewport is
-the command's purpose. Screenshots write artifact files by default; inline PNG
-data is an explicit raw output mode.
+the command's purpose. They are not setup for ordinary semantic actions.
+Screenshots write artifact files by default; inline PNG data is an explicit raw
+output mode.
 
 ### Record and Replay
 
@@ -88,8 +89,8 @@ buttonheist stop_heist --output recording.heist
 buttonheist play_heist --input recording.heist --junit report.xml
 ```
 
-Heist replay uses durable semantic selectors and matchers. `heistId` values are
-current-capture handles and recording step context, not replay identity.
+Heist replay uses durable semantic selectors and matchers. Capture-local
+annotations are recording evidence and diagnostics, not replay identity.
 
 ### JSON-Lines Mode
 

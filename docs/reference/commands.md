@@ -18,7 +18,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `list_devices` | `list_devices` | direct | no | List discovered iOS devices and configured connection targets. |
 | `list_targets` | `list_targets` | direct | no | List configured connection targets and the default target. |
 | `long_press` | `long_press` | direct | yes | Long-press an explicit point or semantic element for a resolved duration. |
-| `one_finger_tap` | `one_finger_tap` | direct | yes | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary control activation should use activate. |
+| `one_finger_tap` | `one_finger_tap` | direct | yes | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
 | `ping` | `ping` | direct | no | Check connection health without reading accessibility state. |
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | `rotor` | direct | yes | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
@@ -27,8 +27,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_edge` | `scroll_to_edge` | direct | yes | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
 | `scroll_to_visible` | `scroll_to_visible` | direct | yes | Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | `set_pasteboard` | direct | yes | Write text to the general pasteboard from within the app. |
-| `start_heist` | `start_heist` | direct | no | Start recording replayable heist steps from successful commands. |
-| `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic heist fixture. |
+| `start_heist` | `start_heist` | direct | no | Start composing successful interactions into a semantic heist test. |
+| `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic semantic heist fixture. |
 | `swipe` | `swipe` | direct | yes | Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
 | `type_text` | `type_text` | direct | yes | Type non-empty text, optionally after making a semantic target actionable. |
 | `wait` | `wait` | direct | yes | Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions. |
@@ -234,7 +234,7 @@ Parameters:
 
 ### `one_finger_tap`
 
-Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary control activation should use activate.
+Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path.
 
 - CLI: direct command `one_finger_tap`
 - MCP: direct tool
@@ -386,7 +386,7 @@ Parameters:
 
 ### `start_heist`
 
-Start recording replayable heist steps from successful commands.
+Start composing successful interactions into a semantic heist test.
 
 - CLI: direct command `start_heist`
 - MCP: direct tool
@@ -402,7 +402,7 @@ Parameters:
 
 ### `stop_heist`
 
-Stop heist recording and save a deterministic heist fixture.
+Stop heist recording and save a deterministic semantic heist fixture.
 
 - CLI: direct command `stop_heist`
 - MCP: direct tool
