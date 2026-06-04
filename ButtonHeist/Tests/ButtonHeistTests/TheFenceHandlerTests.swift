@@ -2668,6 +2668,7 @@ final class TheFenceHandlerTests: XCTestCase {
             steps: [
                 HeistExecutionStepResult(
                     index: 0,
+                    path: "$.body[0]",
                     kind: .conditional,
                     message: "matched case 0",
                     durationMs: 2,
@@ -2682,9 +2683,10 @@ final class TheFenceHandlerTests: XCTestCase {
                         selectedCaseIndex: 0,
                         elapsedMs: 1
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].conditional.cases[0].body[0]",
                             kind: .action,
                             actionResult: ActionResult(
                                 success: false,
@@ -2733,6 +2735,7 @@ final class TheFenceHandlerTests: XCTestCase {
             steps: [
                 HeistExecutionStepResult(
                     index: 0,
+                    path: "$.body[0]",
                     kind: .forEach,
                     message: "for_each completed 2 iteration(s) from 2 matched element(s)",
                     durationMs: 20,
@@ -2742,18 +2745,38 @@ final class TheFenceHandlerTests: XCTestCase {
                         iterationCount: 2,
                         failureReason: nil
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 5
+                            path: "$.body[0].for_each_element.iterations[0]",
+                            kind: .forEachIteration,
+                            message: "iteration 0 target ordinal 0",
+                            durationMs: 5,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_element.iterations[0].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .activate),
+                                    durationMs: 5
+                                ),
+                            ]
                         ),
                         HeistExecutionStepResult(
                             index: 1,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 6
+                            path: "$.body[0].for_each_element.iterations[1]",
+                            kind: .forEachIteration,
+                            message: "iteration 1 target ordinal 1",
+                            durationMs: 6,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_element.iterations[1].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .activate),
+                                    durationMs: 6
+                                ),
+                            ]
                         ),
                     ]
                 ),

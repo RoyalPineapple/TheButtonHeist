@@ -9,6 +9,7 @@ extension TheFence {
 
     func handleStartHeist(_ request: StartHeistRequest) throws -> FenceResponse {
         try heistStore.startRecording(identifier: request.identifier, app: request.app)
+        heistRecording.begin()
         return .heistStarted
     }
 
@@ -16,7 +17,7 @@ extension TheFence {
         guard let resolvedURL = request.outputPath.validatedOutputURL() else {
             throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
         }
-        let heist = try heistStore.finishRecording()
+        let heist = try heistRecording.finish(using: heistStore)
         try HeistStore.writeHeist(heist, to: resolvedURL)
         return .heistStopped(path: resolvedURL.path, stepCount: heist.body.count)
     }

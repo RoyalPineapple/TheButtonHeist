@@ -25,6 +25,7 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
     case conditional
     case waitForCases
     case forEach = "for_each"
+    case forEachIteration = "for_each_iteration"
     case warn
     case fail
     case heist
@@ -34,7 +35,9 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
 
 /// One typed step result from a `HeistPlan`.
 public struct HeistExecutionStepResult: Codable, Sendable {
-    /// Sibling-local step index inside the containing `steps` or `childResults` array.
+    /// JSON-style path to this execution node in the heist program tree.
+    public let path: String
+    /// Sibling-local step index retained for compact summaries and older adapters.
     public let index: Int
     public let kind: HeistExecutionStepKind
     public let actionResult: ActionResult?
@@ -46,10 +49,11 @@ public struct HeistExecutionStepResult: Codable, Sendable {
     public let skipped: HeistExecutionSkippedStepResult?
     public let caseSelection: HeistCaseSelectionResult?
     public let forEachResult: HeistForEachResult?
-    public let childResults: [HeistExecutionStepResult]?
+    public let children: [HeistExecutionStepResult]
 
     public init(
         index: Int,
+        path: String? = nil,
         kind: HeistExecutionStepKind,
         actionResult: ActionResult? = nil,
         expectationActionResult: ActionResult? = nil,
@@ -60,8 +64,9 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         skipped: HeistExecutionSkippedStepResult? = nil,
         caseSelection: HeistCaseSelectionResult? = nil,
         forEachResult: HeistForEachResult? = nil,
-        childResults: [HeistExecutionStepResult]? = nil
+        children: [HeistExecutionStepResult] = []
     ) {
+        self.path = path ?? "$.body[\(index)]"
         self.index = index
         self.kind = kind
         self.actionResult = actionResult
@@ -73,7 +78,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         self.skipped = skipped
         self.caseSelection = caseSelection
         self.forEachResult = forEachResult
-        self.childResults = childResults
+        self.children = children
     }
 
     public var isSkipped: Bool {
@@ -91,8 +96,63 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         if kind == .wait, actionResult?.success != true { return true }
         if kind == .waitForCases, caseSelection?.timedOut == true, caseSelection?.elseRan != true { return true }
         if kind == .forEach, forEachResult?.failureReason != nil { return true }
-        if childResults?.contains(where: \.isFailure) == true { return true }
+        if children.contains(where: \.isFailure) { return true }
         return false
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case path
+        case index
+        case kind
+        case actionResult
+        case expectationActionResult
+        case expectation
+        case message
+        case durationMs
+        case stopsHeist
+        case skipped
+        case caseSelection
+        case forEachResult
+        case children
+        case decodedChildResults = "childResults"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        index = try container.decode(Int.self, forKey: .index)
+        path = try container.decodeIfPresent(String.self, forKey: .path) ?? "$.body[\(index)]"
+        kind = try container.decode(HeistExecutionStepKind.self, forKey: .kind)
+        actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
+        expectationActionResult = try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult)
+        expectation = try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        durationMs = try container.decode(Int.self, forKey: .durationMs)
+        stopsHeist = try container.decodeIfPresent(Bool.self, forKey: .stopsHeist) ?? false
+        skipped = try container.decodeIfPresent(HeistExecutionSkippedStepResult.self, forKey: .skipped)
+        caseSelection = try container.decodeIfPresent(HeistCaseSelectionResult.self, forKey: .caseSelection)
+        forEachResult = try container.decodeIfPresent(HeistForEachResult.self, forKey: .forEachResult)
+        children = try container.decodeIfPresent([HeistExecutionStepResult].self, forKey: .children)
+            ?? container.decodeIfPresent([HeistExecutionStepResult].self, forKey: .decodedChildResults)
+            ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(path, forKey: .path)
+        try container.encode(index, forKey: .index)
+        try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(actionResult, forKey: .actionResult)
+        try container.encodeIfPresent(expectationActionResult, forKey: .expectationActionResult)
+        try container.encodeIfPresent(expectation, forKey: .expectation)
+        try container.encodeIfPresent(message, forKey: .message)
+        try container.encode(durationMs, forKey: .durationMs)
+        if stopsHeist { try container.encode(stopsHeist, forKey: .stopsHeist) }
+        try container.encodeIfPresent(skipped, forKey: .skipped)
+        try container.encodeIfPresent(caseSelection, forKey: .caseSelection)
+        try container.encodeIfPresent(forEachResult, forKey: .forEachResult)
+        if !children.isEmpty {
+            try container.encode(children, forKey: .children)
+        }
     }
 }
 

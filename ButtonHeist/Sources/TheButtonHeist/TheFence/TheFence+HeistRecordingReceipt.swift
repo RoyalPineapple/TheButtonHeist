@@ -27,7 +27,7 @@ extension TheFence {
         }
 
         do {
-            try heistStore.applyRecordingEffect(effect)
+            try heistRecording.apply(effect, to: heistStore)
         } catch {
             heistRecordingLogger.error(
                 "Failed to encode heist step for \(request.command.rawValue): \(error.localizedDescription)"

@@ -8,13 +8,14 @@ extension TheBrains {
     func executeForEachElementStep(
         _ step: ForEachElementStep,
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         guard let observation = await runtime.observeSemanticState(.discovery, nil, nil) else {
-            return forEachUnavailableResult(index: index, start: start, limit: step.limit)
+            return forEachUnavailableResult(index: index, path: path, start: start, limit: step.limit)
         }
 
         var matchSignature = ForEachMatchSignature(
@@ -23,32 +24,43 @@ extension TheBrains {
         )
         let matchedCount = matchSignature.count
         if matchedCount > step.limit {
-            return forEachLimitResult(index: index, start: start, matchedCount: matchedCount, limit: step.limit)
+            return forEachLimitResult(index: index, path: path, start: start, matchedCount: matchedCount, limit: step.limit)
         }
 
-        var childResults: [HeistExecutionStepResult] = []
+        var iterationNodes: [HeistExecutionStepResult] = []
         var failureReason: String?
         var iterationCount = 0
         var nextOrdinal = 0
         var observedSequence = observation.event.sequence
 
         while iterationCount < matchedCount {
+            let iterationIndex = iterationCount
+            let iterationStart = CFAbsoluteTimeGetCurrent()
+            let iterationPath = "\(path).for_each_element.iterations[\(iterationIndex)]"
             let currentElement = ElementTarget.predicate(step.matching, ordinal: nextOrdinal)
             let iterationEnvironment = environment.binding(target: currentElement, to: step.parameter)
             let iterationResults = await executeHeistSteps(
                 step.body,
                 runtime: runtime,
                 environment: iterationEnvironment,
-                scope: scope
+                scope: scope,
+                path: "\(iterationPath).body"
             )
             iterationCount += 1
 
-            for result in iterationResults {
-                childResults.append(result.reindexed(childResults.count))
-            }
+            let iterationFailed = iterationResults.contains(where: \.isFailure)
+            iterationNodes.append(HeistExecutionStepResult(
+                index: iterationIndex,
+                path: iterationPath,
+                kind: .forEachIteration,
+                message: "iteration \(iterationIndex) target ordinal \(nextOrdinal)",
+                durationMs: elapsedMilliseconds(since: iterationStart),
+                stopsHeist: iterationFailed,
+                children: iterationResults
+            ))
 
-            if iterationResults.contains(where: \.isFailure) {
-                failureReason = "iteration \(iterationCount - 1) failed"
+            if iterationFailed {
+                failureReason = "iteration \(iterationIndex) failed"
                 break
             }
 
@@ -58,7 +70,7 @@ extension TheBrains {
                 observedSequence,
                 nil
             ) else {
-                failureReason = "iteration \(iterationCount - 1) post-observation unavailable"
+                failureReason = "iteration \(iterationIndex) post-observation unavailable"
                 break
             }
             observedSequence = afterObservation.event.sequence
@@ -76,6 +88,7 @@ extension TheBrains {
 
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .forEach,
             message: forEachMessage(
                 matchedCount: matchedCount,
@@ -90,37 +103,48 @@ extension TheBrains {
                 iterationCount: iterationCount,
                 failureReason: failureReason
             ),
-            childResults: childResults.isEmpty ? nil : childResults
+            children: iterationNodes
         )
     }
 
     func executeForEachStringStep(
         _ step: ForEachStringStep,
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        var childResults: [HeistExecutionStepResult] = []
+        var iterationNodes: [HeistExecutionStepResult] = []
         var failureReason: String?
         var iterationCount = 0
 
         for (valueIndex, value) in step.values.enumerated() {
+            let iterationStart = CFAbsoluteTimeGetCurrent()
+            let iterationPath = "\(path).for_each_string.iterations[\(valueIndex)]"
             let iterationEnvironment = environment.binding(string: value, to: step.parameter)
             let iterationResults = await executeHeistSteps(
                 step.body,
                 runtime: runtime,
                 environment: iterationEnvironment,
-                scope: scope
+                scope: scope,
+                path: "\(iterationPath).body"
             )
             iterationCount += 1
 
-            for result in iterationResults {
-                childResults.append(result.reindexed(childResults.count))
-            }
+            let iterationFailed = iterationResults.contains(where: \.isFailure)
+            iterationNodes.append(HeistExecutionStepResult(
+                index: valueIndex,
+                path: iterationPath,
+                kind: .forEachIteration,
+                message: "iteration \(valueIndex) value \"\(value)\"",
+                durationMs: elapsedMilliseconds(since: iterationStart),
+                stopsHeist: iterationFailed,
+                children: iterationResults
+            ))
 
-            if iterationResults.contains(where: \.isFailure) {
+            if iterationFailed {
                 failureReason = "iteration \(valueIndex) failed for value \"\(value)\""
                 break
             }
@@ -128,6 +152,7 @@ extension TheBrains {
 
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .forEach,
             message: forEachStringMessage(
                 valueCount: step.values.count,
@@ -142,17 +167,19 @@ extension TheBrains {
                 iterationCount: iterationCount,
                 failureReason: failureReason
             ),
-            childResults: childResults.isEmpty ? nil : childResults
+            children: iterationNodes
         )
     }
 
     private func forEachUnavailableResult(
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         limit: Int
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .forEach,
             message: "Could not observe settled semantic hierarchy before evaluating for_each",
             durationMs: elapsedMilliseconds(since: start),
@@ -168,6 +195,7 @@ extension TheBrains {
 
     private func forEachLimitResult(
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         matchedCount: Int,
         limit: Int
@@ -175,6 +203,7 @@ extension TheBrains {
         let reason = "matched \(matchedCount) element(s), exceeding for_each limit \(limit)"
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .forEach,
             message: reason,
             durationMs: elapsedMilliseconds(since: start),

@@ -570,7 +570,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .conditional)
         XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
-        XCTAssertEqual(step.childResults?.map(\.kind), [.warn])
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
     func testHeistConditionalUnmatchedWithoutElseContinues() async throws {
@@ -645,7 +645,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.caseSelection?.timedOut, true)
         XCTAssertEqual(step.caseSelection?.elseRan, true)
-        XCTAssertEqual(step.childResults?.map(\.kind), [.warn])
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
     func testHeistWaitForCasesPollsUntilCaseMatches() async throws {
@@ -671,7 +671,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
-        XCTAssertEqual(step.childResults?.map(\.kind), [.warn])
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
     func testHeistWaitForCasesContinuesAfterUnavailableObservation() async throws {
@@ -697,7 +697,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
-        XCTAssertEqual(step.childResults?.map(\.kind), [.warn])
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
     func testHeistWaitForCasesZeroTimeoutPassesImmediateObservationBudget() async throws {
@@ -1055,7 +1055,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let topLevel = try XCTUnwrap(results.first)
-        let recursive = try XCTUnwrap(topLevel.childResults?.first)
+        let recursive = try XCTUnwrap(topLevel.children.first)
         XCTAssertTrue(topLevel.isFailure)
         XCTAssertEqual(recursive.kind, .invoke)
         XCTAssertEqual(recursive.message, "Unknown heist invocation repeat")
@@ -1270,7 +1270,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.limit, 20)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertNil(forEachResult.failureReason)
-        XCTAssertNil(step.childResults)
+        XCTAssertNil(step.children)
         XCTAssertEqual(observedScopes, [.discovery])
     }
 
@@ -1309,7 +1309,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.limit, 1)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertEqual(forEachResult.failureReason, "matched 2 element(s), exceeding for_each limit 1")
-        XCTAssertNil(step.childResults)
+        XCTAssertNil(step.children)
     }
 
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
@@ -1350,7 +1350,7 @@ final class TheBrainsActionTests: XCTestCase {
             .activate(.predicate(matching, ordinal: 1)),
             .activate(.predicate(matching, ordinal: 2)),
         ])
-        XCTAssertEqual(step.childResults?.map(\.kind), [.action, .action, .action])
+        XCTAssertEqual(step.children.map(\.kind), [.action, .action, .action])
         XCTAssertEqual(plan.body, originalBody)
     }
 
@@ -1512,7 +1512,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 1)
         XCTAssertEqual(forEachResult.failureReason, "iteration 0 failed")
-        XCTAssertEqual(forEachStep.childResults?.map(\.kind), [.action])
+        XCTAssertEqual(forEachStep.children.map(\.kind), [.action])
     }
 
     func testHeistForEachExpectationUsesCurrentSemanticTarget() async throws {

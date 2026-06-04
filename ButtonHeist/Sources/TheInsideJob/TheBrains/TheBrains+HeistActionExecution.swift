@@ -8,6 +8,7 @@ extension TheBrains {
     func executeActionStep(
         _ step: ActionStep,
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
@@ -18,6 +19,7 @@ extension TheBrains {
         } catch {
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .action,
                 message: "could not resolve heist action command: \(error)",
                 durationMs: elapsedMilliseconds(since: start),
@@ -35,6 +37,7 @@ extension TheBrains {
 
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .action,
             actionResult: actionResult,
             expectationActionResult: expectationReceipt?.actionResult,

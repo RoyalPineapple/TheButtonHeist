@@ -122,9 +122,10 @@ final class HeistReportProjectionTests: XCTestCase {
                         selectedCaseIndex: 0,
                         elapsedMs: 1
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].conditional.cases[0].body[0]",
                             kind: .action,
                             actionResult: ActionResult(success: true, method: .activate),
                             durationMs: 7
@@ -161,9 +162,10 @@ final class HeistReportProjectionTests: XCTestCase {
                         elapsedMs: 1,
                         elseRan: true
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].conditional.else_body[0]",
                             kind: .action,
                             actionResult: ActionResult(success: true, method: .activate),
                             durationMs: 2
@@ -236,9 +238,10 @@ final class HeistReportProjectionTests: XCTestCase {
                         timedOut: true,
                         elseRan: true
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].wait_for_cases.else_body[0]",
                             kind: .warn,
                             message: "No result",
                             durationMs: 1
@@ -267,22 +270,43 @@ final class HeistReportProjectionTests: XCTestCase {
         let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
+                    path: "$.body[0]",
                     kind: .forEach,
                     message: "for_each completed 2 iteration(s) from 2 matched element(s)",
                     durationMs: 20,
                     forEachResult: HeistForEachResult(matchedCount: 2, limit: 20, iterationCount: 2),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 5
+                            path: "$.body[0].for_each_element.iterations[0]",
+                            kind: .forEachIteration,
+                            message: "iteration 0 target ordinal 0",
+                            durationMs: 5,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_element.iterations[0].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .activate),
+                                    durationMs: 5
+                                ),
+                            ]
                         ),
                         HeistExecutionStepResult(
                             index: 1,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 6
+                            path: "$.body[0].for_each_element.iterations[1]",
+                            kind: .forEachIteration,
+                            message: "iteration 1 target ordinal 1",
+                            durationMs: 6,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_element.iterations[1].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .activate),
+                                    durationMs: 6
+                                ),
+                            ]
                         ),
                     ]
                 ),
@@ -313,6 +337,7 @@ final class HeistReportProjectionTests: XCTestCase {
         let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
+                    path: "$.body[0]",
                     kind: .forEach,
                     message: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"",
                     durationMs: 30,
@@ -323,24 +348,45 @@ final class HeistReportProjectionTests: XCTestCase {
                         iterationCount: 2,
                         failureReason: "iteration 1 failed for value \"Eggs\""
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .typeText),
-                            durationMs: 5
+                            path: "$.body[0].for_each_string.iterations[0]",
+                            kind: .forEachIteration,
+                            message: "iteration 0 value \"Milk\"",
+                            durationMs: 5,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_string.iterations[0].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .typeText),
+                                    durationMs: 5
+                                ),
+                            ]
                         ),
                         HeistExecutionStepResult(
                             index: 1,
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .typeText,
-                                message: "field missing",
-                                errorKind: .elementNotFound
-                            ),
+                            path: "$.body[0].for_each_string.iterations[1]",
+                            kind: .forEachIteration,
+                            message: "iteration 1 value \"Eggs\"",
                             durationMs: 6,
-                            stopsHeist: true
+                            stopsHeist: true,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_string.iterations[1].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(
+                                        success: false,
+                                        method: .typeText,
+                                        message: "field missing",
+                                        errorKind: .elementNotFound
+                                    ),
+                                    durationMs: 6,
+                                    stopsHeist: true
+                                ),
+                            ]
                         ),
                     ]
                 ),
@@ -400,9 +446,10 @@ final class HeistReportProjectionTests: XCTestCase {
                     index: 0,
                     kind: .heist,
                     durationMs: 5,
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].heist.body[0]",
                             kind: .action,
                             actionResult: ActionResult(success: true, method: .activate),
                             durationMs: 5
@@ -435,9 +482,10 @@ final class HeistReportProjectionTests: XCTestCase {
                     index: 0,
                     kind: .invoke,
                     durationMs: 5,
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].invoke.body[0]",
                             kind: .action,
                             actionResult: ActionResult(success: true, method: .activate),
                             durationMs: 5
@@ -494,9 +542,10 @@ final class HeistReportTreeProjectionTests: XCTestCase {
                         elapsedMs: 1,
                         elseRan: true
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
+                            path: "$.body[0].conditional.else_body[0]",
                             kind: .action,
                             actionResult: ActionResult(success: true, method: .activate),
                             durationMs: 2
@@ -524,6 +573,7 @@ final class HeistReportTreeProjectionTests: XCTestCase {
         let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
+                    path: "$.body[0]",
                     kind: .forEach,
                     message: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"",
                     durationMs: 30,
@@ -534,24 +584,45 @@ final class HeistReportTreeProjectionTests: XCTestCase {
                         iterationCount: 2,
                         failureReason: "iteration 1 failed for value \"Eggs\""
                     ),
-                    childResults: [
+                    children: [
                         HeistExecutionStepResult(
                             index: 0,
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .typeText),
-                            durationMs: 5
+                            path: "$.body[0].for_each_string.iterations[0]",
+                            kind: .forEachIteration,
+                            message: "iteration 0 value \"Milk\"",
+                            durationMs: 5,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_string.iterations[0].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(success: true, method: .typeText),
+                                    durationMs: 5
+                                ),
+                            ]
                         ),
                         HeistExecutionStepResult(
                             index: 1,
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .typeText,
-                                message: "field missing",
-                                errorKind: .elementNotFound
-                            ),
+                            path: "$.body[0].for_each_string.iterations[1]",
+                            kind: .forEachIteration,
+                            message: "iteration 1 value \"Eggs\"",
                             durationMs: 6,
-                            stopsHeist: true
+                            stopsHeist: true,
+                            children: [
+                                HeistExecutionStepResult(
+                                    index: 0,
+                                    path: "$.body[0].for_each_string.iterations[1].body[0]",
+                                    kind: .action,
+                                    actionResult: ActionResult(
+                                        success: false,
+                                        method: .typeText,
+                                        message: "field missing",
+                                        errorKind: .elementNotFound
+                                    ),
+                                    durationMs: 6,
+                                    stopsHeist: true
+                                ),
+                            ]
                         ),
                     ]
                 ),

@@ -8,6 +8,7 @@ extension TheBrains {
     func executeWaitStep(
         _ step: WaitStep,
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
@@ -18,6 +19,7 @@ extension TheBrains {
         } catch {
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .wait,
                 message: "could not resolve heist wait predicate: \(error)",
                 durationMs: elapsedMilliseconds(since: start),
@@ -27,6 +29,7 @@ extension TheBrains {
         let receipt = await runtime.wait(resolvedStep, nil)
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .wait,
             actionResult: receipt.actionResult,
             expectation: receipt.expectation,

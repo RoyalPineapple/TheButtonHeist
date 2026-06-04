@@ -68,7 +68,8 @@ extension TheBrains {
             plan.body,
             runtime: runtime,
             environment: .empty,
-            scope: HeistExecutionScope(plan: plan)
+            scope: HeistExecutionScope(plan: plan),
+            path: "$.body"
         )
         let failedIndex = stepResults.firstIndex(where: \.isFailure)
 
@@ -95,15 +96,18 @@ extension TheBrains {
         _ steps: [HeistStep],
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
-        scope: HeistExecutionScope
+        scope: HeistExecutionScope,
+        path: String = "$.body"
     ) async -> [HeistExecutionStepResult] {
         var stepResults: [HeistExecutionStepResult] = []
         var failedIndex: Int?
 
         stepLoop: for (index, step) in steps.enumerated() {
+            let stepPath = "\(path)[\(index)]"
             var stepResult = await executeHeistStep(
                 step,
                 index: index,
+                path: stepPath,
                 runtime: runtime,
                 environment: environment,
                 scope: scope
@@ -118,6 +122,7 @@ extension TheBrains {
                 appendSkippedHeistSteps(
                     afterFailedIndex: index,
                     remainingCount: steps.count - index - 1,
+                    path: path,
                     into: &stepResults
                 )
                 break stepLoop
@@ -130,6 +135,7 @@ extension TheBrains {
     private func executeHeistStep(
         _ step: HeistStep,
         index: Int,
+        path: String,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
@@ -137,13 +143,28 @@ extension TheBrains {
         let start = CFAbsoluteTimeGetCurrent()
         switch step {
         case .action(let action):
-            return await executeActionStep(action, index: index, start: start, runtime: runtime, environment: environment)
+            return await executeActionStep(
+                action,
+                index: index,
+                path: path,
+                start: start,
+                runtime: runtime,
+                environment: environment
+            )
         case .wait(let waitStep):
-            return await executeWaitStep(waitStep, index: index, start: start, runtime: runtime, environment: environment)
+            return await executeWaitStep(
+                waitStep,
+                index: index,
+                path: path,
+                start: start,
+                runtime: runtime,
+                environment: environment
+            )
         case .conditional(let conditional):
             return await executeConditionalStep(
                 conditional,
                 index: index,
+                path: path,
                 start: start,
                 runtime: runtime,
                 environment: environment,
@@ -153,6 +174,7 @@ extension TheBrains {
             return await executeWaitForCasesStep(
                 waitForCases,
                 index: index,
+                path: path,
                 start: start,
                 runtime: runtime,
                 environment: environment,
@@ -162,6 +184,7 @@ extension TheBrains {
             return await executeForEachElementStep(
                 forEach,
                 index: index,
+                path: path,
                 start: start,
                 runtime: runtime,
                 environment: environment,
@@ -171,6 +194,7 @@ extension TheBrains {
             return await executeForEachStringStep(
                 forEach,
                 index: index,
+                path: path,
                 start: start,
                 runtime: runtime,
                 environment: environment,
@@ -179,6 +203,7 @@ extension TheBrains {
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .warn,
                 message: warn.message,
                 durationMs: elapsedMilliseconds(since: start)
@@ -186,6 +211,7 @@ extension TheBrains {
         case .fail(let fail):
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .fail,
                 message: fail.message,
                 durationMs: elapsedMilliseconds(since: start),
@@ -195,6 +221,7 @@ extension TheBrains {
             return await executeInlineHeistStep(
                 plan,
                 index: index,
+                path: path,
                 start: start,
                 runtime: runtime,
                 environment: environment,
@@ -204,6 +231,7 @@ extension TheBrains {
             return await executeInvocationStep(
                 invoke,
                 index: index,
+                path: path,
                 start: start,
                 runtime: runtime,
                 environment: environment,
@@ -215,12 +243,13 @@ extension TheBrains {
     private func executeInlineHeistStep(
         _ plan: HeistPlan,
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let childResults = await executeHeistSteps(
+        let children = await executeHeistSteps(
             plan.body,
             runtime: runtime,
             environment: environment,
@@ -228,21 +257,24 @@ extension TheBrains {
                 plan: plan,
                 definitionPath: scope.definitionPath,
                 invocationStack: scope.invocationStack
-            )
+            ),
+            path: "\(path).heist.body"
         )
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .heist,
             message: plan.name.map { "heist \($0)" } ?? "inline heist",
             durationMs: elapsedMilliseconds(since: start),
-            stopsHeist: childResults.contains(where: \.isFailure),
-            childResults: childResults
+            stopsHeist: children.contains(where: \.isFailure),
+            children: children
         )
     }
 
     private func executeInvocationStep(
         _ invoke: HeistInvocationStep,
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -253,6 +285,7 @@ extension TheBrains {
         guard !scope.invocationStack.contains(resolvedInvocationName) else {
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .invoke,
                 message: "Recursive heist invocation \(resolvedInvocationName)",
                 durationMs: elapsedMilliseconds(since: start),
@@ -262,6 +295,7 @@ extension TheBrains {
         guard let definition = scope.plan.heistDefinition(at: invoke.path) else {
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .invoke,
                 message: "Unknown heist invocation \(invocationName)",
                 durationMs: elapsedMilliseconds(since: start),
@@ -274,13 +308,14 @@ extension TheBrains {
         } catch {
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .invoke,
                 message: "Could not bind heist invocation argument: \(error)",
                 durationMs: elapsedMilliseconds(since: start),
                 stopsHeist: true
             )
         }
-        let childResults = await executeHeistSteps(
+        let children = await executeHeistSteps(
             definition.body,
             runtime: runtime,
             environment: childEnvironment,
@@ -288,21 +323,24 @@ extension TheBrains {
                 plan: definition,
                 definitionPath: scope.definitionPath + invoke.path,
                 invocationStack: scope.invocationStack.union([resolvedInvocationName])
-            )
+            ),
+            path: "\(path).invoke.body"
         )
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .invoke,
             message: "invoked \(invocationName)",
             durationMs: elapsedMilliseconds(since: start),
-            stopsHeist: childResults.contains(where: \.isFailure),
-            childResults: childResults
+            stopsHeist: children.contains(where: \.isFailure),
+            children: children
         )
     }
 
     private func appendSkippedHeistSteps(
         afterFailedIndex failedIndex: Int,
         remainingCount: Int,
+        path: String,
         into stepResults: inout [HeistExecutionStepResult]
     ) {
         guard remainingCount > 0 else { return }
@@ -314,6 +352,7 @@ extension TheBrains {
             )
             stepResults.append(HeistExecutionStepResult(
                 index: index,
+                path: "\(path)[\(index)]",
                 kind: .skipped,
                 durationMs: 0,
                 skipped: skipped
@@ -344,6 +383,7 @@ private extension HeistExecutionStepResult {
     func markingStop() -> HeistExecutionStepResult {
         HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: kind,
             actionResult: actionResult,
             expectationActionResult: expectationActionResult,
@@ -354,26 +394,7 @@ private extension HeistExecutionStepResult {
             skipped: skipped,
             caseSelection: caseSelection,
             forEachResult: forEachResult,
-            childResults: childResults
-        )
-    }
-}
-
-extension HeistExecutionStepResult {
-    func reindexed(_ newIndex: Int) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
-            index: newIndex,
-            kind: kind,
-            actionResult: actionResult,
-            expectationActionResult: expectationActionResult,
-            expectation: expectation,
-            message: message,
-            durationMs: durationMs,
-            stopsHeist: stopsHeist,
-            skipped: skipped,
-            caseSelection: caseSelection,
-            forEachResult: forEachResult,
-            childResults: childResults
+            children: children
         )
     }
 }

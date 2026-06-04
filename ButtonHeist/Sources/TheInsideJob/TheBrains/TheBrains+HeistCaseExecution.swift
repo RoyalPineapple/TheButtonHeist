@@ -8,6 +8,7 @@ extension TheBrains {
     func executeConditionalStep(
         _ step: ConditionalStep,
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -17,24 +18,26 @@ extension TheBrains {
         do {
             resolvedCases = try step.cases.map { try $0.resolve(in: environment) }
         } catch {
-            return caseResolutionFailure(index: index, kind: .conditional, start: start, error: error)
+            return caseResolutionFailure(index: index, path: path, kind: .conditional, start: start, error: error)
         }
 
         guard let observation = await runtime.observeSemanticState(resolvedCases.observationScope, nil, nil) else {
-            return caseObservationFailure(index: index, kind: .conditional, start: start)
+            return caseObservationFailure(index: index, path: path, kind: .conditional, start: start)
         }
 
         let selection = evaluatePredicateCases(resolvedCases, observation: observation)
         if let selectedCaseIndex = selection.selectedCaseIndex {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
-            let childResults = await executeHeistSteps(
+            let children = await executeHeistSteps(
                 resolvedCases[selectedCaseIndex].body,
                 runtime: runtime,
                 environment: environment,
-                scope: scope
+                scope: scope,
+                path: "\(path).conditional.cases[\(selectedCaseIndex)].body"
             )
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .conditional,
                 message: "matched case \(selectedCaseIndex)",
                 durationMs: elapsedMilliseconds(since: start),
@@ -44,20 +47,22 @@ extension TheBrains {
                     elapsedMs: selectionElapsedMs,
                     lastObservedSummary: observation.summary
                 ),
-                childResults: childResults
+                children: children
             )
         }
 
         if let elseBody = step.elseBody {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
-            let childResults = await executeHeistSteps(
+            let children = await executeHeistSteps(
                 elseBody,
                 runtime: runtime,
                 environment: environment,
-                scope: scope
+                scope: scope,
+                path: "\(path).conditional.else_body"
             )
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .conditional,
                 message: "no case matched; else ran",
                 durationMs: elapsedMilliseconds(since: start),
@@ -68,12 +73,13 @@ extension TheBrains {
                     elseRan: true,
                     lastObservedSummary: observation.summary
                 ),
-                childResults: childResults
+                children: children
             )
         }
 
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .conditional,
             message: "no case matched",
             durationMs: elapsedMilliseconds(since: start),
@@ -89,6 +95,7 @@ extension TheBrains {
     func executeWaitForCasesStep(
         _ step: WaitForCasesStep,
         index: Int,
+        path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
@@ -98,7 +105,7 @@ extension TheBrains {
         do {
             resolvedCases = try step.cases.map { try $0.resolve(in: environment) }
         } catch {
-            return caseResolutionFailure(index: index, kind: .waitForCases, start: start, error: error)
+            return caseResolutionFailure(index: index, path: path, kind: .waitForCases, start: start, error: error)
         }
 
         let deadline = start + step.timeout
@@ -124,14 +131,16 @@ extension TheBrains {
 
             if let selectedCaseIndex = lastSelection.selectedCaseIndex {
                 let selectionElapsedMs = elapsedMilliseconds(since: start)
-                let childResults = await executeHeistSteps(
+                let children = await executeHeistSteps(
                     resolvedCases[selectedCaseIndex].body,
                     runtime: runtime,
                     environment: environment,
-                    scope: scope
+                    scope: scope,
+                    path: "\(path).wait_for_cases.cases[\(selectedCaseIndex)].body"
                 )
                 return HeistExecutionStepResult(
                     index: index,
+                    path: path,
                     kind: .waitForCases,
                     message: "matched case \(selectedCaseIndex)",
                     durationMs: elapsedMilliseconds(since: start),
@@ -142,7 +151,7 @@ extension TheBrains {
                         timeout: step.timeout,
                         lastObservedSummary: observation.summary
                     ),
-                    childResults: childResults
+                    children: children
                 )
             }
 
@@ -151,14 +160,16 @@ extension TheBrains {
 
         if let elseBody = step.elseBody {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
-            let childResults = await executeHeistSteps(
+            let children = await executeHeistSteps(
                 elseBody,
                 runtime: runtime,
                 environment: environment,
-                scope: scope
+                scope: scope,
+                path: "\(path).wait_for_cases.else_body"
             )
             return HeistExecutionStepResult(
                 index: index,
+                path: path,
                 kind: .waitForCases,
                 message: "timed out after \(heistTimeoutDescription(step.timeout))s; else ran",
                 durationMs: elapsedMilliseconds(since: start),
@@ -171,12 +182,13 @@ extension TheBrains {
                     elseRan: true,
                     lastObservedSummary: lastSummary
                 ),
-                childResults: childResults
+                children: children
             )
         }
 
         return HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: .waitForCases,
             message: waitForCasesTimeoutMessage(step: step, lastObservedSummary: lastSummary),
             durationMs: elapsedMilliseconds(since: start),
@@ -212,11 +224,13 @@ extension TheBrains {
 
     private func caseObservationFailure(
         index: Int,
+        path: String,
         kind: HeistExecutionStepKind,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: kind,
             message: "Could not observe settled accessibility state before evaluating heist cases",
             durationMs: elapsedMilliseconds(since: start),
@@ -226,12 +240,14 @@ extension TheBrains {
 
     private func caseResolutionFailure(
         index: Int,
+        path: String,
         kind: HeistExecutionStepKind,
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
             index: index,
+            path: path,
             kind: kind,
             message: "Could not resolve heist case predicate: \(error)",
             durationMs: elapsedMilliseconds(since: start),
