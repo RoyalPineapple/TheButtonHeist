@@ -5,19 +5,34 @@ struct HeistRecordingComposition {
     let dispatchedResponse: FenceResponse
     let validatedResponse: FenceResponse
 
+    enum Effect {
+        case ignore
+        case dropPendingViewportSetup
+        case append([HeistStep])
+    }
+
     func steps() throws -> [HeistStep] {
-        guard request.command.descriptor.isHeistExecutable else { return [] }
+        switch try effect() {
+        case .append(let steps):
+            return steps
+        case .ignore, .dropPendingViewportSetup:
+            return []
+        }
+    }
+
+    func effect() throws -> Effect {
+        guard request.command.descriptor.isHeistExecutable else { return .ignore }
         guard let dispatchedReceipt = dispatchedResponse.heistRecordingReceipt,
               dispatchedReceipt.actionResult.success else {
-            return []
+            return request.consumesPendingViewportSetup ? .dropPendingViewportSetup : .ignore
         }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt,
               finalReceipt.shouldRecord else {
-            return []
+            return request.consumesPendingViewportSetup ? .dropPendingViewportSetup : .ignore
         }
         if request.expectationPayload.expectation != nil,
            finalReceipt.expectation?.met != true {
-            return []
+            return request.consumesPendingViewportSetup ? .dropPendingViewportSetup : .ignore
         }
         guard let messages = request.executableMessages,
               let message = messages.first,
@@ -32,11 +47,15 @@ struct HeistRecordingComposition {
         }
 
         if case .wait(let target) = message {
-            return [.wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))]
+            return .append([.wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))])
         }
 
         if case .scrollToVisible = message {
-            return []
+            return .ignore
+        }
+
+        guard !Self.hasUnrecordableSemanticEvidence(message, actionResult: dispatchedReceipt.actionResult) else {
+            return .dropPendingViewportSetup
         }
 
         let normalizedCommand = Self.normalizedCommand(
@@ -48,10 +67,29 @@ struct HeistRecordingComposition {
             actionResult: dispatchedReceipt.actionResult,
             finalReceipt: finalReceipt
         )
-        return [.action(try ActionStep(
+        return .append([.action(try ActionStep(
             command: normalizedCommand,
             expectation: expectation
-        ))]
+        ))])
+    }
+
+    private static func hasUnrecordableSemanticEvidence(
+        _ message: ClientMessage,
+        actionResult: ActionResult
+    ) -> Bool {
+        guard actionResult.settled != false,
+              actionResult.subjectEvidence != nil,
+              actionResult.accessibilityTrace?.captures.first != nil
+        else { return false }
+        if message.requiresMinimumSemanticRecordingTarget {
+            return minimumTarget(actionResult: actionResult) == nil
+        }
+        if case .oneFingerTap = message,
+           let evidence = actionResult.subjectEvidence,
+           isActivatable(evidence.element) {
+            return minimumTarget(actionResult: actionResult) == nil
+        }
+        return false
     }
 
     private static func recordedExpectation(
@@ -306,6 +344,42 @@ struct HeistRecordingComposition {
 
     private static func orderedUnique(_ traits: [HeistTrait]) -> [HeistTrait] {
         AccessibilityPolicy.orderedMatcherTraits(Array(Set(traits)))
+    }
+}
+
+private extension TheFence.ParsedRequest {
+    var consumesPendingViewportSetup: Bool {
+        executableMessages?.contains { $0.consumesPendingViewportSetup } == true
+    }
+}
+
+private extension ClientMessage {
+    var consumesPendingViewportSetup: Bool {
+        switch self {
+        case .activate, .increment, .decrement, .performCustomAction, .rotor:
+            return true
+        case .typeText(let target):
+            return target.elementTarget != nil
+        case .oneFingerTap, .longPress, .swipe, .drag, .scroll, .scrollToVisible,
+             .scrollToEdge, .editAction, .setPasteboard, .resignFirstResponder,
+             .clientHello, .authenticate, .requestInterface, .ping, .status,
+             .getPasteboard, .requestScreen, .wait, .heistPlan:
+            return false
+        }
+    }
+
+    var requiresMinimumSemanticRecordingTarget: Bool {
+        switch self {
+        case .activate, .increment, .decrement, .performCustomAction, .rotor:
+            return true
+        case .typeText(let target):
+            return target.elementTarget != nil
+        case .oneFingerTap, .longPress, .swipe, .drag, .scroll, .scrollToVisible,
+             .scrollToEdge, .editAction, .setPasteboard, .resignFirstResponder,
+             .clientHello, .authenticate, .requestInterface, .ping, .status,
+             .getPasteboard, .requestScreen, .wait, .heistPlan:
+            return false
+        }
     }
 }
 

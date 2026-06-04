@@ -192,6 +192,36 @@ func multiCaseWaitForBuildsWaitForCasesStep() throws {
 }
 
 @Test
+func canonicalProductDemoCompilesAsAccessibilityContractProgram() throws {
+    let heist = try Heist("searchFlow") {
+        TypeText("milk", into: .label("Search"))
+            .expect(.present(ElementPredicate.element(label: "Search", value: "milk")), timeout: .seconds(2))
+
+        Activate(.label("Search"))
+            .expect(.changed(.screen()), timeout: .seconds(5))
+
+        WaitFor(timeout: .seconds(5)) {
+            Case(.present(.label("Results"))) {
+                Warn("Search results loaded")
+            }
+
+            Case(.present(.label("No Results"))) {
+                Fail("Expected search results")
+            }
+
+            Else {
+                Fail("Search did not settle")
+            }
+        }
+    }
+
+    #expect(heist.plan.name == "searchFlow")
+    #expect(heist.plan.body.count == 3)
+    #expect(heist.plan.runtimeAdmissionFailures().isEmpty)
+    #expect(heist.lint(.strictTest).isEmpty)
+}
+
+@Test
 func warnAndFailBuildTheirStepTypes() throws {
     let heist = try Heist {
         Warn("Optional onboarding was skipped")

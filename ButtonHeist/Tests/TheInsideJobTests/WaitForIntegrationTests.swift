@@ -119,11 +119,11 @@ final class WaitForIntegrationTests: XCTestCase {
         return await insideJob.brains.performWait(target: waitTarget)
     }
 
-    private func waitForChange(
+    private func changedWait(
         expectation: AccessibilityPredicate,
         timeout: Double? = nil
     ) async -> ActionResult {
-        await insideJob.brains.executeWaitForChange(
+        await insideJob.brains.executeChangedWait(
             timeout: timeout ?? 5.0,
             expectation: expectation
         )
@@ -136,6 +136,11 @@ final class WaitForIntegrationTests: XCTestCase {
             after: nil,
             timeout: 1.0
         ) != nil
+    }
+
+    private func mutateVisibleHierarchy(_ body: () -> Void) {
+        body()
+        insideJob.brains.stash.markDirtyFromTripwire()
     }
 
     // MARK: - 1. Element already present — returns immediately
@@ -327,7 +332,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let label = addLabel("WaitForChange-AlreadyPresent")
         defer { label.removeFromSuperview() }
 
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.appeared(ElementPredicate(label: "WaitForChange-AlreadyPresent"))),
             timeout: 0.2
         )
@@ -341,7 +346,7 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     func testWaitForChangeElementDisappearedAlreadyAbsentStillRequiresObservedChange() async throws {
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.disappeared(ElementPredicate(label: "WaitForChange-NeverExisted"))),
             timeout: 0.2
         )
@@ -360,16 +365,14 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        let addTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
+        mutateVisibleHierarchy {
             _ = self.addLabel("WaitForChange-Delayed")
         }
 
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.appeared(ElementPredicate(label: "WaitForChange-Delayed"))),
             timeout: 5.0
         )
-        await addTask.value
         for subview in window.subviews where subview.accessibilityLabel == "WaitForChange-Delayed" {
             subview.removeFromSuperview()
         }
@@ -388,7 +391,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.elements),
             timeout: 0.2
         )
@@ -408,7 +411,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { visible.removeFromSuperview() }
 
         guard insideJob.brains.stash.recordVisibleSemanticObservation() != nil else {
-            throw XCTSkip("No live hierarchy available for wait_for_change memory test")
+            throw XCTSkip("No live hierarchy available for changed-wait memory test")
         }
 
         let offViewportElement = AccessibilityElement.make(
@@ -425,24 +428,22 @@ final class WaitForIntegrationTests: XCTestCase {
         ))
         XCTAssertNotNil(insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId))
 
-        let updateTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
+        mutateVisibleHierarchy {
             // Mutate a tracked update property (value) while keeping the element's
             // identity (identifier/label) stable so before/after pair on the same
             // diffPairingKey and the change registers as an elements update.
             visible.accessibilityValue = "New"
         }
 
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.elements),
             timeout: 5.0
         )
-        await updateTask.value
 
-        XCTAssertTrue(result.success, result.message ?? "wait_for_change did not observe visible update")
+        XCTAssertTrue(result.success, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(
             insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId),
-            "wait_for_change must refresh visible evidence without deleting explored off-viewport semantic memory"
+            "changed wait must refresh visible evidence without deleting explored off-viewport semantic memory"
         )
     }
 
@@ -450,7 +451,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let label = addLabel("WaitForChange-StillPresent")
         defer { label.removeFromSuperview() }
 
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.disappeared(ElementPredicate(label: "WaitForChange-StillPresent"))),
             timeout: 0.2
         )
@@ -468,7 +469,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let label = addLabel("WaitForChange-ScreenChangedTimeout")
         defer { label.removeFromSuperview() }
 
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.screen()),
             timeout: 0.2
         )
@@ -485,7 +486,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let label = addLabel("WaitForChange-ElementsChangedTimeout")
         defer { label.removeFromSuperview() }
 
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.elements),
             timeout: 0.2
         )
@@ -503,7 +504,7 @@ final class WaitForIntegrationTests: XCTestCase {
         label.accessibilityValue = "Ready"
         defer { label.removeFromSuperview() }
 
-        let result = await waitForChange(
+        let result = await changedWait(
             expectation: .changed(.updated(ElementUpdatePredicate(
                 element: nil,
                 property: .value,

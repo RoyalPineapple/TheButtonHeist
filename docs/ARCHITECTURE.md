@@ -111,10 +111,10 @@ flowchart LR
 
 ### Wait
 
-`wait_for_change` is server-owned. With an expectation, TheInsideJob checks the
-current settled state first, then watches later settled captures until the
-expectation matches or the timeout expires. `element_disappeared` means current
-absence; it is not proof of a prior appearance/removal event.
+`wait` is server-owned. TheInsideJob checks the current settled state first,
+then watches later settled captures until the requested accessibility predicate
+matches or the timeout expires. `element_disappeared` means current absence; it
+is not proof of a prior appearance/removal event.
 
 ### Record and Replay
 

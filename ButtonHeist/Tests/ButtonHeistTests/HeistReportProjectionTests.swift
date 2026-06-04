@@ -74,6 +74,31 @@ final class HeistReportProjectionTests: XCTestCase {
         XCTAssertEqual(projection.nodes.first?.action?.finalActionResult?.message, "Delete failed")
     }
 
+    func testWaitProjectsWaitNode() throws {
+        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let plan = HeistPlan(body: [.wait(WaitStep(predicate: predicate, timeout: 2))])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .wait,
+                    actionResult: ActionResult(success: true, method: .wait),
+                    expectation: ExpectationResult(met: true, predicate: predicate),
+                    durationMs: 20
+                ),
+            ],
+            totalTimingMs: 20
+        )
+
+        let node = HeistReportProjection(plan: plan, result: result).nodes[0]
+
+        XCTAssertEqual(node.path, "$.body[0]")
+        XCTAssertEqual(node.kind, .wait)
+        XCTAssertEqual(node.status, .passed)
+        XCTAssertEqual(node.expectation?.met, true)
+        XCTAssertNil(node.action)
+    }
+
     func testConditionalSelectedCaseProjectsOnlySelectedChildren() throws {
         let child = try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Home")))))
         let unselected = try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Login")))))
@@ -363,6 +388,73 @@ final class HeistReportProjectionTests: XCTestCase {
         XCTAssertEqual(projection.nodes.map(\.status), [.warned, .failed])
     }
 
+    func testInlineHeistProjectsChildBodyPaths() throws {
+        let inlinePlan = HeistPlan(
+            name: "checkout",
+            body: [try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Checkout")))))]
+        )
+        let plan = HeistPlan(body: [.heist(inlinePlan)])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .heist,
+                    durationMs: 5,
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate),
+                            durationMs: 5
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 5
+        )
+
+        let node = HeistReportProjection(plan: plan, result: result).nodes[0]
+
+        XCTAssertEqual(node.kind, .heist)
+        XCTAssertEqual(node.children.map(\.path), ["$.body[0].heist.body[0]"])
+        XCTAssertEqual(node.children.first?.action?.commandName, "activate")
+    }
+
+    func testInvokeProjectsDefinitionBodyPaths() throws {
+        let definition = HeistPlan(
+            name: "submit",
+            body: [try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))))]
+        )
+        let plan = HeistPlan(
+            definitions: [definition],
+            body: [.invoke(HeistInvocationStep(path: ["submit"]))]
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .invoke,
+                    durationMs: 5,
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate),
+                            durationMs: 5
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 5
+        )
+
+        let node = HeistReportProjection(plan: plan, result: result).nodes[0]
+
+        XCTAssertEqual(node.kind, .invoke)
+        XCTAssertEqual(node.children.map(\.path), ["$.body[0].invoke.body[0]"])
+        XCTAssertEqual(node.children.first?.action?.commandName, "activate")
+    }
+
     private func actionStep(
         command: HeistActionCommand = .activate(.target(.predicate(ElementPredicate(label: "Button")))),
         expectation: WaitStep? = nil
@@ -381,9 +473,9 @@ final class HeistReportProjectionTests: XCTestCase {
     }
 }
 
-final class HeistLegacyFlatReportTests: XCTestCase {
+final class HeistReportTreeProjectionTests: XCTestCase {
 
-    func testLegacyRowsFlattenSelectedStructuralChildren() throws {
+    func testSelectedStructuralChildrenStayInReportTree() throws {
         let elseStep = try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Fallback")))))
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(
@@ -418,10 +510,11 @@ final class HeistLegacyFlatReportTests: XCTestCase {
         let projection = HeistReportProjection(plan: plan, result: result)
 
         XCTAssertEqual(projection.nodes.first?.children.first?.path, "$.body[0].conditional.else_body[0]")
-        XCTAssertEqual(projection.legacyFlatRows.map(\.commandName), ["if", "activate"])
+        XCTAssertEqual(projection.nodes.first?.kind, .conditional)
+        XCTAssertEqual(projection.nodes.first?.children.first?.action?.commandName, "activate")
     }
 
-    func testLegacyRowsKeepForEachBodyNestedUnderLoopRow() throws {
+    func testForEachBodyResultsStayNestedUnderLoopNode() throws {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
@@ -469,11 +562,15 @@ final class HeistLegacyFlatReportTests: XCTestCase {
 
         let projection = HeistReportProjection(plan: plan, result: result)
 
-        XCTAssertEqual(projection.legacyFlatRows.map(\.commandName), ["for_each_string"])
-        XCTAssertEqual(
-            projection.legacyFlatRows.first?.failureMessage,
-            "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
-        )
+        let node = try XCTUnwrap(projection.nodes.first)
+        XCTAssertEqual(node.kind, .forEachString)
+        XCTAssertEqual(node.status, .failed)
+        XCTAssertEqual(node.message, "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"")
+        XCTAssertEqual(node.children.map(\.path), [
+            "$.body[0].for_each_string.iterations[0]",
+            "$.body[0].for_each_string.iterations[1]",
+        ])
+        XCTAssertEqual(node.children[1].children.first?.action?.commandName, "typeText")
     }
 
     private func actionStep(

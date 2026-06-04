@@ -13,6 +13,7 @@ struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unc
     let app: String
     let fileHandle: FileHandle
     let filePath: URL
+    var pendingViewportSetupSteps: [HeistStep]
 }
 
 // MARK: - HeistStore
@@ -74,11 +75,13 @@ final class HeistStore {
         heistRecording = .recording(HeistRecording(
             app: app,
             fileHandle: heistHandle,
-            filePath: heistPath
+            filePath: heistPath,
+            pendingViewportSetupSteps: []
         ))
     }
 
     func finishRecording() throws -> HeistPlan {
+        try flushPendingViewportSetup()
         let recording = try currentRecording()
         heistRecording = .idle
 
@@ -99,12 +102,47 @@ final class HeistStore {
 
     func appendStep(_ step: HeistStep) throws {
         let recording = try currentRecording()
+        try appendStep(step, to: recording)
+    }
+
+    func appendPendingViewportSetupStep(_ step: HeistStep) throws {
+        try mutateCurrentRecording { recording in
+            recording.pendingViewportSetupSteps.append(step)
+        }
+    }
+
+    func dropPendingViewportSetupSteps() throws {
+        try mutateCurrentRecording { recording in
+            recording.pendingViewportSetupSteps.removeAll()
+        }
+    }
+
+    func flushPendingViewportSetup() throws {
+        let pendingSteps = try currentRecording().pendingViewportSetupSteps
+        guard !pendingSteps.isEmpty else { return }
+        try mutateCurrentRecording { recording in
+            recording.pendingViewportSetupSteps.removeAll()
+        }
+        for step in pendingSteps {
+            try appendStep(step)
+        }
+    }
+
+    private func appendStep(_ step: HeistStep, to recording: HeistRecording) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
         var lineData = try encoder.encode(step)
         lineData.append(contentsOf: [0x0A])
         recording.fileHandle.write(lineData)
+    }
+
+    private func mutateCurrentRecording(_ mutate: (inout HeistRecording) throws -> Void) throws {
+        guard case .recording(var recording) = heistRecording else {
+            throw StorageError.heistRecording(.notRecording)
+        }
+        try mutate(&recording)
+        heistRecording = .recording(recording)
     }
 
     private func currentRecording() throws -> HeistRecording {

@@ -35,13 +35,13 @@ extension TheFence.Command {
                 .startHeist, requestDecoder: TheFence.decodeStartHeistRequest,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [param(.app, .string), param(.identifier, .string)],
-                description: "Start recording replayable heist steps from successful commands."
+                description: "Start composing successful interactions into a semantic heist test."
             ),
             commandDescriptor(
                 .stopHeist, requestDecoder: TheFence.decodeStopHeistRequest,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [param(.output, .string, required: true)],
-                description: "Stop heist recording and save a deterministic heist fixture."
+                description: "Stop heist recording and save a deterministic semantic heist fixture."
             ),
             commandDescriptor(
                 .playHeist, requestDecoder: TheFence.decodePlayHeistRequest,

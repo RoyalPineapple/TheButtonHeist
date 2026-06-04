@@ -54,7 +54,7 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertFalse(activate.localizedCaseInsensitiveContains("tap"), activate)
 
         XCTAssertTrue(tap.localizedCaseInsensitiveContains("explicit mechanical/spatial tap"), tap)
-        XCTAssertTrue(tap.localizedCaseInsensitiveContains("ordinary control activation should use activate"), tap)
+        XCTAssertTrue(tap.localizedCaseInsensitiveContains("ordinary accessible controls should use the semantic command path"), tap)
 
         XCTAssertTrue(scroll.localizedCaseInsensitiveContains("explicit viewport operation"), scroll)
         XCTAssertTrue(scrollToVisible.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToVisible)

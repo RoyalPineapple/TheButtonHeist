@@ -172,7 +172,7 @@ struct PublicElementUpdate: Encodable {
 
 struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let status: PublicStatus
-    let results: [PublicResponseModel]
+    let report: PublicHeistReport
     let completedSteps: Int
     let totalTimingMs: Int
     let failedIndex: Int?
@@ -187,7 +187,7 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
         let projection = HeistReportProjection(plan: plan, result: result)
         let failedIndex = result.stoppedFailedIndex
         self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
-        self.results = projection.legacyPublicResponses.map(PublicResponseModel.init(response:))
+        self.report = PublicHeistReport(projection: projection)
         self.completedSteps = result.completedStepCount
         self.totalTimingMs = result.totalTimingMs
         self.failedIndex = failedIndex
@@ -196,6 +196,72 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
             ? PublicHeistExpectations(checked: checked, met: projection.summary.expectationsMet)
             : nil
         self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
+    }
+}
+
+struct PublicHeistReport: Encodable {
+    let summary: PublicHeistReportSummary
+    let nodes: [PublicHeistReportNode]
+
+    init(projection: HeistReportProjection) {
+        self.summary = PublicHeistReportSummary(summary: projection.summary)
+        self.nodes = projection.nodes.map(PublicHeistReportNode.init(node:))
+    }
+}
+
+struct PublicHeistReportSummary: Encodable {
+    let completedSteps: Int
+    let failedIndex: Int?
+    let totalTimingMs: Int
+    let expectations: PublicHeistExpectations?
+
+    init(summary: HeistReportSummary) {
+        self.completedSteps = summary.completedStepCount
+        self.failedIndex = summary.failedIndex
+        self.totalTimingMs = summary.totalTimingMs
+        self.expectations = summary.expectationsChecked > 0
+            ? PublicHeistExpectations(checked: summary.expectationsChecked, met: summary.expectationsMet)
+            : nil
+    }
+}
+
+struct PublicHeistReportNode: Encodable {
+    let path: String
+    let kind: String
+    let status: String
+    let message: String?
+    let durationMs: Int
+    let action: PublicHeistReportAction?
+    let expectation: PublicExpectationResult?
+    let caseSelection: HeistCaseSelectionResult?
+    let forEachResult: HeistForEachResult?
+    let children: [PublicHeistReportNode]
+
+    init(node: HeistReportNode) {
+        self.path = node.path
+        self.kind = node.kind.rawValue
+        self.status = node.status.rawValue
+        self.message = node.message
+        self.durationMs = node.durationMs
+        self.action = node.action.map(PublicHeistReportAction.init(action:))
+        self.expectation = node.expectation.map(PublicExpectationResult.init(result:))
+        self.caseSelection = node.caseSelection
+        self.forEachResult = node.forEachResult
+        self.children = node.children.map(PublicHeistReportNode.init(node:))
+    }
+}
+
+struct PublicHeistReportAction: Encodable {
+    let commandName: String
+    let target: ElementTarget?
+    let result: PublicActionResponse?
+
+    init(action: HeistActionReportProjection) {
+        self.commandName = action.commandName
+        self.target = action.target
+        self.result = action.finalActionResult.map {
+            PublicActionResponse(commandName: action.commandName, result: $0, expectation: nil)
+        }
     }
 }
 

@@ -12,13 +12,13 @@ extension TheFence {
         guard playback.isIdle else { return }
         guard heistStore.isRecordingHeist else { return }
 
-        let steps: [HeistStep]
+        let effect: HeistRecordingComposition.Effect
         do {
-            steps = try HeistRecordingComposition(
+            effect = try HeistRecordingComposition(
                 request: request,
                 dispatchedResponse: dispatchedResponse,
                 validatedResponse: validatedResponse
-            ).steps()
+            ).effect()
         } catch {
             heistRecordingLogger.error(
                 "Skipped heist step for \(request.command.rawValue): composition failed: \(String(describing: error))"
@@ -26,9 +26,8 @@ extension TheFence {
             return
         }
 
-        guard !steps.isEmpty else { return }
         do {
-            try heistStore.appendRecordingSteps(steps)
+            try heistStore.applyRecordingEffect(effect)
         } catch {
             heistRecordingLogger.error(
                 "Failed to encode heist step for \(request.command.rawValue): \(error.localizedDescription)"

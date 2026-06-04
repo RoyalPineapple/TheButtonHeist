@@ -22,7 +22,7 @@ extension FenceResponse {
         }).last {
             text = "\(lastScreenId) | \(text)"
         }
-        for row in projection.legacyFlatRows {
+        for row in HeistReportAdapterRow.rows(from: projection.nodes) {
             var line = "  [\(row.index)] \(row.commandName)"
             if let actionResult = row.finalActionResult {
                 if !actionResult.success, let error = actionResult.message {
@@ -30,13 +30,6 @@ extension FenceResponse {
                 } else if let delta = actionResult.accessibilityTrace?.endpointDeltaProjection {
                     let kind = Self.compactDeltaKind(delta)
                     line += " -> \(kind)"
-                }
-            } else if let response = row.response,
-                      case .error(let message, let details) = response {
-                if let details {
-                    line += " -> error[\(details.errorCode) \(details.phase.rawValue)]: \(message)"
-                } else {
-                    line += " -> error: \(message)"
                 }
             } else if let failureMessage = row.failureMessage {
                 line += " -> error: \(failureMessage)"
