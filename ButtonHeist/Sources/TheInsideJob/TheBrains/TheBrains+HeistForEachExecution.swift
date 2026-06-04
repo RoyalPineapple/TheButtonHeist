@@ -89,7 +89,7 @@ extension TheBrains {
         return HeistExecutionStepResult(
             index: index,
             path: path,
-            kind: .forEach,
+            kind: .forEachElement,
             message: forEachMessage(
                 matchedCount: matchedCount,
                 iterationCount: iterationCount,
@@ -153,7 +153,7 @@ extension TheBrains {
         return HeistExecutionStepResult(
             index: index,
             path: path,
-            kind: .forEach,
+            kind: .forEachString,
             message: forEachStringMessage(
                 valueCount: step.values.count,
                 iterationCount: iterationCount,
@@ -180,7 +180,7 @@ extension TheBrains {
         HeistExecutionStepResult(
             index: index,
             path: path,
-            kind: .forEach,
+            kind: .forEachElement,
             message: "Could not observe settled semantic hierarchy before evaluating for_each",
             durationMs: elapsedMilliseconds(since: start),
             stopsHeist: true,
@@ -204,7 +204,7 @@ extension TheBrains {
         return HeistExecutionStepResult(
             index: index,
             path: path,
-            kind: .forEach,
+            kind: .forEachElement,
             message: reason,
             durationMs: elapsedMilliseconds(since: start),
             stopsHeist: true,

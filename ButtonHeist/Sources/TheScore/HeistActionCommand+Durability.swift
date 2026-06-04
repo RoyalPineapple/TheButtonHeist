@@ -36,14 +36,11 @@ public extension HeistActionCommand {
     var reportTarget: ElementTarget? {
         switch self {
         case .activate(let target), .increment(let target), .decrement(let target), .viewportScrollToVisible(let target):
-            if case .target(let target) = target { return target }
-            return nil
+            return target.reportTarget
         case .customAction(_, let target), .rotor(_, let target, _):
-            if case .target(let target) = target { return target }
-            return nil
+            return target.reportTarget
         case .typeText(_, let target):
-            if case .target(let target) = target { return target }
-            return nil
+            return target?.reportTarget
         case .mechanicalTap(let target):
             if case .element(let target) = target.selection { return target }
             return nil
@@ -70,5 +67,11 @@ public extension HeistActionCommand {
         case .editAction, .setPasteboard, .dismissKeyboard:
             return nil
         }
+    }
+}
+
+private extension ElementTargetExpr {
+    var reportTarget: ElementTarget? {
+        try? resolve(in: .empty)
     }
 }
