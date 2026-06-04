@@ -8,6 +8,14 @@ struct PublicStatus: Encodable {
 
     let value: String
 
+    init(value: String) {
+        self.value = value
+    }
+
+    init(_ status: PublicResponseStatus) {
+        self.value = status.rawValue
+    }
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         try container.encode(value)
@@ -35,6 +43,7 @@ struct PublicResponseModel: FencePublicJSONResponse {
     let response: FenceResponse
 
     func encode(to encoder: Encoder) throws {
+        let projection = PublicResponseProjection(response: response)
         switch response {
         case .ok(let message):
             try PublicOKResponse(message: message).encode(to: encoder)
@@ -48,8 +57,11 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicDevicesResponse(devices: devices).encode(to: encoder)
         case .interface(let interface, let detail):
             try PublicInterfaceResponse(interface: interface, detail: detail).encode(to: encoder)
-        case .action(let command, let result, let expectation):
-            try PublicActionResponse(commandName: command.rawValue, result: result, expectation: expectation).encode(to: encoder)
+        case .action:
+            guard let action = projection.action else {
+                preconditionFailure("Missing public action projection for action response")
+            }
+            try PublicActionResponse(projection: action).encode(to: encoder)
         case .screenshot(let path, let payload, let options):
             try PublicScreenshotResponse(
                 path: path,
@@ -64,12 +76,11 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 includePNGData: true,
                 includeInterface: options.includeInterface
             ).encode(to: encoder)
-        case .heistExecution(let plan, let result, let accessibilityTrace):
-            try PublicHeistExecutionResponse(
-                plan: plan,
-                result: result,
-                accessibilityTrace: accessibilityTrace
-            ).encode(to: encoder)
+        case .heistExecution:
+            guard let heist = projection.heist else {
+                preconditionFailure("Missing public heist projection for heist response")
+            }
+            try PublicHeistExecutionResponse(projection: heist).encode(to: encoder)
         case .sessionState(let payload):
             try PublicSessionStateResponse(payload: payload).encode(to: encoder)
         case .targets(let targets, let defaultTarget):
@@ -78,13 +89,11 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicHeistStartedResponse().encode(to: encoder)
         case .heistStopped(let path, let stepCount):
             try PublicHeistStoppedResponse(path: path, stepCount: stepCount).encode(to: encoder)
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
-            try PublicPlaybackResponse(
-                completedSteps: completedSteps,
-                failedIndex: failedIndex,
-                totalTimingMs: totalTimingMs,
-                failure: failure
-            ).encode(to: encoder)
+        case .heistPlayback:
+            guard let playback = projection.playback else {
+                preconditionFailure("Missing public playback projection for playback response")
+            }
+            try PublicPlaybackResponse(projection: playback).encode(to: encoder)
         }
     }
 }

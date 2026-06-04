@@ -19,42 +19,21 @@ struct PublicActionResponse: FencePublicJSONResponse {
     let hint: String?
     let expectation: PublicExpectationResult?
 
-    init(commandName: String, result: ActionResult, expectation: ExpectationResult?) {
-        if let expectation, !expectation.met {
-            self.status = PublicStatus(value: "expectation_failed")
-        } else {
-            self.status = result.success ? .ok : .error
-        }
-        self.method = commandName
-        self.message = result.message
-        if case .value(let value) = result.payload {
-            self.value = value
-        } else {
-            self.value = nil
-        }
-        if case .rotor(let rotor) = result.payload {
-            self.rotor = PublicRotorResult(result: rotor)
-        } else {
-            self.rotor = nil
-        }
-        self.delta = result.accessibilityTrace?.endpointDeltaProjection.map(PublicDelta.init)
-        self.screenName = result.accessibilityTrace?.endpointScreenNameProjection
-        self.screenId = result.accessibilityTrace?.endpointScreenIdProjection
-        if result.success {
-            self.errorClass = nil
-            self.errorCode = nil
-            self.phase = nil
-            self.retryable = nil
-            self.hint = nil
-        } else {
-            self.errorClass = (result.errorKind ?? .actionFailed).rawValue
-            let details = FenceResponse.actionFailureDetails(result)
-            self.errorCode = details?.errorCode
-            self.phase = details?.phase.rawValue
-            self.retryable = details?.retryable
-            self.hint = details?.hint
-        }
-        self.expectation = expectation.map { PublicExpectationResult(result: $0) }
+    init(projection: PublicActionProjection) {
+        self.status = PublicStatus(projection.status)
+        self.method = projection.commandName
+        self.message = projection.message
+        self.value = projection.value
+        self.rotor = projection.rotor.map(PublicRotorResult.init(result:))
+        self.delta = projection.delta.map(PublicDelta.init)
+        self.screenName = projection.screenName
+        self.screenId = projection.screenId
+        self.errorClass = projection.failure?.errorClass
+        self.errorCode = projection.failure?.errorCode
+        self.phase = projection.failure?.phase?.rawValue
+        self.retryable = projection.failure?.retryable
+        self.hint = projection.failure?.hint
+        self.expectation = projection.expectation.map(PublicExpectationResult.init(projection:))
     }
 
 }
@@ -92,10 +71,10 @@ struct PublicExpectationResult: Encodable {
     let actual: String?
     let expected: AccessibilityPredicate?
 
-    init(result: ExpectationResult) {
-        self.met = result.met
-        self.actual = result.actual
-        self.expected = result.predicate
+    init(projection: PublicExpectationProjection) {
+        self.met = projection.met
+        self.actual = projection.actual
+        self.expected = projection.expected
     }
 }
 
@@ -179,23 +158,14 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let expectations: PublicHeistExpectations?
     let netDelta: PublicDelta?
 
-    init(
-        plan: HeistPlan,
-        result: HeistExecutionResult,
-        accessibilityTrace: AccessibilityTrace?
-    ) {
-        let projection = HeistReportProjection(plan: plan, result: result)
-        let failedIndex = result.stoppedFailedIndex
-        self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
-        self.report = PublicHeistReport(projection: projection)
-        self.completedSteps = result.completedStepCount
-        self.totalTimingMs = result.totalTimingMs
-        self.failedIndex = failedIndex
-        let checked = projection.summary.expectationsChecked
-        self.expectations = checked > 0
-            ? PublicHeistExpectations(checked: checked, met: projection.summary.expectationsMet)
-            : nil
-        self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
+    init(projection: PublicHeistExecutionProjection) {
+        self.status = PublicStatus(projection.status)
+        self.report = PublicHeistReport(projection: projection.report)
+        self.completedSteps = projection.completedSteps
+        self.totalTimingMs = projection.totalTimingMs
+        self.failedIndex = projection.failedIndex
+        self.expectations = projection.expectations.map(PublicHeistExpectations.init(projection:))
+        self.netDelta = projection.netDelta.map(PublicDelta.init)
     }
 }
 
@@ -244,7 +214,7 @@ struct PublicHeistReportNode: Encodable {
         self.message = node.message
         self.durationMs = node.durationMs
         self.action = node.action.map(PublicHeistReportAction.init(action:))
-        self.expectation = node.expectation.map(PublicExpectationResult.init(result:))
+        self.expectation = node.expectationProjection.map(PublicExpectationResult.init(projection:))
         self.caseSelection = node.caseSelection
         self.forEachResult = node.forEachResult
         self.children = node.children.map(PublicHeistReportNode.init(node:))
@@ -259,9 +229,7 @@ struct PublicHeistReportAction: Encodable {
     init(action: HeistActionReportProjection) {
         self.commandName = action.commandName
         self.target = action.target
-        self.result = action.finalActionResult.map {
-            PublicActionResponse(commandName: action.commandName, result: $0, expectation: nil)
-        }
+        self.result = action.finalActionProjection.map(PublicActionResponse.init(projection:))
     }
 }
 
@@ -269,6 +237,12 @@ struct PublicHeistExpectations: Encodable {
     let checked: Int
     let met: Int
     let allMet: Bool
+
+    init(projection: PublicHeistExpectationsProjection) {
+        self.checked = projection.checked
+        self.met = projection.met
+        self.allMet = projection.allMet
+    }
 
     init(checked: Int, met: Int) {
         self.checked = checked

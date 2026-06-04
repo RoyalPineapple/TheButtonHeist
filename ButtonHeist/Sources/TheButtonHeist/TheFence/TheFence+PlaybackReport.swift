@@ -74,6 +74,49 @@ private struct PlaybackReportProjection {
     }
 }
 
+// Playback reports are an external linear format. Keep flattening private here;
+// public report surfaces consume HeistReportProjection.nodes or compactLines.
+private struct HeistReportAdapterRow {
+    let index: Int
+    let node: HeistReportNode
+
+    var commandName: String {
+        node.action?.commandName ?? node.kind.reportName
+    }
+
+    var fenceCommand: TheFence.Command? {
+        node.action?.fenceCommand
+    }
+
+    var target: ElementTarget? {
+        node.action?.target
+    }
+
+    var finalActionResult: ActionResult? {
+        node.action?.finalActionResult
+    }
+
+    var failureMessage: String? {
+        node.publicFailureMessage
+    }
+
+    static func rows(from nodes: [HeistReportNode]) -> [Self] {
+        nodes.flatMap(Self.flatten(node:))
+            .enumerated()
+            .map { index, row in Self(index: index, node: row.node) }
+    }
+
+    private static func flatten(node: HeistReportNode) -> [Self] {
+        let row = Self(index: 0, node: node)
+        switch node.kind {
+        case .forEachElement, .forEachString:
+            return [row]
+        case .action, .wait, .conditional, .waitForCases, .forEachIteration, .warn, .fail, .heist, .invoke:
+            return [row] + node.children.flatMap(Self.flatten(node:))
+        }
+    }
+}
+
 private extension HeistReportAdapterRow {
     var playbackFailure: PlaybackFailure? {
         let failedStep: PlaybackFailure.FailedStep
@@ -83,11 +126,11 @@ private extension HeistReportAdapterRow {
             failedStep = PlaybackFailure.FailedStep(commandName: commandName, target: target)
         }
         if let result = finalActionResult,
-           result.success == false || node.expectation?.met == false {
+           result.success == false || node.expectationProjection?.status == .failed {
             return .actionFailed(
                 step: failedStep,
                 result: result,
-                expectation: node.expectation,
+                expectation: node.expectationProjection?.status == .failed ? node.expectation : nil,
                 interface: nil,
                 diagnosticCaptureFailure: nil
             )

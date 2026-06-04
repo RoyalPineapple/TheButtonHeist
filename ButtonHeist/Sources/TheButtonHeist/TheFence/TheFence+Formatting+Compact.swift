@@ -48,9 +48,11 @@ extension FenceResponse {
             )
         case .heistExecution(let plan, let result, let accessibilityTrace):
             return compactHeistFormatted(
-                plan: plan,
-                result: result,
-                netDelta: accessibilityTrace?.meaningfulEndpointDeltaProjection
+                PublicHeistExecutionProjection(
+                    plan: plan,
+                    result: result,
+                    accessibilityTrace: accessibilityTrace
+                )
             )
         case .sessionState(let payload):
             return Self.compactSessionState(payload)
@@ -65,10 +67,16 @@ extension FenceResponse {
         case .heistStopped(let path, let stepCount):
             return "saved: \(path) (\(stepCount) steps)"
         case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
-            var text = "playback: \(completedSteps) steps in \(totalTimingMs)ms"
-            if let index = failedIndex { text += " (failed at \(index))" }
-            if let failure {
-                text += " [\(failure.step.commandName): \(failure.errorMessage)]"
+            let projection = PublicPlaybackProjection(
+                completedSteps: completedSteps,
+                failedIndex: failedIndex,
+                totalTimingMs: totalTimingMs,
+                failure: failure
+            )
+            var text = "playback: \(projection.completedSteps) steps in \(projection.totalTimingMs)ms"
+            if let index = projection.failedIndex { text += " (failed at \(index))" }
+            if let failure = projection.failure {
+                text += " [\(failure.command): \(failure.error)]"
                 if let diagnosticCaptureFailure = failure.diagnosticCaptureFailure {
                     text += " [diagnosticCaptureFailure: \(diagnosticCaptureFailure)]"
                 }

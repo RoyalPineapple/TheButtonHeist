@@ -20,6 +20,18 @@ struct HeistReportProjection {
         nodes.flatMap(\.finalActionResultsInExecutionOrder)
     }
 
+    var finalActionProjectionsInExecutionOrder: [PublicActionProjection] {
+        nodes.flatMap(\.finalActionProjectionsInExecutionOrder)
+    }
+
+    var compactLines: [PublicHeistReportLineProjection] {
+        Self.compactLineNodes(from: nodes)
+            .enumerated()
+            .map { index, line in
+                PublicHeistReportLineProjection(index: index, depth: line.depth, node: line.node)
+            }
+    }
+
     private static func node(outcome: HeistExecutionStepResult) -> HeistReportNode {
         let kind = HeistReportStepKind(outcome: outcome)
         return HeistReportNode(
@@ -66,6 +78,20 @@ struct HeistReportProjection {
             expectationActionResult: outcome.expectationActionResult
         )
     }
+
+    private static func compactLineNodes(from nodes: [HeistReportNode]) -> [(node: HeistReportNode, depth: Int)] {
+        nodes.flatMap { compactLineNodes(node: $0, depth: 0) }
+    }
+
+    private static func compactLineNodes(node: HeistReportNode, depth: Int) -> [(node: HeistReportNode, depth: Int)] {
+        let row = (node: node, depth: depth)
+        switch node.kind {
+        case .forEachElement, .forEachString:
+            return [row]
+        case .action, .wait, .conditional, .waitForCases, .forEachIteration, .warn, .fail, .heist, .invoke:
+            return [row] + node.children.flatMap { compactLineNodes(node: $0, depth: depth + 1) }
+        }
+    }
 }
 
 struct HeistReportSummary {
@@ -97,22 +123,71 @@ struct HeistReportNode {
     let children: [HeistReportNode]
 
     var expectationsChecked: Int {
-        (expectation?.predicate == nil ? 0 : 1) + children.reduce(0) { $0 + $1.expectationsChecked }
+        (expectationProjection?.expected == nil ? 0 : 1) + children.reduce(0) { $0 + $1.expectationsChecked }
     }
 
     var expectationsMet: Int {
-        (expectation?.met == true && expectation?.predicate != nil ? 1 : 0) + children.reduce(0) { $0 + $1.expectationsMet }
+        (expectationProjection?.met == true && expectationProjection?.expected != nil ? 1 : 0) +
+            children.reduce(0) { $0 + $1.expectationsMet }
     }
 
     var expectationMet: Bool? {
-        guard expectation?.predicate != nil else { return nil }
-        return expectation?.met
+        guard expectationProjection?.expected != nil else { return nil }
+        return expectationProjection?.met
+    }
+
+    var expectationProjection: PublicExpectationProjection? {
+        if action?.finalActionResult?.success == false {
+            return nil
+        }
+        return expectation.map(PublicExpectationProjection.init(result:))
     }
 
     var finalActionResultsInExecutionOrder: [ActionResult] {
         [
             action?.finalActionResult,
         ].compactMap { $0 } + children.flatMap(\.finalActionResultsInExecutionOrder)
+    }
+
+    var finalActionProjectionsInExecutionOrder: [PublicActionProjection] {
+        [
+            action?.finalActionProjection,
+        ].compactMap { $0 } + children.flatMap(\.finalActionProjectionsInExecutionOrder)
+    }
+
+    var publicFailureMessage: String? {
+        switch status {
+        case .passed, .warned:
+            return nil
+        case .skipped, .failed:
+            break
+        }
+        if children.contains(where: { $0.status == .failed }) {
+            switch kind {
+            case .conditional, .waitForCases, .forEachIteration, .heist, .invoke:
+                return nil
+            case .action, .wait, .forEachElement, .forEachString, .warn, .fail:
+                break
+            }
+        }
+        if let message {
+            return message
+        }
+        if let action = action?.finalActionProjection, action.status == .error {
+            return action.message ?? "action failed"
+        }
+        if expectationProjection?.status == .failed {
+            return expectationProjection?.actual ?? "expectation not met"
+        }
+        if kind == .waitForCases,
+           caseSelection?.timedOut == true,
+           caseSelection?.elseRan != true {
+            return "wait_for_cases timed out"
+        }
+        if let reason = forEachResult?.failureReason {
+            return reason
+        }
+        return "heist step failed"
     }
 
 }
@@ -126,6 +201,12 @@ struct HeistActionReportProjection {
 
     var finalActionResult: ActionResult? {
         expectationActionResult ?? actionResult
+    }
+
+    var finalActionProjection: PublicActionProjection? {
+        finalActionResult.map {
+            PublicActionProjection(commandName: commandName, result: $0, expectation: nil)
+        }
     }
 }
 
