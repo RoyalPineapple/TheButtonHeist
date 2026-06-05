@@ -51,8 +51,8 @@ final class TheBrainsPipelineTests: XCTestCase {
                        "Without explicit errorKind, failures default to actionFailed")
         XCTAssertEqual(result.accessibilityTrace?.captures.first?.hash, before.capture.hash)
         XCTAssertNotNil(result.accessibilityTrace?.captures.last)
-        guard case .elementsChanged? = result.accessibilityTrace?.endpointDeltaProjection else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        guard case .elementsChanged? = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
     }
 
@@ -140,8 +140,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNotNil(result.accessibilityTrace)
         XCTAssertEqual(result.accessibilityTrace?.captures.first?.hash, before.capture.hash)
         XCTAssertNotNil(result.accessibilityTrace?.captures.last?.hash)
-        guard case .noChange? = result.accessibilityTrace?.endpointDeltaProjection else {
-            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        guard case .noChange? = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
     }
 
@@ -211,8 +211,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
-        guard case .screenChanged? = result.accessibilityTrace?.endpointDeltaProjection else {
-            return XCTFail("Expected screenChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        guard case .screenChanged? = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected screenChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
     }
 
@@ -343,8 +343,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(receipt.actionResult.success)
         XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Before"])
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Before", "Loaded"])
-        guard case .elementsChanged? = trace.endpointDeltaProjection else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDeltaProjection))")
+        guard case .elementsChanged? = trace.endpointDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDelta))")
         }
     }
 
@@ -387,8 +387,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
 
         XCTAssertNil(trace.captures.last?.transition.screenChangeReason)
-        guard case .elementsChanged(let payload)? = trace.endpointDeltaProjection else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDeltaProjection))")
+        guard case .elementsChanged(let payload)? = trace.endpointDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDelta))")
         }
         XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
         XCTAssertEqual(payload.captureEdge?.after.hash, trace.captures.last?.hash)
@@ -404,8 +404,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
 
         XCTAssertEqual(trace.captures.last?.transition.screenChangeReason, "primaryHeaderChanged")
-        guard case .screenChanged(let payload)? = trace.endpointDeltaProjection else {
-            return XCTFail("Expected screenChanged delta, got \(String(describing: trace.endpointDeltaProjection))")
+        guard case .screenChanged(let payload)? = trace.endpointDelta else {
+            return XCTFail("Expected screenChanged delta, got \(String(describing: trace.endpointDelta))")
         }
         XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
         XCTAssertEqual(payload.captureEdge?.after.hash, trace.captures.last?.hash)
@@ -419,9 +419,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         let after = brains.postActionObservation.captureSemanticState()
 
         let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
-        let endpointDelta = try XCTUnwrap(trace.endpointDeltaProjection)
+        let endpointDelta = try XCTUnwrap(trace.endpointDelta)
 
-        XCTAssertEqual(trace.meaningfulEndpointDeltaProjection, endpointDelta)
+        XCTAssertEqual(trace.meaningfulEndpointDelta, endpointDelta)
         XCTAssertEqual(trace.captures.first?.hash, before.capture.hash)
         XCTAssertEqual(trace.captures.last?.parentHash, before.capture.hash)
         XCTAssertEqual(trace.captures.last?.hash, after.capture.hash)

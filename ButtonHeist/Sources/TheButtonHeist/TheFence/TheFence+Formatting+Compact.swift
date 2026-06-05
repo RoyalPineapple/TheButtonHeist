@@ -49,7 +49,7 @@ extension FenceResponse {
         case .heistExecution(_, let result, let accessibilityTrace):
             return compactHeistFormatted(
                 result,
-                netDelta: accessibilityTrace?.meaningfulEndpointDeltaProjection
+                netDelta: accessibilityTrace?.meaningfulEndpointDelta
             )
         case .sessionState(let payload):
             return Self.compactSessionState(payload)

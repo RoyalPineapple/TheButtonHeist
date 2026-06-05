@@ -6,7 +6,7 @@ extension FenceResponse {
 
     func compactActionResult(command: TheFence.Command, _ result: ActionResult, expectation: ExpectationResult?) -> String {
         let commandName = command.rawValue
-        let screenId = result.accessibilityTrace?.endpointScreenIdProjection
+        let screenId = result.accessibilityTrace?.endpointScreenId
         guard result.success else {
             return Self.compactActionFailure(commandName: commandName, result: result, screenId: screenId)
         }
@@ -18,7 +18,7 @@ extension FenceResponse {
         case .heistExecution(let heist):
             text = "\(TheFence.Command.runHeist.rawValue): \(heist.steps.count) step(s)"
         case .value, .none:
-            if let delta = result.accessibilityTrace?.endpointDeltaProjection {
+            if let delta = result.accessibilityTrace?.endpointDelta {
                 text = Self.compactDelta(delta, method: commandName)
             } else {
                 text = "\(commandName): ok"

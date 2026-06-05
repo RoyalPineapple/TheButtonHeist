@@ -1,10 +1,13 @@
 import ThePlans
+
+// MARK: - Endpoint Trace Facts
+//
+// Captures are the durable source of truth; these are derived facts callers
+// read for action receipts, expectations, and formatting.
+
 public extension AccessibilityTrace {
-    /// Raw compact projection between this trace's first and final capture.
-    ///
-    /// Captures remain the durable source of truth; this is the compact view
-    /// callers use for action receipts, expectations, and formatting.
-    var endpointDeltaProjection: AccessibilityTrace.Delta? {
+    /// The compact delta between this trace's first and final capture.
+    var endpointDelta: AccessibilityTrace.Delta? {
         guard captures.count >= 2,
               let first = captures.first,
               let last = captures.last
@@ -12,22 +15,22 @@ public extension AccessibilityTrace {
         return .between(first, last)
     }
 
-    /// Background/summary projection between this trace's endpoints.
+    /// The endpoint delta with silent no-change edges dropped.
     ///
     /// Silent no-change edges are omitted because they do not carry useful
     /// background evidence. Transient-bearing no-change edges are preserved.
-    var meaningfulEndpointDeltaProjection: AccessibilityTrace.Delta? {
-        guard let delta = endpointDeltaProjection else { return nil }
-        return Self.meaningfulEndpointDeltaProjection(delta)
+    var meaningfulEndpointDelta: AccessibilityTrace.Delta? {
+        guard let delta = endpointDelta else { return nil }
+        return Self.meaningfulEndpointDelta(delta)
     }
 
-    /// Build one source trace projection from per-step action traces.
+    /// Build one combined endpoint trace from per-step action traces.
     ///
     /// Adjacent duplicate captures are collapsed so a batch `[A->B, B->C]`
     /// becomes `[A, B, C]`. Parent links are normalized by
     /// `AccessibilityTrace(captures:)`; capture hashes still describe the
     /// captured interface/context content.
-    static func endpointTraceProjection(from traces: [AccessibilityTrace]) -> AccessibilityTrace? {
+    static func endpointTrace(from traces: [AccessibilityTrace]) -> AccessibilityTrace? {
         var captures: [AccessibilityTrace.Capture] = []
         for trace in traces {
             for capture in trace.captures {
@@ -39,15 +42,15 @@ public extension AccessibilityTrace {
         return AccessibilityTrace(captures: captures)
     }
 
-    var endpointScreenNameProjection: String? {
-        captures.last?.screenNameProjection
+    var endpointScreenName: String? {
+        captures.last?.screenName
     }
 
-    var endpointScreenIdProjection: String? {
-        captures.last?.screenIdProjection
+    var endpointScreenId: String? {
+        captures.last?.screenId
     }
 
-    private static func meaningfulEndpointDeltaProjection(
+    private static func meaningfulEndpointDelta(
         _ delta: AccessibilityTrace.Delta
     ) -> AccessibilityTrace.Delta? {
         switch delta {
@@ -60,11 +63,11 @@ public extension AccessibilityTrace {
 }
 
 extension AccessibilityTrace.Capture {
-    var screenNameProjection: String? {
+    var screenName: String? {
         InterfaceSummary.screenTitle(for: interface)
     }
 
-    var screenIdProjection: String? {
+    var screenId: String? {
         context.screenId ?? InterfaceSummary.screenId(for: interface)
     }
 }

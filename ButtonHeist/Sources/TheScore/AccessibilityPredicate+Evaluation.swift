@@ -46,7 +46,7 @@ public extension AccessibilityPredicate {
         }
         return evaluate(
             currentElements: trace.endpointCurrentElements,
-            delta: trace.endpointDeltaProjection
+            delta: trace.endpointDelta
         )
     }
 }
@@ -154,7 +154,7 @@ public extension AccessibilityPredicate.Change {
         predicate: ElementPredicate,
         delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
-        let added = delta?.elementEditsProjection.added ?? []
+        let added = delta?.elementEdits.added ?? []
         if !added.isEmpty {
             if added.contains(where: { predicate.matches($0) }) {
                 return ExpectationResult(met: true, predicate: nil)
@@ -175,7 +175,7 @@ public extension AccessibilityPredicate.Change {
         predicate: ElementPredicate,
         delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
-        let removed = delta?.elementEditsProjection.removed ?? []
+        let removed = delta?.elementEdits.removed ?? []
         if !removed.isEmpty {
             if removed.contains(where: { predicate.matches($0) }) {
                 return ExpectationResult(met: true, predicate: nil)
@@ -201,7 +201,7 @@ public extension AccessibilityPredicate.Change {
         update: ElementUpdatePredicate,
         delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
-        let updates = delta?.elementEditsProjection.updated ?? []
+        let updates = delta?.elementEdits.updated ?? []
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, predicate: nil, actual: "no element updates")
         }
@@ -237,7 +237,7 @@ public extension AccessibilityPredicate.Change {
     }
 }
 
-// MARK: - Delta Projections
+// MARK: - Delta Facts
 
 private extension AccessibilityTrace.Delta {
     var kindDescription: String {
@@ -255,7 +255,7 @@ private extension AccessibilityTrace.Delta {
         }
     }
 
-    var elementEditsProjection: ElementEdits {
+    var elementEdits: ElementEdits {
         if case .elementsChanged(let payload) = self { return payload.edits }
         return ElementEdits()
     }

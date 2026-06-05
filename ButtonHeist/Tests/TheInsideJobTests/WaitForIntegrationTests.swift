@@ -380,8 +380,8 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.contains("predicate met after") == true, result.message ?? "missing wait message")
-        guard case .elementsChanged = result.accessibilityTrace?.endpointDeltaProjection else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        guard case .elementsChanged = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
     }
 
@@ -402,8 +402,8 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "missing wait message")
         XCTAssertEqual(result.method, .wait)
         XCTAssertTrue(result.message?.contains("predicate met after") == true, result.message ?? "missing wait message")
-        guard case .elementsChanged = result.accessibilityTrace?.endpointDeltaProjection else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        guard case .elementsChanged = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
     }
 
