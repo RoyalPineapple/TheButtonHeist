@@ -17,7 +17,7 @@ public extension HeistPlan {
     }
 }
 
-#if os(macOS)
+#if os(macOS) || os(Linux)
 public struct HeistSourceCompiler: Sendable {
     public let packageRoot: URL?
 
@@ -42,29 +42,58 @@ public struct HeistSourceCompiler: Sendable {
         try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
-        try writeCompilePackage(
+        let compileDirectory = try writeCompileDirectory(
             at: tempURL,
             source: source,
-            thePlansSource: thePlansSource,
             entry: entry
         )
 
-        let result = try ProcessRunner.run(
+        let buildDirectory = tempURL.appendingPathComponent("Build", isDirectory: true)
+        try FileManager.default.createDirectory(at: buildDirectory, withIntermediateDirectories: true)
+        let moduleCache = buildDirectory.appendingPathComponent("ModuleCache", isDirectory: true)
+        try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
+
+        let moduleResult = try ProcessRunner.run(
             executable: URL(fileURLWithPath: "/usr/bin/env"),
-            arguments: [
-                "swift",
-                "run",
-                "--package-path",
-                tempURL.path,
-                "--quiet",
-                "plan-compiler",
-            ]
+            arguments: swiftcThePlansArguments(
+                sourceDirectory: thePlansSource,
+                buildDirectory: buildDirectory,
+                moduleCache: moduleCache
+            )
+        )
+        guard moduleResult.exitCode == 0 else {
+            throw HeistSourceCompilerError.compileFailed(
+                source.path,
+                moduleResult.diagnostics
+            )
+        }
+
+        let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
+        let compilerResult = try ProcessRunner.run(
+            executable: URL(fileURLWithPath: "/usr/bin/env"),
+            arguments: swiftcPlanCompilerArguments(
+                compileDirectory: compileDirectory,
+                buildDirectory: buildDirectory,
+                moduleCache: moduleCache,
+                executableURL: executableURL
+            )
+        )
+        guard compilerResult.exitCode == 0 else {
+            throw HeistSourceCompilerError.compileFailed(
+                source.path,
+                compilerResult.diagnostics
+            )
+        }
+
+        let result = try ProcessRunner.run(
+            executable: executableURL,
+            arguments: []
         )
 
         guard result.exitCode == 0 else {
             throw HeistSourceCompilerError.compileFailed(
                 source.path,
-                result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                result.diagnostics
             )
         }
 
@@ -75,51 +104,15 @@ public struct HeistSourceCompiler: Sendable {
         }
     }
 
-    private func writeCompilePackage(
+    private func writeCompileDirectory(
         at tempURL: URL,
         source: URL,
-        thePlansSource: URL,
         entry: HeistSourceEntrySymbol
-    ) throws {
-        let packageSourcesURL = tempURL.appendingPathComponent("Sources", isDirectory: true)
+    ) throws -> URL {
         let sourcesURL = tempURL
             .appendingPathComponent("Sources", isDirectory: true)
             .appendingPathComponent("PlanCompiler", isDirectory: true)
         try FileManager.default.createDirectory(at: sourcesURL, withIntermediateDirectories: true)
-        try FileManager.default.copyItem(
-            at: thePlansSource,
-            to: packageSourcesURL.appendingPathComponent("ThePlans", isDirectory: true)
-        )
-
-        let packageManifest = """
-        // swift-tools-version: 6.0
-        import PackageDescription
-
-        let package = Package(
-            name: "HeistSourceCompile",
-            platforms: [.macOS(.v14)],
-            products: [
-                .executable(name: "plan-compiler", targets: ["PlanCompiler"]),
-            ],
-            targets: [
-                .target(
-                    name: "ThePlans",
-                    path: "Sources/ThePlans"
-                ),
-                .executableTarget(
-                    name: "PlanCompiler",
-                    dependencies: [
-                        "ThePlans",
-                    ]
-                ),
-            ]
-        )
-        """
-        try packageManifest.write(
-            to: tempURL.appendingPathComponent("Package.swift"),
-            atomically: true,
-            encoding: .utf8
-        )
 
         let userSource = try String(contentsOf: source, encoding: .utf8)
         try userSource.write(
@@ -141,6 +134,90 @@ public struct HeistSourceCompiler: Sendable {
             atomically: true,
             encoding: .utf8
         )
+        return sourcesURL
+    }
+
+    private func swiftcThePlansArguments(
+        sourceDirectory: URL,
+        buildDirectory: URL,
+        moduleCache: URL
+    ) throws -> [String] {
+        let libraryURL = buildDirectory
+            .appendingPathComponent("libThePlans.\(Self.dynamicLibraryExtension)")
+        let moduleURL = buildDirectory.appendingPathComponent("ThePlans.swiftmodule")
+        var arguments = [
+            "swiftc",
+            "-emit-library",
+            "-emit-module",
+            "-module-name",
+            "ThePlans",
+            "-parse-as-library",
+            "-swift-version",
+            "6",
+            "-module-cache-path",
+            moduleCache.path,
+            "-emit-module-path",
+            moduleURL.path,
+            "-o",
+            libraryURL.path,
+        ]
+        arguments.append(contentsOf: try swiftSourceFiles(in: sourceDirectory).map(\.path))
+        return arguments
+    }
+
+    private func swiftcPlanCompilerArguments(
+        compileDirectory: URL,
+        buildDirectory: URL,
+        moduleCache: URL,
+        executableURL: URL
+    ) -> [String] {
+        [
+            "swiftc",
+            "-swift-version",
+            "6",
+            "-module-cache-path",
+            moduleCache.path,
+            "-I",
+            buildDirectory.path,
+            "-L",
+            buildDirectory.path,
+            "-lThePlans",
+            "-Xlinker",
+            "-rpath",
+            "-Xlinker",
+            buildDirectory.path,
+            "-o",
+            executableURL.path,
+            compileDirectory.appendingPathComponent("PlanSource.swift").path,
+            compileDirectory.appendingPathComponent("main.swift").path,
+        ]
+    }
+
+    private func swiftSourceFiles(in sourceDirectory: URL) throws -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: sourceDirectory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            throw HeistSourceCompilerError.packageRootNotFound
+        }
+
+        var files: [URL] = []
+        for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            if values.isRegularFile == true {
+                files.append(fileURL)
+            }
+        }
+        return files.sorted { $0.path < $1.path }
+    }
+
+    private static var dynamicLibraryExtension: String {
+        #if os(macOS)
+        "dylib"
+        #else
+        "so"
+        #endif
     }
 }
 
@@ -247,6 +324,14 @@ private struct ProcessResult {
     let exitCode: Int32
     let stdout: Data
     let stderr: String
+
+    var diagnostics: String {
+        let stdoutText = String(data: stdout, encoding: .utf8) ?? ""
+        return [stderr, stdoutText]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
 }
 
 private enum ProcessRunner {
