@@ -96,16 +96,16 @@ extension TheFence {
     }
 
     private static func heistAccessibilityTrace(
-        plan: HeistPlan,
+        plan _: HeistPlan,
         result: HeistExecutionResult
     ) -> AccessibilityTrace? {
-        let actionResults = HeistReportProjection(plan: plan, result: result).finalActionResultsInExecutionOrder
+        let actionResults = result.finalActionResultsInExecutionOrder
         let actionOutcomeCount = actionResults.count
         let stepAccessibilityTraces = actionResults.compactMap(\.accessibilityTrace)
         guard actionOutcomeCount > 0,
               stepAccessibilityTraces.count == actionOutcomeCount
         else { return nil }
-        return AccessibilityTrace.endpointTraceProjection(from: stepAccessibilityTraces)
+        return AccessibilityTrace.endpointTrace(from: stepAccessibilityTraces)
     }
 
     // MARK: - Session State

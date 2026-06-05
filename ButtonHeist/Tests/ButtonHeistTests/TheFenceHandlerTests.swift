@@ -2501,20 +2501,21 @@ final class TheFenceHandlerTests: XCTestCase {
             failedIndex: 0
         )
         let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(heist)
+        _ = try fence.validateHeistPlayback(heist)
 
-        let projection = fence.playbackProjection(contract: contract, result: executionResult)
+        let stepRows = fence.playbackStepRows(result: executionResult)
+        let failure = fence.playbackFailure(result: executionResult)
 
-        XCTAssertEqual(projection.stepResults.map(\.command), ["if", "activate"])
-        XCTAssertTrue(projection.stepResults[0].passed)
-        XCTAssertEqual(projection.failedIndex, 1)
-        XCTAssertEqual(projection.failure?.step.commandName, "activate")
-        guard case .failed(let message, let errorKind) = projection.stepResults[1].outcome else {
-            return XCTFail("Expected nested action failure, got \(projection.stepResults[1].outcome)")
+        XCTAssertEqual(stepRows.map(\.command), ["if", "activate"])
+        XCTAssertTrue(stepRows[0].passed)
+        XCTAssertEqual(stepRows.first { !$0.passed }?.index, 1)
+        XCTAssertEqual(failure?.step.commandName, "activate")
+        guard case .failed(let message, let errorKind) = stepRows[1].outcome else {
+            return XCTFail("Expected nested action failure, got \(stepRows[1].outcome)")
         }
         XCTAssertEqual(message, "nested button failed")
         XCTAssertEqual(errorKind, .action(.actionFailed))
-        XCTAssertEqual(projection.stepResults[1].timeSeconds, 0.007, accuracy: 0.000_001)
+        XCTAssertEqual(stepRows[1].timeSeconds, 0.007, accuracy: 0.000_001)
     }
 
     @ButtonHeistActor
@@ -2582,15 +2583,16 @@ final class TheFenceHandlerTests: XCTestCase {
             failedIndex: nil
         )
         let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(heist)
+        _ = try fence.validateHeistPlayback(heist)
 
-        let projection = fence.playbackProjection(contract: contract, result: executionResult)
+        let stepRows = fence.playbackStepRows(result: executionResult)
+        let failure = fence.playbackFailure(result: executionResult)
 
-        XCTAssertEqual(projection.stepResults.map(\.command), ["for_each_element"])
-        XCTAssertTrue(projection.stepResults.allSatisfy(\.passed))
-        XCTAssertNil(projection.failedIndex)
-        XCTAssertNil(projection.failure)
-        XCTAssertEqual(projection.stepResults[0].timeSeconds, 0.020, accuracy: 0.000_001)
+        XCTAssertEqual(stepRows.map(\.command), ["for_each_element"])
+        XCTAssertTrue(stepRows.allSatisfy(\.passed))
+        XCTAssertNil(stepRows.first { !$0.passed }?.index)
+        XCTAssertNil(failure)
+        XCTAssertEqual(stepRows[0].timeSeconds, 0.020, accuracy: 0.000_001)
     }
 
     @ButtonHeistActor

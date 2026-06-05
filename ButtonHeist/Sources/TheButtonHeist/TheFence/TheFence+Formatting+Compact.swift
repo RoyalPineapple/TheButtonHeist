@@ -46,16 +46,13 @@ extension FenceResponse {
                 payload: payload,
                 options: options
             )
-        case .heistExecution(let plan, let result, let accessibilityTrace):
+        case .heistExecution(_, let result, let accessibilityTrace):
             if let single = singleLeafActionRendering {
                 return compactActionResult(command: single.command, single.result, expectation: single.expectation)
             }
             return compactHeistFormatted(
-                PublicHeistExecutionProjection(
-                    plan: plan,
-                    result: result,
-                    accessibilityTrace: accessibilityTrace
-                )
+                result,
+                netDelta: accessibilityTrace?.meaningfulEndpointDelta
             )
         case .sessionState(let payload):
             return Self.compactSessionState(payload)
@@ -70,16 +67,10 @@ extension FenceResponse {
         case .heistStopped(let path, let stepCount):
             return "saved: \(path) (\(stepCount) steps)"
         case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
-            let projection = PublicPlaybackProjection(
-                completedSteps: completedSteps,
-                failedIndex: failedIndex,
-                totalTimingMs: totalTimingMs,
-                failure: failure
-            )
-            var text = "playback: \(projection.completedSteps) steps in \(projection.totalTimingMs)ms"
-            if let index = projection.failedIndex { text += " (failed at \(index))" }
-            if let failure = projection.failure {
-                text += " [\(failure.command): \(failure.error)]"
+            var text = "playback: \(completedSteps) steps in \(totalTimingMs)ms"
+            if let failedIndex { text += " (failed at \(failedIndex))" }
+            if let failure {
+                text += " [\(failure.step.commandName): \(failure.errorMessage)]"
                 if let diagnosticCaptureFailure = failure.diagnosticCaptureFailure {
                     text += " [diagnosticCaptureFailure: \(diagnosticCaptureFailure)]"
                 }

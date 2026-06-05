@@ -825,8 +825,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(receipt.actionResult.success)
         XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Before"])
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Before", "Loaded"])
-        guard case .elementsChanged? = trace.endpointDeltaProjection else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDeltaProjection))")
+        guard case .elementsChanged? = trace.endpointDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDelta))")
         }
     }
 
@@ -2363,7 +2363,7 @@ final class TheBrainsActionTests: XCTestCase {
                 let met = PredicateEvaluation.evaluate(
                     waitStep.predicate,
                     currentElements: state?.interface.projectedElements ?? [],
-                    delta: trace?.endpointDeltaProjection
+                    delta: trace?.endpointDelta
                 )
                 let result = ActionResult(
                     success: met.met,
@@ -2528,7 +2528,7 @@ private final class ScriptedHeistObservationSource {
             observation: settledObservation,
             previous: previousObservation,
             trace: trace,
-            delta: trace.endpointDeltaProjection
+            delta: trace.endpointDelta
         )
         previousObservation = settledObservation
         previousCapture = trace.captures.last

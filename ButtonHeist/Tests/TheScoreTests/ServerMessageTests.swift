@@ -400,7 +400,7 @@ final class ServerMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertNil(decoded.accessibilityTrace?.endpointDeltaProjection)
+        XCTAssertNil(decoded.accessibilityTrace?.endpointDelta)
     }
 
     func testActionResultScreenContextProjectsFromTrace() throws {
@@ -417,8 +417,8 @@ final class ServerMessageTests: XCTestCase {
             accessibilityTrace: trace
         )
 
-        XCTAssertEqual(result.accessibilityTrace?.endpointScreenNameProjection, "Trace Screen")
-        XCTAssertEqual(result.accessibilityTrace?.endpointScreenIdProjection, "trace_screen")
+        XCTAssertEqual(result.accessibilityTrace?.endpointScreenName, "Trace Screen")
+        XCTAssertEqual(result.accessibilityTrace?.endpointScreenId, "trace_screen")
     }
 
     func testActionResultScreenContextRoundTripsTraceProjection() throws {
@@ -440,8 +440,8 @@ final class ServerMessageTests: XCTestCase {
 
         XCTAssertNil(json["screenName"])
         XCTAssertNil(json["screenId"])
-        XCTAssertEqual(decoded.accessibilityTrace?.endpointScreenNameProjection, "Trace Screen")
-        XCTAssertEqual(decoded.accessibilityTrace?.endpointScreenIdProjection, "trace_screen")
+        XCTAssertEqual(decoded.accessibilityTrace?.endpointScreenName, "Trace Screen")
+        XCTAssertEqual(decoded.accessibilityTrace?.endpointScreenId, "trace_screen")
     }
 
     func testActionResultScreenContextDoesNotFallbackWhenTraceProjectsNil() throws {
@@ -453,8 +453,8 @@ final class ServerMessageTests: XCTestCase {
             accessibilityTrace: trace
         )
 
-        XCTAssertNil(result.accessibilityTrace?.endpointScreenNameProjection)
-        XCTAssertNil(result.accessibilityTrace?.endpointScreenIdProjection)
+        XCTAssertNil(result.accessibilityTrace?.endpointScreenName)
+        XCTAssertNil(result.accessibilityTrace?.endpointScreenId)
     }
 
     func testActionResultDecodedScreenContextProjectsFromTrace() throws {
@@ -468,8 +468,8 @@ final class ServerMessageTests: XCTestCase {
 
         let result = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertEqual(result.accessibilityTrace?.endpointScreenNameProjection, "Trace Screen")
-        XCTAssertEqual(result.accessibilityTrace?.endpointScreenIdProjection, "trace_screen")
+        XCTAssertEqual(result.accessibilityTrace?.endpointScreenName, "Trace Screen")
+        XCTAssertEqual(result.accessibilityTrace?.endpointScreenId, "trace_screen")
     }
 
     func testActionResultRejectsStoredScreenContextFields() {
