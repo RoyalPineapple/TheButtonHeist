@@ -54,7 +54,7 @@ struct PredicateCaseSelection {
         observeSemanticState: ObservationSource
     ) async -> HeistCaseSelectionResult {
         let start = CFAbsoluteTimeGetCurrent()
-        let timeout = InteractionObservationProjection.clampedWaitTimeout(rawTimeout)
+        let timeout = PredicateWait.clampedWaitTimeout(rawTimeout)
         let scope = cases.observationScope
         let requiresChangeBaseline = cases.contains { $0.predicate.requiresFutureSettledBaseline }
         var observedSequence: UInt64?

@@ -5,7 +5,22 @@ import Foundation
 import AccessibilitySnapshotModel
 import TheScore
 
-/// Projects supplied semantic states into traces, captures, and deltas.
+/// A settled semantic observation paired with its trace, delta, and summary.
+struct HeistSemanticObservation {
+    let event: SettledSemanticObservationEvent
+    let state: PostActionObservation.BeforeState
+    let accessibilityTrace: AccessibilityTrace
+    let delta: AccessibilityTrace.Delta?
+    let summary: String
+}
+
+enum SemanticObservationTiming {
+    static let defaultTimeout: Double = 1
+}
+
+/// Builds traces, captures, deltas, and action receipts from supplied semantic
+/// states. The post-action contract is: refresh/settle → before → action →
+/// refresh/settle → after → result.
 @MainActor
 final class PostActionObservation {
     let stash: TheStash
@@ -67,7 +82,13 @@ final class PostActionObservation {
 
     func semanticObservation(from event: SettledSemanticObservationEvent) -> HeistSemanticObservation {
         let current = captureSemanticState(from: event.observation)
-        return InteractionObservationProjection.semanticObservation(event: event, state: current)
+        return HeistSemanticObservation(
+            event: event,
+            state: current,
+            accessibilityTrace: event.trace,
+            delta: event.delta,
+            summary: Self.observationSummary(current)
+        )
     }
 
     func settleEvidence(
@@ -223,7 +244,7 @@ final class PostActionObservation {
             afterInterface: final.interface,
             parentCapture: before.capture,
             classification: classification,
-            transient: InteractionObservationProjection.transientElements(
+            transient: Self.transientElements(
                 settleResult: settleEvidence.outcome,
                 before: before,
                 final: final,
@@ -246,6 +267,187 @@ final class PostActionObservation {
             screenId: stash.lastScreenId,
             windowStack: windows
         )
+    }
+
+    // MARK: - Result Building
+
+    /// Inputs for building a post-action receipt from settle and final evidence.
+    struct ResultInput {
+        let success: Bool
+        let method: ActionMethod
+        let message: String?
+        let payload: ResultPayload?
+        let afterStatePayload: ((BeforeState) -> ResultPayload?)?
+        let errorKind: ErrorKind?
+        let subjectEvidence: ActionSubjectEvidence?
+        let before: BeforeState
+        let settleEvidence: SettleEvidence
+        let finalEvidence: FinalEvidence?
+    }
+
+    /// Build the action receipt from before/settle/final evidence. Cancellation
+    /// and parse-failure are settled here from the evidence, not by a separate
+    /// worldview.
+    static func result(_ input: ResultInput) -> ActionResult {
+        if let cancelled = cancelledActionResult(
+            method: input.method,
+            payload: input.payload,
+            subjectEvidence: input.subjectEvidence,
+            before: input.before,
+            settleEvidence: input.settleEvidence
+        ) {
+            return cancelled
+        }
+
+        guard let finalEvidence = input.finalEvidence else {
+            return parseFailureResult(
+                method: input.method,
+                payload: input.payload,
+                subjectEvidence: input.subjectEvidence,
+                before: input.before,
+                settleEvidence: input.settleEvidence
+            )
+        }
+
+        let resolvedPayload = input.success
+            ? (input.afterStatePayload?(finalEvidence.state) ?? input.payload)
+            : input.payload
+
+        guard finalEvidence.capture != nil else {
+            return failedActionResult(
+                method: input.method,
+                capture: input.before.capture,
+                message: input.message,
+                payload: resolvedPayload,
+                subjectEvidence: input.subjectEvidence
+            )
+        }
+
+        return actionResult(
+            method: input.method,
+            capture: finalEvidence.capture ?? finalEvidence.state.capture,
+            message: input.message,
+            payload: resolvedPayload,
+            errorKind: input.errorKind,
+            accessibilityTrace: finalEvidence.trace,
+            subjectEvidence: input.subjectEvidence,
+            settled: input.settleEvidence.didSettleCleanly,
+            settleTimeMs: input.settleEvidence.timeMs,
+            success: input.success
+        )
+    }
+
+    static func actionResult(
+        method: ActionMethod,
+        capture: AccessibilityTrace.Capture,
+        message: String?,
+        payload: ResultPayload?,
+        errorKind: ErrorKind? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        success: Bool
+    ) -> ActionResult {
+        var builder = ActionResultBuilder(method: method, capture: capture)
+        builder.message = message
+        if let accessibilityTrace {
+            builder.accessibilityTrace = accessibilityTrace
+        }
+        builder.settled = settled
+        builder.settleTimeMs = settleTimeMs
+        builder.subjectEvidence = subjectEvidence
+        if success {
+            return builder.success(payload: payload)
+        }
+        return builder.failure(errorKind: errorKind ?? .actionFailed, payload: payload)
+    }
+
+    static func failedActionResult(
+        method: ActionMethod,
+        capture: AccessibilityTrace.Capture,
+        message: String?,
+        payload: ResultPayload?,
+        errorKind: ErrorKind? = .actionFailed,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil
+    ) -> ActionResult {
+        actionResult(
+            method: method,
+            capture: capture,
+            message: message,
+            payload: payload,
+            errorKind: errorKind,
+            subjectEvidence: subjectEvidence,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            success: false
+        )
+    }
+
+    private static func cancelledActionResult(
+        method: ActionMethod,
+        payload: ResultPayload?,
+        subjectEvidence: ActionSubjectEvidence?,
+        before: BeforeState,
+        settleEvidence: SettleEvidence
+    ) -> ActionResult? {
+        guard case .cancelled(let cancelMs) = settleEvidence.outcome.outcome else { return nil }
+        return failedActionResult(
+            method: method,
+            capture: before.capture,
+            message: "cancelled after \(cancelMs)ms",
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            settled: false,
+            settleTimeMs: cancelMs
+        )
+    }
+
+    private static func parseFailureResult(
+        method: ActionMethod,
+        payload: ResultPayload?,
+        subjectEvidence: ActionSubjectEvidence?,
+        before: BeforeState,
+        settleEvidence: SettleEvidence
+    ) -> ActionResult {
+        failedActionResult(
+            method: method,
+            capture: before.capture,
+            message: "Could not parse post-action accessibility tree",
+            payload: payload,
+            subjectEvidence: subjectEvidence,
+            settled: settleEvidence.didSettleCleanly,
+            settleTimeMs: settleEvidence.timeMs
+        )
+    }
+
+    // MARK: - Observation Helpers
+
+    static func observationSummary(_ state: BeforeState) -> String {
+        var parts = ["known: \(state.interface.projectedElements.count) elements"]
+        if let screenId = state.screenId {
+            parts.insert("screen: \(screenId)", at: 0)
+        }
+        return parts.joined(separator: "; ")
+    }
+
+    static func transientElements(
+        settleResult: SettleSession.Outcome,
+        before: BeforeState,
+        final: BeforeState,
+        classification: ScreenClassifier.Classification
+    ) -> [HeistElement] {
+        guard !classification.isScreenChange,
+              !settleResult.events.containsTripwireSignalChange else {
+            return []
+        }
+        return SettleSession.transientElements(
+            seenByKey: settleResult.elementsByKey,
+            baseline: before.elements,
+            final: final.elements
+        ).map { TheStash.WireConversion.convert($0) }
     }
 }
 
