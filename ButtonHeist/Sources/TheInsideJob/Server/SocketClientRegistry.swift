@@ -5,6 +5,13 @@ import Network
 ///
 /// The server decides transport policy; this registry owns per-client socket
 /// facts: identity allocation and send-buffer accounting.
+///
+/// **Ownership.** Transport source of truth, owned by `SimpleSocketServer`.
+/// Key: `clientId: Int` (this registry allocates it via `nextClientId`).
+/// Lifetime: per socket connection. Invalidation: `remove(_:)` on close,
+/// `drain()` on teardown. It owns `NWConnection` + send-buffer state only — auth
+/// phase lives in `TheMuscleClientRegistry` under the same key, deliberately
+/// separate so transport never owns auth semantics. See `docs/DATA-OWNERSHIP.md`.
 struct SocketClientRegistry {
     struct Client {
         let connection: NWConnection

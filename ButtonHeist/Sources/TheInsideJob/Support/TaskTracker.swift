@@ -4,6 +4,13 @@ import os
 /// Lock-protected table of in-flight `Task<Void, Never>` handles with a
 /// drain-and-cancel teardown.
 ///
+/// **Ownership.** Task-lifetime tracker, not product state. Owned by the crew
+/// members that spawn callback-bridge Tasks (transport/connection callbacks).
+/// Key: an internal monotonic `UInt64` id. Lifetime: per spawned Task, from
+/// `record`/`spawn` until completion or cancellation. Invalidation: each Task
+/// self-removes on completion (sibling watcher); `cancelAll()` clears the rest
+/// at teardown. See `docs/DATA-OWNERSHIP.md`.
+///
 /// Three crew members track callback-bridge Tasks the same way: hold a table,
 /// insert on spawn, and cancel-all on teardown. The pattern needs a lock
 /// because inserts happen from arbitrary isolation contexts — NWConnection /

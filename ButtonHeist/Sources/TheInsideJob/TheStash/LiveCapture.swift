@@ -10,15 +10,17 @@ import AccessibilitySnapshotParser
 
 /// Latest parsed interface and disposable UIKit evidence.
 ///
-/// `LiveCapture` is viewport-shaped. It may contain weak UIKit refs and live
-/// indices, but it is not semantic memory and is never unioned across
-/// exploration pages.
+/// **Ownership.** Owned by `TheStash` as one field of the current `Screen`.
+/// Ephemeral index, not source of truth: keyed by `TreePath` /
+/// `AccessibilityElement` / `HeistId`, rebuilt wholesale on every parse, and
+/// invalidated by the next parse (last-read-wins). It carries weak UIKit refs
+/// and per-path lookups but is **never** unioned across exploration pages and
+/// must never be treated as stable identity. See `docs/DATA-OWNERSHIP.md`.
 struct LiveCapture: Equatable {
     let hierarchy: [AccessibilityHierarchy]
     let containerNames: [AccessibilityContainer: ContainerName]
     let containerNamesByPath: [TreePath: ContainerName]
     let heistIdByElement: [AccessibilityElement: HeistId]
-    let heistIdByElementPath: [TreePath: HeistId]
     let elementRefs: [HeistId: ElementRef]
     let containerRefsByPath: [TreePath: ContainerRef]
     let containerContentFramesByPath: [TreePath: CGRect]
@@ -32,7 +34,6 @@ struct LiveCapture: Equatable {
         containerNames: [AccessibilityContainer: ContainerName],
         containerNamesByPath: [TreePath: ContainerName] = [:],
         heistIdByElement: [AccessibilityElement: HeistId],
-        heistIdByElementPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
         containerContentFramesByPath: [TreePath: CGRect] = [:],
@@ -45,7 +46,6 @@ struct LiveCapture: Equatable {
         self.containerNames = containerNames
         self.containerNamesByPath = containerNamesByPath
         self.heistIdByElement = heistIdByElement
-        self.heistIdByElementPath = heistIdByElementPath
         self.elementRefs = elementRefs
         self.containerRefsByPath = containerRefsByPath
         self.containerContentFramesByPath = containerContentFramesByPath
@@ -65,7 +65,6 @@ struct LiveCapture: Equatable {
         hierarchy: [],
         containerNames: [:],
         heistIdByElement: [:],
-        heistIdByElementPath: [:],
         elementRefs: [:],
         containerRefsByPath: [:],
         containerContentFramesByPath: [:],
@@ -74,7 +73,7 @@ struct LiveCapture: Equatable {
     )
 
     var heistIds: Set<HeistId> {
-        Set(heistIdByElement.values).union(heistIdByElementPath.values)
+        Set(heistIdByElement.values)
     }
 
     func contains(heistId: HeistId) -> Bool {
@@ -83,10 +82,6 @@ struct LiveCapture: Equatable {
 
     func heistId(for element: AccessibilityElement) -> HeistId? {
         heistIdByElement[element]
-    }
-
-    func heistId(forPath path: TreePath) -> HeistId? {
-        heistIdByElementPath[path]
     }
 
     func object(for heistId: HeistId) -> NSObject? {

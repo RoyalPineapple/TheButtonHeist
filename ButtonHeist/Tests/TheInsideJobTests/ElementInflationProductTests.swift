@@ -324,7 +324,6 @@ final class ElementInflationProductTests: XCTestCase {
             containerNames: screen.liveCapture.containerNames,
             containerNamesByPath: screen.liveCapture.containerNamesByPath,
             heistIdByElement: screen.liveCapture.heistIdByElement,
-            heistIdByElementPath: screen.liveCapture.heistIdByElementPath,
             elementRefs: screen.liveCapture.elementRefs,
             containerRefsByPath: screen.liveCapture.containerRefsByPath,
             firstResponderHeistId: screen.liveCapture.firstResponderHeistId,
