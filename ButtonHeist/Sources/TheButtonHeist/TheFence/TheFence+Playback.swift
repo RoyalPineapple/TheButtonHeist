@@ -23,8 +23,8 @@ extension TheFence {
             playbackContract.plan,
             timeout: Timeouts.longActionSeconds
         )
-        let projection = playbackProjection(contract: playbackContract, result: executionResult)
-        var failure = projection.failure
+        let stepRows = playbackStepRows(result: executionResult)
+        var failure = playbackFailure(result: executionResult)
 
         if let currentFailure = failure {
             failure = await currentFailure.withPlaybackDiagnostics(capturingWith: self)
@@ -34,13 +34,13 @@ extension TheFence {
         let report = HeistPlaybackReport(
             heistName: heistName,
             app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
-            totalStepCount: projection.stepResults.count,
+            totalStepCount: stepRows.count,
             totalTimeSeconds: totalTimeSeconds,
-            steps: projection.stepResults
+            steps: stepRows
         )
         return .heistPlayback(
-            completedSteps: projection.stepResults.prefix { $0.passed }.count,
-            failedIndex: projection.failedIndex,
+            completedSteps: stepRows.prefix { $0.passed }.count,
+            failedIndex: stepRows.first { !$0.passed }?.index,
             totalTimingMs: Int(totalTimeSeconds * 1000),
             failure: failure,
             report: report

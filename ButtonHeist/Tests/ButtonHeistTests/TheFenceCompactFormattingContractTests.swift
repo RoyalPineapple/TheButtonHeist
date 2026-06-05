@@ -68,7 +68,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.isFailure)
     }
 
-    func testActionFailureCodeAndClassComeFromOneProjection() {
+    func testActionFailureCodeAndClassAgreeAcrossPublicFormats() {
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult(

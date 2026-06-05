@@ -383,7 +383,6 @@ func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
         return nil
     }
     let plannedSteps = plan.body
-    let projection = HeistReportProjection(plan: plan, result: result)
     return HeistInspection(
         commands: plannedSteps.map(\.commandForInspection),
         steps: plannedSteps,
@@ -391,8 +390,8 @@ func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
         completedSteps: result.completedStepCount,
         failedIndex: result.stoppedFailedIndex,
         totalTimingMs: result.totalTimingMs,
-        expectationsChecked: projection.summary.expectationsChecked,
-        expectationsMet: projection.summary.expectationsMet,
+        expectationsChecked: result.expectationsChecked,
+        expectationsMet: result.expectationsMet,
         accessibilityTrace: accessibilityTrace
     )
 }
