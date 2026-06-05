@@ -10,10 +10,10 @@ Button Heist turns the interface VoiceOver reads into a live world model for
 agents and tests: the whole screen as structured text, real accessibility
 actions for control, and settled evidence after every move.
 
-We believe accessibility is the interface. It is where the app says what things
-are, what state they are in, and what actions they support. VoiceOver turns that
-interface into speech and gestures. Button Heist gives it to agents as text and
-actions.
+We believe accessibility is the ideal interface for agentic control. It is where 
+the app says what things are, what state they are in, and what actions they support.
+VoiceOver turns that interface into speech and gestures. Button Heist gives it to agents
+as text and actions.
 
 An iOS app already describes itself through accessibility. Labels name things.
 Traits say what they are. Values and state say what changed. Actions say what
