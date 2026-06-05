@@ -496,8 +496,16 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 
-    func testSubtreeSelectorContainerAcceptsContainerNameString() throws {
+    func testSubtreeSelectorContainerRequiresMatcherObject() throws {
+        // The MCP schema advertises subtree.container as an object-only matcher
+        // (no oneOf string/object adapter), so a bare string container name is
+        // no longer accepted at the wire boundary.
         let data = Data(#"{"container":"semantic_actions"}"#.utf8)
+        XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: data))
+    }
+
+    func testSubtreeSelectorContainerAcceptsMatcherObject() throws {
+        let data = Data(#"{"container":{"containerName":"semantic_actions"}}"#.utf8)
         let decoded = try decoder.decode(SubtreeSelector.self, from: data)
 
         XCTAssertEqual(decoded, .container(ContainerMatcher(containerName: "semantic_actions")))

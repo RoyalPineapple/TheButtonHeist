@@ -35,25 +35,36 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("get_interface subtree container accepts containerName string or matcher object")
-    func getInterfaceSubtreeContainerSchemaAcceptsStringOrObject() throws {
+    @Test("get_interface subtree container is an object-only matcher")
+    func getInterfaceSubtreeContainerSchemaIsObjectOnly() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "get_interface" })
-        let oneOf = try #require(schemaValue(
-            at: ["properties", "subtree", "properties", "container", "oneOf"],
-            in: tool.inputSchema
-        )?.arrayValue)
+        let containerPath = ["properties", "subtree", "properties", "container"]
+        let container = try #require(schemaValue(at: containerPath, in: tool.inputSchema))
 
-        #expect(oneOf.contains { schema in
-            schema.objectValue?["type"] == .string("string")
-                && schema.objectValue?["minLength"] == .int(1)
-        })
-        #expect(oneOf.contains { schema in
-            guard schema.objectValue?["type"] == .string("object"),
-                  case .object(let properties)? = schema.objectValue?["properties"] else {
-                return false
-            }
-            return properties["containerName"] != nil
-        })
+        #expect(container.objectValue?["type"] == .string("object"))
+
+        let properties = try #require(schemaValue(at: containerPath + ["properties"], in: tool.inputSchema)?.objectValue)
+        #expect(properties["containerName"] != nil)
+
+        // No schema combinator anywhere under the container subschema.
+        #expect(schemaValue(at: containerPath + ["oneOf"], in: tool.inputSchema) == nil)
+        #expect(schemaValue(at: containerPath + ["anyOf"], in: tool.inputSchema) == nil)
+        #expect(schemaValue(at: containerPath + ["allOf"], in: tool.inputSchema) == nil)
+        #expect(SchemaCombinatorScanner.combinatorPaths(in: container, path: "container").isEmpty)
+    }
+
+    @Test("No MCP tool input schema contains a combinator at any depth")
+    func noToolSchemaContainsCombinatorAtAnyDepth() {
+        let offending = ToolDefinitions.all.flatMap { tool in
+            SchemaCombinatorScanner.combinatorPaths(
+                in: tool.inputSchema,
+                path: "\(tool.name).inputSchema"
+            )
+        }
+        #expect(
+            offending.isEmpty,
+            "MCP tool input schemas must not advertise oneOf/anyOf/allOf:\n\(offending.joined(separator: "\n"))"
+        )
     }
 
     @Test("run_heist schema exposes only the plan, never Swift authoring inputs")
@@ -80,10 +91,34 @@ private extension Value {
         guard case .object(let object) = self else { return nil }
         return object
     }
+}
 
-    var arrayValue: [Value]? {
-        guard case .array(let array) = self else { return nil }
-        return array
+/// Recursively scans a JSON Schema value for banned combinator keywords,
+/// returning the exact dotted path to each occurrence (e.g.
+/// `get_interface.inputSchema.properties.subtree.properties.container.oneOf`).
+private enum SchemaCombinatorScanner {
+    static let bannedKeywords = ["oneOf", "anyOf", "allOf"]
+
+    static func combinatorPaths(in value: Value, path: String) -> [String] {
+        switch value {
+        case .object(let object):
+            var paths: [String] = []
+            for keyword in bannedKeywords where object[keyword] != nil {
+                paths.append("\(path).\(keyword)")
+            }
+            for (key, nestedValue) in object {
+                paths += combinatorPaths(in: nestedValue, path: "\(path).\(key)")
+            }
+            return paths
+
+        case .array(let values):
+            return values.enumerated().flatMap { index, nestedValue in
+                combinatorPaths(in: nestedValue, path: "\(path)[\(index)]")
+            }
+
+        default:
+            return []
+        }
     }
 }
 
@@ -131,6 +166,12 @@ private enum ToolSchemaLint {
         switch value {
         case .object(let object):
             var violations: [String] = []
+
+            // Schema combinators are banned entirely on the MCP surface — OpenAI
+            // tool input schemas reject oneOf/anyOf/allOf at any depth.
+            for combinator in SchemaCombinatorScanner.bannedKeywords where object[combinator] != nil {
+                violations.append("\(path).\(combinator) is a forbidden JSON Schema combinator")
+            }
 
             if let typeValue = object["type"] {
                 if case .array = typeValue {

@@ -2276,7 +2276,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(command: .getInterface, values: [
             "subtree": .object([
-                "container": .string("semantic_actions__actions"),
+                "container": .object(["containerName": .string("semantic_actions__actions")]),
             ]),
         ])
 
