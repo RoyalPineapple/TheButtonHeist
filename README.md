@@ -68,7 +68,7 @@ Use The Button Heist to:
 - Drive a debug iOS app from an agent over MCP.
 - Run semantic UI commands from a CLI.
 - Compose multi-step heist plans with waits and expectations.
-- Record successful interactions as durable `.heist` tests.
+- Compose successful interactions into generated `.heist` artifacts.
 - Replay those tests in CI with failure diagnostics and JUnit output.
 - Validate complete app flows through the accessibility contract.
 
@@ -210,8 +210,10 @@ commands. Each action can carry an expectation. Each wait evaluates settled
 semantic state. If a step fails, the heist stops at the point where the contract
 failed.
 
-The `.heist` format is the durable wire form. Swift DSL source is the authoring
-form. See [docs/HEIST-FORMAT.md](docs/HEIST-FORMAT.md) and
+Swift DSL source is the authoring form. Raw `HeistPlan` JSON is explicit
+`.json` IR for debug, import, and export. `.heist` is a generated package
+artifact containing `manifest.json` and canonical `plan.json`. See
+[docs/HEIST-FORMAT.md](docs/HEIST-FORMAT.md) and
 [docs/SWIFT-HEIST-AUTHORING.md](docs/SWIFT-HEIST-AUTHORING.md).
 
 ## Recordings

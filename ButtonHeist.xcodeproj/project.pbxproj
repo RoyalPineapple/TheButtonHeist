@@ -110,6 +110,7 @@
 		2F380AD6AE4BB22EF36DA8B6 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		2F94B833740659A02093F762 /* ScreenClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F75CD8C56005B03DF567DC /* ScreenClassifier.swift */; };
 		2FC3CAAB5ABC9EC51DDF3246 /* TheBrainsScrollTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD414D07E60258326145755A /* TheBrainsScrollTests.swift */; };
+		30B5EA429E2C04B77538CF3B /* HeistArtifact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C4781A9F9BB0B3163048425 /* HeistArtifact.swift */; };
 		3151C140018BC81CBA12AA3A /* HeistPlanExpressions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD18BEB6C1300E3033FBE74 /* HeistPlanExpressions.swift */; };
 		3199385249BEDA947E25945D /* DeviceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = D43D24A6682C61D9E2826547 /* DeviceProtocols.swift */; };
 		31D4344EC13757142C48C58A /* CCryptoBoringSSL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F39B2361B09CAE86D5E0B46A /* CCryptoBoringSSL.framework */; };
@@ -743,6 +744,7 @@
 		0AB999A39F6788A19B1F2865 /* SocketConnectionAdmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketConnectionAdmission.swift; sourceTree = "<group>"; };
 		0B05AC474B9C2427612BB9A7 /* AccessibilityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPolicyTests.swift; sourceTree = "<group>"; };
 		0B5C52071043D7EF9CA490A6 /* SocketClientLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClientLifecycle.swift; sourceTree = "<group>"; };
+		0C4781A9F9BB0B3163048425 /* HeistArtifact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistArtifact.swift; sourceTree = "<group>"; };
 		0D9C421EACCD36A3A4230D1D /* TheFence+CommandPresentation+Adapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandPresentation+Adapters.swift"; sourceTree = "<group>"; };
 		0E70B3ADCA6E79A1A9C7A241 /* TheFence+RequestTargetDecoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestTargetDecoding.swift"; sourceTree = "<group>"; };
 		0F005989657D4AA16D05DFCC /* TheFence+PlaybackReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+PlaybackReport.swift"; sourceTree = "<group>"; };
@@ -2014,6 +2016,7 @@
 				E9DAF29AFB3CD90B3F797E67 /* HeistActionCommand.swift */,
 				A840E6A3538DA4AE2D7B0786 /* HeistActionCommand+Durability.swift */,
 				DC91F1AFB4D122BD3AE8B4D2 /* HeistActions.swift */,
+				0C4781A9F9BB0B3163048425 /* HeistArtifact.swift */,
 				1864691C0F2DDC187964800A /* HeistContent.swift */,
 				C5CEBA8A6AD001AB491E5550 /* HeistControl.swift */,
 				E2F493BDAB60522C174B55BE /* HeistPlan.swift */,
@@ -2991,6 +2994,7 @@
 				83358D5A9A40124F4898676E /* HeistActionCommand+Durability.swift in Sources */,
 				CFF4585C73D76DB205C4A623 /* HeistActionCommand.swift in Sources */,
 				C190E047EAAD8DB2FC0D3F5A /* HeistActions.swift in Sources */,
+				30B5EA429E2C04B77538CF3B /* HeistArtifact.swift in Sources */,
 				C1616D28548CC61074322F4E /* HeistContent.swift in Sources */,
 				4F41A0A2E7CBB4041D88C051 /* HeistControl.swift in Sources */,
 				D287A8F3A4290D921EEF1C93 /* HeistPlan+CanonicalSwiftDSL.swift in Sources */,

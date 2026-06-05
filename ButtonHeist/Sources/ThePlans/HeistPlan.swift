@@ -9,7 +9,7 @@ import Foundation
 /// contract executed by the runtime. The plan stores semantic structure; it
 /// does not observe UI state, settle, report, compose live interactions, or dispatch actions.
 public struct HeistPlan: Codable, Sendable, Equatable {
-    public static let currentVersion = 2
+    public static let currentVersion = 1
 
     public let version: Int
     public let name: String?
@@ -43,8 +43,7 @@ public struct HeistPlan: Codable, Sendable, Equatable {
                 forKey: .version,
                 in: container,
                 debugDescription: "Unsupported heist plan version \(decodedVersion). " +
-                    "This Button Heist build supports version \(Self.currentVersion). " +
-                    "Version 2 renamed \"steps\" to \"body\"."
+                    "This Button Heist build supports version \(Self.currentVersion)."
             )
         }
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan")

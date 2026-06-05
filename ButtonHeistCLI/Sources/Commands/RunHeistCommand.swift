@@ -8,22 +8,22 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Execute a Button Heist plan from .heist JSON or Swift DSL source",
+        abstract: "Execute a Button Heist plan from .heist package, .json IR, or Swift DSL source",
         discussion: """
-            Reads a canonical heist plan object from .heist/.json, or compiles
-            Swift DSL source locally before sending the resulting plan through
-            the run_heist command path. Existing --plan and --plan-from-file
-            JSON inputs remain available for compatibility.
+            Reads a generated .heist package artifact, reads explicit .json
+            HeistPlan IR, or compiles Swift DSL source locally before sending
+            the resulting plan through the run_heist command path. Existing
+            --plan and --plan-from-file JSON inputs remain available.
 
             Examples:
               buttonheist run_heist Flow.heist
               buttonheist run_heist Flow.swift --entry makeHeist
               buttonheist run_heist --plan-from-file plan.json
-              buttonheist run_heist --plan '{"version":2,"body":[{"type":"warn","warn":{"message":"Check login state"}}]}'
+              buttonheist run_heist --plan '{"version":1,"body":[{"type":"warn","warn":{"message":"Check login state"}}]}'
             """
     )
 
-    @Argument(help: "Path to a .heist/.json plan or Swift DSL source file.")
+    @Argument(help: "Path to a .heist package, .json HeistPlan IR, or Swift DSL source file.")
     var input: String?
 
     @OptionGroup var connection: ConnectionOptions
@@ -35,7 +35,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .long, help: "Path to a JSON file containing a canonical heist plan object")
     var planFromFile: String?
 
-    @Option(name: .long, help: "Zero-argument Swift entry symbol returning Heist or HeistPlan.")
+    @Option(name: .long, help: "Zero-argument Swift entry symbol returning HeistPlan.")
     var entry: String?
 
     @ButtonHeistActor
@@ -119,19 +119,15 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             guard entry == nil else {
                 throw ValidationError("--entry is only valid with Swift source input")
             }
-            let data: Data
             do {
-                data = try Data(contentsOf: url)
+                let plan = try HeistArtifactCodec.readPlan(from: url)
+                try plan.assertRuntimeAdmissible()
+                return try requestParameters(for: plan)
+            } catch let error as HeistArtifactCodecError {
+                throw ValidationError(error.description)
             } catch {
-                throw ValidationError("Failed to read \(path): \(error.localizedDescription)")
+                throw ValidationError("Failed to read \(path): \(error)")
             }
-            let plan: HeistPlan
-            do {
-                plan = try HeistPlan.decodeValidatedHeistJSON(from: data)
-            } catch {
-                throw ValidationError("\(path) is not valid .heist JSON: \(error)")
-            }
-            return try requestParameters(for: plan)
 
         case "swift":
             guard let entry, !entry.isEmpty else {

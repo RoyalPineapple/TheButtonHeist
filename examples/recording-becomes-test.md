@@ -21,7 +21,7 @@ buttonheist stop_heist --output search-flow.heist
 buttonheist play_heist --input search-flow.heist --junit search-flow.xml
 ```
 
-The `.heist` fixture stores semantic action steps and expectations. It does not
-store reads, failed actions, setup scrolls for semantic commands, viewport
-geometry, live object handles, or capture-local IDs as replay identity.
-
+The generated `.heist` package stores `manifest.json` and canonical `plan.json`
+with semantic action steps and expectations. It does not store reads, failed
+actions, setup scrolls for semantic commands, viewport geometry, live object
+handles, or capture-local IDs as replay identity.

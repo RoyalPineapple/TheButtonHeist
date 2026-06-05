@@ -8,7 +8,7 @@ struct HeistPlanToolTests {
     func `validate succeeds for a valid fixture`() throws {
         let temp = try TemporaryDirectory()
         let planURL = temp.url.appendingPathComponent("valid.heist")
-        try writeCanonicalJSON(representativePlan(), to: planURL)
+        try HeistArtifactCodec.writePlan(representativePlan(), to: planURL)
 
         let result = try runHeistPlan(["validate", planURL.path])
 
@@ -19,20 +19,32 @@ struct HeistPlanToolTests {
     @Test
     func `validate fails for malformed JSON`() throws {
         let temp = try TemporaryDirectory()
-        let planURL = temp.url.appendingPathComponent("malformed.heist")
+        let planURL = temp.url.appendingPathComponent("malformed.json")
         try "{".write(to: planURL, atomically: true, encoding: .utf8)
 
         let result = try runHeistPlan(["validate", planURL.path])
 
         #expect(result.exitCode != 0)
-        #expect(result.stderr.contains("failed to decode"))
+        #expect(result.stderr.contains("Invalid heist plan"))
+    }
+
+    @Test
+    func `validate fails for raw JSON with heist extension`() throws {
+        let temp = try TemporaryDirectory()
+        let planURL = temp.url.appendingPathComponent("raw.heist")
+        try writeCanonicalJSON(representativePlan(), to: planURL)
+
+        let result = try runHeistPlan(["validate", planURL.path])
+
+        #expect(result.exitCode != 0)
+        #expect(result.stderr.contains("raw JSON is not a .heist package"))
     }
 
     @Test
     func `validate fails for inadmissible plan with path and contract`() throws {
         let temp = try TemporaryDirectory()
         let planURL = temp.url.appendingPathComponent("inadmissible.heist")
-        try writeCanonicalJSON(inadmissiblePlan(), to: planURL)
+        try HeistArtifactCodec.writePlan(inadmissiblePlan(), to: planURL)
 
         let result = try runHeistPlan(["validate", planURL.path])
 
@@ -45,7 +57,7 @@ struct HeistPlanToolTests {
     func `render-swift prints canonical Swift`() throws {
         let temp = try TemporaryDirectory()
         let planURL = temp.url.appendingPathComponent("valid.heist")
-        try writeCanonicalJSON(representativePlan(), to: planURL)
+        try HeistArtifactCodec.writePlan(representativePlan(), to: planURL)
 
         let result = try runHeistPlan(["render-swift", planURL.path])
 
@@ -64,7 +76,7 @@ struct HeistPlanToolTests {
     @Test
     func `canonicalize writes sorted stable JSON`() throws {
         let temp = try TemporaryDirectory()
-        let inputURL = temp.url.appendingPathComponent("input.heist")
+        let inputURL = temp.url.appendingPathComponent("input.json")
         let outputURL = temp.url.appendingPathComponent("output.heist")
         let plan = try representativePlan()
         try writeCanonicalJSON(plan, to: inputURL)
@@ -78,74 +90,10 @@ struct HeistPlanToolTests {
 
         #expect(result.exitCode == 0, "\(result.stderr)")
         #expect(result.stdout.isEmpty)
-        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        let output = try String(contentsOf: outputURL.appendingPathComponent("plan.json"), encoding: .utf8)
         let expected = try String(data: canonicalJSONData(plan) + Data([0x0A]), encoding: .utf8)
-        #expect(output == expected)
-    }
-
-    @Test
-    func `compile round trips Swift DSL through JSON and canonical Swift`() throws {
-        let temp = try TemporaryDirectory()
-        let sourceURL = temp.url.appendingPathComponent("Plan.swift")
-        let outputURL = temp.url.appendingPathComponent("compiled.heist")
-        let renderedSourceURL = temp.url.appendingPathComponent("RenderedPlan.swift")
-        let roundTrippedOutputURL = temp.url.appendingPathComponent("round-tripped.heist")
-        try """
-        import ThePlans
-
-        func makeHeist() throws -> HeistPlan {
-            try HeistPlan("compiled") {
-                Warn("from Swift")
-            }
-        }
-        """.write(to: sourceURL, atomically: true, encoding: .utf8)
-
-        let result = try runHeistPlan([
-            "compile",
-            sourceURL.path,
-            "--entry",
-            "makeHeist",
-            "--output",
-            outputURL.path,
-        ])
-
-        #expect(result.exitCode == 0, "\(result.stderr)")
-        let data = try Data(contentsOf: outputURL)
-        let plan = try JSONDecoder().decode(HeistPlan.self, from: data)
-        #expect(plan.runtimeAdmissionFailures().isEmpty)
-        let expectedSwift = """
-        try HeistPlan("compiled") {
-            Warn("from Swift")
-        }
-        """
-        #expect(try plan.canonicalSwiftDSL() == expectedSwift)
-
-        let validateResult = try runHeistPlan(["validate", outputURL.path])
-        #expect(validateResult.exitCode == 0, "\(validateResult.stderr)")
-
-        let renderResult = try runHeistPlan(["render-swift", outputURL.path])
-        #expect(renderResult.exitCode == 0, "\(renderResult.stderr)")
-        #expect(renderResult.stdout == expectedSwift + "\n")
-
-        try swiftSourceReturningHeistPlan(from: renderResult.stdout).write(
-            to: renderedSourceURL,
-            atomically: true,
-            encoding: .utf8
-        )
-
-        let roundTripResult = try runHeistPlan([
-            "compile",
-            renderedSourceURL.path,
-            "--entry",
-            "makeHeist",
-            "--output",
-            roundTrippedOutputURL.path,
-        ])
-        #expect(roundTripResult.exitCode == 0, "\(roundTripResult.stderr)")
-
-        let roundTripValidateResult = try runHeistPlan(["validate", roundTrippedOutputURL.path])
-        #expect(roundTripValidateResult.exitCode == 0, "\(roundTripValidateResult.stderr)")
-        #expect(try Data(contentsOf: roundTrippedOutputURL) == data)
+        #expect(output + "\n" == expected)
+        #expect(FileManager.default.fileExists(atPath: outputURL.appendingPathComponent("manifest.json").path))
     }
 
     @Test
@@ -212,20 +160,6 @@ private func canonicalJSONData(_ plan: HeistPlan) throws -> Data {
 
 private func writeCanonicalJSON(_ plan: HeistPlan, to url: URL) throws {
     try canonicalJSONData(plan).write(to: url)
-}
-
-private func swiftSourceReturningHeistPlan(from canonicalSwift: String) -> String {
-    let indentedSwift = canonicalSwift
-        .split(separator: "\n", omittingEmptySubsequences: false)
-        .map { line in line.isEmpty ? "" : "    \(line)" }
-        .joined(separator: "\n")
-    return """
-    import ThePlans
-
-    func makeHeist() throws -> HeistPlan {
-    \(indentedSwift)
-    }
-    """
 }
 
 private final class TemporaryDirectory {

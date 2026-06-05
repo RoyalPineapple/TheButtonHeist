@@ -2557,9 +2557,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected invalid heist file")
         } catch {
             XCTAssertTrue(
-                "\(error)".contains("Unsupported heist plan version")
-                    || "\(error)".contains("app")
-                    || "\(error)".contains("steps"),
+                "\(error)".contains("raw JSON is not a .heist package"),
                 "\(error)"
             )
         }
@@ -2573,9 +2571,19 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPlayHeistRejectsInvalidPlanCommandBeforeExecution() async throws {
         let heistURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("invalid-command-\(UUID().uuidString).heist")
+        try FileManager.default.createDirectory(at: heistURL, withIntermediateDirectories: true)
+        let manifest = HeistArtifactManifest(
+            format: heistArtifactFormat,
+            formatVersion: currentHeistArtifactFormatVersion,
+            planVersion: currentHeistPlanVersion,
+            producer: .buttonHeist,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        try HeistArtifactCodec.canonicalManifestJSONData(manifest)
+            .write(to: heistURL.appendingPathComponent("manifest.json"))
         try """
         {
-          "version": 2,
+          "version": 1,
           "body": [
             {
               "type": "action",
@@ -2588,7 +2596,7 @@ final class TheFenceHandlerTests: XCTestCase {
             }
           ]
         }
-        """.write(to: heistURL, atomically: true, encoding: .utf8)
+        """.write(to: heistURL.appendingPathComponent("plan.json"), atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
         let (fence, mockConn) = makeConnectedFence()

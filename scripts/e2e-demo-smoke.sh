@@ -414,7 +414,7 @@ printf '    token/id: %s\n' "$TOKEN"
 printf '    cli config: %s\n' "$CLI_CONFIGURATION"
 if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '    heist: %s\n' "$HEIST_PATH"
-    [[ -f "$HEIST_PATH" ]] || fail "heist fixture not found at $HEIST_PATH"
+    [[ -e "$HEIST_PATH" ]] || fail "heist fixture not found at $HEIST_PATH"
 fi
 
 log "Preparing dependencies"

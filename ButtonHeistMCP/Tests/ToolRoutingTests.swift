@@ -77,7 +77,7 @@ struct ToolRoutingTests {
 
         #expect(arguments.argumentValues["source_file"] == nil)
         #expect(arguments.argumentValues["entry"] == nil)
-        #expect(arguments.argumentValues["version"] == .int(2))
+        #expect(arguments.argumentValues["version"] == .int(1))
         guard case .array(let body)? = arguments.argumentValues["body"] else {
             Issue.record("Expected compiled heist body")
             return

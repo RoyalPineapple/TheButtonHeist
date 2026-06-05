@@ -1,7 +1,6 @@
-import ButtonHeistDSL
-import TheScore
+import ThePlans
 
-let heist = try Heist("searchFlow") {
+let heist = try HeistPlan("searchFlow") {
     TypeText("milk", into: .label("Search"))
         .expect(.present(.element(label: "Search", value: "milk")), timeout: .seconds(2))
 
@@ -18,4 +17,3 @@ let heist = try Heist("searchFlow") {
         }
     }
 }
-

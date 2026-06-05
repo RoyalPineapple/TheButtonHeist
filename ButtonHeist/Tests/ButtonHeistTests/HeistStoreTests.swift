@@ -863,6 +863,12 @@ final class HeistStoreTests: XCTestCase {
         let filePath = tempDirectory.appendingPathComponent("test.heist")
         try HeistFileIO.write(heist, to: filePath)
 
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: filePath.path, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: filePath.appendingPathComponent("manifest.json").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: filePath.appendingPathComponent("plan.json").path))
+
         let loaded = try HeistFileIO.read(from: filePath)
         XCTAssertEqual(loaded, heist)
     }

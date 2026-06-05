@@ -135,7 +135,7 @@ failure points at the accessibility contract that changed.
   payload schemas, and auth/session details.
 - [MCP Agent Guide](MCP-AGENT-GUIDE.md) - practical tool-use patterns for
   agents.
-- [Heist Format](HEIST-FORMAT.md) - replayable session file format.
+- [Heist Format](HEIST-FORMAT.md) - generated heist artifact and plan IR format.
 - [Recording Contract](RECORDING-CONTRACT.md) - how runtime evidence becomes
   durable semantic heist steps.
 - [Element Inflation](ELEMENT-INFLATION.md) - semantic target to inflated live

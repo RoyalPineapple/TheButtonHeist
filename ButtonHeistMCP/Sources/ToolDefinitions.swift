@@ -47,7 +47,47 @@ enum ToolDefinitions {
         ])
         object["properties"] = .object(properties)
         object.removeValue(forKey: "required")
+        object["oneOf"] = .array([
+            runHeistPlanSchema(from: properties),
+            runHeistSourceFileSchema(),
+        ])
         return .object(object)
+    }
+
+    private static func runHeistPlanSchema(from properties: [String: Value]) -> Value {
+        var planProperties = properties
+        planProperties.removeValue(forKey: "source_file")
+        planProperties.removeValue(forKey: "entry")
+        return .object([
+            "type": .string("object"),
+            "properties": .object(planProperties),
+            "required": .array([
+                .string("version"),
+                .string("body"),
+            ]),
+            "additionalProperties": .bool(false),
+        ])
+    }
+
+    private static func runHeistSourceFileSchema() -> Value {
+        .object([
+            "type": .string("object"),
+            "properties": .object([
+                "source_file": .object([
+                    "type": .string("string"),
+                    "minLength": .int(1),
+                ]),
+                "entry": .object([
+                    "type": .string("string"),
+                    "minLength": .int(1),
+                ]),
+            ]),
+            "required": .array([
+                .string("source_file"),
+                .string("entry"),
+            ]),
+            "additionalProperties": .bool(false),
+        ])
     }
 
     private static func value(from schemaValue: HeistValue) -> Value {

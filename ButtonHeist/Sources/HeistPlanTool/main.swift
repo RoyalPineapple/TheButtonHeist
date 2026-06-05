@@ -19,10 +19,10 @@ struct HeistPlanTool: ParsableCommand {
 struct Validate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "validate",
-        abstract: "Validate a .heist JSON plan."
+        abstract: "Validate a .heist package artifact or .json HeistPlan IR."
     )
 
-    @Argument(help: "Path to the .heist JSON plan.")
+    @Argument(help: "Path to a .heist package artifact or .json HeistPlan IR.")
     var plan: String
 
     func run() throws {
@@ -33,10 +33,10 @@ struct Validate: ParsableCommand {
 struct RenderSwift: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "render-swift",
-        abstract: "Render a .heist JSON plan as canonical Swift DSL."
+        abstract: "Render a heist plan as canonical Swift DSL."
     )
 
-    @Argument(help: "Path to the .heist JSON plan.")
+    @Argument(help: "Path to a .heist package artifact or .json HeistPlan IR.")
     var plan: String
 
     func run() throws {
@@ -48,13 +48,13 @@ struct RenderSwift: ParsableCommand {
 struct Canonicalize: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "canonicalize",
-        abstract: "Re-encode a .heist JSON plan as stable canonical JSON."
+        abstract: "Re-encode a heist plan as stable canonical JSON or a .heist package."
     )
 
-    @Argument(help: "Path to the .heist JSON plan.")
+    @Argument(help: "Path to a .heist package artifact or .json HeistPlan IR.")
     var plan: String
 
-    @Option(name: .long, help: "Path to write canonical .heist JSON. Defaults to stdout.")
+    @Option(name: .long, help: "Path to write .heist package or .json IR. Defaults to JSON stdout.")
     var output: String?
 
     func run() throws {
@@ -66,7 +66,7 @@ struct Canonicalize: ParsableCommand {
 struct Compile: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "compile",
-        abstract: "Compile Swift DSL source into canonical .heist JSON."
+        abstract: "Compile Swift DSL source into a .heist package or .json HeistPlan IR."
     )
 
     @Argument(help: "Path to a Swift source file that imports ThePlans.")
@@ -75,7 +75,7 @@ struct Compile: ParsableCommand {
     @Option(name: .long, help: "Zero-argument entry symbol returning HeistPlan.")
     var entry: String
 
-    @Option(name: .long, help: "Path to write canonical .heist JSON.")
+    @Option(name: .long, help: "Path to write .heist package or .json HeistPlan IR.")
     var output: String
 
     func validate() throws {
@@ -96,21 +96,15 @@ struct Compile: ParsableCommand {
 enum HeistPlanIO {
     static func readValidatedPlan(from path: String) throws -> HeistPlan {
         let url = URL(fileURLWithPath: path)
-        let data: Data
         do {
-            data = try Data(contentsOf: url)
+            let plan = try HeistArtifactCodec.readPlan(from: url)
+            try validate(plan)
+            return plan
+        } catch let error as HeistArtifactCodecError {
+            throw ValidationError(error.description)
         } catch {
-            throw ValidationError("failed to read \(path): \(error.localizedDescription)")
+            throw ValidationError("failed to read \(path): \(error)")
         }
-
-        let plan: HeistPlan
-        do {
-            plan = try JSONDecoder().decode(HeistPlan.self, from: data)
-        } catch {
-            throw ValidationError("failed to decode \(path) as .heist JSON: \(error)")
-        }
-        try validate(plan)
-        return plan
     }
 
     static func validate(_ plan: HeistPlan) throws {
@@ -125,11 +119,15 @@ enum HeistPlanIO {
     }
 
     static func writeCanonicalJSON(for plan: HeistPlan, to path: String?) throws {
-        let data = try canonicalJSONData(for: plan)
-        let output = data + Data([0x0A])
         if let path {
-            try output.write(to: URL(fileURLWithPath: path), options: .atomic)
+            let url = URL(fileURLWithPath: path)
+            do {
+                try HeistArtifactCodec.writePlan(plan, to: url)
+            } catch let error as HeistArtifactCodecError {
+                throw ValidationError(error.description)
+            }
         } else {
+            let output = try canonicalJSONData(for: plan) + Data([0x0A])
             FileHandle.standardOutput.write(output)
         }
     }

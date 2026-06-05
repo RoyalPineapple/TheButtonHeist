@@ -1,0 +1,66 @@
+{
+  "body" : [
+    {
+      "action" : {
+        "command" : {
+          "payload" : {
+            "label" : "Controls Demo",
+            "traits" : [
+              "button"
+            ]
+          },
+          "type" : "activate"
+        },
+        "expectation" : {
+          "predicate" : {
+            "type" : "screen_changed"
+          },
+          "timeout" : 0
+        }
+      },
+      "type" : "action"
+    },
+    {
+      "action" : {
+        "command" : {
+          "payload" : {
+            "label" : "Display",
+            "traits" : [
+              "button"
+            ]
+          },
+          "type" : "activate"
+        },
+        "expectation" : {
+          "predicate" : {
+            "type" : "screen_changed"
+          },
+          "timeout" : 0
+        }
+      },
+      "type" : "action"
+    },
+    {
+      "action" : {
+        "command" : {
+          "payload" : {
+            "label" : "Controls Demo",
+            "traits" : [
+              "button",
+              "backButton"
+            ]
+          },
+          "type" : "activate"
+        },
+        "expectation" : {
+          "predicate" : {
+            "type" : "screen_changed"
+          },
+          "timeout" : 0
+        }
+      },
+      "type" : "action"
+    }
+  ],
+  "version" : 1
+}

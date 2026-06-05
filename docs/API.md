@@ -13,7 +13,7 @@ Generated references are the source of truth for executable surface area:
   from the Fence command contract
 - [Wire Protocol](WIRE-PROTOCOL.md) - transport envelopes, handshake,
   authentication, and wire-only examples
-- [Heist Format](HEIST-FORMAT.md) - durable replay file format
+- [Heist Format](HEIST-FORMAT.md) - generated heist artifact and plan IR format
 
 ## Contract Layers
 

@@ -6,11 +6,7 @@ enum HeistFileIO {
 
     static func write(_ heist: HeistPlan, to path: URL) throws {
         do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(heist)
-            try PrivateStorage.writePrivateData(data, to: path)
+            try HeistArtifactCodec.writePlan(heist, to: path)
         } catch {
             throw StorageError.heistRecording(.heistWriteFailed(
                 path: path.path,
@@ -21,15 +17,7 @@ enum HeistFileIO {
 
     static func read(from path: URL) throws -> HeistPlan {
         do {
-            let data = try Data(contentsOf: path)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode(HeistPlan.self, from: data)
-        } catch DecodingError.dataCorrupted(let context) {
-            throw StorageError.heistRecording(.heistReadFailed(
-                path: path.path,
-                reason: context.debugDescription
-            ))
+            return try HeistArtifactCodec.readPlan(from: path)
         } catch {
             throw StorageError.heistRecording(.heistReadFailed(
                 path: path.path,
