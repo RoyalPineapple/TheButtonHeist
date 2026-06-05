@@ -4,25 +4,25 @@
 [![Release](https://img.shields.io/github/v/release/RoyalPineapple/TheButtonHeist?label=release)](https://github.com/RoyalPineapple/TheButtonHeist/releases/latest)
 [![License](https://img.shields.io/github/license/RoyalPineapple/TheButtonHeist)](LICENSE)
 
-# Button Heist
+# The Button Heist
 
-Button Heist turns the interface VoiceOver reads into a live world model for
+The Button Heist turns the interface VoiceOver reads into a live world model for
 agents and tests: the whole screen as structured text, real accessibility
 actions for control, and settled evidence after every move.
 
 We believe accessibility is the ideal interface for agentic control. It is where 
 the app says what things are, what state they are in, and what actions they support.
-VoiceOver turns that interface into speech and gestures. Button Heist gives it to agents
+VoiceOver turns that interface into speech and gestures. The Button Heist gives it to agents
 as text and actions.
 
 An iOS app already describes itself through accessibility. Labels name things.
 Traits say what they are. Values and state say what changed. Actions say what
-can happen next. Button Heist keeps that text-and-actions interface current and
+can happen next. The Button Heist keeps that text-and-actions interface current and
 programmable.
 
 Agents read the screen like a structured document or menu, then choose intent
 from what the app exposes: the Continue button, the Search field, the selected
-row. Button Heist owns the screen work behind that intent: target
+row. The Button Heist owns the screen work behind that intent: target
 resolution, reveal, live geometry, action execution, settling, and evidence.
 
 The heist is clean: read the interface, make the move, keep the receipt.
@@ -30,7 +30,7 @@ The heist is clean: read the interface, make the move, keep the receipt.
 ```mermaid
 flowchart TB
     AX["1 App speaks accessibility"]
-    Model["2 Button Heist builds a world model"]
+    Model["2 The Button Heist builds a world model"]
     Intent["3 Agent or heist chooses intent"]
     Runtime["4 Runtime acts and settles"]
     Evidence["5 Evidence comes back"]
@@ -63,7 +63,7 @@ assertion, recording step, or audit.
 
 ## What You Can Do
 
-Use Button Heist to:
+Use The Button Heist to:
 
 - Drive a debug iOS app from an agent over MCP.
 - Run semantic UI commands from a CLI.
@@ -159,11 +159,11 @@ surfaces live in [docs/reference/commands.md](docs/reference/commands.md) and
 
 ## The Contract
 
-Button Heist treats accessibility as the control plane.
+The Button Heist treats accessibility as the control plane.
 
 For normal controls, callers speak in the app's accessibility language:
 activate this button, type into this field, run this custom action, move through
-this rotor, wait until this predicate is true. Button Heist manages ordinary
+this rotor, wait until this predicate is true. The Button Heist manages ordinary
 viewport setup: it resolves the target, reveals it through the owning
 scroll/container path when needed, acquires fresh live geometry, performs the
 operation, waits for settled semantic evidence, and reports the result.
@@ -235,7 +235,7 @@ a durable UI test to surface.
 ## Why It Works
 
 Accessibility already names the app's working parts: roles, values, state,
-hierarchy, and actions. Button Heist keeps that language executable.
+hierarchy, and actions. The Button Heist keeps that language executable.
 
 For ordinary controls, the loop is semantic: target, action, wait, evidence.
 For maps, canvases, drawing surfaces, games, and spatial products, explicit
@@ -245,7 +245,7 @@ contract and making progress through it.
 The benchmark suite compares that loop with coordinate-first MCP automation
 across 96 trials and 16 UI tasks.
 
-|  | Button Heist | Coordinate-based |
+|  | The Button Heist | Coordinate-based |
 |---|---:|---:|
 | Avg wall time | 134s | 235s |
 | Avg turns | 14 | 43 |
@@ -283,7 +283,7 @@ If you enable network scope, add the Bonjour permissions:
 
 ```xml
 <key>NSLocalNetworkUsageDescription</key>
-<string>This app uses local network to communicate with Button Heist.</string>
+<string>This app uses local network to communicate with The Button Heist.</string>
 <key>NSBonjourServices</key>
 <array>
     <string>_buttonheist._tcp</string>
@@ -338,7 +338,7 @@ echo '{"command":"get_interface"}' | buttonheist json_lines
 
 ## The Crew
 
-Button Heist is a distributed system: a debug iOS framework inside the app, a
+The Button Heist is a distributed system: a debug iOS framework inside the app, a
 macOS client outside it, and CLI/MCP fronts for humans and agents.
 
 ### Inside the app
@@ -448,7 +448,7 @@ All docs: [API](docs/API.md) / [Command Reference](docs/reference/commands.md) /
 
 ## Acknowledgments
 
-- [KIF (Keep It Functional)](https://github.com/kif-framework/KIF). Button
+- [KIF (Keep It Functional)](https://github.com/kif-framework/KIF). The Button
   Heist builds on KIF's long proof that semantic accessibility is a stable base
   for iOS testing, while moving the model toward accessibility actions, settled
   evidence, and agent-readable contracts.
