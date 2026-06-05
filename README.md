@@ -176,13 +176,17 @@ For physical gestures, callers use mechanical commands. `one_finger_tap`,
 `long_press`, `swipe`, and `drag` are for maps, canvases, drawing surfaces,
 games, custom gesture regions, and other places where the gesture is the intent.
 
-Those routes are explicit because the distinction matters:
+The split is simple:
 
-| Route | Use it for | Durable identity |
-|---|---|---|
-| Semantic | Buttons, fields, links, menus, custom actions, rotors, waits | Accessibility predicates and expectations |
-| Viewport | Screenshots, hierarchy inspection, explicit scrolling | Current visible state |
-| Mechanical | Canvas/spatial gestures, maps, games, drawing | Points, unit points, gesture shape |
+- Use the accessibility language when the app exposes the thing you want:
+  buttons, fields, links, menus, custom actions, rotors, and waits. These steps
+  survive layout changes because they name app meaning.
+- Use viewport commands when the view itself is the question: inspect the
+  hierarchy, capture a screenshot, or deliberately move a scroll view. These
+  commands describe what is visible now.
+- Use mechanical gestures when the gesture is the product: maps, canvases,
+  drawing, games, sliders, and spatial controls. These commands preserve the
+  point, unit point, direction, or gesture shape.
 
 The formal runtime contract is in
 [docs/ACCESSIBILITY-CONTRACT.md](docs/ACCESSIBILITY-CONTRACT.md). Recording and
