@@ -22,7 +22,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `ping` | `session` | `ping` | direct | Check connection health without reading accessibility state. |
 | `play_heist` | `heistRecording` | `play_heist` | direct | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | `semanticAction` | `rotor` | direct | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
-| `run_heist` | `heistRuntime` | `run_heist` | direct | Execute an inline typed heist plan. |
+| `run_heist` | `heistRuntime` | `run_heist` | direct | Execute a typed heist plan, supplied inline (version + body) or loaded by the fence from an `input` .heist package artifact path. |
 | `scroll` | `viewportDebug` | `scroll` | direct | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
 | `scroll_to_edge` | `viewportDebug` | `scroll_to_edge` | direct | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
 | `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | direct | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
@@ -301,7 +301,7 @@ Parameters:
 
 ### `run_heist`
 
-Execute an inline typed heist plan.
+Execute a typed heist plan, supplied inline (version + body) or loaded by the fence from an `input` .heist package artifact path.
 
 - Family: `heistRuntime`
 - CLI: direct command `run_heist`
@@ -312,8 +312,9 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `version` | `integer` | yes | - | - |
-| `body` | `array` | yes | - | - |
+| `input` | `string` | no | - | - |
+| `version` | `integer` | no | - | - |
+| `body` | `array` | no | - | - |
 
 ### `scroll`
 

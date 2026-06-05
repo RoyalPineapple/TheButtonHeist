@@ -320,6 +320,56 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    // MARK: - Run Heist Input Loading
+
+    @ButtonHeistActor
+    func testRunHeistReadsPlanFromArtifactPathIntoSwiftObjects() async throws {
+        let fence = TheFence(configuration: .init())
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fence-runheist-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let heistURL = temp.appendingPathComponent("Smoke.heist")
+        let plan = HeistPlan(body: [.warn(WarnStep(message: "from artifact"))])
+        try HeistArtifactCodec.writePlan(plan, to: heistURL)
+
+        let request = try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: ["input": .string(heistURL.path)])
+        )
+
+        // The fence reads the file into a HeistPlan directly — no parameter
+        // round-trip — and names the anonymous plan after the file.
+        XCTAssertEqual(request.plan.body, plan.body)
+        XCTAssertEqual(request.plan.name, "Smoke")
+    }
+
+    @ButtonHeistActor
+    func testRunHeistRejectsInputCombinedWithInlineBody() async {
+        let fence = TheFence(configuration: .init())
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: [
+                "input": .string("/tmp/Flow.heist"),
+                "body": .array([]),
+            ])
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("either an input path or an inline plan"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testRunHeistRejectsNonHeistInput() async {
+        let fence = TheFence(configuration: .init())
+        // Standalone .json is internal to the package, not a run input.
+        for path in ["Flow.txt", "Flow.json"] {
+            XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+                TheFence.CommandArgumentEnvelope(values: ["input": .string(path)])
+            )) { error in
+                XCTAssertTrue(String(describing: error).contains(".heist package artifact"))
+            }
+        }
+    }
+
     // MARK: - Typed Argument Parsing
 
     func testCommandArgumentEnvelopeReadsTypedScalarValues() throws {

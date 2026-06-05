@@ -6,9 +6,10 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
             command, family: .heistRuntime,
             requestDecoder: TheFence.decodeRunHeistCommandRequest,
             parameters: [
-                param(.version, .integer, required: true),
+                param(.input, .string),
+                param(.version, .integer),
                 param(
-                    .body, .array, required: true,
+                    .body, .array,
                     minItems: 1,
                     maxItems: TheFence.DecodeLimits.maxRunHeistSteps,
                     arrayItemType: .object,
@@ -34,7 +35,8 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     arrayItemAdditionalProperties: true
                 )
             ],
-            description: "Execute an inline typed heist plan."
+            description: "Execute a typed heist plan, supplied inline (version + body) or loaded by " +
+                "the fence from an `input` .heist package artifact path."
         )
     }
 }

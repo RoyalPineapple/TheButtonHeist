@@ -118,84 +118,64 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testRunHeistRequiresExactlyOnePlanSource() {
         XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: nil, fromFile: nil)) { error in
-            XCTAssertTrue(String(describing: error).contains("Must supply either --plan or --plan-from-file"))
+            XCTAssertTrue(String(describing: error).contains("Must supply a plan path, --plan, or --plan-from-file"))
         }
         XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: "{}", fromFile: "plan.json")) { error in
-            XCTAssertTrue(String(describing: error).contains("--plan and --plan-from-file are mutually exclusive"))
+            XCTAssertTrue(String(describing: error).contains("mutually exclusive"))
         }
     }
 
-    func testRunHeistPathJSONAndSwiftInputsConvergeBeforeFenceRequest() throws {
-        let temp = try TemporaryCLIDirectory()
-        let heistURL = temp.url.appendingPathComponent("Flow.heist")
-        let swiftURL = temp.url.appendingPathComponent("Flow.swift")
-        let plan = HeistPlan(body: [.warn(WarnStep(message: "from file"))])
-        try HeistArtifactCodec.writePlan(plan, to: heistURL)
-        try "".write(to: swiftURL, atomically: true, encoding: .utf8)
-
-        let jsonArguments = try RunHeistCommand.planArguments(
+    func testRunHeistForwardsArtifactPathToFenceWithoutReadingIt() throws {
+        // The CLI must not read or re-encode the plan — it forwards the path so
+        // the fence reads it into a HeistPlan. No version/body fields are sent.
+        let arguments = try RunHeistCommand.planArguments(
             inline: nil,
             fromFile: nil,
-            input: heistURL.path,
+            input: "Flow.heist",
             entry: nil
         )
-        let swiftArguments = try RunHeistCommand.planArguments(
+
+        XCTAssertEqual(arguments[.input], .string("Flow.heist"))
+        XCTAssertNil(arguments[.version])
+        XCTAssertNil(arguments[.body])
+    }
+
+    func testRunHeistCompilesSwiftSourceLocallyAndSendsInline() throws {
+        // Swift DSL source needs the toolchain, so the CLI compiles it locally
+        // and sends the plan inline; the fence is not handed a .swift path.
+        let plan = HeistPlan(body: [.warn(WarnStep(message: "from swift"))])
+        let arguments = try RunHeistCommand.planArguments(
             inline: nil,
             fromFile: nil,
-            input: swiftURL.path,
+            input: "Flow.swift",
             entry: "makeHeist",
             compileSwiftFile: { _, _ in plan }
         )
 
-        XCTAssertEqual(swiftArguments, jsonArguments)
-        XCTAssertEqual(swiftArguments[.version], .int(1))
+        XCTAssertEqual(arguments[.version], .int(1))
+        XCTAssertNotNil(arguments[.body])
+        XCTAssertNil(arguments[.input])
     }
 
-    func testRunHeistUnknownPathExtensionFailsBeforeFenceRequestConstruction() {
+    func testRunHeistSwiftSourceRequiresEntry() {
         XCTAssertThrowsError(try RunHeistCommand.planArguments(
             inline: nil,
             fromFile: nil,
-            input: "Flow.txt",
+            input: "Flow.swift",
             entry: nil
         )) { error in
-            XCTAssertTrue(String(describing: error).contains("Unsupported run_heist input extension"))
+            XCTAssertTrue(String(describing: error).contains("--entry is required for Swift source input"))
         }
     }
 
-    func testRunHeistRejectsRawJSONAtHeistExtensionBeforeFenceRequestConstruction() throws {
-        let temp = try TemporaryCLIDirectory()
-        let heistURL = temp.url.appendingPathComponent("Raw.heist")
-        let plan = HeistPlan(body: [.warn(WarnStep(message: "raw"))])
-        try plan.canonicalHeistJSONData().write(to: heistURL)
-
+    func testRunHeistRejectsEntryWithoutInput() {
         XCTAssertThrowsError(try RunHeistCommand.planArguments(
-            inline: nil,
+            inline: #"{"version":1,"body":[{"type":"warn","warn":{"message":"x"}}]}"#,
             fromFile: nil,
-            input: heistURL.path,
-            entry: nil
+            input: nil,
+            entry: "makeHeist"
         )) { error in
-            let message = String(describing: error)
-            XCTAssertTrue(message.contains("raw JSON is not a .heist package"), message)
-        }
-    }
-
-    func testRunHeistMalformedSwiftReportsAdapterCompileError() throws {
-        let temp = try TemporaryCLIDirectory()
-        let swiftURL = temp.url.appendingPathComponent("Broken.swift")
-        try "".write(to: swiftURL, atomically: true, encoding: .utf8)
-
-        XCTAssertThrowsError(try RunHeistCommand.planArguments(
-            inline: nil,
-            fromFile: nil,
-            input: swiftURL.path,
-            entry: "makeHeist",
-            compileSwiftFile: { source, _ in
-                throw HeistSourceCompilerError.compileFailed(source.path, "expected declaration")
-            }
-        )) { error in
-            let message = String(describing: error)
-            XCTAssertTrue(message.contains("failed to compile Swift heist source"), message)
-            XCTAssertFalse(message.contains("SchemaValidationError"), message)
+            XCTAssertTrue(String(describing: error).contains("--entry is only valid with Swift source input"))
         }
     }
 
