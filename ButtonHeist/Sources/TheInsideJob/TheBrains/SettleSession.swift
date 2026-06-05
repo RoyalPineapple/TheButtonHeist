@@ -285,7 +285,7 @@ enum SettleOutcome: Equatable {
         baseline: [AccessibilityElement],
         final: [AccessibilityElement]
     ) -> [AccessibilityElement] {
-        SettleProjection.transientElements(seenByKey: seenByKey, baseline: baseline, final: final)
+        SettleTimeline.transientElements(seenByKey: seenByKey, baseline: baseline, final: final)
     }
 }
 

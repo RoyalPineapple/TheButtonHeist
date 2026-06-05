@@ -41,11 +41,11 @@ struct SettleObservationLedger {
         for element in elements {
             elementsByKey[element.timelineKey] = element
         }
-        return SettleProjection.fingerprint(of: elements)
+        return SettleTimeline.fingerprint(of: elements)
     }
 }
 
-enum SettleProjection {
+enum SettleTimeline {
     static func fingerprint(of elements: [AccessibilityElement]) -> Int {
         var hasher = Hasher()
         hasher.combine(elements.count)
