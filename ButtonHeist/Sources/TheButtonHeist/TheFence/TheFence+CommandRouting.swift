@@ -37,10 +37,11 @@ public extension TheFence.Command {
 extension ClientWireMessageType {
     var commandName: String {
         switch self {
-        case .performCustomAction: return TheFence.Command.activate.rawValue
+        case .performCustomAction, .increment, .decrement: return TheFence.Command.activate.rawValue
         case .oneFingerTap: return TheFence.Command.oneFingerTap.rawValue
         case .longPress: return TheFence.Command.longPress.rawValue
         case .typeText: return TheFence.Command.typeText.rawValue
+        case .editAction: return TheFence.Command.editAction.rawValue
         case .setPasteboard: return TheFence.Command.setPasteboard.rawValue
         case .scrollToVisible: return TheFence.Command.scrollToVisible.rawValue
         case .scrollToEdge: return TheFence.Command.scrollToEdge.rawValue

@@ -105,7 +105,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeActivateRequest,
                 parameters: FenceParameterBlocks.elementTarget
-                    + [param(.action, .string), FenceParameterBlocks.incrementCount] + FenceParameterBlocks.expectation,
+                    + [param(.action, .string)] + FenceParameterBlocks.expectation,
                 description: "Perform primary accessibility activation on a semantic UI element, "
                     + "or one of its named accessibility actions."
             )

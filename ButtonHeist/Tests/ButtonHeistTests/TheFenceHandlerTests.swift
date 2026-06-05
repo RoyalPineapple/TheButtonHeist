@@ -3,31 +3,6 @@ import Network
 @testable import ButtonHeist
 import TheScore
 
-private extension Array where Element == (ClientMessage, String?) {
-    var adjustmentMessages: [ClientMessage] {
-        compactMap { message, _ in
-            switch message {
-            case .increment, .decrement:
-                return message
-            default:
-                return nil
-            }
-        }
-    }
-}
-
-private extension ClientMessage {
-    var isIncrement: Bool {
-        if case .increment = self { return true }
-        return false
-    }
-
-    var isDecrement: Bool {
-        if case .decrement = self { return true }
-        return false
-    }
-}
-
 private extension AccessibilityTrace.Delta {
     var testKind: String {
         switch self {
@@ -849,7 +824,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "direction": .string("left"),
             ]),
         ])
-        guard let (message, _ ) = mockConn.sent.last,
+        guard let message = mockConn.sent.sentPlanMessages.last,
               case .swipe(let target) = message,
               case .elementDirection(let elementTarget, let direction) = target.selection else {
             XCTFail("Expected element direction swipe to lower to element direction swipe")
@@ -925,7 +900,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     "end": .object(["x": .double(300.0), "y": .double(600.0)]),
                 ]),
             ])
-        guard let (message, _) = mockConn.sent.last,
+        guard let message = mockConn.sent.sentPlanMessages.last,
               case .drag(let target) = message else {
             XCTFail("Expected drag message")
             return
@@ -1212,7 +1187,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testActivateWithIncrementCountOmittedDispatchesOnce() async throws {
+    func testActivateActionIncrementDispatchesSingleIncrementStep() async throws {
         let (fence, mockConn) = makeConnectedFence()
 
         let response = try await fence.execute(command: .activate, values: [
@@ -1220,149 +1195,10 @@ final class TheFenceHandlerTests: XCTestCase {
             "action": .string("increment"),
         ])
 
-        guard case .action = response else {
-            return XCTFail("Expected action response, got \(response)")
-        }
-        XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 1)
-        XCTAssertTrue(mockConn.sent.adjustmentMessages.allSatisfy { $0.isIncrement })
-    }
-
-    @ButtonHeistActor
-    func testActivateWithIncrementCountOneDispatchesOnce() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-
-        let response = try await fence.execute(command: .activate, values: [
-            "target": targetValue(identifier: "myElement"),
-            "action": .string("increment"),
-            "count": .int(1),
-        ])
-
-        guard case .action = response else {
-            return XCTFail("Expected action response, got \(response)")
-        }
-        XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 1)
-        XCTAssertTrue(mockConn.sent.adjustmentMessages.allSatisfy { $0.isIncrement })
-    }
-
-    @ButtonHeistActor
-    func testActivateWithIncrementCountDispatchesMultipleExistingCommands() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-
-        let response = try await fence.execute(command: .activate, values: [
-            "target": targetValue(identifier: "myElement"),
-            "action": .string("increment"),
-            "count": .int(3),
-        ])
-
-        guard case .action = response else {
-            return XCTFail("Expected action response, got \(response)")
-        }
-        XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 3)
-        XCTAssertTrue(mockConn.sent.adjustmentMessages.allSatisfy { $0.isIncrement })
-    }
-
-    @ButtonHeistActor
-    func testActivateWithDecrementCountDispatchesMultipleExistingCommands() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-
-        let response = try await fence.execute(command: .activate, values: [
-            "target": targetValue(identifier: "myElement"),
-            "action": .string("decrement"),
-            "count": .int(2),
-        ])
-
-        guard case .action = response else {
-            return XCTFail("Expected action response, got \(response)")
-        }
-        XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 2)
-        XCTAssertTrue(mockConn.sent.adjustmentMessages.allSatisfy { $0.isDecrement })
-    }
-
-    @ButtonHeistActor
-    func testActivateWithIncrementRejectsCountZero() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "action": .string("increment"),
-                "count": .int(0),
-            ],
-            contains: "schema validation failed for count: observed integer 0; expected integer in 1...100"
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateWithIncrementRejectsNegativeCount() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "action": .string("increment"),
-                "count": .int(-1),
-            ],
-            contains: "schema validation failed for count: observed integer -1; expected integer in 1...100"
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateWithIncrementRejectsCountAboveMaximum() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "action": .string("increment"),
-                "count": .int(101),
-            ],
-            contains: "schema validation failed for count: observed integer 101; expected integer in 1...100"
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateRejectsCountWithoutAdjustmentAction() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: ["target": targetValue(identifier: "myElement"), "count": .int(2)],
-            contains: "schema validation failed for count: observed integer 2; expected only valid with increment or decrement"
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateRejectsCountWithCustomAction() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "action": .string("Delete"),
-                "count": .int(2),
-            ],
-            contains: "schema validation failed for count: observed integer 2; expected only valid with increment or decrement"
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateRejectsOutOfRangeCountWithCustomActionAsNonAdjustment() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "action": .string("Delete"),
-                "count": .int(200),
-            ],
-            contains: "schema validation failed for count: observed integer 200; expected only valid with increment or decrement"
-        )
-    }
-
-    @ButtonHeistActor
-    func testActivateTreatsActionPrefixAsLiteralCustomActionName() async {
-        await assertValidationError(
-            command: .activate,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "action": .string("action:increment"),
-                "count": .int(2),
-            ],
-            contains: "schema validation failed for count: observed integer 2; expected only valid with increment or decrement"
-        )
+        XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
+        let commands = mockConn.sent.sentHeistActionCommands
+        XCTAssertEqual(commands.count, 1)
+        XCTAssertEqual(commands.first?.wireType, .increment)
     }
 
     @ButtonHeistActor
@@ -1372,71 +1208,6 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: ["target": targetValue(identifier: "myElement"), "action": .string("")],
             equals: "schema validation failed for action: observed string \"\"; expected non-empty string"
         )
-    }
-
-    @ButtonHeistActor
-    func testActivateWithIncrementCountFailsOnIntermediateFailure() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        var callCount = 0
-        mockConn.autoResponse = { message in
-            if case .increment = message {
-                callCount += 1
-                if callCount == 2 {
-                    return .actionResult(ActionResult(
-                        success: false,
-                        method: .increment,
-                        message: "adjustment failed"
-                    ))
-                }
-            }
-            return .actionResult(ActionResult(success: true, method: .increment))
-        }
-
-        let response = try await fence.execute(command: .activate, values: [
-            "target": targetValue(identifier: "myElement"),
-            "action": .string("increment"),
-            "count": .int(3),
-        ])
-
-        guard case .action(_, let result, _) = response else {
-            return XCTFail("Expected action failure response, got \(response)")
-        }
-        XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 2)
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .increment)
-        XCTAssertEqual(result.message, "adjustment failed")
-    }
-
-    @ButtonHeistActor
-    func testActivateWithIncrementCountReturnsFinalFailureResult() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        var callCount = 0
-        mockConn.autoResponse = { message in
-            if case .increment = message {
-                callCount += 1
-                if callCount == 3 {
-                    return .actionResult(ActionResult(
-                        success: false,
-                        method: .increment,
-                        message: "final adjustment failed"
-                    ))
-                }
-            }
-            return .actionResult(ActionResult(success: true, method: .increment))
-        }
-
-        let response = try await fence.execute(command: .activate, values: [
-            "target": targetValue(identifier: "myElement"),
-            "action": .string("increment"),
-            "count": .int(3),
-        ])
-
-        guard case .action(_, let result, _) = response else {
-            return XCTFail("Expected final action response, got \(response)")
-        }
-        XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 3)
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.message, "final adjustment failed")
     }
 
     // MARK: - Text Input Validation
@@ -1475,12 +1246,10 @@ final class TheFenceHandlerTests: XCTestCase {
             "target": targetValue(identifier: "search_field"),
         ])
 
-        guard case .action = response else {
-            return XCTFail("Expected action response, got \(response)")
-        }
-        guard let (message, _) = mockConn.sent.last,
+        XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
+        guard let message = mockConn.sent.sentPlanMessages.last,
               case .typeText(let target) = message else {
-            return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.last))")
+            return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
         XCTAssertEqual(target.text, "hello")
         XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "search_field")))
@@ -1712,7 +1481,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "predicate": .object(["type": .string("screen_changed")]),
             "timeout": .double(8.0),
         ])
-        guard let (message, _) = mockConn.sent.last,
+        guard let message = mockConn.sent.sentPlanMessages.last,
               case .wait(let target) = message else {
             return XCTFail("Expected wait message")
         }
@@ -1742,11 +1511,11 @@ final class TheFenceHandlerTests: XCTestCase {
             ]),
         ])
 
-        guard case .action(_, _, let expectation) = response else {
-            return XCTFail("Expected action response, got \(response)")
+        guard let leaf = response.leafAction else {
+            return XCTFail("Expected single-step action response, got \(response)")
         }
-        XCTAssertEqual(expectation?.met, false)
-        XCTAssertEqual(expectation?.actual, "no elements removed")
+        XCTAssertEqual(leaf.expectation?.met, false)
+        XCTAssertEqual(leaf.expectation?.actual, "no elements removed")
     }
 
     @ButtonHeistActor
@@ -1773,11 +1542,11 @@ final class TheFenceHandlerTests: XCTestCase {
             "timeout": .double(0.2),
         ])
 
-        guard case .action(_, _, let expectation) = response else {
-            return XCTFail("Expected action response, got \(response)")
+        guard let leaf = response.leafAction else {
+            return XCTFail("Expected single-step action response, got \(response)")
         }
-        XCTAssertEqual(expectation?.met, false)
-        XCTAssertEqual(expectation?.actual, "timed out after 0.2s — expectation not met")
+        XCTAssertEqual(leaf.expectation?.met, false)
+        XCTAssertEqual(leaf.result.message, "timed out after 0.2s — expectation not met")
     }
 
     @ButtonHeistActor
@@ -1798,7 +1567,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testActionExpectationUsesWaitObservationInsteadOfActionTraceShortcut() async throws {
+    func testActionExpectationExecutesAsServerSideExpectationStep() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "Home")))
         let interface = makeReceiptTestInterface([
@@ -1837,17 +1606,19 @@ final class TheFenceHandlerTests: XCTestCase {
             ]),
         ])
 
-        XCTAssertEqual(mockConn.sent.count, 2)
-        guard case .wait(let waitTarget) = mockConn.sent.last?.0 else {
-            return XCTFail("Expected action expectation to execute a wait message, got \(String(describing: mockConn.sent.last))")
+        // The action and its expectation cross the wire as one heist plan; the
+        // expectation is a server-side step on the action, not a separate
+        // client-issued wait round-trip.
+        XCTAssertEqual(mockConn.sent.count, 1)
+        guard case .action(let step)? = mockConn.sent.sentHeistPlan?.body.first else {
+            return XCTFail("Expected a single action step, got \(String(describing: mockConn.sent.sentHeistPlan))")
         }
-        XCTAssertEqual(waitTarget.predicate, predicate)
+        XCTAssertEqual(step.expectation?.predicate, .predicate(predicate))
 
-        guard case .action(_, let result, let expectation) = response else {
-            return XCTFail("Expected action response, got \(response)")
+        guard let leaf = response.leafAction else {
+            return XCTFail("Expected single-step action response, got \(response)")
         }
-        XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(expectation?.met, true)
+        XCTAssertEqual(leaf.expectation?.met, true)
     }
 
     // MARK: - Expectation Parsing

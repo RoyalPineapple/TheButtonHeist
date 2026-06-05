@@ -129,6 +129,27 @@ public enum FenceResponse {
         return nil
     }
 
+    /// A `.heistExecution` whose plan executed exactly one leaf step (action or
+    /// wait) renders as a single action — a single command and a one-step heist
+    /// read as one action line, not a heist report. `nil` for multi-step or
+    /// control-flow heists, which keep the full report shape.
+    var singleLeafActionRendering: (command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?)? {
+        guard case .heistExecution(_, let result, _) = self,
+              result.steps.count == 1,
+              let step = result.steps.first,
+              let actionResult = step.actionResult else { return nil }
+        switch step.kind {
+        case .action:
+            guard let command = step.actionCommand
+                .flatMap({ TheFence.Command(clientWireType: $0.clientWireType) }) else { return nil }
+            return (command, actionResult, step.expectation)
+        case .wait:
+            return (.wait, actionResult, step.expectation)
+        default:
+            return nil
+        }
+    }
+
     /// Builds an error response with typed metadata when the error belongs to TheFence.
     public static func failure(_ error: Error) -> FenceResponse {
         if let fenceError = error as? FenceError {

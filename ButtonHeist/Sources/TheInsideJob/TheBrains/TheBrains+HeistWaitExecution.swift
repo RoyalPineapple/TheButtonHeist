@@ -13,27 +13,15 @@ extension TheBrains {
         runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
-        let resolvedStep: ResolvedWaitStep
-        do {
-            resolvedStep = try step.resolve(in: environment)
-        } catch {
-            return HeistExecutionStepResult(
-                index: index,
-                path: path,
-                kind: .wait,
-                message: "could not resolve heist wait predicate: \(error)",
-                durationMs: elapsedMilliseconds(since: start),
-                stopsHeist: true
-            )
-        }
-        let receipt = await runtime.wait(resolvedStep, nil)
-        return HeistExecutionStepResult(
+        // A wait is a step with no command: just the predicate wait.
+        await executeStep(
+            command: nil,
+            wait: step,
             index: index,
             path: path,
-            kind: .wait,
-            actionResult: receipt.actionResult,
-            expectation: receipt.expectation,
-            durationMs: elapsedMilliseconds(since: start)
+            start: start,
+            runtime: runtime,
+            environment: environment
         )
     }
 }

@@ -50,7 +50,6 @@ Parameters:
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
 | `action` | `string` | no | - | - |
-| `count` | `integer` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 

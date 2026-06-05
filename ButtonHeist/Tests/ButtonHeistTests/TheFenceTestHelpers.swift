@@ -44,6 +44,59 @@ extension TheFence {
     }
 }
 
+extension FenceResponse {
+    /// The leaf action for assertions, whether the response is a direct
+    /// `.action` (e.g. the `get_pasteboard` read) or a single-leaf
+    /// `.heistExecution` (a single command executed as a one-step heist).
+    @ButtonHeistActor
+    var leafAction: (command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?)? {
+        if case .action(let command, let result, let expectation) = self {
+            return (command, result, expectation)
+        }
+        return singleLeafActionRendering
+    }
+}
+
+extension Array where Element == (ClientMessage, String?) {
+    /// The single `HeistPlan` sent for a command, when execution routed through
+    /// the one-step heist pipeline.
+    var sentHeistPlan: HeistPlan? {
+        for (message, _) in self {
+            if case .heistPlan(let plan) = message { return plan }
+        }
+        return nil
+    }
+
+    /// Action commands inside the sent heist plan, in order — the wire-level
+    /// equivalent of the old per-message dispatch list now that a command
+    /// executes as a plan.
+    var sentHeistActionCommands: [HeistActionCommand] {
+        guard let plan = sentHeistPlan else { return [] }
+        return plan.body.compactMap { step in
+            if case .action(let action) = step { return action.command }
+            return nil
+        }
+    }
+
+    /// The sent heist plan's body resolved back to `ClientMessage`s (action and
+    /// wait steps) — what a command now puts on the wire, since a single command
+    /// executes as a one-step plan rather than a bare message.
+    var sentPlanMessages: [ClientMessage] {
+        guard let plan = sentHeistPlan else { return [] }
+        return plan.body.compactMap { step in
+            switch step {
+            case .action(let action):
+                return try? action.command.resolve(in: .empty)
+            case .wait(let wait):
+                guard let resolved = try? wait.resolve(in: .empty) else { return nil }
+                return .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))
+            default:
+                return nil
+            }
+        }
+    }
+}
+
 func semanticTarget(
     label: String? = nil,
     identifier: String? = nil,

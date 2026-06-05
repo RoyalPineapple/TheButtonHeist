@@ -62,13 +62,6 @@ extension TheFence.CommandArgumentEnvelope {
         return value
     }
 
-    func countArgument() throws -> TheFence.CountArgument {
-        TheFence.CountArgument(
-            value: try schemaInteger("count"),
-            observed: observedDescription(for: "count")
-        )
-    }
-
     func decodeElementTargetPayload() throws -> ElementTarget {
         let value = HeistValue.object(argumentValues)
         do {

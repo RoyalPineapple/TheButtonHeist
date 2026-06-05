@@ -231,7 +231,7 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
 }
 
 @Test
-func nonDurableActionShapeFailsAdmissionAndRenderingWithSameReason() throws {
+func nonDurableActionShapeExecutesButFailsCanonicalRendering() throws {
     let command = HeistActionCommand.rotor(
         selection: .index(0),
         target: .target(.predicate(.label("Article"))),
@@ -240,9 +240,10 @@ func nonDurableActionShapeFailsAdmissionAndRenderingWithSameReason() throws {
     let plan = HeistPlan(body: [.action(try ActionStep(command: command))])
     let reason = try #require(command.durableHeistActionFailure)
 
-    #expect(plan.runtimeAdmissionFailures().contains {
+    // Durability is enforced at rendering, not execution: a non-durable shape is
+    // admissible for execution but cannot be rendered to canonical Swift DSL.
+    #expect(!plan.runtimeAdmissionFailures().contains {
         $0.contract == "durable heist action support"
-            && $0.observed == reason
     })
 
     do {
@@ -270,9 +271,12 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
         let reason = try #require(command.durableHeistActionFailure)
 
         #expect(reason.contains("viewport debug command"))
-        #expect(plan.runtimeAdmissionFailures().contains {
+
+        // Durability is a recording/DSL concern, not a runtime-execution one:
+        // viewport commands execute through the heist pipeline (admission no
+        // longer rejects them) but cannot be rendered to canonical Swift DSL.
+        #expect(!plan.runtimeAdmissionFailures().contains {
             $0.contract == "durable heist action support"
-                && $0.observed == reason
         })
 
         do {
@@ -303,10 +307,11 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
     }
     """.utf8))
 
-    #expect(jsonPlan.runtimeAdmissionFailures().contains {
-        $0.contract == "durable heist action support"
-            && $0.observed == "scroll is a viewport debug command, not a durable heist action"
-    })
+    // A decoded viewport plan is admissible for execution but not renderable.
+    #expect(jsonPlan.runtimeAdmissionFailures().isEmpty)
+    #expect(throws: HeistCanonicalSwiftDSLError.self) {
+        _ = try jsonPlan.canonicalSwiftDSL()
+    }
 }
 
 private let fullASTJSON = """

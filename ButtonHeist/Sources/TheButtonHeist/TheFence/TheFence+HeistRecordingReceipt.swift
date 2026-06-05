@@ -4,10 +4,16 @@ import TheScore
 private let heistRecordingLogger = Logger(subsystem: "com.buttonheist.fence", category: "heist")
 
 extension TheFence {
+    /// Record the executed command as a durable heist step when recording is
+    /// active. Driven by the one-step heist execution evidence — the action's
+    /// own `ActionResult` and the server-evaluated `ExpectationResult` — not a
+    /// reconstructed action response. `actionResult`/`expectation` are `nil`
+    /// for non-action commands (the composition decides discard/ignore from the
+    /// command alone before touching them).
     func recordHeistStep(
         _ request: ParsedRequest,
-        dispatchedResponse: FenceResponse,
-        validatedResponse: FenceResponse
+        actionResult: ActionResult?,
+        expectation: ExpectationResult?
     ) {
         guard playback.isIdle else { return }
         guard heistStore.isRecordingHeist else { return }
@@ -16,8 +22,8 @@ extension TheFence {
         do {
             effect = try HeistRecordingComposition(
                 request: request,
-                dispatchedResponse: dispatchedResponse,
-                validatedResponse: validatedResponse
+                actionResult: actionResult,
+                expectation: expectation
             ).effect()
         } catch {
             heistRecordingLogger.error(

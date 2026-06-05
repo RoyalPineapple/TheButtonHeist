@@ -337,6 +337,7 @@ final class MockConnection: TransportReachabilityConnecting {
             index: index,
             path: path,
             kind: .action,
+            actionCommand: action.command,
             actionResult: actionResult,
             expectationActionResult: expectation?.actionResult,
             expectation: expectation?.result,
