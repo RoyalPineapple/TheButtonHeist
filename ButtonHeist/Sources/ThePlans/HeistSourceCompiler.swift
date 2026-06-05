@@ -40,7 +40,6 @@ public struct HeistSourceCompiler: Sendable {
 
         HeistSourceCompilerTrace.write("preparing Swift heist compile")
         let packageRoot = try packageRoot ?? LocalThePlansPackage.resolve()
-        let thePlansSource = try LocalThePlansPackage.thePlansSourceDirectory(in: packageRoot)
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("heist-source-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true)
@@ -56,6 +55,18 @@ public struct HeistSourceCompiler: Sendable {
         try FileManager.default.createDirectory(at: buildDirectory, withIntermediateDirectories: true)
         let moduleCache = buildDirectory.appendingPathComponent("ModuleCache", isDirectory: true)
         try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
+
+        if let artifacts = try ThePlansBuildArtifacts.resolve(in: packageRoot) {
+            return try compileWithBuiltThePlansArtifacts(
+                source: source,
+                compileDirectory: compileDirectory,
+                buildDirectory: buildDirectory,
+                moduleCache: moduleCache,
+                artifacts: artifacts
+            )
+        }
+
+        let thePlansSource = try LocalThePlansPackage.thePlansSourceDirectory(in: packageRoot)
 
         HeistSourceCompilerTrace.write("compiling ThePlans module")
         let moduleResult = try ProcessRunner.run(
@@ -82,6 +93,52 @@ public struct HeistSourceCompiler: Sendable {
                 buildDirectory: buildDirectory,
                 moduleCache: moduleCache,
                 executableURL: executableURL
+            )
+        )
+        guard compilerResult.exitCode == 0 else {
+            throw HeistSourceCompilerError.compileFailed(
+                source.path,
+                compilerResult.diagnostics
+            )
+        }
+
+        HeistSourceCompilerTrace.write("running Swift heist wrapper")
+        let result = try ProcessRunner.run(
+            executable: executableURL,
+            arguments: []
+        )
+
+        guard result.exitCode == 0 else {
+            throw HeistSourceCompilerError.compileFailed(
+                source.path,
+                result.diagnostics
+            )
+        }
+
+        do {
+            return try HeistPlan.decodeValidatedHeistJSON(from: result.stdout, sourceURL: source)
+        } catch {
+            throw HeistSourceCompilerError.invalidCompilerOutput(String(describing: error))
+        }
+    }
+
+    private func compileWithBuiltThePlansArtifacts(
+        source: URL,
+        compileDirectory: URL,
+        buildDirectory: URL,
+        moduleCache: URL,
+        artifacts: ThePlansBuildArtifacts
+    ) throws -> HeistPlan {
+        let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
+        HeistSourceCompilerTrace.write("compiling Swift heist wrapper with built ThePlans artifacts")
+        let compilerResult = try ProcessRunner.run(
+            executable: URL(fileURLWithPath: "/usr/bin/env"),
+            arguments: swiftcPlanCompilerArguments(
+                compileDirectory: compileDirectory,
+                buildDirectory: buildDirectory,
+                moduleCache: moduleCache,
+                executableURL: executableURL,
+                builtArtifacts: artifacts
             )
         )
         guard compilerResult.exitCode == 0 else {
@@ -180,9 +237,10 @@ public struct HeistSourceCompiler: Sendable {
         compileDirectory: URL,
         buildDirectory: URL,
         moduleCache: URL,
-        executableURL: URL
+        executableURL: URL,
+        builtArtifacts: ThePlansBuildArtifacts? = nil
     ) -> [String] {
-        [
+        var arguments = [
             "swiftc",
             "-j",
             "1",
@@ -193,19 +251,28 @@ public struct HeistSourceCompiler: Sendable {
             "-module-cache-path",
             moduleCache.path,
             "-I",
-            buildDirectory.path,
-            "-L",
-            buildDirectory.path,
-            "-lThePlans",
-            "-Xlinker",
-            "-rpath",
-            "-Xlinker",
-            buildDirectory.path,
+            builtArtifacts?.modulesDirectory.path ?? buildDirectory.path,
             "-o",
             executableURL.path,
             compileDirectory.appendingPathComponent("PlanSource.swift").path,
             compileDirectory.appendingPathComponent("main.swift").path,
         ]
+
+        if let builtArtifacts {
+            arguments.append(contentsOf: builtArtifacts.objectFiles.map(\.path))
+        } else {
+            arguments.append(contentsOf: [
+                "-L",
+                buildDirectory.path,
+                "-lThePlans",
+                "-Xlinker",
+                "-rpath",
+                "-Xlinker",
+                buildDirectory.path,
+            ])
+        }
+
+        return arguments
     }
 
     private func swiftSourceFiles(in sourceDirectory: URL) throws -> [URL] {
@@ -332,6 +399,73 @@ private enum LocalThePlansPackage {
         let rootSources = url.appendingPathComponent("ButtonHeist/Sources/ThePlans")
         return FileManager.default.fileExists(atPath: nestedSources.path)
             || FileManager.default.fileExists(atPath: rootSources.path)
+    }
+}
+
+private struct ThePlansBuildArtifacts {
+    let modulesDirectory: URL
+    let objectFiles: [URL]
+
+    static func resolve(in packageRoot: URL) throws -> ThePlansBuildArtifacts? {
+        for buildDirectory in try candidateBuildDirectories(in: packageRoot) {
+            let modulesDirectory = buildDirectory.appendingPathComponent("Modules", isDirectory: true)
+            let module = modulesDirectory.appendingPathComponent("ThePlans.swiftmodule")
+            let objectsDirectory = buildDirectory.appendingPathComponent("ThePlans.build", isDirectory: true)
+            guard FileManager.default.fileExists(atPath: module.path) else {
+                continue
+            }
+            let objectFiles = try swiftObjectFiles(in: objectsDirectory)
+            guard !objectFiles.isEmpty else {
+                continue
+            }
+            return ThePlansBuildArtifacts(
+                modulesDirectory: modulesDirectory,
+                objectFiles: objectFiles
+            )
+        }
+
+        return nil
+    }
+
+    private static func candidateBuildDirectories(in packageRoot: URL) throws -> [URL] {
+        let buildRoot = packageRoot.appendingPathComponent(".build", isDirectory: true)
+        var candidates = [
+            buildRoot.appendingPathComponent("debug", isDirectory: true),
+            buildRoot.appendingPathComponent("release", isDirectory: true),
+        ]
+
+        if let entries = try? FileManager.default.contentsOfDirectory(
+            at: buildRoot,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for entry in entries {
+                let values = try entry.resourceValues(forKeys: [.isDirectoryKey])
+                guard values.isDirectory == true else { continue }
+                candidates.append(entry.appendingPathComponent("debug", isDirectory: true))
+                candidates.append(entry.appendingPathComponent("release", isDirectory: true))
+            }
+        }
+
+        return candidates
+    }
+
+    private static func swiftObjectFiles(in directory: URL) throws -> [URL] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        return try entries
+            .filter { $0.lastPathComponent.hasSuffix(".swift.o") }
+            .filter {
+                let values = try $0.resourceValues(forKeys: [.isRegularFileKey])
+                return values.isRegularFile == true
+            }
+            .sorted { $0.path < $1.path }
     }
 }
 
