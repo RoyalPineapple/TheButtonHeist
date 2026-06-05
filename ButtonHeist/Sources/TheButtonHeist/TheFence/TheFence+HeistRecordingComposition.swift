@@ -118,15 +118,25 @@ enum HeistRecordingEffectPolicy {
         _ message: ClientMessage,
         actionResult: ActionResult
     ) -> Bool {
-        guard actionResult.settled != false,
-              actionResult.subjectEvidence != nil,
-              actionResult.accessibilityTrace?.captures.first != nil
-        else { return false }
         if message.requiresMinimumSemanticRecordingTarget {
+            // A semantic action records a minimum durable target derived from
+            // settled before-state evidence. A post-action state that never
+            // settled is not durable proof, so the step is dropped rather than
+            // recorded from the caller's raw input. Settled evidence that
+            // cannot disambiguate the subject is dropped for the same reason.
+            if actionResult.settled == false {
+                return true
+            }
+            guard actionResult.subjectEvidence != nil,
+                  actionResult.accessibilityTrace?.captures.first != nil
+            else { return false }
             return RecordingTargetSelection.minimumTarget(actionResult: actionResult) == nil
         }
+        guard actionResult.settled != false,
+              let evidence = actionResult.subjectEvidence,
+              actionResult.accessibilityTrace?.captures.first != nil
+        else { return false }
         if case .oneFingerTap = message,
-           let evidence = actionResult.subjectEvidence,
            RecordingTargetSelection.isActivatable(evidence.element) {
             return RecordingTargetSelection.minimumTarget(actionResult: actionResult) == nil
         }

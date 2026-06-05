@@ -44,6 +44,8 @@ Every interaction during recording has one explicit effect:
 - `scroll_to_visible` as setup for later semantic commands.
 - Manual scroll before a semantic action when the semantic action is the
   durable intent.
+- Semantic actions whose post-action state never settled — without a settled
+  trace there is no durable evidence to record a minimum target from.
 - Ambiguous or unrecordable semantic evidence.
 - Viewport geometry, capture IDs, runtime IDs, live object references,
   containerNames, or capture-local IDs as semantic identity.
