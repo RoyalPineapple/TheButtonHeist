@@ -39,9 +39,7 @@ public struct HeistSourceCompiler: Sendable {
         }
 
         HeistSourceCompilerTrace.write("preparing Swift heist compile")
-        HeistSourceCompilerTrace.write("resolving ButtonHeist package root")
-        let packageRoot = try packageRoot ?? LocalThePlansPackage.resolve()
-        HeistSourceCompilerTrace.write("resolved ButtonHeist package root: \(packageRoot.path)")
+        let overrideArtifacts = try ThePlansBuildArtifacts.resolveEnvironmentOverride()
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("heist-source-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true)
@@ -58,6 +56,20 @@ public struct HeistSourceCompiler: Sendable {
         let moduleCache = buildDirectory.appendingPathComponent("ModuleCache", isDirectory: true)
         try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
 
+        if let artifacts = overrideArtifacts {
+            HeistSourceCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
+            return try compileWithBuiltThePlansArtifacts(
+                source: source,
+                compileDirectory: compileDirectory,
+                buildDirectory: buildDirectory,
+                moduleCache: moduleCache,
+                artifacts: artifacts
+            )
+        }
+
+        HeistSourceCompilerTrace.write("resolving ButtonHeist package root")
+        let packageRoot = try packageRoot ?? LocalThePlansPackage.resolve()
+        HeistSourceCompilerTrace.write("resolved ButtonHeist package root: \(packageRoot.path)")
         if let artifacts = try ThePlansBuildArtifacts.resolve(in: packageRoot) {
             HeistSourceCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
             return try compileWithBuiltThePlansArtifacts(
@@ -413,7 +425,7 @@ private struct ThePlansBuildArtifacts {
     let modulesDirectory: URL
     let objectFiles: [URL]
 
-    static func resolve(in packageRoot: URL) throws -> ThePlansBuildArtifacts? {
+    static func resolveEnvironmentOverride() throws -> ThePlansBuildArtifacts? {
         if let override = ProcessInfo.processInfo.environment["HEIST_THEPLANS_BUILD_DIR"],
            !override.isEmpty {
             let buildDirectory = URL(fileURLWithPath: override, isDirectory: true)
@@ -423,6 +435,10 @@ private struct ThePlansBuildArtifacts {
             return artifacts
         }
 
+        return nil
+    }
+
+    static func resolve(in packageRoot: URL) throws -> ThePlansBuildArtifacts? {
         for buildDirectory in try candidateBuildDirectories(in: packageRoot) {
             if let artifacts = try resolveBuildDirectory(buildDirectory) {
                 return artifacts
