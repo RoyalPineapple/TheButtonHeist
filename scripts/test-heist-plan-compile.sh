@@ -11,6 +11,7 @@ if [[ ! -x "$HEIST_PLAN_TOOL" ]]; then
     echo "Error: heist-plan executable not found at $HEIST_PLAN_TOOL" >&2
     exit 1
 fi
+HEIST_THEPLANS_BUILD_DIR="${HEIST_THEPLANS_BUILD_DIR:-$REPO_ROOT/ButtonHeist/.build/debug}"
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/heist-plan-compile.XXXXXX")"
 cleanup() {
@@ -40,7 +41,8 @@ try HeistPlan("compiled") {
 SWIFT
 
 echo "Compiling Swift fixture with heist-plan"
-HEIST_SOURCE_COMPILER_TRACE=1 "$HEIST_PLAN_TOOL" compile "$SOURCE" --entry makeHeist --output "$OUTPUT"
+HEIST_SOURCE_COMPILER_TRACE=1 HEIST_THEPLANS_BUILD_DIR="$HEIST_THEPLANS_BUILD_DIR" \
+    "$HEIST_PLAN_TOOL" compile "$SOURCE" --entry makeHeist --output "$OUTPUT"
 [[ -d "$OUTPUT" ]] || {
     echo "Error: compile did not produce a .heist package directory" >&2
     exit 1

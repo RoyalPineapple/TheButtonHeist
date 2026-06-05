@@ -39,7 +39,9 @@ public struct HeistSourceCompiler: Sendable {
         }
 
         HeistSourceCompilerTrace.write("preparing Swift heist compile")
+        HeistSourceCompilerTrace.write("resolving ButtonHeist package root")
         let packageRoot = try packageRoot ?? LocalThePlansPackage.resolve()
+        HeistSourceCompilerTrace.write("resolved ButtonHeist package root: \(packageRoot.path)")
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("heist-source-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true)
@@ -57,6 +59,7 @@ public struct HeistSourceCompiler: Sendable {
         try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
 
         if let artifacts = try ThePlansBuildArtifacts.resolve(in: packageRoot) {
+            HeistSourceCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
             return try compileWithBuiltThePlansArtifacts(
                 source: source,
                 compileDirectory: compileDirectory,
@@ -307,6 +310,7 @@ public enum HeistSourceCompilerError: Error, Sendable, Equatable, CustomStringCo
     case invalidEntry(String)
     case sourceFileNotFound(String)
     case packageRootNotFound
+    case buildArtifactsNotFound(String)
     case compileFailed(String, String)
     case invalidCompilerOutput(String)
 
@@ -318,6 +322,8 @@ public enum HeistSourceCompilerError: Error, Sendable, Equatable, CustomStringCo
             return "Swift heist source file not found: \(path)"
         case .packageRootNotFound:
             return "could not find local ButtonHeist package root for ThePlans"
+        case .buildArtifactsNotFound(let path):
+            return "could not find built ThePlans artifacts at \(path)"
         case .compileFailed(let path, let diagnostics):
             return "failed to compile Swift heist source \(path): \(diagnostics)"
         case .invalidCompilerOutput(let diagnostics):
@@ -403,28 +409,45 @@ private enum LocalThePlansPackage {
 }
 
 private struct ThePlansBuildArtifacts {
+    let buildDirectory: URL
     let modulesDirectory: URL
     let objectFiles: [URL]
 
     static func resolve(in packageRoot: URL) throws -> ThePlansBuildArtifacts? {
+        if let override = ProcessInfo.processInfo.environment["HEIST_THEPLANS_BUILD_DIR"],
+           !override.isEmpty {
+            let buildDirectory = URL(fileURLWithPath: override, isDirectory: true)
+            guard let artifacts = try resolveBuildDirectory(buildDirectory) else {
+                throw HeistSourceCompilerError.buildArtifactsNotFound(buildDirectory.path)
+            }
+            return artifacts
+        }
+
         for buildDirectory in try candidateBuildDirectories(in: packageRoot) {
-            let modulesDirectory = buildDirectory.appendingPathComponent("Modules", isDirectory: true)
-            let module = modulesDirectory.appendingPathComponent("ThePlans.swiftmodule")
-            let objectsDirectory = buildDirectory.appendingPathComponent("ThePlans.build", isDirectory: true)
-            guard FileManager.default.fileExists(atPath: module.path) else {
-                continue
+            if let artifacts = try resolveBuildDirectory(buildDirectory) {
+                return artifacts
             }
-            let objectFiles = try swiftObjectFiles(in: objectsDirectory)
-            guard !objectFiles.isEmpty else {
-                continue
-            }
-            return ThePlansBuildArtifacts(
-                modulesDirectory: modulesDirectory,
-                objectFiles: objectFiles
-            )
         }
 
         return nil
+    }
+
+    private static func resolveBuildDirectory(_ buildDirectory: URL) throws -> ThePlansBuildArtifacts? {
+        let modulesDirectory = buildDirectory.appendingPathComponent("Modules", isDirectory: true)
+        let module = modulesDirectory.appendingPathComponent("ThePlans.swiftmodule")
+        let objectsDirectory = buildDirectory.appendingPathComponent("ThePlans.build", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: module.path) else {
+            return nil
+        }
+        let objectFiles = try swiftObjectFiles(in: objectsDirectory)
+        guard !objectFiles.isEmpty else {
+            return nil
+        }
+        return ThePlansBuildArtifacts(
+            buildDirectory: buildDirectory,
+            modulesDirectory: modulesDirectory,
+            objectFiles: objectFiles
+        )
     }
 
     private static func candidateBuildDirectories(in packageRoot: URL) throws -> [URL] {
