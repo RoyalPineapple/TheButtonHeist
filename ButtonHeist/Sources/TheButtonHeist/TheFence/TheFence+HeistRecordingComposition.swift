@@ -15,8 +15,8 @@ enum HeistRecordingEffect {
 /// dispatch commands, validate expectations, resolve targets, or write storage.
 struct HeistRecordingComposition {
     let request: TheFence.ParsedRequest
-    let dispatchedResponse: FenceResponse
-    let validatedResponse: FenceResponse
+    let actionResult: ActionResult?
+    let expectation: ExpectationResult?
 
     func effect() throws -> HeistRecordingEffect {
         if request.command.viewportDebugCommand != nil {
@@ -25,16 +25,15 @@ struct HeistRecordingComposition {
         guard request.command.heistPrimitiveCommand != nil else {
             return .ignore
         }
-        guard let dispatchedReceipt = dispatchedResponse.heistRecordingReceipt,
-              dispatchedReceipt.actionResult.success else {
+        guard let actionResult, actionResult.success else {
             return HeistRecordingEffectPolicy.unrecordedSemanticEffect(for: request)
         }
-        guard let finalReceipt = validatedResponse.heistRecordingReceipt,
-              finalReceipt.shouldRecord else {
+        // The recorded expectation must not have failed.
+        guard expectation?.met != false else {
             return HeistRecordingEffectPolicy.unrecordedSemanticEffect(for: request)
         }
         if request.expectationPayload.expectation != nil,
-           finalReceipt.expectation?.met != true {
+           expectation?.met != true {
             return HeistRecordingEffectPolicy.unrecordedSemanticEffect(for: request)
         }
         guard let messages = request.executableMessages,
@@ -61,27 +60,27 @@ struct HeistRecordingComposition {
 
         guard !HeistRecordingEffectPolicy.hasUnrecordableSemanticEvidence(
             message,
-            actionResult: dispatchedReceipt.actionResult
+            actionResult: actionResult
         ) else {
             return .discardDeferredSetup
         }
 
         let normalizedCommand = RecordingActionNormalization.normalizedCommand(
             message,
-            actionResult: dispatchedReceipt.actionResult
+            actionResult: actionResult
         )
-        let expectation = RecordingExpectationInference.recordedExpectation(
+        let recordedExpectation = RecordingExpectationInference.recordedExpectation(
             request: request,
-            actionResult: dispatchedReceipt.actionResult,
-            finalReceipt: finalReceipt
+            actionResult: actionResult,
+            expectation: expectation
         )
         let step = HeistStep.action(try ActionStep(
             command: normalizedCommand,
-            expectation: expectation
+            expectation: recordedExpectation
         ))
         return HeistRecordingEffectPolicy.recordedActionEffect(
             command: normalizedCommand,
-            expectation: expectation,
+            expectation: recordedExpectation,
             step: step
         )
     }
@@ -148,10 +147,10 @@ enum RecordingExpectationInference {
     static func recordedExpectation(
         request: TheFence.ParsedRequest,
         actionResult: ActionResult,
-        finalReceipt: FenceResponse.HeistRecordingReceipt
+        expectation: ExpectationResult?
     ) -> WaitStep? {
         if let explicit = request.expectationPayload.expectation,
-           finalReceipt.expectation?.met == true {
+           expectation?.met == true {
             return WaitStep(
                 predicate: explicit,
                 timeout: request.expectationPayload.postActionValidationTimeout ?? 10
@@ -430,21 +429,5 @@ private extension ClientMessage {
              .getPasteboard, .requestScreen, .wait, .heistPlan:
             return false
         }
-    }
-}
-
-extension FenceResponse {
-    struct HeistRecordingReceipt {
-        let actionResult: ActionResult
-        let expectation: ExpectationResult?
-
-        var shouldRecord: Bool {
-            actionResult.success && expectation?.met != false
-        }
-    }
-
-    var heistRecordingReceipt: HeistRecordingReceipt? {
-        guard case .action(_, let result, let expectation) = self else { return nil }
-        return HeistRecordingReceipt(actionResult: result, expectation: expectation)
     }
 }

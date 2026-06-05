@@ -972,28 +972,33 @@ private func recordHeistStep(
         command: command,
         arguments: TheFence.CommandArgumentEnvelope(values: request)
     )
-    let dispatched = dispatchedResponse ?? defaultRecordingResponse(
-        command: command,
-        result: actionResult
-    )
-    let validated = validatedResponse ?? FenceResponse.action(
-        command: command,
-        result: actionResult ?? defaultActionResult(for: command),
-        expectation: expectation
-    )
+    // Map the test's chosen responses onto the one-step execution evidence the
+    // composition now consumes: the action's own ActionResult and the
+    // server-evaluated ExpectationResult. A non-action `dispatchedResponse`
+    // (e.g. `.interface`) yields a nil action result, exercising the
+    // command-only discard/ignore paths.
+    let resolvedActionResult: ActionResult?
+    if let dispatchedResponse {
+        resolvedActionResult = dispatchedResponse.actionResult
+    } else {
+        resolvedActionResult = actionResult ?? defaultActionResult(for: command)
+    }
+    let resolvedExpectation: ExpectationResult?
+    if let validatedResponse {
+        if case .action(_, _, let validatedExpectation) = validatedResponse {
+            resolvedExpectation = validatedExpectation
+        } else {
+            resolvedExpectation = nil
+        }
+    } else {
+        resolvedExpectation = expectation
+    }
     let effect = try HeistRecordingComposition(
         request: parsed,
-        dispatchedResponse: dispatched,
-        validatedResponse: validated
+        actionResult: resolvedActionResult,
+        expectation: resolvedExpectation
     ).effect()
     try recordingLifecycle(for: heistStore).apply(effect, to: heistStore)
-}
-
-private func defaultRecordingResponse(
-    command: TheFence.Command,
-    result: ActionResult?
-) -> FenceResponse {
-    .action(command: command, result: result ?? defaultActionResult(for: command))
 }
 
 private func defaultActionResult(for command: TheFence.Command) -> ActionResult {

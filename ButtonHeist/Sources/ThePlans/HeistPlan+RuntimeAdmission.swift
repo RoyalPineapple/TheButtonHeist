@@ -378,15 +378,12 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         environment: HeistExecutionEnvironment
     ) {
         validateCommandExpressions(command, path: path, scope: scope)
-        if let failure = command.durableHeistActionFailure {
-            fail(
-                path: path,
-                contract: "durable heist action support",
-                observed: failure,
-                correction: "Use a heist action shape that can execute, serialize, and render canonically."
-            )
-        }
-
+        // Durability (serialize/render canonically) is an authoring concern, not
+        // an execution one. It is enforced where heists are persisted — recording
+        // and canonical Swift DSL rendering — not here, so a transient plan (a
+        // single command or an inline run_heist) can execute any valid command,
+        // including viewport commands. This keeps single-step and heist execution
+        // on one pipeline; viewport commands still never enter recordings or the DSL.
         do {
             try command.assertResolvedPayloadAdmissible(in: environment)
         } catch {

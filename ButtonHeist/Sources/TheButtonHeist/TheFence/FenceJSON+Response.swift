@@ -77,10 +77,19 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 includeInterface: options.includeInterface
             ).encode(to: encoder)
         case .heistExecution:
-            guard let heist = projection.heist else {
-                preconditionFailure("Missing public heist projection for heist response")
+            if let single = response.singleLeafActionRendering {
+                let action = PublicActionProjection(
+                    commandName: single.command.rawValue,
+                    result: single.result,
+                    expectation: single.expectation
+                )
+                try PublicActionResponse(projection: action).encode(to: encoder)
+            } else {
+                guard let heist = projection.heist else {
+                    preconditionFailure("Missing public heist projection for heist response")
+                }
+                try PublicHeistExecutionResponse(projection: heist).encode(to: encoder)
             }
-            try PublicHeistExecutionResponse(projection: heist).encode(to: encoder)
         case .sessionState(let payload):
             try PublicSessionStateResponse(payload: payload).encode(to: encoder)
         case .targets(let targets, let defaultTarget):

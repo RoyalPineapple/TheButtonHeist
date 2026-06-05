@@ -47,6 +47,9 @@ extension FenceResponse {
                 options: options
             )
         case .heistExecution(let plan, let result, let accessibilityTrace):
+            if let single = singleLeafActionRendering {
+                return compactActionResult(command: single.command, single.result, expectation: single.expectation)
+            }
             return compactHeistFormatted(
                 PublicHeistExecutionProjection(
                     plan: plan,

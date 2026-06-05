@@ -50,7 +50,7 @@ public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
 public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
     static let command = Self("command")
-    static let container = Self("container"), count = Self("count")
+    static let container = Self("container")
     static let continuation = Self("continuation")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
@@ -342,6 +342,10 @@ enum FenceParameterBlocks: Sendable {
         param(.isModalBoundary, .boolean),
     ]
 
+    // `subtree.container` is a plain object matcher in the public schema — MCP
+    // (OpenAI) tool input schemas reject JSON Schema combinators, so this must
+    // never emit `oneOf`/`anyOf`/`allOf`. Pass the container name as
+    // `{ "container": { "containerName": "main_scroll" } }`.
     private static let subtreeContainer = param(
         .container,
         .object,
@@ -415,8 +419,6 @@ enum FenceParameterBlocks: Sendable {
         .duration, .number,
         maximum: GestureDuration.maximumSeconds
     )
-    static let incrementCount = param(.count, .integer, minimum: 1, maximum: 100)
-
     private static func matcherFieldSpec(_ name: String) -> FenceParameterSpec {
         guard let key = FenceParameterKey(rawValue: name) else {
             preconditionFailure("ElementTarget matcher field '\(name)' is not a Fence parameter key")

@@ -30,18 +30,6 @@ final class ElementActionRequestContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAdjustmentCountRangeDiagnosticKeepsObservedValue() async {
-        await assertExecutionError(
-            command: .activate,
-            arguments: [
-                "target": targetValue(identifier: "counter"),
-                "action": .string("increment"),
-                "count": .int(0),
-            ],
-            contains: "schema validation failed for count: observed integer 0; expected integer in 1...100"
-        )
-    }
-    @ButtonHeistActor
     func testScrollRejectsContainerObjectAtTypedBoundary() async {
         await assertExecutionError(
             command: .scroll,
