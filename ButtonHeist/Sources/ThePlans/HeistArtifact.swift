@@ -125,7 +125,10 @@ public enum HeistArtifactCodec {
                 .write(to: temporaryURL.appendingPathComponent(planFileName), options: .atomic)
 
             if fileManager.fileExists(atPath: packageURL.path) {
-                _ = try fileManager.replaceItemAt(packageURL, withItemAt: temporaryURL)
+                let backupURL = try fileManager.replaceItemAt(packageURL, withItemAt: temporaryURL)
+                if let backupURL {
+                    try? fileManager.removeItem(at: backupURL)
+                }
             } else {
                 try fileManager.moveItem(at: temporaryURL, to: packageURL)
             }

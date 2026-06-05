@@ -1,10 +1,13 @@
 import Foundation
 
 public extension HeistPlan {
-    static func decodeValidatedHeistJSON(from data: Data) throws -> HeistPlan {
+    static func decodeValidatedHeistJSON(
+        from data: Data,
+        sourceURL: URL = URL(fileURLWithPath: "compiled-swift-heist-output.json")
+    ) throws -> HeistPlan {
         let plan = try HeistArtifactCodec.decodePlanJSON(
             data,
-            at: URL(fileURLWithPath: "compiler-output.json")
+            at: sourceURL
         )
         try plan.assertRuntimeAdmissible()
         return plan
@@ -101,7 +104,7 @@ public struct HeistSourceCompiler: Sendable {
         }
 
         do {
-            return try HeistPlan.decodeValidatedHeistJSON(from: result.stdout)
+            return try HeistPlan.decodeValidatedHeistJSON(from: result.stdout, sourceURL: source)
         } catch {
             throw HeistSourceCompilerError.invalidCompilerOutput(String(describing: error))
         }
