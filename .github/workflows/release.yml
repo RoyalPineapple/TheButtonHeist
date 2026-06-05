@@ -14,205 +14,27 @@ permissions:
   contents: write
 
 jobs:
-  macos-guardrail:
-    name: macOS release guardrail
-    runs-on: macos-15
-    timeout-minutes: 25
-
-    steps:
-      - name: Checkout release tag
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
-
-      - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Init required submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
-
-      - name: Install Tuist
-        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
-
-      - name: Install Tuist dependencies
-        timeout-minutes: 12
-        run: tuist install
-
-      - name: Verify generated project is up to date
-        timeout-minutes: 3
-        run: |
-          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
-          ./scripts/clean-generated-projects.sh
-          git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
-            echo "::error::Generated Xcode project is out of date. Run 'scripts/generate-project.sh' and commit the changes."
-            echo "::group::Diff"
-            git diff -- '*.pbxproj' '*.xcworkspacedata'
-            echo "::endgroup::"
-            exit 1
-          }
-
-      - name: Run TheScoreTests
-        timeout-minutes: 5
-        run: tuist test TheScoreTests --no-selective-testing
-
-      - name: Run ButtonHeistTests
-        timeout-minutes: 5
-        run: |
-          set -eo pipefail
-          xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
-            -destination 'platform=macOS'
-
-      - name: Build & test CLI (SwiftPM)
-        timeout-minutes: 5
-        run: |
-          swift package --package-path ButtonHeistCLI resolve
-          swift build --package-path ButtonHeistCLI
-          scripts/swift-test-gate.sh ButtonHeistCLI
-
-      - name: Build & test MCP (SwiftPM)
-        timeout-minutes: 12
-        run: |
-          swift package --package-path ButtonHeistMCP resolve
-          swift build --package-path ButtonHeistMCP
-          scripts/swift-test-gate.sh ButtonHeistMCP
-
-  ios-guardrail:
-    name: iOS release guardrail
-    runs-on: macos-15
-    timeout-minutes: 30
-    env:
-      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData
-
-    steps:
-      - name: Checkout release tag
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
-
-      - name: Select Xcode 26.3
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
-
-      - name: Boot simulator in background
-        run: |
-          set -eo pipefail
-          read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
-          import subprocess, json
-          runtimes = json.loads(subprocess.check_output(
-              ["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
-          devices = json.loads(subprocess.check_output(
-              ["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
-          for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
-              if rt["platform"] != "iOS" or not rt["isAvailable"]:
-                  continue
-              for dev in devices.get(rt["identifier"], []):
-                  if dev["name"] == "iPhone 16 Pro" and dev["isAvailable"]:
-                      print(dev["udid"], rt["version"])
-                      raise SystemExit(0)
-          raise SystemExit("No available iPhone 16 Pro simulator found")
-          PYEOF
-          )
-          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
-          echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
-          echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
-          xcrun simctl boot "$SIM_UDID" || true
-
-      - name: Init required submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
-
-      - name: Install Tuist
-        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
-
-      - name: Install Tuist dependencies
-        timeout-minutes: 12
-        run: tuist install
-
-      - name: Generate project
-        timeout-minutes: 5
-        run: |
-          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
-          ./scripts/clean-generated-projects.sh
-
-      - name: Build iOS app targets
-        timeout-minutes: 20
-        run: |
-          set -eo pipefail
-          DEST="platform=iOS Simulator,id=$SIM_UDID"
-
-          for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
-            echo "Building $scheme..."
-            xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
-              -destination "$DEST" \
-              -derivedDataPath "$DERIVED_DATA_PATH" \
-              build
-          done
-
-      - name: Run BH Demo CLI smoke
-        timeout-minutes: 12
-        run: |
-          set -eo pipefail
-          APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/e2e-demo-smoke.sh \
-            --skip-generate \
-            --sim-udid "$SIM_UDID" \
-            --app "$APP" \
-            --benchmark-report "$RUNNER_TEMP/buttonheist-demo-benchmark.json"
-
-      - name: Run BH Demo lifecycle gate
-        timeout-minutes: 8
-        run: |
-          set -eo pipefail
-          APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/e2e-lifecycle-gate.py \
-            --sim-udid "$SIM_UDID" \
-            --app "$APP" \
-            --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
-            --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
-
-      - name: Measure framework sizes
-        run: |
-          DERIVED="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator"
-          echo "## Framework Sizes" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Framework | Size |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----------|------|" >> "$GITHUB_STEP_SUMMARY"
-          for fw in TheInsideJob TheScore ThePlant; do
-            if [ -d "$DERIVED/${fw}.framework" ]; then
-              SIZE=$(du -sh "$DERIVED/${fw}.framework" | cut -f1)
-              echo "| ${fw} | ${SIZE} |" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-          if [ -d "$DERIVED/BHDemo.app" ]; then
-            APP_SIZE=$(du -sh "$DERIVED/BHDemo.app" | cut -f1)
-            echo "| BHDemo.app (total) | ${APP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Wait for simulator boot
-        timeout-minutes: 5
-        run: xcrun simctl bootstatus "$SIM_UDID" -b
-
-      - name: Run iOS tests
-        timeout-minutes: 20
-        run: |
-          set -eo pipefail
-          DEST="platform=iOS Simulator,id=$SIM_UDID"
-          echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
-          xcodebuild test -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
-
   build-and-release:
-    needs:
-      - macos-guardrail
-      - ios-guardrail
     runs-on: macos-15
     timeout-minutes: 45
     env:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
 
     steps:
+      - name: Verify CI passed on tagged commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${{ github.event.inputs.tag || github.ref_name }} --jq '.object.sha' 2>/dev/null \
+            || echo "${{ github.sha }}")
+          CI_CONCLUSION=$(gh run list --repo ${{ github.repository }} --commit "$TAG_SHA" --workflow CI --limit 5 \
+            --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')
+          if [[ "$CI_CONCLUSION" -eq 0 ]]; then
+            echo "::error::No successful CI run found for commit $TAG_SHA. Release requires CI green on main."
+            exit 1
+          fi
+          echo "CI verified green on ${TAG_SHA:0:8}"
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
@@ -252,11 +74,6 @@ jobs:
           fi
           scripts/validate-release-contract.sh
           echo "Version $TAG_VERSION verified across tag, release contract, and source."
-
-      - name: Run SwiftPM test discovery gates
-        run: |
-          scripts/swift-test-gate.sh ButtonHeistCLI
-          scripts/swift-test-gate.sh ButtonHeistMCP
 
       - name: Build CLI (universal)
         run: |
@@ -337,24 +154,6 @@ jobs:
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
           echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
           echo "Built: $APP_PATH (${APP_SIZE_KB}KB)"
-
-      - name: Run BH Demo lifecycle gate
-        run: |
-          scripts/e2e-lifecycle-gate.py \
-            --sim-udid "$SIM_UDID" \
-            --app "$APP_PATH" \
-            --cli "$PWD/ButtonHeistCLI/.build/buttonheist" \
-            --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
-
-      - name: Run BH Demo CLI smoke benchmark
-        timeout-minutes: 12
-        run: |
-          scripts/e2e-demo-smoke.sh \
-            --skip-generate \
-            --sim-udid "$SIM_UDID" \
-            --app "$APP_PATH" \
-            --cli-configuration release \
-            --benchmark-report "$RUNNER_TEMP/buttonheist-demo-benchmark.json"
 
       - name: Collect TheInsideJob frameworks
         run: |
