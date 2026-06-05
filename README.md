@@ -6,28 +6,26 @@
 
 # Button Heist
 
-Button Heist turns the app interface that VoiceOver reads into a live,
-programmable world model: structured text for agents, real accessibility actions
-for control, and settled evidence for tests.
+Button Heist turns the interface VoiceOver reads into a live world model for
+agents and tests: the whole screen as structured text, real accessibility
+actions for control, and settled evidence after every move.
 
-An iOS app already describes itself through accessibility: labels, identifiers,
-traits, values, states, actions, rotors, focus, and hierarchy. That description
-is structured, textual, and actionable. It is not a screenshot and it is not a
-pile of coordinates.
+We believe accessibility is the interface. It is where the app says what things
+are, what state they are in, and what actions they support. VoiceOver turns that
+interface into speech and gestures. Button Heist gives it to agents as text and
+actions.
 
-Button Heist keeps that interface live. An agent can read the current screen
-like a structured document or menu, choose the next command from what the app
-says is present, and act through the same accessibility contract a human-facing
-assistive technology depends on.
+An iOS app already describes itself through accessibility. Labels name things.
+Traits say what they are. Values and state say what changed. Actions say what
+can happen next. Button Heist keeps that text-and-actions interface current and
+programmable.
 
-The semantic part matters because the target is "the Continue button", "the
-Search field", or "the selected row", not "tap at x:147 y:612". Button Heist
-owns target resolution, reveal, live geometry, action execution, settling, and
-the evidence of what changed.
+Agents read the screen like a structured document or menu, then choose intent
+from what the app exposes: the Continue button, the Search field, the selected
+row. Button Heist owns the screen work behind that intent: target
+resolution, reveal, live geometry, action execution, settling, and evidence.
 
-It is not a screenshot parser. It is not coordinate playback with nicer names.
-It is the inside route: operate the app through the accessibility interface it
-already exposes, then leave with a receipt.
+The heist is clean: read the interface, make the move, keep the receipt.
 
 ```mermaid
 flowchart TB
@@ -46,7 +44,7 @@ flowchart TB
     Evidence --> Output
 ```
 
-A benchmark trace shows the loop. The agent asks for a target by meaning:
+A benchmark trace shows the loop. The agent asks for a target by name and trait:
 
 ```text
 -> activate(label: "Settings", traits: ["button"])
@@ -60,8 +58,8 @@ A benchmark trace shows the loop. The agent asks for a target by meaning:
    ...
 ```
 
-The response is not just "tap succeeded." It is the next screen as readable
-state, ready for the next command, assertion, recording step, or audit.
+The receipt is the next screen as readable state, ready for the next command,
+assertion, recording step, or audit.
 
 ## What You Can Do
 
@@ -72,10 +70,10 @@ Use Button Heist to:
 - Compose multi-step heist plans with waits and expectations.
 - Record successful interactions as durable `.heist` tests.
 - Replay those tests in CI with failure diagnostics and JUnit output.
-- Validate that the accessibility contract actually supports the product flow.
+- Validate complete app flows through the accessibility contract.
 
-These are not separate products bolted together. Direct commands, authored
-heists, recorded heists, replay, reports, and audits all orbit the same runtime.
+Direct commands, authored heists, recorded heists, replay, reports, and audits
+all use the same runtime.
 
 ```mermaid
 flowchart TD
@@ -165,11 +163,10 @@ Button Heist treats accessibility as the control plane.
 
 For normal controls, callers speak in the app's accessibility language:
 activate this button, type into this field, run this custom action, move through
-this rotor, wait until this predicate is true. The caller does not manage
-ordinary viewport setup. Button Heist resolves the target, reveals it through
-the owning scroll/container path when needed, acquires fresh live geometry,
-performs the operation, waits for settled semantic evidence, and reports the
-result.
+this rotor, wait until this predicate is true. Button Heist manages ordinary
+viewport setup: it resolves the target, reveals it through the owning
+scroll/container path when needed, acquires fresh live geometry, performs the
+operation, waits for settled semantic evidence, and reports the result.
 
 For viewport work, callers use viewport commands. `get_screen`, `get_interface`,
 `scroll`, `scroll_to_edge`, and `scroll_to_visible` are for cases where the
@@ -216,19 +213,18 @@ form. See [docs/HEIST-FORMAT.md](docs/HEIST-FORMAT.md) and
 
 ## Recordings
 
-Recording is not a playback log.
+Recording turns receipts into heist plans.
 
 During a recording, Button Heist observes successful runtime evidence and stores
-durable semantic steps. Reads do not record. Failed actions do not record.
-Viewport setup for a later semantic action does not become part of the heist.
-Runtime IDs, capture IDs, live object handles, and screen geometry are not
-durable semantic identity.
+durable semantic steps. It skips reads, failed actions, and viewport setup for a
+later semantic action. Runtime IDs, capture IDs, live object handles, and screen
+geometry stay out of durable semantic identity.
 
-A good recorded step is:
+A good recorded step reads like intent:
 
 > activate the Delete button and expect it to disappear
 
-not:
+The coordinate diary stays out of the plan:
 
 > scroll down, tap at this coordinate, hope the same thing is there tomorrow
 
@@ -236,17 +232,15 @@ That is why a recorded heist can survive layout movement and device changes. It
 fails when the app's accessible contract changes, which is the failure you want
 a durable UI test to surface.
 
-## Why This Is Different
+## Why It Works
 
-Most UI automation tools use accessibility as a way to find coordinates. They
-read the tree, compute a point, tap the screen, then read again.
+Accessibility already names the app's working parts: roles, values, state,
+hierarchy, and actions. Button Heist keeps that language executable.
 
-Button Heist uses accessibility as the app's language.
-
-It can still perform explicit mechanical gestures when that is the product
-intent. But for ordinary controls, the primary path is semantic: target, action,
-wait, evidence. The agent spends less time guessing about pixels and more time
-making progress through the app's contract.
+For ordinary controls, the loop is semantic: target, action, wait, evidence.
+For maps, canvases, drawing surfaces, games, and spatial products, explicit
+mechanical gestures stay available. The agent spends its turns reading the app's
+contract and making progress through it.
 
 The benchmark suite compares that loop with coordinate-first MCP automation
 across 96 trials and 16 UI tasks.
