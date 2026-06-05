@@ -22,6 +22,22 @@ let project = Project(
         "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
     ]),
     targets: [
+        // MARK: - Pure Heist Language
+        .target(
+            name: "ThePlans",
+            destinations: [.iPhone, .iPad, .mac],
+            product: .framework,
+            bundleId: "com.buttonheist.theplans",
+            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Sources/ThePlans/**"],
+            dependencies: [],
+            settings: .settings(base: [
+                "SWIFT_VERSION": "6",
+                "LastSwiftMigration": "2620",
+            ])
+        ),
+
         // MARK: - Shared Protocol Types (cross-platform)
         .target(
             name: "TheScore",
@@ -33,6 +49,7 @@ let project = Project(
             sources: ["ButtonHeist/Sources/TheScore/**"],
 
             dependencies: [
+                .target(name: "ThePlans"),
                 .external(name: "AccessibilitySnapshotModel"),
             ],
 
@@ -52,7 +69,7 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/ButtonHeistDSL/**"],
             dependencies: [
-                .target(name: "TheScore"),
+                .target(name: "ThePlans"),
             ],
             settings: .settings(base: [
                 "SWIFT_VERSION": "6",
@@ -96,6 +113,20 @@ let project = Project(
 
             dependencies: [
                 .target(name: "TheScore"),
+            ]
+        ),
+
+        // MARK: - ThePlans Tests
+        .target(
+            name: "ThePlansTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.buttonheist.theplans.tests",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Tests/ThePlansTests/**"],
+            dependencies: [
+                .target(name: "ThePlans"),
             ]
         ),
 
@@ -163,14 +194,26 @@ let project = Project(
         ),
     ],
     schemes: [
+        frameworkScheme(name: "ThePlans"),
         frameworkScheme(name: "TheScore"),
         frameworkScheme(name: "ButtonHeistDSL"),
         frameworkScheme(name: "ButtonHeist"),
         frameworkScheme(name: "TheInsideJob"),
         .scheme(
+            name: "ThePlansTests",
+            buildAction: .buildAction(targets: [
+                .target("ThePlansTests"),
+                .target("ThePlans"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("ThePlansTests")),
+            ])
+        ),
+        .scheme(
             name: "TheScoreTests",
             buildAction: .buildAction(targets: [
                 .target("TheScoreTests"),
+                .target("ThePlans"),
                 .target("TheScore"),
             ]),
             testAction: .targets([

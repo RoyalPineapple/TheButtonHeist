@@ -5,12 +5,12 @@
 **Current version**: `2`
 
 A heist file stores a `HeistPlan`: the canonical runtime and wire contract for
-semantic Button Heist tests. Swift DSL source, recorded heists, agent-authored
-JSON, and playback all converge on this value.
+semantic Button Heist tests. Swift DSL source, live-composed heists, and
+agent-authored JSON all converge on this value.
 
 The plan is not a transcript of viewport mechanics. Normal heists express
 semantic intent and semantic outcomes; Button Heist owns reveal, element inflation,
-settlement, live geometry, and diagnostics at replay time.
+settlement, live geometry, and diagnostics at execution time.
 
 ## Structure
 
@@ -454,8 +454,8 @@ Viewport/debug commands such as `scroll`, `scroll_to_edge`, and
 `scroll_to_visible` are directly executable inspection commands, not durable
 heist primitives. Heist JSON and canonical Swift DSL reject them as action
 steps. Semantic actions do not require `scroll_to_visible` before they run.
-Recording drops pre-action viewport movement when a semantic action intent can
-be derived.
+Live composition drops pre-action viewport movement when a semantic action
+intent can be derived.
 
 ## Runtime Admission And Lint
 
@@ -463,11 +463,11 @@ Runtime admission is the hard execution preflight. It rejects non-executable
 plans before any action dispatch: unresolved refs, invalid payloads, oversized
 loops, excessive depth, noncanonical commands, and nested collection loops.
 
-Lint is quality guidance for authored or recorded tests:
+Lint is quality guidance for authored or composed heist plans:
 
 | Mode | Purpose |
 |------|---------|
-| `recordingQuality` | Warns when recordings look like fragile transcripts. |
+| `compositionQuality` | Warns when composed plans look like fragile transcripts. |
 | `strictTest` | Fails missing expectations, mechanical commands, viewport/debug action steps, and empty branches. |
 
 Lint returns structured findings with severity, step path, message, and a fix
@@ -488,26 +488,26 @@ The durable heist AST is small on purpose. It does not support:
 - unknown JSON keys
 - mechanical commands in strict semantic tests unless explicitly waived
 
-## Recording Contract
+## Live Composition Contract
 
-Recording composes completed interactions and settled semantic evidence into
+Live composition turns completed interactions and settled semantic evidence into
 semantic action intent plus validated semantic expectation.
 
-See [Recording Contract](RECORDING-CONTRACT.md) for the focused recording
-rules.
+See [Live Composition Contract](RECORDING-CONTRACT.md) for the focused
+composition rules.
 
 Rules:
 
-- Observation commands are scratchpad and record no steps.
-- `wait` is an assertion primitive and records as a wait step.
-- Failed actions record no steps.
-- Unmet expectations record no steps.
-- Direct viewport/debug commands record no steps.
-- Scroll setup before semantic action records no setup step.
+- Observation commands are scratchpad and add no steps.
+- `wait` is an assertion primitive and becomes a wait step.
+- Failed actions add no steps.
+- Unmet expectations add no steps.
+- Direct viewport/debug commands add no steps.
+- Scroll setup before semantic action adds no setup step.
 - Coordinate gestures survive only when no semantic element intent exists.
-- Recorded heists should pass recording-quality lint.
+- Composed heists should pass composition-quality lint.
 
-Recorded and authored heists must not depend on scroll position, geometry,
+Composed and authored heists must not depend on scroll position, geometry,
 runtime IDs, capture-local IDs, or containerNames as semantic identity. Direct
 viewport/debug commands may use a current `container` value while inspecting the
 live interface, but those commands are not durable heist primitives.

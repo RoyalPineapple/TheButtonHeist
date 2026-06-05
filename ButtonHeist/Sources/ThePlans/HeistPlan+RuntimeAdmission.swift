@@ -302,17 +302,17 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
             )
             return
         }
-        guard step.argument.kind == resolved.plan.parameter.kind else {
+        guard step.argument.kind == resolved.definition.parameter.kind else {
             fail(
                 path: "\(context.path).argument",
                 contract: "heist invocation argument type must match the target parameter",
-                observed: "\(step.argument.kind.rawValue) for \(resolved.plan.parameter.kind.rawValue)",
+                observed: "\(step.argument.kind.rawValue) for \(resolved.definition.parameter.kind.rawValue)",
                 correction: "Pass the argument shape declared by the invoked heist definition."
             )
             return
         }
         do {
-            _ = try context.environment.binding(argument: step.argument, to: resolved.plan.parameter)
+            _ = try context.environment.binding(argument: step.argument, to: resolved.definition.parameter)
         } catch {
             fail(
                 path: "\(context.path).argument",
@@ -388,12 +388,11 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         }
 
         do {
-            let message = try command.resolve(in: environment)
-            try validateDirectCommandContract(message)
+            try command.assertResolvedPayloadAdmissible(in: environment)
         } catch {
             fail(
                 path: path,
-                contract: "resolved command payload must satisfy the direct Fence command contract",
+                contract: "resolved command payload must satisfy the heist action payload contract",
                 observed: summarize(error),
                 correction: "Use values and refs that lower to a valid \(command.wireType.rawValue) command payload."
             )
@@ -418,11 +417,11 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         }
         do {
             let resolved = try wait.resolve(in: environment)
-            try validateDirectCommandContract(.wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout)))
+            try validateResolvedPayloadContract(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))
         } catch {
             fail(
                 path: path,
-                contract: "resolved wait predicate must satisfy the direct Fence wait contract",
+                contract: "resolved wait predicate must satisfy the heist wait payload contract",
                 observed: summarize(error),
                 correction: "Use scoped refs and predicate values that lower to a valid wait command."
             )
@@ -557,9 +556,9 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         failures += validator.failures
     }
 
-    func validateDirectCommandContract(_ message: ClientMessage) throws {
-        let data = try encoder.encode(message)
-        _ = try decoder.decode(ClientMessage.self, from: data)
+    func validateResolvedPayloadContract<T: Codable>(_ payload: T) throws {
+        let data = try encoder.encode(payload)
+        _ = try decoder.decode(T.self, from: data)
     }
 
     mutating func fail(
@@ -601,12 +600,11 @@ private struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
 
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
         do {
-            let command = try action.command.resolve(in: context.environment)
-            try validateDirectCommandContract(command)
+            try action.command.assertResolvedPayloadAdmissible(in: context.environment)
         } catch {
             fail(
                 path: context.path,
-                contract: "string loop value must lower through the direct command contract",
+                contract: "string loop value must lower through the heist action payload contract",
                 observed: "\(valuePath) resolved to \(summarize(error))",
                 correction: "Use loop string values that keep every referenced command payload valid."
             )
@@ -616,10 +614,10 @@ private struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
     mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {
         do {
             let resolved = try wait.resolve(in: context.environment)
-            try validateDirectCommandContract(.wait(WaitTarget(
+            try validateResolvedPayloadContract(WaitTarget(
                 predicate: resolved.predicate,
                 timeout: resolved.timeout
-            )))
+            ))
         } catch {
             fail(
                 path: context.path,
@@ -630,9 +628,9 @@ private struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
         }
     }
 
-    func validateDirectCommandContract(_ message: ClientMessage) throws {
-        let data = try encoder.encode(message)
-        _ = try decoder.decode(ClientMessage.self, from: data)
+    func validateResolvedPayloadContract<T: Codable>(_ payload: T) throws {
+        let data = try encoder.encode(payload)
+        _ = try decoder.decode(T.self, from: data)
     }
 
     mutating func fail(

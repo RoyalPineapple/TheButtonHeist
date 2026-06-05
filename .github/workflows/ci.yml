@@ -80,6 +80,38 @@ jobs:
         timeout-minutes: 5
         run: swift build --target ButtonHeist
 
+      - name: Build heist-plan
+        timeout-minutes: 5
+        run: swift build --product heist-plan
+
+  heist-plan-tests:
+    runs-on: macos-15
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
+
+      - name: Build heist-plan
+        timeout-minutes: 8
+        run: swift build --package-path ButtonHeist --product heist-plan
+
+      - name: Run HeistPlanToolTests
+        timeout-minutes: 15
+        env:
+          HEIST_PLAN_TOOL: ${{ github.workspace }}/ButtonHeist/.build/debug/heist-plan
+        run: scripts/swift-test-gate.sh HeistPlanTests --disable-xctest
+
   macos-tests:
     runs-on: macos-15
     timeout-minutes: 25
@@ -130,7 +162,7 @@ jobs:
             -destination 'platform=macOS'
 
       - name: Build & test CLI (SwiftPM)
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: |
           swift package --package-path ButtonHeistCLI resolve
           swift build --package-path ButtonHeistCLI

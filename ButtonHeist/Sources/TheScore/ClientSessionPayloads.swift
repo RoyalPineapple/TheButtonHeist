@@ -1,3 +1,4 @@
+import ThePlans
 import Foundation
 
 /// Payload for authenticate message

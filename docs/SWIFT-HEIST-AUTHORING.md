@@ -10,7 +10,7 @@ use Button Heist's explicit `ForEach` primitives, not native Swift `for`.
 storage artifact, not the source authoring surface.
 
 Decoding `.heist` JSON reconstructs an executable `HeistPlan` with the body,
-targets, arguments, and expectations required for playback. `ButtonHeistDSL`
+targets, arguments, and expectations required for runtime execution. `ThePlans`
 can render that AST back to canonical Swift DSL. Canonical rendering preserves
 semantic meaning, not arbitrary authorship details. In particular, JSON does
 not recover:
@@ -39,7 +39,7 @@ enum LibraryScreen {
     }
 }
 
-Heist("purchaseFlow") {
+try HeistPlan("purchaseFlow") {
     LibraryScreen.addToCart("Milk")
     LibraryScreen.addToCart("Bread")
 }
@@ -53,7 +53,7 @@ source grouping, comments, or local constants.
 Semantic actions should describe user intent and expected semantic outcome:
 
 ```swift
-Heist {
+try HeistPlan {
     TypeText("milk", into: .label("Search"))
         .expect(.present(.element(label: "Search", value: "milk")))
 
@@ -73,8 +73,8 @@ Activate(.label("Optional"))
 Runtime admission and lint are separate:
 
 - Runtime admission rejects plans that cannot safely execute.
-- `.recordingQuality` lint flags recordings that read like transcripts instead of
-  compact semantic tests.
+- `.compositionQuality` lint flags composed plans that read like transcripts
+  instead of compact semantic tests.
 - `.strictTest` lint treats missing expectations, mechanical commands,
   viewport/debug action steps, and empty branches as
   test quality failures.

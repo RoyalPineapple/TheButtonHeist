@@ -1,5 +1,4 @@
 import Foundation
-import TheScore
 
 public protocol HeistContent {
     var heistSteps: [HeistStep] { get }
@@ -10,41 +9,32 @@ public extension HeistContent {
     var heistDefinitions: [HeistPlan] { [] }
 }
 
-public struct Heist: HeistContent {
-    public let plan: HeistPlan
-
-    public var heistSteps: [HeistStep] { plan.body }
-    public var heistDefinitions: [HeistPlan] { plan.definitions }
-
-    public func lint(_ mode: HeistPlanLintMode) -> [HeistPlanLintFinding] {
-        plan.lint(mode)
+public extension HeistPlan {
+    init(@HeistBuilder _ content: () throws -> some HeistContent) throws {
+        try self.init(dslName: nil, content)
     }
 
-    public init(@HeistBuilder _ content: () throws -> some HeistContent) throws {
-        try self.init(nil, content)
-    }
-
-    public init(
+    init(
         _ name: String,
         @HeistBuilder _ content: () throws -> some HeistContent
     ) throws {
-        try self.init(Optional(name), content)
+        try self.init(dslName: name, content)
     }
+}
 
-    private init(
-        _ name: String?,
+private extension HeistPlan {
+    init(
+        dslName name: String?,
         _ content: () throws -> some HeistContent
     ) throws {
         let content = try content()
-        self.plan = try HeistPlan.validatedDSLPlan(
+        self = try Self.validatedDSLPlan(
             name: name,
             definitions: content.heistDefinitions,
             body: content.heistSteps
         )
     }
-}
 
-private extension HeistPlan {
     static func validatedDSLPlan(
         name: String? = nil,
         definitions: [HeistPlan] = [],

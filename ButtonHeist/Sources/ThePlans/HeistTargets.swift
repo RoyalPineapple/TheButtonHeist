@@ -1,5 +1,3 @@
-import TheScore
-
 public extension ElementTarget {
     static func label(_ label: String) -> ElementTarget {
         .predicate(.label(label))

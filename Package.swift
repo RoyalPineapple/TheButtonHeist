@@ -8,8 +8,10 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
+        .library(name: "ThePlans", targets: ["ThePlans"]),
         .library(name: "TheScore", targets: ["TheScore"]),
         .library(name: "ButtonHeistDSL", targets: ["ButtonHeistDSL"]),
+        .executable(name: "heist-plan", targets: ["HeistPlanTool"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
@@ -19,13 +21,21 @@ let package = Package(
         // Keep this exact tag aligned with submodules/AccessibilitySnapshotBH
         // via scripts/check-parser-contract.sh and scripts/bump-parser.sh.
         .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.14.1"),
+        .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
         .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
     ],
     targets: [
         .target(
+            name: "ThePlans",
+            dependencies: [],
+            path: "ButtonHeist/Sources/ThePlans",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .target(
             name: "TheScore",
             dependencies: [
+                "ThePlans",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "ButtonHeist/Sources/TheScore",
@@ -33,8 +43,17 @@ let package = Package(
         ),
         .target(
             name: "ButtonHeistDSL",
-            dependencies: ["TheScore"],
+            dependencies: ["ThePlans"],
             path: "ButtonHeist/Sources/ButtonHeistDSL",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .executableTarget(
+            name: "HeistPlanTool",
+            dependencies: [
+                "ThePlans",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "ButtonHeist/Sources/HeistPlanTool",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // Swift implementation of TheInsideJob
@@ -68,6 +87,12 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "ButtonHeist/Sources/TheButtonHeist",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .testTarget(
+            name: "ThePlansTests",
+            dependencies: ["ThePlans"],
+            path: "ButtonHeist/Tests/ThePlansTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]

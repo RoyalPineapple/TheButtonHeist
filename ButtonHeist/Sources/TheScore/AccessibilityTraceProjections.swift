@@ -1,3 +1,4 @@
+import ThePlans
 public extension AccessibilityTrace {
     /// Raw compact projection between this trace's first and final capture.
     ///

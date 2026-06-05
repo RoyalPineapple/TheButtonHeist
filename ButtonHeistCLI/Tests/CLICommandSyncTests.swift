@@ -1,6 +1,7 @@
 import XCTest
 import ButtonHeist
 import Foundation
+import ThePlans
 import TheScore
 @testable import ButtonHeistCLIExe
 
@@ -121,6 +122,65 @@ final class CLICommandSyncTests: XCTestCase {
         }
         XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: "{}", fromFile: "plan.json")) { error in
             XCTAssertTrue(String(describing: error).contains("--plan and --plan-from-file are mutually exclusive"))
+        }
+    }
+
+    func testRunHeistPathJSONAndSwiftInputsConvergeBeforeFenceRequest() throws {
+        let temp = try TemporaryCLIDirectory()
+        let heistURL = temp.url.appendingPathComponent("Flow.heist")
+        let swiftURL = temp.url.appendingPathComponent("Flow.swift")
+        let plan = HeistPlan(body: [.warn(WarnStep(message: "from file"))])
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(plan).write(to: heistURL)
+        try "".write(to: swiftURL, atomically: true, encoding: .utf8)
+
+        let jsonArguments = try RunHeistCommand.planArguments(
+            inline: nil,
+            fromFile: nil,
+            input: heistURL.path,
+            entry: nil
+        )
+        let swiftArguments = try RunHeistCommand.planArguments(
+            inline: nil,
+            fromFile: nil,
+            input: swiftURL.path,
+            entry: "makeHeist",
+            compileSwiftFile: { _, _ in plan }
+        )
+
+        XCTAssertEqual(swiftArguments, jsonArguments)
+        XCTAssertEqual(swiftArguments[.version], .int(2))
+    }
+
+    func testRunHeistUnknownPathExtensionFailsBeforeFenceRequestConstruction() {
+        XCTAssertThrowsError(try RunHeistCommand.planArguments(
+            inline: nil,
+            fromFile: nil,
+            input: "Flow.txt",
+            entry: nil
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("Unsupported run_heist input extension"))
+        }
+    }
+
+    func testRunHeistMalformedSwiftReportsAdapterCompileError() throws {
+        let temp = try TemporaryCLIDirectory()
+        let swiftURL = temp.url.appendingPathComponent("Broken.swift")
+        try "".write(to: swiftURL, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try RunHeistCommand.planArguments(
+            inline: nil,
+            fromFile: nil,
+            input: swiftURL.path,
+            entry: "makeHeist",
+            compileSwiftFile: { source, _ in
+                throw HeistSourceCompilerError.compileFailed(source.path, "expected declaration")
+            }
+        )) { error in
+            let message = String(describing: error)
+            XCTAssertTrue(message.contains("failed to compile Swift heist source"), message)
+            XCTAssertFalse(message.contains("SchemaValidationError"), message)
         }
     }
 
@@ -316,6 +376,20 @@ final class CLICommandSyncTests: XCTestCase {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)
         }
+    }
+}
+
+private final class TemporaryCLIDirectory {
+    let url: URL
+
+    init() throws {
+        url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("buttonheist-cli-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: url)
     }
 }
 
