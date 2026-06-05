@@ -97,13 +97,6 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicHeistStartedResponse().encode(to: encoder)
         case .heistStopped(let path, let stepCount):
             try PublicHeistStoppedResponse(path: path, stepCount: stepCount).encode(to: encoder)
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
-            try PublicPlaybackResponse(
-                completedSteps: completedSteps,
-                failedIndex: failedIndex,
-                totalTimingMs: totalTimingMs,
-                failure: failure
-            ).encode(to: encoder)
         }
     }
 }

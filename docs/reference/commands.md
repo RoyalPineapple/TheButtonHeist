@@ -20,9 +20,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `long_press` | `spatialAction` | `long_press` | direct | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
 | `one_finger_tap` | `spatialAction` | `one_finger_tap` | direct | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
 | `ping` | `session` | `ping` | direct | Check connection health without reading accessibility state. |
-| `play_heist` | `heistRecording` | `play_heist` | direct | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | `semanticAction` | `rotor` | direct | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
-| `run_heist` | `heistRuntime` | `run_heist` | direct | Execute a typed heist plan, supplied inline (version + body) or loaded by the fence from an `input` .heist package artifact path. |
+| `run_heist` | `heistRuntime` | `run_heist` | direct | Execute a typed heist plan, supplied inline (version + body) or loaded by the fence from a `path` to a .heist package artifact. |
 | `scroll` | `viewportDebug` | `scroll` | direct | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
 | `scroll_to_edge` | `viewportDebug` | `scroll_to_edge` | direct | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
 | `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | direct | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
@@ -264,21 +263,6 @@ Parameters:
 
 _None._
 
-### `play_heist`
-
-Play back a heist file and return step diagnostics on failure.
-
-- Family: `heistRecording`
-- CLI: direct command `play_heist`
-- MCP: direct tool
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `input` | `string` | yes | - | - |
-
 ### `rotor`
 
 Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor.
@@ -301,7 +285,7 @@ Parameters:
 
 ### `run_heist`
 
-Execute a typed heist plan, supplied inline (version + body) or loaded by the fence from an `input` .heist package artifact path.
+Execute a typed heist plan, supplied inline (version + body) or loaded by the fence from a `path` to a .heist package artifact.
 
 - Family: `heistRuntime`
 - CLI: direct command `run_heist`
@@ -312,7 +296,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `input` | `string` | no | - | - |
+| `path` | `string` | no | - | - |
 | `version` | `integer` | no | - | - |
 | `body` | `array` | no | - | - |
 

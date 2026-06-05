@@ -118,7 +118,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testRunHeistRequiresExactlyOnePlanSource() {
         XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: nil, fromFile: nil)) { error in
-            XCTAssertTrue(String(describing: error).contains("Must supply a plan path, --plan, or --plan-from-file"))
+            XCTAssertTrue(String(describing: error).contains("Must supply --path, --plan, or --plan-from-file"))
         }
         XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: "{}", fromFile: "plan.json")) { error in
             XCTAssertTrue(String(describing: error).contains("mutually exclusive"))
@@ -131,11 +131,11 @@ final class CLICommandSyncTests: XCTestCase {
         let arguments = try RunHeistCommand.planArguments(
             inline: nil,
             fromFile: nil,
-            input: "Flow.heist",
+            path: "Flow.heist",
             entry: nil
         )
 
-        XCTAssertEqual(arguments[.input], .string("Flow.heist"))
+        XCTAssertEqual(arguments[.path], .string("Flow.heist"))
         XCTAssertNil(arguments[.version])
         XCTAssertNil(arguments[.body])
     }
@@ -145,42 +145,42 @@ final class CLICommandSyncTests: XCTestCase {
         // crosses through the canonical codec, never a parameter round-trip.
         let plan = HeistPlan(body: [.warn(WarnStep(message: "from swift"))])
         let prepared = try RunHeistCommand.prepareInput(
-            input: "Flow.swift",
+            path: "Flow.swift",
             entry: "makeHeist",
             compileSwiftFile: { _, _ in plan }
         )
         defer { prepared.cleanup() }
 
-        let inputPath = try XCTUnwrap(prepared.input)
-        XCTAssertTrue(inputPath.hasSuffix(".heist"))
+        let artifactPath = try XCTUnwrap(prepared.path)
+        XCTAssertTrue(artifactPath.hasSuffix(".heist"))
         XCTAssertNil(prepared.entry)
 
         // The compiled artifact round-trips losslessly through the canonical codec.
-        let written = try HeistArtifactCodec.readPlan(from: URL(fileURLWithPath: inputPath))
+        let written = try HeistArtifactCodec.readPlan(from: URL(fileURLWithPath: artifactPath))
         XCTAssertEqual(written.body, plan.body)
 
-        // And it dispatches as a .heist input path, not inline version/body params.
+        // And it dispatches as a .heist path, not inline version/body params.
         let arguments = try RunHeistCommand.planArguments(
             inline: nil,
             fromFile: nil,
-            input: prepared.input,
+            path: prepared.path,
             entry: prepared.entry
         )
-        XCTAssertEqual(arguments[.input], .string(inputPath))
+        XCTAssertEqual(arguments[.path], .string(artifactPath))
         XCTAssertNil(arguments[.version])
     }
 
     func testRunHeistSwiftSourceRequiresEntry() {
-        XCTAssertThrowsError(try RunHeistCommand.prepareInput(input: "Flow.swift", entry: nil)) { error in
+        XCTAssertThrowsError(try RunHeistCommand.prepareInput(path: "Flow.swift", entry: nil)) { error in
             XCTAssertTrue(String(describing: error).contains("--entry is required for Swift source input"))
         }
     }
 
-    func testRunHeistRejectsEntryWithoutInput() {
+    func testRunHeistRejectsEntryWithoutPath() {
         XCTAssertThrowsError(try RunHeistCommand.planArguments(
             inline: #"{"version":1,"body":[{"type":"warn","warn":{"message":"x"}}]}"#,
             fromFile: nil,
-            input: nil,
+            path: nil,
             entry: "makeHeist"
         )) { error in
             XCTAssertTrue(String(describing: error).contains("--entry is only valid with Swift source input"))

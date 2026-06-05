@@ -125,7 +125,7 @@ buttonheist activate \
   --traits button
 
 buttonheist stop_heist --output search-flow.heist
-buttonheist play_heist --input search-flow.heist --junit search-flow.xml
+buttonheist run_heist --path search-flow.heist --junit search-flow.xml
 ```
 
 A Swift-authored heist:

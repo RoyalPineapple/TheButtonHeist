@@ -121,7 +121,6 @@ public enum FenceResponse {
     case targets([String: TargetConfig], defaultTarget: String?)
     case heistStarted
     case heistStopped(path: String, stepCount: Int)
-    case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil, report: HeistPlaybackReport? = nil)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     var actionResult: ActionResult? {
@@ -172,8 +171,6 @@ public enum FenceResponse {
             return false
         case .heistExecution(_, let result, _):
             return result.stoppedFailedIndex != nil
-        case .heistPlayback(_, let failedIndex, _, _, _):
-            return failedIndex != nil
         }
     }
 

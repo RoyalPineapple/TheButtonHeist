@@ -59,7 +59,7 @@ public extension FenceParameterKey {
     static let elementUnitPoints = Self("elementUnitPoints")
     static let expect = Self("expect"), from = Self("from"), heistId = Self("heistId")
     static let identifier = Self("identifier"), includeInterface = Self("includeInterface")
-    static let inlineData = Self("inlineData"), input = Self("input"), isModalBoundary = Self("isModalBoundary")
+    static let inlineData = Self("inlineData"), path = Self("path"), isModalBoundary = Self("isModalBoundary")
     static let label = Self("label"), matcher = Self("matcher"), mode = Self("mode")
     static let newValue = Self("newValue"), oldValue = Self("oldValue"), ordinal = Self("ordinal"), output = Self("output")
     static let point = Self("point"), pointDirection = Self("pointDirection"), pointToPoint = Self("pointToPoint")

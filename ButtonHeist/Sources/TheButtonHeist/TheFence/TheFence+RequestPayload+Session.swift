@@ -17,10 +17,6 @@ extension TheFence {
         let outputPath: String
     }
 
-    struct PlayHeistRequest {
-        let inputPath: String
-    }
-
     static func decodePingRequest(
         _ fence: TheFence,
         _ arguments: CommandArgumentEnvelope,
@@ -100,18 +96,6 @@ extension TheFence {
             outputPath: try arguments.requiredSchemaString("output")
         )
         return DecodedRequestDispatch { fence, _ in try fence.handleStopHeist(request) }
-    }
-
-    static func decodePlayHeistRequest(
-        _ fence: TheFence,
-        _ arguments: CommandArgumentEnvelope,
-        _ requestId: String,
-        _ expectationPayload: ExpectationPayload
-    ) throws -> DecodedRequestDispatch {
-        let request = PlayHeistRequest(
-            inputPath: try arguments.requiredSchemaString("input")
-        )
-        return DecodedRequestDispatch { fence, _ in try await fence.handlePlayHeist(request) }
     }
 
     private func decodeConnectRequest(_ arguments: CommandArgumentEnvelope) throws -> ConnectRequest {

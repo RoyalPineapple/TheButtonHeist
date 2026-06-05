@@ -136,7 +136,6 @@ extension TheFence {
         case listTargets = "list_targets"
         case startHeist = "start_heist"
         case stopHeist = "stop_heist"
-        case playHeist = "play_heist"
     }
 }
 

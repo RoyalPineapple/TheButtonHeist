@@ -18,7 +18,7 @@ buttonheist activate \
   --expect '{"type":"screen_changed"}'
 
 buttonheist stop_heist --output search-flow.heist
-buttonheist play_heist --input search-flow.heist --junit search-flow.xml
+buttonheist run_heist --path search-flow.heist --junit search-flow.xml
 ```
 
 The generated `.heist` package stores `manifest.json` and canonical `plan.json`
