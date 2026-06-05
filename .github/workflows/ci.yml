@@ -106,6 +106,12 @@ jobs:
         timeout-minutes: 8
         run: swift build --package-path ButtonHeist --product heist-plan
 
+      - name: Smoke test heist-plan compile
+        timeout-minutes: 5
+        env:
+          HEIST_PLAN_TOOL: ${{ github.workspace }}/ButtonHeist/.build/debug/heist-plan
+        run: scripts/test-heist-plan-compile.sh
+
       - name: Run HeistPlanToolTests
         timeout-minutes: 15
         env:

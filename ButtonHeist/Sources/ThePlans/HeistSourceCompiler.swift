@@ -2,7 +2,10 @@ import Foundation
 
 public extension HeistPlan {
     static func decodeValidatedHeistJSON(from data: Data) throws -> HeistPlan {
-        let plan = try JSONDecoder().decode(HeistPlan.self, from: data)
+        let plan = try HeistArtifactCodec.decodePlanJSON(
+            data,
+            at: URL(fileURLWithPath: "compiler-output.json")
+        )
         try plan.assertRuntimeAdmissible()
         return plan
     }
@@ -33,6 +36,7 @@ public struct HeistSourceCompiler: Sendable {
         }
 
         let packageRoot = try packageRoot ?? LocalThePlansPackage.resolve()
+        let thePlansSource = try LocalThePlansPackage.thePlansSourceDirectory(in: packageRoot)
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("heist-source-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true)
@@ -41,7 +45,7 @@ public struct HeistSourceCompiler: Sendable {
         try writeCompilePackage(
             at: tempURL,
             source: source,
-            packageRoot: packageRoot,
+            thePlansSource: thePlansSource,
             entry: entry
         )
 
@@ -74,13 +78,18 @@ public struct HeistSourceCompiler: Sendable {
     private func writeCompilePackage(
         at tempURL: URL,
         source: URL,
-        packageRoot: URL,
+        thePlansSource: URL,
         entry: HeistSourceEntrySymbol
     ) throws {
+        let packageSourcesURL = tempURL.appendingPathComponent("Sources", isDirectory: true)
         let sourcesURL = tempURL
             .appendingPathComponent("Sources", isDirectory: true)
             .appendingPathComponent("PlanCompiler", isDirectory: true)
         try FileManager.default.createDirectory(at: sourcesURL, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(
+            at: thePlansSource,
+            to: packageSourcesURL.appendingPathComponent("ThePlans", isDirectory: true)
+        )
 
         let packageManifest = """
         // swift-tools-version: 6.0
@@ -92,14 +101,15 @@ public struct HeistSourceCompiler: Sendable {
             products: [
                 .executable(name: "plan-compiler", targets: ["PlanCompiler"]),
             ],
-            dependencies: [
-                .package(path: \(swiftStringLiteral(packageRoot.path))),
-            ],
             targets: [
+                .target(
+                    name: "ThePlans",
+                    path: "Sources/ThePlans"
+                ),
                 .executableTarget(
                     name: "PlanCompiler",
                     dependencies: [
-                        .product(name: "ThePlans", package: "ButtonHeist"),
+                        "ThePlans",
                     ]
                 ),
             ]
@@ -152,7 +162,7 @@ public enum HeistSourceCompilerError: Error, Sendable, Equatable, CustomStringCo
         case .compileFailed(let path, let diagnostics):
             return "failed to compile Swift heist source \(path): \(diagnostics)"
         case .invalidCompilerOutput(let diagnostics):
-            return "compiled Swift heist did not emit valid .heist JSON: \(diagnostics)"
+            return "compiled Swift heist did not emit valid HeistPlan JSON: \(diagnostics)"
         }
     }
 }
@@ -193,6 +203,20 @@ private enum LocalThePlansPackage {
             if isButtonHeistPackageRoot(sibling) {
                 return sibling
             }
+        }
+
+        throw HeistSourceCompilerError.packageRootNotFound
+    }
+
+    static func thePlansSourceDirectory(in packageRoot: URL) throws -> URL {
+        let direct = packageRoot.appendingPathComponent("Sources/ThePlans", isDirectory: true)
+        if FileManager.default.fileExists(atPath: direct.path) {
+            return direct
+        }
+
+        let nested = packageRoot.appendingPathComponent("ButtonHeist/Sources/ThePlans", isDirectory: true)
+        if FileManager.default.fileExists(atPath: nested.path) {
+            return nested
         }
 
         throw HeistSourceCompilerError.packageRootNotFound
@@ -259,8 +283,16 @@ private final class ProcessOutputCapture {
         stderrURL = temp.appendingPathComponent("heist-source-stderr-\(UUID().uuidString)")
         _ = FileManager.default.createFile(atPath: stdoutURL.path, contents: nil)
         _ = FileManager.default.createFile(atPath: stderrURL.path, contents: nil)
-        stdoutHandle = try FileHandle(forWritingTo: stdoutURL)
-        stderrHandle = try FileHandle(forWritingTo: stderrURL)
+        let openedStdoutHandle = try FileHandle(forWritingTo: stdoutURL)
+        do {
+            stderrHandle = try FileHandle(forWritingTo: stderrURL)
+            stdoutHandle = openedStdoutHandle
+        } catch {
+            try? openedStdoutHandle.close()
+            try? FileManager.default.removeItem(at: stdoutURL)
+            try? FileManager.default.removeItem(at: stderrURL)
+            throw error
+        }
     }
 
     deinit {
@@ -283,25 +315,4 @@ private final class ProcessOutputCapture {
     }
 }
 
-private func swiftStringLiteral(_ value: String) -> String {
-    var result = "\""
-    for scalar in value.unicodeScalars {
-        switch scalar {
-        case "\\":
-            result += "\\\\"
-        case "\"":
-            result += "\\\""
-        case "\n":
-            result += #"\n"#
-        case "\r":
-            result += #"\r"#
-        case "\t":
-            result += #"\t"#
-        default:
-            result.unicodeScalars.append(scalar)
-        }
-    }
-    result += "\""
-    return result
-}
 #endif

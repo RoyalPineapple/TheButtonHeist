@@ -20,8 +20,8 @@ final class HeistPlanTests: XCTestCase {
     func testDecodeRejectsUnsupportedVersionAtBoundary() {
         let json = """
         {
-          "version": 1,
-          "steps": [{"type":"warn","warn":{"message":"check state"}}]
+          "version": 2,
+          "body": [{"type":"warn","warn":{"message":"check state"}}]
         }
         """
 
@@ -31,7 +31,6 @@ final class HeistPlanTests: XCTestCase {
             }
             XCTAssertTrue(context.debugDescription.contains("Unsupported heist plan version"))
             XCTAssertTrue(context.debugDescription.contains("supports version \(HeistPlan.currentVersion)"))
-            XCTAssertTrue(context.debugDescription.contains(#"renamed "steps" to "body""#))
         }
     }
 
@@ -536,8 +535,8 @@ final class HeistPlanTests: XCTestCase {
         XCTAssertFalse(result.isFailure)
     }
 
-    func testCurrentVersionIsTwo() {
-        XCTAssertEqual(HeistPlan.currentVersion, 2)
+    func testCurrentVersionIsOne() {
+        XCTAssertEqual(HeistPlan.currentVersion, 1)
     }
 
     func testFullHeistJsonShape() throws {

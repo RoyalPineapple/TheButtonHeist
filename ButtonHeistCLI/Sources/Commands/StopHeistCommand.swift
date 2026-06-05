@@ -5,10 +5,10 @@ import Foundation
 struct StopHeistCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Stop recording and save a deterministic heist fixture"
+        abstract: "Stop heist composition and save a generated heist artifact"
     )
 
-    @Option(name: [.customShort("o"), .customLong("output")], help: "Output file path for the .heist file")
+    @Option(name: [.customShort("o"), .customLong("output")], help: "Output path for the generated .heist package")
     var outputPath: String
 
     @OptionGroup var connection: ConnectionOptions

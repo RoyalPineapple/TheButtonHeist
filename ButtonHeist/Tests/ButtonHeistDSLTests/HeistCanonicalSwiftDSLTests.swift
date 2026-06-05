@@ -285,7 +285,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
 
     let jsonPlan = try JSONDecoder().decode(HeistPlan.self, from: Data("""
     {
-      "version": 2,
+      "version": 1,
       "body": [
         {
           "type": "action",
@@ -311,7 +311,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
 
 private let fullASTJSON = """
 {
-  "version": 2,
+  "version": 1,
   "body": [
     {
       "type": "action",
@@ -422,7 +422,7 @@ private let fullASTJSON = """
 
 private let invalidElementLoopParameterJSON = """
 {
-  "version": 2,
+  "version": 1,
   "body": [
     {
       "type": "for_each_element",
@@ -449,7 +449,7 @@ private let invalidElementLoopParameterJSON = """
 
 private let invalidStringLoopParameterJSON = """
 {
-  "version": 2,
+  "version": 1,
   "body": [
     {
       "type": "for_each_string",

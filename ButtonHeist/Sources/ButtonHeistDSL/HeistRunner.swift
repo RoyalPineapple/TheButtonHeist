@@ -1,7 +1,7 @@
 import ThePlans
 
 public struct HeistRunRequest: Sendable, Equatable {
-    let heistPlan: HeistPlan
+    public let heistPlan: HeistPlan
 
     public init(_ plan: HeistPlan) {
         self.heistPlan = plan

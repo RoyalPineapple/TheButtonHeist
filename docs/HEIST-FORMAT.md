@@ -1,12 +1,72 @@
 # Heist Plan Format
 
-**Extension**: `.heist`
-**Encoding**: JSON (UTF-8)
-**Current version**: `2`
+Button Heist uses three file roles:
 
-A heist file stores a `HeistPlan`: the canonical runtime and wire contract for
+| Role | Meaning |
+|------|---------|
+| `.swift` | Preferred editable source. Agents and humans should author Swift DSL. |
+| `.json` | Explicit raw `HeistPlan` JSON IR for debug, import, and export. |
+| `.heist` | Generated package artifact. Do not hand-author it. |
+
+A `.heist` path is an Apple-native package directory:
+
+```text
+SearchFlow.heist/
+  manifest.json
+  plan.json
+```
+
+`manifest.json` describes only the artifact container. `plan.json` stores the
+canonical `HeistPlan` JSON that the runtime executes after decoding. Runtime
+execution still receives a `HeistPlan`; it does not execute artifact internals
+or Swift source.
+
+Plain JSON with a `.heist` extension is invalid. Use `.json` for raw HeistPlan
+IR, or generate a `.heist` package from Swift DSL, live composition, or export.
+
+## Manifest
+
+`manifest.json` is intentionally small:
+
+```json
+{
+  "createdAt": "2026-06-05T00:00:00Z",
+  "format": "com.royalpineapple.buttonheist.heist",
+  "formatVersion": 1,
+  "planVersion": 1,
+  "producer": {
+    "name": "buttonheist"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `format` | `String` | Must be `com.royalpineapple.buttonheist.heist`. |
+| `formatVersion` | `Int` | Package/container schema version. Current value is `1`. |
+| `planVersion` | `Int` | Must match `plan.json.version`. Current value is `1`. |
+| `producer` | `HeistArtifactProducer` | Tool that generated the artifact. |
+| `createdAt` | `Date` | Artifact creation timestamp. |
+
+The manifest does not contain source metadata, app bundle IDs, step counts,
+command lists, screenshots, accessibility evidence, repair provenance, trace
+IDs, or target labels. Those belong in `plan.json` or future sidecars, not in
+the v1 manifest.
+
+This is v1 of the package artifact contract. Earlier development fixtures that
+stored raw JSON at a `.heist` path, including pre-package `version: 2` fixture
+JSON, are intentionally unsupported. Re-export those plans as `.json` IR or
+generate a fresh `.heist` package.
+
+## Plan JSON
+
+**Path**: `plan.json` inside `.heist`, or a standalone `.json` IR file.
+**Encoding**: JSON (UTF-8)
+**Current plan version**: `1`
+
+`plan.json` stores a `HeistPlan`: the canonical runtime and wire contract for
 semantic Button Heist tests. Swift DSL source, live-composed heists, and
-agent-authored JSON all converge on this value.
+explicit raw JSON IR all converge on this value.
 
 The plan is not a transcript of viewport mechanics. Normal heists express
 semantic intent and semantic outcomes; Button Heist owns reveal, element inflation,
@@ -16,7 +76,7 @@ settlement, live geometry, and diagnostics at execution time.
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "name": "purchaseFlow",
   "parameter": { "type": "none" },
   "definitions": [],
@@ -45,15 +105,15 @@ source execution over the wire.
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "name": "purchaseFlow",
   "definitions": [
     {
-      "version": 2,
+      "version": 1,
       "name": "LibraryScreen",
       "definitions": [
         {
-          "version": 2,
+          "version": 1,
           "name": "addToCart",
           "parameter": { "type": "strings", "name": "item" },
           "body": [
@@ -396,7 +456,7 @@ pipeline:
 {
   "type": "heist",
   "heist": {
-    "version": 2,
+    "version": 1,
     "name": "checkoutGroup",
     "body": [
       {

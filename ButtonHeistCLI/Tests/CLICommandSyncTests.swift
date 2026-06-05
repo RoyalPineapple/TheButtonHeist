@@ -100,11 +100,11 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testRunHeistSerializesPlanFieldsBeforeSending() throws {
         let arguments = try RunHeistCommand.planArguments(
-            inline: #"{"version":2,"body":[{"type":"warn","warn":{"message":"Check login state"}}]}"#,
+            inline: #"{"version":1,"body":[{"type":"warn","warn":{"message":"Check login state"}}]}"#,
             fromFile: nil
         )
 
-        XCTAssertEqual(arguments[.version], .int(2))
+        XCTAssertEqual(arguments[.version], .int(1))
         guard case .array(let body)? = arguments[.body] else {
             return XCTFail("expected serialized heist plan body")
         }
@@ -130,9 +130,7 @@ final class CLICommandSyncTests: XCTestCase {
         let heistURL = temp.url.appendingPathComponent("Flow.heist")
         let swiftURL = temp.url.appendingPathComponent("Flow.swift")
         let plan = HeistPlan(body: [.warn(WarnStep(message: "from file"))])
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(plan).write(to: heistURL)
+        try HeistArtifactCodec.writePlan(plan, to: heistURL)
         try "".write(to: swiftURL, atomically: true, encoding: .utf8)
 
         let jsonArguments = try RunHeistCommand.planArguments(
@@ -150,7 +148,7 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(swiftArguments, jsonArguments)
-        XCTAssertEqual(swiftArguments[.version], .int(2))
+        XCTAssertEqual(swiftArguments[.version], .int(1))
     }
 
     func testRunHeistUnknownPathExtensionFailsBeforeFenceRequestConstruction() {
@@ -161,6 +159,23 @@ final class CLICommandSyncTests: XCTestCase {
             entry: nil
         )) { error in
             XCTAssertTrue(String(describing: error).contains("Unsupported run_heist input extension"))
+        }
+    }
+
+    func testRunHeistRejectsRawJSONAtHeistExtensionBeforeFenceRequestConstruction() throws {
+        let temp = try TemporaryCLIDirectory()
+        let heistURL = temp.url.appendingPathComponent("Raw.heist")
+        let plan = HeistPlan(body: [.warn(WarnStep(message: "raw"))])
+        try plan.canonicalHeistJSONData().write(to: heistURL)
+
+        XCTAssertThrowsError(try RunHeistCommand.planArguments(
+            inline: nil,
+            fromFile: nil,
+            input: heistURL.path,
+            entry: nil
+        )) { error in
+            let message = String(describing: error)
+            XCTAssertTrue(message.contains("raw JSON is not a .heist package"), message)
         }
     }
 

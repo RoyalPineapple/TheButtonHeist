@@ -62,6 +62,14 @@ struct ToolSyncTests {
 
         #expect(schemaValue(at: ["properties", "source_file", "type"], in: tool.inputSchema) == .string("string"))
         #expect(schemaValue(at: ["properties", "entry", "type"], in: tool.inputSchema) == .string("string"))
+        let branches = try #require(schemaValue(at: ["oneOf"], in: tool.inputSchema)?.arrayValue)
+
+        #expect(branches.contains { schema in
+            requiredKeys(in: schema) == ["body", "version"]
+        })
+        #expect(branches.contains { schema in
+            requiredKeys(in: schema) == ["entry", "source_file"]
+        })
     }
 }
 
@@ -81,6 +89,11 @@ private extension Value {
         guard case .array(let array) = self else { return nil }
         return array
     }
+}
+
+private func requiredKeys(in schema: Value) -> Set<String> {
+    guard case .array(let values)? = schema.objectValue?["required"] else { return [] }
+    return Set(values.compactMap(\.stringValue))
 }
 
 private enum ToolSchemaLint {

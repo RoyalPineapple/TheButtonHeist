@@ -6,10 +6,10 @@ import TheScore
 struct PlayHeistCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Play back a recorded .heist file"
+        abstract: "Play back a .heist package artifact or .json HeistPlan IR"
     )
 
-    @Option(name: .shortAndLong, help: "Input .heist file path")
+    @Option(name: .shortAndLong, help: "Input .heist package or .json HeistPlan IR path")
     var input: String
 
     @Option(name: .long, help: "Write JUnit XML report to this path")
