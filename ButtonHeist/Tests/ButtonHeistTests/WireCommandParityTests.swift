@@ -85,6 +85,34 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertFalse(reference.contains("Durable"), reference)
     }
 
+    func testCommittedCommandReferenceDocsMatchDescriptorProjection() throws {
+        try assertReferenceDocInSync(
+            relativePath: "docs/reference/commands.md",
+            generated: FenceCommandReference.commandMarkdown()
+        )
+        try assertReferenceDocInSync(
+            relativePath: "docs/reference/mcp-tools.md",
+            generated: FenceCommandReference.mcpMarkdown()
+        )
+    }
+
+    private func assertReferenceDocInSync(
+        relativePath: String,
+        generated: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let url = repositoryRoot().appendingPathComponent(relativePath)
+        let committed = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(
+            committed,
+            generated,
+            "\(relativePath) is stale. Regenerate with scripts/render-command-reference.sh.",
+            file: file,
+            line: line
+        )
+    }
+
     func testRunHeistDescriptorAdvertisesPublicJSONPlanStepTypes() {
         let descriptor = TheFence.Command.descriptor(for: .runHeist)
         let body = descriptor.parameters.first { $0.key == "body" }
@@ -343,6 +371,10 @@ final class WireCommandParityTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+
+    private func repositoryRoot() -> URL {
+        packageRoot().deletingLastPathComponent()
     }
 
     private func heistStepValue(type: String, payload: [String: HeistValue]) -> HeistValue {
