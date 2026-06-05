@@ -140,30 +140,38 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNil(arguments[.body])
     }
 
-    func testRunHeistCompilesSwiftSourceLocallyAndSendsInline() throws {
-        // Swift DSL source needs the toolchain, so the CLI compiles it locally
-        // and sends the plan inline; the fence is not handed a .swift path.
+    func testRunHeistCompilesSwiftSourceToTemporaryHeistArtifact() throws {
+        // Swift source compiles to a temp .heist the fence reads — the plan
+        // crosses through the canonical codec, never a parameter round-trip.
         let plan = HeistPlan(body: [.warn(WarnStep(message: "from swift"))])
-        let arguments = try RunHeistCommand.planArguments(
-            inline: nil,
-            fromFile: nil,
+        let prepared = try RunHeistCommand.prepareInput(
             input: "Flow.swift",
             entry: "makeHeist",
             compileSwiftFile: { _, _ in plan }
         )
+        defer { prepared.cleanup() }
 
-        XCTAssertEqual(arguments[.version], .int(1))
-        XCTAssertNotNil(arguments[.body])
-        XCTAssertNil(arguments[.input])
+        let inputPath = try XCTUnwrap(prepared.input)
+        XCTAssertTrue(inputPath.hasSuffix(".heist"))
+        XCTAssertNil(prepared.entry)
+
+        // The compiled artifact round-trips losslessly through the canonical codec.
+        let written = try HeistArtifactCodec.readPlan(from: URL(fileURLWithPath: inputPath))
+        XCTAssertEqual(written.body, plan.body)
+
+        // And it dispatches as a .heist input path, not inline version/body params.
+        let arguments = try RunHeistCommand.planArguments(
+            inline: nil,
+            fromFile: nil,
+            input: prepared.input,
+            entry: prepared.entry
+        )
+        XCTAssertEqual(arguments[.input], .string(inputPath))
+        XCTAssertNil(arguments[.version])
     }
 
     func testRunHeistSwiftSourceRequiresEntry() {
-        XCTAssertThrowsError(try RunHeistCommand.planArguments(
-            inline: nil,
-            fromFile: nil,
-            input: "Flow.swift",
-            entry: nil
-        )) { error in
+        XCTAssertThrowsError(try RunHeistCommand.prepareInput(input: "Flow.swift", entry: nil)) { error in
             XCTAssertTrue(String(describing: error).contains("--entry is required for Swift source input"))
         }
     }
