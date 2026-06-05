@@ -132,6 +132,51 @@ mutations do not reset ordinal scheduling. Each body action still resolves the
 live `ElementTarget` through the normal command and element inflation pipeline, so
 out-of-range or non-inflated targets fail with normal command diagnostics.
 
+## Compilation Boundary
+
+Swift compilation is an **author-time** step, not a runtime capability. It lives
+only in the authoring tools:
+
+- `buttonheist run_heist Flow.swift --entry makeHeist` compiles the Swift source
+  to a `HeistPlan`, validates that plan for runtime admission, then sends it down
+  the ordinary `run_heist` path — identical to passing a `.heist` package or
+  `.json` IR.
+- `heist-plan compile Flow.swift --entry makeHeist --output Flow.heist` compiles
+  and persists a `.heist` package (or `.json` IR) without running it.
+
+The runtime never compiles Swift. `TheFence`, the MCP server, and `TheInsideJob`
+have no knowledge of Swift source — they accept only canonical plan IR. The MCP
+`run_heist` tool therefore exposes only the plan schema; there is no `source_file`
+input. Compile with the CLI or `heist-plan`, then run the resulting plan.
+
+There is no runtime Swift execution and no hidden fallback: a Swift source either
+compiles to an admissible `HeistPlan` ahead of time or the command fails.
+
+### Resolving built ThePlans artifacts
+
+Compiling Swift source links the user file against a **built** `ThePlans`
+module. There is exactly one resolution path, in this order:
+
+1. **`HEIST_THEPLANS_BUILD_DIR`** — the deterministic override. Set it to a
+   directory containing `Modules/ThePlans.swiftmodule` and
+   `ThePlans.build/*.swift.o`. This is what CI uses:
+
+   ```bash
+   swift build --package-path ButtonHeist --product heist-plan
+   HEIST_THEPLANS_BUILD_DIR=ButtonHeist/.build/debug \
+     heist-plan compile Flow.swift --entry makeHeist --output Flow.heist
+   ```
+
+2. **Local package discovery** — absent the override, the local ButtonHeist
+   checkout's `.build` directories are searched for the same artifacts.
+
+The compiler never builds `ThePlans` from source on demand. If no built
+artifacts are found, compilation fails with a diagnostic that lists every path
+that was searched and tells you to run
+`swift build --package-path ButtonHeist --product heist-plan` (or set
+`HEIST_THEPLANS_BUILD_DIR`). Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace which
+resolution branch was taken.
+
 ## Explicit Non-Goals
 
 Swift Heist does not preserve:

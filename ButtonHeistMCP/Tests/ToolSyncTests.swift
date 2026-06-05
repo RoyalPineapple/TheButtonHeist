@@ -56,20 +56,16 @@ struct ToolSyncTests {
         })
     }
 
-    @Test("run_heist schema includes adapter source_file convenience")
-    func runHeistSchemaIncludesAdapterSourceFileConvenience() throws {
+    @Test("run_heist schema exposes only the plan, never Swift authoring inputs")
+    func runHeistSchemaExposesOnlyPlan() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "run_heist" })
 
-        #expect(schemaValue(at: ["properties", "source_file", "type"], in: tool.inputSchema) == .string("string"))
-        #expect(schemaValue(at: ["properties", "entry", "type"], in: tool.inputSchema) == .string("string"))
-        let branches = try #require(schemaValue(at: ["oneOf"], in: tool.inputSchema)?.arrayValue)
-
-        #expect(branches.contains { schema in
-            requiredKeys(in: schema) == ["body", "version"]
-        })
-        #expect(branches.contains { schema in
-            requiredKeys(in: schema) == ["entry", "source_file"]
-        })
+        // Swift compilation lives entirely in the CLI/heist-plan authoring tools.
+        // The MCP run_heist tool accepts only canonical plan IR — no source_file,
+        // no entry, and no oneOf adapter branch.
+        #expect(schemaValue(at: ["properties", "source_file"], in: tool.inputSchema) == nil)
+        #expect(schemaValue(at: ["properties", "entry"], in: tool.inputSchema) == nil)
+        #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
     }
 }
 
@@ -89,11 +85,6 @@ private extension Value {
         guard case .array(let array) = self else { return nil }
         return array
     }
-}
-
-private func requiredKeys(in schema: Value) -> Set<String> {
-    guard case .array(let values)? = schema.objectValue?["required"] else { return [] }
-    return Set(values.compactMap(\.stringValue))
 }
 
 private enum ToolSchemaLint {

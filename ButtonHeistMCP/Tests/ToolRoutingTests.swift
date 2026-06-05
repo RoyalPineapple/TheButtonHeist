@@ -3,7 +3,6 @@ import MCP
 import Testing
 @testable import ButtonHeistMCP
 import ButtonHeist
-import ThePlans
 
 struct ToolRoutingTests {
     private typealias Argument = HeistValue
@@ -58,56 +57,30 @@ struct ToolRoutingTests {
         #expect(error.message == "Unknown tool: not_a_tool")
     }
 
-    @Test("run_heist source_file compiles before Fence routing")
-    func runHeistSourceFileCompilesBeforeFenceRouting() throws {
-        let temp = try TemporaryMCPDirectory()
-        let sourceURL = temp.url.appendingPathComponent("LoginFlow.swift")
-        try "".write(to: sourceURL, atomically: true, encoding: .utf8)
-
+    @Test("MCP does not compile Swift; run_heist arguments pass through opaquely")
+    func runHeistDoesNotCompileSwift() throws {
+        // The MCP adapter has no knowledge of Swift compilation. Any keys are
+        // forwarded verbatim as command arguments — including ones that the CLI
+        // would treat as Swift authoring inputs — with no special-casing.
         let arguments = try ButtonHeistMCPServer.decodeArguments(
             [
-                "source_file": .string(sourceURL.path),
+                "source_file": .string("Flow.swift"),
                 "entry": .string("makeHeist"),
-            ],
-            forTool: TheFence.Command.runHeist.rawValue,
-            compileSwiftFile: { _, _ in
-                HeistPlan(body: [.warn(WarnStep(message: "from MCP"))])
-            }
+            ]
         )
 
-        #expect(arguments.argumentValues["source_file"] == nil)
-        #expect(arguments.argumentValues["entry"] == nil)
-        #expect(arguments.argumentValues["version"] == .int(1))
-        guard case .array(let body)? = arguments.argumentValues["body"] else {
-            Issue.record("Expected compiled heist body")
-            return
-        }
-        #expect(body.count == 1)
+        #expect(arguments.argumentValues["source_file"] == .string("Flow.swift"))
+        #expect(arguments.argumentValues["entry"] == .string("makeHeist"))
     }
 
-    @Test("run_heist malformed source reports adapter error")
-    func runHeistMalformedSourceReportsAdapterError() throws {
-        let temp = try TemporaryMCPDirectory()
-        let sourceURL = temp.url.appendingPathComponent("Broken.swift")
-        try "".write(to: sourceURL, atomically: true, encoding: .utf8)
-
-        do {
-            _ = try ButtonHeistMCPServer.decodeArguments(
-                [
-                    "source_file": .string(sourceURL.path),
-                    "entry": .string("makeHeist"),
-                ],
-                forTool: TheFence.Command.runHeist.rawValue,
-                compileSwiftFile: { source, _ in
-                    throw HeistSourceCompilerError.compileFailed(source.path, "expected declaration")
-                }
-            )
-            Issue.record("Expected adapter compile error")
-        } catch {
-            let message = String(describing: error)
-            #expect(message.contains("failed to compile Swift heist source"))
-            #expect(!message.contains("SchemaValidationError"))
+    @Test("run_heist tool schema exposes no Swift authoring inputs")
+    func runHeistToolSchemaHasNoSwiftInputs() throws {
+        guard let runHeist = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.runHeist.rawValue }) else {
+            Issue.record("run_heist tool not found")
+            return
         }
+        let schema = String(describing: runHeist.inputSchema)
+        #expect(!schema.contains("source_file"))
     }
 
     private func routeToolRequest(
@@ -132,18 +105,4 @@ struct ToolRoutingTests {
         TheFence.CommandArgumentEnvelope(values: arguments)
     }
 
-}
-
-private final class TemporaryMCPDirectory {
-    let url: URL
-
-    init() throws {
-        url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("buttonheist-mcp-tests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-    }
-
-    deinit {
-        try? FileManager.default.removeItem(at: url)
-    }
 }

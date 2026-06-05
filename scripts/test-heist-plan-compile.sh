@@ -56,8 +56,32 @@ HEIST_SOURCE_COMPILER_TRACE=1 HEIST_THEPLANS_BUILD_DIR="$HEIST_THEPLANS_BUILD_DI
     exit 1
 }
 
-echo "Validating compiled heist package"
+echo "Validating compiled heist package passes runtime admission"
 "$HEIST_PLAN_TOOL" validate "$OUTPUT"
 echo "Rendering compiled heist package as canonical Swift"
 "$HEIST_PLAN_TOOL" render-swift "$OUTPUT" > "$RENDERED"
 diff -u "$EXPECTED" "$RENDERED"
+
+# Negative: a missing build directory override must fail with an actionable
+# diagnostic that names what was searched and how to fix it. This guards the
+# single-resolution contract — there is no hidden fallback to building ThePlans
+# from source or to JSON.
+echo "Verifying missing-artifact diagnostic"
+MISSING_OUTPUT="$TMP_DIR/missing.heist"
+set +e
+DIAGNOSTIC="$(HEIST_THEPLANS_BUILD_DIR="$TMP_DIR/does-not-exist" \
+    "$HEIST_PLAN_TOOL" compile "$SOURCE" --entry makeHeist --output "$MISSING_OUTPUT" 2>&1)"
+STATUS=$?
+set -e
+if [[ "$STATUS" -eq 0 ]]; then
+    echo "Error: compile unexpectedly succeeded with a missing build directory" >&2
+    exit 1
+fi
+for fragment in "searched:" "HEIST_THEPLANS_BUILD_DIR" "swift build --package-path ButtonHeist --product heist-plan"; do
+    if [[ "$DIAGNOSTIC" != *"$fragment"* ]]; then
+        echo "Error: missing-artifact diagnostic did not mention '$fragment'" >&2
+        echo "--- diagnostic ---" >&2
+        echo "$DIAGNOSTIC" >&2
+        exit 1
+    fi
+done
