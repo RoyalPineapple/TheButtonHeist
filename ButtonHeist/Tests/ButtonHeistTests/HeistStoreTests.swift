@@ -608,7 +608,7 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testUnsettledTraceDoesNotGenerateMinimumMatcherOrExpectation() async throws {
+    func testUnsettledSemanticTraceRecordsNoStep() async throws {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "unsettled-trace", app: "com.example.app")
 
@@ -631,12 +631,46 @@ final class HeistStoreTests: XCTestCase {
             actionResult: actionResult
         )
 
-        let heist = try finishRecording(heistStore)
-        XCTAssertEqual(heist.body, [
-            .action(try ActionStep(command: .activate(
-                .predicate(ElementPredicate(label: "Delete"), ordinal: 1)
-            ))),
-        ])
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testManualScrollBeforeUnsettledSemanticActionDoesNotRecordScrollOnlyHeist() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "scroll-before-unsettled-semantic", app: "com.example.app")
+
+        let button = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let actionResult = semanticActionResult(
+            method: .activate,
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Delete")),
+            subject: button,
+            before: [button],
+            after: [button],
+            settled: false
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .scroll,
+            args: ["direction": .string("down")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")],
+            actionResult: actionResult
+        )
+
+        XCTAssertThrowsError(try finishRecording(heistStore)) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
     }
 
     @ButtonHeistActor
