@@ -163,7 +163,7 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertEqual(result.method, .scroll)
         XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
         XCTAssertNotNil(result.accessibilityTrace)
-        let delta = try XCTUnwrap(result.accessibilityTrace?.endpointDeltaProjection)
+        let delta = try XCTUnwrap(result.accessibilityTrace?.endpointDelta)
         XCTAssertNotNil(delta.testCaptureEdge)
     }
 

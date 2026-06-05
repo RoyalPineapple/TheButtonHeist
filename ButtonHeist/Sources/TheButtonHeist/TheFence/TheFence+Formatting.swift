@@ -25,17 +25,12 @@ extension FenceResponse {
         case .interface(let interface, let detail):
             return formatInterface(interface, detail: detail)
         case .action(let command, let result, let expectation):
-            let projection = PublicActionProjection(
-                commandName: command.rawValue,
-                result: result,
-                expectation: expectation
-            )
-            var text = formatActionResult(projection)
-            if let expectation = projection.expectation {
+            var text = formatActionResult(command: command, result: result)
+            if result.success, let expectation {
                 if expectation.met {
                     text += "  [expectation met]"
                 } else {
-                    let tier = expectation.expected.map(String.init(describing:)) ?? "delivery"
+                    let tier = expectation.predicate.map(String.init(describing:)) ?? "delivery"
                     text += "  [expectation FAILED: expected \(tier), got \(expectation.actual ?? "nil")]"
                 }
             }
@@ -52,16 +47,12 @@ extension FenceResponse {
                 payload: payload,
                 options: options
             )
-        case .heistExecution(let plan, let result, let accessibilityTrace):
-            let projection = PublicHeistExecutionProjection(
-                plan: plan,
-                result: result,
-                accessibilityTrace: accessibilityTrace
-            )
-            var text = "Heist: \(projection.completedSteps) step(s) completed in \(projection.totalTimingMs)ms"
-            if let idx = projection.failedIndex { text += " (failed at step \(idx))" }
-            if let expectations = projection.expectations {
-                text += " [expectations: \(expectations.met)/\(expectations.checked) met]"
+        case .heistExecution(_, let result, _):
+            var text = "Heist: \(result.completedStepCount) step(s) completed in \(result.totalTimingMs)ms"
+            if let idx = result.stoppedFailedIndex { text += " (failed at step \(idx))" }
+            let checked = result.expectationsChecked
+            if checked > 0 {
+                text += " [expectations: \(result.expectationsMet)/\(checked) met]"
             }
             return text
         case .sessionState(let payload):
@@ -73,20 +64,14 @@ extension FenceResponse {
         case .heistStopped(let path, let stepCount):
             return "Heist saved: \(path) (\(stepCount) steps)"
         case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
-            let projection = PublicPlaybackProjection(
-                completedSteps: completedSteps,
-                failedIndex: failedIndex,
-                totalTimingMs: totalTimingMs,
-                failure: failure
-            )
-            var text = "Playback: \(projection.completedSteps) step(s) completed in \(projection.totalTimingMs)ms"
-            if let index = projection.failedIndex { text += " (failed at step \(index))" }
-            if let failure = projection.failure {
-                text += "\n  command: \(failure.command)"
-                if let target = failure.target {
+            var text = "Playback: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
+            if let failedIndex { text += " (failed at step \(failedIndex))" }
+            if let failure {
+                text += "\n  command: \(failure.step.commandName)"
+                if let target = failure.step.target {
                     text += "\n  target: \(target)"
                 }
-                text += "\n  error: \(failure.error)"
+                text += "\n  error: \(failure.errorMessage)"
                 if let diagnosticCaptureFailure = failure.diagnosticCaptureFailure {
                     text += "\n  diagnosticCaptureFailure: \(diagnosticCaptureFailure)"
                 }
@@ -365,31 +350,31 @@ extension FenceResponse {
         return lines.joined(separator: "\n")
     }
 
-    private func formatActionResult(_ projection: PublicActionProjection) -> String {
-        let methodName = projection.commandName
-        if projection.status != .error {
-            var output = "✓ \(methodName)"
-            if let value = projection.value {
-                output += "  value: \"\(value)\""
-            }
-            if let search = projection.rotor {
-                output += "  rotor: \"\(search.rotor)\" \(search.direction.rawValue)"
-                if let foundElement = search.foundElement {
-                    output += " → \(foundElement.label ?? foundElement.description)"
-                }
-                if let textRange = search.textRange {
-                    output += "  range: \(textRange.rangeDescription)"
-                    if let text = textRange.text {
-                        output += " \"\(text)\""
-                    }
-                }
-            }
-            if let delta = projection.delta {
-                output += "  \(formatDelta(delta))"
-            }
-            return output
+    private func formatActionResult(command: TheFence.Command, result: ActionResult) -> String {
+        let methodName = command.rawValue
+        guard result.success else {
+            return "Error: \(result.message ?? methodName)"
         }
-        return "Error: \(projection.message ?? methodName)"
+        var output = "✓ \(methodName)"
+        if case .value(let value) = result.payload {
+            output += "  value: \"\(value)\""
+        }
+        if case .rotor(let search) = result.payload {
+            output += "  rotor: \"\(search.rotor)\" \(search.direction.rawValue)"
+            if let foundElement = search.foundElement {
+                output += " → \(foundElement.label ?? foundElement.description)"
+            }
+            if let textRange = search.textRange {
+                output += "  range: \(textRange.rangeDescription)"
+                if let text = textRange.text {
+                    output += " \"\(text)\""
+                }
+            }
+        }
+        if let delta = result.accessibilityTrace?.endpointDelta {
+            output += "  \(formatDelta(delta))"
+        }
+        return output
     }
 
     /// Actions that aren't implied by the element's traits.

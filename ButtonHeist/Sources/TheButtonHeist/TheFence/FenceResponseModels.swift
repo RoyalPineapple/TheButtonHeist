@@ -160,7 +160,21 @@ public enum FenceResponse {
 
     /// Whether callers should treat this response as a failed command.
     public var isFailure: Bool {
-        PublicResponseProjection(response: self).isFailure
+        switch self {
+        case .ok, .status, .pong, .devices, .interface, .screenshot, .screenshotData,
+             .sessionState, .targets, .heistStarted, .heistStopped:
+            return false
+        case .error:
+            return true
+        case .action(_, let result, let expectation):
+            if !result.success { return true }
+            if let expectation, !expectation.met { return true }
+            return false
+        case .heistExecution(_, let result, _):
+            return result.stoppedFailedIndex != nil
+        case .heistPlayback(_, let failedIndex, _, _, _):
+            return failedIndex != nil
+        }
     }
 
 }

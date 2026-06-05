@@ -12,12 +12,12 @@ import TheScore
         Double?
     ) async -> SettledSemanticObservationEvent?
     typealias LatestEvent = @MainActor () -> SettledSemanticObservationEvent?
-    typealias SemanticProjection = @MainActor (SettledSemanticObservationEvent) -> HeistSemanticObservation
+    typealias SemanticObserver = @MainActor (SettledSemanticObservationEvent) -> HeistSemanticObservation
     typealias PresenceTimeoutMessage = @MainActor (AccessibilityPredicate, String) -> String?
 
     let observeEvent: ObserveEvent
     let latestEvent: LatestEvent
-    let semanticObservation: SemanticProjection
+    let semanticObservation: SemanticObserver
     let presenceTimeoutMessage: PresenceTimeoutMessage
 
     func wait(
@@ -30,7 +30,7 @@ import TheScore
                 initialTrace: initialTrace
             )
         } catch {
-            let predicate = InteractionObservationProjection.unresolvedWaitPredicate()
+            let predicate = Self.unresolvedWaitPredicate()
             let resolvedStep = ResolvedWaitStep(predicate: predicate, timeout: step.timeout)
             let expectation = ExpectationResult(
                 met: false,
@@ -53,10 +53,10 @@ import TheScore
         initialTrace: AccessibilityTrace? = nil
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
-        let timeout = InteractionObservationProjection.clampedWaitTimeout(step.timeout)
+        let timeout = Self.clampedWaitTimeout(step.timeout)
         var state = WaitPredicateState(predicate: step.predicate)
 
-        if let initialTraceResult = InteractionObservationProjection.initialTraceResult(
+        if let initialTraceResult = Self.initialTraceResult(
             for: step,
             initialTrace: initialTrace,
             timeout: timeout
@@ -222,18 +222,18 @@ import TheScore
         changeBaseline: SettledSemanticObservationEvent? = nil,
         sawFutureObservation: Bool = false
     ) -> HeistWaitReceipt {
-        let elapsed = InteractionObservationProjection.elapsedSeconds(since: start)
+        let elapsed = Self.elapsedSeconds(since: start)
         let presenceMessage = success || observationSummary == nil
             ? nil
             : presenceTimeoutMessage(step.predicate, elapsed)
         let latest = latestEvent()
-        let settledDiagnostics = success ? nil : InteractionObservationProjection.SettledWaitDiagnostics(
-            baseline: changeBaseline.map(InteractionObservationProjection.SettledEventSummary.init(event:)),
-            last: latest.map(InteractionObservationProjection.SettledEventSummary.init(event:)),
-            lastDelta: trace?.endpointDeltaProjection ?? latest?.delta,
+        let settledDiagnostics = success ? nil : SettledWaitDiagnostics(
+            baseline: changeBaseline.map(SettledEventSummary.init(event:)),
+            last: latest.map(SettledEventSummary.init(event:)),
+            lastDelta: trace?.endpointDelta ?? latest?.delta,
             sawFutureObservation: sawFutureObservation
         )
-        return InteractionObservationProjection.waitReceipt(
+        return Self.waitReceipt(
             for: step,
             trace: trace,
             observationSummary: observationSummary,
@@ -262,6 +262,175 @@ import TheScore
             sawFutureObservation: state.sawFutureObservation
         )
     }
+
+    // MARK: - Wait Building
+
+    struct InitialTraceResult {
+        let trace: AccessibilityTrace
+        let summary: String?
+        let expectation: ExpectationResult
+        let shouldReturn: Bool
+    }
+
+    struct SettledEventSummary {
+        let sequence: UInt64
+        let hash: String?
+
+        init(event: SettledSemanticObservationEvent) {
+            sequence = event.sequence
+            hash = event.currentCaptureRef?.hash
+        }
+
+        var description: String {
+            if let hash {
+                return "sequence \(sequence), hash \(hash)"
+            }
+            return "sequence \(sequence), hash unavailable"
+        }
+    }
+
+    struct SettledWaitDiagnostics {
+        let baseline: SettledEventSummary?
+        let last: SettledEventSummary?
+        let lastDelta: AccessibilityTrace.Delta?
+        let sawFutureObservation: Bool
+    }
+
+    nonisolated static func clampedWaitTimeout(_ timeout: Double) -> Double {
+        max(0, min(timeout, 30))
+    }
+
+    static func unresolvedWaitPredicate() -> AccessibilityPredicate {
+        AccessibilityPredicate.state(.absent(ElementPredicate(identifier: "__unresolved_heist_predicate__")))
+    }
+
+    static func elapsedSeconds(since start: CFAbsoluteTime) -> String {
+        String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+    }
+
+    static func initialTraceResult(
+        for step: ResolvedWaitStep,
+        initialTrace: AccessibilityTrace?,
+        timeout: Double
+    ) -> InitialTraceResult? {
+        guard let initialTrace else { return nil }
+        let expectation = PredicateEvaluation.evaluate(step.predicate, in: initialTrace)
+        return InitialTraceResult(
+            trace: initialTrace,
+            summary: traceSummary(initialTrace),
+            expectation: expectation,
+            shouldReturn: expectation.met || timeout == 0
+        )
+    }
+
+    static func traceSummary(_ trace: AccessibilityTrace) -> String? {
+        guard let capture = trace.captures.last else { return nil }
+        var parts = ["known: \(capture.interface.projectedElements.count) elements"]
+        if let screenId = capture.context.screenId {
+            parts.insert("screen: \(screenId)", at: 0)
+        }
+        return parts.joined(separator: "; ")
+    }
+
+    static func waitReceipt(
+        for step: ResolvedWaitStep,
+        trace: AccessibilityTrace?,
+        observationSummary: String?,
+        expectation: ExpectationResult,
+        elapsed: String,
+        success: Bool,
+        presenceTimeoutMessage: String? = nil,
+        settledDiagnostics: SettledWaitDiagnostics? = nil
+    ) -> HeistWaitReceipt {
+        var builder = ActionResultBuilder(method: .wait)
+        builder.accessibilityTrace = trace
+        builder.message = success
+            ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
+            : waitTimeoutMessage(
+                for: step,
+                expectation: expectation,
+                observationSummary: observationSummary,
+                elapsed: elapsed,
+                presenceTimeoutMessage: presenceTimeoutMessage,
+                settledDiagnostics: settledDiagnostics
+            )
+
+        let actionResult = success
+            ? builder.success()
+            : builder.failure(errorKind: .timeout)
+        return HeistWaitReceipt(actionResult: actionResult, expectation: expectation)
+    }
+
+    static func waitSuccessMessage(
+        for predicate: AccessibilityPredicate,
+        elapsed: String
+    ) -> String {
+        switch predicate {
+        case .state(.present):
+            return elapsed == "0.0" ? "matched immediately" : "matched after \(elapsed)s"
+        case .state(.absent):
+            return "absent confirmed after \(elapsed)s"
+        default:
+            return "predicate met after \(elapsed)s"
+        }
+    }
+
+    static func waitTimeoutMessage(
+        for step: ResolvedWaitStep,
+        expectation: ExpectationResult,
+        observationSummary: String?,
+        elapsed: String,
+        presenceTimeoutMessage: String?,
+        settledDiagnostics: SettledWaitDiagnostics?
+    ) -> String {
+        let diagnostics = settledDiagnostics.map(settledDiagnosticsMessage) ?? []
+        guard let observationSummary else {
+            return ([
+                "timed out after \(elapsed)s waiting for heist predicate",
+                "expected: \(step.predicate.description)",
+                "last result: \(expectation.actual ?? "not met")",
+                "last observed: no settled semantic observation available",
+            ] + diagnostics).joined(separator: "; ")
+        }
+
+        if let presenceTimeoutMessage {
+            return ([presenceTimeoutMessage] + diagnostics).joined(separator: "; ")
+        }
+
+        return ([
+            "timed out after \(elapsed)s waiting for heist predicate",
+            "expected: \(step.predicate.description)",
+            "last result: \(expectation.actual ?? "not met")",
+            "last observed: \(observationSummary)",
+        ] + diagnostics).joined(separator: "; ")
+    }
+
+    private static func settledDiagnosticsMessage(_ diagnostics: SettledWaitDiagnostics) -> [String] {
+        var parts: [String] = []
+        if let baseline = diagnostics.baseline {
+            parts.append("baseline: \(baseline.description)")
+        }
+        if let last = diagnostics.last {
+            parts.append("last settled: \(last.description)")
+        }
+        parts.append("last delta: \(deltaSummary(diagnostics.lastDelta))")
+        if diagnostics.baseline != nil, !diagnostics.sawFutureObservation {
+            parts.append("no future settled observation arrived after baseline")
+        }
+        return parts
+    }
+
+    private static func deltaSummary(_ delta: AccessibilityTrace.Delta?) -> String {
+        guard let delta else { return "none" }
+        switch delta {
+        case .noChange:
+            return "no_change"
+        case .elementsChanged:
+            return "elements_changed"
+        case .screenChanged:
+            return "screen_changed"
+        }
+    }
 }
 
 private typealias WaitEvaluation = (observation: HeistSemanticObservation, expectation: ExpectationResult)
@@ -283,7 +452,7 @@ private struct WaitPredicateState {
     }
 
     mutating func record(
-        _ initialTraceResult: InteractionObservationProjection.InitialTraceResult,
+        _ initialTraceResult: PredicateWait.InitialTraceResult,
         latestSequence: UInt64?
     ) {
         lastTrace = initialTraceResult.trace

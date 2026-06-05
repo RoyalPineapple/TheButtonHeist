@@ -6,15 +6,15 @@ import AccessibilitySnapshotModel
 
 public extension AccessibilityTrace.Delta {
 
-    /// Compare two full accessibility captures and emit the compact delta projection.
+    /// Compare two full accessibility captures and emit the compact delta.
     ///
     /// Captures remain trace truth. This facade preserves the public entry point
-    /// while delegating all derived diff behavior to projection-specific owners.
+    /// while delegating the derived diff to `AccessibilityTraceDiff`.
     static func between(
         _ before: AccessibilityTrace.Capture,
         _ after: AccessibilityTrace.Capture
     ) -> AccessibilityTrace.Delta {
-        AccessibilityTraceDiffProjection.projectDelta(between: before, and: after)
+        AccessibilityTraceDiff.projectDelta(between: before, and: after)
     }
 }
 

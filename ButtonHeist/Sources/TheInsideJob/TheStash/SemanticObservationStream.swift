@@ -332,7 +332,7 @@ final class SemanticObservationStream {
             observation: observation,
             previous: previous?.observation,
             trace: trace,
-            delta: trace.endpointDeltaProjection
+            delta: trace.endpointDelta
         )
     }
 

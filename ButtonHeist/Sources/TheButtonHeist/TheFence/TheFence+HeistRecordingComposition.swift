@@ -168,7 +168,7 @@ enum RecordingExpectationInference {
               before.hash != after.hash
         else { return nil }
 
-        if case .screenChanged? = trace.endpointDeltaProjection {
+        if case .screenChanged? = trace.endpointDelta {
             return WaitStep(predicate: .changed(.screen()), timeout: 10)
         }
 
