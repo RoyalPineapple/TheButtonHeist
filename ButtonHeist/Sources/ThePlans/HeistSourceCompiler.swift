@@ -39,7 +39,9 @@ public struct HeistSourceCompiler: Sendable {
         }
 
         HeistSourceCompilerTrace.write("preparing Swift heist compile")
-        let overrideArtifacts = try ThePlansBuildArtifacts.resolveEnvironmentOverride()
+        let artifacts = try ThePlansBuildArtifacts.resolve(explicitPackageRoot: packageRoot)
+        HeistSourceCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
+
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("heist-source-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true)
@@ -56,88 +58,16 @@ public struct HeistSourceCompiler: Sendable {
         let moduleCache = buildDirectory.appendingPathComponent("ModuleCache", isDirectory: true)
         try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
 
-        if let artifacts = overrideArtifacts {
-            HeistSourceCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
-            return try compileWithBuiltThePlansArtifacts(
-                source: source,
-                compileDirectory: compileDirectory,
-                buildDirectory: buildDirectory,
-                moduleCache: moduleCache,
-                artifacts: artifacts
-            )
-        }
-
-        HeistSourceCompilerTrace.write("resolving ButtonHeist package root")
-        let packageRoot = try packageRoot ?? LocalThePlansPackage.resolve()
-        HeistSourceCompilerTrace.write("resolved ButtonHeist package root: \(packageRoot.path)")
-        if let artifacts = try ThePlansBuildArtifacts.resolve(in: packageRoot) {
-            HeistSourceCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
-            return try compileWithBuiltThePlansArtifacts(
-                source: source,
-                compileDirectory: compileDirectory,
-                buildDirectory: buildDirectory,
-                moduleCache: moduleCache,
-                artifacts: artifacts
-            )
-        }
-
-        let thePlansSource = try LocalThePlansPackage.thePlansSourceDirectory(in: packageRoot)
-
-        HeistSourceCompilerTrace.write("compiling ThePlans module")
-        let moduleResult = try ProcessRunner.run(
-            executable: URL(fileURLWithPath: "/usr/bin/env"),
-            arguments: swiftcThePlansArguments(
-                sourceDirectory: thePlansSource,
-                buildDirectory: buildDirectory,
-                moduleCache: moduleCache
-            )
+        return try compile(
+            source: source,
+            compileDirectory: compileDirectory,
+            buildDirectory: buildDirectory,
+            moduleCache: moduleCache,
+            artifacts: artifacts
         )
-        guard moduleResult.exitCode == 0 else {
-            throw HeistSourceCompilerError.compileFailed(
-                source.path,
-                moduleResult.diagnostics
-            )
-        }
-
-        let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
-        HeistSourceCompilerTrace.write("compiling Swift heist wrapper")
-        let compilerResult = try ProcessRunner.run(
-            executable: URL(fileURLWithPath: "/usr/bin/env"),
-            arguments: swiftcPlanCompilerArguments(
-                compileDirectory: compileDirectory,
-                buildDirectory: buildDirectory,
-                moduleCache: moduleCache,
-                executableURL: executableURL
-            )
-        )
-        guard compilerResult.exitCode == 0 else {
-            throw HeistSourceCompilerError.compileFailed(
-                source.path,
-                compilerResult.diagnostics
-            )
-        }
-
-        HeistSourceCompilerTrace.write("running Swift heist wrapper")
-        let result = try ProcessRunner.run(
-            executable: executableURL,
-            arguments: []
-        )
-
-        guard result.exitCode == 0 else {
-            throw HeistSourceCompilerError.compileFailed(
-                source.path,
-                result.diagnostics
-            )
-        }
-
-        do {
-            return try HeistPlan.decodeValidatedHeistJSON(from: result.stdout, sourceURL: source)
-        } catch {
-            throw HeistSourceCompilerError.invalidCompilerOutput(String(describing: error))
-        }
     }
 
-    private func compileWithBuiltThePlansArtifacts(
+    private func compile(
         source: URL,
         compileDirectory: URL,
         buildDirectory: URL,
@@ -145,15 +75,14 @@ public struct HeistSourceCompiler: Sendable {
         artifacts: ThePlansBuildArtifacts
     ) throws -> HeistPlan {
         let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
-        HeistSourceCompilerTrace.write("compiling Swift heist wrapper with built ThePlans artifacts")
+        HeistSourceCompilerTrace.write("compiling Swift heist wrapper against built ThePlans artifacts")
         let compilerResult = try ProcessRunner.run(
             executable: URL(fileURLWithPath: "/usr/bin/env"),
             arguments: swiftcPlanCompilerArguments(
                 compileDirectory: compileDirectory,
-                buildDirectory: buildDirectory,
                 moduleCache: moduleCache,
                 executableURL: executableURL,
-                builtArtifacts: artifacts
+                artifacts: artifacts
             )
         )
         guard compilerResult.exitCode == 0 else {
@@ -216,44 +145,11 @@ public struct HeistSourceCompiler: Sendable {
         return sourcesURL
     }
 
-    private func swiftcThePlansArguments(
-        sourceDirectory: URL,
-        buildDirectory: URL,
-        moduleCache: URL
-    ) throws -> [String] {
-        let libraryURL = buildDirectory
-            .appendingPathComponent("libThePlans.\(Self.dynamicLibraryExtension)")
-        let moduleURL = buildDirectory.appendingPathComponent("ThePlans.swiftmodule")
-        var arguments = [
-            "swiftc",
-            "-j",
-            "1",
-            "-num-threads",
-            "1",
-            "-emit-library",
-            "-emit-module",
-            "-module-name",
-            "ThePlans",
-            "-parse-as-library",
-            "-swift-version",
-            "6",
-            "-module-cache-path",
-            moduleCache.path,
-            "-emit-module-path",
-            moduleURL.path,
-            "-o",
-            libraryURL.path,
-        ]
-        arguments.append(contentsOf: try swiftSourceFiles(in: sourceDirectory).map(\.path))
-        return arguments
-    }
-
     private func swiftcPlanCompilerArguments(
         compileDirectory: URL,
-        buildDirectory: URL,
         moduleCache: URL,
         executableURL: URL,
-        builtArtifacts: ThePlansBuildArtifacts? = nil
+        artifacts: ThePlansBuildArtifacts
     ) -> [String] {
         var arguments = [
             "swiftc",
@@ -266,55 +162,14 @@ public struct HeistSourceCompiler: Sendable {
             "-module-cache-path",
             moduleCache.path,
             "-I",
-            builtArtifacts?.modulesDirectory.path ?? buildDirectory.path,
+            artifacts.modulesDirectory.path,
             "-o",
             executableURL.path,
             compileDirectory.appendingPathComponent("PlanSource.swift").path,
             compileDirectory.appendingPathComponent("main.swift").path,
         ]
-
-        if let builtArtifacts {
-            arguments.append(contentsOf: builtArtifacts.objectFiles.map(\.path))
-        } else {
-            arguments.append(contentsOf: [
-                "-L",
-                buildDirectory.path,
-                "-lThePlans",
-                "-Xlinker",
-                "-rpath",
-                "-Xlinker",
-                buildDirectory.path,
-            ])
-        }
-
+        arguments.append(contentsOf: artifacts.objectFiles.map(\.path))
         return arguments
-    }
-
-    private func swiftSourceFiles(in sourceDirectory: URL) throws -> [URL] {
-        guard let enumerator = FileManager.default.enumerator(
-            at: sourceDirectory,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            throw HeistSourceCompilerError.packageRootNotFound
-        }
-
-        var files: [URL] = []
-        for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
-            let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
-            if values.isRegularFile == true {
-                files.append(fileURL)
-            }
-        }
-        return files.sorted { $0.path < $1.path }
-    }
-
-    private static var dynamicLibraryExtension: String {
-        #if os(macOS)
-        "dylib"
-        #else
-        "so"
-        #endif
     }
 }
 
@@ -322,7 +177,7 @@ public enum HeistSourceCompilerError: Error, Sendable, Equatable, CustomStringCo
     case invalidEntry(String)
     case sourceFileNotFound(String)
     case packageRootNotFound
-    case buildArtifactsNotFound(String)
+    case buildArtifactsNotFound(searched: [String], hint: String)
     case compileFailed(String, String)
     case invalidCompilerOutput(String)
 
@@ -333,9 +188,20 @@ public enum HeistSourceCompilerError: Error, Sendable, Equatable, CustomStringCo
         case .sourceFileNotFound(let path):
             return "Swift heist source file not found: \(path)"
         case .packageRootNotFound:
-            return "could not find local ButtonHeist package root for ThePlans"
-        case .buildArtifactsNotFound(let path):
-            return "could not find built ThePlans artifacts at \(path)"
+            return """
+            could not locate a local ButtonHeist package root containing Sources/ThePlans. \
+            Run the compiler from inside a ButtonHeist checkout, or set HEIST_THEPLANS_BUILD_DIR \
+            to a directory holding built ThePlans artifacts \
+            (Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o).
+            """
+        case .buildArtifactsNotFound(let searched, let hint):
+            let searchedList = searched.map { "  - \($0)" }.joined(separator: "\n")
+            return """
+            could not find built ThePlans artifacts for Swift compilation.
+            searched:
+            \(searchedList)
+            \(hint)
+            """
         case .compileFailed(let path, let diagnostics):
             return "failed to compile Swift heist source \(path): \(diagnostics)"
         case .invalidCompilerOutput(let diagnostics):
@@ -385,20 +251,6 @@ private enum LocalThePlansPackage {
         throw HeistSourceCompilerError.packageRootNotFound
     }
 
-    static func thePlansSourceDirectory(in packageRoot: URL) throws -> URL {
-        let direct = packageRoot.appendingPathComponent("Sources/ThePlans", isDirectory: true)
-        if FileManager.default.fileExists(atPath: direct.path) {
-            return direct
-        }
-
-        let nested = packageRoot.appendingPathComponent("ButtonHeist/Sources/ThePlans", isDirectory: true)
-        if FileManager.default.fileExists(atPath: nested.path) {
-            return nested
-        }
-
-        throw HeistSourceCompilerError.packageRootNotFound
-    }
-
     private static func candidateRoots(from url: URL) -> [URL] {
         var roots: [URL] = []
         var current = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
@@ -420,32 +272,63 @@ private enum LocalThePlansPackage {
     }
 }
 
+/// The single resolution path for built ThePlans artifacts used by Swift heist
+/// compilation. `HEIST_THEPLANS_BUILD_DIR` is the deterministic override; absent
+/// it, the local package's `.build` directories are searched. Both routes feed
+/// the same compile path, and a miss reports what was searched and how to fix it.
 private struct ThePlansBuildArtifacts {
+    static let environmentOverrideKey = "HEIST_THEPLANS_BUILD_DIR"
+
     let buildDirectory: URL
     let modulesDirectory: URL
     let objectFiles: [URL]
 
-    static func resolveEnvironmentOverride() throws -> ThePlansBuildArtifacts? {
-        if let override = ProcessInfo.processInfo.environment["HEIST_THEPLANS_BUILD_DIR"],
-           !override.isEmpty {
+    static func resolve(explicitPackageRoot: URL?) throws -> ThePlansBuildArtifacts {
+        if let override = environmentOverridePath() {
+            HeistSourceCompilerTrace.write("resolving \(environmentOverrideKey) override at \(override)")
             let buildDirectory = URL(fileURLWithPath: override, isDirectory: true)
             guard let artifacts = try resolveBuildDirectory(buildDirectory) else {
-                throw HeistSourceCompilerError.buildArtifactsNotFound(buildDirectory.path)
+                throw HeistSourceCompilerError.buildArtifactsNotFound(
+                    searched: [buildDirectory.path],
+                    hint: """
+                    \(environmentOverrideKey)=\(override) does not contain built ThePlans artifacts \
+                    (expected Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o). \
+                    Build them with `swift build --package-path ButtonHeist --product heist-plan` \
+                    and point \(environmentOverrideKey) at ButtonHeist/.build/debug.
+                    """
+                )
             }
             return artifacts
         }
 
-        return nil
-    }
-
-    static func resolve(in packageRoot: URL) throws -> ThePlansBuildArtifacts? {
-        for buildDirectory in try candidateBuildDirectories(in: packageRoot) {
+        HeistSourceCompilerTrace.write("resolving ButtonHeist package root")
+        let packageRoot = try explicitPackageRoot ?? LocalThePlansPackage.resolve()
+        HeistSourceCompilerTrace.write("resolved ButtonHeist package root: \(packageRoot.path)")
+        let candidates = try candidateBuildDirectories(in: packageRoot)
+        for buildDirectory in candidates {
             if let artifacts = try resolveBuildDirectory(buildDirectory) {
                 return artifacts
             }
         }
 
-        return nil
+        throw HeistSourceCompilerError.buildArtifactsNotFound(
+            searched: candidates.map(\.path),
+            hint: """
+            No built ThePlans artifacts found under \
+            \(packageRoot.appendingPathComponent(".build").path). \
+            Build them with `swift build --package-path ButtonHeist --product heist-plan`, \
+            or set \(environmentOverrideKey) to a directory containing \
+            Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o.
+            """
+        )
+    }
+
+    private static func environmentOverridePath() -> String? {
+        guard let override = ProcessInfo.processInfo.environment[environmentOverrideKey],
+              !override.isEmpty else {
+            return nil
+        }
+        return override
     }
 
     private static func resolveBuildDirectory(_ buildDirectory: URL) throws -> ThePlansBuildArtifacts? {
