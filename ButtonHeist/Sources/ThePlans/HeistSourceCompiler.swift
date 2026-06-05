@@ -380,7 +380,6 @@ private enum HeistSourceCompilerTrace {
         let line = "heist-source-compiler: \(message)\n"
         if let data = line.data(using: .utf8) {
             FileHandle.standardError.write(data)
-            try? FileHandle.standardError.synchronize()
         }
     }
 }
