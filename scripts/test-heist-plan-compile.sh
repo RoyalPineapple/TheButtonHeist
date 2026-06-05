@@ -39,7 +39,8 @@ try HeistPlan("compiled") {
 }
 SWIFT
 
-"$HEIST_PLAN_TOOL" compile "$SOURCE" --entry makeHeist --output "$OUTPUT"
+echo "Compiling Swift fixture with heist-plan"
+HEIST_SOURCE_COMPILER_TRACE=1 "$HEIST_PLAN_TOOL" compile "$SOURCE" --entry makeHeist --output "$OUTPUT"
 [[ -d "$OUTPUT" ]] || {
     echo "Error: compile did not produce a .heist package directory" >&2
     exit 1
@@ -53,6 +54,8 @@ SWIFT
     exit 1
 }
 
+echo "Validating compiled heist package"
 "$HEIST_PLAN_TOOL" validate "$OUTPUT"
+echo "Rendering compiled heist package as canonical Swift"
 "$HEIST_PLAN_TOOL" render-swift "$OUTPUT" > "$RENDERED"
 diff -u "$EXPECTED" "$RENDERED"

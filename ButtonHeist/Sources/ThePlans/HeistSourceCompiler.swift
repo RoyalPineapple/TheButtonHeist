@@ -53,6 +53,7 @@ public struct HeistSourceCompiler: Sendable {
         let moduleCache = buildDirectory.appendingPathComponent("ModuleCache", isDirectory: true)
         try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
 
+        HeistSourceCompilerTrace.write("compiling ThePlans module")
         let moduleResult = try ProcessRunner.run(
             executable: URL(fileURLWithPath: "/usr/bin/env"),
             arguments: swiftcThePlansArguments(
@@ -69,6 +70,7 @@ public struct HeistSourceCompiler: Sendable {
         }
 
         let executableURL = buildDirectory.appendingPathComponent("plan-compiler")
+        HeistSourceCompilerTrace.write("compiling Swift heist wrapper")
         let compilerResult = try ProcessRunner.run(
             executable: URL(fileURLWithPath: "/usr/bin/env"),
             arguments: swiftcPlanCompilerArguments(
@@ -85,6 +87,7 @@ public struct HeistSourceCompiler: Sendable {
             )
         }
 
+        HeistSourceCompilerTrace.write("running Swift heist wrapper")
         let result = try ProcessRunner.run(
             executable: executableURL,
             arguments: []
@@ -353,6 +356,19 @@ private enum ProcessRunner {
             stdout: try capture.stdoutData(),
             stderr: try capture.stderrString()
         )
+    }
+}
+
+private enum HeistSourceCompilerTrace {
+    static func write(_ message: String) {
+        guard ProcessInfo.processInfo.environment["HEIST_SOURCE_COMPILER_TRACE"] == "1" else {
+            return
+        }
+
+        let line = "heist-source-compiler: \(message)\n"
+        if let data = line.data(using: .utf8) {
+            FileHandle.standardError.write(data)
+        }
     }
 }
 
