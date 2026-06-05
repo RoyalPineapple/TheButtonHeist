@@ -30,7 +30,7 @@ The heist is clean: read the interface, make the move, keep the receipt.
 ```mermaid
 flowchart TB
     AX["1 App speaks accessibility"]
-    Model["2 The Button Heist builds a world model"]
+    Model["2 The Button Heist builds a semantic world model"]
     Intent["3 Agent or heist chooses intent"]
     Runtime["4 Runtime acts and settles"]
     Evidence["5 Evidence comes back"]
