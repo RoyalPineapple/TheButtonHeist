@@ -371,7 +371,7 @@ extension FenceResponse {
                 }
             }
         }
-        if let delta = result.accessibilityTrace?.endpointDeltaProjection {
+        if let delta = result.accessibilityTrace?.endpointDelta {
             output += "  \(formatDelta(delta))"
         }
         return output

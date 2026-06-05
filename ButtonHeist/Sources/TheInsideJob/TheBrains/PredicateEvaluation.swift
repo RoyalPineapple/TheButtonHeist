@@ -47,7 +47,7 @@ enum PredicateEvaluation {
         evaluate(
             predicate,
             currentElements: trace.captures.last?.interface.projectedElements ?? [],
-            delta: trace.endpointDeltaProjection
+            delta: trace.endpointDelta
         )
     }
 

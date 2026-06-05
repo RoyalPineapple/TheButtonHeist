@@ -230,7 +230,7 @@ import TheScore
         let settledDiagnostics = success ? nil : SettledWaitDiagnostics(
             baseline: changeBaseline.map(SettledEventSummary.init(event:)),
             last: latest.map(SettledEventSummary.init(event:)),
-            lastDelta: trace?.endpointDeltaProjection ?? latest?.delta,
+            lastDelta: trace?.endpointDelta ?? latest?.delta,
             sawFutureObservation: sawFutureObservation
         )
         return Self.waitReceipt(

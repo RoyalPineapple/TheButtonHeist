@@ -79,7 +79,7 @@ struct PublicResponseModel: FencePublicJSONResponse {
         case .heistExecution(_, let result, let accessibilityTrace):
             try PublicHeistExecutionResponse(
                 result: result,
-                netDelta: accessibilityTrace?.meaningfulEndpointDeltaProjection
+                netDelta: accessibilityTrace?.meaningfulEndpointDelta
             ).encode(to: encoder)
         case .sessionState(let payload):
             try PublicSessionStateResponse(payload: payload).encode(to: encoder)

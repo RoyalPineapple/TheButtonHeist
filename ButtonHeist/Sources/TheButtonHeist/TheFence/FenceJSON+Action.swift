@@ -35,9 +35,9 @@ struct PublicActionResponse: FencePublicJSONResponse {
             self.value = nil
             self.rotor = nil
         }
-        self.delta = result.accessibilityTrace?.endpointDeltaProjection.map(PublicDelta.init)
-        self.screenName = result.accessibilityTrace?.endpointScreenNameProjection
-        self.screenId = result.accessibilityTrace?.endpointScreenIdProjection
+        self.delta = result.accessibilityTrace?.endpointDelta.map(PublicDelta.init)
+        self.screenName = result.accessibilityTrace?.endpointScreenName
+        self.screenId = result.accessibilityTrace?.endpointScreenId
         self.errorClass = result.publicErrorClass
         let details = result.publicFailureDetails
         self.errorCode = details?.errorCode

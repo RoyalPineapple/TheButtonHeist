@@ -2,7 +2,9 @@ import ThePlans
 import Foundation
 import AccessibilitySnapshotModel
 
-enum AccessibilityTraceDiffProjection {
+/// Computes the compact delta between two accessibility captures. Captures stay
+/// the durable truth; this derives the diff fact on demand.
+enum AccessibilityTraceDiff {
 
     static func projectDelta(
         between before: AccessibilityTrace.Capture,

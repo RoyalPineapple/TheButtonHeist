@@ -23,7 +23,7 @@ extension FenceResponse {
             var line = "  [\(index)] \(step.reportCommandName ?? step.reportStepName)"
             if let failureMessage = step.reportFailureMessage {
                 line += " -> error: \(failureMessage)"
-            } else if let delta = step.reportActionResult?.accessibilityTrace?.endpointDeltaProjection {
+            } else if let delta = step.reportActionResult?.accessibilityTrace?.endpointDelta {
                 line += " -> \(Self.compactDeltaKind(delta))"
             }
             if let expectation = step.reportExpectation {
@@ -37,7 +37,7 @@ extension FenceResponse {
     /// Screen id of the last action that ran, if recorded.
     private static func finalScreenId(_ result: HeistExecutionResult) -> String? {
         result.finalActionResultsInExecutionOrder
-            .compactMap { $0.accessibilityTrace?.endpointScreenIdProjection }
+            .compactMap { $0.accessibilityTrace?.endpointScreenId }
             .last
     }
 

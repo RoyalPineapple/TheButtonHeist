@@ -255,8 +255,8 @@ final class AccessibilityTraceTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "settings_context")
         )
 
-        XCTAssertEqual(trace.endpointScreenNameProjection, "Settings")
-        XCTAssertEqual(trace.endpointScreenIdProjection, "settings_context")
+        XCTAssertEqual(trace.endpointScreenName, "Settings")
+        XCTAssertEqual(trace.endpointScreenId, "settings_context")
     }
 
     func testTraceConstructionNormalizesToSingleLinkedList() throws {
