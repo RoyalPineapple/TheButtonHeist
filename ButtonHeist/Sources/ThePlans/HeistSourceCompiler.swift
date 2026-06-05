@@ -38,6 +38,7 @@ public struct HeistSourceCompiler: Sendable {
             throw HeistSourceCompilerError.sourceFileNotFound(source.path)
         }
 
+        HeistSourceCompilerTrace.write("preparing Swift heist compile")
         let packageRoot = try packageRoot ?? LocalThePlansPackage.resolve()
         let thePlansSource = try LocalThePlansPackage.thePlansSourceDirectory(in: packageRoot)
         let tempURL = FileManager.default.temporaryDirectory
@@ -153,6 +154,10 @@ public struct HeistSourceCompiler: Sendable {
         let moduleURL = buildDirectory.appendingPathComponent("ThePlans.swiftmodule")
         var arguments = [
             "swiftc",
+            "-j",
+            "1",
+            "-num-threads",
+            "1",
             "-emit-library",
             "-emit-module",
             "-module-name",
@@ -179,6 +184,10 @@ public struct HeistSourceCompiler: Sendable {
     ) -> [String] {
         [
             "swiftc",
+            "-j",
+            "1",
+            "-num-threads",
+            "1",
             "-swift-version",
             "6",
             "-module-cache-path",
@@ -371,6 +380,7 @@ private enum HeistSourceCompilerTrace {
         let line = "heist-source-compiler: \(message)\n"
         if let data = line.data(using: .utf8) {
             FileHandle.standardError.write(data)
+            try? FileHandle.standardError.synchronize()
         }
     }
 }
