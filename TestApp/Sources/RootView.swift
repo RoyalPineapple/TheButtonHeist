@@ -45,6 +45,9 @@ struct RootView: View {
                 NavigationLink("Menu") {
                     MenuOrderView()
                 }
+                NavigationLink("Long List") {
+                    LongListView()
+                }
                 NavigationLink("Settings") {
                     SettingsView()
                 }
@@ -80,9 +83,6 @@ struct RootView: View {
                 }
 
                 Section("Scroll Tests") {
-                    NavigationLink("Long List") {
-                        LongListView()
-                    }
                     NavigationLink("Grid Gallery") {
                         GridGalleryView()
                     }
