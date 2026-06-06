@@ -1,6 +1,15 @@
 import Foundation
 
 /// Actor-owned client table for `TheMuscle`.
+///
+/// **Ownership.** Auth/admission source of truth, owned by `TheMuscleAdmission`.
+/// Key: `clientId: Int` (allocated by the transport). Tracks each client's
+/// `ClientAuthenticationState` phase. Lifetime: per connected client, from
+/// connect to disconnect. Invalidation: `remove(_:)` on disconnect, `removeAll()`
+/// on teardown. This is the admission security boundary — it is not the
+/// transport's `SocketClientRegistry` (which owns socket facts under the same
+/// key) and must stay separate per the no-auth-in-transport rule. See
+/// `docs/DATA-OWNERSHIP.md`.
 struct TheMuscleClientRegistry {
     private var clients: [Int: ClientAuthenticationState] = [:]
 

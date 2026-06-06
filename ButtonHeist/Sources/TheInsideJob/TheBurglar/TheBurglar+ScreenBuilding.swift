@@ -48,8 +48,6 @@ extension TheBurglar {
         screenElements.reserveCapacity(elements.count)
         var heistIdByElement: [AccessibilityElement: HeistId] = [:]
         heistIdByElement.reserveCapacity(elements.count)
-        var heistIdByElementPath: [TreePath: HeistId] = [:]
-        heistIdByElementPath.reserveCapacity(elements.count)
         var elementRefs: [HeistId: Screen.ElementRef] = [:]
         elementRefs.reserveCapacity(elements.count)
         for ((parsedElement, path, _), heistId) in zip(indexedElements, resolvedHeistIds) {
@@ -63,7 +61,6 @@ extension TheBurglar {
             )
             screenElements[heistId] = entry
             heistIdByElement[parsedElement] = heistId
-            heistIdByElementPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
                 object: context?.object,
                 scrollView: context?.scrollView
@@ -90,7 +87,6 @@ extension TheBurglar {
             containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
             heistIdByElement: heistIdByElement,
-            heistIdByElementPath: heistIdByElementPath,
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: identityContext.contentFramesByPath,

@@ -59,7 +59,7 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(screen.liveCapture.heistIdByElement[element], "ok_button")
     }
 
-    func testBuildScreenKeepsPathHeistIdsForValueEqualElements() {
+    func testBuildScreenKeepsDistinctEntriesForValueEqualElements() {
         let first = makeElement(label: "Item", traits: .button)
         let second = makeElement(label: "Item", traits: .button)
         let result = TheBurglar.ParseResult(
@@ -74,9 +74,11 @@ final class TheBurglarApplyTests: XCTestCase {
         let screen = TheBurglar.buildScreen(from: result)
         let interface = TheStash.WireConversion.toInterface(from: screen)
 
+        // Value-equal elements collide as `heistIdByElement` keys, but each still
+        // gets a distinct synthesized heistId and a distinct semantic entry and
+        // interface annotation path.
         XCTAssertEqual(screen.semantic.elements.count, 2)
-        XCTAssertEqual(screen.liveCapture.heistIdByElementPath[TreePath([0])], "item_button_1")
-        XCTAssertEqual(screen.liveCapture.heistIdByElementPath[TreePath([1])], "item_button_2")
+        XCTAssertEqual(Set(screen.semantic.elements.keys), ["item_button_1", "item_button_2"])
         XCTAssertEqual(interface.annotations.elements.map(\.path), [TreePath([0]), TreePath([1])])
     }
 

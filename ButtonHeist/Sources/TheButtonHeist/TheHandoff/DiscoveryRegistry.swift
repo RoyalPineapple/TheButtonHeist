@@ -5,6 +5,14 @@ enum DiscoveryMutation: Equatable {
 }
 
 /// Deduplicates Bonjour advertisements by device identity, tracking the newest per identity.
+///
+/// **Ownership.** Ephemeral index, owned by `DeviceDiscovery` (TheHandoff), for
+/// the span of a discovery scan. Key: Bonjour service name, plus device identity
+/// for the visible-selection index. Invalidation: `recordLost` evicts a service
+/// name; a newer advertisement supersedes an older one for the same identity.
+/// It cannot be derived from a receipt — the network emits raw add/remove
+/// events and this is the dedup state that turns them into a stable device list.
+/// See `docs/DATA-OWNERSHIP.md`.
 struct DiscoveryRegistry {
     struct Advertisement {
         let device: DiscoveredDevice
