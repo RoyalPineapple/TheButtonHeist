@@ -15,6 +15,23 @@ public enum HeistStepStatus: String, Sendable {
     case warned
 }
 
+/// One warning emitted by a `Warn(...)` heist step.
+public struct HeistExecutionWarning: Sendable, Equatable {
+    public let path: String
+    public let displayName: String
+    public let message: String
+
+    public init(
+        path: String,
+        displayName: String,
+        message: String
+    ) {
+        self.path = path
+        self.displayName = displayName
+        self.message = message
+    }
+}
+
 public extension HeistExecutionStepResult {
     /// Report status derived from the execution outcome.
     var reportStatus: HeistStepStatus {
@@ -235,6 +252,13 @@ public extension HeistExecutionResult {
         Self.reportRows(steps)
     }
 
+    /// Warnings emitted anywhere in the heist execution tree, in execution
+    /// order. Each warning carries the exact runtime path of the `Warn(...)`
+    /// step that fired.
+    var warnings: [HeistExecutionWarning] {
+        Self.warnings(in: steps)
+    }
+
     private static func reportRows(_ steps: [HeistExecutionStepResult]) -> [HeistExecutionStepResult] {
         steps.flatMap { step -> [HeistExecutionStepResult] in
             switch step.kind {
@@ -244,6 +268,24 @@ public extension HeistExecutionResult {
                  .warn, .fail, .heist, .invoke, .skipped:
                 return [step] + reportRows(step.children)
             }
+        }
+    }
+
+    private static func warnings(in steps: [HeistExecutionStepResult]) -> [HeistExecutionWarning] {
+        steps.flatMap { step -> [HeistExecutionWarning] in
+            let current: [HeistExecutionWarning]
+            if step.kind == .warn {
+                current = [
+                    HeistExecutionWarning(
+                        path: step.path,
+                        displayName: step.reportDisplayName,
+                        message: step.message ?? "warning"
+                    ),
+                ]
+            } else {
+                current = []
+            }
+            return current + warnings(in: step.children)
         }
     }
 }

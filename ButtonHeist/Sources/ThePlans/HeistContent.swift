@@ -22,55 +22,6 @@ public extension HeistPlan {
     }
 }
 
-// swiftlint:disable identifier_name
-public func Heist<Content: HeistContent>(
-    @HeistBuilder _ content: () throws -> Content
-) throws -> HeistPlan {
-    try HeistPlan(content)
-}
-
-public func Heist<Content: HeistContent>(
-    _ input: String,
-    parameter: String = "input",
-    @HeistBuilder _ content: (StringExpr) throws -> Content
-) throws -> HeistPlan {
-    try HeistPlan(rootParameter: .string(name: parameter)) {
-        try content(try StringExpr(ref: parameter))
-    }
-}
-
-@_disfavoredOverload
-public func Heist<Content: HeistContent>(
-    _ input: ElementTarget,
-    parameter: String = "input",
-    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-) throws -> HeistPlan {
-    try HeistPlan(rootParameter: .elementTarget(name: parameter)) {
-        try content(try ElementTargetExpr(ref: parameter))
-    }
-}
-
-public func Heist<Content: HeistContent>(
-    _ input: ElementTargetExpr,
-    parameter: String = "input",
-    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-) throws -> HeistPlan {
-    try HeistPlan(rootParameter: .elementTarget(name: parameter)) {
-        try content(try ElementTargetExpr(ref: parameter))
-    }
-}
-
-public func Heist<Content: HeistContent>(
-    _ values: [String],
-    parameter: String = "item",
-    @HeistBuilder _ content: (StringExpr) throws -> Content
-) throws -> HeistPlan {
-    try HeistPlan {
-        try ForEach(values, parameter: parameter, content: content)
-    }
-}
-// swiftlint:enable identifier_name
-
 private extension HeistPlan {
     init(
         dslName name: String?,

@@ -155,6 +155,27 @@ let heist = try HeistPlan("searchFlow") {
 }
 ```
 
+An in-app XCTest or Swift Testing run:
+
+```swift
+import TheInsideJob
+
+let heist = try await Heist {
+    Warn("ok")
+}
+
+heist.result
+
+try await Heist("milk") { query in
+    TypeText(query, into: .label("Search"))
+    Activate(.label("Search"))
+}
+
+try await Heist(.label("Delete")) { target in
+    Activate(target)
+}
+```
+
 The examples live in [examples/](examples/). The generated command and MCP
 surfaces live in [docs/reference/commands.md](docs/reference/commands.md) and
 [docs/reference/mcp-tools.md](docs/reference/mcp-tools.md).

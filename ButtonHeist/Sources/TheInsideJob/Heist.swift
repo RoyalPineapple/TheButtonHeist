@@ -1,0 +1,313 @@
+#if canImport(UIKit)
+#if DEBUG
+import Foundation
+
+@_exported import TheScore
+
+/// Completed in-process heist execution receipt for app and UI tests.
+///
+/// Constructing a `Heist` builds or accepts a runtime-validated `HeistPlan`,
+/// runs it through the same in-app heist executor used by `run_heist`, and then
+/// exposes the execution result for assertions and reporting.
+public struct Heist: Sendable {
+    public let result: HeistExecutionResult
+
+    @MainActor
+    public init(
+        _ plan: HeistPlan,
+        argument: HeistArgument = .none
+    ) async throws {
+        self.result = try await Self.execute(plan, argument: argument, runtime: .shared)
+    }
+
+    @MainActor
+    init(
+        _ plan: HeistPlan,
+        argument: HeistArgument = .none,
+        runtime: InAppHeistRuntime
+    ) async throws {
+        self.result = try await Self.execute(plan, argument: argument, runtime: runtime)
+    }
+
+    @MainActor
+    public init<Content: HeistContent>(
+        @HeistBuilder _ content: () throws -> Content
+    ) async throws {
+        let plan = try HeistPlan(content)
+        self.result = try await Self.execute(plan, argument: .none, runtime: .shared)
+    }
+
+    @MainActor
+    init<Content: HeistContent>(
+        runtime: InAppHeistRuntime,
+        @HeistBuilder _ content: () throws -> Content
+    ) async throws {
+        let plan = try HeistPlan(content)
+        self.result = try await Self.execute(plan, argument: .none, runtime: runtime)
+    }
+
+    @MainActor
+    public init<Content: HeistContent>(
+        _ input: String,
+        parameter: String = "input",
+        @HeistBuilder _ content: (StringExpr) throws -> Content
+    ) async throws {
+        let plan = try Self.plan(parameter: .string(name: parameter)) {
+            try content(try StringExpr(ref: parameter))
+        }
+        self.result = try await Self.execute(
+            plan,
+            argument: .string(.literal(input)),
+            runtime: .shared
+        )
+    }
+
+    @MainActor
+    init<Content: HeistContent>(
+        _ input: String,
+        parameter: String = "input",
+        runtime: InAppHeistRuntime,
+        @HeistBuilder _ content: (StringExpr) throws -> Content
+    ) async throws {
+        let plan = try Self.plan(parameter: .string(name: parameter)) {
+            try content(try StringExpr(ref: parameter))
+        }
+        self.result = try await Self.execute(
+            plan,
+            argument: .string(.literal(input)),
+            runtime: runtime
+        )
+    }
+
+    @_disfavoredOverload
+    @MainActor
+    public init<Content: HeistContent>(
+        _ input: ElementTarget,
+        parameter: String = "input",
+        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+    ) async throws {
+        try await self.init(
+            .target(input),
+            parameter: parameter,
+            runtime: .shared,
+            content
+        )
+    }
+
+    @MainActor
+    init<Content: HeistContent>(
+        _ input: ElementTarget,
+        parameter: String = "input",
+        runtime: InAppHeistRuntime,
+        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+    ) async throws {
+        try await self.init(
+            .target(input),
+            parameter: parameter,
+            runtime: runtime,
+            content
+        )
+    }
+
+    @MainActor
+    public init<Content: HeistContent>(
+        _ input: ElementTargetExpr,
+        parameter: String = "input",
+        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+    ) async throws {
+        try await self.init(
+            input,
+            parameter: parameter,
+            runtime: .shared,
+            content
+        )
+    }
+
+    @MainActor
+    init<Content: HeistContent>(
+        _ input: ElementTargetExpr,
+        parameter: String = "input",
+        runtime: InAppHeistRuntime,
+        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+    ) async throws {
+        let plan = try Self.plan(parameter: .elementTarget(name: parameter)) {
+            try content(try ElementTargetExpr(ref: parameter))
+        }
+        let target = try input.resolve(in: .empty)
+        self.result = try await Self.execute(
+            plan,
+            argument: .elementTarget(.target(target)),
+            runtime: runtime
+        )
+    }
+
+    @MainActor
+    public init<Content: HeistContent>(
+        _ values: [String],
+        parameter: String = "item",
+        @HeistBuilder _ content: (StringExpr) throws -> Content
+    ) async throws {
+        let plan = try HeistPlan {
+            try ForEach(values, parameter: parameter, content: content)
+        }
+        self.result = try await Self.execute(plan, argument: .none, runtime: .shared)
+    }
+
+    @MainActor
+    init<Content: HeistContent>(
+        _ values: [String],
+        parameter: String = "item",
+        runtime: InAppHeistRuntime,
+        @HeistBuilder _ content: (StringExpr) throws -> Content
+    ) async throws {
+        let plan = try HeistPlan {
+            try ForEach(values, parameter: parameter, content: content)
+        }
+        self.result = try await Self.execute(plan, argument: .none, runtime: runtime)
+    }
+
+    private static func plan<Content: HeistContent>(
+        parameter: HeistParameter,
+        @HeistBuilder _ content: () throws -> Content
+    ) throws -> HeistPlan {
+        let content = try content()
+        return try HeistPlan(
+            parameter: parameter,
+            definitions: content.heistDefinitions,
+            body: content.heistSteps
+        )
+    }
+
+    @MainActor
+    private static func execute(
+        _ plan: HeistPlan,
+        argument: HeistArgument,
+        runtime: InAppHeistRuntime
+    ) async throws -> HeistExecutionResult {
+        let actionResult = await runtime.execute(plan, argument)
+        guard case .heistExecution(let result) = actionResult.payload else {
+            throw RuntimeError(actionResult: actionResult)
+        }
+        guard !result.isFailure else {
+            throw Failure(result)
+        }
+        return result
+    }
+}
+
+public extension Heist {
+    struct Failure: Error, Sendable, LocalizedError, CustomStringConvertible {
+        public let failedStepPath: String
+        public let failedStepKind: HeistExecutionStepKind
+        public let message: String
+        public let diagnostic: String?
+        public let result: HeistExecutionResult
+
+        public init(_ result: HeistExecutionResult) {
+            let failedStep = Self.firstFailedStep(in: result.steps)
+            self.failedStepPath = failedStep?.path ?? "$"
+            self.failedStepKind = failedStep?.kind ?? .fail
+            self.message = failedStep?.reportFailureMessage
+                ?? failedStep?.reportMessage
+                ?? "heist failed"
+            self.diagnostic = failedStep.flatMap(Self.diagnostic)
+            self.result = result
+        }
+
+        public var errorDescription: String? { description }
+
+        public var description: String {
+            var parts = [
+                "Heist failed",
+                "path=\(failedStepPath)",
+                "kind=\(failedStepKind.rawValue)",
+                "message=\(message)",
+            ]
+            if let diagnostic {
+                parts.append("diagnostic=\(diagnostic)")
+            }
+            return parts.joined(separator: " ")
+        }
+
+        private static func firstFailedStep(in steps: [HeistExecutionStepResult]) -> HeistExecutionStepResult? {
+            for step in steps {
+                if let child = firstFailedStep(in: step.children) {
+                    return child
+                }
+                if step.isFailure {
+                    return step
+                }
+            }
+            return nil
+        }
+
+        private static func diagnostic(_ step: HeistExecutionStepResult) -> String? {
+            var messages: [String] = []
+            func append(_ message: String?) {
+                guard let message, !message.isEmpty else { return }
+                messages.append(message)
+            }
+
+            append(step.actionResult?.message)
+            append(step.expectationActionResult?.message)
+            if let expectation = step.expectation {
+                append(expectation.actual)
+            }
+            append(step.caseSelection?.lastObservedSummary)
+            append(step.forEachResult?.failureReason)
+            return messages.first
+        }
+    }
+
+    private struct RuntimeError: Error, Sendable, LocalizedError, CustomStringConvertible {
+        let actionResult: ActionResult
+
+        var errorDescription: String? { description }
+
+        var description: String {
+            let message = actionResult.message ?? "heist execution did not return a heist result"
+            return "Heist runtime failed: \(message)"
+        }
+    }
+}
+
+@MainActor
+struct InAppHeistRuntime {
+    let execute: @MainActor (HeistPlan, HeistArgument) async -> ActionResult
+
+    static var shared: InAppHeistRuntime {
+        insideJob(.shared)
+    }
+
+    static func insideJob(_ job: TheInsideJob) -> InAppHeistRuntime {
+        InAppHeistRuntime { plan, argument in
+            await job.executeInAppHeist(plan, argument: argument)
+        }
+    }
+}
+
+@MainActor
+extension TheInsideJob {
+    func executeInAppHeist(
+        _ plan: HeistPlan,
+        argument: HeistArgument = .none
+    ) async -> ActionResult {
+        let shouldRestoreRuntime = !brains.semanticObservationIsActive
+        if shouldRestoreRuntime {
+            tripwire.startPulse()
+            brains.startSemanticObservation()
+            brains.safecracker.startKeyboardObservation()
+        }
+        defer {
+            if shouldRestoreRuntime {
+                brains.stopSemanticObservation()
+                tripwire.stopPulse()
+                brains.safecracker.stopKeyboardObservation()
+            }
+        }
+        return await brains.executeHeistPlan(plan, argument: argument)
+    }
+}
+
+#endif // DEBUG
+#endif // canImport(UIKit)

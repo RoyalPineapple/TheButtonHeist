@@ -391,6 +391,8 @@ private extension HeistExecutionStepResult {
             index: index,
             path: path,
             kind: kind,
+            actionCommand: actionCommand,
+            invocation: invocation,
             actionResult: actionResult,
             expectationActionResult: expectationActionResult,
             expectation: expectation,
