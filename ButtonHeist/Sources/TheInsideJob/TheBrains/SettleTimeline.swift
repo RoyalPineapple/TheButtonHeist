@@ -70,25 +70,26 @@ extension AccessibilityElement {
 @MainActor enum SettleTimeline { // swiftlint:disable:this agent_main_actor_value_type
     static func fingerprint(
         of elements: [AccessibilityElement],
-        bucket: CGFloat = CoarseFrameComparison.currentBucket
+        bucket _: CGFloat = CoarseFrameComparison.currentBucket
     ) -> Int {
         var hasher = Hasher()
         hasher.combine(elements.count)
         for element in elements {
+            let masked = element.traits.contains(.updatesFrequently)
+            hasher.combine(element.description)
             hasher.combine(element.label)
             hasher.combine(element.identifier)
             hasher.combine(element.traits.rawValue)
-            let masked = element.traits.contains(.updatesFrequently)
-            if case .frame(let rect) = element.shape, !masked {
-                let frameKey = CoarseFrameComparison.key(for: rect.cgRect, bucket: bucket)
-                hasher.combine(frameKey.minX)
-                hasher.combine(frameKey.minY)
-                hasher.combine(frameKey.width)
-                hasher.combine(frameKey.height)
-            }
             if !masked {
                 hasher.combine(element.value)
             }
+            hasher.combine(element.hint)
+            hasher.combine(element.userInputLabels)
+            hasher.combine(element.customActions.map(\.name).filter { !$0.isEmpty })
+            hasher.combine(normalizedCustomContent(element))
+            hasher.combine(element.customRotors.map(\.name).filter { !$0.isEmpty })
+            hasher.combine(element.accessibilityLanguage)
+            hasher.combine(element.respondsToUserInteraction)
         }
         return hasher.finalize()
     }
@@ -117,9 +118,10 @@ extension AccessibilityElement {
     static func changeDescription(
         from previous: [AccessibilityElement],
         to current: [AccessibilityElement],
-        bucket: CGFloat = CoarseFrameComparison.currentBucket
+        bucket _: CGFloat = CoarseFrameComparison.currentBucket
     ) -> String? {
         var changes: [String] = []
+        var truncated = false
         if previous.count != current.count {
             changes.append("count \(previous.count)->\(current.count)")
         }
@@ -131,25 +133,29 @@ extension AccessibilityElement {
             guard let summary = elementChangeDescription(
                 before: before,
                 after: after,
-                index: index,
-                bucket: bucket
+                index: index
             ) else { continue }
             changes.append(summary)
-            if changes.count == 4 { break }
+            if changes.count == 4 {
+                truncated = index < pairedCount - 1
+                break
+            }
         }
 
         guard !changes.isEmpty else { return nil }
-        let suffix = pairedCount > 4 ? "; ..." : ""
-        return "unstable accessibility changes: \(changes.joined(separator: "; "))\(suffix)"
+        let suffix = truncated ? "; ..." : ""
+        return "unstable semantic changes: \(changes.joined(separator: "; "))\(suffix)"
     }
 
     private static func elementChangeDescription(
         before: AccessibilityElement,
         after: AccessibilityElement,
-        index: Int,
-        bucket: CGFloat
+        index: Int
     ) -> String? {
         var fields: [String] = []
+        if before.description != after.description {
+            fields.append("description \(quoted(before.description))->\(quoted(after.description))")
+        }
         if before.label != after.label {
             fields.append("label \(quoted(before.label))->\(quoted(after.label))")
         }
@@ -165,20 +171,57 @@ extension AccessibilityElement {
             if before.value != after.value {
                 fields.append("value \(quoted(before.value))->\(quoted(after.value))")
             }
-            let beforeFrame = before.shape.frame
-            let afterFrame = after.shape.frame
-            let beforeKey = CoarseFrameComparison.key(for: beforeFrame, bucket: bucket)
-            let afterKey = CoarseFrameComparison.key(for: afterFrame, bucket: bucket)
-            if beforeKey != afterKey {
-                fields.append(
-                    "frame \(format(beforeFrame))->\(format(afterFrame)) " +
-                        "coarse \(beforeKey.hashFragment)->\(afterKey.hashFragment)"
-                )
-            }
+        }
+        if before.hint != after.hint {
+            fields.append("hint \(quoted(before.hint))->\(quoted(after.hint))")
+        }
+        if before.userInputLabels != after.userInputLabels {
+            fields.append("userInputLabels \(quotedList(before.userInputLabels))->\(quotedList(after.userInputLabels))")
+        }
+        let beforeActions = before.customActions.map(\.name).filter { !$0.isEmpty }
+        let afterActions = after.customActions.map(\.name).filter { !$0.isEmpty }
+        if beforeActions != afterActions {
+            fields.append("actions \(quotedList(beforeActions))->\(quotedList(afterActions))")
+        }
+        let beforeContent = normalizedCustomContent(before)
+        let afterContent = normalizedCustomContent(after)
+        if beforeContent != afterContent {
+            fields.append("customContent \(format(beforeContent))->\(format(afterContent))")
+        }
+        let beforeRotors = before.customRotors.map(\.name).filter { !$0.isEmpty }
+        let afterRotors = after.customRotors.map(\.name).filter { !$0.isEmpty }
+        if beforeRotors != afterRotors {
+            fields.append("rotors \(quotedList(beforeRotors))->\(quotedList(afterRotors))")
+        }
+        if before.accessibilityLanguage != after.accessibilityLanguage {
+            fields.append("language \(quoted(before.accessibilityLanguage))->\(quoted(after.accessibilityLanguage))")
+        }
+        if before.respondsToUserInteraction != after.respondsToUserInteraction {
+            fields.append(
+                "respondsToUserInteraction \(before.respondsToUserInteraction)->\(after.respondsToUserInteraction)"
+            )
         }
 
         guard !fields.isEmpty else { return nil }
         return "[\(index)] \(elementName(before, alternate: after)): \(fields.joined(separator: ", "))"
+    }
+
+    private struct CustomContentFingerprint: Hashable {
+        let label: String
+        let value: String
+        let isImportant: Bool
+    }
+
+    private static func normalizedCustomContent(_ element: AccessibilityElement) -> [CustomContentFingerprint] {
+        element.customContent
+            .filter { !$0.label.isEmpty || !$0.value.isEmpty }
+            .map {
+                CustomContentFingerprint(
+                    label: $0.label,
+                    value: $0.value,
+                    isImportant: $0.isImportant
+                )
+            }
     }
 
     private static func elementName(_ element: AccessibilityElement, alternate: AccessibilityElement) -> String {
@@ -194,17 +237,18 @@ extension AccessibilityElement {
         return "\"\(value)\""
     }
 
-    private static func format(_ frame: CGRect) -> String {
-        "(\(format(frame.origin.x)),\(format(frame.origin.y)),\(format(frame.size.width)),\(format(frame.size.height)))"
+    private static func quotedList(_ value: [String]?) -> String {
+        guard let value else { return "nil" }
+        return "[\(value.map { quoted($0) }.joined(separator: ", "))]"
     }
 
-    private static func format(_ value: CGFloat) -> String {
-        guard value.isFinite else { return "0" }
-        let rounded = value.rounded()
-        if abs(value - rounded) < 0.000_001 {
-            return "\(safeInt(rounded))"
-        }
-        return String(format: "%.1f", Double(value))
+    private static func format(_ content: [CustomContentFingerprint]) -> String {
+        "[\(content.map { format($0) }.joined(separator: ", "))]"
+    }
+
+    private static func format(_ content: CustomContentFingerprint) -> String {
+        let importance = content.isImportant ? ", important" : ""
+        return "\(quoted(content.label)):\(quoted(content.value))\(importance)"
     }
 }
 

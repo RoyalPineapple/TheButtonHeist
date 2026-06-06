@@ -6,7 +6,8 @@ enum AccessibilityTraceElementDiff {
 
     static func projectElementEdits(
         beforeElements: [HeistElement],
-        afterElements: [HeistElement]
+        afterElements: [HeistElement],
+        includeGeometry: Bool = true
     ) -> ElementEdits {
         let oldByKey = Dictionary(grouping: beforeElements, by: \.diffPairingKey)
         let newByKey = Dictionary(grouping: afterElements, by: \.diffPairingKey)
@@ -21,7 +22,7 @@ enum AccessibilityTraceElementDiff {
             let newEls = newByKey[key] ?? []
             let pairCount = min(oldEls.count, newEls.count)
             updated += zip(oldEls.prefix(pairCount), newEls.prefix(pairCount))
-                .compactMap { projectElementStateChange(old: $0, new: $1) }
+                .compactMap { projectElementStateChange(old: $0, new: $1, includeGeometry: includeGeometry) }
             removed += Array(oldEls.suffix(from: pairCount))
             added += newEls.suffix(from: pairCount)
         }
@@ -76,6 +77,13 @@ func projectElementStateChange(
             property: .rotors,
             old: formatRotors(old.rotors),
             new: formatRotors(new.rotors)
+        ))
+    }
+    if old.respondsToUserInteraction != new.respondsToUserInteraction {
+        changes.append(PropertyChange(
+            property: .respondsToUserInteraction,
+            old: String(old.respondsToUserInteraction),
+            new: String(new.respondsToUserInteraction)
         ))
     }
 

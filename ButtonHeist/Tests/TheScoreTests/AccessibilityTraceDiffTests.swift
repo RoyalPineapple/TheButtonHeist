@@ -236,6 +236,48 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
     }
 
+    func testSemanticCaptureDiffIgnoresGeometryOnlyChanges() {
+        let beforeInterface = makeTestInterface(elements: [
+            makeElement(label: "$ 9 Cash", traits: [.button], frameY: 423),
+        ])
+        let afterInterface = makeTestInterface(elements: [
+            makeElement(label: "$ 9 Cash", traits: [.button], frameY: 467),
+        ])
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
+        let after = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: before.hash)
+
+        guard case .elementsChanged(let exactPayload) = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Expected exact diff to report geometry movement")
+        }
+        XCTAssertTrue(exactPayload.edits.updated.first?.changes.contains { $0.property == .frame } == true)
+
+        guard case .noChange = AccessibilityTrace.Delta.between(before, after, includeGeometry: false) else {
+            return XCTFail("Expected semantic diff to ignore geometry-only movement")
+        }
+        XCTAssertTrue(ElementEdits.between(beforeInterface, afterInterface, includeGeometry: false).isEmpty)
+    }
+
+    func testSemanticCaptureDiffKeepsInteractionChanges() {
+        let beforeInterface = makeTestInterface(elements: [
+            makeElement(label: "Cash", traits: [.staticText], respondsToUserInteraction: true),
+        ])
+        let afterInterface = makeTestInterface(elements: [
+            makeElement(label: "Cash", traits: [.staticText], respondsToUserInteraction: false),
+        ])
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
+        let after = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: before.hash)
+
+        guard case .elementsChanged(let payload) = AccessibilityTrace.Delta.between(
+            before,
+            after,
+            includeGeometry: false
+        ) else {
+            return XCTFail("Expected semantic diff to report interaction availability")
+        }
+
+        XCTAssertEqual(payload.edits.updated.first?.changes.map(\.property), [.respondsToUserInteraction])
+    }
+
     func testElementDiffTreatsIndistinguishableElementsAsNoChangeWithoutHierarchyContext() {
         let before = makeElement(label: "Item", traits: [.staticText])
         let after = makeElement(label: "Item", traits: [.staticText])
@@ -263,7 +305,9 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     private func makeElement(
         label: String,
         value: String? = nil,
-        traits: [HeistTrait]
+        traits: [HeistTrait],
+        frameY: Double = 0,
+        respondsToUserInteraction: Bool = true
     ) -> HeistElement {
         HeistElement(
             description: label,
@@ -272,9 +316,10 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             identifier: nil,
             traits: traits,
             frameX: 0,
-            frameY: 0,
+            frameY: frameY,
             frameWidth: 100,
             frameHeight: 44,
+            respondsToUserInteraction: respondsToUserInteraction,
             actions: []
         )
     }

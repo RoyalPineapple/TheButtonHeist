@@ -12,39 +12,55 @@ public extension AccessibilityTrace.Delta {
     /// while delegating the derived diff to `AccessibilityTraceDiff`.
     static func between(
         _ before: AccessibilityTrace.Capture,
-        _ after: AccessibilityTrace.Capture
+        _ after: AccessibilityTrace.Capture,
+        includeGeometry: Bool = true
     ) -> AccessibilityTrace.Delta {
-        AccessibilityTraceDiff.projectDelta(between: before, and: after)
+        AccessibilityTraceDiff.projectDelta(between: before, and: after, includeGeometry: includeGeometry)
     }
 }
 
 public extension ElementEdits {
 
     /// Compare two single-element hierarchies.
-    static func between(_ before: HeistElement, _ after: HeistElement) -> ElementEdits {
-        AccessibilityTraceElementDiff.projectElementEdits(beforeElements: [before], afterElements: [after])
+    static func between(_ before: HeistElement, _ after: HeistElement, includeGeometry: Bool = true) -> ElementEdits {
+        AccessibilityTraceElementDiff.projectElementEdits(
+            beforeElements: [before],
+            afterElements: [after],
+            includeGeometry: includeGeometry
+        )
     }
 
     /// Compare two flat root element lists.
-    static func between(_ before: [HeistElement], _ after: [HeistElement]) -> ElementEdits {
-        AccessibilityTraceElementDiff.projectElementEdits(beforeElements: before, afterElements: after)
+    static func between(
+        _ before: [HeistElement],
+        _ after: [HeistElement],
+        includeGeometry: Bool = true
+    ) -> ElementEdits {
+        AccessibilityTraceElementDiff.projectElementEdits(
+            beforeElements: before,
+            afterElements: after,
+            includeGeometry: includeGeometry
+        )
     }
 
     /// Compare two full interfaces.
-    static func between(_ before: Interface, _ after: Interface) -> ElementEdits {
+    static func between(_ before: Interface, _ after: Interface, includeGeometry: Bool = true) -> ElementEdits {
         AccessibilityTraceElementDiff.projectElementEdits(
             beforeElements: before.projectedElements,
-            afterElements: after.projectedElements
+            afterElements: after.projectedElements,
+            includeGeometry: includeGeometry
         )
     }
 
     static func between(
         beforeElements: [HeistElement],
-        afterElements: [HeistElement]
+        afterElements: [HeistElement],
+        includeGeometry: Bool = true
     ) -> ElementEdits {
         AccessibilityTraceElementDiff.projectElementEdits(
             beforeElements: beforeElements,
-            afterElements: afterElements
+            afterElements: afterElements,
+            includeGeometry: includeGeometry
         )
     }
 

@@ -10,6 +10,7 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable {
     case activationPoint
     case customContent
     case rotors
+    case respondsToUserInteraction
 
     /// Geometry properties: frame position/size and activation point coordinates.
     public var isGeometry: Bool {

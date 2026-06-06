@@ -154,6 +154,37 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(payload.edits.added.map(\.label), ["Toast"])
     }
 
+    func testSettledSemanticObservationEventDeltaIgnoresGeometryOnlyMovement() throws {
+        let firstElement = AccessibilityElement.make(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let movedElement = AccessibilityElement.make(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 467, width: 90, height: 72)
+        )
+
+        let first = Screen.makeForTests(elements: [(firstElement, "cash_button")])
+        bagman.semanticObservationStream.commitSettledObservation(first)
+
+        let moved = Screen.makeForTests(elements: [(movedElement, "cash_button")])
+        bagman.semanticObservationStream.commitSettledObservation(moved)
+        let movedEvent = try XCTUnwrap(bagman.latestSettledSemanticObservationEvent)
+
+        guard case .noChange? = movedEvent.delta else {
+            return XCTFail(
+                "Expected semantic event delta to ignore frame-only movement, got " +
+                    "\(String(describing: movedEvent.delta))"
+            )
+        }
+        guard case .elementsChanged? = movedEvent.trace.endpointDelta else {
+            return XCTFail("Expected exact trace endpoint delta to preserve frame movement")
+        }
+        XCTAssertEqual(movedEvent.observation.screen.orderedElements.first?.element.shape.frame.origin.y, 467)
+    }
+
     func testVisibleCommitMarksLatestSettledObservationDirtyWithoutReplacingIt() {
         let settled = Screen.makeForTests(elements: [(element(label: "Settled"), "settled")])
         bagman.semanticObservationStream.commitSettledObservation(settled)

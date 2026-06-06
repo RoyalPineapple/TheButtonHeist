@@ -164,16 +164,35 @@ final class SettleSessionTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 561, y: 467, width: 90, height: 72)
         )
+        let valueChanged = makeElement(
+            label: "$ 9 Cash",
+            value: "selected",
+            traits: .button,
+            frame: CGRect(x: 561, y: 467, width: 90, height: 72)
+        )
+        let labelChanged = makeElement(
+            label: "$ 10 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 467, width: 90, height: 72)
+        )
 
         XCTAssertEqual(
             SettleTimeline.fingerprint(of: [first], bucket: 13),
             SettleTimeline.fingerprint(of: [jittered], bucket: 13),
             "iPad scroll-view content-offset jitter should not reset settle"
         )
-        XCTAssertNotEqual(
+        XCTAssertEqual(
             SettleTimeline.fingerprint(of: [first], bucket: 13),
             SettleTimeline.fingerprint(of: [moved], bucket: 13),
-            "real row movement should still count as a semantic tree change"
+            "frame-only movement should not count as a semantic tree change"
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [valueChanged], bucket: 13)
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [labelChanged], bucket: 13)
         )
     }
 
@@ -193,6 +212,54 @@ final class SettleSessionTests: XCTestCase {
     }
 
     // MARK: - Timeout
+
+    func testFrameOnlyMovementSettlesAndKeepsFinalFrame() async {
+        let first = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let moved = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 467, width: 90, height: 72)
+        )
+        let session = makeSession(
+            script: [
+                makeParseResult([first]),
+                makeParseResult([moved]),
+                makeParseResult([first]),
+                makeParseResult([moved]),
+            ],
+            cyclesRequired: 3
+        )
+
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Expected frame-only movement to settle, got \(outcome.outcome)")
+        }
+        XCTAssertNil(outcome.instabilityDescription)
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.shape.frame.origin.y, 467)
+    }
+
+    func testFrameOnlyMovementDoesNotProduceChangeDescription() {
+        let first = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let moved = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 467, width: 90, height: 72)
+        )
+
+        XCTAssertNil(SettleTimeline.changeDescription(from: [first], to: [moved], bucket: 13))
+    }
 
     func testTimesOutWhenTreeNeverStabilizes() async {
         // Each parse returns a unique element so the fingerprint never
@@ -232,18 +299,19 @@ final class SettleSessionTests: XCTestCase {
                              "Every distinct element observed mid-loop should accumulate into elementsByKey")
     }
 
-    func testTimeoutReportsUnstableFrameChanges() async {
+    func testTimeoutReportsUnstableSemanticChanges() async {
         let counter = Counter()
         let session = SettleSession(
             parseProvider: { [weak self] in
                 guard let self else { return nil }
                 let value = counter.next()
-                let y: CGFloat = value.isMultiple(of: 2) ? 423 : 467
+                let semanticValue = value.isMultiple(of: 2) ? "A" : "B"
                 return self.makeParseResult([
                     self.makeElement(
                         label: "$ 9 Cash",
+                        value: semanticValue,
                         traits: .button,
-                        frame: CGRect(x: 561, y: y, width: 90, height: 72)
+                        frame: CGRect(x: 561, y: 423, width: 90, height: 72)
                     ),
                 ])
             },
@@ -263,10 +331,13 @@ final class SettleSessionTests: XCTestCase {
         guard case .timedOut = outcome.outcome else {
             return XCTFail("Expected .timedOut, got \(outcome.outcome)")
         }
-        let diagnostic = try? XCTUnwrap(outcome.instabilityDescription)
-        XCTAssertTrue(diagnostic?.contains("unstable accessibility changes") == true, diagnostic ?? "missing diagnostic")
-        XCTAssertTrue(diagnostic?.contains("$ 9 Cash") == true, diagnostic ?? "missing diagnostic")
-        XCTAssertTrue(diagnostic?.contains("frame") == true, diagnostic ?? "missing diagnostic")
+        guard let diagnostic = outcome.instabilityDescription else {
+            return XCTFail("Expected instabilityDescription on timeout, got nil")
+        }
+        XCTAssertTrue(diagnostic.contains("unstable semantic changes"), diagnostic)
+        XCTAssertTrue(diagnostic.contains("$ 9 Cash"), diagnostic)
+        XCTAssertTrue(diagnostic.contains("value"), diagnostic)
+        XCTAssertFalse(diagnostic.contains("frame"), diagnostic)
     }
 
     // MARK: - Screen Change

@@ -888,6 +888,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertFalse(ElementProperty.hint.isGeometry)
         XCTAssertFalse(ElementProperty.actions.isGeometry)
         XCTAssertFalse(ElementProperty.rotors.isGeometry)
+        XCTAssertFalse(ElementProperty.respondsToUserInteraction.isGeometry)
     }
 
     func testElementPropertyAllCasesRoundTrip() throws {

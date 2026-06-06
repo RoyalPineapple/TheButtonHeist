@@ -388,13 +388,16 @@ final class SemanticObservationStream {
         } else {
             AccessibilityTrace(capture: currentCapture)
         }
+        let delta = previousCapture.map {
+            AccessibilityTrace.Delta.between($0, currentCapture, includeGeometry: false)
+        }
         return SettledSemanticObservationEvent(
             sequence: observation.sequence,
             scope: observation.scope,
             observation: observation,
             previous: previous?.observation,
             trace: trace,
-            delta: trace.endpointDelta
+            delta: delta
         )
     }
 

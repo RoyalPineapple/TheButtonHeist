@@ -8,7 +8,8 @@ enum AccessibilityTraceDiff {
 
     static func projectDelta(
         between before: AccessibilityTrace.Capture,
-        and after: AccessibilityTrace.Capture
+        and after: AccessibilityTrace.Capture,
+        includeGeometry: Bool = true
     ) -> AccessibilityTrace.Delta {
         let edge = AccessibilityTrace.CaptureEdge(before: before, after: after)
         let screenChanged = before.context.screenId != after.context.screenId
@@ -27,7 +28,8 @@ enum AccessibilityTraceDiff {
             after.interface,
             isScreenChange: screenChanged,
             captureEdge: edge,
-            transient: after.transition.transient
+            transient: after.transition.transient,
+            includeGeometry: includeGeometry
         )
 
         guard before.context != after.context else { return interfaceDelta }
@@ -47,7 +49,8 @@ enum AccessibilityTraceDiff {
         _ after: Interface,
         isScreenChange: Bool,
         captureEdge: AccessibilityTrace.CaptureEdge,
-        transient: [HeistElement]
+        transient: [HeistElement],
+        includeGeometry: Bool
     ) -> AccessibilityTrace.Delta {
         let afterElements = after.projectedElements
 
@@ -69,7 +72,7 @@ enum AccessibilityTraceDiff {
         }
 
         return projectElementDelta(
-            edits: ElementEdits.between(before, after),
+            edits: ElementEdits.between(before, after, includeGeometry: includeGeometry),
             elementCount: afterElements.count,
             captureEdge: captureEdge,
             transient: transient
