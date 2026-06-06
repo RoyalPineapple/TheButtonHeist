@@ -4,18 +4,16 @@ Recording observes normal runtime evidence and stores only durable semantic
 intent.
 
 ```bash
-buttonheist start_heist --identifier search-flow --app com.buttonheist.testapp
+buttonheist start_heist --app com.buttonheist.testapp
 
 buttonheist get_interface
 
-buttonheist type_text "milk" \
-  --label "Search" \
-  --expect '{"type":"element_updated","element":{"label":"Search"},"property":"value","to":"milk"}'
+buttonheist type_text --text "milk" \
+  --label "Search"
 
 buttonheist activate \
   --label "Search" \
-  --traits button \
-  --expect '{"type":"screen_changed"}'
+  --traits button
 
 buttonheist stop_heist --output search-flow.heist
 buttonheist run_heist --path search-flow.heist --junit search-flow.xml

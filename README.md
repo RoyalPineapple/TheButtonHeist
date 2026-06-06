@@ -6,39 +6,40 @@
 
 # The Button Heist
 
-The Button Heist turns the interface VoiceOver reads into a live world model for
-agents and tests: the whole screen as structured text, real accessibility
-actions for control, and settled evidence after every move.
-
-We believe accessibility is the ideal interface for agentic control. It is where 
-the app says what things are, what state they are in, and what actions they support.
-VoiceOver turns that interface into speech and gestures. The Button Heist gives it to agents
-as text and actions.
+ButtonHeist lets agents and tests use an app's accessibility contract as a
+programmable world model, with reusable product-semantic capabilities and
+evidence.
 
 An iOS app already describes itself through accessibility. Labels name things.
-Traits say what they are. Values and state say what changed. Actions say what
-can happen next. The Button Heist keeps that text-and-actions interface current and
-programmable.
+Traits describe controls. Values and state say what changed. Actions and rotors
+say what can happen next. VoiceOver renders that contract as speech and
+gestures; ButtonHeist renders it as structured text, typed intent, and receipts.
 
-Agents read the screen like a structured document or menu, then choose intent
-from what the app exposes: the Continue button, the Search field, the selected
-row. The Button Heist owns the screen work behind that intent: target
-resolution, reveal, live geometry, action execution, settling, and evidence.
+Agents read the whole screen like a document or menu. Tests and heists wrap the
+same accessibility facts in product language: search for this item, add it to
+cart, confirm settings changed. ButtonHeist keeps the world model ready for
+action: resolve the target, perform the interaction, wait for settle, and return
+evidence.
 
-The heist is clean: read the interface, make the move, keep the receipt.
+The heist is clean: read the contract, make the move, keep the receipt.
 
 ```mermaid
-flowchart TB
-    AX["1 App speaks accessibility"]
-    Model["2 The Button Heist builds<br/>a semantic world model"]
-    Intent["3 Agent or heist<br/>chooses intent"]
-    Runtime["4 Runtime acts and settles"]
-    Evidence["5 Evidence comes back"]
+flowchart LR
+    App["Debug app"]
+    AX["Accessibility contract<br/>labels, values, traits,<br/>actions, rotors"]
+    Model["ButtonHeist world model<br/>whole screen as structured text"]
+    Intent["Agent or test<br/>chooses intent"]
+    Heist["Reusable heists<br/>product-semantic capabilities"]
+    Runtime["Runtime<br/>resolve, reveal, act, settle"]
+    Evidence["Evidence<br/>trace, delta, expectation"]
     Output["Tests, recordings,<br/>audits, reports"]
 
+    App --> AX
     AX --> Model
     Model --> Intent
     Intent --> Runtime
+    Intent --> Heist
+    Heist --> Runtime
     Runtime --> Evidence
     Evidence --> Model
     Evidence --> Output
@@ -67,13 +68,15 @@ Use The Button Heist to:
 
 - Drive a debug iOS app from an agent over MCP.
 - Run semantic UI commands from a CLI.
-- Compose multi-step heist plans with waits and expectations.
+- Package product flows as reusable heists agents can run or compose.
+- Compose multi-step heist plans with waits, branches, inputs, and expectations.
 - Compose successful interactions into generated `.heist` artifacts.
 - Replay those tests in CI with failure diagnostics and JUnit output.
 - Validate complete app flows through the accessibility contract.
 
 Direct commands, authored heists, recorded heists, replay, reports, and audits
-all use the same runtime.
+all use the same runtime. A single command is just the smallest heist; larger
+heists are saved product intent.
 
 ```mermaid
 flowchart TD
@@ -239,8 +242,8 @@ a durable UI test to surface.
 
 ## Why It Works
 
-Accessibility already names the app's working parts: roles, values, state,
-hierarchy, and actions. The Button Heist keeps that language executable.
+Accessibility already names the app's working parts: labels, traits, values,
+state, hierarchy, and actions. The Button Heist keeps that language executable.
 
 For ordinary controls, the loop is semantic: target, action, wait, evidence.
 For maps, canvases, drawing surfaces, games, and spatial products, explicit
@@ -266,7 +269,7 @@ Full methodology: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 ### 1. Add TheInsideJob
 
 Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC
-`+load`; no app setup code is required. Release builds leave the server behind.
+`+load`; no app setup code is required. Release builds do not start the server.
 
 ```swift
 import SwiftUI
@@ -337,8 +340,7 @@ objects. Direct CLI commands and MCP tools project from the same Fence command
 contract.
 
 ```bash
-buttonheist json_lines
-echo '{"command":"get_interface"}' | buttonheist json_lines
+printf '%s\n' '{"command":"get_interface"}' | buttonheist json_lines
 ```
 
 ## The Crew
