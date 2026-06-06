@@ -176,7 +176,7 @@ final class CLICommandSyncTests: XCTestCase {
     func testRunHeistCompilesSwiftSourceToTemporaryHeistArtifact() throws {
         // Swift source compiles to a temp .heist the fence reads — the plan
         // crosses through the canonical codec, never a parameter round-trip.
-        let plan = HeistPlan(body: [.warn(WarnStep(message: "from swift"))])
+        let plan = HeistPlan(name: "swiftFlow", body: [.warn(WarnStep(message: "from swift"))])
         let prepared = try RunHeistCommand.prepareInput(
             path: "Flow.swift",
             entry: "makeHeist",
@@ -189,8 +189,9 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNil(prepared.entry)
 
         // The compiled artifact round-trips losslessly through the canonical codec.
-        let written = try HeistArtifactCodec.readPlan(from: URL(fileURLWithPath: artifactPath))
-        XCTAssertEqual(written.body, plan.body)
+        let artifact = try HeistArtifactCodec.read(from: URL(fileURLWithPath: artifactPath))
+        XCTAssertEqual(artifact.plan, plan)
+        XCTAssertEqual(artifact.manifest.entry, "swiftFlow")
 
         // And it dispatches as a .heist path, not inline version/body params.
         let arguments = try RunHeistCommand.planArguments(

@@ -149,7 +149,10 @@ private func representativePlan() throws -> HeistPlan {
 }
 
 private func inadmissiblePlan() throws -> HeistPlan {
-    HeistPlan(body: Array(repeating: .warn(WarnStep(message: "too many steps")), count: 501))
+    HeistPlan(
+        name: "tooManySteps",
+        body: Array(repeating: .warn(WarnStep(message: "too many steps")), count: 501)
+    )
 }
 
 private func canonicalJSONData(_ plan: HeistPlan) throws -> Data {

@@ -62,5 +62,6 @@
       "type" : "action"
     }
   ],
+  "name" : "demoSmokeFlow",
   "version" : 1
 }
