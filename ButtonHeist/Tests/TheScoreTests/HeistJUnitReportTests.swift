@@ -148,7 +148,7 @@ final class HeistJUnitReportTests: XCTestCase {
         ])
         let xml = report.junitXML()
 
-        assertContains(xml, "type=\"playbackFailure\"")
+        assertContains(xml, "type=\"heistFailure\"")
     }
 
     func testJunitXMLEmptySteps() {
