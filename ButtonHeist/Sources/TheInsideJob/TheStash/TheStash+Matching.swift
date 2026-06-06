@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
 import AccessibilitySnapshotParser
@@ -92,7 +93,7 @@ extension Array where Element == AccessibilityHierarchy {
 
 // MARK: - AccessibilityElement Predicate Conformance
 
-extension AccessibilityElement: @retroactive ElementPredicateSubject {
+extension AccessibilityElement: ThePlans.ElementPredicateSubject {
 
     /// Known trait name strings — references the parser's authoritative set directly.
     private static let knownTraitNames = AccessibilityTraits.knownTraitNames
