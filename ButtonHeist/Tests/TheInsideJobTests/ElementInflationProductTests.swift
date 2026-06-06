@@ -134,13 +134,19 @@ final class ElementInflationProductTests: XCTestCase {
             heist: true
         )
         let heistPayload = try XCTUnwrap(heist.result.heistExecutionPayload)
-        let stepResult = try XCTUnwrap(heistPayload.steps.first?.actionResult)
+        let step = try XCTUnwrap(heistPayload.steps.first)
+        guard case .action(let actionEvidence)? = step.evidence else {
+            return XCTFail("Expected heist action evidence, got \(String(describing: step.evidence))")
+        }
+        let stepResult = try XCTUnwrap(actionEvidence.actionResult)
 
         XCTAssertTrue(single.result.success, single.result.message ?? "single activate failed")
         XCTAssertTrue(heist.result.success, heist.result.message ?? "heist activate failed")
         guard single.result.success, heist.result.success else { return }
         XCTAssertEqual(single.activationCount, 1)
         XCTAssertEqual(heist.activationCount, 1)
+        XCTAssertEqual(step.kind, .action)
+        XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(single.result.method, .activate)
         XCTAssertEqual(stepResult.method, .activate)
         XCTAssertEqual(stepResult.success, single.result.success)
