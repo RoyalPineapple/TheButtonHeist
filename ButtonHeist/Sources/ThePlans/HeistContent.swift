@@ -22,6 +22,7 @@ public extension HeistPlan {
     }
 }
 
+// swiftlint:disable identifier_name
 public func Heist<Content: HeistContent>(
     @HeistBuilder _ content: () throws -> Content
 ) throws -> HeistPlan {
@@ -68,6 +69,7 @@ public func Heist<Content: HeistContent>(
         try ForEach(values, parameter: parameter, content: content)
     }
 }
+// swiftlint:enable identifier_name
 
 private extension HeistPlan {
     init(
