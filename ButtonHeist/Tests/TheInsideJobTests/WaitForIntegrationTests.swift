@@ -143,6 +143,45 @@ final class WaitForIntegrationTests: XCTestCase {
         insideJob.brains.stash.markDirtyFromTripwire()
     }
 
+    // MARK: - Passive Observation
+
+    func testPassiveVisibleObservationPublishesStableAXTreeWhileLayerAnimationRuns() async throws {
+        let label = addLabel("PassiveObservation-StableAX")
+        defer { label.removeFromSuperview() }
+
+        let animatedLayer = CALayer()
+        animatedLayer.frame = CGRect(x: 0, y: 0, width: 12, height: 12)
+        hostView.layer.addSublayer(animatedLayer)
+        defer {
+            animatedLayer.removeAllAnimations()
+            animatedLayer.removeFromSuperlayer()
+        }
+
+        let animation = CABasicAnimation(keyPath: "position.x")
+        animation.fromValue = 0
+        animation.toValue = 24
+        animation.duration = 10.0
+        animation.repeatCount = .infinity
+        animatedLayer.add(animation, forKey: "semanticObservationRegressionMotion")
+
+        let layerSettled = await insideJob.tripwire.waitForAllClear(timeout: 0.2)
+        XCTAssertFalse(layerSettled, "Regression setup must keep the CALayer quiet gate blocked")
+
+        insideJob.brains.stash.markDirtyFromTripwire()
+        let observation = await insideJob.brains.interactionObservation.observeSemanticState(
+            scope: .visible,
+            after: nil,
+            timeout: 2.0
+        )
+
+        let event = try XCTUnwrap(observation?.event)
+        XCTAssertTrue(
+            event.observation.screen.orderedElements.contains { $0.element.label == "PassiveObservation-StableAX" },
+            "Passive visible observation should publish a stable AX tree even while unrelated layer motion continues"
+        )
+        XCTAssertNil(insideJob.brains.stash.latestSemanticObservationFailureDiagnostic())
+    }
+
     // MARK: - 1. Element already present — returns immediately
 
     func testWaitForAlreadyPresentReturnsImmediately() async throws {
