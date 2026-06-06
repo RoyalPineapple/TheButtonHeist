@@ -40,6 +40,11 @@ final class ElementInflation {
         case failed(ElementInflationFailure)
     }
 
+    enum ActivationPointPolicy {
+        case requireOnscreen
+        case liveObjectOnly
+    }
+
     enum ElementInflationFailureStep: String {
         case notFound
         case ambiguous
@@ -102,7 +107,8 @@ final class ElementInflation {
     func inflate(
         for target: ElementTarget,
         method: ActionMethod,
-        deallocatedBoundary: String
+        deallocatedBoundary: String,
+        activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
         // Source screens derive only semantic identity. Reveal and geometry
         // authority always come from the current live graph.
@@ -144,6 +150,9 @@ final class ElementInflation {
         }
         switch freshTarget {
         case .success(let inflatedTarget):
+            guard activationPointPolicy == .requireOnscreen else {
+                return .inflated(inflatedTarget)
+            }
             return await placeElementActivationPoint(
                 inflatedTarget,
                 method: method,

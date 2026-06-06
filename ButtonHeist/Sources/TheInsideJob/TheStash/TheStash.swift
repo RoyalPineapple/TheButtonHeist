@@ -70,7 +70,27 @@ final class TheStash {
     /// Current live viewport projected through settled semantic identity.
     /// Use this only for actionability and geometry, never as semantic truth.
     var liveVisibleScreen: Screen {
-        Screen(semantic: settledWorld.semantic, liveCapture: liveCapture)
+        let visibleElements = Dictionary(
+            uniqueKeysWithValues: liveCapture.heistIdByElement.map { element, heistId in
+                let settledEntry = settledWorld.semantic.elements[heistId]
+                return (
+                    heistId,
+                    ScreenElement(
+                        heistId: heistId,
+                        scrollContentLocation: settledEntry?.scrollContentLocation,
+                        element: element
+                    )
+                )
+            }
+        )
+        let visibleContainerPaths = Set(liveCapture.hierarchy.containerPaths.map(\.path))
+        return Screen(
+            semantic: SemanticScreen(
+                elements: visibleElements,
+                containers: settledWorld.semantic.containers.filter { visibleContainerPaths.contains($0.key) }
+            ),
+            liveCapture: liveCapture
+        )
     }
 
     /// Last non-clean settle evidence. Reporting and trace code may consume it;
@@ -139,6 +159,21 @@ final class TheStash {
     /// O(1) lookup in committed semantic memory.
     func knownElement(heistId: HeistId) -> ScreenElement? {
         settledWorld.findElement(heistId: heistId)
+    }
+
+    /// Latest parsed live element payload for a known heistId.
+    ///
+    /// The heistId and reveal evidence come from settled semantic truth; the
+    /// accessibility element payload comes from the disposable live parse so
+    /// actionability uses fresh geometry.
+    func liveScreenElement(heistId: HeistId) -> ScreenElement? {
+        guard let liveElement = liveCapture.element(for: heistId) else { return nil }
+        let settledEntry = settledWorld.semantic.elements[heistId]
+        return ScreenElement(
+            heistId: heistId,
+            scrollContentLocation: settledEntry?.scrollContentLocation,
+            element: liveElement
+        )
     }
 
     /// Semantic containers in deterministic traversal order.

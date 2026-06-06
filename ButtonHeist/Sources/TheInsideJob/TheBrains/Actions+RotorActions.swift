@@ -18,13 +18,17 @@ extension Actions {
         return await performElementAction(
             target: target.elementTarget,
             method: method,
-            requireInteractive: false
+            requireInteractive: false,
+            activationPointPolicy: .liveObjectOnly
         ) { context in
             let outcome = self.stash.performRotor(
                 selection: target.selection,
                 direction: direction,
                 on: context.liveTarget
             )
+            if case .succeeded(let hit) = outcome {
+                await self.exposeRotorResultIfPossible(hit)
+            }
             return Self.rotorInteractionResult(
                 outcome: outcome,
                 rotor: rotor,
@@ -33,6 +37,34 @@ extension Actions {
                 liveTarget: context.liveTarget
             )
         }
+    }
+
+    private func exposeRotorResultIfPossible(_ hit: TheStash.RotorHit) async {
+        guard let screenElement = hit.screenElement else { return }
+
+        if case .objectUnavailable = stash.resolveLiveActionTarget(for: screenElement) {
+            let reveal = stash.revealSemanticTarget(screenElement)
+            if reveal.didReveal {
+                await tripwire.yieldFrames(ElementInflation.postScrollLayoutFrames)
+                stash.refreshLiveCapture()
+            }
+        }
+
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement) else {
+            return
+        }
+
+        let description = Navigation.ScrollTargetDescription(liveTarget.screenElement).description
+        _ = await navigation.elementInflation.scrollActivationPointIntoBounds(
+            liveTarget.activationPoint,
+            in: stash.liveScrollView(for: liveTarget.screenElement),
+            method: .rotor,
+            noScrollViewFailure: .geometryNotActionable(
+                "rotor result \(description) has no live scrollable ancestor to make activation point actionable"
+            ),
+            unsafeProgrammaticScrollMessage: nil,
+            scrollFailedMessage: "rotor result \(description) activation point could not be brought on-screen"
+        )
     }
 
     // MARK: - Diagnostic Helpers

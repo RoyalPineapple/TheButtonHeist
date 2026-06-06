@@ -548,6 +548,85 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotEqual(liveTarget.activationPoint, sourcePoint)
     }
 
+    func testVisibleResolutionUsesFreshLiveGeometryWithoutReplacingSettledTruth() throws {
+        let staleFrame = CGRect(x: 32, y: 865, width: 240, height: 44)
+        let stalePoint = CGPoint(x: staleFrame.midX, y: staleFrame.midY)
+        let settledElement = AccessibilityElement.make(
+            label: "Rotor Host",
+            identifier: "rotor_host",
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(staleFrame)),
+            activationPoint: stalePoint,
+            customRotors: [.init(name: "Errors")]
+        )
+        let liveObject = UIAccessibilityElement(accessibilityContainer: NSObject())
+        liveObject.accessibilityFrame = staleFrame
+        liveObject.accessibilityActivationPoint = stalePoint
+        bagman.installScreenForTesting(Screen.makeForTests(
+            elements: [(settledElement, "rotor_host")],
+            objects: ["rotor_host": liveObject]
+        ))
+
+        let freshFrame = CGRect(x: 32, y: 320, width: 240, height: 44)
+        let freshPoint = CGPoint(x: freshFrame.midX, y: freshFrame.midY)
+        let freshElement = AccessibilityElement.make(
+            label: "Rotor Host",
+            identifier: "rotor_host",
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(freshFrame)),
+            activationPoint: freshPoint,
+            customRotors: [.init(name: "Errors")]
+        )
+        bagman.recordLivePageObservation(Screen.makeForTests(
+            elements: [(freshElement, "rotor_host")],
+            objects: ["rotor_host": liveObject]
+        ))
+
+        let target: ElementTarget = .predicate(ElementPredicate(identifier: "rotor_host"))
+        let settled = try XCTUnwrap(bagman.resolveTarget(target).resolved)
+        XCTAssertEqual(settled.element.shape.frame, staleFrame)
+        XCTAssertEqual(settled.element.bhResolvedActivationPoint, stalePoint)
+
+        let visible = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolved)
+        XCTAssertEqual(visible.element.shape.frame, freshFrame)
+        XCTAssertEqual(visible.element.bhResolvedActivationPoint, freshPoint)
+
+        guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: settled) else {
+            return XCTFail("Expected fresh live action target")
+        }
+        XCTAssertEqual(liveTarget.frame, freshFrame)
+        XCTAssertEqual(liveTarget.activationPoint, freshPoint)
+        XCTAssertNotEqual(liveTarget.frame, liveObject.accessibilityFrame)
+        XCTAssertNotEqual(liveTarget.activationPoint, liveObject.accessibilityActivationPoint)
+    }
+
+    func testVisibleCommitPreservesKnownDiscoveryUnionWhenRefreshingSameScreen() {
+        let controls = element(label: "Controls Demo", traits: .button)
+        let customRotors = element(label: "Custom Rotors", traits: .button)
+        let discovery = Screen.makeForTests(
+            elements: [(customRotors, "custom_rotors")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    controls,
+                    heistId: "controls_demo",
+                    contentSpaceOrigin: CGPoint(x: 20, y: 120),
+                    scrollContainer: "root_scroll"
+                ),
+            ]
+        )
+        bagman.semanticObservationStream.commitSettledObservation(discovery, scope: .discovery)
+
+        let refreshedBottom = Screen.makeForTests(elements: [(customRotors, "custom_rotors")])
+        bagman.semanticObservationStream.commitSettledObservation(refreshedBottom, scope: .visible)
+
+        XCTAssertEqual(bagman.visibleIds, ["custom_rotors"])
+        XCTAssertEqual(bagman.knownIds, ["controls_demo", "custom_rotors"])
+        XCTAssertEqual(
+            bagman.resolveTarget(.predicate(ElementPredicate(label: "Controls Demo", traits: [.button]))).resolved?.heistId,
+            "controls_demo"
+        )
+    }
+
     // MARK: - Matcher Resolution
 
     func testMatcherResolvesUniqueElement() {

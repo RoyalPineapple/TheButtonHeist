@@ -2152,6 +2152,126 @@ final class TheBrainsActionTests: XCTestCase {
                       result.message ?? "missing rotor success message")
     }
 
+    func testExecuteRotorDoesNotRequireHostActivationPointOnscreen() async {
+        let heistId = "offscreen_rotor_host"
+        let screenBounds = ScreenMetrics.current.bounds
+        let frame = CGRect(x: 32, y: screenBounds.maxY - 8, width: 240, height: 44)
+        let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
+        let element = AccessibilityElement.make(
+            label: "Offscreen Rotor Host",
+            identifier: heistId,
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(frame)),
+            activationPoint: activationPoint,
+            customRotors: [.init(name: "Live Rotor")]
+        )
+        let liveObject = UIView()
+        liveObject.accessibilityFrame = frame
+        liveObject.accessibilityActivationPoint = activationPoint
+        liveObject.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Live Rotor") { _ in
+                UIAccessibilityCustomRotorItemResult(targetElement: liveObject, targetRange: nil)
+            },
+        ]
+        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(
+                elementTarget: .predicate(ElementPredicate(identifier: "offscreen_rotor_host")),
+                selection: .named("Live Rotor")
+            )
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "rotor failed")
+        XCTAssertEqual(result.method, .rotor)
+        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found Offscreen Rotor Host") ?? false,
+                      result.message ?? "missing rotor success message")
+    }
+
+    func testExecuteRotorScrollsViewportTowardResultActivationPoint() async {
+        let hostHeistId = "rotor_result_host"
+        let resultHeistId = "rotor_result_target"
+        let screenBounds = ScreenMetrics.current.bounds
+        let scrollView = UIScrollView(frame: screenBounds)
+        scrollView.contentSize = CGSize(width: screenBounds.width, height: screenBounds.height + 900)
+
+        let hostFrame = CGRect(x: 32, y: 80, width: 240, height: 44)
+        let hostElement = AccessibilityElement.make(
+            label: "Rotor Host",
+            identifier: hostHeistId,
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(hostFrame)),
+            activationPoint: CGPoint(x: hostFrame.midX, y: hostFrame.midY),
+            customRotors: [.init(name: "Live Rotor")]
+        )
+        let resultFrame = CGRect(x: 32, y: screenBounds.maxY + 240, width: 240, height: 44)
+        let resultElement = AccessibilityElement.make(
+            label: "Rotor Result",
+            identifier: resultHeistId,
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(resultFrame)),
+            activationPoint: CGPoint(x: resultFrame.midX, y: resultFrame.midY)
+        )
+
+        let resultObject = UIView()
+        resultObject.accessibilityFrame = resultFrame
+        resultObject.accessibilityActivationPoint = CGPoint(x: resultFrame.midX, y: resultFrame.midY)
+
+        let hostObject = UIView()
+        hostObject.accessibilityFrame = hostFrame
+        hostObject.accessibilityActivationPoint = CGPoint(x: hostFrame.midX, y: hostFrame.midY)
+        hostObject.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Live Rotor") { _ in
+                UIAccessibilityCustomRotorItemResult(targetElement: resultObject, targetRange: nil)
+            },
+        ]
+
+        brains.stash.installScreenForTesting(Screen(
+            elements: [
+                hostHeistId: Screen.ScreenElement(
+                    heistId: hostHeistId,
+                    contentSpaceOrigin: nil,
+                    element: hostElement
+                ),
+                resultHeistId: Screen.ScreenElement(
+                    heistId: resultHeistId,
+                    contentSpaceOrigin: nil,
+                    element: resultElement
+                ),
+            ],
+            hierarchy: [
+                .element(hostElement, traversalIndex: 0),
+                .element(resultElement, traversalIndex: 1),
+            ],
+            containerNames: [:],
+            heistIdByElement: [
+                hostElement: hostHeistId,
+                resultElement: resultHeistId,
+            ],
+            elementRefs: [
+                hostHeistId: .init(object: hostObject, scrollView: scrollView),
+                resultHeistId: .init(object: resultObject, scrollView: scrollView),
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        ))
+
+        XCTAssertEqual(scrollView.contentOffset, .zero)
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(
+                elementTarget: .predicate(ElementPredicate(identifier: hostHeistId)),
+                selection: .named("Live Rotor")
+            )
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "rotor failed")
+        XCTAssertEqual(result.method, .rotor)
+        XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
+        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found Rotor Result") ?? false,
+                      result.message ?? "missing rotor success message")
+    }
+
     func testExecuteRotorNotFoundReportsAvailableRotorsAndNextStep() async {
         let heistId = "rotor_host"
         let liveObject = UIView()

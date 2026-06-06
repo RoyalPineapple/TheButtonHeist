@@ -119,7 +119,7 @@ extension Navigation {
             let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
             guard !result.inserted.isEmpty else { return false }
 
-            if let target, hasTerminalExplorationResolution(target) {
+            if let target, hasTerminalExplorationResolution(target, in: exploration.screen) {
                 return true
             }
         }

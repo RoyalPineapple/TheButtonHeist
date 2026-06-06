@@ -149,6 +149,12 @@ extension TheStash {
         resolveTarget(target, in: settledScreen, resolutionScope: .known)
     }
 
+    /// Resolve a target against a caller-provided observation value. Used by
+    /// exploration before its local semantic union has been committed.
+    func resolveTarget(_ target: ElementTarget, in screen: Screen) -> TargetResolution {
+        resolveTarget(target, in: screen, resolutionScope: .provided)
+    }
+
     /// Resolve a target only against the latest live hierarchy. This preserves
     /// full target semantics (ambiguity and explicit ordinal) while excluding
     /// known-only entries retained from exploration.
@@ -224,7 +230,7 @@ extension TheStash {
         guard let entry = knownElement(heistId: heistId) else { return nil }
         switch scope {
         case .visible:
-            return liveContains(heistId: heistId) ? entry : nil
+            return liveContains(heistId: heistId) ? liveScreenElement(heistId: heistId) ?? entry : nil
         case .known:
             return entry
         }

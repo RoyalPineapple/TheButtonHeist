@@ -53,11 +53,12 @@ extension TheStash {
         guard let object = dispatchObject(for: screenElement) else {
             return .objectUnavailable
         }
-        guard let geometry = Self.liveGeometry(for: screenElement.element) else {
+        let liveScreenElement = liveScreenElement(heistId: screenElement.heistId) ?? screenElement
+        guard let geometry = Self.liveGeometry(for: liveScreenElement.element) else {
             return .geometryUnavailable
         }
         return .resolved(LiveActionTarget(
-            screenElement: screenElement,
+            screenElement: liveScreenElement,
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint

@@ -217,7 +217,8 @@ final class SemanticObservationStream {
         guard let stash else {
             preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
         }
-        stash.storeSettledSemanticObservationForStream(screen)
+        let committedScreen = screenForCommit(screen, scope: scope, stash: stash)
+        stash.storeSettledSemanticObservationForStream(committedScreen)
         return publishCurrentSettledObservation(scope: scope, stash: stash)
     }
 
@@ -340,6 +341,19 @@ final class SemanticObservationStream {
         guard let timeout else { return nil }
         guard timeout > 0 else { return nil }
         return timeout
+    }
+
+    private func screenForCommit(
+        _ screen: Screen,
+        scope: SemanticObservationScope,
+        stash: TheStash
+    ) -> Screen {
+        switch scope {
+        case .visible:
+            return stash.settledScreen.refreshingVisibleState(with: screen)
+        case .discovery:
+            return screen
+        }
     }
 
     private static func timeoutMilliseconds(from timeout: Double?) -> Int {

@@ -404,17 +404,20 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        mutateVisibleHierarchy {
-            _ = self.addLabel("WaitForChange-Delayed")
+        var delayedLabel: UILabel?
+        defer { delayedLabel?.removeFromSuperview() }
+        let addTask = Task { @MainActor in
+            await self.insideJob.tripwire.yieldRealFrames(2)
+            let label = self.addLabel("WaitForChange-Delayed")
+            self.insideJob.brains.stash.markDirtyFromTripwire()
+            return label
         }
 
         let result = await changedWait(
             expectation: .changed(.appeared(ElementPredicate(label: "WaitForChange-Delayed"))),
             timeout: 5.0
         )
-        for subview in window.subviews where subview.accessibilityLabel == "WaitForChange-Delayed" {
-            subview.removeFromSuperview()
-        }
+        delayedLabel = await addTask.value
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .wait)
@@ -429,14 +432,17 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        mutateVisibleHierarchy {
+        let removeTask = Task { @MainActor in
+            await self.insideJob.tripwire.yieldRealFrames(2)
             label.removeFromSuperview()
+            self.insideJob.brains.stash.markDirtyFromTripwire()
         }
 
         let result = await changedWait(
             expectation: .changed(.disappeared(ElementPredicate(label: "WaitForChange-Removed"))),
             timeout: 5.0
         )
+        await removeTask.value
 
         XCTAssertTrue(result.success, result.message ?? "missing wait message")
         XCTAssertEqual(result.method, .wait)
@@ -517,17 +523,21 @@ final class WaitForIntegrationTests: XCTestCase {
         ))
         XCTAssertNotNil(insideJob.brains.stash.settledScreen.findElement(heistId: offViewportHeistId))
 
-        mutateVisibleHierarchy {
-            // Mutate a tracked update property (value) while keeping the element's
-            // identity (identifier/label) stable so before/after pair on the same
-            // diffPairingKey and the change registers as an elements update.
-            visible.accessibilityValue = "New"
+        let mutationTask = Task { @MainActor in
+            await self.insideJob.tripwire.yieldRealFrames(2)
+            self.mutateVisibleHierarchy {
+                // Mutate a tracked update property (value) while keeping the element's
+                // identity (identifier/label) stable so before/after pair on the same
+                // diffPairingKey and the change registers as an elements update.
+                visible.accessibilityValue = "New"
+            }
         }
 
         let result = await changedWait(
             expectation: .changed(.elements),
             timeout: 5.0
         )
+        await mutationTask.value
 
         XCTAssertTrue(result.success, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(
