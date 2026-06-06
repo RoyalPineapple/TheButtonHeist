@@ -21,19 +21,25 @@ jobs:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
 
     steps:
-      - name: Verify CI passed on tagged commit
+      - name: Verify CI passed on release ancestry
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${{ github.event.inputs.tag || github.ref_name }} --jq '.object.sha' 2>/dev/null \
             || echo "${{ github.sha }}")
-          CI_CONCLUSION=$(gh run list --repo ${{ github.repository }} --commit "$TAG_SHA" --workflow CI --limit 5 \
-            --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')
-          if [[ "$CI_CONCLUSION" -eq 0 ]]; then
-            echo "::error::No successful CI run found for commit $TAG_SHA. Release requires CI green on main."
-            exit 1
-          fi
-          echo "CI verified green on ${TAG_SHA:0:8}"
+          # The release commit is a version bump that CI never runs on directly.
+          # Check the tagged commit first, then its parent (the last CI-tested commit on main).
+          for SHA in "$TAG_SHA" "$(gh api repos/${{ github.repository }}/git/commits/$TAG_SHA --jq '.parents[0].sha' 2>/dev/null || true)"; do
+            [[ -z "$SHA" ]] && continue
+            COUNT=$(gh run list --repo ${{ github.repository }} --commit "$SHA" --workflow CI --limit 5 \
+              --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')
+            if [[ "$COUNT" -gt 0 ]]; then
+              echo "CI verified green on ${SHA:0:8}"
+              exit 0
+            fi
+          done
+          echo "::error::No successful CI run found for tagged commit $TAG_SHA or its parent. Release requires CI green on main."
+          exit 1
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
