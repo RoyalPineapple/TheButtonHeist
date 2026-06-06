@@ -327,7 +327,7 @@ struct HeistPlanTraversal {
                     break
                 case .strings:
                     environment = environment.binding(string: "__heist_parameter__", to: parameterName)
-                case .elementTargets:
+                case .elementTarget:
                     environment = environment.binding(target: .predicate(.identifier("__heist_parameter__")), to: parameterName)
                 }
             }
@@ -425,7 +425,7 @@ struct HeistReferenceScope {
             return self
         case .strings:
             return bindingString(reference)
-        case .elementTargets:
+        case .elementTarget:
             return bindingTarget(reference)
         }
     }

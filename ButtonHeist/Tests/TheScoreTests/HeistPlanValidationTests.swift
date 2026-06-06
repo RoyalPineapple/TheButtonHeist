@@ -438,34 +438,22 @@ func runtimeAdmissionRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
 }
 
 @Test
-func runtimeAdmissionEnforcesSingularElementTargetArgument() throws {
-    // An element-target capability is singular: a predicate for exactly one
-    // element. Passing more than one target fails admission (the argument does
-    // not bind), while exactly one is admissible.
+func runtimeAdmissionAcceptsSingularElementTargetCapability() throws {
+    // `elementTarget` is singular by type — a predicate for exactly one element.
+    // Multiple targets are unrepresentable; a capability run with one target is
+    // admissible.
     let definition = HeistPlan(
         name: "deleteItem",
-        parameter: .elementTargets(name: "target"),
+        parameter: .elementTarget(name: "target"),
         body: [.action(try ActionStep(command: .activate(.ref("target"))))]
     )
-
-    let twoTargets = HeistPlan(definitions: [definition], body: [
+    let plan = HeistPlan(definitions: [definition], body: [
         .invoke(HeistInvocationStep(
             path: ["deleteItem"],
-            argument: .elementTargets([.target(.label("Row 1")), .target(.label("Row 2"))])
+            argument: .elementTarget(.target(.label("Row 1")))
         )),
     ])
-    #expect(twoTargets.runtimeAdmissionFailures().contains {
-        $0.contract == "heist run argument must bind to the target parameter"
-            && $0.observed.contains("requires exactly one value")
-    }, "\(twoTargets.runtimeAdmissionFailures())")
-
-    let oneTarget = HeistPlan(definitions: [definition], body: [
-        .invoke(HeistInvocationStep(
-            path: ["deleteItem"],
-            argument: .elementTargets([.target(.label("Row 1"))])
-        )),
-    ])
-    #expect(oneTarget.runtimeAdmissionFailures().isEmpty, "\(oneTarget.runtimeAdmissionFailures())")
+    #expect(plan.runtimeAdmissionFailures().isEmpty, "\(plan.runtimeAdmissionFailures())")
 }
 
 @Test

@@ -343,11 +343,8 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
             for (index, value) in values.enumerated() {
                 validateString(value, path: "\(path).values[\(index)]", scope: scope)
             }
-        case .elementTargets(let targets):
-            validateArgumentArrayCount(targets.count, path: "\(path).targets")
-            for (index, target) in targets.enumerated() {
-                validateTarget(target, path: "\(path).targets[\(index)]", scope: scope)
-            }
+        case .elementTarget(let target):
+            validateTarget(target, path: "\(path).target", scope: scope)
         }
     }
 

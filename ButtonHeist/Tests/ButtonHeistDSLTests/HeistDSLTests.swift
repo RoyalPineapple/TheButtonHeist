@@ -482,7 +482,7 @@ func `element target heist definitions default parameter to input`() throws {
         HeistPlan(name: "Rows", definitions: [
             HeistPlan(
                 name: "delete",
-                parameter: .elementTargets(name: "input"),
+                parameter: .elementTarget(name: "input"),
                 body: [
                     .action(try ActionStep(
                         command: .activate(.ref("input")),
@@ -591,7 +591,7 @@ func runHeistBuildsHeistRunSteps() throws {
 
     let targetRun = try HeistPlan { RunHeist("Rows.activate", ElementTarget.label("Row 1")) }
     #expect(targetRun.body == [
-        .invoke(HeistInvocationStep(path: ["Rows", "activate"], argument: .elementTargets([.target(.label("Row 1"))]))),
+        .invoke(HeistInvocationStep(path: ["Rows", "activate"], argument: .elementTarget(.target(.label("Row 1"))))),
     ])
 }
 
@@ -669,7 +669,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
             body: [
                 .invoke(HeistInvocationStep(
                     path: ["CartScreen", "deleteItem"],
-                    argument: .elementTargets([.ref("target")])
+                    argument: .elementTarget(.ref("target"))
                 )),
             ]
         )),

@@ -70,10 +70,7 @@ public extension HeistExecutionEnvironment {
                 throw HeistExpressionError.parameterArgumentCardinality(parameter: parameter.kind, count: values.count)
             }
             return binding(string: try value.resolve(in: self), to: name)
-        case (.elementTargets(let name), .elementTargets(let targets)):
-            guard targets.count == 1, let target = targets.first else {
-                throw HeistExpressionError.parameterArgumentCardinality(parameter: parameter.kind, count: targets.count)
-            }
+        case (.elementTarget(let name), .elementTarget(let target)):
             return binding(target: try target.resolve(in: self), to: name)
         default:
             throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)
