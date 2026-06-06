@@ -36,9 +36,9 @@ struct RenderResponseTests {
             HeistCatalogEntry(
                 name: "checkout",
                 role: .capability,
-                parameterKind: .strings,
+                parameterKind: .string,
                 requiresArgument: true,
-                summary: "Reusable heist capability requiring strings argument",
+                summary: "Reusable heist capability requiring string argument",
                 tags: ["capability", "parameterized", "semantic-action"]
             ),
         ]))
@@ -50,7 +50,7 @@ struct RenderResponseTests {
             return
         }
         #expect(text.contains("checkout"))
-        #expect(text.contains("summary=Reusable heist capability requiring strings argument"))
+        #expect(text.contains("summary=Reusable heist capability requiring string argument"))
         #expect(!text.contains("actions:"))
         #expect(!text.contains("nested RunHeist:"))
         #expect(!text.contains("semantic surfaces:"))

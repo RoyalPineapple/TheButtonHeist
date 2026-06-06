@@ -264,7 +264,6 @@ import Foundation
     public let maxAllPredicateChildren: Int
     public let maxForEachStringValues: Int
     public let maxForEachElementLimit: Int
-    public let maxArgumentValues: Int
     public let maxStringBytes: Int
     public let maxTotalStringBytes: Int
     public let maxParameterBytes: Int
@@ -276,7 +275,6 @@ import Foundation
         maxAllPredicateChildren: Int = 20,
         maxForEachStringValues: Int = 100,
         maxForEachElementLimit: Int = 100,
-        maxArgumentValues: Int = 100,
         maxStringBytes: Int = 4_096,
         maxTotalStringBytes: Int = 65_536,
         maxParameterBytes: Int = 64
@@ -287,7 +285,6 @@ import Foundation
         self.maxAllPredicateChildren = maxAllPredicateChildren
         self.maxForEachStringValues = maxForEachStringValues
         self.maxForEachElementLimit = maxForEachElementLimit
-        self.maxArgumentValues = maxArgumentValues
         self.maxStringBytes = maxStringBytes
         self.maxTotalStringBytes = maxTotalStringBytes
         self.maxParameterBytes = maxParameterBytes
@@ -573,24 +570,10 @@ struct HeistPlanRuntimeValidator: HeistPlanTraversalVisitor {
         switch argument {
         case .none:
             break
-        case .strings(let values):
-            validateArgumentArrayCount(values.count, path: "\(path).values")
-            for (index, value) in values.enumerated() {
-                validateString(value, path: "\(path).values[\(index)]", scope: scope)
-            }
+        case .string(let value):
+            validateString(value, path: "\(path).value", scope: scope)
         case .elementTarget(let target):
             validateTarget(target, path: "\(path).target", scope: scope)
-        }
-    }
-
-    mutating func validateArgumentArrayCount(_ count: Int, path: String) {
-        if count > limits.maxArgumentValues {
-            fail(
-                path: path,
-                contract: "max heist argument values",
-                observed: "\(count) values",
-                correction: "Use \(limits.maxArgumentValues) argument values or fewer."
-            )
         }
     }
 

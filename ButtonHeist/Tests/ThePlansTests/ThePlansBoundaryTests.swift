@@ -271,7 +271,7 @@ func `heist artifact accepts parameterized root entry through validation contrac
     let temp = try PlansTemporaryDirectory()
     let raw = UnvalidatedHeistPlan(
         name: "search",
-        parameter: .strings(name: "query"),
+        parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
             text: .ref("query"),
             target: .target(.predicate(.label("Search")))
@@ -286,7 +286,7 @@ func `heist artifact accepts parameterized root entry through validation contrac
     ) { url in
         let plan = try HeistArtifactCodec.readPlan(from: url)
         #expect(plan.name == "search")
-        #expect(plan.parameter.kind == .strings)
+        #expect(plan.parameter.kind == .string)
     }
 }
 

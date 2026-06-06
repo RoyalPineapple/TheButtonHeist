@@ -170,7 +170,7 @@ final class ClientMessageTests: XCTestCase {
     func testHeistPlanClientMessageRoundTripPreservesRootArgument() throws {
         let plan = try HeistPlan(
             name: "search",
-            parameter: .strings(name: "query"),
+            parameter: .string(name: "query"),
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
@@ -180,7 +180,7 @@ final class ClientMessageTests: XCTestCase {
         )
         let message = ClientMessage.heistPlan(HeistPlanRun(
             plan: plan,
-            argument: .strings([.literal("milk")])
+            argument: .string(.literal("milk"))
         ))
 
         let data = try JSONEncoder().encode(message)
@@ -190,7 +190,7 @@ final class ClientMessageTests: XCTestCase {
             return XCTFail("Expected heistPlan, got \(decoded)")
         }
         XCTAssertEqual(decodedRun.plan, plan)
-        XCTAssertEqual(decodedRun.argument, .strings([.literal("milk")]))
+        XCTAssertEqual(decodedRun.argument, .string(.literal("milk")))
     }
 
     func testHeistPlanEnvelopeRoundTrip() throws {

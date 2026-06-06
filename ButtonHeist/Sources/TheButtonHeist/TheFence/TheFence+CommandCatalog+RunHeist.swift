@@ -15,7 +15,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 description: "Execute a typed heist plan, supplied inline (canonical HeistPlan fields: " +
                     "version, name, parameter, definitions, body) or loaded by the fence from a `path` " +
                     "to a .heist package artifact. Provide exactly one source: a path or an inline plan. " +
-                    "Use `argument` when the root heist declares a strings or element_target parameter."
+                    "Use `argument` when the root heist declares a string or element_target parameter."
             )
         case .listHeists:
             return TheFence.Command.commandDescriptor(
@@ -103,13 +103,10 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     .type,
                     .string,
                     required: true,
-                    enumValues: ["none", "strings", "element_target"]
+                    enumValues: ["none", "string", "element_target"]
                 ),
-                param(
-                    .values,
-                    .array,
-                    arrayItemType: .string
-                ),
+                param(.value, .string),
+                param(.valueRef, .string),
                 param(
                     .target,
                     .object,

@@ -82,9 +82,10 @@ struct ToolSyncTests {
         }
         #expect(schemaValue(at: ["properties", "argument", "properties", "type", "enum"], in: tool.inputSchema) == .array([
             .string("none"),
-            .string("strings"),
+            .string("string"),
             .string("element_target"),
         ]))
+        #expect(schemaValue(at: ["properties", "argument", "properties", "values"], in: tool.inputSchema) == nil)
 
         // Swift compilation lives entirely in the CLI/heist-plan authoring tools.
         // The MCP run_heist tool accepts only canonical plan IR — no source_file,

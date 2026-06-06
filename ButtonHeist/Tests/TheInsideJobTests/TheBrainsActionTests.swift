@@ -944,7 +944,7 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = try UnvalidatedHeistPlan(definitions: [
             UnvalidatedHeistPlan(
                 name: "addToCart",
-                parameter: .strings(name: "item"),
+                parameter: .string(name: "item"),
                 definitions: [
                     UnvalidatedHeistPlan(name: "tapAddButton", body: [
                         .action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Add to Cart"))))),
@@ -958,8 +958,8 @@ final class TheBrainsActionTests: XCTestCase {
         ], body: [
             .invoke(HeistInvocationStep(
                 path: ["addToCart"],
-            argument: .strings([.literal("Milk")])
-        )),
+                argument: .string(.literal("Milk"))
+            )),
         ]).validatedForRuntime()
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -982,7 +982,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(
             name: "search",
-            parameter: .strings(name: "query"),
+            parameter: .string(name: "query"),
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
@@ -993,7 +993,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.executeHeistPlanForTest(
             plan,
-            argument: .strings([.literal("milk")]),
+            argument: .string(.literal("milk")),
             runtime: runtime
         )
 
@@ -1006,11 +1006,40 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testHeistExecutionBindsRootElementTargetArgument() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(
+            name: "tapRow",
+            parameter: .elementTarget(name: "row"),
+            body: [
+                .action(try ActionStep(command: .activate(.ref("row")))),
+            ]
+        )
+
+        let result = await brains.executeHeistPlanForTest(
+            plan,
+            argument: .elementTarget(.target(.label("Row 1"))),
+            runtime: runtime
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(executedCommands, [
+            .activate(.predicate(ElementPredicate(label: "Row 1"))),
+        ])
+    }
+
     func testHeistExecutionRejectsMissingRootArgument() async throws {
         let runtime = heistRuntime(observations: [])
         let plan = try HeistPlan(
             name: "search",
-            parameter: .strings(name: "query"),
+            parameter: .string(name: "query"),
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
@@ -1023,7 +1052,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.errorKind, .validationError)
-        XCTAssertEqual(result.message, "Could not bind root heist argument: heist argument type none does not match parameter type strings")
+        XCTAssertEqual(result.message, "Could not bind root heist argument: heist argument type none does not match parameter type string")
     }
 
     func testHeistInvocationAllowsSameLeafDefinitionNamesInDifferentScopes() async throws {

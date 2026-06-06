@@ -403,11 +403,11 @@ final class TheFenceHandlerTests: XCTestCase {
         // Nested definitions + invoke + a string parameter all round-trip.
         let definition = try HeistPlan(
             name: "addToCart",
-            parameter: .strings(name: "item"),
+            parameter: .string(name: "item"),
             body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
         )
         let plan = try HeistPlan(definitions: [definition], body: [
-            .invoke(HeistInvocationStep(path: ["addToCart"], argument: .strings([.literal("Milk")]))),
+            .invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk")))),
         ])
 
         let request = try fence.decodeRunHeistRequest(try Self.inlineArguments(for: plan))
@@ -436,7 +436,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let fence = TheFence(configuration: .init())
         let plan = try HeistPlan(
             name: "search",
-            parameter: .strings(name: "query"),
+            parameter: .string(name: "query"),
             body: [.action(try ActionStep(command: .typeText(
                 text: .ref("query"),
                 target: .target(.predicate(.label("Search")))
@@ -444,14 +444,36 @@ final class TheFenceHandlerTests: XCTestCase {
         )
         var arguments = try Self.inlineArguments(for: plan).argumentValues
         arguments["argument"] = .object([
-            "type": .string("strings"),
-            "values": .array([.string("milk")]),
+            "type": .string("string"),
+            "value": .string("milk"),
         ])
 
         let request = try fence.decodeRunHeistRequest(TheFence.CommandArgumentEnvelope(values: arguments))
 
         XCTAssertEqual(request.plan, plan)
-        XCTAssertEqual(request.argument, .strings([.literal("milk")]))
+        XCTAssertEqual(request.argument, .string(.literal("milk")))
+    }
+
+    @ButtonHeistActor
+    func testRunHeistRejectsMultipleStringRootArgumentValues() async throws {
+        let fence = TheFence(configuration: .init())
+        let plan = try HeistPlan(
+            name: "search",
+            parameter: .string(name: "query"),
+            body: [.action(try ActionStep(command: .typeText(
+                text: .ref("query"),
+                target: .target(.predicate(.label("Search")))
+            )))]
+        )
+        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        arguments["argument"] = .object([
+            "type": .string("string"),
+            "values": .array([.string("milk"), .string("eggs")]),
+        ])
+
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(TheFence.CommandArgumentEnvelope(values: arguments))) { error in
+            XCTAssertTrue(String(describing: error).contains("string heist argument accepts exactly one value"), "\(error)")
+        }
     }
 
     @ButtonHeistActor
@@ -479,7 +501,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let fence = TheFence(configuration: .init())
         let plan = try HeistPlan(
             name: "search",
-            parameter: .strings(name: "query"),
+            parameter: .string(name: "query"),
             body: [.action(try ActionStep(command: .typeText(
                 text: .ref("query"),
                 target: .target(.predicate(.label("Search")))
@@ -515,13 +537,13 @@ final class TheFenceHandlerTests: XCTestCase {
         let fence = TheFence(configuration: .init())
         let definition = try HeistPlan(
             name: "addToCart",
-            parameter: .strings(name: "item"),
+            parameter: .string(name: "item"),
             body: [.warn(WarnStep(message: "x"))]
         )
         let plan = try HeistPlan(
             name: "flow",
             definitions: [definition],
-            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .strings([.literal("Milk")])))]
+            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk"))))]
         )
         XCTAssertNoThrow(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
     }
@@ -531,7 +553,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let fence = TheFence(configuration: .init())
         let definition = try HeistPlan(
             name: "addToCart",
-            parameter: .strings(name: "item"),
+            parameter: .string(name: "item"),
             body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
         )
         let plan = try HeistPlan(
@@ -546,9 +568,9 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
         XCTAssertEqual(catalog.heists.map(\.name), ["shop", "addToCart"])
-        XCTAssertEqual(catalog.heists[1].parameterKind, .strings)
+        XCTAssertEqual(catalog.heists[1].parameterKind, .string)
         XCTAssertTrue(catalog.heists[1].requiresArgument)
-        XCTAssertEqual(catalog.heists[1].summary, "Reusable heist capability requiring strings argument")
+        XCTAssertEqual(catalog.heists[1].summary, "Reusable heist capability requiring string argument")
         XCTAssertEqual(catalog.heists[1].tags, ["capability", "parameterized", "semantic-action"])
         XCTAssertNil(catalog.heists[1].parameterName)
         XCTAssertNil(catalog.heists[1].actionCommands)

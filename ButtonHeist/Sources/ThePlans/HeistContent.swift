@@ -22,6 +22,53 @@ public extension HeistPlan {
     }
 }
 
+public func Heist<Content: HeistContent>(
+    @HeistBuilder _ content: () throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan(content)
+}
+
+public func Heist<Content: HeistContent>(
+    _ input: String,
+    parameter: String = "input",
+    @HeistBuilder _ content: (StringExpr) throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan(rootParameter: .string(name: parameter)) {
+        try content(try StringExpr(ref: parameter))
+    }
+}
+
+@_disfavoredOverload
+public func Heist<Content: HeistContent>(
+    _ input: ElementTarget,
+    parameter: String = "input",
+    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan(rootParameter: .elementTarget(name: parameter)) {
+        try content(try ElementTargetExpr(ref: parameter))
+    }
+}
+
+public func Heist<Content: HeistContent>(
+    _ input: ElementTargetExpr,
+    parameter: String = "input",
+    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan(rootParameter: .elementTarget(name: parameter)) {
+        try content(try ElementTargetExpr(ref: parameter))
+    }
+}
+
+public func Heist<Content: HeistContent>(
+    _ values: [String],
+    parameter: String = "item",
+    @HeistBuilder _ content: (StringExpr) throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan {
+        try ForEach(values, parameter: parameter, content: content)
+    }
+}
+
 private extension HeistPlan {
     init(
         dslName name: String?,
@@ -33,6 +80,20 @@ private extension HeistPlan {
             definitions: content.heistDefinitions,
             body: content.heistSteps
         )
+    }
+
+    init(
+        rootParameter parameter: HeistParameter,
+        _ content: () throws -> some HeistContent
+    ) throws {
+        let content = try content()
+        guard !content.heistSteps.isEmpty || !content.heistDefinitions.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: [HeistPlanCodingKey("body")],
+                debugDescription: "HeistPlan requires a non-empty body or definitions"
+            ))
+        }
+        try self.init(parameter: parameter, definitions: content.heistDefinitions, body: content.heistSteps)
     }
 
     static func validatedDSLPlan(
@@ -192,7 +253,7 @@ public struct HeistDef<Input>: Sendable {
     ) where Input == String {
         let components = Self.pathComponents(path)
         self.path = components
-        self.parameter = .strings(name: parameter)
+        self.parameter = .string(name: parameter)
         self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
             try content(try StringExpr(ref: parameter))
         }
@@ -312,11 +373,11 @@ public extension HeistDef where Input == Void {
 
 public extension HeistDef where Input == String {
     func callAsFunction(_ input: String) throws -> some HeistContent {
-        try invocation(argument: .strings([.literal(input)]))
+        try invocation(argument: .string(.literal(input)))
     }
 
     func callAsFunction(_ input: StringExpr) throws -> some HeistContent {
-        try invocation(argument: .strings([input]))
+        try invocation(argument: .string(input))
     }
 }
 
@@ -346,11 +407,11 @@ public struct RunHeist: HeistContent {
     }
 
     public init(_ name: String, _ input: String) {
-        self.init(name: name, argument: .strings([.literal(input)]))
+        self.init(name: name, argument: .string(.literal(input)))
     }
 
     public init(_ name: String, _ input: StringExpr) {
-        self.init(name: name, argument: .strings([input]))
+        self.init(name: name, argument: .string(input))
     }
 
     @_disfavoredOverload

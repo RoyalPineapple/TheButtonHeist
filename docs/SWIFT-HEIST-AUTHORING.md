@@ -119,7 +119,7 @@ Do not use native Swift `for` inside `Heist {}`. The heist result builder does
 not lower native loops because native loops flatten at authoring time and lose
 loop intent. If a loop should survive JSON, write `ForEach`.
 
-Semantic `ForEach` serializes as `for_each_element`. String-array `ForEach`
+Semantic `ForEach` serializes as `for_each_element`. Finite string `ForEach`
 serializes as `for_each_string`. Runtime `ForEach` repeats semantic intent;
 commands re-resolve targets. The loop owns match counting, ordinal scheduling,
 and limit enforcement only. Semantic `ForEach` takes an initial settled

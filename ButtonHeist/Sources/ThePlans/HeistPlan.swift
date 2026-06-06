@@ -58,14 +58,14 @@ public struct HeistPlan: Codable, Sendable, Equatable {
 
 public enum HeistParameter: Codable, Sendable, Equatable {
     case none
-    case strings(name: HeistReferenceName)
+    case string(name: HeistReferenceName)
     case elementTarget(name: HeistReferenceName)
 
     public var name: HeistReferenceName? {
         switch self {
         case .none:
             return nil
-        case .strings(let name), .elementTarget(let name):
+        case .string(let name), .elementTarget(let name):
             return name
         }
     }
@@ -73,7 +73,7 @@ public enum HeistParameter: Codable, Sendable, Equatable {
     public var kind: HeistParameterKind {
         switch self {
         case .none: return .none
-        case .strings: return .strings
+        case .string: return .string
         case .elementTarget: return .elementTarget
         }
     }
@@ -96,8 +96,8 @@ public enum HeistParameter: Codable, Sendable, Equatable {
                 )
             }
             self = .none
-        case .strings:
-            self = .strings(name: try container.decode(String.self, forKey: .name))
+        case .string:
+            self = .string(name: try container.decode(String.self, forKey: .name))
         case .elementTarget:
             self = .elementTarget(name: try container.decode(String.self, forKey: .name))
         }
@@ -114,19 +114,19 @@ public enum HeistParameter: Codable, Sendable, Equatable {
 
 public enum HeistParameterKind: String, Codable, Sendable, Equatable {
     case none
-    case strings
+    case string
     case elementTarget = "element_target"
 }
 
 public enum HeistArgument: Codable, Sendable, Equatable {
     case none
-    case strings([StringExpr])
+    case string(StringExpr)
     case elementTarget(ElementTargetExpr)
 
     public var kind: HeistParameterKind {
         switch self {
         case .none: return .none
-        case .strings: return .strings
+        case .string: return .string
         case .elementTarget: return .elementTarget
         }
     }
@@ -155,29 +155,24 @@ public enum HeistArgument: Codable, Sendable, Equatable {
                 ))
             }
             self = .none
-        case .strings:
-            let hasValues = container.contains(.values)
-            let hasValue = container.contains(.value)
-            let hasRef = container.contains(.valueRef)
-            guard hasValues != (hasValue || hasRef) else {
+        case .string:
+            if container.contains(.values) {
                 throw DecodingError.dataCorrupted(.init(
-                    codingPath: container.codingPath,
-                    debugDescription: "strings heist argument requires values or exactly one of value/value_ref"
+                    codingPath: container.codingPath + [CodingKeys.values],
+                    debugDescription: "string heist argument accepts exactly one value; use ForEach for multiple string values"
                 ))
             }
-            if hasValues {
-                self = .strings(try container.decode([StringExpr].self, forKey: .values))
-            } else {
-                guard hasValue != hasRef else {
-                    throw DecodingError.dataCorrupted(.init(
-                        codingPath: container.codingPath,
-                        debugDescription: "strings heist argument requires values or exactly one of value/value_ref"
-                    ))
-                }
-                self = hasValue
-                    ? .strings([.literal(try container.decode(String.self, forKey: .value))])
-                    : .strings([.ref(try container.decode(String.self, forKey: .valueRef))])
+            let hasValue = container.contains(.value)
+            let hasRef = container.contains(.valueRef)
+            guard hasValue != hasRef else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: container.codingPath,
+                    debugDescription: "string heist argument requires exactly one of value/value_ref"
+                ))
             }
+            self = hasValue
+                ? .string(.literal(try container.decode(String.self, forKey: .value)))
+                : .string(.ref(try container.decode(String.self, forKey: .valueRef)))
         case .elementTarget:
             // Singular: a predicate for exactly one element, carried under `target`
             // as an element-target expression (concrete target, predicate, or ref).
@@ -197,8 +192,13 @@ public enum HeistArgument: Codable, Sendable, Equatable {
         switch self {
         case .none:
             break
-        case .strings(let values):
-            try container.encode(values, forKey: .values)
+        case .string(let value):
+            switch value {
+            case .literal(let string):
+                try container.encode(string, forKey: .value)
+            case .ref(let reference):
+                try container.encode(reference, forKey: .valueRef)
+            }
         case .elementTarget(let target):
             try container.encode(target, forKey: .target)
         }
@@ -675,9 +675,8 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         switch argument {
         case .none:
             return "RunHeist(\(name))"
-        case .strings(let values):
-            let rendered = values.map(Self.stringArgumentSummary).joined(separator: ", ")
-            return "RunHeist(\(name), \(rendered))"
+        case .string(let value):
+            return "RunHeist(\(name), \(Self.stringArgumentSummary(value)))"
         case .elementTarget(let target):
             return "RunHeist(\(name), \(Self.targetArgumentSummary(target)))"
         }

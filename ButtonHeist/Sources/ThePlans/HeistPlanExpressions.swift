@@ -37,7 +37,6 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
     case emptyReference(String)
     case unsupportedHeistActionCommand(String)
     case parameterArgumentMismatch(parameter: HeistParameterKind, argument: HeistParameterKind)
-    case parameterArgumentCardinality(parameter: HeistParameterKind, count: Int)
 
     public var description: String {
         switch self {
@@ -51,8 +50,6 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
             return "unsupported heist action command \"\(command)\""
         case .parameterArgumentMismatch(let parameter, let argument):
             return "heist argument type \(argument.rawValue) does not match parameter type \(parameter.rawValue)"
-        case .parameterArgumentCardinality(let parameter, let count):
-            return "heist argument type \(parameter.rawValue) requires exactly one value, got \(count)"
         }
     }
 }
@@ -65,10 +62,7 @@ public extension HeistExecutionEnvironment {
         switch (parameter, argument) {
         case (.none, .none):
             return self
-        case (.strings(let name), .strings(let values)):
-            guard values.count == 1, let value = values.first else {
-                throw HeistExpressionError.parameterArgumentCardinality(parameter: parameter.kind, count: values.count)
-            }
+        case (.string(let name), .string(let value)):
             return binding(string: try value.resolve(in: self), to: name)
         case (.elementTarget(let name), .elementTarget(let target)):
             return binding(target: try target.resolve(in: self), to: name)

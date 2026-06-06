@@ -420,18 +420,18 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
     #expect(heist.body == [
         .invoke(HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
-            argument: .strings([.literal("Milk")])
+            argument: .string(.literal("Milk"))
         )),
         .invoke(HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
-            argument: .strings([.literal("Bread")])
+            argument: .string(.literal("Bread"))
         )),
     ])
     #expect(try heist.definitions == validatedDefinitions([
         UnvalidatedHeistPlan(name: "LibraryScreen", definitions: [
             UnvalidatedHeistPlan(
                 name: "addToCart",
-                parameter: .strings(name: "item"),
+                parameter: .string(name: "item"),
                 body: [
                     .action(try ActionStep(command: .activate(.label(.ref("item"))))),
                     .action(try ActionStep(
@@ -458,7 +458,7 @@ func `string heist definitions default parameter to input`() throws {
         UnvalidatedHeistPlan(name: "SearchScreen", definitions: [
             UnvalidatedHeistPlan(
                 name: "search",
-                parameter: .strings(name: "input"),
+                parameter: .string(name: "input"),
                 body: [
                     .action(try ActionStep(
                         command: .typeText(text: .ref("input"), target: .target(.label("Search")))
@@ -533,7 +533,7 @@ func heistDefinitionsCarryLocalDependenciesInDefinitionScope() throws {
         UnvalidatedHeistPlan(name: "LibraryScreen", definitions: [
             UnvalidatedHeistPlan(
                 name: "addToCart",
-                parameter: .strings(name: "item"),
+                parameter: .string(name: "item"),
                 definitions: [
                     UnvalidatedHeistPlan(name: "AddButton", definitions: [
                         UnvalidatedHeistPlan(
@@ -575,7 +575,7 @@ func rawHeistPlanContentCarriesDefinitions() throws {
 func runHeistBuildsHeistRunSteps() throws {
     let stringRun = RunHeist("LibraryScreen.addToCart", "Milk")
     #expect(stringRun.heistSteps == [
-        .invoke(HeistInvocationStep(path: ["LibraryScreen", "addToCart"], argument: .strings([.literal("Milk")]))),
+        .invoke(HeistInvocationStep(path: ["LibraryScreen", "addToCart"], argument: .string(.literal("Milk")))),
     ])
 
     let noArgRun = RunHeist("CartScreen.checkout")
@@ -651,7 +651,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
             body: [
                 .invoke(HeistInvocationStep(
                     path: ["LibraryScreen", "addToCart"],
-                    argument: .strings([.ref("item")])
+                    argument: .string(.ref("item"))
                 )),
             ]
         )),
@@ -693,6 +693,61 @@ func stringForEachBuildsRuntimeStringLoop() throws {
             ]
         )),
     ])
+}
+
+@Test
+func `top level Heist string input declares singular root parameter`() throws {
+    let heist = try Heist("Milk") { query in
+        TypeText(query, into: .label("Search"))
+    }
+
+    #expect(heist.parameter == .string(name: "input"))
+    #expect(heist.body == [
+        .action(try ActionStep(command: .typeText(
+            text: .ref("input"),
+            target: .target(.label("Search"))
+        ))),
+    ])
+}
+
+@Test
+func `top level Heist element target input declares singular root parameter`() throws {
+    let heist = try Heist(.label("Delete")) { target in
+        Activate(target)
+    }
+
+    #expect(heist.parameter == .elementTarget(name: "input"))
+    #expect(heist.body == [
+        .action(try ActionStep(command: .activate(.ref("input")))),
+    ])
+}
+
+@Test
+func `top level Heist array sugar lowers to finite string ForEach`() throws {
+    enum Library {
+        static let search = HeistDef<String>("Library.search", parameter: "item") { item in
+            TypeText(item, into: .label("Search"))
+        }
+    }
+
+    let heist = try Heist(["Milk", "Eggs"]) { item in
+        try Library.search(item)
+    }
+
+    #expect(heist.parameter == .none)
+    #expect(heist.body == [
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["Library", "search"],
+                    argument: .string(.ref("item"))
+                )),
+            ]
+        )),
+    ])
+    #expect(try heist.canonicalSwiftDSL().contains(#"try ForEach(["Milk", "Eggs"]) { item in"#))
 }
 
 @Test

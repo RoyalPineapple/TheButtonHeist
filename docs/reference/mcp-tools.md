@@ -23,7 +23,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `one_finger_tap` | `spatialAction` | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
 | `ping` | `session` | Check connection health without reading accessibility state. |
 | `rotor` | `semanticAction` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
-| `run_heist` | `heistRuntime` | Execute a typed heist plan, supplied inline (canonical HeistPlan fields: version, name, parameter, definitions, body) or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: a path or an inline plan. Use `argument` when the root heist declares a strings or element_target parameter. |
+| `run_heist` | `heistRuntime` | Execute a typed heist plan, supplied inline (canonical HeistPlan fields: version, name, parameter, definitions, body) or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: a path or an inline plan. Use `argument` when the root heist declares a string or element_target parameter. |
 | `scroll` | `viewportDebug` | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
 | `scroll_to_edge` | `viewportDebug` | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
 | `scroll_to_visible` | `viewportDebug` | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
@@ -278,7 +278,7 @@ Parameters:
 
 ### `run_heist`
 
-Execute a typed heist plan, supplied inline (canonical HeistPlan fields: version, name, parameter, definitions, body) or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: a path or an inline plan. Use `argument` when the root heist declares a strings or element_target parameter.
+Execute a typed heist plan, supplied inline (canonical HeistPlan fields: version, name, parameter, definitions, body) or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: a path or an inline plan. Use `argument` when the root heist declares a string or element_target parameter.
 
 - Family: `heistRuntime`
 

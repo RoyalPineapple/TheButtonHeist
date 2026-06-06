@@ -327,7 +327,7 @@ struct HeistPlanTraversal {
                 switch definition.parameter {
                 case .none:
                     break
-                case .strings:
+                case .string:
                     environment = environment.binding(string: "__heist_parameter__", to: parameterName)
                 case .elementTarget:
                     environment = environment.binding(target: .predicate(.identifier("__heist_parameter__")), to: parameterName)
@@ -425,7 +425,7 @@ struct HeistReferenceScope {
         switch parameter {
         case .none:
             return self
-        case .strings:
+        case .string:
             return bindingString(reference)
         case .elementTarget:
             return bindingTarget(reference)
@@ -475,7 +475,7 @@ extension HeistExecutionEnvironment {
         switch parameter {
         case .none:
             return .empty
-        case .strings:
+        case .string:
             return .empty.binding(string: "__heist_parameter__", to: parameterName)
         case .elementTarget:
             return .empty.binding(target: .predicate(.identifier("__heist_parameter__")), to: parameterName)

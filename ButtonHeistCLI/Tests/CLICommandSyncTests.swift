@@ -123,13 +123,13 @@ final class CLICommandSyncTests: XCTestCase {
         // and an invoke body must survive serialization without dropping fields.
         let definition = try HeistPlan(
             name: "addToCart",
-            parameter: .strings(name: "item"),
+            parameter: .string(name: "item"),
             body: [.warn(WarnStep(message: "x"))]
         )
         let plan = try HeistPlan(
             name: "flow",
             definitions: [definition],
-            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .strings([.literal("Milk")])))]
+            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk"))))]
         )
         let inline = try XCTUnwrap(String(data: try JSONEncoder().encode(plan), encoding: .utf8))
 
@@ -181,29 +181,29 @@ final class CLICommandSyncTests: XCTestCase {
             fromFile: nil,
             path: "Search.heist",
             entry: nil,
-            argument: #"{"type":"strings","values":["milk"]}"#
+            argument: #"{"type":"string","value":"milk"}"#
         )
 
         XCTAssertEqual(arguments[.path], .string("Search.heist"))
         XCTAssertEqual(arguments[.argument], .object([
-            "type": .string("strings"),
-            "values": .array([.string("milk")]),
+            "type": .string("string"),
+            "value": .string("milk"),
         ]))
     }
 
     func testRunHeistForwardsRootArgumentWithInlineSource() throws {
         let arguments = try RunHeistCommand.planArguments(
-            inline: #"{"version":1,"name":"search","parameter":{"type":"strings","name":"query"},"body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
+            inline: #"{"version":1,"name":"search","parameter":{"type":"string","name":"query"},"body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
             fromFile: nil,
             path: nil,
             entry: nil,
-            argument: #"{"type":"strings","values":["milk"]}"#
+            argument: #"{"type":"string","value":"milk"}"#
         )
 
         XCTAssertEqual(arguments[.name], .string("search"))
         XCTAssertEqual(arguments[.argument], .object([
-            "type": .string("strings"),
-            "values": .array([.string("milk")]),
+            "type": .string("string"),
+            "value": .string("milk"),
         ]))
     }
 

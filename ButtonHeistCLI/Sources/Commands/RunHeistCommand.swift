@@ -18,7 +18,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
 
             Examples:
               buttonheist run_heist --path Flow.heist
-              buttonheist run_heist --path Search.heist --argument '{"type":"strings","values":["milk"]}'
+              buttonheist run_heist --path Search.heist --argument '{"type":"string","value":"milk"}'
               buttonheist run_heist --path Flow.swift --entry makeHeist
               buttonheist run_heist --path Flow.heist --junit report.xml
               buttonheist run_heist --plan '{"version":1,"body":[{"type":"warn","warn":{"message":"Check"}}]}'

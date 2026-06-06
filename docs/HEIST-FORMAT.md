@@ -122,7 +122,7 @@ source execution over the wire.
         {
           "version": 1,
           "name": "addToCart",
-          "parameter": { "type": "strings", "name": "item" },
+          "parameter": { "type": "string", "name": "item" },
           "body": [
             {
               "type": "action",
@@ -148,7 +148,7 @@ source execution over the wire.
       "type": "invoke",
       "invoke": {
         "path": ["LibraryScreen", "addToCart"],
-        "argument": { "type": "strings", "value": "Milk" }
+        "argument": { "type": "string", "value": "Milk" }
       }
     }
   ]
@@ -162,17 +162,17 @@ Lookup is explicit:
 - Duplicate names in the same `definitions` array are rejected.
 - Recursion and invocation cycles are rejected by runtime validation.
 
-Parameters are finite semantic values only:
+Parameters are singular semantic values only:
 
 | Type | Meaning |
 |------|---------|
 | `none` | No argument accepted. |
-| `strings` | One or more strings. A single string encodes as one-value array semantics at execution. |
-| `element_targets` | One or more semantic `ElementTarget` values. A single target encodes as one-value array semantics at execution. |
+| `string` | One string value. |
+| `element_target` | One semantic `ElementTarget` value. |
 
 Arguments must match the target parameter type. String arguments may use
-`value`, `value_ref`, or `values`; element-target arguments may use `target`,
-`target_ref`, or `targets`. Refs are scoped names, not objects. They carry no
+`value` or `value_ref`; element-target arguments may use `target` or
+`target_ref`. Refs are scoped names, not objects. They carry no
 geometry, runtime ID, capture ID, or cached element.
 
 ## Step Types
@@ -485,7 +485,7 @@ Invocations call local definitions by explicit path:
   "type": "invoke",
   "invoke": {
     "path": ["LibraryScreen", "addToCart"],
-    "argument": { "type": "strings", "value": "Milk" }
+    "argument": { "type": "string", "value": "Milk" }
   }
 }
 ```

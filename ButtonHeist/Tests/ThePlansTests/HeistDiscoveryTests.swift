@@ -45,13 +45,13 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
     #expect(catalog.heists[1].parameterName == nil)
 }
 
-@Test func `list heists includes strings definition`() throws {
+@Test func `list heists includes string definition`() throws {
     let catalog = try validatedPlan(UnvalidatedHeistPlan(
         name: "root",
         definitions: [
             UnvalidatedHeistPlan(
                 name: "addToCart",
-                parameter: .strings(name: "item"),
+                parameter: .string(name: "item"),
                 body: [
                     .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
                 ]
@@ -62,9 +62,9 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
 
     #expect(catalog.heists[1].name == "addToCart")
     #expect(catalog.heists[1].role == .capability)
-    #expect(catalog.heists[1].parameterKind == .strings)
+    #expect(catalog.heists[1].parameterKind == .string)
     #expect(catalog.heists[1].requiresArgument == true)
-    #expect(catalog.heists[1].summary == "Reusable heist capability requiring strings argument")
+    #expect(catalog.heists[1].summary == "Reusable heist capability requiring string argument")
     #expect(catalog.heists[1].tags == ["capability", "parameterized", "semantic-action"])
     #expect(catalog.heists[1].parameterName == nil)
 }
@@ -170,7 +170,7 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
 @Test func `list heists includes parameterized root entry`() throws {
     let catalog = try validatedPlan(UnvalidatedHeistPlan(
         name: "root",
-        parameter: .strings(name: "item"),
+        parameter: .string(name: "item"),
         body: [
             .action(try ActionStep(command: .typeText(
                 text: .ref("item"),
@@ -182,10 +182,10 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
     let root = try #require(catalog.heists.first)
     #expect(root.name == "root")
     #expect(root.role == .entry)
-    #expect(root.parameterKind == .strings)
+    #expect(root.parameterKind == .string)
     #expect(root.requiresArgument)
     #expect(root.parameterName == nil)
-    #expect(root.summary == "Root entry heist requiring strings argument")
+    #expect(root.summary == "Root entry heist requiring string argument")
     #expect(root.tags == ["entry", "parameterized", "text-input"])
 }
 
@@ -208,7 +208,7 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
         definitions: [
             UnvalidatedHeistPlan(
                 name: "addToCart",
-                parameter: .strings(name: "item"),
+                parameter: .string(name: "item"),
                 body: [
                     .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
                 ]
@@ -218,7 +218,7 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
     )).describeHeist(named: "addToCart")
 
     #expect(description.role == .capability)
-    #expect(description.parameterKind == .strings)
+    #expect(description.parameterKind == .string)
     #expect(description.parameterName == "item")
     #expect(description.requiresArgument)
 }

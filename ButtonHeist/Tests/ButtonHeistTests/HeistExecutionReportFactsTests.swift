@@ -473,7 +473,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     func testInvokeNodeCarriesCapabilityFrameAndArgument() {
         let invocation = HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
-            argument: .strings([.literal("Milk")])
+            argument: .string(.literal("Milk"))
         )
         let result = HeistExecutionResult(
             steps: [

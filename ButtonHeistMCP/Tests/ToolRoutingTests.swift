@@ -90,16 +90,16 @@ struct ToolRoutingTests {
             [
                 "path": .string("Search.heist"),
                 "argument": .object([
-                    "type": .string("strings"),
-                    "values": .array([.string("milk")]),
+                    "type": .string("string"),
+                    "value": .string("milk"),
                 ]),
             ]
         )
 
         #expect(operation.command == .runHeist)
         #expect(operation.arguments.argumentValues["argument"] == .object([
-            "type": .string("strings"),
-            "values": .array([.string("milk")]),
+            "type": .string("string"),
+            "value": .string("milk"),
         ]))
     }
 

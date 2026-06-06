@@ -384,7 +384,7 @@ func runtimeValidationRejectsNestedCollectionLoops() throws {
 func runtimeValidationRejectsInvalidHeistDefinitionsAndInvocations() throws {
     let definition = UnvalidatedHeistPlan(
         name: "addToCart",
-        parameter: .strings(name: "item"),
+        parameter: .string(name: "item"),
         body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
     )
     let cases: [(UnvalidatedHeistPlan, String)] = [
@@ -407,7 +407,7 @@ func runtimeValidationRejectsInvalidHeistDefinitionsAndInvocations() throws {
             UnvalidatedHeistPlan(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(
                     path: ["missing"],
-                    argument: .strings([.literal("Milk")])
+                    argument: .string(.literal("Milk"))
                 )),
             ]),
             "heist run path must resolve"
@@ -417,15 +417,6 @@ func runtimeValidationRejectsInvalidHeistDefinitionsAndInvocations() throws {
                 .invoke(HeistInvocationStep(path: ["addToCart"], argument: .none)),
             ]),
             "heist run argument type must match"
-        ),
-        (
-            UnvalidatedHeistPlan(definitions: [definition], body: [
-                .invoke(HeistInvocationStep(
-                    path: ["addToCart"],
-                    argument: .strings([.literal("Milk"), .literal("Bread")])
-                )),
-            ]),
-            "heist run argument must bind"
         ),
         (
             UnvalidatedHeistPlan(definitions: [definition], body: [
@@ -440,6 +431,21 @@ func runtimeValidationRejectsInvalidHeistDefinitionsAndInvocations() throws {
         #expect(failures.contains {
             $0.contract.contains(expectedContract)
         }, "\(expectedContract): \(failures)")
+    }
+}
+
+@Test
+func decodedHeistArgumentsRejectStringArrayShape() throws {
+    let payloads = [
+        #"{"type":"string","values":["Milk","Bread"]}"#,
+        #"{"type":"string","values":["Milk"]}"#,
+        #"{"type":"strings","values":["Milk"]}"#,
+    ]
+
+    for payload in payloads {
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(HeistArgument.self, from: Data(payload.utf8))
+        }
     }
 }
 
@@ -483,7 +489,7 @@ func runtimeValidationAcceptsSingularElementTargetCapability() throws {
 func runtimeValidationAcceptsParameterizedRootAndScratchRootCaller() throws {
     let parameterizedRoot = UnvalidatedHeistPlan(
         name: "search",
-        parameter: .strings(name: "query"),
+        parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
             text: .ref("query"),
             target: .target(.predicate(.label("Search")))
@@ -493,14 +499,14 @@ func runtimeValidationAcceptsParameterizedRootAndScratchRootCaller() throws {
 
     let scratchRoot = UnvalidatedHeistPlan(
         definitions: [
-            UnvalidatedHeistPlan(name: "search", parameter: .strings(name: "query"), body: [
+            UnvalidatedHeistPlan(name: "search", parameter: .string(name: "query"), body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
                     target: .target(.predicate(.label("Search")))
                 ))),
             ]),
         ],
-        body: [.invoke(HeistInvocationStep(path: ["search"], argument: .strings([.literal("Milk")])))]
+        body: [.invoke(HeistInvocationStep(path: ["search"], argument: .string(.literal("Milk"))))]
     )
     _ = try validatedPlan(scratchRoot)
 }
@@ -510,7 +516,7 @@ func runtimeValidationUsesInvokedDefinitionScopeForHelperDependencies() throws {
     let raw = UnvalidatedHeistPlan(definitions: [
         UnvalidatedHeistPlan(
             name: "addToCart",
-            parameter: .strings(name: "item"),
+            parameter: .string(name: "item"),
             definitions: [
                 UnvalidatedHeistPlan(name: "tapAddButton", body: [
                     .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Add to Cart")))))),
@@ -524,7 +530,7 @@ func runtimeValidationUsesInvokedDefinitionScopeForHelperDependencies() throws {
     ], body: [
         .invoke(HeistInvocationStep(
             path: ["addToCart"],
-            argument: .strings([.literal("Milk")])
+            argument: .string(.literal("Milk"))
         )),
     ])
 
@@ -557,7 +563,7 @@ func runtimeValidationValidatesInvokedBodiesWithBoundArguments() throws {
     let raw = UnvalidatedHeistPlan(definitions: [
         UnvalidatedHeistPlan(
             name: "typeSearch",
-            parameter: .strings(name: "query"),
+            parameter: .string(name: "query"),
             body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
@@ -568,7 +574,7 @@ func runtimeValidationValidatesInvokedBodiesWithBoundArguments() throws {
     ], body: [
         .invoke(HeistInvocationStep(
             path: ["typeSearch"],
-            argument: .strings([.literal("")])
+            argument: .string(.literal(""))
         )),
     ])
 
