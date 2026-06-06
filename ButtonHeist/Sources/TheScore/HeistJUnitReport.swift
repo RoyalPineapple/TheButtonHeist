@@ -154,7 +154,7 @@ extension HeistJUnitReport {
         let failed = allPassed ? 0 : 1
 
         var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        xml += "<testsuites name=\"heist-playback\" tests=\"1\""
+        xml += "<testsuites name=\"heist\" tests=\"1\""
         xml += " failures=\"\(failed)\" time=\"\(totalTime)\">\n"
 
         xml += "  <testsuite name=\"\(xmlEscape(heistName))\""
@@ -169,8 +169,8 @@ extension HeistJUnitReport {
             xml += "/>\n"
         } else if let failedStep = steps.first(where: { !$0.passed }) {
             xml += ">\n"
-            let message = failedStep.outcome.failureMessage ?? "playback failed"
-            let failureType = failedStep.outcome.failureType?.typeName ?? "playbackFailure"
+            let message = failedStep.outcome.failureMessage ?? "heist failed"
+            let failureType = failedStep.outcome.failureType?.typeName ?? "heistFailure"
             xml += "      <failure message=\"\(xmlEscape(message))\""
             xml += " type=\"\(xmlEscape(failureType))\">"
             xml += xmlEscape(failureBody(failedStep: failedStep))
