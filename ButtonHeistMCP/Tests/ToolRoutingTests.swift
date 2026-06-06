@@ -57,30 +57,27 @@ struct ToolRoutingTests {
         #expect(error.message == "Unknown tool: not_a_tool")
     }
 
-    @Test("MCP does not compile Swift; run_heist arguments pass through opaquely")
-    func runHeistDoesNotCompileSwift() throws {
-        // The MCP adapter has no knowledge of Swift compilation. Any keys are
-        // forwarded verbatim as command arguments — including ones that the CLI
-        // would treat as Swift authoring inputs — with no special-casing.
+    @Test("MCP routes run_heist plan source opaquely")
+    func runHeistDoesNotParsePlanSource() throws {
+        // The MCP adapter has no knowledge of ButtonHeist plan source parsing. The
+        // `plan` string is forwarded verbatim to TheFence/ThePlans.
         let arguments = try ButtonHeistMCPServer.decodeArguments(
             [
-                "source_file": .string("Flow.swift"),
-                "entry": .string("makeHeist"),
+                "plan": .string("Activate(.label(\"Pay\"))"),
             ]
         )
 
-        #expect(arguments.argumentValues["source_file"] == .string("Flow.swift"))
-        #expect(arguments.argumentValues["entry"] == .string("makeHeist"))
+        #expect(arguments.argumentValues["plan"] == .string("Activate(.label(\"Pay\"))"))
     }
 
-    @Test("run_heist tool schema exposes no Swift authoring inputs")
-    func runHeistToolSchemaHasNoSwiftInputs() throws {
+    @Test("run_heist tool schema exposes plan source")
+    func runHeistToolSchemaHasPlanSource() throws {
         guard let runHeist = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.runHeist.rawValue }) else {
             Issue.record("run_heist tool not found")
             return
         }
         let schema = String(describing: runHeist.inputSchema)
-        #expect(!schema.contains("source_file"))
+        #expect(schema.contains("plan"))
     }
 
     @Test("run_heist routes root argument opaquely")

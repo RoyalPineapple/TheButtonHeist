@@ -22,15 +22,16 @@ extension TheFence {
         let message: String
     }
 
-    /// Canonical `HeistPlan` root fields that constitute an inline plan. A
-    /// `path` may not be combined with any of them — exactly one input source.
+    /// Canonical `HeistPlan` root fields that constitute a structured inline plan.
+    /// `path`, `plan`, and these fields are mutually exclusive plan sources.
     static let inlinePlanFieldKeys: Set<String> = ["version", "name", "parameter", "definitions", "body"]
 
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {
         let plan = try decodeRuntimeValidatedHeistPlanSource(
             from: arguments,
             commandName: Command.runHeist.rawValue,
-            droppingPlanKeys: ["argument"]
+            droppingPlanKeys: ["argument"],
+            acceptsCompactPlanSource: true
         )
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
@@ -43,7 +44,8 @@ extension TheFence {
             let plan = try decodeRuntimeValidatedHeistPlanSource(
                 from: arguments,
                 commandName: Command.listHeists.rawValue,
-                droppingPlanKeys: ["detail"]
+                droppingPlanKeys: ["detail"],
+                acceptsCompactPlanSource: false
             )
             return ListHeistsRequest(catalog: try plan.heistCatalog(detail: detail))
         } catch let error as HeistCatalogError {
@@ -57,7 +59,8 @@ extension TheFence {
             let plan = try decodeRuntimeValidatedHeistPlanSource(
                 from: arguments,
                 commandName: Command.describeHeist.rawValue,
-                droppingPlanKeys: ["heist"]
+                droppingPlanKeys: ["heist"],
+                acceptsCompactPlanSource: false
             )
             return DescribeHeistRequest(description: try plan.describeHeist(named: requestedName))
         } catch let error as HeistCatalogError {
@@ -108,23 +111,33 @@ private extension TheFence {
     func decodeRuntimeValidatedHeistPlanSource(
         from arguments: CommandArgumentEnvelope,
         commandName: String,
-        droppingPlanKeys: Set<String> = []
+        droppingPlanKeys: Set<String> = [],
+        acceptsCompactPlanSource: Bool
     ) throws -> HeistPlan {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
 
-        let plan: HeistPlan
-        if let path = try arguments.schemaString("path") {
-            // Reject `path` combined with ANY inline plan field before touching
-            // the artifact — heist plan source commands accept exactly one plan
-            // source, plus command-specific selector fields.
-            guard arguments.argumentValues.keys.allSatisfy({ !Self.inlinePlanFieldKeys.contains($0) }) else {
-                throw FenceError.invalidRequest("\(commandName) accepts either a path or an inline plan, not both")
-            }
-            plan = try loadHeistPlan(fromArtifactPath: path, commandName: commandName)
-        } else {
-            plan = try loadInlineHeistPlan(from: arguments, commandName: commandName, dropping: droppingPlanKeys)
+        let path = try arguments.schemaString("path")
+        let plan = try arguments.schemaString("plan")
+        guard acceptsCompactPlanSource || plan == nil else {
+            throw FenceError.invalidRequest(
+                "\(commandName) does not accept compact plan source; use path or structured plan fields"
+            )
         }
-        return plan
+        let hasInlinePlan = arguments.argumentValues.keys.contains { Self.inlinePlanFieldKeys.contains($0) }
+        let sourceCount = [path != nil, plan != nil, hasInlinePlan].filter { $0 }.count
+        guard sourceCount == 1 else {
+            throw FenceError.invalidRequest(
+                "\(commandName) accepts exactly one plan source: path, plan, or structured plan fields"
+            )
+        }
+
+        if let path {
+            return try loadHeistPlan(fromArtifactPath: path, commandName: commandName)
+        }
+        if let plan {
+            return try loadInlinePlanSource(plan, commandName: commandName)
+        }
+        return try loadInlineHeistPlan(from: arguments, commandName: commandName, dropping: droppingPlanKeys)
     }
 
     /// Read a heist plan from a `.heist` package artifact the operator handed us.
@@ -133,7 +146,7 @@ private extension TheFence {
     /// asks ThePlans' heist planning boundary for a validated `HeistPlan`. The plan
     /// reaches the runtime as Swift objects rather than surviving a
     /// JSON→parameter→JSON round-trip. The package's `plan.json` is internal to
-    /// the artifact and is not itself a run input. Swift DSL source is compiled
+    /// the artifact and is not itself a run input. Local Swift source is compiled
     /// by the CLI authoring path, not here.
     ///
     /// The plan is run exactly as authored — the fence does not stamp the file
@@ -179,6 +192,22 @@ private extension TheFence {
             )
         } catch let error as HeistArtifactCodecError {
             throw FenceError.invalidRequest(error.description)
+        }
+    }
+
+    func loadInlinePlanSource(_ source: String, commandName: String) throws -> HeistPlan {
+        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw FenceError.invalidRequest("\(commandName) plan must not be empty")
+        }
+        do {
+            return try HeistPlanning.compileHeistPlanSource(
+                source,
+                sourceName: "\(commandName)-inline.plan"
+            )
+        } catch let error as HeistPlanSourceCompilerError {
+            throw FenceError.invalidRequest(error.description)
+        } catch {
+            throw FenceError.invalidRequest(String(describing: error))
         }
     }
 
