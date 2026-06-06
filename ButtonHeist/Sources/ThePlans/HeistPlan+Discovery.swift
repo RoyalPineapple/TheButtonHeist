@@ -156,21 +156,31 @@ public struct HeistCatalogError: Error, Sendable, Equatable, CustomStringConvert
 
 public extension HeistPlan {
     func admittedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistCatalog {
-        try assertRuntimeAdmissible()
-        return try heistCatalog(detail: detail)
+        try heistCatalog(detail: detail)
     }
 
     func describeAdmittedHeist(named requestedName: String) throws -> HeistDescription {
-        try assertRuntimeAdmissible()
-        return try describeHeist(named: requestedName)
+        try describeHeist(named: requestedName)
     }
 
     func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistCatalog {
+        try assertRuntimeAdmissible()
+        return try uncheckedHeistCatalog(detail: detail)
+    }
+
+    func describeHeist(named requestedName: String) throws -> HeistDescription {
+        try assertRuntimeAdmissible()
+        return try uncheckedDescribeHeist(named: requestedName)
+    }
+}
+
+private extension HeistPlan {
+    func uncheckedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistCatalog {
         let resolved = try catalogResolvedHeists()
         return HeistCatalog(heists: resolved.map { catalogEntry(for: $0, detail: detail) })
     }
 
-    func describeHeist(named requestedName: String) throws -> HeistDescription {
+    func uncheckedDescribeHeist(named requestedName: String) throws -> HeistDescription {
         let trimmedName = requestedName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolved = try catalogResolvedHeists()
         guard let heist = resolved.first(where: { $0.entry.name == trimmedName }) else {
@@ -190,17 +200,7 @@ public extension HeistPlan {
             semanticSurface: HeistSemanticSurfaceBuilder.surface(for: heist)
         )
     }
-}
 
-struct ResolvedCatalogHeist {
-    let entry: HeistCatalogEntry
-    let plan: HeistPlan
-    let definitionScope: HeistDefinitionScope
-    let environment: HeistExecutionEnvironment
-    let invocationStack: [String]
-}
-
-private extension HeistPlan {
     func catalogResolvedHeists() throws -> [ResolvedCatalogHeist] {
         let rootName: String
         if let name, !name.isEmpty {
@@ -383,6 +383,14 @@ private extension HeistPlan {
     static func isViewportAction(_ command: String) -> Bool {
         ["scroll", "scrollToVisible", "scrollToEdge"].contains(command)
     }
+}
+
+struct ResolvedCatalogHeist {
+    let entry: HeistCatalogEntry
+    let plan: HeistPlan
+    let definitionScope: HeistDefinitionScope
+    let environment: HeistExecutionEnvironment
+    let invocationStack: [String]
 }
 
 private struct HeistSemanticSurfaceBuilder {

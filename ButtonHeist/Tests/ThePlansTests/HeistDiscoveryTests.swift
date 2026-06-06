@@ -163,6 +163,21 @@ import ThePlans
     }
 }
 
+@Test func `direct discovery methods fail non admitted parameterized root`() throws {
+    let plan = HeistPlan(
+        name: "root",
+        parameter: .strings(name: "item"),
+        body: [.warn(WarnStep(message: "invalid root"))]
+    )
+
+    #expect(throws: HeistPlanAdmissionError.self) {
+        try plan.heistCatalog()
+    }
+    #expect(throws: HeistPlanAdmissionError.self) {
+        try plan.describeHeist(named: "root")
+    }
+}
+
 @Test func `describe root entry`() throws {
     let description = try HeistPlan(
         name: "checkout",
