@@ -124,7 +124,7 @@ extension TheBrains {
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
         let currentElement = ElementTarget.predicate(step.matching, ordinal: targetOrdinal)
-        HeistExecutionStepResult(
+        return HeistExecutionStepResult(
             path: path,
             kind: .forEachIteration,
             status: abortedAtChildPath == nil ? .passed : .failed,
