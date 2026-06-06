@@ -32,7 +32,7 @@ struct RenderResponseTests {
 
     @Test("summary heist catalog render stays a compact menu")
     func summaryHeistCatalogRenderStaysCompactMenu() {
-        let response = FenceResponse.heistCatalog(HeistCatalog(heists: [
+        let response = FenceResponse.heistCatalog(HeistDiscoveryCatalog(heists: [
             HeistCatalogEntry(
                 name: "checkout",
                 role: .capability,
@@ -60,7 +60,7 @@ struct RenderResponseTests {
 
     @Test("detailed heist catalog render includes safe derived fields")
     func detailedHeistCatalogRenderIncludesSafeDerivedFields() {
-        let response = FenceResponse.heistCatalog(HeistCatalog(heists: [
+        let response = FenceResponse.heistCatalog(HeistDiscoveryCatalog(heists: [
             HeistCatalogEntry(
                 name: "checkout",
                 role: .capability,

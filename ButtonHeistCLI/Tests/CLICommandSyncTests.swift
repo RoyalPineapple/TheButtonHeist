@@ -207,14 +207,14 @@ final class CLICommandSyncTests: XCTestCase {
         ]))
     }
 
-    func testRunHeistCompilesSwiftSourceToTemporaryHeistArtifact() throws {
+    func testRunHeistCompilesSwiftSourceToTemporaryHeistArtifact() async throws {
         // Swift source compiles to a temp .heist the fence reads — the plan
         // crosses through the canonical codec, never a parameter round-trip.
         let plan = try HeistPlan(name: "swiftFlow", body: [.warn(WarnStep(message: "from swift"))])
-        let prepared = try RunHeistCommand.prepareInput(
+        let prepared = try await RunHeistCommand.prepareInput(
             path: "Flow.swift",
             entry: "makeHeist",
-            compileSwiftFile: { _, _ in plan }
+            compileSwiftFile: { _, _ in .success(plan, diagnostics: []) }
         )
         defer { prepared.cleanup() }
 
@@ -238,8 +238,11 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNil(arguments[.version])
     }
 
-    func testRunHeistSwiftSourceRequiresEntry() {
-        XCTAssertThrowsError(try RunHeistCommand.prepareInput(path: "Flow.swift", entry: nil)) { error in
+    func testRunHeistSwiftSourceRequiresEntry() async {
+        do {
+            _ = try await RunHeistCommand.prepareInput(path: "Flow.swift", entry: nil)
+            XCTFail("Expected missing entry to throw")
+        } catch {
             XCTAssertTrue(String(describing: error).contains("--entry is required for Swift source input"))
         }
     }

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@_spi(ButtonHeistInternals) import ThePlans
+import ThePlans
 
 @Suite(.serialized)
 struct HeistPlanToolTests {
@@ -44,7 +44,7 @@ struct HeistPlanToolTests {
     func `validate fails for runtime-invalid plan with path and contract`() throws {
         let temp = try TemporaryDirectory()
         let planURL = temp.url.appendingPathComponent("runtime-invalid.heist")
-        try writeUnvalidatedHeistArtifact(runtimeInvalidPlan(), to: planURL)
+        try writeRuntimeInvalidHeistArtifact(to: planURL)
 
         let result = try runHeistPlan(["validate", planURL.path])
 
@@ -148,13 +148,6 @@ private func representativePlan() throws -> HeistPlan {
     }
 }
 
-private func runtimeInvalidPlan() -> UnvalidatedHeistPlan {
-    UnvalidatedHeistPlan(
-        name: "tooManySteps",
-        body: Array(repeating: .warn(WarnStep(message: "too many steps")), count: 501)
-    )
-}
-
 private func canonicalJSONData(_ plan: HeistPlan) throws -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -165,23 +158,34 @@ private func writeCanonicalJSON(_ plan: HeistPlan, to url: URL) throws {
     try canonicalJSONData(plan).write(to: url)
 }
 
-private func writeUnvalidatedHeistArtifact(_ plan: UnvalidatedHeistPlan, to url: URL) throws {
+private func writeRuntimeInvalidHeistArtifact(to url: URL) throws {
     let fileManager = FileManager.default
     try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
     let manifest = HeistArtifactManifest(
         format: heistArtifactFormat,
-        entry: plan.name ?? "",
+        entry: "tooManySteps",
         formatVersion: currentHeistArtifactFormatVersion,
-        planVersion: plan.version,
+        planVersion: currentHeistPlanVersion,
         producer: .buttonHeist,
         createdAt: Date(timeIntervalSince1970: 0)
     )
     try HeistArtifactCodec.canonicalManifestJSONData(manifest)
         .write(to: url.appendingPathComponent(HeistArtifactCodec.manifestFileName))
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    try encoder.encode(plan)
+    try runtimeInvalidPlanJSONData()
         .write(to: url.appendingPathComponent(HeistArtifactCodec.planFileName))
+}
+
+private func runtimeInvalidPlanJSONData() throws -> Data {
+    let warnStep: [String: Any] = [
+        "type": "warn",
+        "warn": ["message": "too many steps"],
+    ]
+    let payload: [String: Any] = [
+        "version": currentHeistPlanVersion,
+        "name": "tooManySteps",
+        "body": Array(repeating: warnStep, count: 501),
+    ]
+    return try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
 }
 
 private final class TemporaryDirectory {

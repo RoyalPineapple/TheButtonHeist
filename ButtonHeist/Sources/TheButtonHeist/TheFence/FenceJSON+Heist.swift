@@ -17,7 +17,7 @@ struct PublicHeistCatalogResponse: FencePublicJSONResponse {
     let status = PublicStatus.ok
     let heists: [HeistCatalogEntry]
 
-    init(catalog: HeistCatalog) {
+    init(catalog: HeistDiscoveryCatalog) {
         heists = catalog.heists
     }
 }

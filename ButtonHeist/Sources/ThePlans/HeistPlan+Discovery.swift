@@ -60,11 +60,29 @@ public struct HeistCatalogEntry: Codable, Sendable, Equatable {
     }
 }
 
-public struct HeistCatalog: Codable, Sendable, Equatable {
+public struct HeistDiscoveryCatalog: Codable, Sendable, Equatable {
     public let heists: [HeistCatalogEntry]
 
     public init(heists: [HeistCatalogEntry]) {
         self.heists = heists
+    }
+}
+
+public struct HeistCatalogSource: Codable, Sendable, Equatable {
+    public let url: URL
+
+    public init(url: URL) {
+        self.url = url
+    }
+}
+
+public struct HeistCatalog: Codable, Sendable, Equatable {
+    public let source: HeistCatalogSource?
+    public let capabilities: [HeistPlan]
+
+    public init(source: HeistCatalogSource? = nil, capabilities: [HeistPlan]) {
+        self.source = source
+        self.capabilities = capabilities
     }
 }
 
@@ -155,7 +173,7 @@ public struct HeistCatalogError: Error, Sendable, Equatable, CustomStringConvert
 }
 
 public extension HeistPlan {
-    func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistCatalog {
+    func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistDiscoveryCatalog {
         return try uncheckedHeistCatalog(detail: detail)
     }
 
@@ -165,9 +183,9 @@ public extension HeistPlan {
 }
 
 private extension HeistPlan {
-    func uncheckedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistCatalog {
+    func uncheckedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistDiscoveryCatalog {
         let resolved = try catalogResolvedHeists()
-        return HeistCatalog(heists: resolved.map { catalogEntry(for: $0, detail: detail) })
+        return HeistDiscoveryCatalog(heists: resolved.map { catalogEntry(for: $0, detail: detail) })
     }
 
     func uncheckedDescribeHeist(named requestedName: String) throws -> HeistDescription {
