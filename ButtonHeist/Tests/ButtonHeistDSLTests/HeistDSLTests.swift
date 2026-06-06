@@ -696,61 +696,6 @@ func stringForEachBuildsRuntimeStringLoop() throws {
 }
 
 @Test
-func `top level Heist string input declares singular root parameter`() throws {
-    let heist = try Heist("Milk") { query in
-        TypeText(query, into: .label("Search"))
-    }
-
-    #expect(heist.parameter == .string(name: "input"))
-    #expect(heist.body == [
-        .action(try ActionStep(command: .typeText(
-            text: .ref("input"),
-            target: .target(.label("Search"))
-        ))),
-    ])
-}
-
-@Test
-func `top level Heist element target input declares singular root parameter`() throws {
-    let heist = try Heist(.label("Delete")) { target in
-        Activate(target)
-    }
-
-    #expect(heist.parameter == .elementTarget(name: "input"))
-    #expect(heist.body == [
-        .action(try ActionStep(command: .activate(.ref("input")))),
-    ])
-}
-
-@Test
-func `top level Heist array sugar lowers to finite string ForEach`() throws {
-    enum Library {
-        static let search = HeistDef<String>("Library.search", parameter: "item") { item in
-            TypeText(item, into: .label("Search"))
-        }
-    }
-
-    let heist = try Heist(["Milk", "Eggs"]) { item in
-        try Library.search(item)
-    }
-
-    #expect(heist.parameter == .none)
-    #expect(heist.body == [
-        .forEachString(try ForEachStringStep(
-            values: ["Milk", "Eggs"],
-            parameter: "item",
-            body: [
-                .invoke(HeistInvocationStep(
-                    path: ["Library", "search"],
-                    argument: .string(.ref("item"))
-                )),
-            ]
-        )),
-    ])
-    #expect(try heist.canonicalSwiftDSL().contains(#"try ForEach(["Milk", "Eggs"]) { item in"#))
-}
-
-@Test
 func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     let matching = ElementPredicate.label("Delete")
     let heist = try HeistPlan {
@@ -804,19 +749,6 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
     #expect(!json.contains("source"))
     #expect(!json.contains("source_map"))
     #expect(!json.contains("static_loop"))
-}
-
-@Test
-func runHeistHelperPassesPlanToExecutor() async throws {
-    let heist = try HeistPlan {
-        Activate(.label("Save"))
-    }
-
-    let executedPlan = try await runHeist(heist) { plan in
-        plan
-    }
-
-    #expect(executedPlan == heist)
 }
 
 @Test
