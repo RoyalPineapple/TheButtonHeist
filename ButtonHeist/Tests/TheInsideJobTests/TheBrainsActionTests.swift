@@ -1405,6 +1405,46 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(plan.body, originalBody)
     }
 
+    func testHeistForEachPreservesCallerPredicateInsteadOfMinimumMatchers() async throws {
+        let matching = ElementPredicate(label: "Delete", traits: [.button])
+        var executedCommands: [ClientMessage] = []
+        let initialState = observedState(elements: [
+            (
+                makeElement(label: "Delete", value: "First", identifier: "delete_first", traits: [.button]),
+                "delete_first"
+            ),
+            (
+                makeElement(label: "Delete", value: "Second", identifier: "delete_second", traits: [.button]),
+                "delete_second"
+            ),
+        ])
+        let runtime = heistRuntime(
+            observations: [initialState, initialState],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .forEachElement(try ForEachElementStep(
+                matching: matching,
+                limit: 10,
+                parameter: "target",
+                body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachResult)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(forEachResult.iterationCount, 2)
+        XCTAssertEqual(executedCommands, [
+            .activate(.predicate(matching, ordinal: 0)),
+            .activate(.predicate(matching, ordinal: 1)),
+        ])
+    }
+
     func testHeistForEachResetsOrdinalWhenMatchedCollectionIdentityChanges() async throws {
         let matching = ElementPredicate(label: "Delete")
         var executedCommands: [ClientMessage] = []
