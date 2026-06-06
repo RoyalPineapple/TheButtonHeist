@@ -515,14 +515,3 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
     }
 }
-
-private extension Array where Element == HeistExecutionStepResult {
-    var firstFailedStep: HeistExecutionStepResult? {
-        for step in self {
-            if let failed = step.firstFailedStep {
-                return failed
-            }
-        }
-        return nil
-    }
-}

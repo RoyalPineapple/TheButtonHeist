@@ -609,17 +609,6 @@ final class MockConnection: TransportReachabilityConnecting {
     }
 }
 
-private extension Array where Element == HeistExecutionStepResult {
-    var firstFailedStep: HeistExecutionStepResult? {
-        for step in self {
-            if let failed = step.firstFailedStep {
-                return failed
-            }
-        }
-        return nil
-    }
-}
-
 @ButtonHeistActor
 final class MockDiscovery: DeviceDiscovering {
     var discoveredDevices: [DiscoveredDevice] = []

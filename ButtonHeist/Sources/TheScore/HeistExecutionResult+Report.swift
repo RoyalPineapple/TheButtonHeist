@@ -266,6 +266,17 @@ public extension HeistExecutionStepResult {
     }
 }
 
+public extension Array where Element == HeistExecutionStepResult {
+    var firstFailedStep: HeistExecutionStepResult? {
+        for step in self {
+            if let failed = step.firstFailedStep {
+                return failed
+            }
+        }
+        return nil
+    }
+}
+
 public extension HeistExecutionResult {
     /// Steps that actually began execution/evaluation.
     var completedStepCount: Int {
@@ -280,12 +291,7 @@ public extension HeistExecutionResult {
     /// First failed receipt node. Child failures are canonical before compound
     /// parent frames that merely report an aborted child.
     var firstFailedStep: HeistExecutionStepResult? {
-        for step in steps {
-            if let failed = step.firstFailedStep {
-                return failed
-            }
-        }
-        return nil
+        steps.firstFailedStep
     }
 
     var failedStepPath: String? {
