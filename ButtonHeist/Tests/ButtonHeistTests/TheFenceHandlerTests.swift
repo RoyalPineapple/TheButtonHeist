@@ -401,7 +401,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistDecodesComposableInlinePlan() throws {
+    func testRunHeistDecodesComposableInlinePlan() async throws {
         let fence = TheFence(configuration: .init())
         // Nested definitions + invoke + a string parameter all round-trip.
         let definition = HeistPlan(
@@ -418,7 +418,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistDecodesInlinePlanWithElementTargetParameter() throws {
+    func testRunHeistDecodesInlinePlanWithElementTargetParameter() async throws {
         let fence = TheFence(configuration: .init())
         let definition = HeistPlan(
             name: "tapEach",
@@ -435,7 +435,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistRejectsUnsupportedInlineVersionAndEmptyPlan() throws {
+    func testRunHeistRejectsUnsupportedInlineVersionAndEmptyPlan() async throws {
         let fence = TheFence(configuration: .init())
         // Unsupported plan version fails.
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
@@ -451,7 +451,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistDescriptorAcceptsComposableInlinePlanKeys() throws {
+    func testRunHeistDescriptorAcceptsComposableInlinePlanKeys() async throws {
         // The descriptor must declare the canonical plan fields so an inline
         // plan with definitions/parameter/name survives request-key validation
         // (the path that MCP and CLI inline plans travel).
