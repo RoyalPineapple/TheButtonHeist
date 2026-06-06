@@ -13,7 +13,7 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 /// the server's and the client's `buttonHeistVersion`. Update this constant
 /// only via `scripts/release.sh`. See `docs/WIRE-PROTOCOL.md` and
 /// `VERSIONING.md` in bh-infra.
-public let buttonHeistVersion = "0.5.0"
+public let buttonHeistVersion = "0.5.1"
 
 /// Direction-specific JSON `type` discriminator shared by client and server wire enums.
 public protocol DirectionalWireMessageType: RawRepresentable, Codable, CaseIterable, Sendable, CustomStringConvertible where RawValue == String {
