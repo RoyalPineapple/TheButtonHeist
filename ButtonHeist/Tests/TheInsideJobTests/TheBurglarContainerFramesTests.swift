@@ -196,10 +196,11 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         ))
         let interface = TheStash.WireConversion.toInterface(from: screen)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
+        let repeatedFramePrefix = "scrollable_\(TheBurglar.coarseFrameHash(frame))-"
 
         XCTAssertEqual(containerNames.count, 2)
         XCTAssertEqual(Set(containerNames).count, 2)
-        XCTAssertTrue(containerNames.allSatisfy { $0.hasPrefix("scrollable_0_0_40_50-") })
+        XCTAssertTrue(containerNames.allSatisfy { $0.hasPrefix(repeatedFramePrefix) })
         XCTAssertTrue(screen.liveCapture.scrollView(forContainer: containerNames[0]) === firstScrollView)
         XCTAssertTrue(screen.liveCapture.scrollView(forContainer: containerNames[1]) === secondScrollView)
     }
@@ -282,12 +283,14 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         ))
         let interface = TheStash.WireConversion.toInterface(from: screen)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
-        let repeatedFrameIds = containerNames.filter { $0.hasPrefix("scrollable_0_0_40_50-") }
+        let repeatedFramePrefix = "scrollable_\(TheBurglar.coarseFrameHash(frame))-"
+        let pagerName = "scrollable_\(TheBurglar.coarseFrameHash(pagerFrame))"
+        let repeatedFrameIds = containerNames.filter { $0.hasPrefix(repeatedFramePrefix) }
 
         XCTAssertEqual(containerNames.count, 4)
         XCTAssertEqual(repeatedFrameIds.count, 3)
         XCTAssertEqual(Set(repeatedFrameIds).count, 3)
-        XCTAssertTrue(containerNames.contains("scrollable_0_0_120_50"))
+        XCTAssertTrue(containerNames.contains(pagerName))
         let repeatedScrollViews = repeatedFrameIds.compactMap { screen.liveCapture.scrollView(forContainer: $0) }
         XCTAssertEqual(repeatedScrollViews.count, 3)
         XCTAssertEqual(Set(repeatedScrollViews.map(ObjectIdentifier.init)).count, 3)
@@ -308,7 +311,10 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         let interface = TheStash.WireConversion.toInterface(from: screen)
 
-        XCTAssertEqual(interface.annotations.containers.first?.containerName, "list_0_0_40_50")
+        XCTAssertEqual(
+            interface.annotations.containers.first?.containerName,
+            "list_\(TheBurglar.coarseFrameHash(container.frame.cgRect))"
+        )
     }
 }
 

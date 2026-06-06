@@ -164,6 +164,33 @@ final class SettleSessionTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 561, y: 467, width: 90, height: 72)
         )
+        let valueChanged = makeElement(
+            label: "$ 9 Cash",
+            value: "selected",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let labelChanged = makeElement(
+            label: "$ 10 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let identifierChanged = makeElement(
+            label: "$ 9 Cash",
+            identifier: "cash_9",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let traitsChanged = makeElement(
+            label: "$ 9 Cash",
+            traits: [.button, .selected],
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let second = makeElement(
+            label: "$ 10 Cash",
+            traits: .button,
+            frame: CGRect(x: 651, y: 423, width: 94, height: 72)
+        )
 
         XCTAssertEqual(
             SettleTimeline.fingerprint(of: [first], bucket: 13),
@@ -173,7 +200,33 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertNotEqual(
             SettleTimeline.fingerprint(of: [first], bucket: 13),
             SettleTimeline.fingerprint(of: [moved], bucket: 13),
-            "real row movement should still count as a semantic tree change"
+            "movement across coarse frame buckets should reset settle"
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [valueChanged], bucket: 13)
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [labelChanged], bucket: 13)
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [identifierChanged], bucket: 13)
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [traitsChanged], bucket: 13)
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [first, second], bucket: 13),
+            "element count is semantic settle state"
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first, second], bucket: 13),
+            SettleTimeline.fingerprint(of: [second, first], bucket: 13),
+            "settle fingerprint intentionally preserves traversal order"
         )
     }
 
@@ -193,6 +246,97 @@ final class SettleSessionTests: XCTestCase {
     }
 
     // MARK: - Timeout
+
+    func testFrameJitterInsideCoarseBucketSettlesAndKeepsFinalFrame() async {
+        let first = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let jittered = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 428, width: 90, height: 72)
+        )
+        let session = makeSession(
+            script: [
+                makeParseResult([first]),
+                makeParseResult([jittered]),
+                makeParseResult([first]),
+                makeParseResult([jittered]),
+            ],
+            cyclesRequired: 3
+        )
+
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        guard case .settled = outcome.outcome else {
+            return XCTFail("Expected frame jitter inside the bucket to settle, got \(outcome.outcome)")
+        }
+        XCTAssertNil(outcome.instabilityDescription)
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.shape.frame.origin.y, 428)
+    }
+
+    func testFrameJitterInsideCoarseBucketDoesNotProduceChangeDescription() {
+        let first = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let jittered = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 428, width: 90, height: 72)
+        )
+
+        XCTAssertNil(SettleTimeline.changeDescription(from: [first], to: [jittered], bucket: 13))
+    }
+
+    func testChangeDescriptionNamesChangedFieldsAndIsBounded() {
+        let before = [
+            makeElement(
+                label: "Old",
+                value: "offline",
+                identifier: "old_id",
+                traits: .button,
+                frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+            ),
+            makeElement(label: "Second", traits: .staticText),
+            makeElement(label: "Third", traits: .staticText),
+            makeElement(label: "Fourth", traits: .staticText),
+            makeElement(label: "Fifth", traits: .staticText),
+        ]
+        let after = [
+            makeElement(
+                label: "New",
+                value: "online",
+                identifier: "new_id",
+                traits: .staticText,
+                frame: CGRect(x: 561, y: 467, width: 90, height: 72)
+            ),
+            makeElement(label: "Second changed", traits: .staticText),
+            makeElement(label: "Third changed", traits: .staticText),
+            makeElement(label: "Fourth changed", traits: .staticText),
+            makeElement(label: "Fifth changed", traits: .staticText),
+            makeElement(label: "Sixth", traits: .staticText),
+        ]
+
+        let diagnostic = SettleTimeline.changeDescription(from: before, to: after, bucket: 13)
+
+        XCTAssertTrue(diagnostic?.contains("count 5->6") == true, diagnostic ?? "missing diagnostic")
+        XCTAssertTrue(diagnostic?.contains("label \"Old\"->\"New\"") == true, diagnostic ?? "missing diagnostic")
+        XCTAssertTrue(
+            diagnostic?.contains("identifier \"old_id\"->\"new_id\"") == true,
+            diagnostic ?? "missing diagnostic"
+        )
+        XCTAssertTrue(diagnostic?.contains("traits") == true, diagnostic ?? "missing diagnostic")
+        XCTAssertTrue(diagnostic?.contains("value \"offline\"->\"online\"") == true, diagnostic ?? "missing diagnostic")
+        XCTAssertTrue(diagnostic?.contains("frame bucket") == true, diagnostic ?? "missing diagnostic")
+        XCTAssertTrue(diagnostic?.hasSuffix("; ...") == true, diagnostic ?? "missing diagnostic")
+    }
 
     func testTimesOutWhenTreeNeverStabilizes() async {
         // Each parse returns a unique element so the fingerprint never
@@ -228,11 +372,12 @@ final class SettleSessionTests: XCTestCase {
         } else {
             XCTFail("Expected .timedOut, got \(outcome.outcome)")
         }
+        XCTAssertFalse(outcome.outcome.didSettleCleanly)
         XCTAssertGreaterThan(outcome.elementsByKey.count, 1,
                              "Every distinct element observed mid-loop should accumulate into elementsByKey")
     }
 
-    func testTimeoutReportsUnstableFrameChanges() async {
+    func testTimeoutReportsUnstableFrameBucketChanges() async {
         let counter = Counter()
         let session = SettleSession(
             parseProvider: { [weak self] in
@@ -263,10 +408,14 @@ final class SettleSessionTests: XCTestCase {
         guard case .timedOut = outcome.outcome else {
             return XCTFail("Expected .timedOut, got \(outcome.outcome)")
         }
-        let diagnostic = try? XCTUnwrap(outcome.instabilityDescription)
-        XCTAssertTrue(diagnostic?.contains("unstable accessibility changes") == true, diagnostic ?? "missing diagnostic")
-        XCTAssertTrue(diagnostic?.contains("$ 9 Cash") == true, diagnostic ?? "missing diagnostic")
-        XCTAssertTrue(diagnostic?.contains("frame") == true, diagnostic ?? "missing diagnostic")
+        XCTAssertFalse(outcome.outcome.didSettleCleanly)
+        guard let diagnostic = outcome.instabilityDescription else {
+            return XCTFail("Expected instabilityDescription on timeout, got nil")
+        }
+        XCTAssertTrue(diagnostic.contains("unstable accessibility changes"), diagnostic)
+        XCTAssertTrue(diagnostic.contains("$ 9 Cash"), diagnostic)
+        XCTAssertTrue(diagnostic.contains("frame bucket"), diagnostic)
+        XCTAssertTrue(diagnostic.contains("frame"), diagnostic)
     }
 
     // MARK: - Screen Change

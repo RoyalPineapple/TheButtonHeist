@@ -46,6 +46,7 @@ final class PostActionObservation {
     struct SettleEvidence {
         let outcome: SettleSession.Outcome
         let visibleEvent: SettledSemanticObservationEvent?
+        let diagnosticScreen: Screen?
 
         var didSettleCleanly: Bool {
             outcome.outcome.didSettleCleanly
@@ -109,7 +110,8 @@ final class PostActionObservation {
         )
         return SettleEvidence(
             outcome: settledObservation.settle,
-            visibleEvent: settledObservation.event
+            visibleEvent: settledObservation.event,
+            diagnosticScreen: settledObservation.diagnosticScreen
         )
     }
 
@@ -117,8 +119,18 @@ final class PostActionObservation {
         before: BeforeState,
         settleEvidence: SettleEvidence
     ) async -> FinalEvidence? {
-        guard let visibleEvent = settleEvidence.visibleEvent else { return nil }
-        let finalState = await captureFinalSemanticState(after: visibleEvent)
+        let finalState: BeforeState
+        if let visibleEvent = settleEvidence.visibleEvent {
+            finalState = await captureFinalSemanticState(after: visibleEvent)
+        } else if let diagnosticScreen = settleEvidence.diagnosticScreen {
+            finalState = captureSemanticState(
+                from: diagnosticScreen,
+                tripwireSignal: tripwire.tripwireSignal(),
+                settledObservationSequence: nil
+            )
+        } else {
+            return nil
+        }
         let trace = buildPostActionTrace(
             before: before,
             final: finalState,

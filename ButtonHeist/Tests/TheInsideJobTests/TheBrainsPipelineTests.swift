@@ -220,6 +220,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
+        let settledSequence = brains.stash.latestSettledSemanticObservationEvent?.sequence
         let afterScreen = makeScreen(elements: [("Saved", .button, "save")])
 
         let result = await brains.interactionObservation.finishAfterAction(
@@ -232,6 +233,14 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 250)
+        XCTAssertEqual(
+            brains.stash.latestSettledSemanticObservationEvent?.sequence,
+            settledSequence,
+            "timeout evidence must not be published as a new settled observation"
+        )
+        XCTAssertTrue(brains.stash.latestSettledSemanticObservationIsDirty)
+        XCTAssertEqual(brains.stash.currentScreen.orderedElements.first?.element.label, "Saved")
+        XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Saved")
     }
 
     func testActionResultWithDeltaCancelledSettleFailsActionResult() async {
