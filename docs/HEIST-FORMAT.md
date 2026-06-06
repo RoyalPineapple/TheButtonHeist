@@ -160,7 +160,7 @@ Lookup is explicit:
 - `["LibraryScreen", "addToCart"]` can call a definition nested under `LibraryScreen`.
 - `["addToCart"]` is valid only when the current definition scope defines `addToCart` directly.
 - Duplicate names in the same `definitions` array are rejected.
-- Recursion and invocation cycles are rejected by runtime admission.
+- Recursion and invocation cycles are rejected by runtime validation.
 
 Parameters are finite semantic values only:
 
@@ -419,7 +419,7 @@ At runtime each iteration computes
 `ElementTarget.predicate(matching, ordinal: index)`, binds it to the target
 reference, and executes the body steps. The body does not receive cached
 geometry, UIKit objects, or a capture-local handle. Nested collection ForEach
-is rejected by runtime admission.
+is rejected by runtime validation.
 
 String-array ForEach serializes as `for_each_string`:
 
@@ -538,7 +538,7 @@ Lint is quality guidance for authored or composed heist plans:
 | `strictTest` | Fails missing expectations, mechanical commands, viewport/debug action steps, and empty branches. |
 
 Lint returns structured findings with severity, step path, message, and a fix
-suggestion. It does not replace runtime admission.
+suggestion. It does not replace runtime validation.
 
 ## Intentional Non-Goals
 

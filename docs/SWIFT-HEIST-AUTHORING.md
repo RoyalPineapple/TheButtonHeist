@@ -138,7 +138,7 @@ Swift compilation is an **author-time** step, not a runtime capability. It lives
 only in the authoring tools:
 
 - `buttonheist run_heist Flow.swift --entry makeHeist` compiles the Swift source
-  to a `HeistPlan`, validates that plan for runtime admission, then sends it down
+  to a `HeistPlan`, validates that plan for runtime behavior, then sends it down
   the ordinary `run_heist` path — identical to passing a `.heist` package or
   `.json` IR.
 - `heist-plan compile Flow.swift --entry makeHeist --output Flow.heist` compiles
