@@ -27,6 +27,9 @@ final class InteractionObservation {
             latestEvent: {
                 stash.latestSettledSemanticObservationEvent
             },
+            latestSettleFailure: {
+                stash.latestSemanticObservationFailureDiagnostic()
+            },
             semanticObservation: { event in
                 postActionObservation.semanticObservation(from: event)
             },
@@ -37,10 +40,12 @@ final class InteractionObservation {
     }
 
     func prepareBeforeState(timeout: Double? = 1.0) async -> PostActionObservation.BeforeState? {
-        guard let event = await stash.observeSettledSemanticObservation(
-            scope: .visible, after: nil, timeout: timeout
-        ) else { return nil }
-        return postActionObservation.captureSemanticState(from: event.observation)
+        await observeVisibleState(timeout: timeout)
+    }
+
+    func observeVisibleState(timeout: Double? = 1.0) async -> PostActionObservation.BeforeState? {
+        guard let evidence = await stash.observeVisibleSemanticEvidence(timeout: timeout) else { return nil }
+        return postActionObservation.captureSemanticState(from: evidence)
     }
 
     func observeSemanticState(

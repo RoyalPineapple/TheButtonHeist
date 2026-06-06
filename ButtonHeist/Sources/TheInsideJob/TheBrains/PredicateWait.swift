@@ -12,11 +12,13 @@ import TheScore
         Double?
     ) async -> SettledSemanticObservationEvent?
     typealias LatestEvent = @MainActor () -> SettledSemanticObservationEvent?
+    typealias LatestSettleFailure = @MainActor () -> String?
     typealias SemanticObserver = @MainActor (SettledSemanticObservationEvent) -> HeistSemanticObservation
     typealias PresenceTimeoutMessage = @MainActor (AccessibilityPredicate, String) -> String?
 
     let observeEvent: ObserveEvent
     let latestEvent: LatestEvent
+    let latestSettleFailure: LatestSettleFailure
     let semanticObservation: SemanticObserver
     let presenceTimeoutMessage: PresenceTimeoutMessage
 
@@ -231,6 +233,7 @@ import TheScore
             baseline: changeBaseline.map(SettledEventSummary.init(event:)),
             last: latest.map(SettledEventSummary.init(event:)),
             lastDelta: trace?.endpointDelta ?? latest?.delta,
+            settleFailure: latestSettleFailure(),
             sawFutureObservation: sawFutureObservation
         )
         return Self.waitReceipt(
@@ -293,6 +296,7 @@ import TheScore
         let baseline: SettledEventSummary?
         let last: SettledEventSummary?
         let lastDelta: AccessibilityTrace.Delta?
+        let settleFailure: String?
         let sawFutureObservation: Bool
     }
 
@@ -414,6 +418,9 @@ import TheScore
             parts.append("last settled: \(last.description)")
         }
         parts.append("last delta: \(deltaSummary(diagnostics.lastDelta))")
+        if let settleFailure = diagnostics.settleFailure {
+            parts.append(settleFailure)
+        }
         if diagnostics.baseline != nil, !diagnostics.sawFutureObservation {
             parts.append("no future settled observation arrived after baseline")
         }

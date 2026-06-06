@@ -247,21 +247,11 @@ extension TheBurglar {
         }
     }
 
-    /// Bucket size (in points) used when hashing a container frame into a
-    /// generated container name. Round-to-nearest-8pt tolerates the minor layout
-    /// drift produced by Auto Layout re-resolves, Dynamic Type rounding, and
-    /// sub-pixel alignment, while still distinguishing visually distinct
-    /// containers. 8pt aligns with UIKit's 8-point design grid, so a "same"
-    /// container that shifts by a layout pass stays in the same bucket.
-    private static let coarseFrameBucket: CGFloat = 8
-
+    /// Coarse frame hash used when deriving generated container names. The
+    /// bucket is device-dependent so iPad layouts get the same tolerance used
+    /// by settle fingerprinting.
     static func coarseFrameHash(_ frame: CGRect) -> String {
-        let bucket = coarseFrameBucket
-        let xCoord = safeInt((frame.origin.x.sanitizedForJSON / bucket).rounded())
-        let yCoord = safeInt((frame.origin.y.sanitizedForJSON / bucket).rounded())
-        let width = safeInt((frame.size.width.sanitizedForJSON / bucket).rounded())
-        let height = safeInt((frame.size.height.sanitizedForJSON / bucket).rounded())
-        return "\(xCoord)_\(yCoord)_\(width)_\(height)"
+        CoarseFrameComparison.hashFragment(for: frame)
     }
 
 }

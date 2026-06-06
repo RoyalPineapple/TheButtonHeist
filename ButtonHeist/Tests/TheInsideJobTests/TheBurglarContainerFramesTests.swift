@@ -151,17 +151,21 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         )
         let nonFiniteHash = TheBurglar.coarseFrameHash(nonFiniteFrame)
         XCTAssertEqual(nonFiniteHash, "0_0_0_0",
-                       "sanitizedForJSON folds non-finite to 0; safeInt(0/8) is 0")
+                       "non-finite geometry folds to 0 before coarse frame bucketing")
     }
 
     /// Locks in the no-change-for-normal-inputs invariant for `coarseFrameHash`.
     /// `safeInt` must be the identity for any in-range finite CGFloat — otherwise
     /// switching `Int` → `safeInt` is a wire-format break.
     func testCoarseFrameHashUnchangedForOrdinaryFrame() {
-        // All-integer-after-divide frame so banker's rounding can't cause drift.
-        let frame = CGRect(x: 16, y: 96, width: 320, height: 40)
-        // Expected: 16/8=2, 96/8=12, 320/8=40, 40/8=5
+        let bucket = CoarseFrameComparison.currentBucket
+        let frame = CGRect(x: bucket * 2, y: bucket * 12, width: bucket * 40, height: bucket * 5)
         XCTAssertEqual(TheBurglar.coarseFrameHash(frame), "2_12_40_5")
+    }
+
+    func testCoarseFrameComparisonUsesDeviceBuckets() {
+        XCTAssertEqual(CoarseFrameComparison.bucket(for: .phone), 8)
+        XCTAssertEqual(CoarseFrameComparison.bucket(for: .pad), 13)
     }
 
     func testDuplicateReadableContainerIdsGetCaptureLocalHashes() {

@@ -24,6 +24,13 @@ struct SettledSemanticObservationEvent {
     }
 }
 
+struct VisibleSemanticObservationEvidence {
+    let screen: Screen
+    let tripwireSignal: TheTripwire.TripwireSignal
+    let settledObservationSequence: UInt64?
+    let settleOutcome: SettleOutcome
+}
+
 @MainActor
 final class SemanticObservationStream {
     typealias DiscoveryObservation = @MainActor () async -> Void
@@ -58,6 +65,7 @@ final class SemanticObservationStream {
     private var settledSequence: UInt64 = 0
     private(set) var latestEvent: SettledSemanticObservationEvent?
     private(set) var latestObservationIsDirty = true
+    private(set) var latestSettleFailureDiagnostic: String?
 
     private(set) var passiveObservationTask: Task<Void, Never>?
     private var discoveryObservation: DiscoveryObservation?
@@ -158,6 +166,52 @@ final class SemanticObservationStream {
         return await waitForNextSettledEvent(scope: scope, after: requiredSequence, timeout: timeout)
     }
 
+    func visibleEvidence(timeout: Double?) async -> VisibleSemanticObservationEvidence? {
+        let subscription = subscribe(scope: .visible)
+        defer { _ = subscription }
+
+        guard let stash else { return nil }
+
+        let settleSession = SettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            timeoutMs: Self.timeoutMilliseconds(from: timeout)
+        )
+        let outcome = await settleSession.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal()
+        )
+
+        if case .cancelled = outcome.outcome {
+            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            return nil
+        }
+
+        guard let screen = outcome.finalScreen else {
+            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            return nil
+        }
+
+        if outcome.outcome.didSettleCleanly {
+            let event = commitSettledObservation(screen, scope: .visible)
+            return VisibleSemanticObservationEvidence(
+                screen: event.observation.screen,
+                tripwireSignal: event.observation.tripwireSignal,
+                settledObservationSequence: event.sequence,
+                settleOutcome: outcome.outcome
+            )
+        }
+
+        latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+        stash.commitVisibleRefresh(screen)
+        return VisibleSemanticObservationEvidence(
+            screen: stash.currentScreen,
+            tripwireSignal: tripwire.tripwireSignal(),
+            settledObservationSequence: nil,
+            settleOutcome: outcome.outcome
+        )
+    }
+
     @discardableResult
     func commitSettledObservation(
         _ screen: Screen,
@@ -208,6 +262,7 @@ final class SemanticObservationStream {
         latestEvent = nil
         latestObservationIsDirty = true
         passiveObservationSettledReading = nil
+        latestSettleFailureDiagnostic = nil
     }
 
     func markDirtyFromTripwire() {
@@ -228,6 +283,7 @@ final class SemanticObservationStream {
         let event = makeEvent(observation: observation, previous: latestEvent, stash: stash)
         latestEvent = event
         latestObservationIsDirty = false
+        latestSettleFailureDiagnostic = nil
         passiveObservationSettledReading = tripwire.latestReading
         completeWaiters(with: event)
         return event
@@ -274,6 +330,12 @@ final class SemanticObservationStream {
         guard let timeout else { return nil }
         guard timeout > 0 else { return nil }
         return timeout
+    }
+
+    private static func timeoutMilliseconds(from timeout: Double?) -> Int {
+        guard let timeout else { return SettleSession.defaultTimeoutMs }
+        guard timeout > 0 else { return 0 }
+        return max(1, Int((timeout * 1_000).rounded(.up)))
     }
 
     private func baselineSequence(
@@ -402,6 +464,7 @@ final class SemanticObservationStream {
         }
 
         guard await tripwire.waitForAllClear(timeout: 0.5) else {
+            latestSettleFailureDiagnostic = "visible observation blocked: app motion did not clear before settle"
             markDirtyFromTripwire()
             await Task.yield()
             return true
@@ -415,6 +478,7 @@ final class SemanticObservationStream {
         )
 
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
+            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: settle)
             markDirtyFromTripwire()
             await Task.yield()
             return true
@@ -423,6 +487,19 @@ final class SemanticObservationStream {
         _ = commitSettledObservation(screen, scope: .visible)
         await Task.yield()
         return true
+    }
+
+    private static func failureDiagnostic(for outcome: SettleSession.Outcome) -> String {
+        var parts = ["settle \(outcome.outcome.outcomeDescription)"]
+        if let finalScreen = outcome.finalScreen {
+            parts.append("last parsed: \(finalScreen.liveCapture.hierarchy.sortedElements.count) elements")
+        } else {
+            parts.append("last parsed: no accessibility tree")
+        }
+        if let instability = outcome.instabilityDescription {
+            parts.append(instability)
+        }
+        return parts.joined(separator: "; ")
     }
 
     private func waitForNextCycle(scope: SemanticObservationScope, after cycle: UInt64) async {

@@ -22,6 +22,50 @@ func safeInt(_ cgFloat: CGFloat) -> Int {
     return Int(cgFloat)
 }
 
+// MARK: - Coarse Frame Comparison
+
+struct CoarseFrameKey: Hashable {
+    let minX: Int
+    let minY: Int
+    let width: Int
+    let height: Int
+
+    static let zero = CoarseFrameKey(minX: 0, minY: 0, width: 0, height: 0)
+
+    var hashFragment: String {
+        "\(minX)_\(minY)_\(width)_\(height)"
+    }
+}
+
+@MainActor enum CoarseFrameComparison { // swiftlint:disable:this agent_main_actor_value_type
+    static var currentBucket: CGFloat {
+        bucket(for: UIDevice.current.userInterfaceIdiom)
+    }
+
+    static func bucket(for idiom: UIUserInterfaceIdiom) -> CGFloat {
+        idiom == .pad ? 13 : 8
+    }
+
+    static func key(for frame: CGRect, bucket: CGFloat = currentBucket) -> CoarseFrameKey {
+        CoarseFrameKey(
+            minX: component(frame.origin.x, bucket: bucket),
+            minY: component(frame.origin.y, bucket: bucket),
+            width: component(frame.size.width, bucket: bucket),
+            height: component(frame.size.height, bucket: bucket)
+        )
+    }
+
+    static func hashFragment(for frame: CGRect, bucket: CGFloat = currentBucket) -> String {
+        key(for: frame, bucket: bucket).hashFragment
+    }
+
+    private static func component(_ value: CGFloat, bucket: CGFloat) -> Int {
+        let sanitized = value.isFinite ? value : 0
+        guard bucket > 0, bucket.isFinite else { return safeInt(sanitized.rounded()) }
+        return safeInt((sanitized / bucket).rounded())
+    }
+}
+
 // MARK: - Safe Path Bounds
 
 extension UIBezierPath {

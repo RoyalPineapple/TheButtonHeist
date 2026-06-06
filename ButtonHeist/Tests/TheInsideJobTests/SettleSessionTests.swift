@@ -148,6 +148,50 @@ final class SettleSessionTests: XCTestCase {
         XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.map(\.label), ["Unchanged"])
     }
 
+    func testFingerprintUsesSharedCoarseFrameComparisonForIPadJitter() {
+        let first = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 423, width: 90, height: 72)
+        )
+        let jittered = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 428, width: 90, height: 72)
+        )
+        let moved = makeElement(
+            label: "$ 9 Cash",
+            traits: .button,
+            frame: CGRect(x: 561, y: 467, width: 90, height: 72)
+        )
+
+        XCTAssertEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [jittered], bucket: 13),
+            "iPad scroll-view content-offset jitter should not reset settle"
+        )
+        XCTAssertNotEqual(
+            SettleTimeline.fingerprint(of: [first], bucket: 13),
+            SettleTimeline.fingerprint(of: [moved], bucket: 13),
+            "real row movement should still count as a semantic tree change"
+        )
+    }
+
+    func testTimelineKeysUseSharedCoarseFrameComparisonForIPadJitter() {
+        let first = makeElement(
+            label: "Cash",
+            traits: .staticText,
+            frame: CGRect(x: 244, y: 423, width: 42, height: 72)
+        )
+        let jittered = makeElement(
+            label: "Cash",
+            traits: .staticText,
+            frame: CGRect(x: 244, y: 428, width: 42, height: 72)
+        )
+
+        XCTAssertEqual(first.timelineKey(bucket: 13), jittered.timelineKey(bucket: 13))
+    }
+
     // MARK: - Timeout
 
     func testTimesOutWhenTreeNeverStabilizes() async {
@@ -186,6 +230,43 @@ final class SettleSessionTests: XCTestCase {
         }
         XCTAssertGreaterThan(outcome.elementsByKey.count, 1,
                              "Every distinct element observed mid-loop should accumulate into elementsByKey")
+    }
+
+    func testTimeoutReportsUnstableFrameChanges() async {
+        let counter = Counter()
+        let session = SettleSession(
+            parseProvider: { [weak self] in
+                guard let self else { return nil }
+                let value = counter.next()
+                let y: CGFloat = value.isMultiple(of: 2) ? 423 : 467
+                return self.makeParseResult([
+                    self.makeElement(
+                        label: "$ 9 Cash",
+                        traits: .button,
+                        frame: CGRect(x: 561, y: y, width: 90, height: 72)
+                    ),
+                ])
+            },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
+            // swiftlint:disable:next agent_test_task_sleep
+            sleeper: { try await Task.sleep(nanoseconds: $0) },
+            cyclesRequired: 3,
+            cycleIntervalMs: 5,
+            timeoutMs: 50
+        )
+
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        guard case .timedOut = outcome.outcome else {
+            return XCTFail("Expected .timedOut, got \(outcome.outcome)")
+        }
+        let diagnostic = try? XCTUnwrap(outcome.instabilityDescription)
+        XCTAssertTrue(diagnostic?.contains("unstable accessibility changes") == true, diagnostic ?? "missing diagnostic")
+        XCTAssertTrue(diagnostic?.contains("$ 9 Cash") == true, diagnostic ?? "missing diagnostic")
+        XCTAssertTrue(diagnostic?.contains("frame") == true, diagnostic ?? "missing diagnostic")
     }
 
     // MARK: - Screen Change

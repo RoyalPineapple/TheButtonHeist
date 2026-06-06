@@ -81,7 +81,11 @@ final class TheBrains {
 
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
         var builder = ActionResultBuilder(method: method)
-        builder.message = TheBrains.treeUnavailableMessage
+        if let diagnostic = stash.latestSemanticObservationFailureDiagnostic() {
+            builder.message = "Could not observe accessibility tree; \(diagnostic)"
+        } else {
+            builder.message = TheBrains.treeUnavailableMessage
+        }
         return builder.failure(errorKind: .actionFailed)
     }
 
