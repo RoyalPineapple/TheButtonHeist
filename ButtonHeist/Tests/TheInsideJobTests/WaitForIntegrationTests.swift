@@ -499,7 +499,7 @@ final class WaitForIntegrationTests: XCTestCase {
         visible.accessibilityValue = "Old"
         defer { visible.removeFromSuperview() }
 
-        guard insideJob.brains.stash.recordVisibleSemanticObservation() != nil else {
+        guard insideJob.brains.stash.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for changed-wait memory test")
         }
 
@@ -513,9 +513,9 @@ final class WaitForIntegrationTests: XCTestCase {
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
         insideJob.brains.stash.installScreenForTesting(offViewportMemory.merging(
-            insideJob.brains.stash.currentScreen
+            insideJob.brains.stash.settledScreen
         ))
-        XCTAssertNotNil(insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId))
+        XCTAssertNotNil(insideJob.brains.stash.settledScreen.findElement(heistId: offViewportHeistId))
 
         mutateVisibleHierarchy {
             // Mutate a tracked update property (value) while keeping the element's
@@ -531,7 +531,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(
-            insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId),
+            insideJob.brains.stash.settledScreen.findElement(heistId: offViewportHeistId),
             "changed wait must refresh visible evidence without deleting explored off-viewport semantic memory"
         )
     }

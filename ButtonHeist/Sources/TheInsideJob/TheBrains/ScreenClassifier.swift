@@ -97,7 +97,7 @@ import TheScore
     }
 
     static func snapshot(of stash: TheStash) -> Snapshot {
-        snapshot(of: stash.currentScreen)
+        snapshot(of: stash.settledScreen)
     }
 
     static func classify(before: Snapshot, after: Snapshot) -> Classification {

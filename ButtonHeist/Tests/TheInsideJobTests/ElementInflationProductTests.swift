@@ -301,7 +301,7 @@ final class ElementInflationProductTests: XCTestCase {
         scrollContainerOverride: ContainerName? = nil
     ) throws {
         let targetBrains = targetBrains ?? brains!
-        let screen = try XCTUnwrap(targetBrains.stash.recordVisibleSemanticObservation())
+        let screen = try XCTUnwrap(targetBrains.stash.refreshLiveCapture())
         let element = makeElement(
             label: fixture.label,
             identifier: fixture.identifier,

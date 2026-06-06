@@ -446,10 +446,10 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 **Canonical element types** (from AccessibilitySnapshotParser):
 - `AccessibilityElement` — a leaf element with label, identifier, value, traits, frame, activation point, and custom actions. This is the parsed representation of a live UIKit accessibility element.
-- `AccessibilityHierarchy` — the tree: `.element(AccessibilityElement, traversalIndex)` or `.container(AccessibilityContainer, children)`. TheStash holds the latest version inside the current `Screen` value after each accessibility refresh.
+- `AccessibilityHierarchy` — the tree: `.element(AccessibilityElement, traversalIndex)` or `.container(AccessibilityContainer, children)`. TheStash keeps the latest parsed hierarchy in disposable live capture, separate from settled semantic truth.
 
 **Screen value** (TheInsideJob):
-- `Screen` — immutable snapshot of one screen state. Bundles `elements: [String: ScreenElement]` (heistId → entry), `hierarchy`, `containerStableIds`, `heistIdByElement`, `firstResponderHeistId`, and `scrollableContainerViews`. Pure value semantics — TheStash holds exactly one mutable field of this type (`currentScreen`) and rebinds it on every parse. Exploration uses a local `var union: Screen` that's `merging(_:)`'d across page parses and committed back to `stash.currentScreen` at the end of the cycle. **Conflict rule**: `Screen.merging` is pure last-read-wins — `other`'s entry replaces `self`'s on heistId conflict; no field-level preservation. `name`/`id`/`heistIds` are derived on demand so they cannot drift from `hierarchy`.
+- `Screen` — immutable snapshot of one screen state. Bundles settled semantic elements with one live capture: hierarchy, per-element live refs, first responder, and scrollable container views. Pure value semantics — TheStash stores a settled screen as truth, a separate latest live capture for action machinery, and separate diagnostic evidence for non-clean settle. Exploration uses a local `var union: Screen` that's `merging(_:)`'d across page parses and commits the finished union as settled discovery state. **Conflict rule**: `Screen.merging` is pure last-read-wins — `other`'s entry replaces `self`'s on heistId conflict; no field-level preservation. `name`/`id`/`heistIds` are derived on demand so they cannot drift from `hierarchy`.
 
 **Target types** (TheScore wire types):
 - `ElementTarget` — how callers refer to an element: `.heistId(String)` for stable ID lookup, `.matcher(ElementMatcher)` for predicate-based search. This is the currency type passed through TheFence, TheSafecracker, MCP, and CLI. Only TheStash resolves it to a live element.
@@ -463,7 +463,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 - Do not create wrapper structs, snapshot types, or intermediate representations to hold subsets of these types. If you need a subset, pass the original and read what you need.
 - Wire types (`HeistElement`, `ElementMatcher`, `ElementTarget`) live in TheScore and cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`, `Screen`) stay inside TheInsideJob.
 
-**Strict off-screen rule**: `resolveTarget(.heistId(_:))` looks only in `currentScreen.elements`. If an heistId scrolled out of the viewport since the last commit, resolution returns `.notFound` with a near-miss suggestion — there is no fallback to a recorded position from a previous parse. Agents that want to act on an off-screen element must explicitly scroll first or refetch the interface.
+**Strict off-screen rule**: semantic target resolution reads settled world only. Live capture can prove actionability and geometry for a settled element, but diagnostic settle evidence is not targetable by default.
 
 ## heistId synthesis is wire-format-stable
 

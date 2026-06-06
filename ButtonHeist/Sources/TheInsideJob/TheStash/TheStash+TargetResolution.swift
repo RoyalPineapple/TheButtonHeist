@@ -142,18 +142,18 @@ extension TheStash {
     /// Resolve a target to a unique element. Returns `.resolved` on success,
     /// `.notFound` or `.ambiguous` with diagnostics on failure.
     ///
-    /// Resolution reads committed semantic memory. If an element is not known,
+    /// Resolution reads settled semantic memory. If an element is not known,
     /// resolution fails with a near-miss suggestion. Live coordinate
     /// revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
-        resolveTarget(target, in: currentScreen, resolutionScope: .known)
+        resolveTarget(target, in: settledScreen, resolutionScope: .known)
     }
 
     /// Resolve a target only against the latest live hierarchy. This preserves
     /// full target semantics (ambiguity and explicit ordinal) while excluding
     /// known-only entries retained from exploration.
     func resolveVisibleTarget(_ target: ElementTarget) -> TargetResolution {
-        resolveTarget(target, in: currentScreen.visibleOnly, resolutionScope: .visible)
+        resolveTarget(target, in: liveVisibleScreen.visibleOnly, resolutionScope: .visible)
     }
 
     func resolveContainerTarget(_ matcher: ContainerMatcher, ordinal: Int?) -> ContainerTargetResolution {
@@ -250,7 +250,7 @@ extension TheStash {
         return resolveVisibleTarget(effectiveTarget).resolved
     }
 
-    /// All elements in the current screen.
+    /// All elements in the supplied screen, or in settled world when omitted.
     ///
     /// Live elements appear first in hierarchy (depth-first) traversal order;
     /// any known heistIds not present in the live

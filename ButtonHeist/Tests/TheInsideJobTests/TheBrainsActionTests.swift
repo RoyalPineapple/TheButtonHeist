@@ -224,7 +224,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
         XCTAssertEqual(result.method, .activate)
         XCTAssertTrue(
-            brains.stash.currentScreen.orderedElements.contains { $0.element.label == "Visible Evidence Action" },
+            brains.stash.settledScreen.orderedElements.contains { $0.element.label == "Visible Evidence Action" },
             "the observed full tree should be committed so action resolution sees live evidence"
         )
     }
@@ -2237,7 +2237,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         brains.clearCache()
 
-        XCTAssertEqual(brains.stash.currentScreen, .empty)
+        XCTAssertEqual(brains.stash.settledScreen, .empty)
     }
 
     // MARK: - Accessibility Tree Availability

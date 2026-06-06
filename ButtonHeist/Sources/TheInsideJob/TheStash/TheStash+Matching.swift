@@ -136,7 +136,7 @@ extension TheStash {
     /// entries first, then known entries retained from exploration. Viewport
     /// reachability is handled by action execution, not by target resolution.
     func matchScreenElements(_ predicate: ElementPredicate, limit: Int) -> [ScreenElement] {
-        matchScreenElements(predicate, limit: limit, in: currentScreen)
+        matchScreenElements(predicate, limit: limit, in: settledScreen)
     }
 
     func matchScreenElements(

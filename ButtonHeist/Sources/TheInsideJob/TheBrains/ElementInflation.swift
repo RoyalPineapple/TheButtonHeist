@@ -115,7 +115,7 @@ final class ElementInflation {
             }
             if reveal.didReveal {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                stash.recordVisibleSemanticObservation()
+                stash.refreshLiveCapture()
                 didRevealTarget = true
             }
         case .notFound(let facts):
@@ -135,7 +135,7 @@ final class ElementInflation {
             // A semantic target can outlive its capture-local UIKit object.
             // Refresh once before failing; reveal and activation-point placement
             // own the other bounded refresh points.
-            stash.recordVisibleSemanticObservation()
+            stash.refreshLiveCapture()
             freshTarget = resolveFreshElementTarget(
                 target: target,
                 method: method,
@@ -157,7 +157,7 @@ final class ElementInflation {
     func inflateAfterActivationRetryRefresh(
         for target: ElementTarget
     ) async -> ElementInflationResult {
-        recordVisibleObservationForActivationRetry()
+        refreshLiveCaptureForActivationRetry()
         return await inflate(
             for: target,
             method: .activate,
@@ -165,8 +165,8 @@ final class ElementInflation {
         )
     }
 
-    private func recordVisibleObservationForActivationRetry() {
-        stash.recordVisibleSemanticObservation()
+    private func refreshLiveCaptureForActivationRetry() {
+        stash.refreshLiveCapture()
     }
 
     private func placeElementActivationPoint(
@@ -328,7 +328,7 @@ final class ElementInflation {
             return .failure(.geometryNotActionable(scrollFailedMessage))
         }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        stash.recordVisibleSemanticObservation()
+        stash.refreshLiveCapture()
         return .success(true)
     }
 
