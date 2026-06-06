@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 @testable import AccessibilitySnapshotParser
-@_spi(ButtonHeistInternals) import ThePlans
+@_spi(ButtonHeistInternals) @testable import ThePlans
 @testable import TheInsideJob
 @testable import TheScore
 
@@ -1090,14 +1090,15 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistExecutionRuntimeRejectsSelfInvocationOutsideLocalScopeWhenValidationIsBypassed() async throws {
         let runtime = heistRuntime(observations: [])
-        let plan = try UnvalidatedHeistPlan(definitions: [
-            UnvalidatedHeistPlan(name: "repeat", body: [
-                .invoke(HeistInvocationStep(path: ["repeat"])),
+        let recursiveName = "repeatHeist"
+        let plan = UnvalidatedHeistPlan(definitions: [
+            UnvalidatedHeistPlan(name: recursiveName, body: [
+                .invoke(HeistInvocationStep(path: [recursiveName])),
             ]),
-        ], body: []).validatedForRuntime()
+        ], body: []).uncheckedPlanForRuntimeValidation()
 
         let results = await brains.executeHeistSteps(
-            [.invoke(HeistInvocationStep(path: ["repeat"]))],
+            [.invoke(HeistInvocationStep(path: [recursiveName]))],
             runtime: runtime,
             environment: .empty,
             scope: TheBrains.HeistExecutionScope(plan: plan)
@@ -1107,7 +1108,7 @@ final class TheBrainsActionTests: XCTestCase {
         let recursive = try XCTUnwrap(topLevel.children.first)
         XCTAssertTrue(topLevel.isFailure)
         XCTAssertEqual(recursive.kind, .invoke)
-        XCTAssertEqual(recursive.message, "Unknown heist run repeat")
+        XCTAssertEqual(recursive.message, "Unknown heist run \(recursiveName)")
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {

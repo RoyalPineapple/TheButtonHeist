@@ -451,12 +451,13 @@ func decodedHeistArgumentsRejectStringArrayShape() throws {
 
 @Test
 func runtimeValidationRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
+    let recursiveName = "repeatHeist"
     let raw = UnvalidatedHeistPlan(definitions: [
-        UnvalidatedHeistPlan(name: "repeat", body: [
-            .invoke(HeistInvocationStep(path: ["repeat"])),
+        UnvalidatedHeistPlan(name: recursiveName, body: [
+            .invoke(HeistInvocationStep(path: [recursiveName])),
         ]),
     ], body: [
-        .invoke(HeistInvocationStep(path: ["repeat"])),
+        .invoke(HeistInvocationStep(path: [recursiveName])),
     ])
 
     let failures = runtimeValidationFailures(for: raw)
