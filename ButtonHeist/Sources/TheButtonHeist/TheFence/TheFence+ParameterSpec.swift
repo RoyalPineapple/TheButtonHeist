@@ -69,6 +69,7 @@ public extension FenceParameterKey {
     static let startOffset = Self("startOffset")
     static let containerName = Self("containerName")
     static let states = Self("states"), body = Self("body")
+    static let name = Self("name"), parameter = Self("parameter"), definitions = Self("definitions")
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
     static let timeout = Self("timeout"), version = Self("version")
     static let to = Self("to"), token = Self("token"), traits = Self("traits"), type = Self("type"), value = Self("value")

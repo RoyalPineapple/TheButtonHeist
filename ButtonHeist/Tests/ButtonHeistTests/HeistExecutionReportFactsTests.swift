@@ -110,6 +110,91 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertNil(node.reportActionResult)
     }
 
+    // MARK: - Wait Evidence (§6)
+
+    func testWaitStepRetainsTraceEvidenceWithoutActionFieldPollution() {
+        let trace = AccessibilityTrace.projectingForTests(.elementsChanged(.init(elementCount: 3, edits: ElementEdits())))
+        let step = HeistExecutionStepResult(
+            index: 0,
+            kind: .wait,
+            actionResult: ActionResult(success: true, method: .wait, accessibilityTrace: trace),
+            durationMs: 10
+        )
+
+        // Action-specific report field stays nil for a wait, and the wait is not
+        // represented as a fake action command...
+        XCTAssertNil(step.reportActionResult)
+        XCTAssertNil(step.actionCommand)
+        // ...but the wait's trace evidence is retained for net traces/deltas.
+        XCTAssertEqual(step.traceEvidenceResult?.method, .wait)
+        XCTAssertNotNil(step.traceEvidenceResult?.accessibilityTrace)
+    }
+
+    func testActionAndWaitSurfaceBothTraceDeltas() {
+        let actionTrace = AccessibilityTrace.projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits())))
+        let waitTrace = AccessibilityTrace.projectingForTests(.elementsChanged(.init(elementCount: 3, edits: ElementEdits())))
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .action,
+                    actionCommand: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
+                    actionResult: ActionResult(success: true, method: .activate, accessibilityTrace: actionTrace),
+                    durationMs: 5
+                ),
+                HeistExecutionStepResult(
+                    index: 1,
+                    kind: .wait,
+                    actionResult: ActionResult(success: true, method: .wait, accessibilityTrace: waitTrace),
+                    durationMs: 5
+                ),
+            ],
+            totalTimingMs: 10
+        )
+
+        // Both the action and the wait contribute trace evidence in order.
+        let traces = result.traceResultsInExecutionOrder
+        XCTAssertEqual(traces.map(\.method), [.activate, .wait])
+        XCTAssertNotNil(traces[0].accessibilityTrace)
+        XCTAssertNotNil(traces[1].accessibilityTrace)
+        // Action-specific results remain action-only.
+        XCTAssertEqual(result.finalActionResultsInExecutionOrder.map(\.method), [.activate])
+    }
+
+    // MARK: - Failure Truth (§7)
+
+    func testResultIsFailureFromFailedChildWithNilFailedIndex() {
+        // A structural node whose child failed, with no top-level failedIndex
+        // and no stopsHeist marker — failure must still be detected.
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .heist,
+                    durationMs: 5,
+                    children: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(
+                                success: false,
+                                method: .activate,
+                                message: "boom",
+                                errorKind: .actionFailed
+                            ),
+                            durationMs: 5
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 5,
+            failedIndex: nil
+        )
+
+        XCTAssertNil(result.stoppedFailedIndex, "precondition: failure is not visible via failedIndex")
+        XCTAssertTrue(result.isFailure, "a failed child must drive failure even with nil failedIndex")
+    }
+
     func testConditionalSelectedCaseKeepsOnlySelectedChildren() {
         let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(

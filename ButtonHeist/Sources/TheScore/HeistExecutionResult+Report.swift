@@ -117,6 +117,26 @@ public extension HeistExecutionStepResult {
             + children.flatMap(\.finalActionResultsInExecutionOrder)
     }
 
+    /// Action result that contributes accessibility-trace evidence for this step.
+    ///
+    /// Unlike `reportActionResult` (action-only, drives action-specific report
+    /// fields), this includes `wait` steps so their settled-state trace is
+    /// retained in net traces and per-step deltas. A wait keeps its evidence
+    /// without being represented as an action command.
+    var traceEvidenceResult: ActionResult? {
+        switch kind {
+        case .action: return reportActionResult
+        case .wait: return actionResult
+        default: return nil
+        }
+    }
+
+    /// Trace-contributing results (action and wait) in execution order.
+    var traceResultsInExecutionOrder: [ActionResult] {
+        (traceEvidenceResult.map { [$0] } ?? [])
+            + children.flatMap(\.traceResultsInExecutionOrder)
+    }
+
     /// Public-facing failure message for a failed or skipped step, derived from
     /// the execution outcome. Returns nil for passed/warned steps and for
     /// structural nodes whose failure is fully described by a failed child.
@@ -167,6 +187,15 @@ public extension HeistExecutionResult {
         failedIndex ?? steps.first { $0.stopsHeist }?.index
     }
 
+    /// Whether any step in the execution tree failed.
+    ///
+    /// Drives failure off the execution outcome, not off `failedIndex` — a
+    /// result built with a failed child but a nil `failedIndex` is still a
+    /// failure. `HeistExecutionStepResult.isFailure` recurses into children.
+    var isFailure: Bool {
+        steps.contains(where: \.isFailure)
+    }
+
     /// Total expectations evaluated across the whole execution tree.
     var expectationsChecked: Int {
         steps.reduce(0) { $0 + $1.expectationsChecked }
@@ -180,6 +209,12 @@ public extension HeistExecutionResult {
     /// Final action results in execution order across the whole tree.
     var finalActionResultsInExecutionOrder: [ActionResult] {
         steps.flatMap(\.finalActionResultsInExecutionOrder)
+    }
+
+    /// Trace-contributing results (action and wait) in execution order across
+    /// the whole tree. Wait evidence is retained here when available.
+    var traceResultsInExecutionOrder: [ActionResult] {
+        steps.flatMap(\.traceResultsInExecutionOrder)
     }
 
     /// Steps flattened into report rows in execution order. `for_each` loops

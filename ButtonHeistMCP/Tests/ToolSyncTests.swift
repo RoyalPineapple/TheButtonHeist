@@ -71,6 +71,16 @@ struct ToolSyncTests {
     func runHeistSchemaExposesOnlyPlan() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "run_heist" })
 
+        // The MCP run_heist tool exposes the canonical HeistPlan fields and a
+        // `path`, so agents can drive composable inline plans (definitions,
+        // parameters, named heists) without a Swift toolchain.
+        for field in ["path", "version", "name", "parameter", "definitions", "body"] {
+            #expect(
+                schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
+                "run_heist schema must expose \(field)"
+            )
+        }
+
         // Swift compilation lives entirely in the CLI/heist-plan authoring tools.
         // The MCP run_heist tool accepts only canonical plan IR — no source_file,
         // no entry, and no oneOf adapter branch.
