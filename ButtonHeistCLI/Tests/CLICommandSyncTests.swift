@@ -116,6 +116,39 @@ final class CLICommandSyncTests: XCTestCase {
         ])
     }
 
+    func testRunHeistInlinePlanPreservesAllCanonicalFields() throws {
+        // An inline plan with name, nested definitions (carrying a parameter),
+        // and an invoke body must survive serialization without dropping fields.
+        let definition = HeistPlan(
+            name: "addToCart",
+            parameter: .strings(name: "item"),
+            body: [.warn(WarnStep(message: "x"))]
+        )
+        let plan = HeistPlan(
+            name: "flow",
+            definitions: [definition],
+            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .strings([.literal("Milk")])))]
+        )
+        let inline = try XCTUnwrap(String(data: try JSONEncoder().encode(plan), encoding: .utf8))
+
+        let arguments = try RunHeistCommand.planArguments(inline: inline, fromFile: nil)
+
+        XCTAssertEqual(arguments[.version], .int(1))
+        XCTAssertEqual(arguments[.name], .string("flow"))
+        guard case .array(let definitions)? = arguments[.definitions],
+              case .object(let firstDefinition)? = definitions.first,
+              case .object(let parameter)? = firstDefinition["parameter"] else {
+            return XCTFail("expected serialized definition carrying its parameter")
+        }
+        // The nested parameter rides along inside the definition.
+        XCTAssertEqual(parameter["name"], .string("item"))
+        guard case .array(let body)? = arguments[.body],
+              case .object(let firstStep)? = body.first else {
+            return XCTFail("expected serialized invoke body")
+        }
+        XCTAssertEqual(firstStep["type"], .string("invoke"))
+    }
+
     func testRunHeistRequiresExactlyOnePlanSource() {
         XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: nil, fromFile: nil)) { error in
             XCTAssertTrue(String(describing: error).contains("Must supply --path, --plan, or --plan-from-file"))

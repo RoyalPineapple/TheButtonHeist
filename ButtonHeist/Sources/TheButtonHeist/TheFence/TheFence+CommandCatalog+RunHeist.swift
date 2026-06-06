@@ -8,6 +8,13 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
             parameters: [
                 param(.path, .string),
                 param(.version, .integer),
+                param(.name, .string),
+                param(.parameter, .object),
+                param(
+                    .definitions, .array,
+                    arrayItemType: .object,
+                    arrayItemAdditionalProperties: true
+                ),
                 param(
                     .body, .array,
                     minItems: 1,
@@ -35,8 +42,9 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     arrayItemAdditionalProperties: true
                 )
             ],
-            description: "Execute a typed heist plan, supplied inline (version + body) or loaded by " +
-                "the fence from a `path` to a .heist package artifact."
+            description: "Execute a typed heist plan, supplied inline (canonical HeistPlan fields: " +
+                "version, name, parameter, definitions, body) or loaded by the fence from a `path` " +
+                "to a .heist package artifact. Provide exactly one source: a path or an inline plan."
         )
     }
 }

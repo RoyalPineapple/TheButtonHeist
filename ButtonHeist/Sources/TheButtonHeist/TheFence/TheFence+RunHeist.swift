@@ -99,13 +99,16 @@ extension TheFence {
         plan _: HeistPlan,
         result: HeistExecutionResult
     ) -> AccessibilityTrace? {
+        // Don't emit a net trace if an action step ran without producing a
+        // trace — a partial action trace would be misleading. Wait steps then
+        // contribute their settled-state trace when available; `endpointTrace`
+        // returns nil unless at least two distinct captures survive.
         let actionResults = result.finalActionResultsInExecutionOrder
-        let actionOutcomeCount = actionResults.count
-        let stepAccessibilityTraces = actionResults.compactMap(\.accessibilityTrace)
-        guard actionOutcomeCount > 0,
-              stepAccessibilityTraces.count == actionOutcomeCount
+        guard !actionResults.isEmpty,
+              actionResults.allSatisfy({ $0.accessibilityTrace != nil })
         else { return nil }
-        return AccessibilityTrace.endpointTrace(from: stepAccessibilityTraces)
+        let traces = result.traceResultsInExecutionOrder.compactMap(\.accessibilityTrace)
+        return AccessibilityTrace.endpointTrace(from: traces)
     }
 
     // MARK: - Session State

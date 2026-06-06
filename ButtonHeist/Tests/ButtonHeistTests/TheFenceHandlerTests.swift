@@ -353,29 +353,165 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistRejectsInputCombinedWithInlineBody() async {
+    func testRunHeistRejectsPathCombinedWithAnyInlinePlanField() async {
         let fence = TheFence(configuration: .init())
-        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
-            TheFence.CommandArgumentEnvelope(values: [
-                "path": .string("/tmp/Flow.heist"),
-                "body": .array([]),
-            ])
-        )) { error in
-            XCTAssertTrue(String(describing: error).contains("either a path or an inline plan"))
+        // Every canonical inline plan field combined with `path` must fail,
+        // before the artifact is touched. Values are irrelevant — key presence
+        // alone is the conflict.
+        let inlineFields: [String: HeistValue] = [
+            "version": .int(1),
+            "name": .string("flow"),
+            "parameter": .object(["type": .string("none")]),
+            "definitions": .array([]),
+            "body": .array([.object(["type": .string("warn")])]),
+        ]
+        for (field, value) in inlineFields {
+            XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+                TheFence.CommandArgumentEnvelope(values: [
+                    "path": .string("/tmp/Flow.heist"),
+                    field: value,
+                ])
+            ), "path + \(field) must fail") { error in
+                XCTAssertTrue(
+                    String(describing: error).contains("run_heist accepts either a path or an inline plan, not both"),
+                    "path + \(field): \(error)"
+                )
+            }
         }
     }
 
     @ButtonHeistActor
-    func testRunHeistRejectsNonHeistInput() async {
+    func testRunHeistRejectsNonHeistAndEmptyInput() async {
         let fence = TheFence(configuration: .init())
-        // Standalone .json is internal to the package, not a run input.
-        for path in ["Flow.txt", "Flow.json"] {
+        // Standalone .json is internal to the package; .swift is compiled by the
+        // CLI authoring path, never inspected or compiled at the fence boundary.
+        for path in ["Flow.txt", "Flow.json", "Flow.swift"] {
             XCTAssertThrowsError(try fence.decodeRunHeistRequest(
                 TheFence.CommandArgumentEnvelope(values: ["path": .string(path)])
             )) { error in
-                XCTAssertTrue(String(describing: error).contains(".heist package artifact"))
+                XCTAssertTrue(String(describing: error).contains(".heist package artifact"), "\(path): \(error)")
             }
         }
+        // Empty path fails.
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: ["path": .string("   ")])
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("path must not be empty"), "\(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testRunHeistDecodesComposableInlinePlan() async throws {
+        let fence = TheFence(configuration: .init())
+        // Nested definitions + invoke + a string parameter all round-trip.
+        let definition = HeistPlan(
+            name: "addToCart",
+            parameter: .strings(name: "item"),
+            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
+        )
+        let plan = HeistPlan(definitions: [definition], body: [
+            .invoke(HeistInvocationStep(path: ["addToCart"], argument: .strings([.literal("Milk")]))),
+        ])
+
+        let request = try fence.decodeRunHeistRequest(try Self.inlineArguments(for: plan))
+        XCTAssertEqual(request.plan, plan)
+    }
+
+    @ButtonHeistActor
+    func testRunHeistDecodesInlinePlanWithElementTargetParameter() async throws {
+        let fence = TheFence(configuration: .init())
+        let definition = HeistPlan(
+            name: "tapEach",
+            parameter: .elementTargets(name: "input"),
+            body: [.action(try ActionStep(command: .activate(.ref("input"))))]
+        )
+        let plan = HeistPlan(
+            definitions: [definition],
+            body: [.warn(WarnStep(message: "namespace"))]
+        )
+
+        let request = try fence.decodeRunHeistRequest(try Self.inlineArguments(for: plan))
+        XCTAssertEqual(request.plan, plan)
+    }
+
+    @ButtonHeistActor
+    func testRunHeistRejectsUnsupportedInlineVersionAndEmptyPlan() async throws {
+        let fence = TheFence(configuration: .init())
+        // Unsupported plan version fails.
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: [
+                "version": .int(999),
+                "body": .array([.object(["type": .string("warn"), "warn": .object(["message": .string("x")])])]),
+            ])
+        ))
+        // Empty inline plan (no body, no definitions) fails.
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: ["version": .int(1), "body": .array([])])
+        ))
+    }
+
+    @ButtonHeistActor
+    func testRunHeistDescriptorAcceptsComposableInlinePlanKeys() async throws {
+        // The descriptor must declare the canonical plan fields so an inline
+        // plan with definitions/parameter/name survives request-key validation
+        // (the path that MCP and CLI inline plans travel).
+        let fence = TheFence(configuration: .init())
+        let definition = HeistPlan(
+            name: "addToCart",
+            parameter: .strings(name: "item"),
+            body: [.warn(WarnStep(message: "x"))]
+        )
+        let plan = HeistPlan(
+            name: "flow",
+            definitions: [definition],
+            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .strings([.literal("Milk")])))]
+        )
+        XCTAssertNoThrow(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
+    }
+
+    func testHeistExecutionResponseFailureDrivenByFailedStepNotFailedIndex() {
+        // A failed child with nil failedIndex must mark the response as failure —
+        // this is what drives CLI non-zero exit and MCP isError.
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .heist,
+                    durationMs: 5,
+                    children: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(
+                                success: false,
+                                method: .activate,
+                                message: "boom",
+                                errorKind: .actionFailed
+                            ),
+                            durationMs: 5
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 5,
+            failedIndex: nil
+        )
+        let response = FenceResponse.heistExecution(
+            plan: HeistPlan(body: [.warn(WarnStep(message: "x"))]),
+            result: result,
+            accessibilityTrace: nil
+        )
+        XCTAssertTrue(response.isFailure)
+    }
+
+    /// Build a run_heist argument envelope from a plan the way an inline
+    /// `--plan` / MCP request would: the plan's canonical JSON object fields.
+    private static func inlineArguments(for plan: HeistPlan) throws -> TheFence.CommandArgumentEnvelope {
+        let data = try JSONEncoder().encode(plan)
+        guard case .object(let fields) = try JSONDecoder().decode(HeistValue.self, from: data) else {
+            throw XCTSkip("plan did not encode to a JSON object")
+        }
+        return TheFence.CommandArgumentEnvelope(values: fields)
     }
 
     // MARK: - Typed Argument Parsing

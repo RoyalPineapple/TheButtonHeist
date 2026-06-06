@@ -170,7 +170,9 @@ public enum FenceResponse {
             if let expectation, !expectation.met { return true }
             return false
         case .heistExecution(_, let result, _):
-            return result.stoppedFailedIndex != nil
+            // Failure is driven by any failed step, not by `failedIndex` alone:
+            // a result with a failed child and a nil `failedIndex` is failure.
+            return result.isFailure
         }
     }
 

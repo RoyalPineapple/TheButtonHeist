@@ -13,15 +13,32 @@ extension TheFence {
         let message: String
     }
 
+    /// Canonical `HeistPlan` root fields that constitute an inline plan. A
+    /// `path` may not be combined with any of them — exactly one input source.
+    static let inlinePlanFieldKeys: Set<String> = ["version", "name", "parameter", "definitions", "body"]
+
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {
         try CommandArgumentEnvelopeLimits.validateRunHeist(arguments)
+        let plan: HeistPlan
         if let path = try arguments.schemaString("path") {
-            guard arguments.argumentValues["body"] == nil else {
+            // Reject `path` combined with ANY inline plan field before touching
+            // the artifact — run_heist accepts exactly one input source.
+            guard arguments.argumentValues.keys.allSatisfy({ !Self.inlinePlanFieldKeys.contains($0) }) else {
                 throw FenceError.invalidRequest("run_heist accepts either a path or an inline plan, not both")
             }
-            return RunHeistRequest(plan: try loadHeistPlan(fromArtifactPath: path))
+            plan = try loadHeistPlan(fromArtifactPath: path)
+        } else {
+            plan = try heistPlan(from: arguments)
         }
-        return RunHeistRequest(plan: try heistPlan(from: arguments))
+        // Assert runtime admissibility for BOTH input sources. An inline plan
+        // gets the same up-front contract as an artifact: a non-admissible plan
+        // fails loudly here instead of silently executing zero steps on device.
+        do {
+            try plan.assertRuntimeAdmissible()
+        } catch let error as HeistPlanAdmissionError {
+            throw FenceError.invalidRequest(error.description)
+        }
+        return RunHeistRequest(plan: plan)
     }
 
     func heistStep(for request: ParsedRequest) throws -> HeistStep {
@@ -90,14 +107,13 @@ private extension TheFence {
                 "raw .json plan IR is internal to the package, not a run input."
             )
         }
-        let plan: HeistPlan
         do {
-            plan = try HeistArtifactCodec.readPlan(from: url)
+            // Runtime admissibility is asserted by the caller for both input
+            // sources; this reader only decodes the artifact.
+            return try HeistArtifactCodec.readPlan(from: url)
         } catch let error as HeistArtifactCodecError {
             throw FenceError.invalidRequest(error.description)
         }
-        try plan.assertRuntimeAdmissible()
-        return plan
     }
 
     func heistPlan(from arguments: CommandArgumentEnvelope) throws -> HeistPlan {
