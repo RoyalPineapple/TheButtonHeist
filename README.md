@@ -219,6 +219,27 @@ artifact containing `manifest.json` and canonical `plan.json`. See
 [docs/HEIST-FORMAT.md](docs/HEIST-FORMAT.md) and
 [docs/SWIFT-HEIST-AUTHORING.md](docs/SWIFT-HEIST-AUTHORING.md).
 
+### The heist language
+
+The language is intentionally small. Heists pass product meaning around as one
+of two values: a string or an element target. Everything else is a predicate, a
+control step, a composition step, or an effect.
+
+- `WaitFor` is an assertion: the predicate must become true, or the heist fails
+  unless an explicit timeout branch handles it.
+- `If` is a decision: inspect settled current state and choose a branch.
+- `ForEach` is the loop: repeat behavior over a finite list of strings or a
+  finite set of semantic targets.
+- `RunHeist` is composition: call another product capability with no argument,
+  one string, or one element target.
+- Actions, `Warn`, and `Fail` are the effects.
+
+That is the whole shape. A direct command is a one-step heist. A recorded flow is
+a heist written from settled evidence. A product robot is a named heist that
+wraps the accessibility contract in app language. If a feature cannot be
+expressed as a value, predicate, assertion, decision, loop, composition, or
+effect, it probably does not belong in the heist language.
+
 ## Recordings
 
 Recording turns receipts into heist plans.
