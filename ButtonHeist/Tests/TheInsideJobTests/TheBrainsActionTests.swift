@@ -518,7 +518,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testHeistCommandsMatchSingleCommandMatcherFailures() async {
+    func testHeistCommandsMatchSingleCommandMatcherFailures() async throws {
         let matcher = ElementPredicate(identifier: "missing_target")
         let target = ElementTarget.predicate(matcher)
         let commands: [(String, ClientMessage, Bool)] = [
@@ -536,7 +536,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         for (label, command, normalizingTimeoutDuration) in commands {
             let single = await brains.executeCommand(command)
-            let heist = await heistStepResult(for: command)
+            let heist = try await heistStepResult(for: command)
             assertSameActionResult(
                 label,
                 single: single,
@@ -2318,7 +2318,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
-    private func heistStepResult(for command: ClientMessage) async -> ActionResult {
+    private func heistStepResult(for command: ClientMessage) async throws -> ActionResult {
         let step: HeistStep
         if case .wait(let target) = command {
             step = .wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))
