@@ -903,7 +903,7 @@ final class HeistStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: filePath.appendingPathComponent("manifest.json").path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: filePath.appendingPathComponent("plan.json").path))
 
-        let loaded = try HeistFileIO.read(from: filePath)
+        let loaded = try HeistArtifactCodec.readPlan(from: filePath)
         XCTAssertEqual(loaded, heist)
     }
 

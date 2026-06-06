@@ -330,7 +330,11 @@ final class TheFenceHandlerTests: XCTestCase {
         try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let heistURL = temp.appendingPathComponent("Smoke.heist")
+        // A hyphenated file name is NOT a valid Swift-style identifier. The fence
+        // must run the plan exactly as authored — stamping the file name into the
+        // plan's `name` would fail runtime admission and silently reduce the run
+        // to zero steps (the run_heist replay no-op regression).
+        let heistURL = temp.appendingPathComponent("bh-demo-smoke.heist")
         let plan = HeistPlan(body: [.warn(WarnStep(message: "from artifact"))])
         try HeistArtifactCodec.writePlan(plan, to: heistURL)
 
@@ -339,9 +343,13 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         // The fence reads the file into a HeistPlan directly — no parameter
-        // round-trip — and names the anonymous plan after the file.
+        // round-trip — and does not invent a name from the file.
         XCTAssertEqual(request.plan.body, plan.body)
-        XCTAssertEqual(request.plan.name, "Smoke")
+        XCTAssertNil(request.plan.name)
+        XCTAssertTrue(
+            request.plan.runtimeAdmissionFailures().isEmpty,
+            "loaded plan must be runtime-admissible: \(request.plan.runtimeAdmissionFailures())"
+        )
     }
 
     @ButtonHeistActor

@@ -90,6 +90,9 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         }
 
         CLIRunner.outputResponse(response, format: output.format ?? .auto)
+        if response.isFailure {
+            throw ExitCode.failure
+        }
     }
 
     struct PreparedInput {
@@ -132,7 +135,11 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             .appendingPathComponent("run-heist-\(UUID().uuidString)", isDirectory: true)
         let artifact = directory.appendingPathComponent("\(name).heist")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try HeistArtifactCodec.writePlan(plan.named(name), to: artifact)
+        // Write the plan exactly as compiled. The artifact file name carries the
+        // run name for reporting; it must not be stamped into the plan's `name`,
+        // which is a Swift-identifier-constrained semantic field and would fail
+        // runtime admission for a non-identifier file name.
+        try HeistArtifactCodec.writePlan(plan, to: artifact)
         return PreparedInput(path: artifact.path, entry: nil, cleanup: {
             try? FileManager.default.removeItem(at: directory)
         })

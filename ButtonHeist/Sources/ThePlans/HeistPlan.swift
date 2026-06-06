@@ -31,21 +31,6 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         self.body = body
     }
 
-    /// Returns a copy named `fallback` when the plan has no name of its own.
-    ///
-    /// Used by callers loading a plan from a file so a run can be named after
-    /// the artifact when the plan itself is anonymous.
-    public func named(_ fallback: String) -> HeistPlan {
-        guard name == nil else { return self }
-        return HeistPlan(
-            version: version,
-            name: fallback,
-            parameter: parameter,
-            definitions: definitions,
-            body: body
-        )
-    }
-
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case version, name, parameter, definitions, body
     }

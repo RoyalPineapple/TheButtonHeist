@@ -65,12 +65,19 @@ private extension TheFence {
     /// Read a heist plan from a `.heist` package artifact the operator handed us.
     ///
     /// `.heist` is the enforced run artifact: the fence — not the caller — opens
-    /// the package and turns it into a `HeistPlan` value, so the plan reaches the
+    /// the package and turns it into a `HeistPlan` value through the single
+    /// canonical reader (`HeistArtifactCodec.readPlan`), so the plan reaches the
     /// runtime as Swift objects rather than surviving a JSON→parameter→JSON
     /// round-trip. The package's `plan.json` is internal to the artifact and is
     /// not itself a run input. Swift DSL source is compiled by the CLI authoring
-    /// path, not here. The run is named after the package when the plan is
-    /// anonymous.
+    /// path, not here.
+    ///
+    /// The plan is run exactly as authored — the fence does not stamp the file
+    /// name into the plan's `name`. `name` is a Swift-identifier-constrained
+    /// semantic field (it resolves heist definitions and invocations); a file
+    /// name such as `bh-demo-smoke` is not a valid identifier and would fail
+    /// runtime admission, silently reducing the run to zero steps. Run naming
+    /// for reports is derived from the path at the report layer, not here.
     func loadHeistPlan(fromArtifactPath path: String) throws -> HeistPlan {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -85,12 +92,12 @@ private extension TheFence {
         }
         let plan: HeistPlan
         do {
-            plan = try HeistArtifactCodec.read(from: url).plan
+            plan = try HeistArtifactCodec.readPlan(from: url)
         } catch let error as HeistArtifactCodecError {
             throw FenceError.invalidRequest(error.description)
         }
         try plan.assertRuntimeAdmissible()
-        return plan.named(url.deletingPathExtension().lastPathComponent)
+        return plan
     }
 
     func heistPlan(from arguments: CommandArgumentEnvelope) throws -> HeistPlan {

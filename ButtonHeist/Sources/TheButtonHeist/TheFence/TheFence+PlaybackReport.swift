@@ -34,11 +34,6 @@ extension TheFence {
         playbackOutcomes(result: result).map(\.row)
     }
 
-    /// First failing step in execution order, surfaced in the playback envelope.
-    func playbackFailure(result: HeistExecutionResult) -> PlaybackFailure? {
-        playbackOutcomes(result: result).compactMap(\.failure).first
-    }
-
     // MARK: - Private Helpers
 
     private func playbackOutcomes(
