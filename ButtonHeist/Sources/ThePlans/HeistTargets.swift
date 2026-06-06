@@ -48,6 +48,22 @@ public extension ElementPredicateTemplate {
     static func value(_ value: StringExpr) -> ElementPredicateTemplate {
         ElementPredicateTemplate(value: value)
     }
+
+    static func element(
+        label: StringExpr? = nil,
+        identifier: StringExpr? = nil,
+        value: StringExpr? = nil,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits,
+            excludeTraits: excludeTraits
+        )
+    }
 }
 
 public extension ElementTargetExpr {
@@ -113,6 +129,18 @@ public extension AccessibilityPredicateExpr {
 
     static func all(_ states: [StatePredicateExpr]) -> AccessibilityPredicateExpr {
         .state(.all(states))
+    }
+}
+
+public extension StatePredicateExpr {
+    @_disfavoredOverload
+    static func present(_ target: ElementTargetExpr) -> StatePredicateExpr {
+        .presentTarget(target)
+    }
+
+    @_disfavoredOverload
+    static func absent(_ target: ElementTargetExpr) -> StatePredicateExpr {
+        .absentTarget(target)
     }
 }
 

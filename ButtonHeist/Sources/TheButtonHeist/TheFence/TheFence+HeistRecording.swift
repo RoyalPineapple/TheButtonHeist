@@ -17,8 +17,23 @@ extension TheFence {
         guard let resolvedURL = request.outputPath.validatedOutputURL() else {
             throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
         }
+        let resolvedSwiftURL: URL?
+        if let swiftOutputPath = request.swiftOutputPath {
+            guard let url = swiftOutputPath.validatedOutputURL() else {
+                throw FenceError.invalidRequest(
+                    "Invalid Swift output path: must not be empty, contain '..' components, or contain control characters"
+                )
+            }
+            resolvedSwiftURL = url
+        } else {
+            resolvedSwiftURL = nil
+        }
         let heist = try heistRecording.finish(using: heistStore)
         try HeistFileIO.write(heist, to: resolvedURL)
-        return .heistStopped(path: resolvedURL.path, stepCount: heist.body.count)
+        if let resolvedSwiftURL {
+            let swiftExport = try RecordedHeistSwiftExport().render(heist, sampleRewrite: request.sampleRewrite)
+            try HeistFileIO.writeSwiftSource(swiftExport.source, to: resolvedSwiftURL)
+        }
+        return .heistStopped(path: resolvedURL.path, swiftPath: resolvedSwiftURL?.path, stepCount: heist.body.count)
     }
 }

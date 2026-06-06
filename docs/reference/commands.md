@@ -29,7 +29,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | direct | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | `semanticAction` | `set_pasteboard` | direct | Write text to the general pasteboard from within the app. |
 | `start_heist` | `heistRecording` | `start_heist` | direct | Start composing successful interactions into a semantic heist test. |
-| `stop_heist` | `heistRecording` | `stop_heist` | direct | Stop heist recording and save a deterministic semantic heist fixture. |
+| `stop_heist` | `heistRecording` | `stop_heist` | direct | Stop heist recording and save a deterministic semantic heist fixture plus optional Swift DSL source. |
 | `swipe` | `spatialAction` | `swipe` | direct | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
 | `type_text` | `semanticAction` | `type_text` | direct | Type non-empty text, optionally after inflating a semantic target. |
 | `wait` | `assertion` | `wait` | direct | Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state. |
@@ -438,7 +438,7 @@ Parameters:
 
 ### `stop_heist`
 
-Stop heist recording and save a deterministic semantic heist fixture.
+Stop heist recording and save a deterministic semantic heist fixture plus optional Swift DSL source.
 
 - Family: `heistRecording`
 - CLI: direct command `stop_heist`
@@ -450,6 +450,9 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `output` | `string` | yes | - | - |
+| `swiftOutput` | `string` | no | - | - |
+| `sampleParameter` | `string` | no | - | - |
+| `sampleValue` | `string` | no | - | - |
 
 ### `swipe`
 

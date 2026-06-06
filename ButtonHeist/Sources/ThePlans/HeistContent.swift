@@ -20,6 +20,44 @@ public extension HeistPlan {
     ) throws {
         try self.init(dslName: name, content)
     }
+
+    init(
+        parameter: String,
+        @HeistBuilder _ content: (StringExpr) throws -> some HeistContent
+    ) throws {
+        try self.init(dslName: nil, rootParameter: .string(name: parameter)) {
+            try content(try StringExpr(ref: parameter))
+        }
+    }
+
+    init(
+        _ name: String,
+        parameter: String,
+        @HeistBuilder _ content: (StringExpr) throws -> some HeistContent
+    ) throws {
+        try self.init(dslName: name, rootParameter: .string(name: parameter)) {
+            try content(try StringExpr(ref: parameter))
+        }
+    }
+
+    init(
+        targetParameter: String,
+        @HeistBuilder _ content: (ElementTargetExpr) throws -> some HeistContent
+    ) throws {
+        try self.init(dslName: nil, rootParameter: .elementTarget(name: targetParameter)) {
+            try content(try ElementTargetExpr(ref: targetParameter))
+        }
+    }
+
+    init(
+        _ name: String,
+        targetParameter: String,
+        @HeistBuilder _ content: (ElementTargetExpr) throws -> some HeistContent
+    ) throws {
+        try self.init(dslName: name, rootParameter: .elementTarget(name: targetParameter)) {
+            try content(try ElementTargetExpr(ref: targetParameter))
+        }
+    }
 }
 
 private extension HeistPlan {
@@ -36,6 +74,7 @@ private extension HeistPlan {
     }
 
     init(
+        dslName name: String?,
         rootParameter parameter: HeistParameter,
         _ content: () throws -> some HeistContent
     ) throws {
@@ -46,7 +85,7 @@ private extension HeistPlan {
                 debugDescription: "HeistPlan requires a non-empty body or definitions"
             ))
         }
-        try self.init(parameter: parameter, definitions: content.heistDefinitions, body: content.heistSteps)
+        try self.init(name: name, parameter: parameter, definitions: content.heistDefinitions, body: content.heistSteps)
     }
 
     static func validatedDSLPlan(

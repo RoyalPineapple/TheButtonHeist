@@ -68,8 +68,12 @@ extension FenceResponse {
             }.joined(separator: "\n")
         case .heistStarted:
             return "heist recording started"
-        case .heistStopped(let path, let stepCount):
-            return "saved: \(path) (\(stepCount) steps)"
+        case .heistStopped(let path, let swiftPath, let stepCount):
+            var text = "saved: \(path) (\(stepCount) steps)"
+            if let swiftPath {
+                text += "\nswift: \(swiftPath)"
+            }
+            return text
         }
     }
 
