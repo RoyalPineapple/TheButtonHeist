@@ -227,7 +227,7 @@ final class SemanticObservationStream {
     func settlePostActionObservation(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         settleOutcome providedOutcome: SettleSession.Outcome? = nil
-    ) async -> (settle: SettleSession.Outcome, event: SettledSemanticObservationEvent?) {
+    ) async -> (settle: SettleSession.Outcome, event: SettledSemanticObservationEvent?, diagnosticScreen: Screen?) {
         guard let stash else {
             return (
                 SettleSession.Outcome(
@@ -236,6 +236,7 @@ final class SemanticObservationStream {
                     finalScreen: nil,
                     elementsByKey: [:]
                 ),
+                nil,
                 nil
             )
         }
@@ -251,11 +252,17 @@ final class SemanticObservationStream {
         }
 
         if case .cancelled = outcome.outcome {
-            return (outcome, nil)
+            return (outcome, nil, nil)
         }
 
-        guard let finalScreen = outcome.finalScreen else { return (outcome, nil) }
-        return (outcome, commitSettledObservation(finalScreen, scope: .visible))
+        guard let finalScreen = outcome.finalScreen else { return (outcome, nil, nil) }
+        if outcome.outcome.didSettleCleanly {
+            return (outcome, commitSettledObservation(finalScreen, scope: .visible), nil)
+        }
+
+        latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+        stash.commitVisibleRefresh(finalScreen)
+        return (outcome, nil, stash.currentScreen)
     }
 
     func clearLatestObservation() {

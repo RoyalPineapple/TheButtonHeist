@@ -120,6 +120,7 @@ extension AccessibilityElement {
         bucket: CGFloat = CoarseFrameComparison.currentBucket
     ) -> String? {
         var changes: [String] = []
+        var truncated = false
         if previous.count != current.count {
             changes.append("count \(previous.count)->\(current.count)")
         }
@@ -135,11 +136,14 @@ extension AccessibilityElement {
                 bucket: bucket
             ) else { continue }
             changes.append(summary)
-            if changes.count == 4 { break }
+            if changes.count == 4 {
+                truncated = index < pairedCount - 1
+                break
+            }
         }
 
         guard !changes.isEmpty else { return nil }
-        let suffix = pairedCount > 4 ? "; ..." : ""
+        let suffix = truncated ? "; ..." : ""
         return "unstable accessibility changes: \(changes.joined(separator: "; "))\(suffix)"
     }
 
@@ -154,7 +158,7 @@ extension AccessibilityElement {
             fields.append("label \(quoted(before.label))->\(quoted(after.label))")
         }
         if before.identifier != after.identifier {
-            fields.append("id \(quoted(before.identifier))->\(quoted(after.identifier))")
+            fields.append("identifier \(quoted(before.identifier))->\(quoted(after.identifier))")
         }
         if before.traits.rawValue != after.traits.rawValue {
             fields.append("traits \(before.traits.rawValue)->\(after.traits.rawValue)")
@@ -171,8 +175,8 @@ extension AccessibilityElement {
             let afterKey = CoarseFrameComparison.key(for: afterFrame, bucket: bucket)
             if beforeKey != afterKey {
                 fields.append(
-                    "frame \(format(beforeFrame))->\(format(afterFrame)) " +
-                        "coarse \(beforeKey.hashFragment)->\(afterKey.hashFragment)"
+                    "frame bucket \(beforeKey.hashFragment)->\(afterKey.hashFragment) " +
+                        "frame \(format(beforeFrame))->\(format(afterFrame))"
                 )
             }
         }
