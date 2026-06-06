@@ -166,7 +166,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
     private func render(invoke: HeistInvocationStep, environment: RenderEnvironment) throws -> String {
         let callee = invoke.path.joined(separator: ".")
         let argument = try render(argument: invoke.argument, environment: environment)
-        return argument.isEmpty ? "\(callee)()" : "\(callee)(\(argument))"
+        return argument.isEmpty ? "RunHeist(\(quote(callee)))" : "RunHeist(\(quote(callee)), \(argument))"
     }
 
     private func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {

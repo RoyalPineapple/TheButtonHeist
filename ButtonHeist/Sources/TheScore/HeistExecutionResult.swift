@@ -44,6 +44,10 @@ public struct HeistExecutionStepResult: Codable, Sendable {
     public let index: Int
     public let kind: HeistExecutionStepKind
     public let actionCommand: HeistActionCommand?
+    /// The named-capability run for an `.invoke` step: which capability ran and
+    /// with what argument. The frame is the product — reports surface this as
+    /// `RunHeist("Name", argument)` rather than a bare `invoke`.
+    public let invocation: HeistInvocationStep?
     public let actionResult: ActionResult?
     public let expectationActionResult: ActionResult?
     public let expectation: ExpectationResult?
@@ -60,6 +64,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         path: String? = nil,
         kind: HeistExecutionStepKind,
         actionCommand: HeistActionCommand? = nil,
+        invocation: HeistInvocationStep? = nil,
         actionResult: ActionResult? = nil,
         expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
@@ -75,6 +80,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         self.index = index
         self.kind = kind
         self.actionCommand = actionCommand
+        self.invocation = invocation
         self.actionResult = actionResult
         self.expectationActionResult = expectationActionResult
         self.expectation = expectation
@@ -111,6 +117,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         case index
         case kind
         case actionCommand
+        case invocation
         case actionResult
         case expectationActionResult
         case expectation
@@ -130,6 +137,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         path = try container.decodeIfPresent(String.self, forKey: .path) ?? "$.body[\(index)]"
         kind = try container.decode(HeistExecutionStepKind.self, forKey: .kind)
         actionCommand = try container.decodeIfPresent(HeistActionCommand.self, forKey: .actionCommand)
+        invocation = try container.decodeIfPresent(HeistInvocationStep.self, forKey: .invocation)
         actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
         expectationActionResult = try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult)
         expectation = try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
@@ -150,6 +158,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         try container.encode(index, forKey: .index)
         try container.encode(kind, forKey: .kind)
         try container.encodeIfPresent(actionCommand, forKey: .actionCommand)
+        try container.encodeIfPresent(invocation, forKey: .invocation)
         try container.encodeIfPresent(actionResult, forKey: .actionResult)
         try container.encodeIfPresent(expectationActionResult, forKey: .expectationActionResult)
         try container.encodeIfPresent(expectation, forKey: .expectation)

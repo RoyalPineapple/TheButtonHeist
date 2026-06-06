@@ -696,6 +696,46 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
             argument: try container.decodeIfPresent(HeistArgument.self, forKey: .argument) ?? .none
         )
     }
+
+    /// Dotted capability name, e.g. `LibraryScreen.addToCart`.
+    public var capabilityName: String {
+        path.joined(separator: ".")
+    }
+
+    /// Report/display summary of this run as `RunHeist("Name", argument)`.
+    /// The frame is the product — reports surface this rather than a bare
+    /// `invoke`, so a reader can see which capability ran and with what.
+    public var runHeistSummary: String {
+        let name = "\"\(capabilityName)\""
+        switch argument {
+        case .none:
+            return "RunHeist(\(name))"
+        case .strings(let values):
+            let rendered = values.map(Self.stringArgumentSummary).joined(separator: ", ")
+            return "RunHeist(\(name), \(rendered))"
+        case .elementTargets(let targets):
+            let rendered = targets.map(Self.targetArgumentSummary).joined(separator: ", ")
+            return "RunHeist(\(name), \(rendered))"
+        }
+    }
+
+    private static func stringArgumentSummary(_ expr: StringExpr) -> String {
+        switch expr {
+        case .literal(let value):
+            return "\"\(value)\""
+        case .ref(let reference):
+            return reference
+        }
+    }
+
+    private static func targetArgumentSummary(_ expr: ElementTargetExpr) -> String {
+        switch expr {
+        case .ref(let reference):
+            return reference
+        default:
+            return expr.description
+        }
+    }
 }
 
 public enum HeistPlanError: Error, Sendable, Equatable {

@@ -256,6 +256,10 @@ struct PublicHeistReportSummary: Encodable {
 struct PublicHeistReportNode: Encodable {
     let path: String
     let kind: String
+    /// Product capability name for an invoke node (e.g. `LibraryScreen.addToCart`).
+    /// The frame is the product: reports name which capability ran; the argument
+    /// is visible in `message` as `RunHeist("Name", argument)`.
+    let capability: String?
     let status: String
     let message: String?
     let durationMs: Int
@@ -268,6 +272,7 @@ struct PublicHeistReportNode: Encodable {
     init(step: HeistExecutionStepResult) {
         self.path = step.path
         self.kind = step.reportStepName
+        self.capability = step.invocation?.capabilityName
         self.status = step.reportStatus.rawValue
         self.message = step.reportMessage
         self.durationMs = step.durationMs

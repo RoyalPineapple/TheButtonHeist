@@ -578,6 +578,56 @@ func rawHeistPlanContentCarriesDefinitions() throws {
 }
 
 @Test
+func runHeistBuildsHeistRunSteps() throws {
+    let stringRun = try HeistPlan { RunHeist("LibraryScreen.addToCart", "Milk") }
+    #expect(stringRun.body == [
+        .invoke(HeistInvocationStep(path: ["LibraryScreen", "addToCart"], argument: .strings([.literal("Milk")]))),
+    ])
+
+    let noArgRun = try HeistPlan { RunHeist("CartScreen.checkout") }
+    #expect(noArgRun.body == [
+        .invoke(HeistInvocationStep(path: ["CartScreen", "checkout"], argument: .none)),
+    ])
+
+    let targetRun = try HeistPlan { RunHeist("Rows.activate", ElementTarget.label("Row 1")) }
+    #expect(targetRun.body == [
+        .invoke(HeistInvocationStep(path: ["Rows", "activate"], argument: .elementTargets([.target(.label("Row 1"))]))),
+    ])
+}
+
+@Test
+func runHeistResolvesNamedCapabilityThroughAdmission() throws {
+    let plan = HeistPlan(
+        definitions: [
+            HeistPlan(name: "CartScreen", definitions: [
+                HeistPlan(name: "checkout", body: [
+                    .action(try ActionStep(command: .activate(.target(.label("Checkout"))))),
+                ]),
+            ], body: []),
+        ],
+        body: try HeistPlan { RunHeist("CartScreen.checkout") }.body
+    )
+    #expect(plan.runtimeAdmissionFailures().isEmpty)
+}
+
+@Test
+func runHeistRendersAsRunHeistInCanonicalSwift() throws {
+    let plan = HeistPlan(
+        definitions: [
+            HeistPlan(name: "CartScreen", definitions: [
+                HeistPlan(name: "checkout", body: [
+                    .action(try ActionStep(command: .activate(.target(.label("Checkout"))))),
+                ]),
+            ], body: []),
+        ],
+        body: try HeistPlan { RunHeist("CartScreen.checkout") }.body
+    )
+    let rendered = try plan.canonicalSwiftDSL()
+    #expect(rendered.contains("RunHeist(\"CartScreen.checkout\")"))
+    #expect(!rendered.contains("CartScreen.checkout()"))
+}
+
+@Test
 func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
     enum LibraryScreen {
         static let addToCart = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in

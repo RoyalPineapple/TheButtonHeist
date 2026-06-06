@@ -58,6 +58,16 @@ public extension HeistExecutionStepResult {
         }
     }
 
+    /// Human-facing display label for a step. For an invoke step this is the
+    /// `RunHeist("Name", argument)` frame, so reports name the product
+    /// capability that ran rather than the bare `invoke` kind.
+    var reportDisplayName: String {
+        if let invocation {
+            return invocation.runHeistSummary
+        }
+        return reportCommandName ?? reportStepName
+    }
+
     /// Wire message type for an action-kind step. Prefers the recorded command;
     /// falls back to the delivered action method.
     var reportClientWireType: ClientWireMessageType? {

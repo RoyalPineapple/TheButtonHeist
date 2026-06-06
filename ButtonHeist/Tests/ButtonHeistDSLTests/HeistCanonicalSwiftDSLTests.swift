@@ -89,12 +89,12 @@ func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
 
             Activate(.label(item))
 
-            AddButton.tap()
+            RunHeist("AddButton.tap")
         }
     }
 
     try HeistPlan("purchaseFlow") {
-        LibraryScreen.addToCart("Milk")
+        RunHeist("LibraryScreen.addToCart", "Milk")
     }
     """)
 }
@@ -128,7 +128,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
     }
 
     try HeistPlan("searchFlow") {
-        SearchScreen.search("milk")
+        RunHeist("SearchScreen.search", "milk")
     }
     """)
 }
