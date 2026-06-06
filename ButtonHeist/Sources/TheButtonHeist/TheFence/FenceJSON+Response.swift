@@ -89,6 +89,10 @@ struct PublicResponseModel: FencePublicJSONResponse {
                     netDelta: accessibilityTrace?.meaningfulEndpointDelta
                 ).encode(to: encoder)
             }
+        case .heistCatalog(let catalog):
+            try PublicHeistCatalogResponse(catalog: catalog).encode(to: encoder)
+        case .heistDescription(let description):
+            try PublicHeistDescriptionResponse(heist: description).encode(to: encoder)
         case .sessionState(let payload):
             try PublicSessionStateResponse(payload: payload).encode(to: encoder)
         case .targets(let targets, let defaultTarget):

@@ -63,6 +63,26 @@ extension TheFence {
         return DecodedRequestDispatch { dispatchFence, _ in try await dispatchFence.handleRunHeist(request) }
     }
 
+    static func decodeListHeistsCommandRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        let request = try fence.decodeListHeistsRequest(arguments)
+        return DecodedRequestDispatch { dispatchFence, _ in dispatchFence.handleListHeists(request) }
+    }
+
+    static func decodeDescribeHeistCommandRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        let request = try fence.decodeDescribeHeistRequest(arguments)
+        return DecodedRequestDispatch { dispatchFence, _ in dispatchFence.handleDescribeHeist(request) }
+    }
+
     static func decodeConnectCommandRequest(
         _ fence: TheFence,
         _ arguments: CommandArgumentEnvelope,

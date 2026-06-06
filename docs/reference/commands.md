@@ -8,6 +8,7 @@ _Generated from `TheFence.Command.descriptors`._
 |---------|--------|-----|-----|-------------|
 | `activate` | `semanticAction` | `activate` | direct | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
 | `connect` | `session` | `connect` | direct | Establish or switch the active connection to a Button Heist app. |
+| `describe_heist` | `heistRuntime` | `describe_heist` | direct | Describe one root entry or reusable heist from an admitted plan. The `heist` parameter selects the entry/capability name; the plan is supplied inline (canonical HeistPlan fields: version, name, parameter, definitions, body) or loaded from a `path` to a .heist package artifact. |
 | `dismiss_keyboard` | `semanticAction` | `dismiss_keyboard` | direct | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `spatialAction` | `drag` | direct | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
 | `edit_action` | `semanticAction` | `edit_action` | direct | Perform an edit action on the current first responder. |
@@ -16,6 +17,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_screen` | `observation` | `get_screen` | direct | Capture a PNG screenshot with optional inline data and interface state. |
 | `get_session_state` | `session` | `get_session_state` | direct | Inspect connection, device, and last-action session state. |
 | `list_devices` | `session` | `list_devices` | direct | List discovered iOS devices and configured connection targets. |
+| `list_heists` | `heistRuntime` | `list_heists` | direct | List a summary menu of the root entry and named reusable heists derived from one admitted plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan is supplied inline (canonical HeistPlan fields: version, name, parameter, definitions, body) or loaded from a `path` to a .heist package artifact. |
 | `list_targets` | `session` | `list_targets` | direct | List configured connection targets and the default target. |
 | `long_press` | `spatialAction` | `long_press` | direct | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
 | `one_finger_tap` | `spatialAction` | `one_finger_tap` | direct | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
@@ -68,6 +70,27 @@ Parameters:
 | `target` | `string` | no | - | - |
 | `device` | `string` | no | - | - |
 | `token` | `string` | no | - | - |
+
+### `describe_heist`
+
+Describe one root entry or reusable heist from an admitted plan. The `heist` parameter selects the entry/capability name; the plan is supplied inline (canonical HeistPlan fields: version, name, parameter, definitions, body) or loaded from a `path` to a .heist package artifact.
+
+- Family: `heistRuntime`
+- CLI: direct command `describe_heist`
+- MCP: direct tool
+- Connection before dispatch: no
+
+Parameters:
+
+| Parameter | Type | Required | Default | Values |
+|-----------|------|----------|---------|--------|
+| `heist` | `string` | yes | - | - |
+| `path` | `string` | no | - | - |
+| `version` | `integer` | no | - | - |
+| `name` | `string` | no | - | - |
+| `parameter` | `object` | no | - | - |
+| `definitions` | `array` | no | - | - |
+| `body` | `array` | no | - | - |
 
 ### `dismiss_keyboard`
 
@@ -199,6 +222,27 @@ List discovered iOS devices and configured connection targets.
 Parameters:
 
 _None._
+
+### `list_heists`
+
+List a summary menu of the root entry and named reusable heists derived from one admitted plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan is supplied inline (canonical HeistPlan fields: version, name, parameter, definitions, body) or loaded from a `path` to a .heist package artifact.
+
+- Family: `heistRuntime`
+- CLI: direct command `list_heists`
+- MCP: direct tool
+- Connection before dispatch: no
+
+Parameters:
+
+| Parameter | Type | Required | Default | Values |
+|-----------|------|----------|---------|--------|
+| `detail` | `string` | no | `"summary"` | `summary`, `detailed` |
+| `path` | `string` | no | - | - |
+| `version` | `integer` | no | - | - |
+| `name` | `string` | no | - | - |
+| `parameter` | `object` | no | - | - |
+| `definitions` | `array` | no | - | - |
+| `body` | `array` | no | - | - |
 
 ### `list_targets`
 

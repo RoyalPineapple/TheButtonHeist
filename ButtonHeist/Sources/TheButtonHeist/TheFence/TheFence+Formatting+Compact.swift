@@ -54,6 +54,10 @@ extension FenceResponse {
                 result,
                 netDelta: accessibilityTrace?.meaningfulEndpointDelta
             )
+        case .heistCatalog(let catalog):
+            return compactHeistCatalog(catalog)
+        case .heistDescription(let description):
+            return compactHeistDescription(description)
         case .sessionState(let payload):
             return Self.compactSessionState(payload)
         case .targets(let targets, let defaultTarget):

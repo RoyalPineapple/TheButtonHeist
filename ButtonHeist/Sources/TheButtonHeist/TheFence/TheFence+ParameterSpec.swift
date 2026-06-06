@@ -58,7 +58,7 @@ public extension FenceParameterKey {
     static let elementDirection = Self("elementDirection"), elementToPoint = Self("elementToPoint")
     static let elementUnitPoints = Self("elementUnitPoints")
     static let expect = Self("expect"), from = Self("from"), heistId = Self("heistId")
-    static let identifier = Self("identifier"), includeInterface = Self("includeInterface")
+    static let heist = Self("heist"), identifier = Self("identifier"), includeInterface = Self("includeInterface")
     static let inlineData = Self("inlineData"), path = Self("path"), isModalBoundary = Self("isModalBoundary")
     static let label = Self("label"), matcher = Self("matcher"), mode = Self("mode")
     static let newValue = Self("newValue"), oldValue = Self("oldValue"), ordinal = Self("ordinal"), output = Self("output")
@@ -100,6 +100,7 @@ func param(
 ) -> FenceParameterSpec {
     var schema: [String: HeistValue] = ["type": .string(type.jsonSchemaType)]
     if let enumValues { schema["enum"] = .array(enumValues.map { .string($0) }) }
+    if let defaultValue { schema["default"] = defaultValue }
     if let minimum { schema["minimum"] = jsonSchemaNumber(minimum) }
     if let maximum { schema["maximum"] = jsonSchemaNumber(maximum) }
     if let minLength { schema["minLength"] = .int(minLength) }

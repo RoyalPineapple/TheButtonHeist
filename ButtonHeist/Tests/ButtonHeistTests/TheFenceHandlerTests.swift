@@ -469,6 +469,196 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNoThrow(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
     }
 
+    @ButtonHeistActor
+    func testListHeistsReturnsCatalogFromAdmittedInlinePlan() async throws {
+        let fence = TheFence(configuration: .init())
+        let definition = HeistPlan(
+            name: "addToCart",
+            parameter: .strings(name: "item"),
+            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
+        )
+        let plan = HeistPlan(
+            name: "shop",
+            definitions: [definition],
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+
+        let response = try await fence.execute(command: .listHeists, arguments: try Self.inlineArguments(for: plan))
+
+        guard case .heistCatalog(let catalog) = response else {
+            return XCTFail("Expected heistCatalog response, got \(response)")
+        }
+        XCTAssertEqual(catalog.heists.map(\.name), ["shop", "addToCart"])
+        XCTAssertEqual(catalog.heists[1].parameterKind, .strings)
+        XCTAssertTrue(catalog.heists[1].requiresArgument)
+        XCTAssertEqual(catalog.heists[1].summary, "Reusable heist capability requiring strings argument")
+        XCTAssertEqual(catalog.heists[1].tags, ["capability", "parameterized", "semantic-action"])
+        XCTAssertNil(catalog.heists[1].parameterName)
+        XCTAssertNil(catalog.heists[1].actionCommands)
+        XCTAssertNil(catalog.heists[1].nestedRunHeists)
+        XCTAssertNil(catalog.heists[1].waitCount)
+        XCTAssertNil(catalog.heists[1].expectationCount)
+        XCTAssertNil(catalog.heists[1].semanticSurfaces)
+        XCTAssertNil(catalog.heists[1].admissionStatus)
+    }
+
+    @ButtonHeistActor
+    func testListHeistsDetailedModeReturnsDerivedSafeFields() async throws {
+        let fence = TheFence(configuration: .init())
+        let definition = HeistPlan(
+            name: "checkout",
+            definitions: [
+                HeistPlan(
+                    name: "confirm",
+                    body: [
+                        .action(try ActionStep(command: .activate(.predicate(.identifier(.literal("confirm_button")))))),
+                    ]
+                ),
+            ],
+            body: [
+                .action(try ActionStep(
+                    command: .activate(.predicate(.label("Checkout"))),
+                    expectation: WaitStep(predicate: .present(.label("Done")), timeout: 1)
+                )),
+                .wait(WaitStep(predicate: .present(.label("Receipt")), timeout: 1)),
+                .invoke(HeistInvocationStep(path: ["confirm"])),
+            ]
+        )
+        let plan = HeistPlan(
+            name: "shop",
+            definitions: [definition],
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        arguments["detail"] = .string("detailed")
+
+        let response = try await fence.execute(
+            command: .listHeists,
+            arguments: TheFence.CommandArgumentEnvelope(values: arguments)
+        )
+
+        guard case .heistCatalog(let catalog) = response else {
+            return XCTFail("Expected heistCatalog response, got \(response)")
+        }
+        let checkout = try XCTUnwrap(catalog.heists.first { $0.name == "checkout" })
+        XCTAssertEqual(checkout.nestedRunHeists, ["checkout.confirm"])
+        XCTAssertEqual(checkout.actionCommands, ["activate"])
+        XCTAssertEqual(checkout.waitCount, 1)
+        XCTAssertEqual(checkout.expectationCount, 1)
+        XCTAssertEqual(checkout.semanticSurfaces, [
+            "label=Checkout",
+            "label=Done",
+            "label=Receipt",
+            "identifier=confirm_button",
+        ])
+        XCTAssertEqual(checkout.admissionStatus, .admitted)
+        XCTAssertFalse((checkout.semanticSurfaces ?? []).contains { $0.contains("predicate(") })
+        XCTAssertFalse((checkout.semanticSurfaces ?? []).contains { $0.contains("target_ref") })
+    }
+
+    @ButtonHeistActor
+    func testListHeistsReturnsAdmissionFailureDiagnostics() async throws {
+        let fence = TheFence(configuration: .init())
+        let plan = HeistPlan(
+            name: "root",
+            parameter: .strings(name: "item"),
+            body: [.warn(WarnStep(message: "invalid root"))]
+        )
+
+        let response = try await fence.execute(command: .listHeists, arguments: try Self.inlineArguments(for: plan))
+
+        guard case .error(let message, _) = response else {
+            return XCTFail("Expected error response, got \(response)")
+        }
+        XCTAssertTrue(message.contains("entry heist must be parameterless"), message)
+    }
+
+    @ButtonHeistActor
+    func testListHeistsRejectsUnknownDetailMode() async throws {
+        let fence = TheFence(configuration: .init())
+        let plan = HeistPlan(
+            name: "shop",
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        arguments["detail"] = .string("full")
+
+        let response = try await fence.execute(
+            command: .listHeists,
+            arguments: TheFence.CommandArgumentEnvelope(values: arguments)
+        )
+
+        guard case .error(let message, _) = response else {
+            return XCTFail("Expected error response, got \(response)")
+        }
+        XCTAssertTrue(message.contains("detail"), message)
+        XCTAssertTrue(message.contains("summary"), message)
+        XCTAssertTrue(message.contains("detailed"), message)
+    }
+
+    @ButtonHeistActor
+    func testDescribeHeistReturnsSemanticSurfaceFromAdmittedPlan() async throws {
+        let fence = TheFence(configuration: .init())
+        let definition = HeistPlan(
+            name: "checkout",
+            body: [
+                .action(try ActionStep(
+                    command: .activate(.predicate(.label("Checkout"))),
+                    expectation: WaitStep(predicate: .present(.label("Done")), timeout: 1)
+                )),
+            ]
+        )
+        let plan = HeistPlan(
+            name: "shop",
+            definitions: [definition],
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        arguments["heist"] = .string("checkout")
+
+        let response = try await fence.execute(
+            command: .describeHeist,
+            arguments: TheFence.CommandArgumentEnvelope(values: arguments)
+        )
+
+        guard case .heistDescription(let description) = response else {
+            return XCTFail("Expected heistDescription response, got \(response)")
+        }
+        XCTAssertEqual(description.name, "checkout")
+        XCTAssertEqual(description.role, .capability)
+        XCTAssertEqual(description.semanticSurface.actionCommands, ["activate"])
+        XCTAssertEqual(description.semanticSurface.expectations, [#"present(predicate(label="Done"))"#])
+        XCTAssertEqual(description.semanticSurface.targetPredicates, [
+            #"predicate(label="Checkout")"#,
+            #"predicate(label="Done")"#,
+        ])
+    }
+
+    @ButtonHeistActor
+    func testDescribeHeistMissingNameDiagnosticIncludesAvailableNames() async throws {
+        let fence = TheFence(configuration: .init())
+        let plan = HeistPlan(
+            name: "shop",
+            definitions: [
+                HeistPlan(name: "openCart", body: [.warn(WarnStep(message: "open"))]),
+            ],
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        arguments["heist"] = .string("checkout")
+
+        let response = try await fence.execute(
+            command: .describeHeist,
+            arguments: TheFence.CommandArgumentEnvelope(values: arguments)
+        )
+
+        guard case .error(let message, _) = response else {
+            return XCTFail("Expected error response, got \(response)")
+        }
+        XCTAssertTrue(message.contains(#"heist "checkout" was not found"#), message)
+        XCTAssertTrue(message.contains("shop, openCart"), message)
+    }
+
     func testHeistExecutionResponseFailureDrivenByFailedStepNotFailedIndex() {
         // A failed child with nil failedIndex must mark the response as failure —
         // this is what drives CLI non-zero exit and MCP isError.

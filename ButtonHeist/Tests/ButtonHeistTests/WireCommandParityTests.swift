@@ -33,6 +33,8 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(TheFence.Command.scrollToVisible.family, .viewportDebug)
         XCTAssertEqual(TheFence.Command.scrollToEdge.family, .viewportDebug)
         XCTAssertEqual(TheFence.Command.runHeist.family, .heistRuntime)
+        XCTAssertEqual(TheFence.Command.listHeists.family, .heistRuntime)
+        XCTAssertEqual(TheFence.Command.describeHeist.family, .heistRuntime)
         XCTAssertEqual(TheFence.Command.startHeist.family, .heistRecording)
 
         XCTAssertNil(ObservationCommand(rawValue: TheFence.Command.wait.rawValue))
@@ -153,6 +155,10 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(
             TheFence.Command.rotor.descriptor.requiredDefaultEnumValue(for: .direction, as: RotorDirection.self),
             .next
+        )
+        XCTAssertEqual(
+            TheFence.Command.listHeists.descriptor.requiredDefaultEnumValue(for: .detail, as: HeistCatalogDetail.self),
+            .summary
         )
     }
 
@@ -304,8 +310,22 @@ final class WireCommandParityTests: XCTestCase {
             return ["action": .string(EditAction.paste.rawValue)]
         case .setPasteboard:
             return ["text": .string("clipboard")]
-        case .runHeist:
+        case .runHeist, .listHeists:
             return [
+                "version": .int(HeistPlan.currentVersion),
+                "body": .array([heistStepValue(
+                    type: "action",
+                    payload: [
+                        "command": .object([
+                            "type": .string(ClientWireMessageType.activate.rawValue),
+                            "payload": target,
+                        ]),
+                    ]
+                )]),
+            ]
+        case .describeHeist:
+            return [
+                "heist": .string("entry"),
                 "version": .int(HeistPlan.currentVersion),
                 "body": .array([heistStepValue(
                     type: "action",

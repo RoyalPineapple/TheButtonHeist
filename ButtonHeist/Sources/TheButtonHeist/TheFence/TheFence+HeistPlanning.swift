@@ -9,6 +9,14 @@ extension TheFence {
         let plan: HeistPlan
     }
 
+    struct ListHeistsRequest {
+        let catalog: HeistCatalog
+    }
+
+    struct DescribeHeistRequest {
+        let description: HeistDescription
+    }
+
     struct HeistStepPlanBuildError: Error {
         let message: String
     }
@@ -18,27 +26,40 @@ extension TheFence {
     static let inlinePlanFieldKeys: Set<String> = ["version", "name", "parameter", "definitions", "body"]
 
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {
-        try CommandArgumentEnvelopeLimits.validateRunHeist(arguments)
-        let plan: HeistPlan
-        if let path = try arguments.schemaString("path") {
-            // Reject `path` combined with ANY inline plan field before touching
-            // the artifact — run_heist accepts exactly one input source.
-            guard arguments.argumentValues.keys.allSatisfy({ !Self.inlinePlanFieldKeys.contains($0) }) else {
-                throw FenceError.invalidRequest("run_heist accepts either a path or an inline plan, not both")
-            }
-            plan = try loadHeistPlan(fromArtifactPath: path)
-        } else {
-            plan = try heistPlan(from: arguments)
-        }
-        // Assert runtime admissibility for BOTH input sources. An inline plan
-        // gets the same up-front contract as an artifact: a non-admissible plan
-        // fails loudly here instead of silently executing zero steps on device.
+        RunHeistRequest(plan: try decodeAdmittedHeistPlanSource(
+            from: arguments,
+            commandName: Command.runHeist.rawValue
+        ))
+    }
+
+    func decodeListHeistsRequest(_ arguments: CommandArgumentEnvelope) throws -> ListHeistsRequest {
+        let detail = try arguments.schemaEnum("detail", as: HeistCatalogDetail.self) ?? .summary
         do {
-            try plan.assertRuntimeAdmissible()
-        } catch let error as HeistPlanAdmissionError {
+            let plan = try decodeAdmittedHeistPlanSource(
+                from: arguments,
+                commandName: Command.listHeists.rawValue,
+                droppingPlanKeys: ["detail"]
+            )
+            return ListHeistsRequest(catalog: try plan.heistCatalog(detail: detail))
+        } catch let error as HeistCatalogError {
             throw FenceError.invalidRequest(error.description)
         }
-        return RunHeistRequest(plan: plan)
+    }
+
+    func decodeDescribeHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> DescribeHeistRequest {
+        let requestedName = try arguments.requiredSchemaString("heist")
+        do {
+            let plan = try decodeAdmittedHeistPlanSource(
+                from: arguments,
+                commandName: Command.describeHeist.rawValue,
+                droppingPlanKeys: ["heist"]
+            )
+            return DescribeHeistRequest(description: try plan.describeHeist(named: requestedName))
+        } catch let error as HeistCatalogError {
+            throw FenceError.invalidRequest(error.description)
+        } catch let error as HeistDescriptionLookupError {
+            throw FenceError.invalidRequest(error.description)
+        }
     }
 
     func heistStep(for request: ParsedRequest) throws -> HeistStep {
@@ -79,6 +100,36 @@ extension TheFence {
 
 private extension TheFence {
 
+    func decodeAdmittedHeistPlanSource(
+        from arguments: CommandArgumentEnvelope,
+        commandName: String,
+        droppingPlanKeys: Set<String> = []
+    ) throws -> HeistPlan {
+        try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
+
+        let plan: HeistPlan
+        if let path = try arguments.schemaString("path") {
+            // Reject `path` combined with ANY inline plan field before touching
+            // the artifact — heist plan source commands accept exactly one plan
+            // source, plus command-specific selector fields.
+            guard arguments.argumentValues.keys.allSatisfy({ !Self.inlinePlanFieldKeys.contains($0) }) else {
+                throw FenceError.invalidRequest("\(commandName) accepts either a path or an inline plan, not both")
+            }
+            plan = try loadHeistPlan(fromArtifactPath: path, commandName: commandName)
+        } else {
+            plan = try heistPlan(from: arguments, dropping: droppingPlanKeys)
+        }
+        // Assert runtime admissibility for BOTH input sources. An inline plan
+        // gets the same up-front contract as an artifact: a non-admissible plan
+        // fails loudly here instead of silently producing partial discovery.
+        do {
+            try plan.assertRuntimeAdmissible()
+        } catch let error as HeistPlanAdmissionError {
+            throw FenceError.invalidRequest(error.description)
+        }
+        return plan
+    }
+
     /// Read a heist plan from a `.heist` package artifact the operator handed us.
     ///
     /// `.heist` is the enforced run artifact: the fence — not the caller — opens
@@ -95,15 +146,15 @@ private extension TheFence {
     /// name such as `bh-demo-smoke` is not a valid identifier and would fail
     /// runtime admission, silently reducing the run to zero steps. Run naming
     /// for reports is derived from the path at the report layer, not here.
-    func loadHeistPlan(fromArtifactPath path: String) throws -> HeistPlan {
+    func loadHeistPlan(fromArtifactPath path: String, commandName: String) throws -> HeistPlan {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            throw FenceError.invalidRequest("run_heist path must not be empty")
+            throw FenceError.invalidRequest("\(commandName) path must not be empty")
         }
         let url = URL(fileURLWithPath: (trimmed as NSString).expandingTildeInPath)
         guard url.pathExtension.lowercased() == "heist" else {
             throw FenceError.invalidRequest(
-                "run_heist path must be a .heist package artifact for \(path); " +
+                "\(commandName) path must be a .heist package artifact for \(path); " +
                 "raw .json plan IR is internal to the package, not a run input."
             )
         }
@@ -116,9 +167,12 @@ private extension TheFence {
         }
     }
 
-    func heistPlan(from arguments: CommandArgumentEnvelope) throws -> HeistPlan {
+    func heistPlan(from arguments: CommandArgumentEnvelope, dropping keys: Set<String> = []) throws -> HeistPlan {
         var values = arguments.argumentValues
         values.removeValue(forKey: "requestId")
+        for key in keys {
+            values.removeValue(forKey: key)
+        }
         let data = try JSONEncoder().encode(HeistValue.object(values))
         do {
             return try JSONDecoder().decode(HeistPlan.self, from: data)

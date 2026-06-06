@@ -55,6 +55,10 @@ extension FenceResponse {
                 text += " [expectations: \(result.expectationsMet)/\(checked) met]"
             }
             return text
+        case .heistCatalog(let catalog):
+            return formatHeistCatalogHuman(catalog)
+        case .heistDescription(let description):
+            return formatHeistDescriptionHuman(description)
         case .sessionState(let payload):
             return Self.formatSessionStateHuman(payload)
         case .targets(let targets, let defaultTarget):

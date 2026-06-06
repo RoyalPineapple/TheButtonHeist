@@ -10,6 +10,14 @@ extension TheFence {
         try await runHeistPlan(request.plan, timeout: Timeouts.longActionSeconds)
     }
 
+    func handleListHeists(_ request: ListHeistsRequest) -> FenceResponse {
+        .heistCatalog(request.catalog)
+    }
+
+    func handleDescribeHeist(_ request: DescribeHeistRequest) -> FenceResponse {
+        .heistDescription(request.description)
+    }
+
     /// Dispatch a `HeistPlan` to the device and project its execution into a
     /// `.heistExecution` response. Single commands and composed heists share
     /// this one path — a single command is just a one-step plan.

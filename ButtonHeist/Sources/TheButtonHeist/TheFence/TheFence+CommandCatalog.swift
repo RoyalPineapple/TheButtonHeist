@@ -131,6 +131,8 @@ extension TheFence {
         case getPasteboard = "get_pasteboard"
         case dismissKeyboard = "dismiss_keyboard"
         case runHeist = "run_heist"
+        case listHeists = "list_heists"
+        case describeHeist = "describe_heist"
         case getSessionState = "get_session_state"
         case connect
         case listTargets = "list_targets"
