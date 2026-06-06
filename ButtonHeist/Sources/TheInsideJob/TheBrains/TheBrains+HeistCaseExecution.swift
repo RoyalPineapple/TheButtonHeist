@@ -26,9 +26,6 @@ extension TheBrains {
         }
 
         let evaluated = PredicateCaseSelection.evaluate(resolvedCases, observation: observation)
-        // `if` is the immediate (timeout 0) selection; `wait_for` is the waited
-        // one. Both produce a `HeistCaseSelectionResult` and then run the chosen
-        // body through the one shared dispatcher below.
         let selection = HeistCaseSelectionResult(
             cases: evaluated.cases,
             selectedCaseIndex: evaluated.selectedCaseIndex,
@@ -40,13 +37,11 @@ extension TheBrains {
                 selection: selection,
                 cases: resolvedCases,
                 elseBody: step.elseBody,
-                index: index,
                 path: path,
                 kind: .conditional,
+                intent: .conditional,
                 pathSegment: "conditional",
-                start: start,
-                elseMessage: "no case matched; else ran",
-                noMatchMessage: "no case matched"
+                start: start
             ),
             runtime: runtime,
             environment: environment,
@@ -76,13 +71,11 @@ extension TheBrains {
                 selection: selection,
                 cases: resolvedCases,
                 elseBody: step.elseBody,
-                index: index,
                 path: path,
                 kind: .waitForCases,
+                intent: .waitForCases(timeout: step.timeout),
                 pathSegment: "wait_for_cases",
-                start: start,
-                elseMessage: "timed out after \(heistTimeoutDescription(step.timeout))s; else ran",
-                noMatchMessage: waitForCasesTimeoutMessage(step: step, lastObservedSummary: selection.lastObservedSummary)
+                start: start
             ),
             runtime: runtime,
             environment: environment,
@@ -91,10 +84,7 @@ extension TheBrains {
     }
 
     /// Run a resolved case selection: matched case body, else body, or a
-    /// terminal no-match node. Shared by `if` and `wait_for` — they differ only
-    /// in how the `selection` was produced (immediate vs waited) and in the
-    /// node `kind`/messages; the failure of an unmatched `wait_for` rides on the
-    /// selection's `timedOut`, so no policy flag is needed here.
+    /// terminal no-match node. Shared by `if` and `wait_for`.
     private func dispatchPredicateCases(
         _ dispatch: PredicateCaseDispatch,
         runtime: HeistExecutionRuntime,
@@ -109,18 +99,11 @@ extension TheBrains {
                 scope: scope,
                 path: "\(dispatch.path).\(dispatch.pathSegment).cases[\(selectedCaseIndex)].body"
             )
-            return HeistExecutionStepResult(
-                index: dispatch.index,
-                path: dispatch.path,
-                kind: dispatch.kind,
-                message: "matched case \(selectedCaseIndex)",
-                durationMs: elapsedMilliseconds(since: dispatch.start),
-                caseSelection: dispatch.selection,
-                children: children
-            )
+            return caseNode(dispatch, selection: dispatch.selection, children: children)
         }
 
         if let elseBody = dispatch.elseBody {
+            let selection = dispatch.selection.markingElseRan()
             let children = await executeHeistSteps(
                 elseBody,
                 runtime: runtime,
@@ -128,69 +111,98 @@ extension TheBrains {
                 scope: scope,
                 path: "\(dispatch.path).\(dispatch.pathSegment).else_body"
             )
-            return HeistExecutionStepResult(
-                index: dispatch.index,
-                path: dispatch.path,
-                kind: dispatch.kind,
-                message: dispatch.elseMessage,
-                durationMs: elapsedMilliseconds(since: dispatch.start),
-                caseSelection: dispatch.selection.markingElseRan(),
-                children: children
-            )
+            return caseNode(dispatch, selection: selection, children: children)
         }
 
+        let failure: HeistFailureDetail?
+        if dispatch.kind == .waitForCases, dispatch.selection.timedOut {
+            failure = HeistFailureDetail(
+                category: .wait,
+                contract: "wait_for_cases selects a case before timeout or runs else",
+                observed: waitForCasesTimeoutObserved(selection: dispatch.selection),
+                expected: dispatch.selection.cases.map(\.predicate.description).joined(separator: "; ")
+            )
+        } else {
+            failure = nil
+        }
         return HeistExecutionStepResult(
-            index: dispatch.index,
             path: dispatch.path,
             kind: dispatch.kind,
-            message: dispatch.noMatchMessage,
+            status: failure == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: dispatch.start),
-            caseSelection: dispatch.selection
+            intent: dispatch.intent,
+            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
+            failure: failure
+        )
+    }
+
+    private func caseNode(
+        _ dispatch: PredicateCaseDispatch,
+        selection: HeistCaseSelectionResult,
+        children: [HeistExecutionStepResult]
+    ) -> HeistExecutionStepResult {
+        let abortedAtChildPath = children.firstFailedStep?.path
+        return HeistExecutionStepResult(
+            path: dispatch.path,
+            kind: dispatch.kind,
+            status: abortedAtChildPath == nil ? .passed : .failed,
+            durationMs: elapsedMilliseconds(since: dispatch.start),
+            intent: dispatch.intent,
+            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
+            failure: abortedAtChildPath.map {
+                childFailureDetail(category: dispatch.kind == .waitForCases ? .wait : .invocation, childPath: $0)
+            },
+            abortedAtChildPath: abortedAtChildPath,
+            children: children
         )
     }
 
     private func caseObservationFailure(
-        index: Int,
+        index _: Int,
         path: String,
         kind: HeistExecutionStepKind,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: kind,
-            message: "Could not observe settled accessibility state before evaluating heist cases",
+            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
-            stopsHeist: true
+            intent: kind == .waitForCases ? .waitForCases(timeout: 0) : .conditional,
+            failure: HeistFailureDetail(
+                category: .runtimeUnavailable,
+                contract: "settled accessibility state is observable before case evaluation",
+                observed: "no settled accessibility state"
+            )
         )
     }
 
     private func caseResolutionFailure(
-        index: Int,
+        index _: Int,
         path: String,
         kind: HeistExecutionStepKind,
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: kind,
-            message: "Could not resolve heist case predicate: \(error)",
+            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
-            stopsHeist: true
+            intent: kind == .waitForCases ? .waitForCases(timeout: 0) : .conditional,
+            failure: HeistFailureDetail(
+                category: .validation,
+                contract: "case predicates resolve before evaluation",
+                observed: "could not resolve heist case predicate: \(error)"
+            )
         )
     }
 
-    private func waitForCasesTimeoutMessage(
-        step: WaitForCasesStep,
-        lastObservedSummary: String?
-    ) -> String {
+    private func waitForCasesTimeoutObserved(selection: HeistCaseSelectionResult) -> String {
         [
-            "timed out after \(heistTimeoutDescription(step.timeout))s waiting for heist case",
-            "cases: \(step.cases.map(\.predicate.description).joined(separator: "; "))",
-            "last observed: \(lastObservedSummary ?? "no settled accessibility state")",
-            "Next: add Else, widen predicate, or increase timeout.",
+            selection.timeout.map { "timed out after \(heistTimeoutDescription($0))s" }
+                ?? "timed out",
+            "last observed: \(selection.lastObservedSummary ?? "no settled accessibility state")",
         ].joined(separator: "; ")
     }
 
@@ -210,20 +222,15 @@ extension Array where Element == ResolvedPredicateCase {
     }
 }
 
-/// The resolved inputs for running a predicate-case selection — the matched
-/// selection plus the cases/else body and the node identity/labels. Bundled so
-/// `if` and `wait_for` share one dispatcher without parameter sprawl.
 private struct PredicateCaseDispatch {
     let selection: HeistCaseSelectionResult
     let cases: [ResolvedPredicateCase]
     let elseBody: [HeistStep]?
-    let index: Int
     let path: String
     let kind: HeistExecutionStepKind
+    let intent: HeistStepIntent
     let pathSegment: String
     let start: CFAbsoluteTime
-    let elseMessage: String
-    let noMatchMessage: String
 }
 
 private extension HeistCaseSelectionResult {
@@ -237,6 +244,17 @@ private extension HeistCaseSelectionResult {
             elseRan: true,
             lastObservedSummary: lastObservedSummary
         )
+    }
+}
+
+private extension Array where Element == HeistExecutionStepResult {
+    var firstFailedStep: HeistExecutionStepResult? {
+        for step in self {
+            if let failed = step.firstFailedStep {
+                return failed
+            }
+        }
+        return nil
     }
 }
 

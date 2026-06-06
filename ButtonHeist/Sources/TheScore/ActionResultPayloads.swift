@@ -70,7 +70,7 @@ public struct AuthApprovalPendingPayload: Codable, Sendable, Equatable {
 /// documented. Encodes natively as a tagged union under the `payload` key on
 /// `ActionResult`: `{"kind": "value", "data": "..."}`, etc.
 ///   - `.value`        → typeText / setPasteboard / getPasteboard
-public enum ResultPayload: Codable, Sendable {
+public enum ResultPayload: Codable, Sendable, Equatable {
     case value(String)
     case rotor(RotorResult)
     case heistExecution(HeistExecutionResult)
@@ -181,7 +181,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 }
 
 /// The outcome of executing an action command, including post-action diagnostics.
-public struct ActionResult: Codable, Sendable {
+public struct ActionResult: Codable, Sendable, Equatable {
     /// Whether the action was delivered and completed normally. `false` means
     /// the action reached the server but the handler reported failure — it is
     /// not a transport-level error (those surface as thrown errors).

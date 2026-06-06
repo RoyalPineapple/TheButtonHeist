@@ -2,7 +2,7 @@ import ThePlans
 import Foundation
 
 /// Result from a live rotor step operation.
-public struct RotorResult: Codable, Sendable {
+public struct RotorResult: Codable, Sendable, Equatable {
     public let rotor: String
     public let direction: RotorDirection
     /// Description of the element the rotor cursor currently holds, if it

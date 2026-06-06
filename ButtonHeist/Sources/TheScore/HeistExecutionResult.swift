@@ -1,31 +1,30 @@
 import ThePlans
 import Foundation
 
-// MARK: - Heist Execution Results
+// MARK: - Heist Execution Receipt
 
-/// Typed result for executing a `HeistPlan`.
-public struct HeistExecutionResult: Codable, Sendable {
+/// Durable receipt for executing a `HeistPlan`.
+public struct HeistExecutionResult: Codable, Sendable, Equatable {
     public let steps: [HeistExecutionStepResult]
-    public let totalTimingMs: Int
-    public let failedIndex: Int?
+    public let durationMs: Int
+    public let abortedAtPath: String?
 
     public init(
         steps: [HeistExecutionStepResult],
-        totalTimingMs: Int,
-        failedIndex: Int? = nil
+        durationMs: Int,
+        abortedAtPath: String? = nil
     ) {
         self.steps = steps
-        self.totalTimingMs = totalTimingMs
-        self.failedIndex = failedIndex
+        self.durationMs = durationMs
+        self.abortedAtPath = abortedAtPath
     }
 }
 
-public enum HeistExecutionStepKind: String, Codable, Sendable {
+public enum HeistExecutionStepKind: String, Codable, Sendable, Equatable {
     case action
     case wait
     case conditional
     case waitForCases
-    case forEach = "for_each"
     case forEachElement = "for_each_element"
     case forEachString = "for_each_string"
     case forEachIteration = "for_each_iteration"
@@ -33,148 +32,243 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
     case fail
     case heist
     case invoke
-    case skipped
 }
 
-/// One typed step result from a `HeistPlan`.
-public struct HeistExecutionStepResult: Codable, Sendable {
+public enum HeistExecutionStepStatus: String, Codable, Sendable, Equatable {
+    case passed
+    case failed
+}
+
+/// One node in a heist execution receipt tree.
+public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
     /// JSON-style path to this execution node in the heist program tree.
     public let path: String
-    /// Sibling-local step index retained for compact summaries and older adapters.
-    public let index: Int
     public let kind: HeistExecutionStepKind
-    public let actionCommand: HeistActionCommand?
-    /// The named-capability run for an `.invoke` step: which capability ran and
-    /// with what argument. The frame is the product — reports surface this as
-    /// `RunHeist("Name", argument)` rather than a bare `invoke`.
-    public let invocation: HeistInvocationStep?
-    public let actionResult: ActionResult?
-    public let expectationActionResult: ActionResult?
-    public let expectation: ExpectationResult?
-    public let message: String?
+    public let status: HeistExecutionStepStatus
     public let durationMs: Int
-    public let stopsHeist: Bool
-    public let skipped: HeistExecutionSkippedStepResult?
-    public let caseSelection: HeistCaseSelectionResult?
-    public let forEachResult: HeistForEachResult?
+
+    public let intent: HeistStepIntent?
+    public let evidence: HeistStepEvidence?
+    public let failure: HeistFailureDetail?
+    public let abortedAtChildPath: String?
     public let children: [HeistExecutionStepResult]
 
     public init(
-        index: Int,
-        path: String? = nil,
+        path: String,
         kind: HeistExecutionStepKind,
-        actionCommand: HeistActionCommand? = nil,
-        invocation: HeistInvocationStep? = nil,
-        actionResult: ActionResult? = nil,
-        expectationActionResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil,
-        message: String? = nil,
+        status: HeistExecutionStepStatus,
         durationMs: Int,
-        stopsHeist: Bool = false,
-        skipped: HeistExecutionSkippedStepResult? = nil,
-        caseSelection: HeistCaseSelectionResult? = nil,
-        forEachResult: HeistForEachResult? = nil,
+        intent: HeistStepIntent? = nil,
+        evidence: HeistStepEvidence? = nil,
+        failure: HeistFailureDetail? = nil,
+        abortedAtChildPath: String? = nil,
         children: [HeistExecutionStepResult] = []
     ) {
-        self.path = path ?? "$.body[\(index)]"
-        self.index = index
+        self.path = path
         self.kind = kind
-        self.actionCommand = actionCommand
-        self.invocation = invocation
-        self.actionResult = actionResult
-        self.expectationActionResult = expectationActionResult
-        self.expectation = expectation
-        self.message = message
+        self.status = status
         self.durationMs = durationMs
-        self.stopsHeist = stopsHeist
-        self.skipped = skipped
-        self.caseSelection = caseSelection
-        self.forEachResult = forEachResult
+        self.intent = intent
+        self.evidence = evidence
+        self.failure = failure
+        self.abortedAtChildPath = abortedAtChildPath
         self.children = children
-    }
-
-    public var isSkipped: Bool {
-        skipped != nil
-    }
-
-    public var isFailure: Bool {
-        guard skipped == nil else { return false }
-        if stopsHeist { return true }
-        if kind == .fail { return true }
-        if actionResult?.success == false { return true }
-        if expectationActionResult?.success == false { return true }
-        if expectation?.met == false { return true }
-        if kind == .action, actionResult == nil { return true }
-        if kind == .wait, actionResult?.success != true { return true }
-        if kind == .waitForCases, caseSelection?.timedOut == true, caseSelection?.elseRan != true { return true }
-        if [.forEach, .forEachElement, .forEachString].contains(kind), forEachResult?.failureReason != nil { return true }
-        if children.contains(where: \.isFailure) { return true }
-        return false
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case path
-        case index
-        case kind
-        case actionCommand
-        case invocation
-        case actionResult
-        case expectationActionResult
-        case expectation
-        case message
-        case durationMs
-        case stopsHeist
-        case skipped
-        case caseSelection
-        case forEachResult
-        case children
-        case decodedChildResults = "childResults"
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        index = try container.decode(Int.self, forKey: .index)
-        path = try container.decodeIfPresent(String.self, forKey: .path) ?? "$.body[\(index)]"
-        kind = try container.decode(HeistExecutionStepKind.self, forKey: .kind)
-        actionCommand = try container.decodeIfPresent(HeistActionCommand.self, forKey: .actionCommand)
-        invocation = try container.decodeIfPresent(HeistInvocationStep.self, forKey: .invocation)
-        actionResult = try container.decodeIfPresent(ActionResult.self, forKey: .actionResult)
-        expectationActionResult = try container.decodeIfPresent(ActionResult.self, forKey: .expectationActionResult)
-        expectation = try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
-        message = try container.decodeIfPresent(String.self, forKey: .message)
-        durationMs = try container.decode(Int.self, forKey: .durationMs)
-        stopsHeist = try container.decodeIfPresent(Bool.self, forKey: .stopsHeist) ?? false
-        skipped = try container.decodeIfPresent(HeistExecutionSkippedStepResult.self, forKey: .skipped)
-        caseSelection = try container.decodeIfPresent(HeistCaseSelectionResult.self, forKey: .caseSelection)
-        forEachResult = try container.decodeIfPresent(HeistForEachResult.self, forKey: .forEachResult)
-        children = try container.decodeIfPresent([HeistExecutionStepResult].self, forKey: .children)
-            ?? container.decodeIfPresent([HeistExecutionStepResult].self, forKey: .decodedChildResults)
-            ?? []
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(path, forKey: .path)
-        try container.encode(index, forKey: .index)
-        try container.encode(kind, forKey: .kind)
-        try container.encodeIfPresent(actionCommand, forKey: .actionCommand)
-        try container.encodeIfPresent(invocation, forKey: .invocation)
-        try container.encodeIfPresent(actionResult, forKey: .actionResult)
-        try container.encodeIfPresent(expectationActionResult, forKey: .expectationActionResult)
-        try container.encodeIfPresent(expectation, forKey: .expectation)
-        try container.encodeIfPresent(message, forKey: .message)
-        try container.encode(durationMs, forKey: .durationMs)
-        if stopsHeist { try container.encode(stopsHeist, forKey: .stopsHeist) }
-        try container.encodeIfPresent(skipped, forKey: .skipped)
-        try container.encodeIfPresent(caseSelection, forKey: .caseSelection)
-        try container.encodeIfPresent(forEachResult, forKey: .forEachResult)
-        if !children.isEmpty {
-            try container.encode(children, forKey: .children)
-        }
     }
 }
 
-public struct HeistCaseSelectionResult: Codable, Sendable {
+public enum HeistStepIntent: Codable, Sendable, Equatable {
+    case action(command: String, target: String?)
+    case wait(predicate: String, timeout: Double)
+    case conditional
+    case waitForCases(timeout: Double)
+    case forEachString(parameter: String, count: Int)
+    case forEachElement(parameter: String, matching: String, limit: Int)
+    case invoke(path: String, argument: String?)
+    case heist(name: String?)
+    case warn(message: String)
+    case fail(message: String)
+}
+
+public enum HeistStepEvidence: Codable, Sendable, Equatable {
+    case action(HeistActionEvidence)
+    case wait(HeistWaitEvidence)
+    case caseSelection(HeistCaseSelectionEvidence)
+    case forEachString(HeistForEachStringEvidence)
+    case forEachElement(HeistForEachElementEvidence)
+    case invocation(HeistInvocationEvidence)
+    case warning(HeistExecutionWarning)
+}
+
+public struct HeistActionEvidence: Codable, Sendable, Equatable {
+    public let command: HeistActionCommand?
+    public let actionResult: ActionResult?
+    public let expectationActionResult: ActionResult?
+    public let expectation: ExpectationResult?
+
+    public init(
+        command: HeistActionCommand?,
+        actionResult: ActionResult?,
+        expectationActionResult: ActionResult? = nil,
+        expectation: ExpectationResult? = nil
+    ) {
+        self.command = command
+        self.actionResult = actionResult
+        self.expectationActionResult = expectationActionResult
+        self.expectation = expectation
+    }
+}
+
+public struct HeistWaitEvidence: Codable, Sendable, Equatable {
+    public let actionResult: ActionResult
+    public let expectation: ExpectationResult
+    public let baselineSummary: String?
+    public let finalSummary: String?
+
+    public init(
+        actionResult: ActionResult,
+        expectation: ExpectationResult,
+        baselineSummary: String? = nil,
+        finalSummary: String? = nil
+    ) {
+        self.actionResult = actionResult
+        self.expectation = expectation
+        self.baselineSummary = baselineSummary
+        self.finalSummary = finalSummary
+    }
+}
+
+public struct HeistCaseSelectionEvidence: Codable, Sendable, Equatable {
+    public let selection: HeistCaseSelectionResult
+
+    public init(selection: HeistCaseSelectionResult) {
+        self.selection = selection
+    }
+}
+
+public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
+    public let parameter: String
+    public let count: Int
+    public let iterationCount: Int
+    public let iterationOrdinal: Int?
+    public let value: String?
+    public let failureReason: String?
+
+    public init(
+        parameter: String,
+        count: Int,
+        iterationCount: Int,
+        iterationOrdinal: Int? = nil,
+        value: String? = nil,
+        failureReason: String? = nil
+    ) {
+        self.parameter = parameter
+        self.count = count
+        self.iterationCount = iterationCount
+        self.iterationOrdinal = iterationOrdinal
+        self.value = value
+        self.failureReason = failureReason
+    }
+}
+
+public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
+    public let parameter: String
+    public let matching: ElementPredicate
+    public let limit: Int
+    public let matchedCount: Int
+    public let iterationCount: Int
+    public let iterationOrdinal: Int?
+    public let targetOrdinal: Int?
+    public let targetSummary: String?
+    public let failureReason: String?
+
+    public init(
+        parameter: String,
+        matching: ElementPredicate,
+        limit: Int,
+        matchedCount: Int,
+        iterationCount: Int,
+        iterationOrdinal: Int? = nil,
+        targetOrdinal: Int? = nil,
+        targetSummary: String? = nil,
+        failureReason: String? = nil
+    ) {
+        self.parameter = parameter
+        self.matching = matching
+        self.limit = limit
+        self.matchedCount = matchedCount
+        self.iterationCount = iterationCount
+        self.iterationOrdinal = iterationOrdinal
+        self.targetOrdinal = targetOrdinal
+        self.targetSummary = targetSummary
+        self.failureReason = failureReason
+    }
+}
+
+public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
+    public let invocation: HeistInvocationStep?
+    public let name: String?
+    public let argument: String?
+    public let childFailedPath: String?
+
+    public init(
+        invocation: HeistInvocationStep? = nil,
+        name: String? = nil,
+        argument: String? = nil,
+        childFailedPath: String? = nil
+    ) {
+        self.invocation = invocation
+        self.name = name
+        self.argument = argument
+        self.childFailedPath = childFailedPath
+    }
+}
+
+/// One warning emitted by a `Warn(...)` heist step.
+public struct HeistExecutionWarning: Codable, Sendable, Equatable {
+    public let path: String
+    public let message: String
+
+    public init(
+        path: String,
+        message: String
+    ) {
+        self.path = path
+        self.message = message
+    }
+}
+
+public struct HeistFailureDetail: Codable, Sendable, Equatable {
+    public let category: HeistFailureCategory
+    public let contract: String
+    public let observed: String
+    public let expected: String?
+
+    public init(
+        category: HeistFailureCategory,
+        contract: String,
+        observed: String,
+        expected: String? = nil
+    ) {
+        self.category = category
+        self.contract = contract
+        self.observed = observed
+        self.expected = expected
+    }
+}
+
+public enum HeistFailureCategory: String, Codable, Sendable, Equatable {
+    case validation
+    case runtimeUnavailable
+    case targetResolution
+    case action
+    case expectation
+    case wait
+    case invocation
+    case loop
+    case explicitFailure
+}
+
+public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     public let cases: [HeistCaseMatchResult]
     public let selectedCaseIndex: Int?
     public let elapsedMs: Int
@@ -202,7 +296,7 @@ public struct HeistCaseSelectionResult: Codable, Sendable {
     }
 }
 
-public struct HeistCaseMatchResult: Codable, Sendable {
+public struct HeistCaseMatchResult: Codable, Sendable, Equatable {
     public let predicate: AccessibilityPredicate
     public let result: ExpectationResult
 
@@ -212,40 +306,5 @@ public struct HeistCaseMatchResult: Codable, Sendable {
     ) {
         self.predicate = predicate
         self.result = result
-    }
-}
-
-public struct HeistForEachResult: Codable, Sendable {
-    public let matchedCount: Int
-    public let limit: Int
-    public let iterationCount: Int
-    public let failureReason: String?
-
-    public init(
-        matchedCount: Int,
-        limit: Int,
-        iterationCount: Int,
-        failureReason: String? = nil
-    ) {
-        self.matchedCount = matchedCount
-        self.limit = limit
-        self.iterationCount = iterationCount
-        self.failureReason = failureReason
-    }
-}
-
-public struct HeistExecutionSkippedStepResult: Codable, Sendable {
-    public let index: Int
-    public let reason: String
-    public let afterFailedIndex: Int
-
-    public init(
-        index: Int,
-        reason: String,
-        afterFailedIndex: Int
-    ) {
-        self.index = index
-        self.reason = reason
-        self.afterFailedIndex = afterFailedIndex
     }
 }

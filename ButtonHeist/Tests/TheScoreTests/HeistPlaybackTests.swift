@@ -271,11 +271,15 @@ final class HeistPlanTests: XCTestCase {
 
     func testHeistExecutionStepThatStopsHeistIsFailure() {
         let result = HeistExecutionStepResult(
-            index: 0,
+            path: "$.body[0]",
             kind: .conditional,
-            message: "Could not observe settled accessibility state before evaluating heist cases",
+            status: .failed,
             durationMs: 0,
-            stopsHeist: true
+            failure: HeistFailureDetail(
+                category: .runtimeUnavailable,
+                contract: "settled accessibility state is observable before evaluating heist cases",
+                observed: "Could not observe settled accessibility state before evaluating heist cases"
+            )
         )
 
         XCTAssertTrue(result.isFailure)
@@ -506,14 +510,22 @@ final class HeistPlanTests: XCTestCase {
 
     func testForEachExecutionResultWithFailureIsFailure() {
         let result = HeistExecutionStepResult(
-            index: 0,
-            kind: .forEach,
+            path: "$.body[0]",
+            kind: .forEachElement,
+            status: .failed,
             durationMs: 100,
-            forEachResult: HeistForEachResult(
-                matchedCount: 3,
+            evidence: .forEachElement(HeistForEachElementEvidence(
+                parameter: "target",
+                matching: ElementPredicate(label: "Cell"),
                 limit: 10,
+                matchedCount: 3,
                 iterationCount: 2,
                 failureReason: "child step failed at iteration 2"
+            )),
+            failure: HeistFailureDetail(
+                category: .loop,
+                contract: "for_each_element completes all matched iterations",
+                observed: "child step failed at iteration 2"
             )
         )
 
@@ -522,14 +534,17 @@ final class HeistPlanTests: XCTestCase {
 
     func testForEachExecutionResultWithoutFailureIsNotFailure() {
         let result = HeistExecutionStepResult(
-            index: 0,
-            kind: .forEach,
+            path: "$.body[0]",
+            kind: .forEachElement,
+            status: .passed,
             durationMs: 100,
-            forEachResult: HeistForEachResult(
-                matchedCount: 3,
+            evidence: .forEachElement(HeistForEachElementEvidence(
+                parameter: "target",
+                matching: ElementPredicate(label: "Cell"),
                 limit: 10,
+                matchedCount: 3,
                 iterationCount: 3
-            )
+            ))
         )
 
         XCTAssertFalse(result.isFailure)

@@ -32,8 +32,8 @@ extension TheFence {
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
         let result = HeistExecutionResult(
             steps: executionResult.steps,
-            totalTimingMs: totalMs,
-            failedIndex: executionResult.failedIndex
+            durationMs: totalMs,
+            abortedAtPath: executionResult.abortedAtPath
         )
         let accessibilityTrace = Self.heistAccessibilityTrace(plan: plan, result: result)
         return .heistExecution(
@@ -87,7 +87,7 @@ extension TheFence {
         let response = try await runHeistPlan(plan, timeout: singleStepTimeout(for: parsed))
         if case .heistExecution(_, let result, _) = response {
             let step = result.steps.last
-            recordHeistStep(parsed, actionResult: step?.actionResult, expectation: step?.expectation)
+            recordHeistStep(parsed, actionResult: step?.dispatchedActionResult, expectation: step?.reportExpectation)
         }
         return response
     }
@@ -116,7 +116,7 @@ extension TheFence {
         // trace — a partial action trace would be misleading. Wait steps then
         // contribute their settled-state trace when available; `endpointTrace`
         // returns nil unless at least two distinct captures survive.
-        let actionResults = result.finalActionResultsInExecutionOrder
+        let actionResults = result.dispatchedActionResults
         guard !actionResults.isEmpty,
               actionResults.allSatisfy({ $0.accessibilityTrace != nil })
         else { return nil }

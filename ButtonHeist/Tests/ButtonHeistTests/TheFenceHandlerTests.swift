@@ -786,31 +786,47 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     func testHeistExecutionResponseFailureDrivenByFailedStepNotFailedIndex() throws {
-        // A failed child with nil failedIndex must mark the response as failure —
-        // this is what drives CLI non-zero exit and MCP isError.
+        // A failed child must mark the response as failure even when the top-level
+        // abort location is carried by the receipt instead of an index.
+        let childPath = "$.body[0].heist.body[0]"
+        let child = HeistExecutionStepResult(
+            path: childPath,
+            kind: .action,
+            status: .failed,
+            durationMs: 5,
+            evidence: .action(HeistActionEvidence(
+                command: nil,
+                actionResult: ActionResult(
+                    success: false,
+                    method: .activate,
+                    message: "boom",
+                    errorKind: .actionFailed
+                )
+            )),
+            failure: HeistFailureDetail(
+                category: .action,
+                contract: "activate command succeeds",
+                observed: "boom"
+            )
+        )
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
-                    index: 0,
+                    path: "$.body[0]",
                     kind: .heist,
+                    status: .failed,
                     durationMs: 5,
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .activate,
-                                message: "boom",
-                                errorKind: .actionFailed
-                            ),
-                            durationMs: 5
-                        ),
-                    ]
+                    failure: HeistFailureDetail(
+                        category: .invocation,
+                        contract: "heist body completes without failure",
+                        observed: "child failed at \(childPath)"
+                    ),
+                    abortedAtChildPath: childPath,
+                    children: [child]
                 ),
             ],
-            totalTimingMs: 5,
-            failedIndex: nil
+            durationMs: 5,
+            abortedAtPath: childPath
         )
         let response = FenceResponse.heistExecution(
             plan: try HeistPlan(body: [.warn(WarnStep(message: "x"))]),

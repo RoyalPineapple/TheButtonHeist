@@ -635,134 +635,92 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
-        let result = HeistExecutionResult(steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .action,
-                    actionCommand: .activate(.target(.predicate(ElementPredicate(label: "Save")))),
-                    actionResult: ActionResult(
-                        success: false,
-                        method: .activate,
-                        message: "No element matching label \"Save\"",
-                        errorKind: .elementNotFound
-                    ),
-                    durationMs: 0,
-                    stopsHeist: true
-                ),
-                HeistExecutionStepResult(
-                    index: 1,
-                    kind: .skipped,
-                    durationMs: 0,
-                    skipped: HeistExecutionSkippedStepResult(
-                        index: 1,
-                        reason: "skipped: heist stopped after step 0",
-                        afterFailedIndex: 0
-                    )
-                ),
-            ],
-            totalTimingMs: 1,
-            failedIndex: 0
-        )
-
-        let data = try encoder.encode(result)
-        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
-
-        XCTAssertEqual(decoded.failedIndex, 0)
-        XCTAssertEqual(decoded.steps.count, 2)
-        XCTAssertTrue(decoded.steps[0].stopsHeist)
-        XCTAssertEqual(decoded.steps[0].actionCommand?.wireType, .activate)
-        XCTAssertEqual(decoded.steps[0].actionCommand?.reportTarget, .predicate(ElementPredicate(label: "Save")))
-        XCTAssertEqual(decoded.steps[0].actionResult?.method, .activate)
-        XCTAssertEqual(decoded.steps[0].actionResult?.errorKind, .elementNotFound)
-        XCTAssertEqual(
-            decoded.steps[0].actionResult?.message,
-            "No element matching label \"Save\""
-        )
-        XCTAssertTrue(decoded.steps[1].isSkipped)
-        XCTAssertEqual(decoded.steps[1].skipped?.reason, "skipped: heist stopped after step 0")
-        XCTAssertEqual(decoded.steps[1].skipped?.afterFailedIndex, 0)
-    }
-
-    func testHeistExecutionResultRoundTripPreservesForEachResult() throws {
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Save"))))
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
-                    index: 0,
-                    kind: .forEachElement,
-                    message: "matched 3 of 10",
-                    durationMs: 500,
-                    forEachResult: HeistForEachResult(
-                        matchedCount: 3,
-                        limit: 10,
-                        iterationCount: 3
-                    ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].for_each_element.iterations[0]",
-                            kind: .forEachIteration,
-                            message: "iteration 0 target ordinal 0",
-                            durationMs: 50,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_element.iterations[0].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(success: true, method: .activate, message: "activated"),
-                                    durationMs: 50
-                                ),
-                            ]
-                        ),
-                        HeistExecutionStepResult(
-                            index: 1,
-                            path: "$.body[0].for_each_element.iterations[1]",
-                            kind: .forEachIteration,
-                            message: "iteration 1 target ordinal 1",
-                            durationMs: 45,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_element.iterations[1].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(success: true, method: .activate, message: "activated"),
-                                    durationMs: 45
-                                ),
-                            ]
-                        ),
-                        HeistExecutionStepResult(
-                            index: 2,
-                            path: "$.body[0].for_each_element.iterations[2]",
-                            kind: .forEachIteration,
-                            message: "iteration 2 target ordinal 2",
-                            durationMs: 40,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_element.iterations[2].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(success: true, method: .activate, message: "activated"),
-                                    durationMs: 40
-                                ),
-                            ]
-                        ),
-                    ]
+                    path: "$.body[0]",
+                    kind: .action,
+                    status: .failed,
+                    durationMs: 0,
+                    intent: .action(command: "activate", target: "predicate(label=\"Save\")"),
+                    evidence: .action(HeistActionEvidence(
+                        command: command,
+                        actionResult: ActionResult(
+                            success: false,
+                            method: .activate,
+                            message: "No element matching label \"Save\"",
+                            errorKind: .elementNotFound
+                        )
+                    )),
+                    failure: HeistFailureDetail(
+                        category: .targetResolution,
+                        contract: "action dispatch succeeds",
+                        observed: "No element matching label \"Save\"",
+                        expected: "predicate(label=\"Save\")"
+                    )
                 ),
             ],
-            totalTimingMs: 500
+            durationMs: 1,
+            abortedAtPath: "$.body[0]"
         )
 
         let data = try encoder.encode(result)
         let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
 
-        XCTAssertNil(decoded.failedIndex)
+        XCTAssertEqual(decoded.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(decoded.steps.count, 1)
+        XCTAssertEqual(decoded.steps[0].status, .failed)
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.wireType, .activate)
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.command?.reportTarget, .predicate(ElementPredicate(label: "Save")))
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.actionResult?.method, .activate)
+        XCTAssertEqual(decoded.steps[0].actionEvidence?.actionResult?.errorKind, .elementNotFound)
+        XCTAssertEqual(
+            decoded.steps[0].actionEvidence?.actionResult?.message,
+            "No element matching label \"Save\""
+        )
+        XCTAssertEqual(decoded.steps[0].failure?.category, .targetResolution)
+    }
+
+    func testHeistExecutionResultRoundTripPreservesForEachResult() throws {
+        let matching = ElementPredicate(label: "Row")
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    path: "$.body[0]",
+                    kind: .forEachElement,
+                    status: .passed,
+                    durationMs: 500,
+                    intent: .forEachElement(parameter: "row", matching: matching.description, limit: 10),
+                    evidence: .forEachElement(HeistForEachElementEvidence(
+                        parameter: "row",
+                        matching: matching,
+                        limit: 10,
+                        matchedCount: 3,
+                        iterationCount: 3
+                    )),
+                    children: [
+                        forEachElementIteration(index: 0, durationMs: 50, matching: matching),
+                        forEachElementIteration(index: 1, durationMs: 45, matching: matching),
+                        forEachElementIteration(index: 2, durationMs: 40, matching: matching),
+                    ]
+                ),
+            ],
+            durationMs: 500
+        )
+
+        let data = try encoder.encode(result)
+        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
+
+        XCTAssertNil(decoded.abortedAtPath)
         let step = try XCTUnwrap(decoded.steps.first)
         XCTAssertEqual(step.kind, .forEachElement)
-        XCTAssertEqual(step.forEachResult?.matchedCount, 3)
-        XCTAssertEqual(step.forEachResult?.limit, 10)
-        XCTAssertEqual(step.forEachResult?.iterationCount, 3)
-        XCTAssertNil(step.forEachResult?.failureReason)
+        XCTAssertEqual(step.forEachElementEvidence?.matchedCount, 3)
+        XCTAssertEqual(step.forEachElementEvidence?.limit, 10)
+        XCTAssertEqual(step.forEachElementEvidence?.iterationCount, 3)
+        XCTAssertNil(step.forEachElementEvidence?.failureReason)
         XCTAssertEqual(step.children.map(\.kind), [.forEachIteration, .forEachIteration, .forEachIteration])
-        XCTAssertEqual(step.children.first?.children.first?.actionResult?.method, .activate)
+        XCTAssertEqual(step.children.first?.children.first?.actionEvidence?.actionResult?.method, .activate)
         XCTAssertFalse(step.isFailure)
 
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -776,42 +734,71 @@ final class WireTypeRoundTripTests: XCTestCase {
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
-                    index: 0,
+                    path: "$.body[0]",
                     kind: .forEachElement,
+                    status: .failed,
                     durationMs: 200,
-                    stopsHeist: true,
-                    forEachResult: HeistForEachResult(
-                        matchedCount: 5,
+                    intent: .forEachElement(parameter: "row", matching: "predicate(label=\"Row\")", limit: 10),
+                    evidence: .forEachElement(HeistForEachElementEvidence(
+                        parameter: "row",
+                        matching: ElementPredicate(label: "Row"),
                         limit: 10,
+                        matchedCount: 5,
                         iterationCount: 2,
                         failureReason: "child step failed at iteration 2"
+                    )),
+                    failure: HeistFailureDetail(
+                        category: .loop,
+                        contract: "for_each_element completes all matched iterations",
+                        observed: "child step failed at iteration 2",
+                        expected: "5 iteration(s)"
                     )
                 ),
             ],
-            totalTimingMs: 200,
-            failedIndex: 0
+            durationMs: 200,
+            abortedAtPath: "$.body[0]"
         )
 
         let data = try encoder.encode(result)
         let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
 
-        XCTAssertEqual(decoded.failedIndex, 0)
+        XCTAssertEqual(decoded.abortedAtPath, "$.body[0]")
         let step = try XCTUnwrap(decoded.steps.first)
-        XCTAssertEqual(step.forEachResult?.failureReason, "child step failed at iteration 2")
+        XCTAssertEqual(step.forEachElementEvidence?.failureReason, "child step failed at iteration 2")
         XCTAssertTrue(step.isFailure)
     }
 
     func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildren() throws {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let child = HeistExecutionStepResult(
+            path: "$.body[0].conditional.cases[0].body[0]",
+            kind: .action,
+            status: .failed,
+            durationMs: 4,
+            evidence: .action(HeistActionEvidence(
+                command: nil,
+                actionResult: ActionResult(
+                    success: false,
+                    method: .activate,
+                    message: "button disabled",
+                    errorKind: .actionFailed
+                )
+            )),
+            failure: HeistFailureDetail(
+                category: .action,
+                contract: "action dispatch succeeds",
+                observed: "button disabled"
+            )
+        )
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
-                    index: 0,
+                    path: "$.body[0]",
                     kind: .conditional,
-                    message: "matched case 0",
+                    status: .failed,
                     durationMs: 6,
-                    stopsHeist: true,
-                    caseSelection: HeistCaseSelectionResult(
+                    intent: .conditional,
+                    evidence: .caseSelection(HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: predicate,
@@ -821,37 +808,66 @@ final class WireTypeRoundTripTests: XCTestCase {
                         selectedCaseIndex: 0,
                         elapsedMs: 2,
                         lastObservedSummary: "screen: login; known: 3 elements"
+                    ))),
+                    failure: HeistFailureDetail(
+                        category: .invocation,
+                        contract: "child execution completes without failure",
+                        observed: "child failed at \(child.path)"
                     ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].conditional.cases[0].body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .activate,
-                                message: "button disabled",
-                                errorKind: .actionFailed
-                            ),
-                            durationMs: 4,
-                            stopsHeist: true
-                        ),
-                    ]
+                    abortedAtChildPath: child.path,
+                    children: [child]
                 ),
             ],
-            totalTimingMs: 7,
-            failedIndex: 0
+            durationMs: 7,
+            abortedAtPath: child.path
         )
 
         let data = try encoder.encode(result)
         let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
 
         let decodedStep = try XCTUnwrap(decoded.steps.first)
-        XCTAssertEqual(decodedStep.caseSelection?.cases.first?.predicate, predicate)
-        XCTAssertEqual(decodedStep.caseSelection?.cases.first?.result.met, true)
-        XCTAssertEqual(decodedStep.caseSelection?.selectedCaseIndex, 0)
-        XCTAssertEqual(decodedStep.children.first?.actionResult?.errorKind, .actionFailed)
+        XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.cases.first?.predicate, predicate)
+        XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.cases.first?.result.met, true)
+        XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(decodedStep.children.first?.actionEvidence?.actionResult?.errorKind, .actionFailed)
         XCTAssertTrue(decodedStep.children.first?.isFailure == true)
+    }
+
+    private func forEachElementIteration(
+        index: Int,
+        durationMs: Int,
+        matching: ElementPredicate
+    ) -> HeistExecutionStepResult {
+        let path = "$.body[0].for_each_element.iterations[\(index)]"
+        return HeistExecutionStepResult(
+            path: path,
+            kind: .forEachIteration,
+            status: .passed,
+            durationMs: durationMs,
+            intent: .forEachElement(parameter: "row", matching: matching.description, limit: 10),
+            evidence: .forEachElement(HeistForEachElementEvidence(
+                parameter: "row",
+                matching: matching,
+                limit: 10,
+                matchedCount: 3,
+                iterationCount: index + 1,
+                iterationOrdinal: index,
+                targetOrdinal: index,
+                targetSummary: "predicate(label=\"Row\", ordinal: \(index))"
+            )),
+            children: [
+                HeistExecutionStepResult(
+                    path: "\(path).body[0]",
+                    kind: .action,
+                    status: .passed,
+                    durationMs: durationMs,
+                    evidence: .action(HeistActionEvidence(
+                        command: nil,
+                        actionResult: ActionResult(success: true, method: .activate, message: "activated")
+                    ))
+                ),
+            ]
+        )
     }
 
     // MARK: - HeistCustomContent

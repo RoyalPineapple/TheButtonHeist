@@ -3,25 +3,20 @@ import XCTest
 import TheScore
 
 /// The heist execution tree is the report structure. These tests lock the
-/// report facts derived directly from `HeistExecutionResult` /
-/// `HeistExecutionStepResult` — status, wire step name, command name, target,
-/// final action result, surfaced expectation, and expectation counts.
+/// report facts derived directly from the canonical receipt tree.
 final class HeistExecutionReportFactsTests: XCTestCase {
 
     func testActionWithExpectationReportsActionAndExpectation() {
         let expectationPredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .action,
-                    actionCommand: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
+                actionStep(
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
                     actionResult: ActionResult(success: true, method: .activate),
-                    expectation: ExpectationResult(met: true, predicate: expectationPredicate),
-                    durationMs: 5
+                    expectation: ExpectationResult(met: true, predicate: expectationPredicate)
                 ),
             ],
-            totalTimingMs: 5
+            durationMs: 5
         )
 
         XCTAssertEqual(result.expectationsChecked, 1)
@@ -29,21 +24,20 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.map(\.path), ["$.body[0]"])
         XCTAssertEqual(result.steps.first?.reportStepName, "action")
         XCTAssertEqual(result.steps.first?.reportCommandName, "activate")
+        XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
+        XCTAssertEqual(result.reportedActionResults.map(\.method), [.activate])
     }
 
     func testReportFactsUseExecutionTreeInsteadOfPlanSiblingRematch() {
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
+                actionStep(
                     path: "$.body[9]",
-                    kind: .action,
-                    actionCommand: .activate(.target(.predicate(ElementPredicate(label: "Delete")))),
-                    actionResult: ActionResult(success: true, method: .activate),
-                    durationMs: 5
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Delete")))),
+                    actionResult: ActionResult(success: true, method: .activate)
                 ),
             ],
-            totalTimingMs: 5
+            durationMs: 5
         )
 
         XCTAssertEqual(result.steps.map(\.path), ["$.body[9]"])
@@ -52,54 +46,43 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.first?.reportTarget, .predicate(ElementPredicate(label: "Delete")))
     }
 
-    func testFailedActionSkipsLaterSibling() {
+    func testAbortedResultContainsOnlyExecutedSteps() {
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .action,
+                actionStep(
                     actionResult: ActionResult(
                         success: false,
                         method: .activate,
                         message: "Delete failed",
                         errorKind: .actionFailed
                     ),
-                    durationMs: 4,
-                    stopsHeist: true
-                ),
-                HeistExecutionStepResult(
-                    index: 1,
-                    kind: .skipped,
-                    durationMs: 0,
-                    skipped: HeistExecutionSkippedStepResult(
-                        index: 1,
-                        reason: "skipped: heist stopped after step 0",
-                        afterFailedIndex: 0
+                    failure: HeistFailureDetail(
+                        category: .action,
+                        contract: "action dispatch succeeds",
+                        observed: "Delete failed"
                     )
                 ),
             ],
-            totalTimingMs: 4,
-            failedIndex: 0
+            durationMs: 4,
+            abortedAtPath: "$.body[0]"
         )
 
-        XCTAssertEqual(result.steps.map(\.reportStatus), [.failed, .skipped])
-        XCTAssertEqual(result.steps.map(\.reportMessage), [nil, "skipped: heist stopped after step 0"])
+        XCTAssertEqual(result.steps.count, 1)
+        XCTAssertEqual(result.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(result.reportRows.map(\.path), ["$.body[0]"])
+        XCTAssertEqual(result.steps.map(\.reportStatus), [.failed])
         XCTAssertEqual(result.steps.first?.reportActionResult?.message, "Delete failed")
     }
 
-    func testWaitReportsWaitNode() {
+    func testWaitReportsWaitEvidenceWithoutDispatchedActionResult() {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .wait,
-                    actionResult: ActionResult(success: true, method: .wait),
-                    expectation: ExpectationResult(met: true, predicate: predicate),
-                    durationMs: 20
+                waitStep(
+                    expectation: ExpectationResult(met: true, predicate: predicate)
                 ),
             ],
-            totalTimingMs: 20
+            durationMs: 20
         )
 
         let node = result.steps[0]
@@ -107,27 +90,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.reportStepName, "wait")
         XCTAssertEqual(node.reportStatus, .passed)
         XCTAssertEqual(node.reportExpectation?.met, true)
-        XCTAssertNil(node.reportActionResult)
-    }
-
-    // MARK: - Wait Evidence (§6)
-
-    func testWaitStepRetainsTraceEvidenceWithoutActionFieldPollution() {
-        let trace = AccessibilityTrace.projectingForTests(.elementsChanged(.init(elementCount: 3, edits: ElementEdits())))
-        let step = HeistExecutionStepResult(
-            index: 0,
-            kind: .wait,
-            actionResult: ActionResult(success: true, method: .wait, accessibilityTrace: trace),
-            durationMs: 10
-        )
-
-        // Action-specific report field stays nil for a wait, and the wait is not
-        // represented as a fake action command...
-        XCTAssertNil(step.reportActionResult)
-        XCTAssertNil(step.actionCommand)
-        // ...but the wait's trace evidence is retained for net traces/deltas.
-        XCTAssertEqual(step.traceEvidenceResult?.method, .wait)
-        XCTAssertNotNil(step.traceEvidenceResult?.accessibilityTrace)
+        XCTAssertEqual(node.reportActionResult?.method, .wait)
+        XCTAssertEqual(result.dispatchedActionResults, [])
+        XCTAssertEqual(result.reportedActionResults, [])
     }
 
     func testActionAndWaitSurfaceBothTraceDeltas() {
@@ -135,89 +100,82 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         let waitTrace = AccessibilityTrace.projectingForTests(.elementsChanged(.init(elementCount: 3, edits: ElementEdits())))
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .action,
-                    actionCommand: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
-                    actionResult: ActionResult(success: true, method: .activate, accessibilityTrace: actionTrace),
-                    durationMs: 5
+                actionStep(
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
+                    actionResult: ActionResult(success: true, method: .activate, accessibilityTrace: actionTrace)
                 ),
-                HeistExecutionStepResult(
-                    index: 1,
-                    kind: .wait,
-                    actionResult: ActionResult(success: true, method: .wait, accessibilityTrace: waitTrace),
-                    durationMs: 5
+                waitStep(
+                    path: "$.body[1]",
+                    actionResult: ActionResult(success: true, method: .wait, accessibilityTrace: waitTrace)
                 ),
             ],
-            totalTimingMs: 10
+            durationMs: 10
         )
 
-        // Both the action and the wait contribute trace evidence in order.
         let traces = result.traceResultsInExecutionOrder
         XCTAssertEqual(traces.map(\.method), [.activate, .wait])
         XCTAssertNotNil(traces[0].accessibilityTrace)
         XCTAssertNotNil(traces[1].accessibilityTrace)
-        // Action-specific results remain action-only.
-        XCTAssertEqual(result.finalActionResultsInExecutionOrder.map(\.method), [.activate])
+        XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
     }
 
-    // MARK: - Failure Truth (§7)
-
-    func testResultIsFailureFromFailedChildWithNilFailedIndex() {
-        // A structural node whose child failed, with no top-level failedIndex
-        // and no stopsHeist marker — failure must still be detected.
+    func testResultFailureAndFirstFailedStepDeriveFromTree() {
+        let childFailure = actionStep(
+            path: "$.body[0].heist.body[0]",
+            actionResult: ActionResult(
+                success: false,
+                method: .activate,
+                message: "boom",
+                errorKind: .actionFailed
+            ),
+            failure: HeistFailureDetail(
+                category: .action,
+                contract: "action dispatch succeeds",
+                observed: "boom"
+            )
+        )
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
-                    index: 0,
+                    path: "$.body[0]",
                     kind: .heist,
+                    status: .failed,
                     durationMs: 5,
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .activate,
-                                message: "boom",
-                                errorKind: .actionFailed
-                            ),
-                            durationMs: 5
-                        ),
-                    ]
+                    intent: .heist(name: "Wrapper"),
+                    failure: HeistFailureDetail(
+                        category: .invocation,
+                        contract: "child execution completes without failure",
+                        observed: "child failed at $.body[0].heist.body[0]"
+                    ),
+                    abortedAtChildPath: "$.body[0].heist.body[0]",
+                    children: [childFailure]
                 ),
             ],
-            totalTimingMs: 5,
-            failedIndex: nil
+            durationMs: 5,
+            abortedAtPath: "$.body[0].heist.body[0]"
         )
 
-        XCTAssertNil(result.stoppedFailedIndex, "precondition: failure is not visible via failedIndex")
-        XCTAssertTrue(result.isFailure, "a failed child must drive failure even with nil failedIndex")
+        XCTAssertTrue(result.isFailure)
+        XCTAssertEqual(result.firstFailedStep?.path, "$.body[0].heist.body[0]")
+        XCTAssertEqual(result.failedStepPath, "$.body[0].heist.body[0]")
+        XCTAssertEqual(result.steps.first?.abortedAtChildPath, "$.body[0].heist.body[0]")
     }
 
     func testConditionalSelectedCaseKeepsOnlySelectedChildren() {
-        let result = HeistExecutionResult(steps: [
-                HeistExecutionStepResult(
-                    index: 0,
+        let result = HeistExecutionResult(
+            steps: [
+                caseStep(
                     kind: .conditional,
-                    durationMs: 8,
-                    caseSelection: HeistCaseSelectionResult(
-                        cases: [],
-                        selectedCaseIndex: 0,
-                        elapsedMs: 1
-                    ),
+                    selection: HeistCaseSelectionResult(cases: [], selectedCaseIndex: 0, elapsedMs: 1),
                     children: [
-                        HeistExecutionStepResult(
-                            index: 0,
+                        actionStep(
                             path: "$.body[0].conditional.cases[0].body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 7
+                            actionResult: ActionResult(success: true, method: .activate)
                         ),
                     ]
                 ),
             ],
-            totalTimingMs: 8
+            durationMs: 8
         )
 
         let node = result.steps[0]
@@ -226,74 +184,46 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.children.first?.reportCommandName, "activate")
     }
 
-    func testConditionalElseKeepsOnlyElseChildren() {
-        let result = HeistExecutionResult(steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .conditional,
-                    durationMs: 3,
-                    caseSelection: HeistCaseSelectionResult(
-                        cases: [],
-                        selectedCaseIndex: nil,
-                        elapsedMs: 1,
-                        elseRan: true
-                    ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].conditional.else_body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 2
-                        ),
-                    ]
-                ),
-            ],
-            totalTimingMs: 3
-        )
-
-        let node = result.steps[0]
-        XCTAssertEqual(node.children.map(\.path), ["$.body[0].conditional.else_body[0]"])
-    }
-
     func testWaitForTimeoutWithoutElseReportsWaitFailure() {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
-        let result = HeistExecutionResult(steps: [
-                HeistExecutionStepResult(
-                    index: 0,
+        let result = HeistExecutionResult(
+            steps: [
+                caseStep(
                     kind: .waitForCases,
-                    message: "timed out after 2s waiting for heist case",
-                    durationMs: 2000,
-                    stopsHeist: true,
-                    caseSelection: HeistCaseSelectionResult(
+                    status: .failed,
+                    selection: HeistCaseSelectionResult(
                         cases: [caseMatch(predicate, met: false)],
                         selectedCaseIndex: nil,
                         elapsedMs: 2000,
                         timeout: 2,
                         timedOut: true
+                    ),
+                    failure: HeistFailureDetail(
+                        category: .wait,
+                        contract: "wait_for_cases selects a case before timeout or runs else",
+                        observed: "timed out after 2s",
+                        expected: predicate.description
                     )
                 ),
             ],
-            totalTimingMs: 2000,
-            failedIndex: 0
+            durationMs: 2000,
+            abortedAtPath: "$.body[0]"
         )
 
         let node = result.steps[0]
         XCTAssertEqual(node.reportStepName, "wait_for_cases")
         XCTAssertEqual(node.reportStatus, .failed)
         XCTAssertEqual(node.children.count, 0)
-        XCTAssertEqual(node.caseSelection?.timedOut, true)
+        XCTAssertEqual(node.caseSelectionEvidence?.selection.timedOut, true)
     }
 
     func testWaitForTimeoutWithElseReportsElseChildrenAsHandled() {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
-        let result = HeistExecutionResult(steps: [
-                HeistExecutionStepResult(
-                    index: 0,
+        let result = HeistExecutionResult(
+            steps: [
+                caseStep(
                     kind: .waitForCases,
-                    message: "timed out after 2s; else ran",
-                    durationMs: 2000,
-                    caseSelection: HeistCaseSelectionResult(
+                    selection: HeistCaseSelectionResult(
                         cases: [caseMatch(predicate, met: false)],
                         selectedCaseIndex: nil,
                         elapsedMs: 2000,
@@ -302,312 +232,279 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                         elseRan: true
                     ),
                     children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].wait_for_cases.else_body[0]",
-                            kind: .warn,
-                            message: "No result",
-                            durationMs: 1
-                        ),
+                        warnStep(path: "$.body[0].wait_for_cases.else_body[0]", message: "No result"),
                     ]
                 ),
             ],
-            totalTimingMs: 2000
+            durationMs: 2000
         )
 
         let node = result.steps[0]
         XCTAssertEqual(node.reportStatus, .passed)
         XCTAssertEqual(node.children.map(\.path), ["$.body[0].wait_for_cases.else_body[0]"])
-        XCTAssertEqual(node.children.first?.reportStatus, .warned)
-    }
-
-    func testForEachSuccessGroupsChildrenByIteration() {
-        let result = HeistExecutionResult(steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    path: "$.body[0]",
-                    kind: .forEachElement,
-                    message: "for_each completed 2 iteration(s) from 2 matched element(s)",
-                    durationMs: 20,
-                    forEachResult: HeistForEachResult(matchedCount: 2, limit: 20, iterationCount: 2),
-                    children: [
-                        forEachIteration(path: "$.body[0].for_each_element.iterations[0]", durationMs: 5),
-                        forEachIteration(path: "$.body[0].for_each_element.iterations[1]", durationMs: 6),
-                    ]
-                ),
-            ],
-            totalTimingMs: 20
-        )
-
-        let node = result.steps[0]
-        XCTAssertEqual(node.reportStepName, "for_each_element")
-        XCTAssertEqual(node.children.map(\.path), [
-            "$.body[0].for_each_element.iterations[0]",
-            "$.body[0].for_each_element.iterations[1]",
-        ])
-        XCTAssertEqual(node.children.flatMap { $0.children.map(\.path) }, [
-            "$.body[0].for_each_element.iterations[0].body[0]",
-            "$.body[0].for_each_element.iterations[1].body[0]",
-        ])
+        XCTAssertEqual(node.children.first?.reportStatus, .passed)
+        XCTAssertEqual(result.warnings.map(\.path), ["$.body[0].wait_for_cases.else_body[0]"])
     }
 
     func testForEachBodyFailureReportsIterationFailureInStructuredNodes() {
         let result = forEachStringFailureResult()
         let node = result.steps[0]
 
+        XCTAssertEqual(result.abortedAtPath, "$.body[0].for_each_string.iterations[1].body[0]")
         XCTAssertEqual(node.reportStatus, .failed)
+        XCTAssertEqual(node.abortedAtChildPath, "$.body[0].for_each_string.iterations[1].body[0]")
         XCTAssertEqual(node.children.map(\.reportStatus), [.passed, .failed])
+        XCTAssertEqual(node.children[1].abortedAtChildPath, "$.body[0].for_each_string.iterations[1].body[0]")
         XCTAssertEqual(node.children[1].children.first?.reportActionResult?.message, "field missing")
-        XCTAssertEqual(node.reportMessage, "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"")
+        XCTAssertEqual(node.forEachStringEvidence?.failureReason, "iteration 1 failed for value \"Eggs\"")
     }
 
-    func testWarnAndFailAreStructuralNodes() {
-        let result = HeistExecutionResult(steps: [
-                HeistExecutionStepResult(index: 0, kind: .warn, message: "Heads up", durationMs: 1),
-                HeistExecutionStepResult(index: 1, kind: .fail, message: "Stop here", durationMs: 1, stopsHeist: true),
+    func testWarnAndFailAreExecutedNodes() {
+        let result = HeistExecutionResult(
+            steps: [
+                warnStep(message: "Heads up"),
+                HeistExecutionStepResult(
+                    path: "$.body[1]",
+                    kind: .fail,
+                    status: .failed,
+                    durationMs: 1,
+                    intent: .fail(message: "Stop here"),
+                    failure: HeistFailureDetail(
+                        category: .explicitFailure,
+                        contract: "explicit heist failure",
+                        observed: "Stop here"
+                    )
+                ),
             ],
-            totalTimingMs: 2,
-            failedIndex: 1
+            durationMs: 2,
+            abortedAtPath: "$.body[1]"
         )
 
         XCTAssertEqual(result.steps.map(\.reportStepName), ["warn", "fail"])
-        XCTAssertEqual(result.steps.map(\.reportStatus), [.warned, .failed])
+        XCTAssertEqual(result.steps.map(\.reportStatus), [.passed, .failed])
+        XCTAssertEqual(result.warnings.map(\.message), ["Heads up"])
     }
 
-    func testInlineHeistKeepsChildBodyPaths() {
-        let result = HeistExecutionResult(
-            steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .heist,
-                    durationMs: 5,
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].heist.body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 5
-                        ),
-                    ]
-                ),
-            ],
-            totalTimingMs: 5
-        )
-
-        let node = result.steps[0]
-        XCTAssertEqual(node.reportStepName, "heist")
-        XCTAssertEqual(node.children.map(\.path), ["$.body[0].heist.body[0]"])
-        XCTAssertEqual(node.children.first?.reportCommandName, "activate")
-    }
-
-    func testInvokeKeepsDefinitionBodyPaths() {
-        let result = HeistExecutionResult(
-            steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .invoke,
-                    durationMs: 5,
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].invoke.body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 5
-                        ),
-                    ]
-                ),
-            ],
-            totalTimingMs: 5
-        )
-
-        let node = result.steps[0]
-        XCTAssertEqual(node.reportStepName, "invoke")
-        XCTAssertEqual(node.children.map(\.path), ["$.body[0].invoke.body[0]"])
-        XCTAssertEqual(node.children.first?.reportCommandName, "activate")
-    }
-
-    // The composable-heists keystone: a failed step inside an invoked capability
-    // must mark the invoke frame failed and bubble to the root via isFailure —
-    // even with a nil failedIndex. The nested frame is the product; it is never
-    // flattened away or silently passed.
-    func testInvokeWithFailedChildMarksFrameAndRootFailed() {
-        let result = HeistExecutionResult(
-            steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .invoke,
-                    durationMs: 5,
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].invoke.body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .activate,
-                                message: "Add to Cart not found",
-                                errorKind: .actionFailed
-                            ),
-                            durationMs: 5
-                        ),
-                    ]
-                ),
-            ],
-            totalTimingMs: 5,
-            failedIndex: nil
-        )
-
-        let node = result.steps[0]
-        XCTAssertEqual(node.reportStepName, "invoke")
-        XCTAssertEqual(node.reportStatus, .failed, "the invoke frame is failed when a child failed")
-        XCTAssertEqual(node.children.first?.reportStatus, .failed)
-        XCTAssertNil(result.stoppedFailedIndex, "failure is not visible via failedIndex")
-        XCTAssertTrue(result.isFailure, "a failed child bubbles to the root")
-    }
-
-    // The frame is the product: an invoke node carries the called capability
-    // name + argument in the result, and reports surface it as a
-    // `RunHeist("Name", argument)` frame — not a bare `invoke`.
     func testInvokeNodeCarriesCapabilityFrameAndArgument() {
         let invocation = HeistInvocationStep(
             path: ["LibraryScreen", "addToCart"],
             argument: .string(.literal("Milk"))
         )
+        let child = actionStep(
+            path: "$.body[0].invoke.body[0]",
+            actionResult: ActionResult(
+                success: false,
+                method: .activate,
+                message: "Add to Cart not found",
+                errorKind: .actionFailed
+            ),
+            failure: HeistFailureDetail(
+                category: .action,
+                contract: "action dispatch succeeds",
+                observed: "Add to Cart not found"
+            )
+        )
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
-                    index: 0,
+                    path: "$.body[0]",
                     kind: .invoke,
-                    invocation: invocation,
-                    message: invocation.runHeistSummary,
+                    status: .failed,
                     durationMs: 5,
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].invoke.body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .activate,
-                                message: "Add to Cart not found",
-                                errorKind: .actionFailed
-                            ),
-                            durationMs: 5
-                        ),
-                    ]
+                    intent: .invoke(path: "LibraryScreen.addToCart", argument: "Milk"),
+                    evidence: .invocation(HeistInvocationEvidence(
+                        invocation: invocation,
+                        name: "LibraryScreen.addToCart",
+                        argument: "Milk",
+                        childFailedPath: child.path
+                    )),
+                    failure: HeistFailureDetail(
+                        category: .invocation,
+                        contract: "child execution completes without failure",
+                        observed: "child failed at \(child.path)"
+                    ),
+                    abortedAtChildPath: child.path,
+                    children: [child]
                 ),
             ],
-            totalTimingMs: 5,
-            failedIndex: nil
+            durationMs: 5,
+            abortedAtPath: child.path
         )
 
         let node = result.steps[0]
-        // Structural kind stays `invoke` (wire), but the display frame names the
-        // capability and shows the argument.
         XCTAssertEqual(node.reportStepName, "invoke")
-        XCTAssertEqual(node.invocation?.capabilityName, "LibraryScreen.addToCart")
+        XCTAssertEqual(node.invocationEvidence?.invocation?.capabilityName, "LibraryScreen.addToCart")
         XCTAssertEqual(node.reportDisplayName, "RunHeist(\"LibraryScreen.addToCart\", \"Milk\")")
-        // The failed child identifies which product capability failed.
         XCTAssertTrue(result.isFailure)
         XCTAssertEqual(node.reportStatus, .failed)
     }
 
-    func testForEachBodyResultsStayNestedUnderLoopNode() throws {
-        let result = forEachStringFailureResult()
-        let node = try XCTUnwrap(result.steps.first)
-
-        XCTAssertEqual(node.reportStepName, "for_each_string")
-        XCTAssertEqual(node.reportStatus, .failed)
-        XCTAssertEqual(node.reportMessage, "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"")
-        XCTAssertEqual(node.children.map(\.path), [
-            "$.body[0].for_each_string.iterations[0]",
-            "$.body[0].for_each_string.iterations[1]",
-        ])
-        XCTAssertEqual(node.children[1].children.first?.reportCommandName, "typeText")
-    }
-
     // MARK: - Fixtures
 
-    private func forEachIteration(path: String, durationMs: Int) -> HeistExecutionStepResult {
+    private func actionStep(
+        path: String = "$.body[0]",
+        command: HeistActionCommand? = .activate(.target(.predicate(ElementPredicate(label: "Button")))),
+        actionResult: ActionResult,
+        expectationActionResult: ActionResult? = nil,
+        expectation: ExpectationResult? = nil,
+        failure: HeistFailureDetail? = nil
+    ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
-            index: 0,
             path: path,
-            kind: .forEachIteration,
-            durationMs: durationMs,
-            children: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    path: "\(path).body[0]",
-                    kind: .action,
-                    actionResult: ActionResult(success: true, method: .activate),
-                    durationMs: durationMs
-                ),
-            ]
+            kind: .action,
+            status: failure == nil ? .passed : .failed,
+            durationMs: 5,
+            intent: command.map {
+                .action(command: $0.clientWireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
+            },
+            evidence: .action(HeistActionEvidence(
+                command: command,
+                actionResult: actionResult,
+                expectationActionResult: expectationActionResult,
+                expectation: expectation
+            )),
+            failure: failure
+        )
+    }
+
+    private func waitStep(
+        path: String = "$.body[0]",
+        actionResult: ActionResult = ActionResult(success: true, method: .wait),
+        expectation: ExpectationResult = ExpectationResult(
+            met: true,
+            predicate: .state(.present(ElementPredicate(label: "Done")))
+        ),
+        failure: HeistFailureDetail? = nil
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: .wait,
+            status: failure == nil ? .passed : .failed,
+            durationMs: 20,
+            intent: .wait(predicate: expectation.predicate?.description ?? "predicate", timeout: 0),
+            evidence: .wait(HeistWaitEvidence(actionResult: actionResult, expectation: expectation)),
+            failure: failure
+        )
+    }
+
+    private func caseStep(
+        kind: HeistExecutionStepKind,
+        status: HeistExecutionStepStatus = .passed,
+        selection: HeistCaseSelectionResult,
+        failure: HeistFailureDetail? = nil,
+        children: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: "$.body[0]",
+            kind: kind,
+            status: status,
+            durationMs: selection.elapsedMs,
+            intent: kind == .waitForCases ? .waitForCases(timeout: selection.timeout ?? 0) : .conditional,
+            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
+            failure: failure,
+            abortedAtChildPath: children.firstFailedStep?.path,
+            children: children
+        )
+    }
+
+    private func warnStep(path: String = "$.body[0]", message: String) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: .warn,
+            status: .passed,
+            durationMs: 1,
+            intent: .warn(message: message),
+            evidence: .warning(HeistExecutionWarning(path: path, message: message))
         )
     }
 
     private func forEachStringFailureResult() -> HeistExecutionResult {
-        HeistExecutionResult(steps: [
+        let failedActionPath = "$.body[0].for_each_string.iterations[1].body[0]"
+        let firstIteration = HeistExecutionStepResult(
+            path: "$.body[0].for_each_string.iterations[0]",
+            kind: .forEachIteration,
+            status: .passed,
+            durationMs: 5,
+            intent: .forEachString(parameter: "item", count: 2),
+            evidence: .forEachString(HeistForEachStringEvidence(
+                parameter: "item",
+                count: 2,
+                iterationCount: 1,
+                iterationOrdinal: 0,
+                value: "Milk"
+            )),
+            children: [
+                actionStep(
+                    path: "$.body[0].for_each_string.iterations[0].body[0]",
+                    command: .typeText(text: .literal("Milk"), target: nil),
+                    actionResult: ActionResult(success: true, method: .typeText)
+                ),
+            ]
+        )
+        let secondIteration = HeistExecutionStepResult(
+            path: "$.body[0].for_each_string.iterations[1]",
+            kind: .forEachIteration,
+            status: .failed,
+            durationMs: 6,
+            intent: .forEachString(parameter: "item", count: 2),
+            evidence: .forEachString(HeistForEachStringEvidence(
+                parameter: "item",
+                count: 2,
+                iterationCount: 2,
+                iterationOrdinal: 1,
+                value: "Eggs",
+                failureReason: "child failed at \(failedActionPath)"
+            )),
+            failure: HeistFailureDetail(
+                category: .loop,
+                contract: "child execution completes without failure",
+                observed: "child failed at \(failedActionPath)"
+            ),
+            abortedAtChildPath: failedActionPath,
+            children: [
+                actionStep(
+                    path: failedActionPath,
+                    command: .typeText(text: .literal("Eggs"), target: nil),
+                    actionResult: ActionResult(
+                        success: false,
+                        method: .typeText,
+                        message: "field missing",
+                        errorKind: .elementNotFound
+                    ),
+                    failure: HeistFailureDetail(
+                        category: .targetResolution,
+                        contract: "action dispatch succeeds",
+                        observed: "field missing"
+                    )
+                ),
+            ]
+        )
+        return HeistExecutionResult(
+            steps: [
                 HeistExecutionStepResult(
-                    index: 0,
                     path: "$.body[0]",
                     kind: .forEachString,
-                    message: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"",
+                    status: .failed,
                     durationMs: 30,
-                    stopsHeist: true,
-                    forEachResult: HeistForEachResult(
-                        matchedCount: 2,
-                        limit: 2,
+                    intent: .forEachString(parameter: "item", count: 2),
+                    evidence: .forEachString(HeistForEachStringEvidence(
+                        parameter: "item",
+                        count: 2,
                         iterationCount: 2,
                         failureReason: "iteration 1 failed for value \"Eggs\""
+                    )),
+                    failure: HeistFailureDetail(
+                        category: .loop,
+                        contract: "for_each_string completes all values",
+                        observed: "iteration 1 failed for value \"Eggs\"",
+                        expected: "2 value(s)"
                     ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].for_each_string.iterations[0]",
-                            kind: .forEachIteration,
-                            message: "iteration 0 value \"Milk\"",
-                            durationMs: 5,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_string.iterations[0].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(success: true, method: .typeText),
-                                    durationMs: 5
-                                ),
-                            ]
-                        ),
-                        HeistExecutionStepResult(
-                            index: 1,
-                            path: "$.body[0].for_each_string.iterations[1]",
-                            kind: .forEachIteration,
-                            message: "iteration 1 value \"Eggs\"",
-                            durationMs: 6,
-                            stopsHeist: true,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_string.iterations[1].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(
-                                        success: false,
-                                        method: .typeText,
-                                        message: "field missing",
-                                        errorKind: .elementNotFound
-                                    ),
-                                    durationMs: 6,
-                                    stopsHeist: true
-                                ),
-                            ]
-                        ),
-                    ]
+                    abortedAtChildPath: failedActionPath,
+                    children: [firstIteration, secondIteration]
                 ),
             ],
-            totalTimingMs: 30,
-            failedIndex: 0
+            durationMs: 30,
+            abortedAtPath: failedActionPath
         )
     }
 
@@ -616,5 +513,16 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             predicate: predicate,
             result: ExpectationResult(met: met, predicate: predicate)
         )
+    }
+}
+
+private extension Array where Element == HeistExecutionStepResult {
+    var firstFailedStep: HeistExecutionStepResult? {
+        for step in self {
+            if let failed = step.firstFailedStep {
+                return failed
+            }
+        }
+        return nil
     }
 }

@@ -431,8 +431,8 @@ struct HeistInspection {
     let steps: [HeistStep]
     let executionResult: HeistExecutionResult
     let completedSteps: Int
-    let failedIndex: Int?
-    let totalTimingMs: Int
+    let abortedAtPath: String?
+    let durationMs: Int
     let expectationsChecked: Int
     let expectationsMet: Int
     let accessibilityTrace: AccessibilityTrace?
@@ -448,8 +448,8 @@ func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
         steps: plannedSteps,
         executionResult: result,
         completedSteps: result.completedStepCount,
-        failedIndex: result.stoppedFailedIndex,
-        totalTimingMs: result.totalTimingMs,
+        abortedAtPath: result.abortedAtPath,
+        durationMs: result.durationMs,
         expectationsChecked: result.expectationsChecked,
         expectationsMet: result.expectationsMet,
         accessibilityTrace: accessibilityTrace

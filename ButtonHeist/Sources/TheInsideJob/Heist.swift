@@ -204,13 +204,13 @@ public extension Heist {
         public let result: HeistExecutionResult
 
         public init(_ result: HeistExecutionResult) {
-            let failedStep = Self.firstFailedStep(in: result.steps)
+            let failedStep = result.firstFailedStep
             self.failedStepPath = failedStep?.path ?? "$"
             self.failedStepKind = failedStep?.kind ?? .fail
             self.message = failedStep?.reportFailureMessage
                 ?? failedStep?.reportMessage
                 ?? "heist failed"
-            self.diagnostic = failedStep.flatMap(Self.diagnostic)
+            self.diagnostic = failedStep?.failure.map(Self.diagnostic)
             self.result = result
         }
 
@@ -229,33 +229,13 @@ public extension Heist {
             return parts.joined(separator: " ")
         }
 
-        private static func firstFailedStep(in steps: [HeistExecutionStepResult]) -> HeistExecutionStepResult? {
-            for step in steps {
-                if let child = firstFailedStep(in: step.children) {
-                    return child
-                }
-                if step.isFailure {
-                    return step
-                }
-            }
-            return nil
-        }
-
-        private static func diagnostic(_ step: HeistExecutionStepResult) -> String? {
-            var messages: [String] = []
-            func append(_ message: String?) {
-                guard let message, !message.isEmpty else { return }
-                messages.append(message)
-            }
-
-            append(step.actionResult?.message)
-            append(step.expectationActionResult?.message)
-            if let expectation = step.expectation {
-                append(expectation.actual)
-            }
-            append(step.caseSelection?.lastObservedSummary)
-            append(step.forEachResult?.failureReason)
-            return messages.first
+        private static func diagnostic(_ failure: HeistFailureDetail) -> String {
+            [
+                "category=\(failure.category.rawValue)",
+                "contract=\(failure.contract)",
+                "observed=\(failure.observed)",
+                failure.expected.map { "expected=\($0)" },
+            ].compactMap { $0 }.joined(separator: " ")
         }
     }
 

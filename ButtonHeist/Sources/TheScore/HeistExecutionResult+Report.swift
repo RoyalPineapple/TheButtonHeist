@@ -4,49 +4,67 @@ import Foundation
 // MARK: - Heist Report Facts
 //
 // Reporting consumes the execution tree directly. These derived facts live on
-// the execution result types so encoders, formatters, and the report adapter
-// walk `HeistExecutionResult.steps` without a second report worldview.
-
-/// Outcome status for a heist execution step in report and wire output.
-public enum HeistStepStatus: String, Sendable {
-    case passed
-    case failed
-    case skipped
-    case warned
-}
-
-/// One warning emitted by a `Warn(...)` heist step.
-public struct HeistExecutionWarning: Sendable, Equatable {
-    public let path: String
-    public let displayName: String
-    public let message: String
-
-    public init(
-        path: String,
-        displayName: String,
-        message: String
-    ) {
-        self.path = path
-        self.displayName = displayName
-        self.message = message
-    }
-}
+// the execution result types so encoders, formatters, and report adapters walk
+// `HeistExecutionResult.steps` without a second report model.
 
 public extension HeistExecutionStepResult {
-    /// Report status derived from the execution outcome.
-    var reportStatus: HeistStepStatus {
-        if isSkipped { return .skipped }
-        if kind == .warn { return .warned }
-        if isFailure { return .failed }
-        return .passed
+    var isFailure: Bool {
+        status == .failed || children.contains(where: \.isFailure)
     }
 
-    /// Wire-format step name. Disambiguates `for_each` into element/string from
-    /// the execution path and renames `conditional` → `if`,
-    /// `waitForCases` → `wait_for_cases`.
+    var firstFailedStep: HeistExecutionStepResult? {
+        for child in children {
+            if let failed = child.firstFailedStep {
+                return failed
+            }
+        }
+        return status == .failed ? self : nil
+    }
+
+    var reportStatus: HeistExecutionStepStatus {
+        status
+    }
+
+    var actionEvidence: HeistActionEvidence? {
+        guard case .action(let evidence) = evidence else { return nil }
+        return evidence
+    }
+
+    var waitEvidence: HeistWaitEvidence? {
+        guard case .wait(let evidence) = evidence else { return nil }
+        return evidence
+    }
+
+    var caseSelectionEvidence: HeistCaseSelectionEvidence? {
+        guard case .caseSelection(let evidence) = evidence else { return nil }
+        return evidence
+    }
+
+    var forEachStringEvidence: HeistForEachStringEvidence? {
+        guard case .forEachString(let evidence) = evidence else { return nil }
+        return evidence
+    }
+
+    var forEachElementEvidence: HeistForEachElementEvidence? {
+        guard case .forEachElement(let evidence) = evidence else { return nil }
+        return evidence
+    }
+
+    var invocationEvidence: HeistInvocationEvidence? {
+        guard case .invocation(let evidence) = evidence else { return nil }
+        return evidence
+    }
+
+    var warningEvidence: HeistExecutionWarning? {
+        guard case .warning(let warning) = evidence else { return nil }
+        return warning
+    }
+
+    /// Wire-format step name. Renames `conditional` -> `if` and
+    /// `waitForCases` -> `wait_for_cases`.
     var reportStepName: String {
         switch kind {
-        case .action, .skipped:
+        case .action:
             return "action"
         case .wait:
             return "wait"
@@ -54,10 +72,6 @@ public extension HeistExecutionStepResult {
             return "if"
         case .waitForCases:
             return "wait_for_cases"
-        case .forEach:
-            let isString = path.contains("for_each_string")
-                || children.contains { $0.path.contains("for_each_string") }
-            return isString ? "for_each_string" : "for_each_element"
         case .forEachElement:
             return "for_each_element"
         case .forEachString:
@@ -75,11 +89,10 @@ public extension HeistExecutionStepResult {
         }
     }
 
-    /// Human-facing display label for a step. For an invoke step this is the
-    /// `RunHeist("Name", argument)` frame, so reports name the product
+    /// Human-facing display label for a step. Invoke steps surface the product
     /// capability that ran rather than the bare `invoke` kind.
     var reportDisplayName: String {
-        if let invocation {
+        if let invocation = invocationEvidence?.invocation {
             return invocation.runHeistSummary
         }
         return reportCommandName ?? reportStepName
@@ -89,11 +102,11 @@ public extension HeistExecutionStepResult {
     /// falls back to the delivered action method.
     var reportClientWireType: ClientWireMessageType? {
         guard kind == .action else { return nil }
-        if let actionCommand {
-            return actionCommand.clientWireType
+        if let command = actionEvidence?.command {
+            return command.clientWireType
         }
-        return actionResult?.method.heistReportWireType
-            ?? expectationActionResult?.method.heistReportWireType
+        return actionEvidence?.actionResult?.method.heistReportWireType
+            ?? actionEvidence?.expectationActionResult?.method.heistReportWireType
     }
 
     /// Wire command name for an action-kind step.
@@ -103,87 +116,145 @@ public extension HeistExecutionStepResult {
 
     /// Durable matcher target for an action-kind step, if any.
     var reportTarget: ElementTarget? {
-        actionCommand?.reportTarget
+        actionEvidence?.command?.reportTarget
     }
 
-    /// Message to surface for this step. A skip reason wins over the step's
-    /// own message.
+    /// Message to surface for this step. Failure evidence wins over compact
+    /// success summaries because failed receipts are the detail-oriented case.
     var reportMessage: String? {
-        skipped?.reason ?? message
+        if let failure {
+            return failure.observed
+        }
+        if let warning = warningEvidence {
+            return warning.message
+        }
+        if let caseSelection = caseSelectionEvidence?.selection {
+            if let selected = caseSelection.selectedCaseIndex {
+                return "matched case \(selected)"
+            }
+            if caseSelection.elseRan {
+                return caseSelection.timedOut ? "timed out; else ran" : "no case matched; else ran"
+            }
+            if caseSelection.timedOut {
+                return "timed out"
+            }
+            return "no case matched"
+        }
+        if let forEach = forEachStringEvidence {
+            if let failureReason = forEach.failureReason {
+                return failureReason
+            }
+            if let ordinal = forEach.iterationOrdinal, let value = forEach.value {
+                return "iteration \(ordinal) value \"\(value)\""
+            }
+            return "completed \(forEach.iterationCount) of \(forEach.count) value(s)"
+        }
+        if let forEach = forEachElementEvidence {
+            if let failureReason = forEach.failureReason {
+                return failureReason
+            }
+            if let ordinal = forEach.iterationOrdinal, let targetOrdinal = forEach.targetOrdinal {
+                return "iteration \(ordinal) target ordinal \(targetOrdinal)"
+            }
+            return "completed \(forEach.iterationCount) of \(forEach.matchedCount) matched element(s)"
+        }
+        if let invocation = invocationEvidence {
+            if let childFailedPath = invocation.childFailedPath {
+                return "child failed at \(childFailedPath)"
+            }
+            return invocation.name
+        }
+        switch intent {
+        case .warn(let message), .fail(let message):
+            return message
+        default:
+            return nil
+        }
     }
 
-    /// Final action result for an action-kind step. An expectation re-check
-    /// result wins over the original action result when present.
+    /// Action result surfaced to human/report adapters. For an action with an
+    /// expectation, the expectation wait result wins over the dispatch result.
     var reportActionResult: ActionResult? {
-        guard kind == .action else { return nil }
-        return expectationActionResult ?? actionResult
+        switch kind {
+        case .action:
+            return actionEvidence?.expectationActionResult ?? actionEvidence?.actionResult
+        case .wait:
+            return waitEvidence?.actionResult
+        default:
+            return nil
+        }
     }
 
-    /// Expectation to surface for this step, suppressed when the action itself
-    /// failed (the action failure is the headline).
+    /// Runtime dispatch evidence for actual action steps.
+    var dispatchedActionResult: ActionResult? {
+        guard kind == .action else { return nil }
+        return actionEvidence?.actionResult
+    }
+
+    /// Human/report-facing result for actual action steps.
+    var reportedActionResult: ActionResult? {
+        guard kind == .action else { return nil }
+        return actionEvidence?.expectationActionResult ?? actionEvidence?.actionResult
+    }
+
+    /// Expectation to surface for this step. Action dispatch failure suppresses
+    /// expectation details so the dispatch failure remains the headline.
     var reportExpectation: ExpectationResult? {
-        if reportActionResult?.success == false { return nil }
-        return expectation
+        switch kind {
+        case .action:
+            if actionEvidence?.actionResult?.success == false { return nil }
+            return actionEvidence?.expectation
+        case .wait:
+            return waitEvidence?.expectation
+        default:
+            return nil
+        }
     }
 
     /// Number of expectations evaluated in this subtree.
     var expectationsChecked: Int {
-        (reportExpectation?.predicate == nil ? 0 : 1)
+        (reportExpectation == nil ? 0 : 1)
             + children.reduce(0) { $0 + $1.expectationsChecked }
     }
 
     /// Number of evaluated expectations that were met in this subtree.
     var expectationsMet: Int {
-        ((reportExpectation?.met == true && reportExpectation?.predicate != nil) ? 1 : 0)
+        ((reportExpectation?.met == true) ? 1 : 0)
             + children.reduce(0) { $0 + $1.expectationsMet }
     }
 
-    /// Final action results in execution order across this subtree.
-    var finalActionResultsInExecutionOrder: [ActionResult] {
-        (reportActionResult.map { [$0] } ?? [])
-            + children.flatMap(\.finalActionResultsInExecutionOrder)
-    }
-
     /// Action result that contributes accessibility-trace evidence for this step.
-    ///
-    /// Unlike `reportActionResult` (action-only, drives action-specific report
-    /// fields), this includes `wait` steps so their settled-state trace is
-    /// retained in net traces and per-step deltas. A wait keeps its evidence
-    /// without being represented as an action command.
     var traceEvidenceResult: ActionResult? {
         switch kind {
-        case .action: return reportActionResult
-        case .wait: return actionResult
-        default: return nil
+        case .action:
+            return actionEvidence?.expectationActionResult ?? actionEvidence?.actionResult
+        case .wait:
+            return waitEvidence?.actionResult
+        default:
+            return nil
         }
     }
 
-    /// Trace-contributing results (action and wait) in execution order.
+    /// Trace-contributing results in execution order across this subtree.
     var traceResultsInExecutionOrder: [ActionResult] {
         (traceEvidenceResult.map { [$0] } ?? [])
             + children.flatMap(\.traceResultsInExecutionOrder)
     }
 
-    /// Public-facing failure message for a failed or skipped step, derived from
-    /// the execution outcome. Returns nil for passed/warned steps and for
-    /// structural nodes whose failure is fully described by a failed child.
+    /// Public-facing failure message for a failed step, derived from factual
+    /// execution evidence.
     var reportFailureMessage: String? {
-        switch reportStatus {
-        case .passed, .warned:
-            return nil
-        case .skipped, .failed:
-            break
-        }
-        if children.contains(where: { $0.reportStatus == .failed }) {
+        guard status == .failed else { return nil }
+        if children.contains(where: { $0.status == .failed }) {
             switch kind {
             case .conditional, .waitForCases, .forEachIteration, .heist, .invoke:
                 return nil
-            case .action, .wait, .forEach, .forEachElement, .forEachString, .warn, .fail, .skipped:
+            case .action, .wait, .forEachElement, .forEachString, .warn, .fail:
                 break
             }
         }
-        if let message {
-            return message
+        if let failure {
+            return failure.observed
         }
         if let action = reportActionResult, !action.success {
             return action.message ?? "action failed"
@@ -191,36 +262,38 @@ public extension HeistExecutionStepResult {
         if let expectation = reportExpectation, !expectation.met {
             return expectation.actual ?? "expectation not met"
         }
-        if kind == .waitForCases,
-           caseSelection?.timedOut == true,
-           caseSelection?.elseRan != true {
-            return "wait_for_cases timed out"
-        }
-        if let reason = forEachResult?.failureReason {
-            return reason
-        }
         return "heist step failed"
     }
 }
 
 public extension HeistExecutionResult {
-    /// Steps that actually ran (skipped steps excluded).
+    /// Steps that actually began execution/evaluation.
     var completedStepCount: Int {
-        steps.count(where: { !$0.isSkipped })
-    }
-
-    /// Index of the step that stopped the heist, if any.
-    var stoppedFailedIndex: Int? {
-        failedIndex ?? steps.first { $0.stopsHeist }?.index
+        steps.count
     }
 
     /// Whether any step in the execution tree failed.
-    ///
-    /// Drives failure off the execution outcome, not off `failedIndex` — a
-    /// result built with a failed child but a nil `failedIndex` is still a
-    /// failure. `HeistExecutionStepResult.isFailure` recurses into children.
     var isFailure: Bool {
         steps.contains(where: \.isFailure)
+    }
+
+    /// First failed receipt node. Child failures are canonical before compound
+    /// parent frames that merely report an aborted child.
+    var firstFailedStep: HeistExecutionStepResult? {
+        for step in steps {
+            if let failed = step.firstFailedStep {
+                return failed
+            }
+        }
+        return nil
+    }
+
+    var failedStepPath: String? {
+        firstFailedStep?.path
+    }
+
+    var failedStepKind: HeistExecutionStepKind? {
+        firstFailedStep?.kind
     }
 
     /// Total expectations evaluated across the whole execution tree.
@@ -233,28 +306,30 @@ public extension HeistExecutionResult {
         steps.reduce(0) { $0 + $1.expectationsMet }
     }
 
-    /// Final action results in execution order across the whole tree.
-    var finalActionResultsInExecutionOrder: [ActionResult] {
-        steps.flatMap(\.finalActionResultsInExecutionOrder)
+    /// Runtime-evidence-facing action results for action commands actually
+    /// dispatched.
+    var dispatchedActionResults: [ActionResult] {
+        steps.flatMap(\.dispatchedActionResults)
     }
 
-    /// Trace-contributing results (action and wait) in execution order across
-    /// the whole tree. Wait evidence is retained here when available.
+    /// Human/report-facing action results. Expectation wait evidence may be the
+    /// surfaced result when an action has an expectation.
+    var reportedActionResults: [ActionResult] {
+        steps.flatMap(\.reportedActionResults)
+    }
+
+    /// Trace-contributing results in execution order across the whole tree.
     var traceResultsInExecutionOrder: [ActionResult] {
         steps.flatMap(\.traceResultsInExecutionOrder)
     }
 
-    /// Steps flattened into report rows in execution order. `for_each` loops
-    /// collapse to a single row; every other node recurses into its children.
-    /// The flattened position is an output concern and must not drive runtime
-    /// failure logic.
+    /// Steps flattened into report rows in execution order. The flattened
+    /// position is an output concern and must not drive runtime failure logic.
     var reportRows: [HeistExecutionStepResult] {
         Self.reportRows(steps)
     }
 
-    /// Warnings emitted anywhere in the heist execution tree, in execution
-    /// order. Each warning carries the exact runtime path of the `Warn(...)`
-    /// step that fired.
+    /// Warnings emitted by executed `Warn(...)` steps, in execution order.
     var warnings: [HeistExecutionWarning] {
         Self.warnings(in: steps)
     }
@@ -262,10 +337,10 @@ public extension HeistExecutionResult {
     private static func reportRows(_ steps: [HeistExecutionStepResult]) -> [HeistExecutionStepResult] {
         steps.flatMap { step -> [HeistExecutionStepResult] in
             switch step.kind {
-            case .forEach, .forEachElement, .forEachString:
+            case .forEachElement, .forEachString:
                 return [step]
             case .action, .wait, .conditional, .waitForCases, .forEachIteration,
-                 .warn, .fail, .heist, .invoke, .skipped:
+                 .warn, .fail, .heist, .invoke:
                 return [step] + reportRows(step.children)
             }
         }
@@ -273,20 +348,21 @@ public extension HeistExecutionResult {
 
     private static func warnings(in steps: [HeistExecutionStepResult]) -> [HeistExecutionWarning] {
         steps.flatMap { step -> [HeistExecutionWarning] in
-            let current: [HeistExecutionWarning]
-            if step.kind == .warn {
-                current = [
-                    HeistExecutionWarning(
-                        path: step.path,
-                        displayName: step.reportDisplayName,
-                        message: step.message ?? "warning"
-                    ),
-                ]
-            } else {
-                current = []
-            }
+            let current = step.warningEvidence.map { [$0] } ?? []
             return current + warnings(in: step.children)
         }
+    }
+}
+
+private extension HeistExecutionStepResult {
+    var dispatchedActionResults: [ActionResult] {
+        (dispatchedActionResult.map { [$0] } ?? [])
+            + children.flatMap(\.dispatchedActionResults)
+    }
+
+    var reportedActionResults: [ActionResult] {
+        (reportedActionResult.map { [$0] } ?? [])
+            + children.flatMap(\.reportedActionResults)
     }
 }
 
