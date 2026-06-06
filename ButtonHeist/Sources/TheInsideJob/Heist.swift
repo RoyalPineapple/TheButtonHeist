@@ -271,14 +271,15 @@ public extension Heist {
     }
 }
 
-@MainActor
 struct InAppHeistRuntime {
     let execute: @MainActor (HeistPlan, HeistArgument) async -> ActionResult
 
+    @MainActor
     static var shared: InAppHeistRuntime {
         insideJob(.shared)
     }
 
+    @MainActor
     static func insideJob(_ job: TheInsideJob) -> InAppHeistRuntime {
         InAppHeistRuntime { plan, argument in
             await job.executeInAppHeist(plan, argument: argument)
