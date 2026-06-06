@@ -388,13 +388,13 @@ func runtimeAdmissionRejectsInvalidHeistDefinitionsAndInvocations() throws {
                     argument: .strings([.literal("Milk")])
                 )),
             ]),
-            "heist invocation path must resolve"
+            "heist run path must resolve"
         ),
         (
             HeistPlan(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(path: ["addToCart"], argument: .none)),
             ]),
-            "heist invocation argument type must match"
+            "heist run argument type must match"
         ),
         (
             HeistPlan(definitions: [definition], body: [
@@ -403,13 +403,13 @@ func runtimeAdmissionRejectsInvalidHeistDefinitionsAndInvocations() throws {
                     argument: .strings([.literal("Milk"), .literal("Bread")])
                 )),
             ]),
-            "heist invocation argument must bind"
+            "heist run argument must bind"
         ),
         (
             HeistPlan(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(path: [], argument: .none)),
             ]),
-            "heist invocation path must not be empty"
+            "heist run path must not be empty"
         ),
     ]
 
@@ -433,8 +433,58 @@ func runtimeAdmissionRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
     let failures = plan.runtimeAdmissionFailures()
 
     #expect(failures.contains {
-        $0.contract == "heist invocation path must resolve to a local definition"
+        $0.contract == "heist run path must resolve to a local capability"
     })
+}
+
+@Test
+func runtimeAdmissionAcceptsSingularElementTargetCapability() throws {
+    // `elementTarget` is singular by type — a predicate for exactly one element.
+    // Multiple targets are unrepresentable; a capability run with one target is
+    // admissible.
+    let definition = HeistPlan(
+        name: "deleteItem",
+        parameter: .elementTarget(name: "target"),
+        body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+    )
+    let plan = HeistPlan(definitions: [definition], body: [
+        .invoke(HeistInvocationStep(
+            path: ["deleteItem"],
+            argument: .elementTarget(.target(.label("Row 1")))
+        )),
+    ])
+    #expect(plan.runtimeAdmissionFailures().isEmpty, "\(plan.runtimeAdmissionFailures())")
+}
+
+@Test
+func runtimeAdmissionRejectsParameterizedEntryButAcceptsScratchRootCaller() throws {
+    // The entry/root heist must be parameterless. Running a parameterized
+    // capability standalone goes through a scratch root that calls RunHeist
+    // with an explicit argument.
+    let parameterizedRoot = HeistPlan(
+        name: "search",
+        parameter: .strings(name: "query"),
+        body: [.action(try ActionStep(command: .typeText(
+            text: .ref("query"),
+            target: .target(.predicate(.label("Search")))
+        )))]
+    )
+    #expect(parameterizedRoot.runtimeAdmissionFailures().contains {
+        $0.contract == "entry heist must be parameterless"
+    }, "\(parameterizedRoot.runtimeAdmissionFailures())")
+
+    let scratchRoot = HeistPlan(
+        definitions: [
+            HeistPlan(name: "search", parameter: .strings(name: "query"), body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("query"),
+                    target: .target(.predicate(.label("Search")))
+                ))),
+            ]),
+        ],
+        body: [.invoke(HeistInvocationStep(path: ["search"], argument: .strings([.literal("Milk")])))]
+    )
+    #expect(scratchRoot.runtimeAdmissionFailures().isEmpty, "\(scratchRoot.runtimeAdmissionFailures())")
 }
 
 @Test

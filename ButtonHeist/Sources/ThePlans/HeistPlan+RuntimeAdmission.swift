@@ -116,6 +116,17 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
 
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {
         validatePlanHeader(plan, path: context.path, requiresName: false)
+        // The root/entry heist is parameterless. Parameterized reusable
+        // capabilities are run by name through a scratch root that calls
+        // RunHeist with an explicit argument — they are not artifact entries.
+        if plan.parameter != .none {
+            fail(
+                path: "\(context.path).parameter",
+                contract: "entry heist must be parameterless",
+                observed: plan.parameter.kind.rawValue,
+                correction: "Run a parameterized capability through a scratch root heist that calls RunHeist with an argument."
+            )
+        }
     }
 
     mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {
@@ -207,7 +218,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
                 path: "\(context.path).parameter",
                 contract: "inline heist group must not declare a parameter",
                 observed: plan.parameter.kind.rawValue,
-                correction: "Use invoke with a named definition when a heist needs an argument."
+                correction: "Use RunHeist with a named capability when a heist needs an argument."
             )
         }
     }
@@ -273,20 +284,20 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         guard !step.path.isEmpty else {
             fail(
                 path: "\(context.path).path",
-                contract: "heist invocation path must not be empty",
+                contract: "heist run path must not be empty",
                 observed: "empty path",
-                correction: "Invoke a named local definition path."
+                correction: "Run a named local capability."
             )
             return
         }
         for (index, component) in step.path.enumerated() {
-            validateParameter(component, path: "\(context.path).path[\(index)]", role: "heist invocation path component")
+            validateParameter(component, path: "\(context.path).path[\(index)]", role: "heist run path component")
         }
         validateArgument(step.argument, path: "\(context.path).argument", scope: context.scope)
         guard let resolved = context.definitionScope.resolve(path: step.path) else {
             fail(
                 path: "\(context.path).path",
-                contract: "heist invocation path must resolve to a local definition",
+                contract: "heist run path must resolve to a local capability",
                 observed: step.path.joined(separator: "."),
                 correction: "Define this heist in the current scope or qualify it through an exported namespace."
             )
@@ -296,18 +307,18 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         if context.invocationStack.contains(resolvedName) {
             fail(
                 path: "\(context.path).path",
-                contract: "heist invocations must not be recursive",
+                contract: "heist runs must not be recursive",
                 observed: (context.invocationStack + [resolvedName]).joined(separator: " -> "),
-                correction: "Remove the recursive heist invocation cycle."
+                correction: "Remove the recursive heist run cycle."
             )
             return
         }
         guard step.argument.kind == resolved.definition.parameter.kind else {
             fail(
                 path: "\(context.path).argument",
-                contract: "heist invocation argument type must match the target parameter",
+                contract: "heist run argument type must match the target parameter",
                 observed: "\(step.argument.kind.rawValue) for \(resolved.definition.parameter.kind.rawValue)",
-                correction: "Pass the argument shape declared by the invoked heist definition."
+                correction: "Pass the argument shape declared by the named capability."
             )
             return
         }
@@ -316,9 +327,9 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         } catch {
             fail(
                 path: "\(context.path).argument",
-                contract: "heist invocation argument must bind to the target parameter",
+                contract: "heist run argument must bind to the target parameter",
                 observed: summarize(error),
-                correction: "Use a finite semantic value matching the invoked heist parameter."
+                correction: "Use a finite semantic value matching the named capability parameter."
             )
         }
     }
@@ -332,11 +343,8 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
             for (index, value) in values.enumerated() {
                 validateString(value, path: "\(path).values[\(index)]", scope: scope)
             }
-        case .elementTargets(let targets):
-            validateArgumentArrayCount(targets.count, path: "\(path).targets")
-            for (index, target) in targets.enumerated() {
-                validateTarget(target, path: "\(path).targets[\(index)]", scope: scope)
-            }
+        case .elementTarget(let target):
+            validateTarget(target, path: "\(path).target", scope: scope)
         }
     }
 

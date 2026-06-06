@@ -428,6 +428,92 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.children.first?.reportCommandName, "activate")
     }
 
+    // The composable-heists keystone: a failed step inside an invoked capability
+    // must mark the invoke frame failed and bubble to the root via isFailure —
+    // even with a nil failedIndex. The nested frame is the product; it is never
+    // flattened away or silently passed.
+    func testInvokeWithFailedChildMarksFrameAndRootFailed() {
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .invoke,
+                    durationMs: 5,
+                    children: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            path: "$.body[0].invoke.body[0]",
+                            kind: .action,
+                            actionResult: ActionResult(
+                                success: false,
+                                method: .activate,
+                                message: "Add to Cart not found",
+                                errorKind: .actionFailed
+                            ),
+                            durationMs: 5
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 5,
+            failedIndex: nil
+        )
+
+        let node = result.steps[0]
+        XCTAssertEqual(node.reportStepName, "invoke")
+        XCTAssertEqual(node.reportStatus, .failed, "the invoke frame is failed when a child failed")
+        XCTAssertEqual(node.children.first?.reportStatus, .failed)
+        XCTAssertNil(result.stoppedFailedIndex, "failure is not visible via failedIndex")
+        XCTAssertTrue(result.isFailure, "a failed child bubbles to the root")
+    }
+
+    // The frame is the product: an invoke node carries the called capability
+    // name + argument in the result, and reports surface it as a
+    // `RunHeist("Name", argument)` frame — not a bare `invoke`.
+    func testInvokeNodeCarriesCapabilityFrameAndArgument() {
+        let invocation = HeistInvocationStep(
+            path: ["LibraryScreen", "addToCart"],
+            argument: .strings([.literal("Milk")])
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .invoke,
+                    invocation: invocation,
+                    message: invocation.runHeistSummary,
+                    durationMs: 5,
+                    children: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            path: "$.body[0].invoke.body[0]",
+                            kind: .action,
+                            actionResult: ActionResult(
+                                success: false,
+                                method: .activate,
+                                message: "Add to Cart not found",
+                                errorKind: .actionFailed
+                            ),
+                            durationMs: 5
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 5,
+            failedIndex: nil
+        )
+
+        let node = result.steps[0]
+        // Structural kind stays `invoke` (wire), but the display frame names the
+        // capability and shows the argument.
+        XCTAssertEqual(node.reportStepName, "invoke")
+        XCTAssertEqual(node.invocation?.capabilityName, "LibraryScreen.addToCart")
+        XCTAssertEqual(node.reportDisplayName, "RunHeist(\"LibraryScreen.addToCart\", \"Milk\")")
+        // The failed child identifies which product capability failed.
+        XCTAssertTrue(result.isFailure)
+        XCTAssertEqual(node.reportStatus, .failed)
+    }
+
     func testForEachBodyResultsStayNestedUnderLoopNode() throws {
         let result = forEachStringFailureResult()
         let node = try XCTUnwrap(result.steps.first)

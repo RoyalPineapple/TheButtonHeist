@@ -130,7 +130,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
             \(content)
             \(line("}", indent))
             """
-        case .strings, .elementTargets:
+        case .strings, .elementTarget:
             let parameterName = try renderDefinitionParameter(definition.parameter)
             let childEnvironment = try RenderEnvironment.empty.binding(parameter: definition.parameter)
             let body = try render(steps: definition.body, indent: indent + 1, environment: childEnvironment)
@@ -148,7 +148,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
         switch parameter {
         case .strings:
             return "HeistDef<String>"
-        case .elementTargets:
+        case .elementTarget:
             return "HeistDef<ElementTarget>"
         case .none:
             return "HeistDef<Void>"
@@ -166,7 +166,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
     private func render(invoke: HeistInvocationStep, environment: RenderEnvironment) throws -> String {
         let callee = invoke.path.joined(separator: ".")
         let argument = try render(argument: invoke.argument, environment: environment)
-        return argument.isEmpty ? "\(callee)()" : "\(callee)(\(argument))"
+        return argument.isEmpty ? "RunHeist(\(quote(callee)))" : "RunHeist(\(quote(callee)), \(argument))"
     }
 
     private func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {
@@ -178,10 +178,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
                 throw HeistCanonicalSwiftDSLError.unsupportedAction("canonical Swift invocation arguments must contain exactly one string value")
             }
             return try render(string: value, environment: environment)
-        case .elementTargets(let targets):
-            guard targets.count == 1, let target = targets.first else {
-                throw HeistCanonicalSwiftDSLError.unsupportedAction("canonical Swift invocation arguments must contain exactly one element target")
-            }
+        case .elementTarget(let target):
             return try render(target: target, environment: environment)
         }
     }
@@ -684,7 +681,7 @@ private struct RenderEnvironment {
             return self
         case .strings:
             return bindingStringReference(name)
-        case .elementTargets:
+        case .elementTarget:
             return bindingTargetReference(name)
         }
     }

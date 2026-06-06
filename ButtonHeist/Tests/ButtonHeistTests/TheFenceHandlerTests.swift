@@ -422,7 +422,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let fence = TheFence(configuration: .init())
         let definition = HeistPlan(
             name: "tapEach",
-            parameter: .elementTargets(name: "input"),
+            parameter: .elementTarget(name: "input"),
             body: [.action(try ActionStep(command: .activate(.ref("input"))))]
         )
         let plan = HeistPlan(

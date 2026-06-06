@@ -20,7 +20,7 @@ extension FenceResponse {
             text = "\(lastScreenId) | \(text)"
         }
         for (index, step) in result.reportRows.enumerated() {
-            var line = "  [\(index)] \(step.reportCommandName ?? step.reportStepName)"
+            var line = "  [\(index)] \(step.reportDisplayName)"
             if let failureMessage = step.reportFailureMessage {
                 line += " -> error: \(failureMessage)"
             } else if let delta = step.traceEvidenceResult?.accessibilityTrace?.endpointDelta {

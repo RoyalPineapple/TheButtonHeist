@@ -291,7 +291,8 @@ extension TheBrains {
                 index: index,
                 path: path,
                 kind: .invoke,
-                message: "Recursive heist invocation \(resolvedInvocationName)",
+                invocation: invoke,
+                message: "Recursive heist run \(resolvedInvocationName)",
                 durationMs: elapsedMilliseconds(since: start),
                 stopsHeist: true
             )
@@ -301,7 +302,8 @@ extension TheBrains {
                 index: index,
                 path: path,
                 kind: .invoke,
-                message: "Unknown heist invocation \(invocationName)",
+                invocation: invoke,
+                message: "Unknown heist run \(invocationName)",
                 durationMs: elapsedMilliseconds(since: start),
                 stopsHeist: true
             )
@@ -314,7 +316,8 @@ extension TheBrains {
                 index: index,
                 path: path,
                 kind: .invoke,
-                message: "Could not bind heist invocation argument: \(error)",
+                invocation: invoke,
+                message: "Could not bind heist run argument: \(error)",
                 durationMs: elapsedMilliseconds(since: start),
                 stopsHeist: true
             )
@@ -334,7 +337,8 @@ extension TheBrains {
             index: index,
             path: path,
             kind: .invoke,
-            message: "invoked \(invocationName)",
+            invocation: invoke,
+            message: invoke.runHeistSummary,
             durationMs: elapsedMilliseconds(since: start),
             stopsHeist: children.contains(where: \.isFailure),
             children: children

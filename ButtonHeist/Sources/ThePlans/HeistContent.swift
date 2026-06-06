@@ -205,7 +205,7 @@ public struct HeistDef<Input>: Sendable {
     ) where Input == ElementTarget {
         let components = Self.pathComponents(path)
         self.path = components
-        self.parameter = .elementTargets(name: parameter)
+        self.parameter = .elementTarget(name: parameter)
         self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
             try content(try ElementTargetExpr(ref: parameter))
         }
@@ -305,11 +305,51 @@ public extension HeistDef where Input == String {
 
 public extension HeistDef where Input == ElementTarget {
     func callAsFunction(_ input: ElementTarget) throws -> some HeistContent {
-        try invocation(argument: .elementTargets([.target(input)]))
+        try invocation(argument: .elementTarget(.target(input)))
     }
 
     func callAsFunction(_ input: ElementTargetExpr) throws -> some HeistContent {
-        try invocation(argument: .elementTargets([input]))
+        try invocation(argument: .elementTarget(input))
+    }
+}
+
+// MARK: - RunHeist
+
+/// Run a named heist capability from inside a heist body.
+///
+/// `RunHeist` is the public Button Heist verb for composing capabilities. It
+/// references a capability by name and lowers to the invocation IR; the named
+/// capability must resolve within the closed plan — runtime admission enforces
+/// resolution, arity, type, and non-recursion.
+public struct RunHeist: HeistContent {
+    public let heistSteps: [HeistStep]
+
+    public init(_ name: String) {
+        self.init(name: name, argument: .none)
+    }
+
+    public init(_ name: String, _ input: String) {
+        self.init(name: name, argument: .strings([.literal(input)]))
+    }
+
+    public init(_ name: String, _ input: StringExpr) {
+        self.init(name: name, argument: .strings([input]))
+    }
+
+    @_disfavoredOverload
+    public init(_ name: String, _ input: ElementTarget) {
+        self.init(name: name, argument: .elementTarget(.target(input)))
+    }
+
+    public init(_ name: String, _ input: ElementTargetExpr) {
+        self.init(name: name, argument: .elementTarget(input))
+    }
+
+    private init(name: String, argument: HeistArgument) {
+        self.heistSteps = [.invoke(HeistInvocationStep(
+            path: name.split(separator: ".").map(String.init),
+            argument: argument
+        ))]
     }
 }
 

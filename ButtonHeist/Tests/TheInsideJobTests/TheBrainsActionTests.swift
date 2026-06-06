@@ -1057,7 +1057,7 @@ final class TheBrainsActionTests: XCTestCase {
         let recursive = try XCTUnwrap(topLevel.children.first)
         XCTAssertTrue(topLevel.isFailure)
         XCTAssertEqual(recursive.kind, .invoke)
-        XCTAssertEqual(recursive.message, "Unknown heist invocation repeat")
+        XCTAssertEqual(recursive.message, "Unknown heist run repeat")
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
