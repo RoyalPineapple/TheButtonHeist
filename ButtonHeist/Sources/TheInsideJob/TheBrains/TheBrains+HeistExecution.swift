@@ -37,41 +37,39 @@ extension TheBrains {
         }
     }
 
-    func executeHeistPlan(_ plan: HeistPlan) async -> ActionResult {
+    func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .heistPlan)
         }
-        return await executeHeistPlan(plan, runtime: .live(self))
+        return await executeHeistPlan(plan, argument: argument, runtime: .live(self))
     }
 
     func executeHeistPlanForTest(
         _ plan: HeistPlan,
+        argument: HeistArgument = .none,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
-        await executeHeistPlan(plan, runtime: runtime)
+        await executeHeistPlan(plan, argument: argument, runtime: runtime)
     }
 
     private func executeHeistPlan(
         _ plan: HeistPlan,
+        argument: HeistArgument,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let heistStart = CFAbsoluteTimeGetCurrent()
-        let admissionFailures = plan.runtimeAdmissionFailures()
-        guard admissionFailures.isEmpty else {
-            let heistResult = HeistExecutionResult(
-                steps: [],
-                totalTimingMs: Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000),
-                failedIndex: nil
-            )
+        let environment: HeistExecutionEnvironment
+        do {
+            environment = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
+        } catch {
             var builder = ActionResultBuilder(method: .heistPlan)
-            builder.message = HeistPlanAdmissionError(failures: admissionFailures).description
-            return builder.failure(errorKind: .validationError, payload: .heistExecution(heistResult))
+            builder.message = "Could not bind root heist argument: \(error)"
+            return builder.failure(errorKind: .validationError)
         }
-
         let stepResults = await executeHeistSteps(
             plan.body,
             runtime: runtime,
-            environment: .empty,
+            environment: environment,
             scope: HeistExecutionScope(plan: plan),
             path: "$.body"
         )

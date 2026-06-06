@@ -900,7 +900,7 @@ final class HeistStoreTests: XCTestCase {
 
     @ButtonHeistActor
     func testHeistFileIORoundTripsHeist() async throws {
-        let heist = HeistPlan(name: "recordedHeist", body: [
+        let heist = try HeistPlan(name: "recordedHeist", body: [
                 try activateStep(label: "Go", traits: [.button]),
                 .action(try ActionStep(command: .typeText(TypeTextTarget(text: "test")))),
             ]

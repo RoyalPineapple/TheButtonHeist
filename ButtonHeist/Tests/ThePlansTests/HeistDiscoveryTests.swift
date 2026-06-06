@@ -1,11 +1,15 @@
 import Testing
-import ThePlans
+@_spi(ButtonHeistInternals) import ThePlans
+
+private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
+    try raw.validatedForRuntime()
+}
 
 @Test func `list heists includes root only entry`() throws {
     let catalog = try HeistPlan(
         name: "checkout",
         body: [.warn(WarnStep(message: "ready"))]
-    ).admittedHeistCatalog()
+    ).heistCatalog()
 
     #expect(catalog.heists.map(\.name) == ["checkout"])
     #expect(catalog.heists[0].role == .entry)
@@ -19,17 +23,17 @@ import ThePlans
     #expect(catalog.heists[0].waitCount == nil)
     #expect(catalog.heists[0].expectationCount == nil)
     #expect(catalog.heists[0].semanticSurfaces == nil)
-    #expect(catalog.heists[0].admissionStatus == nil)
+    #expect(catalog.heists[0].validationStatus == nil)
 }
 
 @Test func `list heists includes unparameterized definition`() throws {
     let catalog = try HeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(name: "openCart", body: [.warn(WarnStep(message: "open"))]),
+            try HeistPlan(name: "openCart", body: [.warn(WarnStep(message: "open"))]),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).admittedHeistCatalog()
+    ).heistCatalog()
 
     #expect(catalog.heists.map(\.name) == ["root", "openCart"])
     #expect(catalog.heists[0].role == .entry)
@@ -41,35 +45,35 @@ import ThePlans
     #expect(catalog.heists[1].parameterName == nil)
 }
 
-@Test func `list heists includes strings definition`() throws {
-    let catalog = try HeistPlan(
+@Test func `list heists includes string definition`() throws {
+    let catalog = try validatedPlan(UnvalidatedHeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(
+            UnvalidatedHeistPlan(
                 name: "addToCart",
-                parameter: .strings(name: "item"),
+                parameter: .string(name: "item"),
                 body: [
                     .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
                 ]
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).admittedHeistCatalog()
+    )).heistCatalog()
 
     #expect(catalog.heists[1].name == "addToCart")
     #expect(catalog.heists[1].role == .capability)
-    #expect(catalog.heists[1].parameterKind == .strings)
+    #expect(catalog.heists[1].parameterKind == .string)
     #expect(catalog.heists[1].requiresArgument == true)
-    #expect(catalog.heists[1].summary == "Reusable heist capability requiring strings argument")
+    #expect(catalog.heists[1].summary == "Reusable heist capability requiring string argument")
     #expect(catalog.heists[1].tags == ["capability", "parameterized", "semantic-action"])
     #expect(catalog.heists[1].parameterName == nil)
 }
 
 @Test func `list heists includes element target definition`() throws {
-    let catalog = try HeistPlan(
+    let catalog = try validatedPlan(UnvalidatedHeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(
+            UnvalidatedHeistPlan(
                 name: "tapRow",
                 parameter: .elementTarget(name: "row"),
                 body: [
@@ -78,7 +82,7 @@ import ThePlans
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).admittedHeistCatalog()
+    )).heistCatalog()
 
     #expect(catalog.heists[1].name == "tapRow")
     #expect(catalog.heists[1].role == .capability)
@@ -90,7 +94,7 @@ import ThePlans
 }
 
 @Test func `list heists summary mode omits detailed structure`() throws {
-    let catalog = try detailedSurfacePlan().admittedHeistCatalog()
+    let catalog = try detailedSurfacePlan().heistCatalog()
     let checkout = try #require(catalog.heists.first { $0.name == "checkout" })
 
     #expect(checkout.summary == "Reusable heist capability")
@@ -101,11 +105,11 @@ import ThePlans
     #expect(checkout.waitCount == nil)
     #expect(checkout.expectationCount == nil)
     #expect(checkout.semanticSurfaces == nil)
-    #expect(checkout.admissionStatus == nil)
+    #expect(checkout.validationStatus == nil)
 }
 
 @Test func `list heists detailed mode includes derived non raw fields`() throws {
-    let catalog = try detailedSurfacePlan().admittedHeistCatalog(detail: .detailed)
+    let catalog = try detailedSurfacePlan().heistCatalog(detail: .detailed)
     let checkout = try #require(catalog.heists.first { $0.name == "checkout" })
 
     #expect(checkout.parameterName == nil)
@@ -120,17 +124,17 @@ import ThePlans
         "identifier=confirmation_button",
         "traits=button",
     ])
-    #expect(checkout.admissionStatus == .admitted)
+    #expect(checkout.validationStatus == .validated)
     #expect(checkout.semanticSurfaces?.contains(where: { $0.contains("predicate(") }) == false)
     #expect(checkout.semanticSurfaces?.contains(where: { $0.contains("point") }) == false)
     #expect(checkout.semanticSurfaces?.contains(where: { $0.contains("target_ref") }) == false)
 }
 
 @Test func `list heists detailed mode includes parameter name for parameterized capability`() throws {
-    let catalog = try HeistPlan(
+    let catalog = try validatedPlan(UnvalidatedHeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(
+            UnvalidatedHeistPlan(
                 name: "tapRow",
                 parameter: .elementTarget(name: "row"),
                 body: [
@@ -139,7 +143,7 @@ import ThePlans
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).admittedHeistCatalog(detail: .detailed)
+    )).heistCatalog(detail: .detailed)
 
     let tapRow = try #require(catalog.heists.first { $0.name == "tapRow" })
     #expect(tapRow.parameterName == "row")
@@ -148,66 +152,73 @@ import ThePlans
     #expect(tapRow.semanticSurfaces == nil)
 }
 
-@Test func `list heists fails invalid admitted plan`() throws {
-    let plan = HeistPlan(
+@Test func `list heists cannot be reached for invalid raw plan`() throws {
+    let raw = UnvalidatedHeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "one"))]),
-            HeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "two"))]),
+            UnvalidatedHeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "one"))]),
+            UnvalidatedHeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "two"))]),
         ],
         body: [.warn(WarnStep(message: "ready"))]
     )
 
-    #expect(throws: HeistPlanAdmissionError.self) {
-        try plan.admittedHeistCatalog()
+    #expect(throws: HeistPlanValidationError.self) {
+        _ = try raw.validatedForRuntime()
     }
 }
 
-@Test func `direct discovery methods fail non admitted parameterized root`() throws {
-    let plan = HeistPlan(
+@Test func `list heists includes parameterized root entry`() throws {
+    let catalog = try validatedPlan(UnvalidatedHeistPlan(
         name: "root",
-        parameter: .strings(name: "item"),
-        body: [.warn(WarnStep(message: "invalid root"))]
-    )
+        parameter: .string(name: "item"),
+        body: [
+            .action(try ActionStep(command: .typeText(
+                text: .ref("item"),
+                target: .target(.predicate(.label("Search")))
+            ))),
+        ]
+    )).heistCatalog()
 
-    #expect(throws: HeistPlanAdmissionError.self) {
-        try plan.heistCatalog()
-    }
-    #expect(throws: HeistPlanAdmissionError.self) {
-        try plan.describeHeist(named: "root")
-    }
+    let root = try #require(catalog.heists.first)
+    #expect(root.name == "root")
+    #expect(root.role == .entry)
+    #expect(root.parameterKind == .string)
+    #expect(root.requiresArgument)
+    #expect(root.parameterName == nil)
+    #expect(root.summary == "Root entry heist requiring string argument")
+    #expect(root.tags == ["entry", "parameterized", "text-input"])
 }
 
 @Test func `describe root entry`() throws {
     let description = try HeistPlan(
         name: "checkout",
         body: [.warn(WarnStep(message: "ready"))]
-    ).describeAdmittedHeist(named: "checkout")
+    ).describeHeist(named: "checkout")
 
     #expect(description.name == "checkout")
     #expect(description.role == .entry)
     #expect(description.parameterKind == .none)
     #expect(description.requiresArgument == false)
-    #expect(description.admissionStatus == .admitted)
+    #expect(description.validationStatus == .validated)
 }
 
 @Test func `describe parameterized capability`() throws {
-    let description = try HeistPlan(
+    let description = try validatedPlan(UnvalidatedHeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(
+            UnvalidatedHeistPlan(
                 name: "addToCart",
-                parameter: .strings(name: "item"),
+                parameter: .string(name: "item"),
                 body: [
                     .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
                 ]
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).describeAdmittedHeist(named: "addToCart")
+    )).describeHeist(named: "addToCart")
 
     #expect(description.role == .capability)
-    #expect(description.parameterKind == .strings)
+    #expect(description.parameterKind == .string)
     #expect(description.parameterName == "item")
     #expect(description.requiresArgument)
 }
@@ -216,10 +227,10 @@ import ThePlans
     let description = try HeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(
+            try HeistPlan(
                 name: "checkout",
                 definitions: [
-                    HeistPlan(
+                    try HeistPlan(
                         name: "confirm",
                         body: [
                             .action(try ActionStep(command: .activate(.predicate(.label("Confirm"))))),
@@ -232,7 +243,7 @@ import ThePlans
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).describeAdmittedHeist(named: "checkout")
+    ).describeHeist(named: "checkout")
 
     #expect(description.semanticSurface.nestedRunHeists == ["checkout.confirm"])
     #expect(description.semanticSurface.actionCommands == ["activate"])
@@ -245,7 +256,7 @@ import ThePlans
         body: [
             .action(try ActionStep(command: .activate(.predicate(.identifier(.literal("save_button")))))),
         ]
-    ).describeAdmittedHeist(named: "activateSave")
+    ).describeHeist(named: "activateSave")
 
     #expect(description.semanticSurface.actionCommands == ["activate"])
     #expect(description.semanticSurface.targetPredicates == [#"predicate(identifier="save_button")"#])
@@ -261,7 +272,7 @@ import ThePlans
             )),
             .wait(WaitStep(predicate: .changed(.screen()), timeout: 2)),
         ]
-    ).describeAdmittedHeist(named: "submit")
+    ).describeHeist(named: "submit")
 
     #expect(description.semanticSurface.expectations == [#"present(predicate(label="Done"))"#])
     #expect(description.semanticSurface.waits == ["changed(screen_changed)"])
@@ -272,19 +283,19 @@ import ThePlans
 }
 
 @Test func `describe missing name reports available names`() throws {
-    let plan = HeistPlan(
+    let plan = try HeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(name: "openCart", body: [.warn(WarnStep(message: "open"))]),
+            try HeistPlan(name: "openCart", body: [.warn(WarnStep(message: "open"))]),
         ],
         body: [.warn(WarnStep(message: "ready"))]
     )
 
     #expect(throws: HeistDescriptionLookupError.self) {
-        try plan.describeAdmittedHeist(named: "checkout")
+        try plan.describeHeist(named: "checkout")
     }
     do {
-        _ = try plan.describeAdmittedHeist(named: "checkout")
+        _ = try plan.describeHeist(named: "checkout")
         Issue.record("Expected missing heist diagnostic")
     } catch let error as HeistDescriptionLookupError {
         #expect(error.availableNames == ["root", "openCart"])
@@ -293,13 +304,13 @@ import ThePlans
 }
 
 private func detailedSurfacePlan() throws -> HeistPlan {
-    HeistPlan(
+    try HeistPlan(
         name: "root",
         definitions: [
-            HeistPlan(
+            try HeistPlan(
                 name: "checkout",
                 definitions: [
-                    HeistPlan(
+                    try HeistPlan(
                         name: "confirm",
                         body: [
                             .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(

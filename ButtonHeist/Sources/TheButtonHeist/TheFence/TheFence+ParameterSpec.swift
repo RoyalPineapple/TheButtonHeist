@@ -49,6 +49,7 @@ public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
 
 public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
+    static let argument = Self("argument")
     static let command = Self("command")
     static let container = Self("container")
     static let continuation = Self("continuation")
@@ -73,6 +74,8 @@ public extension FenceParameterKey {
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
     static let timeout = Self("timeout"), version = Self("version")
     static let to = Self("to"), token = Self("token"), traits = Self("traits"), type = Self("type"), value = Self("value")
+    static let valueRef = Self("value_ref")
+    static let values = Self("values")
     static let `where` = Self("where")
     static let x = Self("x"), y = Self("y")
 }

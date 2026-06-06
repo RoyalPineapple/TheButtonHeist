@@ -56,7 +56,7 @@ HEIST_SOURCE_COMPILER_TRACE=1 HEIST_THEPLANS_BUILD_DIR="$HEIST_THEPLANS_BUILD_DI
     exit 1
 }
 
-echo "Validating compiled heist package passes runtime admission"
+echo "Validating compiled heist package passes runtime validation"
 "$HEIST_PLAN_TOOL" validate "$OUTPUT"
 echo "Rendering compiled heist package as canonical Swift"
 "$HEIST_PLAN_TOOL" render-swift "$OUTPUT" > "$RENDERED"

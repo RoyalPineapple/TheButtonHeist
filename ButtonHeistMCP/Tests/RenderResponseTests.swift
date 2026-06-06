@@ -36,9 +36,9 @@ struct RenderResponseTests {
             HeistCatalogEntry(
                 name: "checkout",
                 role: .capability,
-                parameterKind: .strings,
+                parameterKind: .string,
                 requiresArgument: true,
-                summary: "Reusable heist capability requiring strings argument",
+                summary: "Reusable heist capability requiring string argument",
                 tags: ["capability", "parameterized", "semantic-action"]
             ),
         ]))
@@ -50,7 +50,7 @@ struct RenderResponseTests {
             return
         }
         #expect(text.contains("checkout"))
-        #expect(text.contains("summary=Reusable heist capability requiring strings argument"))
+        #expect(text.contains("summary=Reusable heist capability requiring string argument"))
         #expect(!text.contains("actions:"))
         #expect(!text.contains("nested RunHeist:"))
         #expect(!text.contains("semantic surfaces:"))
@@ -73,7 +73,7 @@ struct RenderResponseTests {
                 waitCount: 1,
                 expectationCount: 1,
                 semanticSurfaces: ["label=Checkout", "identifier=confirm_button", "traits=button"],
-                admissionStatus: .admitted
+                validationStatus: .validated
             ),
         ]))
 
@@ -87,7 +87,7 @@ struct RenderResponseTests {
         #expect(text.contains("actions: activate"))
         #expect(text.contains("waits=1 expectations=1"))
         #expect(text.contains("semantic surfaces: label=Checkout, identifier=confirm_button, traits=button"))
-        #expect(text.contains("admission=admitted"))
+        #expect(text.contains("validation=validated"))
         #expect(!text.contains("predicate("))
         #expect(!text.contains("point("))
         #expect(!text.contains("heistId"))

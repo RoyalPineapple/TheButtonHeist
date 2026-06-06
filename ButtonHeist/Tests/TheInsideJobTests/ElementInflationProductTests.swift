@@ -187,7 +187,7 @@ final class ElementInflationProductTests: XCTestCase {
         try seedKnownOffscreenTarget(fixture, in: localBrains)
 
         if heist {
-            let plan = HeistPlan(body: [
+            let plan = try HeistPlan(body: [
                 .action(try ActionStep(command: .activate(.predicate(ElementPredicate(identifier: identifier, traits: [.button]))))),
             ])
             let result = await localBrains.executeHeistPlan(plan)

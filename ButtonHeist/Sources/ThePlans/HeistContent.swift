@@ -22,6 +22,55 @@ public extension HeistPlan {
     }
 }
 
+// swiftlint:disable identifier_name
+public func Heist<Content: HeistContent>(
+    @HeistBuilder _ content: () throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan(content)
+}
+
+public func Heist<Content: HeistContent>(
+    _ input: String,
+    parameter: String = "input",
+    @HeistBuilder _ content: (StringExpr) throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan(rootParameter: .string(name: parameter)) {
+        try content(try StringExpr(ref: parameter))
+    }
+}
+
+@_disfavoredOverload
+public func Heist<Content: HeistContent>(
+    _ input: ElementTarget,
+    parameter: String = "input",
+    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan(rootParameter: .elementTarget(name: parameter)) {
+        try content(try ElementTargetExpr(ref: parameter))
+    }
+}
+
+public func Heist<Content: HeistContent>(
+    _ input: ElementTargetExpr,
+    parameter: String = "input",
+    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan(rootParameter: .elementTarget(name: parameter)) {
+        try content(try ElementTargetExpr(ref: parameter))
+    }
+}
+
+public func Heist<Content: HeistContent>(
+    _ values: [String],
+    parameter: String = "item",
+    @HeistBuilder _ content: (StringExpr) throws -> Content
+) throws -> HeistPlan {
+    try HeistPlan {
+        try ForEach(values, parameter: parameter, content: content)
+    }
+}
+// swiftlint:enable identifier_name
+
 private extension HeistPlan {
     init(
         dslName name: String?,
@@ -35,6 +84,20 @@ private extension HeistPlan {
         )
     }
 
+    init(
+        rootParameter parameter: HeistParameter,
+        _ content: () throws -> some HeistContent
+    ) throws {
+        let content = try content()
+        guard !content.heistSteps.isEmpty || !content.heistDefinitions.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: [HeistPlanCodingKey("body")],
+                debugDescription: "HeistPlan requires a non-empty body or definitions"
+            ))
+        }
+        try self.init(parameter: parameter, definitions: content.heistDefinitions, body: content.heistSteps)
+    }
+
     static func validatedDSLPlan(
         name: String? = nil,
         definitions: [HeistPlan] = [],
@@ -46,7 +109,7 @@ private extension HeistPlan {
                 debugDescription: "HeistPlan requires a non-empty body or definitions"
             ))
         }
-        return HeistPlan(name: name, definitions: definitions, body: body)
+        return try HeistPlan(name: name, definitions: definitions, body: body)
     }
 }
 
@@ -138,7 +201,7 @@ public enum HeistBuilder {
             }
             if existing.isNamespaceDefinition, definition.isNamespaceDefinition {
                 merged[existingIndex] = HeistPlan(
-                    version: existing.version,
+                    runtimeValidatedVersion: existing.version,
                     name: existing.name,
                     parameter: existing.parameter,
                     definitions: mergeDefinitions(existing.definitions + definition.definitions),
@@ -192,7 +255,7 @@ public struct HeistDef<Input>: Sendable {
     ) where Input == String {
         let components = Self.pathComponents(path)
         self.path = components
-        self.parameter = .strings(name: parameter)
+        self.parameter = .string(name: parameter)
         self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
             try content(try StringExpr(ref: parameter))
         }
@@ -236,10 +299,22 @@ public struct HeistDef<Input>: Sendable {
         body: [HeistStep]
     ) -> HeistPlan {
         guard let first = path.first else {
-            return HeistPlan(name: nil, parameter: parameter, definitions: definitions, body: body)
+            return HeistPlan(
+                runtimeValidatedVersion: HeistPlan.currentVersion,
+                name: nil,
+                parameter: parameter,
+                definitions: definitions,
+                body: body
+            )
         }
         guard path.count > 1 else {
-            return HeistPlan(name: first, parameter: parameter, definitions: definitions, body: body)
+            return HeistPlan(
+                runtimeValidatedVersion: HeistPlan.currentVersion,
+                name: first,
+                parameter: parameter,
+                definitions: definitions,
+                body: body
+            )
         }
         let child = Self.makeDefinition(
             path: Array(path.dropFirst()),
@@ -247,7 +322,12 @@ public struct HeistDef<Input>: Sendable {
             definitions: definitions,
             body: body
         )
-        return HeistPlan(name: first, definitions: [child], body: [])
+        return HeistPlan(
+            runtimeValidatedVersion: HeistPlan.currentVersion,
+            name: first,
+            definitions: [child],
+            body: []
+        )
     }
 
     private static func pathComponents(_ path: String) -> [String] {
@@ -295,11 +375,11 @@ public extension HeistDef where Input == Void {
 
 public extension HeistDef where Input == String {
     func callAsFunction(_ input: String) throws -> some HeistContent {
-        try invocation(argument: .strings([.literal(input)]))
+        try invocation(argument: .string(.literal(input)))
     }
 
     func callAsFunction(_ input: StringExpr) throws -> some HeistContent {
-        try invocation(argument: .strings([input]))
+        try invocation(argument: .string(input))
     }
 }
 
@@ -319,7 +399,7 @@ public extension HeistDef where Input == ElementTarget {
 ///
 /// `RunHeist` is the public Button Heist verb for composing capabilities. It
 /// references a capability by name and lowers to the invocation IR; the named
-/// capability must resolve within the closed plan — runtime admission enforces
+/// capability must resolve within the closed plan — runtime validation enforces
 /// resolution, arity, type, and non-recursion.
 public struct RunHeist: HeistContent {
     public let heistSteps: [HeistStep]
@@ -329,11 +409,11 @@ public struct RunHeist: HeistContent {
     }
 
     public init(_ name: String, _ input: String) {
-        self.init(name: name, argument: .strings([.literal(input)]))
+        self.init(name: name, argument: .string(.literal(input)))
     }
 
     public init(_ name: String, _ input: StringExpr) {
-        self.init(name: name, argument: .strings([input]))
+        self.init(name: name, argument: .string(input))
     }
 
     @_disfavoredOverload

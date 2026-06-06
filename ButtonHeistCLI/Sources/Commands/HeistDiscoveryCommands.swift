@@ -7,7 +7,7 @@ struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
         abstract: "List reusable heists in a .heist artifact or inline plan",
         discussion: """
             Lists the root entry and all named reusable heists derived from one
-            decoded, runtime-admitted plan.
+            decoded, runtime-validated plan.
 
             Examples:
               buttonheist list_heists --path Flow.heist
@@ -56,7 +56,7 @@ struct DescribeHeistCommand: AsyncParsableCommand, CLICommandContract {
         abstract: "Describe one reusable heist in a .heist artifact or inline plan",
         discussion: """
             Describes the selected root entry or named reusable heist from one
-            decoded, runtime-admitted plan.
+            decoded, runtime-validated plan.
 
             Examples:
               buttonheist describe_heist checkout --path Flow.heist

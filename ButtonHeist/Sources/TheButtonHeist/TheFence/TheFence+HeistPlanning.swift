@@ -1,12 +1,13 @@
 import Foundation
 
-import ThePlans
+@_spi(ButtonHeistInternals) import ThePlans
 import TheScore
 
 extension TheFence {
 
     struct RunHeistRequest {
         let plan: HeistPlan
+        let argument: HeistArgument
     }
 
     struct ListHeistsRequest {
@@ -26,16 +27,20 @@ extension TheFence {
     static let inlinePlanFieldKeys: Set<String> = ["version", "name", "parameter", "definitions", "body"]
 
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {
-        RunHeistRequest(plan: try decodeAdmittedHeistPlanSource(
+        let plan = try decodeRuntimeValidatedHeistPlanSource(
             from: arguments,
-            commandName: Command.runHeist.rawValue
-        ))
+            commandName: Command.runHeist.rawValue,
+            droppingPlanKeys: ["argument"]
+        )
+        let argument = try decodeRootHeistArgument(from: arguments)
+        try validateRootHeistArgument(argument, for: plan)
+        return RunHeistRequest(plan: plan, argument: argument)
     }
 
     func decodeListHeistsRequest(_ arguments: CommandArgumentEnvelope) throws -> ListHeistsRequest {
         let detail = try arguments.schemaEnum("detail", as: HeistCatalogDetail.self) ?? .summary
         do {
-            let plan = try decodeAdmittedHeistPlanSource(
+            let plan = try decodeRuntimeValidatedHeistPlanSource(
                 from: arguments,
                 commandName: Command.listHeists.rawValue,
                 droppingPlanKeys: ["detail"]
@@ -49,7 +54,7 @@ extension TheFence {
     func decodeDescribeHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> DescribeHeistRequest {
         let requestedName = try arguments.requiredSchemaString("heist")
         do {
-            let plan = try decodeAdmittedHeistPlanSource(
+            let plan = try decodeRuntimeValidatedHeistPlanSource(
                 from: arguments,
                 commandName: Command.describeHeist.rawValue,
                 droppingPlanKeys: ["heist"]
@@ -100,7 +105,7 @@ extension TheFence {
 
 private extension TheFence {
 
-    func decodeAdmittedHeistPlanSource(
+    func decodeRuntimeValidatedHeistPlanSource(
         from arguments: CommandArgumentEnvelope,
         commandName: String,
         droppingPlanKeys: Set<String> = []
@@ -117,17 +122,20 @@ private extension TheFence {
             }
             plan = try loadHeistPlan(fromArtifactPath: path, commandName: commandName)
         } else {
-            plan = try heistPlan(from: arguments, dropping: droppingPlanKeys)
-        }
-        // Assert runtime admissibility for BOTH input sources. An inline plan
-        // gets the same up-front contract as an artifact: a non-admissible plan
-        // fails loudly here instead of silently producing partial discovery.
-        do {
-            try plan.assertRuntimeAdmissible()
-        } catch let error as HeistPlanAdmissionError {
-            throw FenceError.invalidRequest(error.description)
+            plan = try translateRuntimeValidationErrors {
+                try decodeRawHeistPlanSource(from: arguments, dropping: droppingPlanKeys)
+                    .validatedForRuntime()
+            }
         }
         return plan
+    }
+
+    func translateRuntimeValidationErrors<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try body()
+        } catch let error as HeistPlanValidationError {
+            throw FenceError.invalidRequest(error.description)
+        }
     }
 
     /// Read a heist plan from a `.heist` package artifact the operator handed us.
@@ -144,7 +152,7 @@ private extension TheFence {
     /// name into the plan's `name`. `name` is a Swift-identifier-constrained
     /// semantic field (it resolves heist definitions and invocations); a file
     /// name such as `bh-demo-smoke` is not a valid identifier and would fail
-    /// runtime admission, silently reducing the run to zero steps. Run naming
+    /// runtime validation, silently reducing the run to zero steps. Run naming
     /// for reports is derived from the path at the report layer, not here.
     func loadHeistPlan(fromArtifactPath path: String, commandName: String) throws -> HeistPlan {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -159,15 +167,18 @@ private extension TheFence {
             )
         }
         do {
-            // Runtime admissibility is asserted by the caller for both input
-            // sources; this reader only decodes the artifact.
+            // The artifact codec decodes and validates the plan before
+            // returning a HeistPlan that is ready for runtime behavior.
             return try HeistArtifactCodec.readPlan(from: url)
         } catch let error as HeistArtifactCodecError {
             throw FenceError.invalidRequest(error.description)
         }
     }
 
-    func heistPlan(from arguments: CommandArgumentEnvelope, dropping keys: Set<String> = []) throws -> HeistPlan {
+    func decodeRawHeistPlanSource(
+        from arguments: CommandArgumentEnvelope,
+        dropping keys: Set<String> = []
+    ) throws -> UnvalidatedHeistPlan {
         var values = arguments.argumentValues
         values.removeValue(forKey: "requestId")
         for key in keys {
@@ -175,7 +186,7 @@ private extension TheFence {
         }
         let data = try JSONEncoder().encode(HeistValue.object(values))
         do {
-            return try JSONDecoder().decode(HeistPlan.self, from: data)
+            return try JSONDecoder().decode(UnvalidatedHeistPlan.self, from: data)
         } catch DecodingError.dataCorrupted(let context) {
             throw SchemaValidationError(
                 field: context.codingPath.map(\.stringValue).joined(separator: "."),
@@ -197,6 +208,43 @@ private extension TheFence {
             )
         } catch {
             throw FenceError.invalidRequest("Invalid heist plan: \(error.localizedDescription)")
+        }
+    }
+
+    func decodeRootHeistArgument(from arguments: CommandArgumentEnvelope) throws -> HeistArgument {
+        guard let value = arguments.argumentValues["argument"] else { return .none }
+        let data = try JSONEncoder().encode(value)
+        do {
+            return try JSONDecoder().decode(HeistArgument.self, from: data)
+        } catch DecodingError.dataCorrupted(let context) {
+            throw SchemaValidationError(
+                field: (["argument"] + context.codingPath.map(\.stringValue)).joined(separator: "."),
+                observed: "invalid heist argument",
+                expected: context.debugDescription
+            )
+        } catch DecodingError.keyNotFound(let key, let context) {
+            throw SchemaValidationError(
+                field: (["argument"] + (context.codingPath + [key]).map(\.stringValue)).joined(separator: "."),
+                observed: "missing",
+                expected: "heist argument field"
+            )
+        } catch DecodingError.typeMismatch(_, let context),
+                DecodingError.valueNotFound(_, let context) {
+            throw SchemaValidationError(
+                field: (["argument"] + context.codingPath.map(\.stringValue)).joined(separator: "."),
+                observed: "invalid heist argument",
+                expected: context.debugDescription
+            )
+        } catch {
+            throw FenceError.invalidRequest("Invalid heist argument: \(error.localizedDescription)")
+        }
+    }
+
+    func validateRootHeistArgument(_ argument: HeistArgument, for plan: HeistPlan) throws {
+        do {
+            _ = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
+        } catch {
+            throw FenceError.invalidRequest("run_heist argument does not match root heist parameter: \(error)")
         }
     }
 

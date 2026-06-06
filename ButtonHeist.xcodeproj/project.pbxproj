@@ -44,7 +44,6 @@
 		0E77F4DD95376FF2835B9817 /* SocketConnectionAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB999A39F6788A19B1F2865 /* SocketConnectionAdmission.swift */; };
 		0EFFABDE27B79DB511497720 /* TheFence+TransportWaits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C77427CB646705295D872B /* TheFence+TransportWaits.swift */; };
 		0F32619C36AB218066E0E0DE /* TheBrains+HeistExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282B12F86A28F19F032483C6 /* TheBrains+HeistExecution.swift */; };
-		1025B57914CF39EF42B091B8 /* HeistPlan+RuntimeAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F29E81566FCF82A043B802 /* HeistPlan+RuntimeAdmission.swift */; };
 		10A369F2E8C743E5F65C8A0B /* _CryptoExtras.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6CEB875A1EA3F7958EC6F211 /* _CryptoExtras.framework */; };
 		10EAB2A53A004072911853F5 /* TheBrains+HeistActionExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07D3A4E984ABE6B6DE9F367E /* TheBrains+HeistActionExecution.swift */; };
 		117F00764D1061792EBC8BF8 /* ElementTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E6B6905A50303532FB4901 /* ElementTarget.swift */; };
@@ -110,6 +109,7 @@
 		2F94B833740659A02093F762 /* ScreenClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F75CD8C56005B03DF567DC /* ScreenClassifier.swift */; };
 		2FC3CAAB5ABC9EC51DDF3246 /* TheBrainsScrollTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD414D07E60258326145755A /* TheBrainsScrollTests.swift */; };
 		30B5EA429E2C04B77538CF3B /* HeistArtifact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C4781A9F9BB0B3163048425 /* HeistArtifact.swift */; };
+		30C22F52A8D84BFAA9CA2B41 /* HeistPlan+RuntimeValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBFC7E23088D49D13BA3E508 /* HeistPlan+RuntimeValidation.swift */; };
 		3151C140018BC81CBA12AA3A /* HeistPlanExpressions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD18BEB6C1300E3033FBE74 /* HeistPlanExpressions.swift */; };
 		3199385249BEDA947E25945D /* DeviceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = D43D24A6682C61D9E2826547 /* DeviceProtocols.swift */; };
 		31D4344EC13757142C48C58A /* CCryptoBoringSSL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F39B2361B09CAE86D5E0B46A /* CCryptoBoringSSL.framework */; };
@@ -250,7 +250,6 @@
 		7C66AFCFE8CB359A42346584 /* HeistActionEligibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C0B05CC1D4634EBF6B048D8 /* HeistActionEligibility.swift */; };
 		7C9216379B68310FC37B5236 /* ServerTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F75B66F13FE91D3C14861B /* ServerTransportTests.swift */; };
 		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
-		7DA6127FFA433E1DE2B00CC4 /* HeistPlan+RuntimeAdmissionCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B25AF8CEBF11D454C48F7F3 /* HeistPlan+RuntimeAdmissionCommands.swift */; };
 		7DC941EC17929C439BD72C9A /* FenceHeistRecordingLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8DE154D464BB65EFDE3C34 /* FenceHeistRecordingLifecycle.swift */; };
 		7DE9C29580D34C57826B3ED0 /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */; };
 		7E0DBE48EA0C1A4CB250C386 /* TheFence+ScreenHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 403E52C7A12CB836468AA436 /* TheFence+ScreenHandlers.swift */; };
@@ -331,11 +330,11 @@
 		A3C01AF95DA5F2B88C93AD73 /* TripwireIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 802556A6984BBC74DD6AFE1D /* TripwireIntegrationTests.swift */; };
 		A49D71A6A794BCDA7B95070A /* PublicJSONSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4CC3DD5E8E5DA17F81344C6 /* PublicJSONSerializer.swift */; };
 		A4BECAF1FBF0C96EA9F03E9D /* SemanticObservationStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9702B3A3EEB5C9ABA60E89E2 /* SemanticObservationStream.swift */; };
-		A63E933706E6D4D8883B6A8B /* HeistPlan+RuntimeAdmissionPredicates.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8C75573AAAFFA20DF270774 /* HeistPlan+RuntimeAdmissionPredicates.swift */; };
 		A6405899D9E72AAB0A4AAC95 /* ActionCapabilityDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB73FEEE9E9722037B924026 /* ActionCapabilityDiagnostic.swift */; };
 		A65BD0AA33C822B456716447 /* AccessibilityElementDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */; };
 		A66DDEF29EC93077D4392AFB /* TargetConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05CB1CBE21394403A78BC900 /* TargetConfigTests.swift */; };
 		A691EC031A9DC23848088E6C /* TheFence+RequestPayload+TextActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D45DB91CC78C277BFBD228B /* TheFence+RequestPayload+TextActions.swift */; };
+		A69B44F66EE5C15419E450A1 /* HeistPlan+RuntimeValidationCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B36404574BAB1A5BD85484 /* HeistPlan+RuntimeValidationCommands.swift */; };
 		A70C5582716DE8D184D2187C /* InteractivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61EDA1A956342901286B448D /* InteractivityTests.swift */; };
 		A84D223839B59CFC18EFB9B9 /* ThePlansExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE20F4EB9616641E71860CC7 /* ThePlansExport.swift */; };
 		A963BAD3BB20FC75003B51CB /* AccessibilityContainer+Matching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6017364A6AB3C529ECE13184 /* AccessibilityContainer+Matching.swift */; };
@@ -488,6 +487,7 @@
 		EEE465CCCB3233DC463B1325 /* IdleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4733C3D4A440AFEA26B7ECF3 /* IdleMonitor.swift */; };
 		EF33A29DE94964545E58B8E8 /* ServerMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */; };
 		EF6ECCEA494E6DD67EDFA231 /* HeistExecutionResult+Report.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04A9C0037DBC2A7D4B00891D /* HeistExecutionResult+Report.swift */; };
+		EFC6BF967C8DA4FEF04C118E /* HeistPlan+RuntimeValidationPredicates.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6037528EA8DA8A5D57C2C1B /* HeistPlan+RuntimeValidationPredicates.swift */; };
 		F010DFFFF85681A9CA958221 /* ScreenshotArtifactWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADFFFF329B57B318C36E43AA /* ScreenshotArtifactWriter.swift */; };
 		F13170081E28A85905C0303D /* Error+Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16F859F1B9863B934C03E3E /* Error+Message.swift */; };
 		F15B0694CFD24636E8A8CBAA /* InterfaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A9301459818B5CDACB2165 /* InterfaceModels.swift */; };
@@ -763,6 +763,7 @@
 		14CA15622C9C76309BC21D90 /* TheFenceTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceTestHelpers.swift; sourceTree = "<group>"; };
 		15073ADC2F0E9EB5DBE3AED6 /* Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Navigation.swift; sourceTree = "<group>"; };
 		15890A73E21EFB3B3AF2F88B /* TheFence+Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting.swift"; sourceTree = "<group>"; };
+		15B36404574BAB1A5BD85484 /* HeistPlan+RuntimeValidationCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+RuntimeValidationCommands.swift"; sourceTree = "<group>"; };
 		15DBEAEA16D41CE10D2A2F80 /* AccessibilityPrimitiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPrimitiveTests.swift; sourceTree = "<group>"; };
 		15F4512323FABE5CE4A1B170 /* FenceJSON+TreeNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FenceJSON+TreeNode.swift"; sourceTree = "<group>"; };
 		161E02AE98EE4A0B5BE414CD /* FenceJSON+Action.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FenceJSON+Action.swift"; sourceTree = "<group>"; };
@@ -937,7 +938,6 @@
 		69D97ECB99E775784B0E4D54 /* ActionResultTraceTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionResultTraceTestHelpers.swift; sourceTree = "<group>"; };
 		6A3DED8FA6023701C7060202 /* swift-crypto__CryptoExtras.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto__CryptoExtras.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B1D087B067D089CF13A7BBC /* TheFenceHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceHandlerTests.swift; sourceTree = "<group>"; };
-		6B25AF8CEBF11D454C48F7F3 /* HeistPlan+RuntimeAdmissionCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+RuntimeAdmissionCommands.swift"; sourceTree = "<group>"; };
 		6B8BB6E40E87DDD5537514C6 /* InterfaceTreeWireCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceTreeWireCoding.swift; sourceTree = "<group>"; };
 		6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMessageTests.swift; sourceTree = "<group>"; };
 		6C0B05CC1D4634EBF6B048D8 /* HeistActionEligibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistActionEligibility.swift; sourceTree = "<group>"; };
@@ -1004,7 +1004,6 @@
 		8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessages.swift; sourceTree = "<group>"; };
 		90E349485532ED0D2C2FE16B /* AccessibilityTraceElementDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceElementDiff.swift; sourceTree = "<group>"; };
 		90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityHierarchy+Reconciliation.swift"; sourceTree = "<group>"; };
-		90F29E81566FCF82A043B802 /* HeistPlan+RuntimeAdmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+RuntimeAdmission.swift"; sourceTree = "<group>"; };
 		929448E03A4BCC6567ECC9A1 /* HeistStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistStore.swift; sourceTree = "<group>"; };
 		9433DDF2A1AA0533161A52E2 /* HandoffReconnectController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffReconnectController.swift; sourceTree = "<group>"; };
 		94B40014AC7D3C30EF77A414 /* HeistValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistValue.swift; sourceTree = "<group>"; };
@@ -1126,6 +1125,7 @@
 		D43D24A6682C61D9E2826547 /* DeviceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceProtocols.swift; sourceTree = "<group>"; };
 		D49CBF2F9D6B021BBD2C282F /* IdAssignmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdAssignmentTests.swift; sourceTree = "<group>"; };
 		D5881244EEF340C6489BA715 /* WireTypeRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireTypeRoundTripTests.swift; sourceTree = "<group>"; };
+		D6037528EA8DA8A5D57C2C1B /* HeistPlan+RuntimeValidationPredicates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+RuntimeValidationPredicates.swift"; sourceTree = "<group>"; };
 		D607B38C289C8CF7FB56197E /* TLSIdentityTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentityTransport.swift; sourceTree = "<group>"; };
 		D658B41B7C2302B143935342 /* TargetConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetConfig.swift; sourceTree = "<group>"; };
 		D699A77AF6D666EDF6891F89 /* HeistPlan+Description.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+Description.swift"; sourceTree = "<group>"; };
@@ -1176,6 +1176,7 @@
 		EA24937B964F1A407637A4E3 /* TLSCertificateMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSCertificateMaterial.swift; sourceTree = "<group>"; };
 		EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenManifestTests.swift; sourceTree = "<group>"; };
 		EBB8D627D7126F3BF5E30763 /* PostActionObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostActionObservation.swift; sourceTree = "<group>"; };
+		EBFC7E23088D49D13BA3E508 /* HeistPlan+RuntimeValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+RuntimeValidation.swift"; sourceTree = "<group>"; };
 		EC23F750B22956636D1DB832 /* ScreenMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMetrics.swift; sourceTree = "<group>"; };
 		EC2771DB546DDE036C0782AC /* TheFence+Formatting+Compact+Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting+Compact+Session.swift"; sourceTree = "<group>"; };
 		EC6F10CA5EECFBD0A011F553 /* UIScrollView+ProgrammaticScrollSafety.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIScrollView+ProgrammaticScrollSafety.swift"; sourceTree = "<group>"; };
@@ -1206,7 +1207,6 @@
 		F70D1508F4F5B5F6099BBB91 /* PendingRequestTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingRequestTracker.swift; sourceTree = "<group>"; };
 		F81D4AD108F70379DBD8DB42 /* TheGetaway+Status.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheGetaway+Status.swift"; sourceTree = "<group>"; };
 		F8744B3E0A411DA0F9E27D6E /* HandoffAdmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffAdmission.swift; sourceTree = "<group>"; };
-		F8C75573AAAFFA20DF270774 /* HeistPlan+RuntimeAdmissionPredicates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistPlan+RuntimeAdmissionPredicates.swift"; sourceTree = "<group>"; };
 		FA3B78F18645E27C9BD85F0B /* ElementMatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementMatcherTests.swift; sourceTree = "<group>"; };
 		FABF374ED46E8B26F4A831C2 /* AuthFailureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFailureTests.swift; sourceTree = "<group>"; };
 		FB73FEEE9E9722037B924026 /* ActionCapabilityDiagnostic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionCapabilityDiagnostic.swift; sourceTree = "<group>"; };
@@ -2007,9 +2007,9 @@
 				61A10987388FD3906CA44495 /* HeistPlan+CanonicalSwiftDSL.swift */,
 				D699A77AF6D666EDF6891F89 /* HeistPlan+Description.swift */,
 				36F5835BACF9D16A59230A78 /* HeistPlan+Discovery.swift */,
-				90F29E81566FCF82A043B802 /* HeistPlan+RuntimeAdmission.swift */,
-				6B25AF8CEBF11D454C48F7F3 /* HeistPlan+RuntimeAdmissionCommands.swift */,
-				F8C75573AAAFFA20DF270774 /* HeistPlan+RuntimeAdmissionPredicates.swift */,
+				EBFC7E23088D49D13BA3E508 /* HeistPlan+RuntimeValidation.swift */,
+				15B36404574BAB1A5BD85484 /* HeistPlan+RuntimeValidationCommands.swift */,
+				D6037528EA8DA8A5D57C2C1B /* HeistPlan+RuntimeValidationPredicates.swift */,
 				84BDB7D2000DAFBE243B6D25 /* HeistPlan+Validation.swift */,
 				9BD18BEB6C1300E3033FBE74 /* HeistPlanExpressions.swift */,
 				7F57866357008EE1B67E3941 /* HeistPlanTraversal.swift */,
@@ -2979,9 +2979,9 @@
 				D287A8F3A4290D921EEF1C93 /* HeistPlan+CanonicalSwiftDSL.swift in Sources */,
 				027629BD5590BD1207EE27FC /* HeistPlan+Description.swift in Sources */,
 				E6737419B8B787EFB40A9275 /* HeistPlan+Discovery.swift in Sources */,
-				1025B57914CF39EF42B091B8 /* HeistPlan+RuntimeAdmission.swift in Sources */,
-				7DA6127FFA433E1DE2B00CC4 /* HeistPlan+RuntimeAdmissionCommands.swift in Sources */,
-				A63E933706E6D4D8883B6A8B /* HeistPlan+RuntimeAdmissionPredicates.swift in Sources */,
+				30C22F52A8D84BFAA9CA2B41 /* HeistPlan+RuntimeValidation.swift in Sources */,
+				A69B44F66EE5C15419E450A1 /* HeistPlan+RuntimeValidationCommands.swift in Sources */,
+				EFC6BF967C8DA4FEF04C118E /* HeistPlan+RuntimeValidationPredicates.swift in Sources */,
 				386EC11046271785F90D75CA /* HeistPlan+Validation.swift in Sources */,
 				B4AADE0930A47A96D8D4C5A0 /* HeistPlan.swift in Sources */,
 				3151C140018BC81CBA12AA3A /* HeistPlanExpressions.swift in Sources */,

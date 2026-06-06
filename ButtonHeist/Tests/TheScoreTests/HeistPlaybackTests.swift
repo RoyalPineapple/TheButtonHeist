@@ -4,7 +4,7 @@ import XCTest
 final class HeistPlanTests: XCTestCase {
 
     func testHeistPlanRoundTrip() throws {
-        let heist = HeistPlan(body: [
+        let heist = try HeistPlan(body: [
             try activateStep(label: "Login", traits: [.button]),
             .action(try ActionStep(command: .typeText(TypeTextTarget(text: "user@example.com")))),
             try activateStep(label: "Submit", traits: [.button]),
@@ -124,7 +124,7 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testWaitWarnAndFailRoundTrip() throws {
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .wait(WaitStep(predicate: .state(.present(ElementPredicate(label: "Ready"))), timeout: 1.5)),
             .warn(WarnStep(message: "optional branch skipped")),
             .fail(FailStep(message: "unexpected state")),
@@ -141,7 +141,7 @@ final class HeistPlanTests: XCTestCase {
             predicate: .state(.present(ElementPredicate(label: "Home"))),
             body: [.warn(WarnStep(message: "home"))]
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(
                 cases: [conditionCase],
                 elseBody: [.warn(WarnStep(message: "not home"))]
@@ -366,7 +366,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testForEachElementEncodesDurableBodyAST() throws {
         let matching = ElementPredicate(label: "Cell", traits: [.button])
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 5,
@@ -540,7 +540,7 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testFullHeistJsonShape() throws {
-        let heist = HeistPlan(body: [
+        let heist = try HeistPlan(body: [
             try activateStep(label: "Go", traits: [.button]),
         ])
 

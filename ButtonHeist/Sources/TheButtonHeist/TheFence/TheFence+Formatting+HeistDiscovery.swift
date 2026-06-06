@@ -14,7 +14,7 @@ extension FenceResponse {
 
     func compactHeistDescription(_ description: HeistDescription) -> String {
         var lines = [
-            "heist \(description.name) [\(description.role.rawValue)] \(parameterSummary(description)) admission=\(description.admissionStatus.rawValue)",
+            "heist \(description.name) [\(description.role.rawValue)] \(parameterSummary(description)) validation=\(description.validationStatus.rawValue)",
         ]
         if let summary = description.summary, !summary.isEmpty {
             lines.append("summary: \(summary)")
@@ -37,7 +37,7 @@ extension FenceResponse {
             "Heist: \(description.name)",
             "Role: \(description.role.rawValue)",
             "Parameter: \(parameterSummary(description))",
-            "Admission: \(description.admissionStatus.rawValue)",
+            "Validation: \(description.validationStatus.rawValue)",
         ]
         if let summary = description.summary, !summary.isEmpty {
             lines.append("Summary: \(summary)")
@@ -82,8 +82,8 @@ extension FenceResponse {
         if let semanticSurfaces = entry.semanticSurfaces, !semanticSurfaces.isEmpty {
             lines.append("\(indent)  semantic surfaces: \(semanticSurfaces.joined(separator: ", "))")
         }
-        if let admissionStatus = entry.admissionStatus {
-            lines.append("\(indent)  admission=\(admissionStatus.rawValue)")
+        if let validationStatus = entry.validationStatus {
+            lines.append("\(indent)  validation=\(validationStatus.rawValue)")
         }
         return lines
     }

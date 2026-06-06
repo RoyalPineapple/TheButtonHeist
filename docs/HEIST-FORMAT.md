@@ -122,7 +122,7 @@ source execution over the wire.
         {
           "version": 1,
           "name": "addToCart",
-          "parameter": { "type": "strings", "name": "item" },
+          "parameter": { "type": "string", "name": "item" },
           "body": [
             {
               "type": "action",
@@ -148,7 +148,7 @@ source execution over the wire.
       "type": "invoke",
       "invoke": {
         "path": ["LibraryScreen", "addToCart"],
-        "argument": { "type": "strings", "value": "Milk" }
+        "argument": { "type": "string", "value": "Milk" }
       }
     }
   ]
@@ -160,19 +160,19 @@ Lookup is explicit:
 - `["LibraryScreen", "addToCart"]` can call a definition nested under `LibraryScreen`.
 - `["addToCart"]` is valid only when the current definition scope defines `addToCart` directly.
 - Duplicate names in the same `definitions` array are rejected.
-- Recursion and invocation cycles are rejected by runtime admission.
+- Recursion and invocation cycles are rejected by runtime validation.
 
-Parameters are finite semantic values only:
+Parameters are singular semantic values only:
 
 | Type | Meaning |
 |------|---------|
 | `none` | No argument accepted. |
-| `strings` | One or more strings. A single string encodes as one-value array semantics at execution. |
-| `element_targets` | One or more semantic `ElementTarget` values. A single target encodes as one-value array semantics at execution. |
+| `string` | One string value. |
+| `element_target` | One semantic `ElementTarget` value. |
 
 Arguments must match the target parameter type. String arguments may use
-`value`, `value_ref`, or `values`; element-target arguments may use `target`,
-`target_ref`, or `targets`. Refs are scoped names, not objects. They carry no
+`value` or `value_ref`; element-target arguments may use `target` or
+`target_ref`. Refs are scoped names, not objects. They carry no
 geometry, runtime ID, capture ID, or cached element.
 
 ## Step Types
@@ -419,7 +419,7 @@ At runtime each iteration computes
 `ElementTarget.predicate(matching, ordinal: index)`, binds it to the target
 reference, and executes the body steps. The body does not receive cached
 geometry, UIKit objects, or a capture-local handle. Nested collection ForEach
-is rejected by runtime admission.
+is rejected by runtime validation.
 
 String-array ForEach serializes as `for_each_string`:
 
@@ -485,7 +485,7 @@ Invocations call local definitions by explicit path:
   "type": "invoke",
   "invoke": {
     "path": ["LibraryScreen", "addToCart"],
-    "argument": { "type": "strings", "value": "Milk" }
+    "argument": { "type": "string", "value": "Milk" }
   }
 }
 ```
@@ -538,7 +538,7 @@ Lint is quality guidance for authored or composed heist plans:
 | `strictTest` | Fails missing expectations, mechanical commands, viewport/debug action steps, and empty branches. |
 
 Lint returns structured findings with severity, step path, message, and a fix
-suggestion. It does not replace runtime admission.
+suggestion. It does not replace runtime validation.
 
 ## Intentional Non-Goals
 

@@ -110,10 +110,20 @@ public enum ClientMessage: Codable, Sendable, Equatable {
     /// intermediate states until the change predicate is met.
     case wait(WaitTarget)
 
-    /// Execute a typed heist plan.
-    case heistPlan(HeistPlan)
+    /// Execute a typed heist plan with the root argument required by its parameter.
+    case heistPlan(HeistPlanRun)
 
     /// Request a capture of the current screen
     case requestScreen
 
+}
+
+public struct HeistPlanRun: Codable, Sendable, Equatable {
+    public let plan: HeistPlan
+    public let argument: HeistArgument
+
+    public init(plan: HeistPlan, argument: HeistArgument = .none) {
+        self.plan = plan
+        self.argument = argument
+    }
 }

@@ -83,6 +83,26 @@ struct ToolRoutingTests {
         #expect(!schema.contains("source_file"))
     }
 
+    @Test("run_heist routes root argument opaquely")
+    func runHeistRoutesRootArgument() throws {
+        let operation = try routed(
+            TheFence.Command.runHeist.rawValue,
+            [
+                "path": .string("Search.heist"),
+                "argument": .object([
+                    "type": .string("string"),
+                    "value": .string("milk"),
+                ]),
+            ]
+        )
+
+        #expect(operation.command == .runHeist)
+        #expect(operation.arguments.argumentValues["argument"] == .object([
+            "type": .string("string"),
+            "value": .string("milk"),
+        ]))
+    }
+
     @Test("heist discovery tools route directly with detail and selector arguments")
     func heistDiscoveryToolsRouteDirectly() throws {
         let list = try routed(

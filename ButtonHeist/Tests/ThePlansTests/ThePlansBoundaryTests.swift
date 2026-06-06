@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import ThePlans
+@_spi(ButtonHeistInternals) import ThePlans
 
 @Test
 func `representative heist plan encodes decodes validates and renders`() throws {
@@ -29,7 +29,6 @@ func `representative heist plan encodes decodes validates and renders`() throws 
     let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
 
     #expect(decoded == plan)
-    #expect(decoded.runtimeAdmissionFailures().isEmpty)
     #expect(decoded.lint(.strictTest).isEmpty)
 
     let rendered = try decoded.canonicalSwiftDSL()
@@ -88,7 +87,7 @@ func `heist artifact entry uses root plan name not output path`() throws {
 func `json heist plan IR reads as raw plan`() throws {
     let temp = try PlansTemporaryDirectory()
     let jsonURL = temp.url.appendingPathComponent("SearchFlow.json")
-    let plan = HeistPlan(body: [.warn(WarnStep(message: "raw unnamed IR"))])
+    let plan = try HeistPlan(body: [.warn(WarnStep(message: "raw unnamed IR"))])
 
     try HeistArtifactCodec.writePlan(plan, to: jsonURL)
 
@@ -268,11 +267,11 @@ func `heist artifact validates required entry against root plan name`() throws {
 }
 
 @Test
-func `heist artifact rejects parameterized root entry through admission contract`() throws {
+func `heist artifact accepts parameterized root entry through validation contract`() throws {
     let temp = try PlansTemporaryDirectory()
-    let plan = HeistPlan(
+    let raw = UnvalidatedHeistPlan(
         name: "search",
-        parameter: .strings(name: "query"),
+        parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
             text: .ref("query"),
             target: .target(.predicate(.label("Search")))
@@ -283,16 +282,11 @@ func `heist artifact rejects parameterized root entry through admission contract
         named: "ParameterizedRoot.heist",
         in: temp.url,
         manifest: validArtifactManifest(entry: "search"),
-        planJSON: plan.canonicalHeistJSONData()
+        planJSON: try JSONEncoder().encode(raw)
     ) { url in
-        try expectArtifactReadError(
-            from: url,
-            containing: [
-                "entry heist must be parameterless",
-                "observed strings",
-                "scratch root heist",
-            ]
-        )
+        let plan = try HeistArtifactCodec.readPlan(from: url)
+        #expect(plan.name == "search")
+        #expect(plan.parameter.kind == .string)
     }
 }
 

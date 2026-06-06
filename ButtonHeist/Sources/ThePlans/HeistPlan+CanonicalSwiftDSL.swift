@@ -130,7 +130,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
             \(content)
             \(line("}", indent))
             """
-        case .strings, .elementTarget:
+        case .string, .elementTarget:
             let parameterName = try renderDefinitionParameter(definition.parameter)
             let childEnvironment = try RenderEnvironment.empty.binding(parameter: definition.parameter)
             let body = try render(steps: definition.body, indent: indent + 1, environment: childEnvironment)
@@ -146,7 +146,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
 
     private func renderDefinitionType(_ parameter: HeistParameter) throws -> String {
         switch parameter {
-        case .strings:
+        case .string:
             return "HeistDef<String>"
         case .elementTarget:
             return "HeistDef<ElementTarget>"
@@ -173,10 +173,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
         switch argument {
         case .none:
             return ""
-        case .strings(let values):
-            guard values.count == 1, let value = values.first else {
-                throw HeistCanonicalSwiftDSLError.unsupportedAction("canonical Swift invocation arguments must contain exactly one string value")
-            }
+        case .string(let value):
             return try render(string: value, environment: environment)
         case .elementTarget(let target):
             return try render(target: target, environment: environment)
@@ -679,7 +676,7 @@ private struct RenderEnvironment {
         switch parameter {
         case .none:
             return self
-        case .strings:
+        case .string:
             return bindingStringReference(name)
         case .elementTarget:
             return bindingTargetReference(name)

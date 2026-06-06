@@ -1,6 +1,7 @@
 import ButtonHeistDSL
 import Foundation
 import Testing
+@_spi(ButtonHeistInternals) import ThePlans
 import TheScore
 
 @Test
@@ -135,43 +136,38 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
 
 @Test
 func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
-    let plan = HeistPlan(body: [
+    let raw = UnvalidatedHeistPlan(body: [
         .action(try ActionStep(command: .activate(.ref("target")))),
     ])
 
     do {
-        _ = try plan.canonicalSwiftDSL()
-        Issue.record("Expected unresolved ref render failure")
-    } catch let error as HeistCanonicalSwiftDSLError {
-        #expect(error == .unresolvedTargetReference("target"))
+        _ = try raw.validatedForRuntime()
+        Issue.record("Expected unresolved ref validation failure")
+    } catch let error as HeistPlanValidationError {
+        #expect(error.failures.contains { $0.contract == "target_ref must resolve in the current heist scope" })
     }
 }
 
 @Test
 func decodedRuntimeLoopsRejectNonCanonicalSwiftParameters() throws {
     for json in [invalidElementLoopParameterJSON, invalidStringLoopParameterJSON] {
-        let plan = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
-        let failures = plan.runtimeAdmissionFailures()
-        #expect(failures.contains { $0.contract.contains("Swift-style identifier") })
-
+        let raw = try JSONDecoder().decode(UnvalidatedHeistPlan.self, from: Data(json.utf8))
         do {
-            _ = try plan.canonicalSwiftDSL()
-            Issue.record("Expected invalid loop parameter render failure")
-        } catch let error as HeistCanonicalSwiftDSLError {
-            #expect(error == .invalidParameter("target-name"))
+            _ = try raw.validatedForRuntime()
+            Issue.record("Expected invalid loop parameter validation failure")
+        } catch let error as HeistPlanValidationError {
+            #expect(error.failures.contains { $0.contract.contains("Swift-style identifier") })
         }
     }
 }
 
 @Test
 func canonicalSwiftRendererRendersAmbientActions() throws {
-    let plan = HeistPlan(body: [
+    let plan = try HeistPlan(body: [
         .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
         .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
         .action(try ActionStep(command: .dismissKeyboard)),
     ])
-
-    #expect(plan.runtimeAdmissionFailures().isEmpty)
     #expect(try plan.canonicalSwiftDSL() == """
     try HeistPlan {
         SetPasteboard("milk")
@@ -185,7 +181,7 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
 
 @Test
 func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
-    let plan = HeistPlan(body: [
+    let plan = try HeistPlan(body: [
         .action(try ActionStep(command: .performCustomAction(CustomActionTarget(
             elementTarget: .predicate(.label("Message")),
             actionName: "Archive"
@@ -199,8 +195,6 @@ func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
             selection: .coordinate(ScreenPoint(x: 12, y: 34))
         )))),
     ])
-
-    #expect(plan.runtimeAdmissionFailures().isEmpty)
     #expect(try plan.canonicalSwiftDSL() == """
     try HeistPlan {
         CustomAction("Archive", on: .label("Message"))
@@ -219,10 +213,9 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
         start: UnitPoint(x: 0.8, y: 0.5),
         end: UnitPoint(x: 0.2, y: 0.5)
     )))
-    let plan = HeistPlan(body: [.action(try ActionStep(command: command))])
+    let plan = try HeistPlan(body: [.action(try ActionStep(command: command))])
 
     #expect(command.durableHeistActionFailure == nil)
-    #expect(plan.runtimeAdmissionFailures().isEmpty)
     #expect(try plan.canonicalSwiftDSL() == """
     try HeistPlan {
         Mechanical.Swipe(.label("Carousel"), from: UnitPoint(x: 0.8, y: 0.5), to: UnitPoint(x: 0.2, y: 0.5))
@@ -237,14 +230,11 @@ func nonDurableActionShapeExecutesButFailsCanonicalRendering() throws {
         target: .target(.predicate(.label("Article"))),
         direction: .next
     )
-    let plan = HeistPlan(body: [.action(try ActionStep(command: command))])
+    let plan = try HeistPlan(body: [.action(try ActionStep(command: command))])
     let reason = try #require(command.durableHeistActionFailure)
 
     // Durability is enforced at rendering, not execution: a non-durable shape is
-    // admissible for execution but cannot be rendered to canonical Swift DSL.
-    #expect(!plan.runtimeAdmissionFailures().contains {
-        $0.contract == "durable heist action support"
-    })
+    // runtime-valid but cannot be rendered to canonical Swift DSL.
 
     do {
         _ = try plan.canonicalSwiftDSL()
@@ -267,17 +257,14 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
     ]
 
     for command in commands {
-        let plan = HeistPlan(body: [.action(try ActionStep(command: command))])
+        let plan = try HeistPlan(body: [.action(try ActionStep(command: command))])
         let reason = try #require(command.durableHeistActionFailure)
 
         #expect(reason.contains("viewport debug command"))
 
-        // Durability is a recording/DSL concern, not a runtime-execution one:
-        // viewport commands execute through the heist pipeline (admission no
-        // longer rejects them) but cannot be rendered to canonical Swift DSL.
-        #expect(!plan.runtimeAdmissionFailures().contains {
-            $0.contract == "durable heist action support"
-        })
+        // Durability is a recording/DSL concern, not runtime validation:
+        // viewport commands construct as runtime-valid plans but cannot render
+        // to canonical Swift DSL.
 
         do {
             _ = try plan.canonicalSwiftDSL()
@@ -307,8 +294,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
     }
     """.utf8))
 
-    // A decoded viewport plan is admissible for execution but not renderable.
-    #expect(jsonPlan.runtimeAdmissionFailures().isEmpty)
+    // A decoded viewport plan is runtime-valid for execution but not renderable.
     #expect(throws: HeistCanonicalSwiftDSLError.self) {
         _ = try jsonPlan.canonicalSwiftDSL()
     }

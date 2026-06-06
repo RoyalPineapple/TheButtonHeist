@@ -372,9 +372,9 @@ final class WireCommandParityTests: XCTestCase {
             .scrollToVisible(ScrollToVisibleTarget(elementTarget: target)),
             .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             .wait(WaitTarget(predicate: .changed(.elements), timeout: 1)),
-            .heistPlan(HeistPlan(body: [
+            .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(try ActionStep(command: .activate(target))),
-            ])),
+            ]))),
         ]
     }
 

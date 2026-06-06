@@ -119,7 +119,7 @@ Do not use native Swift `for` inside `Heist {}`. The heist result builder does
 not lower native loops because native loops flatten at authoring time and lose
 loop intent. If a loop should survive JSON, write `ForEach`.
 
-Semantic `ForEach` serializes as `for_each_element`. String-array `ForEach`
+Semantic `ForEach` serializes as `for_each_element`. Finite string `ForEach`
 serializes as `for_each_string`. Runtime `ForEach` repeats semantic intent;
 commands re-resolve targets. The loop owns match counting, ordinal scheduling,
 and limit enforcement only. Semantic `ForEach` takes an initial settled
@@ -138,7 +138,7 @@ Swift compilation is an **author-time** step, not a runtime capability. It lives
 only in the authoring tools:
 
 - `buttonheist run_heist Flow.swift --entry makeHeist` compiles the Swift source
-  to a `HeistPlan`, validates that plan for runtime admission, then sends it down
+  to a `HeistPlan`, validates that plan for runtime behavior, then sends it down
   the ordinary `run_heist` path — identical to passing a `.heist` package or
   `.json` IR.
 - `heist-plan compile Flow.swift --entry makeHeist --output Flow.heist` compiles
