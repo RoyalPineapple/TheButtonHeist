@@ -183,7 +183,7 @@ The split is simple:
 - Use the accessibility language when the app exposes the thing you want:
   buttons, fields, links, menus, custom actions, rotors, and waits. These steps
   survive layout changes because they name app meaning.
-- Use viewport commands when the view itself is the question: inspect the
+- Use viewport commands when the viewport itself is the question: inspect the
   hierarchy, capture a screenshot, or deliberately move a scroll view. These
   commands describe what is visible now.
 - Use mechanical gestures when the gesture is the product: maps, canvases,
@@ -242,13 +242,23 @@ a durable UI test to surface.
 
 ## Why It Works
 
-Accessibility already names the app's working parts: labels, traits, values,
-state, hierarchy, and actions. The Button Heist keeps that language executable.
+ButtonHeist narrows the problem the agent has to solve. Instead of handing it
+pixels, coordinates, and remembered guesses, ButtonHeist presents the interface
+as a readable action space: the controls on a screen, their roles, their current
+values, the actions they accept, and the evidence produced by the last move.
 
-For ordinary controls, the loop is semantic: target, action, wait, evidence.
+Accessibility is the source of that action space. ButtonHeist keeps it live as a
+world model, then owns the mechanical work: resolve the target, reveal it if
+needed, act, wait for settle, refresh the state, and return evidence.
+
+The agent works from those facts. It chooses the next intent, then reads the
+receipt. It does not need coordinate math, viewport bookkeeping, private state
+diffs, or a shadow model of the app before asking for a button.
+
 For maps, canvases, drawing surfaces, games, and spatial products, explicit
-mechanical gestures stay available. The agent spends its turns reading the app's
-contract and making progress through it.
+mechanical gestures stay available. Those are intentional spatial interactions,
+not the normal path for buttons, fields, menus, actions, rotors, waits, and
+product flows.
 
 The benchmark suite compares that loop with coordinate-first MCP automation
 across 96 trials and 16 UI tasks.
@@ -428,7 +438,7 @@ The app must be running on the device.
 
 ### Empty hierarchy
 
-Make sure the app has visible UI on screen and that the root view exposes an
+Make sure the app has an interface on a screen and that the root view exposes an
 accessibility hierarchy. Then run:
 
 ```bash
