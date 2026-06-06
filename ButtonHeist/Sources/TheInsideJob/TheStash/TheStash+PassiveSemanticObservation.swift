@@ -33,6 +33,14 @@ extension TheStash {
         await semanticObservationStream.settledEvent(scope: scope, after: sequence, timeout: timeout)
     }
 
+    func observeVisibleSemanticEvidence(timeout: Double?) async -> VisibleSemanticObservationEvidence? {
+        await semanticObservationStream.visibleEvidence(timeout: timeout)
+    }
+
+    func latestSemanticObservationFailureDiagnostic() -> String? {
+        semanticObservationStream.latestSettleFailureDiagnostic
+    }
+
     func markDirtyFromTripwire() {
         semanticObservationStream.markDirtyFromTripwire()
     }

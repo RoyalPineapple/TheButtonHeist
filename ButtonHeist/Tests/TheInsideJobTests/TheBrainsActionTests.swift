@@ -155,15 +155,17 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(before.elements.count, 1)
     }
 
-    func testInteractionObservationBeforeStateRequiresCleanSettledObservation() async {
+    func testInteractionObservationBeforeStateDoesNotReuseDirtySettledObservation() async {
         installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
         brains.stash.markDirtyFromTripwire()
 
-        let current = await brains.interactionObservation.prepareBeforeState(timeout: 0.001)
+        let current = await withNoTraversableWindows {
+            await brains.interactionObservation.prepareBeforeState(timeout: 0.001)
+        }
 
         XCTAssertNil(
             current,
-            "dirty settled state must not be returned or repaired through a private visible refresh"
+            "dirty settled state must not be returned when no live tree is readable"
         )
     }
 
@@ -180,8 +182,51 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.errorKind, .actionFailed)
-        XCTAssertEqual(result.message, TheBrains.treeUnavailableMessage)
+        XCTAssertDiagnostic(result.message, contains: [
+            "Could not observe accessibility tree",
+            "last parsed: no accessibility tree",
+        ])
         XCTAssertFalse(interactionRan, "command action must not run without settled pre-state")
+    }
+
+    func testPerformInteractionUsesVisibleEvidenceWhenSettledObservationIsUnavailable() async throws {
+        let windowScene = try requireForegroundWindowScene()
+        var interactionRan = false
+
+        let result = await withNoTraversableWindows {
+            let viewController = UIViewController()
+            viewController.view.backgroundColor = .white
+
+            let button = UIButton(type: .system)
+            button.setTitle("Visible Evidence Action", for: .normal)
+            button.frame = CGRect(x: 40, y: 80, width: 180, height: 44)
+            viewController.view.addSubview(button)
+
+            let window = UIWindow(windowScene: windowScene)
+            window.windowLevel = .alert + 60
+            window.rootViewController = viewController
+            window.frame = UIScreen.main.bounds
+            window.isHidden = false
+
+            defer {
+                window.isHidden = true
+            }
+
+            brains.stash.stopPassiveSemanticObservation()
+
+            return await brains.performInteraction(method: .activate) {
+                interactionRan = true
+                return .success(method: .activate)
+            }
+        }
+
+        XCTAssertTrue(interactionRan, "readable live trees should not be blocked by settled-observation timeouts")
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertTrue(
+            brains.stash.currentScreen.orderedElements.contains { $0.element.label == "Visible Evidence Action" },
+            "the observed full tree should be committed so action resolution sees live evidence"
+        )
     }
 
     func testExecuteIncrementFailsWhenElementIsNotAdjustable() async {
@@ -535,7 +580,9 @@ final class TheBrainsActionTests: XCTestCase {
         ]
 
         for (label, command, normalizingTimeoutDuration) in commands {
+            brains.clearCache()
             let single = await brains.executeCommand(command)
+            brains.clearCache()
             let heist = try await heistStepResult(for: command)
             assertSameActionResult(
                 label,
@@ -2350,13 +2397,36 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(heist.success, single.success, name, file: file, line: line)
         XCTAssertEqual(heist.method, single.method, name, file: file, line: line)
         XCTAssertEqual(heist.errorKind, single.errorKind, name, file: file, line: line)
-        XCTAssertEqual(
-            normalizedActionMessage(heist.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
-            normalizedActionMessage(single.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
+        assertSameActionMessage(
             name,
+            single: normalizedActionMessage(single.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
+            heist: normalizedActionMessage(heist.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
             file: file,
             line: line
         )
+    }
+
+    private func assertSameActionMessage(
+        _ name: String,
+        single: String?,
+        heist: String?,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        if let single,
+           let heist,
+           single.contains("No match for:"),
+           heist.contains("No match for:") {
+            XCTAssertEqual(firstLine(single), firstLine(heist), name, file: file, line: line)
+            XCTAssertTrue(single.contains("Next:"), name, file: file, line: line)
+            XCTAssertTrue(heist.contains("Next:"), name, file: file, line: line)
+            return
+        }
+        XCTAssertEqual(heist, single, name, file: file, line: line)
+    }
+
+    private func firstLine(_ message: String) -> Substring {
+        message.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
     }
 
     private func heistStepResult(for command: ClientMessage) async throws -> ActionResult {

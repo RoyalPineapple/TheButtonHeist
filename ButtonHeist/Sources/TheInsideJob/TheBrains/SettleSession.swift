@@ -61,6 +61,17 @@ enum SettleOutcome: Equatable {
         case .timedOut, .cancelled: return false
         }
     }
+
+    var outcomeDescription: String {
+        switch self {
+        case .settled(let timeMs):
+            return "settled after \(timeMs)ms"
+        case .timedOut(let timeMs):
+            return "timed out after \(timeMs)ms"
+        case .cancelled(let timeMs):
+            return "cancelled after \(timeMs)ms"
+        }
+    }
 }
 
 // MARK: - SettleSession
@@ -185,6 +196,23 @@ enum SettleOutcome: Equatable {
         /// Every `(key, element)` pair observed in any cycle of the loop.
         /// Includes spinner cycles and other intermediate states.
         let elementsByKey: [TimelineKey: AccessibilityElement]
+        /// Compact explanation of the most recent semantic instability when
+        /// the loop exits without a clean settle.
+        let instabilityDescription: String?
+
+        init(
+            outcome: SettleOutcome,
+            events: [SettleEvent],
+            finalScreen: Screen?,
+            elementsByKey: [TimelineKey: AccessibilityElement],
+            instabilityDescription: String? = nil
+        ) {
+            self.outcome = outcome
+            self.events = events
+            self.finalScreen = finalScreen
+            self.elementsByKey = elementsByKey
+            self.instabilityDescription = instabilityDescription
+        }
     }
 
     /// Run the settle loop with the full tripwire signal captured before the
@@ -220,14 +248,16 @@ enum SettleOutcome: Equatable {
                     outcome: .cancelled(timeMs: Self.elapsedMs(since: start)),
                     events: events,
                     finalScreen: lastScreen,
-                    elementsByKey: observations.elementsByKey
+                    elementsByKey: observations.elementsByKey,
+                    instabilityDescription: observations.latestChangeDescription
                 )
             } catch {
                 return Outcome(
                     outcome: .timedOut(timeMs: Self.elapsedMs(since: start)),
                     events: events,
                     finalScreen: lastScreen,
-                    elementsByKey: observations.elementsByKey
+                    elementsByKey: observations.elementsByKey,
+                    instabilityDescription: observations.latestChangeDescription
                 )
             }
 
@@ -272,7 +302,8 @@ enum SettleOutcome: Equatable {
             outcome: .timedOut(timeMs: Self.elapsedMs(since: start)),
             events: events,
             finalScreen: lastScreen,
-            elementsByKey: observations.elementsByKey
+            elementsByKey: observations.elementsByKey,
+            instabilityDescription: observations.latestChangeDescription
         )
     }
 

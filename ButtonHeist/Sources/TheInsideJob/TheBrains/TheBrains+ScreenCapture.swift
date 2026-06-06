@@ -14,11 +14,7 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return .failure(Self.runtimeInactiveMessage)
         }
-        guard let observation = await interactionObservation.observeSemanticState(
-            scope: .visible,
-            after: nil,
-            timeout: 1.0
-        ) else {
+        guard let observation = await interactionObservation.observeVisibleState(timeout: 1.0) else {
             return .failure("Could not access accessibility tree")
         }
 
@@ -34,7 +30,7 @@ extension TheBrains {
             pngData: pngData.base64EncodedString(),
             width: bounds.width,
             height: bounds.height,
-            interface: observation.state.interface
+            interface: observation.interface
         ))
     }
 }
