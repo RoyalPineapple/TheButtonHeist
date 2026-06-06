@@ -160,7 +160,8 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         inline: String?,
         fromFile: String?,
         path: String?,
-        entry: String?
+        entry: String?,
+        commandName: String = Self.cliCommandName
     ) throws -> CLIRequestParameters {
         let suppliedSources = [inline != nil, fromFile != nil, path != nil].filter { $0 }.count
         guard suppliedSources == 1 else {
@@ -177,7 +178,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
             guard url.pathExtension.lowercased() == "heist" else {
                 throw ValidationError(
-                    "Unsupported run_heist --path \(path). Use a .heist package artifact or .swift source " +
+                    "Unsupported \(commandName) --path \(path). Use a .heist package artifact or .swift source " +
                     "(raw .json plan IR is internal to the .heist package, not a run input)."
                 )
             }

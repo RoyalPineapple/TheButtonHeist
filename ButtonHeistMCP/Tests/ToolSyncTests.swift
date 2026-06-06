@@ -88,6 +88,33 @@ struct ToolSyncTests {
         #expect(schemaValue(at: ["properties", "entry"], in: tool.inputSchema) == nil)
         #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
     }
+
+    @Test("heist discovery schemas expose admitted plan source without top-level combinators")
+    func heistDiscoverySchemasExposePlanSourceWithoutTopLevelCombinators() throws {
+        let listHeists = try #require(ToolDefinitions.all.first { $0.name == "list_heists" })
+        let describeHeist = try #require(ToolDefinitions.all.first { $0.name == "describe_heist" })
+
+        for tool in [listHeists, describeHeist] {
+            for field in ["path", "version", "name", "parameter", "definitions", "body"] {
+                #expect(
+                    schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
+                    "\(tool.name) schema must expose \(field)"
+                )
+            }
+            #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
+            #expect(schemaValue(at: ["anyOf"], in: tool.inputSchema) == nil)
+            #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)
+        }
+
+        #expect(schemaValue(at: ["properties", "heist"], in: describeHeist.inputSchema) != nil)
+        #expect(schemaValue(at: ["required"], in: describeHeist.inputSchema) == .array([.string("heist")]))
+        #expect(schemaValue(at: ["properties", "heist"], in: listHeists.inputSchema) == nil)
+        #expect(schemaValue(at: ["properties", "detail", "enum"], in: listHeists.inputSchema) == .array([
+            .string("summary"),
+            .string("detailed"),
+        ]))
+        #expect(schemaValue(at: ["properties", "detail", "default"], in: listHeists.inputSchema) == .string("summary"))
+    }
 }
 
 private func schemaValue(at path: [String], in root: Value) -> Value? {

@@ -83,6 +83,31 @@ struct ToolRoutingTests {
         #expect(!schema.contains("source_file"))
     }
 
+    @Test("heist discovery tools route directly with detail and selector arguments")
+    func heistDiscoveryToolsRouteDirectly() throws {
+        let list = try routed(
+            TheFence.Command.listHeists.rawValue,
+            [
+                "detail": .string("detailed"),
+                "path": .string("Flow.heist"),
+            ]
+        )
+        let describe = try routed(
+            TheFence.Command.describeHeist.rawValue,
+            [
+                "heist": .string("Cart.checkout"),
+                "path": .string("Flow.heist"),
+            ]
+        )
+
+        #expect(list.command == .listHeists)
+        #expect(list.arguments.argumentValues["detail"] == .string("detailed"))
+        #expect(list.arguments.argumentValues["path"] == .string("Flow.heist"))
+        #expect(describe.command == .describeHeist)
+        #expect(describe.arguments.argumentValues["heist"] == .string("Cart.checkout"))
+        #expect(describe.arguments.argumentValues["path"] == .string("Flow.heist"))
+    }
+
     private func routeToolRequest(
         name: String
     ) -> Result<TheFence.Command, FenceOperationRoutingError> {

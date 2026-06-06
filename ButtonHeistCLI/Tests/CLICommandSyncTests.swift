@@ -20,6 +20,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertTrue(help.contains("activate"))
         XCTAssertTrue(help.contains("get_interface"))
         XCTAssertTrue(help.contains("run_heist"))
+        XCTAssertTrue(help.contains("list_heists"))
+        XCTAssertTrue(help.contains("describe_heist"))
     }
 
     func testJSONLinesDefaultOutputIsCanonicalJSON() {
@@ -208,6 +210,54 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try RunHeistCommand.prepareInput(path: "Flow.swift", entry: nil)) { error in
             XCTAssertTrue(String(describing: error).contains("--entry is required for Swift source input"))
         }
+    }
+
+    func testListHeistsUsesRunHeistPlanSourceShape() throws {
+        let arguments = try RunHeistCommand.planArguments(
+            inline: #"{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
+            fromFile: nil,
+            path: nil,
+            entry: nil,
+            commandName: "list_heists"
+        )
+
+        XCTAssertEqual(arguments[.version], .int(1))
+        XCTAssertEqual(arguments[.name], .string("flow"))
+        XCTAssertNil(arguments[.path])
+    }
+
+    func testListHeistsDetailFlagDefaultsToSummary() throws {
+        let command = try ListHeistsCommand.parse([
+            "--plan",
+            #"{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
+        ])
+
+        XCTAssertFalse(command.detail)
+    }
+
+    func testListHeistsDetailFlagRequestsDetailedMode() throws {
+        let command = try ListHeistsCommand.parse([
+            "--detail",
+            "--plan",
+            #"{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
+        ])
+
+        XCTAssertTrue(command.detail)
+    }
+
+    func testDescribeHeistAddsSelectorWithoutDroppingInlinePlanName() throws {
+        var arguments = try RunHeistCommand.planArguments(
+            inline: #"{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
+            fromFile: nil,
+            path: nil,
+            entry: nil,
+            commandName: "describe_heist"
+        )
+        arguments.set(.heist, "flow")
+
+        XCTAssertEqual(arguments[.heist], .string("flow"))
+        XCTAssertEqual(arguments[.name], .string("flow"))
+        XCTAssertEqual(arguments[.version], .int(1))
     }
 
     func testRunHeistRejectsEntryWithoutPath() {
