@@ -336,7 +336,7 @@ public extension HeistDef where Input == ElementTarget {
 ///
 /// `RunHeist` is the public Button Heist verb for composing capabilities. It
 /// references a capability by name and lowers to the invocation IR; the named
-/// capability must resolve within the closed plan — runtime admission enforces
+/// capability must resolve within the closed plan — runtime validation enforces
 /// resolution, arity, type, and non-recursion.
 public struct RunHeist: HeistContent {
     public let heistSteps: [HeistStep]

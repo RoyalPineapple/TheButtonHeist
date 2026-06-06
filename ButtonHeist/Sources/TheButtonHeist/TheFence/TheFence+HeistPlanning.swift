@@ -167,8 +167,8 @@ private extension TheFence {
             )
         }
         do {
-            // Runtime admissibility is asserted by the caller for both input
-            // sources; this reader only decodes the artifact.
+            // The artifact codec decodes and validates the plan before
+            // returning a HeistPlan that is ready for runtime behavior.
             return try HeistArtifactCodec.readPlan(from: url)
         } catch let error as HeistArtifactCodecError {
             throw FenceError.invalidRequest(error.description)
