@@ -145,7 +145,7 @@ extension TheFence {
     // MARK: - Expectation Parsing
 
     /// Parse compact command input into the same typed expectation argument
-    /// shape accepted by direct, MCP, batch, and playback request decoding.
+    /// shape accepted by direct, MCP, batch, and heist request decoding.
     public nonisolated static func parseExpectationArgument(_ rawValue: String) throws -> HeistValue {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.first == "{" else {

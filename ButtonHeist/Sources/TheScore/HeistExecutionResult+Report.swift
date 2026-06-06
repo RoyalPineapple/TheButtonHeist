@@ -4,8 +4,8 @@ import Foundation
 // MARK: - Heist Report Facts
 //
 // Reporting consumes the execution tree directly. These derived facts live on
-// the execution result types so encoders, formatters, and playback walk
-// `HeistExecutionResult.steps` without a second report worldview.
+// the execution result types so encoders, formatters, and the report adapter
+// walk `HeistExecutionResult.steps` without a second report worldview.
 
 /// Outcome status for a heist execution step in report and wire output.
 public enum HeistStepStatus: String, Sendable {

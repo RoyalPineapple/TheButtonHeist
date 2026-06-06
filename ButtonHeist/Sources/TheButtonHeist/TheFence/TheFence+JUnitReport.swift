@@ -1,23 +1,23 @@
 import TheScore
 
-// Playback reports are an external linear (JUnit/legacy) format derived from the
-// heist execution tree. The execution tree stays the product model; these rows
-// are output-only and never drive runtime failure logic.
+// The JUnit report is an external linear format derived from the heist execution
+// tree. The execution tree stays the product model; these rows are output-only
+// and never drive runtime failure logic.
 
 extension TheFence {
 
-    // MARK: - Playback Report
+    // MARK: - JUnit Report
 
-    /// Build the external JUnit/legacy playback report for a finished run_heist
-    /// execution. The execution tree stays the product model; this report is an
-    /// output-only projection consumed by `run_heist --junit`.
-    public func playbackReport(
+    /// Build the external JUnit report for a finished run_heist execution. The
+    /// execution tree stays the product model; this report is an output-only
+    /// projection consumed by `run_heist --junit`.
+    public func junitReport(
         for result: HeistExecutionResult,
         heistName: String,
         totalTimeSeconds: Double
-    ) -> HeistPlaybackReport {
-        let stepRows = playbackStepRows(result: result)
-        return HeistPlaybackReport(
+    ) -> HeistJUnitReport {
+        let stepRows = reportStepRows(result: result)
+        return HeistJUnitReport(
             heistName: heistName,
             app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
             totalStepCount: stepRows.count,
@@ -26,25 +26,25 @@ extension TheFence {
         )
     }
 
-    // MARK: - Playback Report Rows
+    // MARK: - Report Rows
 
-    /// Output-only step rows for the JUnit/legacy playback report, flattened
-    /// from the execution tree in execution order.
-    func playbackStepRows(result: HeistExecutionResult) -> [HeistPlaybackReport.StepResult] {
-        playbackOutcomes(result: result).map(\.row)
+    /// Output-only step rows for the JUnit report, flattened from the execution
+    /// tree in execution order.
+    func reportStepRows(result: HeistExecutionResult) -> [HeistJUnitReport.StepResult] {
+        reportOutcomes(result: result).map(\.row)
     }
 
     // MARK: - Private Helpers
 
-    private func playbackOutcomes(
+    private func reportOutcomes(
         result: HeistExecutionResult
-    ) -> [(row: HeistPlaybackReport.StepResult, failure: PlaybackFailure?)] {
+    ) -> [(row: HeistJUnitReport.StepResult, failure: ReportFailure?)] {
         result.reportRows.enumerated().map { index, step in
-            let failure = playbackFailure(for: step)
-            let outcome: HeistPlaybackReport.Outcome = failure.map {
-                .failed(message: $0.errorMessage, errorKind: Self.playbackErrorKind($0))
+            let failure = reportFailure(for: step)
+            let outcome: HeistJUnitReport.Outcome = failure.map {
+                .failed(message: $0.errorMessage, errorKind: Self.reportErrorKind($0))
             } ?? .passed
-            let row = HeistPlaybackReport.StepResult(
+            let row = HeistJUnitReport.StepResult(
                 index: index,
                 command: step.reportCommandName ?? step.reportStepName,
                 target: step.reportTarget,
@@ -55,12 +55,12 @@ extension TheFence {
         }
     }
 
-    private func playbackFailure(for step: HeistExecutionStepResult) -> PlaybackFailure? {
-        let failedStep: PlaybackFailure.FailedStep
+    private func reportFailure(for step: HeistExecutionStepResult) -> ReportFailure? {
+        let failedStep: ReportFailure.FailedStep
         if let command = step.reportClientWireType.flatMap(TheFence.Command.init(clientWireType:)) {
-            failedStep = PlaybackFailure.FailedStep(command: command, target: step.reportTarget)
+            failedStep = ReportFailure.FailedStep(command: command, target: step.reportTarget)
         } else {
-            failedStep = PlaybackFailure.FailedStep(
+            failedStep = ReportFailure.FailedStep(
                 commandName: step.reportCommandName ?? step.reportStepName,
                 target: step.reportTarget
             )
@@ -86,7 +86,7 @@ extension TheFence {
         )
     }
 
-    private static func playbackErrorKind(_ failure: PlaybackFailure) -> HeistPlaybackReport.PlaybackErrorKind? {
+    private static func reportErrorKind(_ failure: ReportFailure) -> HeistJUnitReport.ReportErrorKind? {
         switch failure {
         case .fenceError:
             return .commandError

@@ -89,7 +89,7 @@ Transport classes do **not** own auth. See the earned-ledger note below.
 - **Invalidation:** immutable value — never mutated after construction.
 - **Output:** report facts (status, counts, rows, JUnit XML) are **derived
   properties** on the result/step types and on output-only adapters
-  (`HeistPlaybackReport`). Counts, pass/fail tallies, and step rows are computed
+  (`HeistJUnitReport`). Counts, pass/fail tallies, and step rows are computed
   from the tree on demand and never stored. Flattening is an output concern and
   must not drive runtime failure logic.
 
