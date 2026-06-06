@@ -28,6 +28,12 @@ public struct HeistSourceCompiler: Sendable {
         self.packageRoot = packageRoot
     }
 
+    /// Persistent, shared swiftc module cache for plan compilation. Reused
+    /// across compiles so the Foundation/ThePlans module interfaces are built
+    /// once per toolchain rather than on every plan.
+    static let sharedModuleCacheDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("buttonheist-heist-plan-module-cache", isDirectory: true)
+
     public func compileSwiftFile(
         _ source: URL,
         entry: String
@@ -55,7 +61,13 @@ public struct HeistSourceCompiler: Sendable {
 
         let buildDirectory = tempURL.appendingPathComponent("Build", isDirectory: true)
         try FileManager.default.createDirectory(at: buildDirectory, withIntermediateDirectories: true)
-        let moduleCache = buildDirectory.appendingPathComponent("ModuleCache", isDirectory: true)
+
+        // Persist the module cache across compiles. A fresh per-compile cache
+        // forced swiftc to rebuild the Foundation/ThePlans module interfaces on
+        // every run — the dominant per-plan cost (~2.5s of ~3s). swiftc keys
+        // cache entries by content hash, so sharing the path is safe and warm
+        // compiles drop to sub-second.
+        let moduleCache = Self.sharedModuleCacheDirectory
         try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
 
         return try compile(

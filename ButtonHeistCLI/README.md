@@ -86,7 +86,7 @@ output mode.
 buttonheist start_heist --app com.example.app
 # run the flow
 buttonheist stop_heist --output recording.heist
-buttonheist play_heist --input recording.heist --junit report.xml
+buttonheist run_heist --path recording.heist --junit report.xml
 ```
 
 Heist replay uses durable semantic selectors and matchers. Capture-local

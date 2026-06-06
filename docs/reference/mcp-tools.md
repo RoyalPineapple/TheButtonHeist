@@ -20,9 +20,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `long_press` | `spatialAction` | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
 | `one_finger_tap` | `spatialAction` | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
 | `ping` | `session` | Check connection health without reading accessibility state. |
-| `play_heist` | `heistRecording` | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | `semanticAction` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
-| `run_heist` | `heistRuntime` | Execute an inline typed heist plan. |
+| `run_heist` | `heistRuntime` | Execute a typed heist plan, supplied inline (version + body) or loaded by the fence from a `path` to a .heist package artifact. |
 | `scroll` | `viewportDebug` | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
 | `scroll_to_edge` | `viewportDebug` | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
 | `scroll_to_visible` | `viewportDebug` | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
@@ -222,18 +221,6 @@ Parameters:
 
 _None._
 
-### `play_heist`
-
-Play back a heist file and return step diagnostics on failure.
-
-- Family: `heistRecording`
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `input` | `string` | yes | - | - |
-
 ### `rotor`
 
 Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor.
@@ -253,7 +240,7 @@ Parameters:
 
 ### `run_heist`
 
-Execute an inline typed heist plan.
+Execute a typed heist plan, supplied inline (version + body) or loaded by the fence from a `path` to a .heist package artifact.
 
 - Family: `heistRuntime`
 
@@ -261,8 +248,9 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `version` | `integer` | yes | - | - |
-| `body` | `array` | yes | - | - |
+| `path` | `string` | no | - | - |
+| `version` | `integer` | no | - | - |
+| `body` | `array` | no | - | - |
 
 ### `scroll`
 

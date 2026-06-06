@@ -15,7 +15,6 @@ extension TheFence {
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) {
-        guard playback.isIdle else { return }
         guard heistStore.isRecordingHeist else { return }
 
         let effect: HeistRecordingEffect

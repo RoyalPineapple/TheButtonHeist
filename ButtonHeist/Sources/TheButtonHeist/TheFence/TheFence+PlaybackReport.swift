@@ -6,17 +6,32 @@ import TheScore
 
 extension TheFence {
 
+    // MARK: - Playback Report
+
+    /// Build the external JUnit/legacy playback report for a finished run_heist
+    /// execution. The execution tree stays the product model; this report is an
+    /// output-only projection consumed by `run_heist --junit`.
+    public func playbackReport(
+        for result: HeistExecutionResult,
+        heistName: String,
+        totalTimeSeconds: Double
+    ) -> HeistPlaybackReport {
+        let stepRows = playbackStepRows(result: result)
+        return HeistPlaybackReport(
+            heistName: heistName,
+            app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
+            totalStepCount: stepRows.count,
+            totalTimeSeconds: totalTimeSeconds,
+            steps: stepRows
+        )
+    }
+
     // MARK: - Playback Report Rows
 
     /// Output-only step rows for the JUnit/legacy playback report, flattened
     /// from the execution tree in execution order.
     func playbackStepRows(result: HeistExecutionResult) -> [HeistPlaybackReport.StepResult] {
         playbackOutcomes(result: result).map(\.row)
-    }
-
-    /// First failing step in execution order, surfaced in the playback envelope.
-    func playbackFailure(result: HeistExecutionResult) -> PlaybackFailure? {
-        playbackOutcomes(result: result).compactMap(\.failure).first
     }
 
     // MARK: - Private Helpers

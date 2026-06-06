@@ -61,7 +61,6 @@ enum CLICommandAdapterCatalog {
         .listTargets: ListTargetsCommand.self,
         .startHeist: StartHeistCommand.self,
         .stopHeist: StopHeistCommand.self,
-        .playHeist: PlayHeistCommand.self,
     ]
 
     // MARK: - Catalog Projection

@@ -320,6 +320,64 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    // MARK: - Run Heist Input Loading
+
+    @ButtonHeistActor
+    func testRunHeistReadsPlanFromArtifactPathIntoSwiftObjects() async throws {
+        let fence = TheFence(configuration: .init())
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fence-runheist-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        // A hyphenated file name is NOT a valid Swift-style identifier. The fence
+        // must run the plan exactly as authored — stamping the file name into the
+        // plan's `name` would fail runtime admission and silently reduce the run
+        // to zero steps (the run_heist replay no-op regression).
+        let heistURL = temp.appendingPathComponent("bh-demo-smoke.heist")
+        let plan = HeistPlan(body: [.warn(WarnStep(message: "from artifact"))])
+        try HeistArtifactCodec.writePlan(plan, to: heistURL)
+
+        let request = try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: ["path": .string(heistURL.path)])
+        )
+
+        // The fence reads the file into a HeistPlan directly — no parameter
+        // round-trip — and does not invent a name from the file.
+        XCTAssertEqual(request.plan.body, plan.body)
+        XCTAssertNil(request.plan.name)
+        XCTAssertTrue(
+            request.plan.runtimeAdmissionFailures().isEmpty,
+            "loaded plan must be runtime-admissible: \(request.plan.runtimeAdmissionFailures())"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRunHeistRejectsInputCombinedWithInlineBody() async {
+        let fence = TheFence(configuration: .init())
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: [
+                "path": .string("/tmp/Flow.heist"),
+                "body": .array([]),
+            ])
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("either a path or an inline plan"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testRunHeistRejectsNonHeistInput() async {
+        let fence = TheFence(configuration: .init())
+        // Standalone .json is internal to the package, not a run input.
+        for path in ["Flow.txt", "Flow.json"] {
+            XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+                TheFence.CommandArgumentEnvelope(values: ["path": .string(path)])
+            )) { error in
+                XCTAssertTrue(String(describing: error).contains(".heist package artifact"))
+            }
+        }
+    }
+
     // MARK: - Typed Argument Parsing
 
     func testCommandArgumentEnvelopeReadsTypedScalarValues() throws {
@@ -1741,9 +1799,8 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .activate(.predicate(ElementPredicate(identifier: "counter"))),
             expectation: WaitStep(predicate: expectation, timeout: 10)
         ))
-        let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(HeistPlan(body: [sourceStep]))
-        guard case .action(let action)? = contract.plan.body.first else {
+        let plan = HeistPlan(body: [sourceStep])
+        guard case .action(let action)? = plan.body.first else {
             return XCTFail("Expected action step")
         }
 
@@ -2168,459 +2225,6 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: ["scope": .string("current")],
             equals: "schema validation failed for scope: observed string \"current\"; expected valid get_interface parameter"
         )
-    }
-
-    // MARK: - Heist Playback
-
-    @ButtonHeistActor
-    private func writeTemporaryHeist(_ heist: HeistPlan) throws -> URL {
-        let tempDir = FileManager.default.temporaryDirectory
-        let heistURL = tempDir.appendingPathComponent("test-\(UUID().uuidString).heist")
-        try HeistFileIO.write(heist, to: heistURL)
-        return heistURL
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistMissingInputReturnsSchemaError() async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(command: .playHeist)
-            guard case .error(let message, _) = response else {
-                return XCTFail("Expected .error response, got \(response)")
-            }
-            XCTAssertEqual(message, "schema validation failed for input: observed missing; expected string")
-        } catch {
-            XCTFail("Unexpected throw: \(error)")
-        }
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistDispatchesTypedPlan() async throws {
-        let heist = HeistPlan(body: [
-            try activateHeistStep(identifier: "btn1"),
-            .warn(WarnStep(message: "optional onboarding skipped")),
-        ])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
-        }
-        XCTAssertEqual(completedSteps, 2)
-        XCTAssertNil(failedIndex)
-        XCTAssertNil(failure)
-        XCTAssertEqual(report?.steps.map(\.command), ["activate", "warn"])
-
-        let plans = mockConn.sent.compactMap { message, _ -> HeistPlan? in
-            if case .heistPlan(let plan) = message { return plan }
-            return nil
-        }
-        XCTAssertEqual(plans, [heist])
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistDoesNotImplicitlyRecoverElementNotFoundWithScrollToVisible() async throws {
-        let heist = HeistPlan(body: [try activateHeistStep(identifier: "offscreen")])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { message in
-            switch message {
-            case .requestInterface:
-                return .interface(Interface(timestamp: Date(), tree: []))
-            case .activate:
-                return .actionResult(ActionResult(
-                    success: false,
-                    method: .activate,
-                    message: "missing",
-                    errorKind: .elementNotFound
-                ))
-            case .scrollToVisible:
-                return .actionResult(ActionResult(success: true, method: .scrollToVisible))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
-        }
-        XCTAssertEqual(completedSteps, 0)
-        XCTAssertEqual(failedIndex, 0)
-        XCTAssertNotNil(failure)
-        XCTAssertEqual(report?.steps.count, 1)
-        XCTAssertFalse(report?.allPassed ?? true)
-
-        let plans = mockConn.sent.compactMap { message, _ -> HeistPlan? in
-            if case .heistPlan(let plan) = message { return plan }
-            return nil
-        }
-        XCTAssertEqual(plans, [heist])
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistMapsServerErrorResponseToCommandFailure() async throws {
-        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { message in
-            switch message {
-            case .requestInterface:
-                return .interface(Interface(timestamp: Date(), tree: []))
-            case .activate:
-                return .error(ServerError(kind: .general, message: "server exploded"))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
-        }
-        XCTAssertEqual(completedSteps, 0)
-        XCTAssertEqual(failedIndex, 0)
-
-        guard case .actionFailed(let step, let result, _, _, _) = failure else {
-            return XCTFail("Expected typed actionFailed playback failure, got \(String(describing: failure))")
-        }
-        XCTAssertEqual(step.commandName, "activate")
-        XCTAssertTrue(result.message?.contains("server exploded") == true)
-
-        guard case .failed(let reportMessage, let errorKind) = report?.steps.first?.outcome else {
-            return XCTFail("Expected failed playback report step, got \(String(describing: report?.steps.first))")
-        }
-        XCTAssertEqual(reportMessage, result.message)
-        XCTAssertEqual(errorKind, .action(.general))
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistRejectsOldRawRecordingShapeBeforeExecution() async throws {
-        let heistURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("legacy-\(UUID().uuidString).heist")
-        try """
-        {
-          "version": 6,
-          "app": "com.test.mock",
-          "steps": [
-            {
-              "command": "activate",
-              "target": {"identifier": "btn1"},
-              "_recorded": {"heistId": "legacy-id"}
-            }
-          ]
-        }
-        """.write(to: heistURL, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        do {
-            _ = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-            XCTFail("Expected invalid heist file")
-        } catch {
-            XCTAssertTrue(
-                "\(error)".contains("raw JSON is not a .heist package"),
-                "\(error)"
-            )
-        }
-        XCTAssertFalse(mockConn.sent.contains { message, _ in
-            if case .heistPlan = message { return true }
-            return false
-        })
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistRejectsInvalidPlanCommandBeforeExecution() async throws {
-        let heistURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("invalid-command-\(UUID().uuidString).heist")
-        try FileManager.default.createDirectory(at: heistURL, withIntermediateDirectories: true)
-        let manifest = HeistArtifactManifest(
-            format: heistArtifactFormat,
-            formatVersion: currentHeistArtifactFormatVersion,
-            planVersion: currentHeistPlanVersion,
-            producer: .buttonHeist,
-            createdAt: Date(timeIntervalSince1970: 0)
-        )
-        try HeistArtifactCodec.canonicalManifestJSONData(manifest)
-            .write(to: heistURL.appendingPathComponent("manifest.json"))
-        try """
-        {
-          "version": 1,
-          "body": [
-            {
-              "type": "action",
-              "action": {
-                "command": {
-                  "type": "not_a_real_command",
-                  "payload": {}
-                }
-              }
-            }
-          ]
-        }
-        """.write(to: heistURL.appendingPathComponent("plan.json"), atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        do {
-            _ = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-            XCTFail("Expected invalid heist file")
-        } catch {
-            XCTAssertTrue("\(error)".contains("not_a_real_command"), "\(error)")
-        }
-        XCTAssertTrue(mockConn.sent.isEmpty)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistReentrantGuard() async throws {
-        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, _) = makeConnectedFence()
-        try fence.playback.begin()
-        defer { fence.playback.end() }
-
-        do {
-            _ = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-            XCTFail("Expected re-entrant playback to fail")
-        } catch FenceError.invalidRequest(let message) {
-            XCTAssertEqual(message, "Cannot nest play_heist inside an active playback")
-        } catch {
-            XCTFail("Expected invalidRequest, got \(error)")
-        }
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistInvalidInputResetsPlaybackLifecycle() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        do {
-            _ = try await fence.execute(command: .playHeist, values: ["input": .string("../bad.heist")])
-            XCTFail("Expected invalid input to fail")
-        } catch FenceError.invalidRequest(let message) {
-            XCTAssertEqual(message, "Invalid input path: must not be empty or contain '..' components")
-        } catch {
-            XCTFail("Expected invalidRequest, got \(error)")
-        }
-
-        XCTAssertTrue(fence.playback.isIdle)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistReportsTimingMs() async throws {
-        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-
-        guard case .heistPlayback(_, _, let totalTimingMs, _, _) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
-        }
-        XCTAssertGreaterThanOrEqual(totalTimingMs, 0)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistReportUsesStepDuration() async throws {
-        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.heistStepDurationMs = 123
-        let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-
-        guard case .heistPlayback(_, _, _, _, let report) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
-        }
-        XCTAssertEqual(report?.steps.first?.timeSeconds ?? -1, 0.123, accuracy: 0.000_001)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistReportSurfacesNestedCaseActionFailure() async throws {
-        let nestedAction = try activateHeistStep(identifier: "nested")
-        let heist = HeistPlan(body: [
-            .conditional(try ConditionalStep(
-                cases: [
-                    PredicateCase(
-                        predicate: .state(.present(ElementPredicate(label: "Home"))),
-                        body: [nestedAction]
-                    ),
-                ]
-            )),
-        ])
-        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
-        let executionResult = HeistExecutionResult(
-            steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    path: "$.body[0]",
-                    kind: .conditional,
-                    message: "matched case 0",
-                    durationMs: 2,
-                    stopsHeist: true,
-                    caseSelection: HeistCaseSelectionResult(
-                        cases: [
-                            HeistCaseMatchResult(
-                                predicate: predicate,
-                                result: ExpectationResult(met: true, predicate: predicate)
-                            ),
-                        ],
-                        selectedCaseIndex: 0,
-                        elapsedMs: 1
-                    ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].conditional.cases[0].body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .activate,
-                                message: "nested button failed",
-                                errorKind: .actionFailed
-                            ),
-                            durationMs: 7,
-                            stopsHeist: true
-                        ),
-                    ]
-                ),
-            ],
-            totalTimingMs: 9,
-            failedIndex: 0
-        )
-        let (fence, _) = makeConnectedFence()
-        _ = try fence.validateHeistPlayback(heist)
-
-        let stepRows = fence.playbackStepRows(result: executionResult)
-        let failure = fence.playbackFailure(result: executionResult)
-
-        XCTAssertEqual(stepRows.map(\.command), ["if", "activate"])
-        XCTAssertTrue(stepRows[0].passed)
-        XCTAssertEqual(stepRows.first { !$0.passed }?.index, 1)
-        XCTAssertEqual(failure?.step.commandName, "activate")
-        guard case .failed(let message, let errorKind) = stepRows[1].outcome else {
-            return XCTFail("Expected nested action failure, got \(stepRows[1].outcome)")
-        }
-        XCTAssertEqual(message, "nested button failed")
-        XCTAssertEqual(errorKind, .action(.actionFailed))
-        XCTAssertEqual(stepRows[1].timeSeconds, 0.007, accuracy: 0.000_001)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistReportProjectsSwiftAuthoredForEachWithoutDurableBodyFlattening() async throws {
-        let matching = ElementPredicate(label: "Delete")
-        let heist = HeistPlan(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: matching,
-                limit: 20,
-                parameter: "target",
-                body: [try activateHeistStep(target: .ref("target"))]
-            )),
-        ])
-        let executionResult = HeistExecutionResult(
-            steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    path: "$.body[0]",
-                    kind: .forEachElement,
-                    message: "for_each completed 2 iteration(s) from 2 matched element(s)",
-                    durationMs: 20,
-                    forEachResult: HeistForEachResult(
-                        matchedCount: 2,
-                        limit: 20,
-                        iterationCount: 2,
-                        failureReason: nil
-                    ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].for_each_element.iterations[0]",
-                            kind: .forEachIteration,
-                            message: "iteration 0 target ordinal 0",
-                            durationMs: 5,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_element.iterations[0].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(success: true, method: .activate),
-                                    durationMs: 5
-                                ),
-                            ]
-                        ),
-                        HeistExecutionStepResult(
-                            index: 1,
-                            path: "$.body[0].for_each_element.iterations[1]",
-                            kind: .forEachIteration,
-                            message: "iteration 1 target ordinal 1",
-                            durationMs: 6,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_element.iterations[1].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(success: true, method: .activate),
-                                    durationMs: 6
-                                ),
-                            ]
-                        ),
-                    ]
-                ),
-            ],
-            totalTimingMs: 20,
-            failedIndex: nil
-        )
-        let (fence, _) = makeConnectedFence()
-        _ = try fence.validateHeistPlayback(heist)
-
-        let stepRows = fence.playbackStepRows(result: executionResult)
-        let failure = fence.playbackFailure(result: executionResult)
-
-        XCTAssertEqual(stepRows.map(\.command), ["for_each_element"])
-        XCTAssertTrue(stepRows.allSatisfy(\.passed))
-        XCTAssertNil(stepRows.first { !$0.passed }?.index)
-        XCTAssertNil(failure)
-        XCTAssertEqual(stepRows[0].timeSeconds, 0.020, accuracy: 0.000_001)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistResetsPhaseAfterCompletion() async throws {
-        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, _) = makeConnectedFence()
-        guard case .heistPlayback = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)]) else {
-            return XCTFail("Expected first heistPlayback response")
-        }
-
-        let secondResponse = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, _) = secondResponse else {
-            return XCTFail("Expected second heistPlayback response")
-        }
-        XCTAssertEqual(completedSteps, 1)
-        XCTAssertNil(failedIndex)
-        XCTAssertNil(failure)
-    }
-
-    private func activateHeistStep(identifier: String) throws -> HeistStep {
-        .action(try ActionStep(command: .activate(.predicate(ElementPredicate(identifier: identifier)))))
-    }
-
-    private func activateHeistStep(target: ElementTargetExpr) throws -> HeistStep {
-        .action(try ActionStep(command: .activate(target)))
     }
 
 }

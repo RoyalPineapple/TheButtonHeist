@@ -479,42 +479,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(compact.contains("[0] for_each_string -> error: for_each_string stopped"), compact)
     }
 
-    func testPlaybackFailureUsesProjectedActionFirstSemantics() throws {
-        let failure = PlaybackFailure.actionFailed(
-            step: PlaybackFailure.FailedStep(command: .activate, target: nil),
-            result: ActionResult(
-                success: false,
-                method: .activate,
-                message: "button disabled",
-                errorKind: .elementNotFound
-            ),
-            expectation: ExpectationResult(
-                met: false,
-                predicate: .state(.present(ElementPredicate(label: "Done"))),
-                actual: "not evaluated"
-            ),
-            interface: nil,
-            diagnosticCaptureFailure: nil
-        )
-        let response = FenceResponse.heistPlayback(
-            completedSteps: 0,
-            failedIndex: 0,
-            totalTimingMs: 4,
-            failure: failure
-        )
-
-        let json = publicJSONObject(response)
-        let publicFailure = try XCTUnwrap(json["failure"] as? [String: Any])
-        let actionResult = try XCTUnwrap(publicFailure["actionResult"] as? [String: Any])
-
-        XCTAssertEqual(json["status"] as? String, "error")
-        XCTAssertEqual(actionResult["status"] as? String, "error")
-        XCTAssertEqual(actionResult["errorClass"] as? String, "elementNotFound")
-        XCTAssertNil(actionResult["expectation"])
-        XCTAssertNil(publicFailure["expectation"])
-        XCTAssertEqual(response.compactFormatted(), "playback: 0 steps in 4ms (failed at 0) [activate: button disabled]")
-    }
-
     func testCompactInterfaceRendersNestedContainersAndElements() {
         let output = FenceResponse.compactInterface(formattingFixtureInterface(), detail: .summary)
 

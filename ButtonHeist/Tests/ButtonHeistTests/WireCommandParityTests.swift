@@ -209,7 +209,7 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryPlaybackStepLowersToTheSameClientMessageAsSingleCommand() async throws {
+    func testEveryHeistStepLowersToTheSameClientMessageAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
         for command in TheFence.Command.heistPrimitiveCases {
@@ -219,11 +219,10 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
             let sourceStep = try fence.heistStep(for: singleRequest)
-            let playback = try fence.validateHeistPlayback(HeistPlan(body: [sourceStep]))
-            let playbackMessages = playback.plan.body.flatMap(clientMessages(for:))
+            let heistMessages = [sourceStep].flatMap(clientMessages(for:))
 
             XCTAssertEqual(
-                String(reflecting: playbackMessages),
+                String(reflecting: heistMessages),
                 String(reflecting: singleMessages),
                 command.rawValue
             )
@@ -322,8 +321,6 @@ final class WireCommandParityTests: XCTestCase {
             return ["target": .string("default")]
         case .stopHeist:
             return ["output": .string("contract.heist")]
-        case .playHeist:
-            return ["input": .string("contract.heist")]
         }
     }
 

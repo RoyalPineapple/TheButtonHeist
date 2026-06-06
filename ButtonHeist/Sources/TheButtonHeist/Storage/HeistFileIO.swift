@@ -14,17 +14,6 @@ enum HeistFileIO {
             ))
         }
     }
-
-    static func read(from path: URL) throws -> HeistPlan {
-        do {
-            return try HeistArtifactCodec.readPlan(from: path)
-        } catch {
-            throw StorageError.heistRecording(.heistReadFailed(
-                path: path.path,
-                reason: String(describing: error)
-            ))
-        }
-    }
 }
 
 extension HeistStore {

@@ -54,7 +54,6 @@ enum SessionCommand: String, CaseIterable, FenceCommand {
 enum HeistRecordingCommand: String, CaseIterable, FenceCommand {
     case startHeist = "start_heist"
     case stopHeist = "stop_heist"
-    case playHeist = "play_heist"
 
     var descriptor: FenceCommandDescriptor {
         switch self {
@@ -73,13 +72,6 @@ enum HeistRecordingCommand: String, CaseIterable, FenceCommand {
                 requiresConnectionBeforeDispatch: false,
                 parameters: [param(.output, .string, required: true)],
                 description: "Stop heist recording and save a deterministic semantic heist fixture."
-            )
-        case .playHeist:
-            return TheFence.Command.commandDescriptor(
-                command, family: .heistRecording,
-                requestDecoder: TheFence.decodePlayHeistRequest,
-                parameters: [param(.input, .string, required: true)],
-                description: "Play back a heist file and return step diagnostics on failure."
             )
         }
     }

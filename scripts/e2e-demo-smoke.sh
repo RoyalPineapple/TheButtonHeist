@@ -566,8 +566,8 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '%s' "$PLAYBACK_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
 
     log "Replaying recorded heist"
-    PLAYBACK_JSON="$(run_cli_json play_heist --input "$HEIST_PATH")"
-    printf '%s' "$PLAYBACK_JSON" | json_expect_ok "play_heist"
+    PLAYBACK_JSON="$(run_cli_json run_heist --path "$HEIST_PATH")"
+    printf '%s' "$PLAYBACK_JSON" | json_expect_ok "run_heist"
     PLAYBACK_FINAL_JSON="$(run_cli_json get_interface)"
     printf '%s' "$PLAYBACK_FINAL_JSON" | json_expect_ok "playback final get_interface"
     printf '%s' "$PLAYBACK_FINAL_JSON" | expect_screen_title "Controls Demo"

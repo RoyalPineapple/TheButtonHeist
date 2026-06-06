@@ -2,29 +2,30 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 import ThePlans
+import TheScore
 
 struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     typealias SwiftHeistCompiler = (_ source: URL, _ entry: String) throws -> HeistPlan
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Execute a Button Heist plan from .heist package, .json IR, or Swift DSL source",
+        abstract: "Execute a Button Heist plan from a .heist package artifact or Swift DSL source",
         discussion: """
-            Reads a generated .heist package artifact, reads explicit .json
-            HeistPlan IR, or compiles Swift DSL source locally before sending
-            the resulting plan through the run_heist command path. Existing
-            --plan and --plan-from-file JSON inputs remain available.
+            Forwards a .heist package artifact `--path` to the fence, which reads
+            the package into a HeistPlan and runs it. Swift DSL source is compiled
+            locally to a .heist before sending. Inline --plan / --plan-from-file
+            JSON remain available.
 
             Examples:
-              buttonheist run_heist Flow.heist
-              buttonheist run_heist Flow.swift --entry makeHeist
-              buttonheist run_heist --plan-from-file plan.json
-              buttonheist run_heist --plan '{"version":1,"body":[{"type":"warn","warn":{"message":"Check login state"}}]}'
+              buttonheist run_heist --path Flow.heist
+              buttonheist run_heist --path Flow.swift --entry makeHeist
+              buttonheist run_heist --path Flow.heist --junit report.xml
+              buttonheist run_heist --plan '{"version":1,"body":[{"type":"warn","warn":{"message":"Check"}}]}'
             """
     )
 
-    @Argument(help: "Path to a .heist package, .json HeistPlan IR, or Swift DSL source file.")
-    var input: String?
+    @Option(name: .long, help: "Path to a .heist package artifact or Swift DSL source file.")
+    var path: String?
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
@@ -38,116 +39,161 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .long, help: "Zero-argument Swift entry symbol returning HeistPlan.")
     var entry: String?
 
+    @Option(name: .long, help: "Write a JUnit XML report to this path.")
+    var junit: String?
+
     @ButtonHeistActor
     mutating func run() async throws {
+        // Swift DSL source is compiled to a temporary .heist package up front,
+        // so every run dispatches a .heist the fence reads — the plan is never
+        // re-encoded through a lossy parameter round-trip.
+        let prepared = try Self.prepareInput(path: path, entry: entry)
+        defer { prepared.cleanup() }
+
         let request = try Self.planArguments(
             inline: plan,
             fromFile: planFromFile,
-            input: input,
-            entry: entry
+            path: prepared.path,
+            entry: prepared.entry
         )
-        try await CLIRunner.run(
+
+        guard let junitPath = junit else {
+            try await CLIRunner.run(
+                connection: connection,
+                format: output.format,
+                command: Self.fenceCommand,
+                arguments: Self.fenceArguments(request),
+                statusMessage: "Running heist..."
+            )
+            return
+        }
+
+        let (fence, response) = try await CLIRunner.execute(
             connection: connection,
-            format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request),
-            statusMessage: "Running heist..."
+            arguments: Self.fenceArguments(request)
         )
+        defer { fence.stop() }
+
+        if case .heistExecution(_, let result, _) = response {
+            let name = prepared.path
+                .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
+            let report = fence.playbackReport(
+                for: result,
+                heistName: name,
+                totalTimeSeconds: Double(result.totalTimingMs) / 1000
+            )
+            try report.junitXML().write(to: URL(fileURLWithPath: junitPath), atomically: true, encoding: .utf8)
+            logStatus("JUnit report written to \(junitPath)")
+        } else {
+            logStatus("Warning: --junit requested but run_heist did not produce a report")
+        }
+
+        CLIRunner.outputResponse(response, format: output.format ?? .auto)
+        if response.isFailure {
+            throw ExitCode.failure
+        }
     }
 
-    static func planArguments(inline: String?, fromFile path: String?) throws -> CLIRequestParameters {
-        try planArguments(inline: inline, fromFile: path, input: nil, entry: nil)
+    struct PreparedInput {
+        let path: String?
+        let entry: String?
+        let cleanup: () -> Void
     }
 
-    static func planArguments(
-        inline: String?,
-        fromFile path: String?,
-        input: String?,
+    /// Resolve the `--path` input before request construction.
+    ///
+    /// `.swift` DSL source is compiled (it needs the toolchain) and written to a
+    /// temporary `.heist` package, so what reaches the fence is always a `.heist`
+    /// artifact read through the canonical codec — never a `HeistPlan` re-encoded
+    /// through a lossy parameter round-trip. The caller must invoke `cleanup`
+    /// once the run completes.
+    static func prepareInput(
+        path: String?,
         entry: String?,
         compileSwiftFile: SwiftHeistCompiler = { source, entry in
             try HeistSourceCompiler().compileSwiftFile(source, entry: entry)
         }
-    ) throws -> CLIRequestParameters {
-        if input == nil {
-            switch (inline, path) {
-            case (nil, nil):
-                throw ValidationError("Must supply either --plan or --plan-from-file")
-            case (.some, .some):
-                throw ValidationError("--plan and --plan-from-file are mutually exclusive")
-            default:
-                break
-            }
+    ) throws -> PreparedInput {
+        guard let path, path.lowercased().hasSuffix(".swift") else {
+            return PreparedInput(path: path, entry: entry, cleanup: {})
+        }
+        guard let entry, !entry.isEmpty else {
+            throw ValidationError("--entry is required for Swift source input")
         }
 
-        let suppliedSources = [inline != nil, path != nil, input != nil].filter { $0 }.count
+        let source = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        let name = source.deletingPathExtension().lastPathComponent
+        let plan: HeistPlan
+        do {
+            plan = try compileSwiftFile(source, entry)
+        } catch {
+            throw ValidationError("failed to compile Swift heist source: \(error)")
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("run-heist-\(UUID().uuidString)", isDirectory: true)
+        let artifact = directory.appendingPathComponent("\(name).heist")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Write the plan exactly as compiled. The artifact file name carries the
+        // run name for reporting; it must not be stamped into the plan's `name`,
+        // which is a Swift-identifier-constrained semantic field and would fail
+        // runtime admission for a non-identifier file name.
+        try HeistArtifactCodec.writePlan(plan, to: artifact)
+        return PreparedInput(path: artifact.path, entry: nil, cleanup: {
+            try? FileManager.default.removeItem(at: directory)
+        })
+    }
+
+    static func planArguments(inline: String?, fromFile: String?) throws -> CLIRequestParameters {
+        try planArguments(inline: inline, fromFile: fromFile, path: nil, entry: nil)
+    }
+
+    /// Build the run_heist request parameters.
+    ///
+    /// A `.heist` package artifact path is forwarded to the fence as a `path`
+    /// parameter; the fence reads the package into a `HeistPlan` directly. Inline
+    /// `--plan` / `--plan-from-file` JSON is the only input expanded into plan
+    /// fields here. `.swift` source is resolved to a `.heist` by `prepareInput`
+    /// before reaching this point.
+    static func planArguments(
+        inline: String?,
+        fromFile: String?,
+        path: String?,
+        entry: String?
+    ) throws -> CLIRequestParameters {
+        let suppliedSources = [inline != nil, fromFile != nil, path != nil].filter { $0 }.count
         guard suppliedSources == 1 else {
             if suppliedSources == 0 {
-                throw ValidationError("Must supply a plan path, --plan, or --plan-from-file")
+                throw ValidationError("Must supply --path, --plan, or --plan-from-file")
             }
-            throw ValidationError("plan path, --plan, and --plan-from-file are mutually exclusive")
+            throw ValidationError("--path, --plan, and --plan-from-file are mutually exclusive")
         }
 
-        if entry != nil, input == nil {
+        if let path {
+            guard entry == nil else {
+                throw ValidationError("--entry is only valid with Swift source input")
+            }
+            let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+            guard url.pathExtension.lowercased() == "heist" else {
+                throw ValidationError(
+                    "Unsupported run_heist --path \(path). Use a .heist package artifact or .swift source " +
+                    "(raw .json plan IR is internal to the .heist package, not a run input)."
+                )
+            }
+            // Forward the artifact path; the fence reads the package into a HeistPlan.
+            return [.path: .string(path)]
+        }
+
+        if entry != nil {
             throw ValidationError("--entry is only valid with Swift source input")
-        }
-
-        if let input {
-            return try planArguments(
-                fromInputPath: input,
-                entry: entry,
-                compileSwiftFile: compileSwiftFile
-            )
         }
 
         let fields = try loadJSONObject(
             inline: inline,
-            fromFile: path,
+            fromFile: fromFile,
             optionName: "plan"
         )
-        return try requestParameters(from: fields)
-    }
-
-    private static func planArguments(
-        fromInputPath path: String,
-        entry: String?,
-        compileSwiftFile: SwiftHeistCompiler
-    ) throws -> CLIRequestParameters {
-        let expanded = (path as NSString).expandingTildeInPath
-        let url = URL(fileURLWithPath: expanded)
-        switch url.pathExtension.lowercased() {
-        case "heist", "json":
-            guard entry == nil else {
-                throw ValidationError("--entry is only valid with Swift source input")
-            }
-            do {
-                let plan = try HeistArtifactCodec.readPlan(from: url)
-                try plan.assertRuntimeAdmissible()
-                return try requestParameters(for: plan)
-            } catch let error as HeistArtifactCodecError {
-                throw ValidationError(error.description)
-            } catch {
-                throw ValidationError("Failed to read \(path): \(error)")
-            }
-
-        case "swift":
-            guard let entry, !entry.isEmpty else {
-                throw ValidationError("--entry is required for Swift source input")
-            }
-            do {
-                let plan = try compileSwiftFile(url, entry)
-                return try requestParameters(for: plan)
-            } catch {
-                throw ValidationError("failed to compile Swift heist source: \(error)")
-            }
-
-        default:
-            throw ValidationError("Unsupported run_heist input extension for \(path). Use .heist, .json, or .swift.")
-        }
-    }
-
-    private static func requestParameters(for plan: HeistPlan) throws -> CLIRequestParameters {
-        let data = try JSONEncoder().encode(plan)
-        let fields = try JSONDecoder().decode([String: HeistValue].self, from: data)
         return try requestParameters(from: fields)
     }
 

@@ -93,7 +93,6 @@ public final class TheFence {
     let pendingRequests = PendingRequestTrackers()
 
     // Lifecycle owners
-    let playback = FencePlaybackLifecycle()
     let heistRecording = FenceHeistRecordingLifecycle()
 
     public init(configuration: Configuration) {
