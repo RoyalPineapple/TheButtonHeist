@@ -11,6 +11,7 @@ enum HeistRecordingPhase: @unchecked Sendable { // swiftlint:disable:this agent_
 /// is confined to the `@ButtonHeistActor`-isolated `HeistStore`.
 struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     let app: String
+    let planName: String
     let fileHandle: FileHandle
     let filePath: URL
 }
@@ -76,6 +77,7 @@ final class HeistStore {
 
         heistRecording = .recording(HeistRecording(
             app: app,
+            planName: Self.rootPlanName(from: identifier),
             fileHandle: heistHandle,
             filePath: heistPath
         ))
@@ -91,7 +93,7 @@ final class HeistStore {
             throw StorageError.heistRecording(.noValidSteps(path: recording.filePath.path))
         }
 
-        return HeistPlan(body: steps)
+        return HeistPlan(name: recording.planName, body: steps)
     }
 
     func abandonRecording() {
@@ -125,6 +127,14 @@ final class HeistStore {
             throw StorageError.heistRecording(.notRecording)
         }
         return recording
+    }
+
+    private static func rootPlanName(from identifier: String) -> String {
+        let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        if HeistParameterName.isValid(trimmed) {
+            return trimmed
+        }
+        return "recordedHeist"
     }
 
 }

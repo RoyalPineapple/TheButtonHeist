@@ -335,7 +335,7 @@ final class TheFenceHandlerTests: XCTestCase {
         // plan's `name` would fail runtime admission and silently reduce the run
         // to zero steps (the run_heist replay no-op regression).
         let heistURL = temp.appendingPathComponent("bh-demo-smoke.heist")
-        let plan = HeistPlan(body: [.warn(WarnStep(message: "from artifact"))])
+        let plan = HeistPlan(name: "demoSmoke", body: [.warn(WarnStep(message: "from artifact"))])
         try HeistArtifactCodec.writePlan(plan, to: heistURL)
 
         let request = try fence.decodeRunHeistRequest(
@@ -345,7 +345,7 @@ final class TheFenceHandlerTests: XCTestCase {
         // The fence reads the file into a HeistPlan directly — no parameter
         // round-trip — and does not invent a name from the file.
         XCTAssertEqual(request.plan.body, plan.body)
-        XCTAssertNil(request.plan.name)
+        XCTAssertEqual(request.plan.name, "demoSmoke")
         XCTAssertTrue(
             request.plan.runtimeAdmissionFailures().isEmpty,
             "loaded plan must be runtime-admissible: \(request.plan.runtimeAdmissionFailures())"

@@ -16,10 +16,10 @@ SearchFlow.heist/
   plan.json
 ```
 
-`manifest.json` describes only the artifact container. `plan.json` stores the
-canonical `HeistPlan` JSON that the runtime executes after decoding. Runtime
-execution still receives a `HeistPlan`; it does not execute artifact internals
-or Swift source.
+`manifest.json` describes the artifact container and names its root entry.
+`plan.json` stores the canonical `HeistPlan` JSON that the runtime executes
+after decoding. Runtime execution still receives a `HeistPlan`; it does not
+execute artifact internals or Swift source.
 
 Plain JSON with a `.heist` extension is invalid. Use `.json` for raw HeistPlan
 IR, or generate a `.heist` package from Swift DSL, live composition, or export.
@@ -31,6 +31,7 @@ IR, or generate a `.heist` package from Swift DSL, live composition, or export.
 ```json
 {
   "createdAt": "2026-06-05T00:00:00Z",
+  "entry": "purchaseFlow",
   "format": "com.royalpineapple.buttonheist.heist",
   "formatVersion": 1,
   "planVersion": 1,
@@ -42,11 +43,17 @@ IR, or generate a `.heist` package from Swift DSL, live composition, or export.
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `entry` | `String` | Required non-empty root plan identity. Must equal `plan.json.name`. |
 | `format` | `String` | Must be `com.royalpineapple.buttonheist.heist`. |
 | `formatVersion` | `Int` | Package/container schema version. Current value is `1`. |
 | `planVersion` | `Int` | Must match `plan.json.version`. Current value is `1`. |
 | `producer` | `HeistArtifactProducer` | Tool that generated the artifact. |
 | `createdAt` | `Date` | Artifact creation timestamp. |
+
+`entry` is not a path, registry key, alias, import, or selector for arbitrary
+definitions. It names the root `HeistPlan.name` stored in `plan.json`.
+Parameterized definitions are capabilities, not artifact entries; run them from
+a parameterless root plan with `RunHeist("Name", argument)`.
 
 The manifest does not contain source metadata, app bundle IDs, step counts,
 command lists, screenshots, accessibility evidence, repair provenance, trace
@@ -87,7 +94,7 @@ settlement, live geometry, and diagnostics at execution time.
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | `Int` | Must match the supported `HeistPlan` version. |
-| `name` | `String?` | Optional heist or definition name. Required for plans stored in `definitions`. |
+| `name` | `String?` | Heist or definition name. Required for `.heist` root entries and for plans stored in `definitions`; optional for raw `.json` IR and inline one-step heists. |
 | `parameter` | `HeistParameter` | Optional reusable-heist parameter declaration. Omitted means no parameter. |
 | `definitions` | `[HeistPlan]` | Local named reusable heist definitions. |
 | `body` | `[HeistStep]` | Ordered list of typed heist steps. The body must be non-empty unless the plan only provides definitions. |

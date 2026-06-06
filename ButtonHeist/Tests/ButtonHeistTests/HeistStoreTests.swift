@@ -28,9 +28,21 @@ final class HeistStoreTests: XCTestCase {
 
         XCTAssertFalse(heistStore.isRecordingHeist)
         XCTAssertEqual(heist.version, HeistPlan.currentVersion)
+        XCTAssertEqual(heist.name, "recordedHeist")
         XCTAssertEqual(heist.body, [
             try activateStep(label: "Pay", traits: [.button]),
         ])
+    }
+
+    @ButtonHeistActor
+    func testRecordingUsesValidIdentifierAsPlanName() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "checkoutFlow", app: "com.example.app")
+        try heistStore.appendStep(try activateStep(label: "Pay", traits: [.button]))
+
+        let heist = try finishRecording(heistStore)
+
+        XCTAssertEqual(heist.name, "checkoutFlow")
     }
 
     @ButtonHeistActor
@@ -888,7 +900,7 @@ final class HeistStoreTests: XCTestCase {
 
     @ButtonHeistActor
     func testHeistFileIORoundTripsHeist() async throws {
-        let heist = HeistPlan(body: [
+        let heist = HeistPlan(name: "recordedHeist", body: [
                 try activateStep(label: "Go", traits: [.button]),
                 .action(try ActionStep(command: .typeText(TypeTextTarget(text: "test")))),
             ]

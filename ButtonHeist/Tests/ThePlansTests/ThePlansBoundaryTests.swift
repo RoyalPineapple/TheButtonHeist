@@ -59,19 +59,36 @@ func `heist artifact package writes manifest and canonical plan`() throws {
     decoder.dateDecodingStrategy = .iso8601
     let manifest = try decoder.decode(HeistArtifactManifest.self, from: Data(contentsOf: manifestURL))
     #expect(manifest.format == heistArtifactFormat)
+    #expect(manifest.entry == "searchFlow")
+    #expect(manifest.entry == plan.name)
     #expect(manifest.formatVersion == currentHeistArtifactFormatVersion)
     #expect(manifest.planVersion == currentHeistPlanVersion)
 
     let planObject = try JSONSerialization.jsonObject(with: Data(contentsOf: planURL)) as? [String: Any]
     #expect(planObject?["version"] as? Int == currentHeistPlanVersion)
+    #expect(planObject?["name"] as? String == "searchFlow")
     #expect(try HeistArtifactCodec.readPlan(from: artifactURL) == plan)
+    #expect(try HeistArtifactCodec.read(from: artifactURL).manifest.entry == "searchFlow")
+}
+
+@Test
+func `heist artifact entry uses root plan name not output path`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let artifactURL = temp.url.appendingPathComponent("CompletelyDifferent.heist")
+    let plan = try representativeArtifactPlan()
+
+    try HeistArtifactCodec.writePlan(plan, to: artifactURL)
+
+    let artifact = try HeistArtifactCodec.read(from: artifactURL)
+    #expect(artifact.manifest.entry == "searchFlow")
+    #expect(artifact.plan.name == "searchFlow")
 }
 
 @Test
 func `json heist plan IR reads as raw plan`() throws {
     let temp = try PlansTemporaryDirectory()
     let jsonURL = temp.url.appendingPathComponent("SearchFlow.json")
-    let plan = try representativeArtifactPlan()
+    let plan = HeistPlan(body: [.warn(WarnStep(message: "raw unnamed IR"))])
 
     try HeistArtifactCodec.writePlan(plan, to: jsonURL)
 
@@ -120,6 +137,7 @@ func `heist artifact validates manifest and plan versions`() throws {
         in: temp.url,
         manifest: HeistArtifactManifest(
             format: "not.buttonheist",
+            entry: "searchFlow",
             formatVersion: currentHeistArtifactFormatVersion,
             planVersion: currentHeistPlanVersion,
             producer: .buttonHeist,
@@ -137,6 +155,7 @@ func `heist artifact validates manifest and plan versions`() throws {
         in: temp.url,
         manifest: HeistArtifactManifest(
             format: heistArtifactFormat,
+            entry: "searchFlow",
             formatVersion: 2,
             planVersion: currentHeistPlanVersion,
             producer: .buttonHeist,
@@ -165,6 +184,7 @@ func `heist artifact validates manifest and plan versions`() throws {
         in: temp.url,
         manifest: HeistArtifactManifest(
             format: heistArtifactFormat,
+            entry: "searchFlow",
             formatVersion: currentHeistArtifactFormatVersion,
             planVersion: 2,
             producer: .buttonHeist,
@@ -189,6 +209,90 @@ func `heist artifact validates manifest and plan versions`() throws {
         } catch {
             #expect(String(describing: error).contains("manifest planVersion 1 does not match plan version 2"))
         }
+    }
+}
+
+@Test
+func `heist artifact validates required entry against root plan name`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let plan = try representativeArtifactPlan()
+    let planJSON = try plan.canonicalHeistJSONData()
+
+    try writePackage(
+        named: "MissingEntry.heist",
+        in: temp.url,
+        manifestJSON: rawArtifactManifestJSON(entry: nil),
+        planJSON: planJSON
+    ) { url in
+        try expectArtifactReadError(
+            from: url,
+            containing: [
+                "manifest entry contract failed",
+                "observed missing entry",
+                #"Set manifest.json entry to "searchFlow""#,
+            ]
+        )
+    }
+
+    try writePackage(
+        named: "EmptyEntry.heist",
+        in: temp.url,
+        manifest: validArtifactManifest(entry: ""),
+        planJSON: planJSON
+    ) { url in
+        try expectArtifactReadError(
+            from: url,
+            containing: [
+                "entry must be non-empty",
+                "observed empty string",
+                #"Set manifest.json entry to "searchFlow""#,
+            ]
+        )
+    }
+
+    try writePackage(
+        named: "WrongEntry.heist",
+        in: temp.url,
+        manifest: validArtifactManifest(entry: "otherFlow"),
+        planJSON: planJSON
+    ) { url in
+        try expectArtifactReadError(
+            from: url,
+            containing: [
+                "entry must equal the root HeistPlan.name",
+                #"entry "otherFlow" with root plan name "searchFlow""#,
+                "definition name",
+            ]
+        )
+    }
+}
+
+@Test
+func `heist artifact rejects parameterized root entry through admission contract`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let plan = HeistPlan(
+        name: "search",
+        parameter: .strings(name: "query"),
+        body: [.action(try ActionStep(command: .typeText(
+            text: .ref("query"),
+            target: .target(.predicate(.label("Search")))
+        )))]
+    )
+
+    try writePackage(
+        named: "ParameterizedRoot.heist",
+        in: temp.url,
+        manifest: validArtifactManifest(entry: "search"),
+        planJSON: plan.canonicalHeistJSONData()
+    ) { url in
+        try expectArtifactReadError(
+            from: url,
+            containing: [
+                "entry heist must be parameterless",
+                "observed strings",
+                "scratch root heist",
+            ]
+        )
     }
 }
 
@@ -231,8 +335,13 @@ private func representativeArtifactPlan() throws -> HeistPlan {
 }
 
 private func validArtifactManifest() -> HeistArtifactManifest {
+    validArtifactManifest(entry: "searchFlow")
+}
+
+private func validArtifactManifest(entry: String) -> HeistArtifactManifest {
     HeistArtifactManifest(
         format: heistArtifactFormat,
+        entry: entry,
         formatVersion: currentHeistArtifactFormatVersion,
         planVersion: currentHeistPlanVersion,
         producer: .buttonHeist,
@@ -247,12 +356,53 @@ private func writePackage(
     planJSON: Data,
     validate: (URL) throws -> Void
 ) throws {
+    try writePackage(
+        named: name,
+        in: directory,
+        manifestJSON: HeistArtifactCodec.canonicalManifestJSONData(manifest),
+        planJSON: planJSON,
+        validate: validate
+    )
+}
+
+private func writePackage(
+    named name: String,
+    in directory: URL,
+    manifestJSON: Data,
+    planJSON: Data,
+    validate: (URL) throws -> Void
+) throws {
     let packageURL = directory.appendingPathComponent(name)
     try FileManager.default.createDirectory(at: packageURL, withIntermediateDirectories: true)
-    try HeistArtifactCodec.canonicalManifestJSONData(manifest)
-        .write(to: packageURL.appendingPathComponent("manifest.json"))
+    try manifestJSON.write(to: packageURL.appendingPathComponent("manifest.json"))
     try planJSON.write(to: packageURL.appendingPathComponent("plan.json"))
     try validate(packageURL)
+}
+
+private func rawArtifactManifestJSON(entry: String?) -> Data {
+    var fields = [
+        #"  "createdAt" : "2026-06-05T00:00:00Z""#,
+        #"  "format" : "com.royalpineapple.buttonheist.heist""#,
+        #"  "formatVersion" : 1"#,
+        #"  "planVersion" : 1"#,
+        #"  "producer" : { "name" : "buttonheist" }"#,
+    ]
+    if let entry {
+        fields.insert(#"  "entry" : "\#(entry)""#, at: 1)
+    }
+    return Data(("{\n" + fields.joined(separator: ",\n") + "\n}\n").utf8)
+}
+
+private func expectArtifactReadError(from url: URL, containing substrings: [String]) throws {
+    do {
+        _ = try HeistArtifactCodec.read(from: url)
+        Issue.record("Expected artifact read to fail")
+    } catch {
+        let description = String(describing: error)
+        for substring in substrings {
+            #expect(description.contains(substring), "\(description) did not contain \(substring)")
+        }
+    }
 }
 
 private final class PlansTemporaryDirectory {
