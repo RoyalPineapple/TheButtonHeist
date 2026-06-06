@@ -125,7 +125,7 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 ## Recording Heists
 
-`start_heist` / `stop_heist` compose successful interactions into a replayable semantic .heist test. The recording is not a playback log: observation commands produce no steps, `wait` records as an assertion primitive, failed actions produce no steps, viewport/debug commands produce no steps, and explicit expectations are kept only after they pass.
+`start_heist` / `stop_heist` compose successful interactions into a replayable semantic .heist test. The recording is not a playback log: observation commands produce no steps, `wait` records as an assertion primitive, failed actions produce no steps, viewport/debug commands produce no steps, and explicit expectations are kept only after they pass. Pass `swiftOutput` to also write deterministic Swift DSL source; pair `sampleParameter` with `sampleValue` to request a conservative exact sample rewrite.
 
 **Prime the interface first.** Call `get_interface` before your first action. The recorder derives portable matchers from current element data.
 

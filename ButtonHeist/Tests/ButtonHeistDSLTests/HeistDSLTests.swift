@@ -696,6 +696,31 @@ func stringForEachBuildsRuntimeStringLoop() throws {
 }
 
 @Test
+func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
+    let heist = try HeistPlan("Search", parameter: "query") { query in
+        TypeText(query, into: .label("Search"))
+            .expect(.present(.value(query)), timeout: .seconds(2))
+    }
+
+    #expect(heist.parameter == .string(name: "query"))
+    #expect(heist.body == [
+        .action(try ActionStep(
+            command: .typeText(text: .ref("query"), target: .target(.label("Search"))),
+            expectation: WaitStep(
+                predicate: .present(.value(.ref("query"))),
+                timeout: 2
+            )
+        )),
+    ])
+    #expect(try heist.canonicalSwiftDSL() == """
+    try HeistPlan("Search", parameter: "query") { query in
+        TypeText(query, into: .label("Search"))
+            .expect(.present(.value(query)), timeout: .seconds(2))
+    }
+    """)
+}
+
+@Test
 func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     let matching = ElementPredicate.label("Delete")
     let heist = try HeistPlan {

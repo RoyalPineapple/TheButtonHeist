@@ -7,6 +7,45 @@ The recorder observes the same dispatched and validated responses as normal
 execution. It does not dispatch commands, re-run waits, resolve targets, or
 store live runtime handles.
 
+## Artifacts
+
+`stop_heist` always writes the required `.heist` package artifact. That package
+is the replay input and contains `manifest.json` plus canonical `plan.json`.
+
+When `swiftOutput` is present, `stop_heist` also writes deterministic Swift DSL
+source for author review and editing. The Swift file is additive: replay still
+uses the `.heist` artifact unless the source is later edited and compiled by an
+authoring tool.
+
+```bash
+buttonheist stop_heist \
+  --output search-flow.heist \
+  --swift-output SearchFlow.swift \
+  --sample-parameter query \
+  --sample-value milk
+```
+
+With a safe exact sample rewrite, the Swift source can lift repeated concrete
+values into a root string parameter:
+
+```swift
+import ThePlans
+
+let heist = try HeistPlan("searchFlow", parameter: "query") { query in
+    TypeText(query, into: .label("Search"))
+        .expect(.present(.element(label: "Search", value: query)), timeout: .seconds(2))
+}
+```
+
+Sample rewrite is intentionally conservative. It only rewrites exact full
+matches in recorded typed text and semantic value expectations or updates.
+Label-only exact matches may be rewritten when that is the only safe match.
+Identifiers, traits, command names, heist names, file paths, warning messages,
+failure messages, pasteboard payloads, and partial string matches stay concrete.
+When there is no safe exact match, the Swift output remains a concrete canonical
+DSL projection. Recording does not infer loops, helper functions, retries,
+dynamic registries, or arbitrary Swift structure.
+
 ## Recording Rule
 
 ```mermaid

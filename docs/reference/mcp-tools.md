@@ -29,7 +29,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_visible` | `viewportDebug` | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | `semanticAction` | Write text to the general pasteboard from within the app. |
 | `start_heist` | `heistRecording` | Start composing successful interactions into a semantic heist test. |
-| `stop_heist` | `heistRecording` | Stop heist recording and save a deterministic semantic heist fixture. |
+| `stop_heist` | `heistRecording` | Stop heist recording and save a deterministic semantic heist fixture plus optional Swift DSL source. |
 | `swipe` | `spatialAction` | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
 | `type_text` | `semanticAction` | Type non-empty text, optionally after inflating a semantic target. |
 | `wait` | `assertion` | Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state. |
@@ -369,7 +369,7 @@ Parameters:
 
 ### `stop_heist`
 
-Stop heist recording and save a deterministic semantic heist fixture.
+Stop heist recording and save a deterministic semantic heist fixture plus optional Swift DSL source.
 
 - Family: `heistRecording`
 
@@ -378,6 +378,9 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `output` | `string` | yes | - | - |
+| `swiftOutput` | `string` | no | - | - |
+| `sampleParameter` | `string` | no | - | - |
+| `sampleValue` | `string` | no | - | - |
 
 ### `swipe`
 

@@ -10,6 +10,7 @@ struct PublicHeistStartedResponse: FencePublicJSONResponse {
 struct PublicHeistStoppedResponse: FencePublicJSONResponse {
     let status = PublicStatus.ok
     let path: String
+    let swiftPath: String?
     let stepCount: Int
 }
 

@@ -309,6 +309,12 @@ public enum StringExpr: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+extension StringExpr: ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self = .literal(value)
+    }
+}
+
 extension StringExpr: CustomStringConvertible {
     public var description: String {
         switch self {

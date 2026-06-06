@@ -190,13 +190,11 @@ struct HeistSourceCompiler: Sendable {
             "6",
             "-module-cache-path",
             moduleCache.path,
-            "-I",
-            artifacts.modulesDirectory.path,
             "-o",
             executableURL.path,
             compileDirectory.appendingPathComponent("main.swift").path,
         ]
-        arguments.append(contentsOf: artifacts.objectFiles.map(\.path))
+        arguments.append(contentsOf: artifacts.swiftcArguments)
         return arguments
     }
 
@@ -353,25 +351,28 @@ private struct ThePlansBuildArtifacts {
     static let environmentOverrideKey = "HEIST_THEPLANS_BUILD_DIR"
 
     let buildDirectory: URL
-    let modulesDirectory: URL
-    let objectFiles: [URL]
+    let swiftcArguments: [String]
 
     static func resolve(explicitPackageRoot: URL?) throws -> ThePlansBuildArtifacts {
         if let override = environmentOverridePath() {
             HeistSourceCompilerTrace.write("resolving \(environmentOverrideKey) override at \(override)")
             let buildDirectory = URL(fileURLWithPath: override, isDirectory: true)
-            guard let artifacts = try resolveBuildDirectory(buildDirectory) else {
-                throw HeistSourceCompilerError.buildArtifactsNotFound(
-                    searched: [buildDirectory.path],
-                    hint: """
-                    \(environmentOverrideKey)=\(override) does not contain built ThePlans artifacts \
-                    (expected Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o). \
-                    Build them with `swift build --package-path ButtonHeist --product heist-plan` \
-                    and point \(environmentOverrideKey) at ButtonHeist/.build/debug.
-                    """
-                )
+            if let artifacts = try resolveSwiftPMBuildDirectory(buildDirectory) {
+                return artifacts
             }
-            return artifacts
+            if let artifacts = resolveXcodeProductsDirectory(buildDirectory) {
+                return artifacts
+            }
+            throw HeistSourceCompilerError.buildArtifactsNotFound(
+                searched: [buildDirectory.path],
+                hint: """
+                \(environmentOverrideKey)=\(override) does not contain built ThePlans artifacts \
+                (expected Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o, or \
+                ThePlans.framework in an Xcode products directory). \
+                Build them with `swift build --package-path ButtonHeist --product heist-plan` \
+                and point \(environmentOverrideKey) at ButtonHeist/.build/debug.
+                """
+            )
         }
 
         let packageRoots: [URL]
@@ -388,10 +389,18 @@ private struct ThePlansBuildArtifacts {
         var searched: [String] = []
         for packageRoot in packageRoots {
             HeistSourceCompilerTrace.write("checking ButtonHeist package root: \(packageRoot.path)")
-            let candidates = try candidateBuildDirectories(in: packageRoot)
-            searched.append(contentsOf: candidates.map(\.path))
-            for buildDirectory in candidates {
-                if let artifacts = try resolveBuildDirectory(buildDirectory) {
+            let swiftPMCandidates = try candidateBuildDirectories(in: packageRoot)
+            searched.append(contentsOf: swiftPMCandidates.map(\.path))
+            for buildDirectory in swiftPMCandidates {
+                if let artifacts = try resolveSwiftPMBuildDirectory(buildDirectory) {
+                    return artifacts
+                }
+            }
+
+            let xcodeCandidates = candidateXcodeProductsDirectories(packageRoot: packageRoot)
+            searched.append(contentsOf: xcodeCandidates.map(\.path))
+            for productsDirectory in xcodeCandidates {
+                if let artifacts = resolveXcodeProductsDirectory(productsDirectory) {
                     return artifacts
                 }
             }
@@ -404,7 +413,8 @@ private struct ThePlansBuildArtifacts {
             \(packageRoots.map { $0.appendingPathComponent(".build").path }.joined(separator: " or ")). \
             Build them with `swift build --package-path ButtonHeist --product heist-plan`, \
             or set \(environmentOverrideKey) to a directory containing \
-            Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o.
+            Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o. \
+            Xcode test runs can also provide a products directory containing ThePlans.framework.
             """
         )
     }
@@ -417,7 +427,7 @@ private struct ThePlansBuildArtifacts {
         return override
     }
 
-    private static func resolveBuildDirectory(_ buildDirectory: URL) throws -> ThePlansBuildArtifacts? {
+    private static func resolveSwiftPMBuildDirectory(_ buildDirectory: URL) throws -> ThePlansBuildArtifacts? {
         let modulesDirectory = buildDirectory.appendingPathComponent("Modules", isDirectory: true)
         let module = modulesDirectory.appendingPathComponent("ThePlans.swiftmodule")
         let objectsDirectory = buildDirectory.appendingPathComponent("ThePlans.build", isDirectory: true)
@@ -430,8 +440,35 @@ private struct ThePlansBuildArtifacts {
         }
         return ThePlansBuildArtifacts(
             buildDirectory: buildDirectory,
-            modulesDirectory: modulesDirectory,
-            objectFiles: objectFiles
+            swiftcArguments: [
+                "-I",
+                modulesDirectory.path,
+            ] + objectFiles.map(\.path)
+        )
+    }
+
+    private static func resolveXcodeProductsDirectory(_ productsDirectory: URL) -> ThePlansBuildArtifacts? {
+        let frameworkDirectory = productsDirectory.appendingPathComponent("ThePlans.framework", isDirectory: true)
+        let binary = frameworkDirectory.appendingPathComponent("ThePlans")
+        let swiftModuleDirectory = frameworkDirectory
+            .appendingPathComponent("Modules", isDirectory: true)
+            .appendingPathComponent("ThePlans.swiftmodule", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: binary.path),
+              FileManager.default.fileExists(atPath: swiftModuleDirectory.path) else {
+            return nil
+        }
+        return ThePlansBuildArtifacts(
+            buildDirectory: productsDirectory,
+            swiftcArguments: [
+                "-F",
+                productsDirectory.path,
+                "-Xlinker",
+                "-rpath",
+                "-Xlinker",
+                productsDirectory.path,
+                "-framework",
+                "ThePlans",
+            ]
         )
     }
 
@@ -456,6 +493,47 @@ private struct ThePlansBuildArtifacts {
         }
 
         return candidates
+    }
+
+    private static func candidateXcodeProductsDirectories(packageRoot: URL) -> [URL] {
+        let environmentKeys = [
+            "BUILT_PRODUCTS_DIR",
+            "TARGET_BUILD_DIR",
+            "CONFIGURATION_BUILD_DIR",
+        ]
+        let environmentDirectories = environmentKeys.compactMap { key -> URL? in
+            guard let value = ProcessInfo.processInfo.environment[key], !value.isEmpty else {
+                return nil
+            }
+            return URL(fileURLWithPath: value, isDirectory: true).standardizedFileURL
+        }
+        let seedURLs = environmentDirectories + [
+            URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true),
+            URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL,
+            URL(fileURLWithPath: #filePath).standardizedFileURL,
+            packageRoot,
+        ]
+
+        var seen = Set<String>()
+        var candidates: [URL] = []
+        for seedURL in seedURLs {
+            for candidate in ancestorDirectories(from: seedURL, maxDepth: 8) {
+                let path = candidate.path
+                guard seen.insert(path).inserted else { continue }
+                candidates.append(candidate)
+            }
+        }
+        return candidates
+    }
+
+    private static func ancestorDirectories(from url: URL, maxDepth: Int) -> [URL] {
+        var directories: [URL] = []
+        var current = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
+        while directories.count < maxDepth && current.path != current.deletingLastPathComponent().path {
+            directories.append(current)
+            current = current.deletingLastPathComponent()
+        }
+        return directories
     }
 
     private static func swiftObjectFiles(in directory: URL) throws -> [URL] {

@@ -155,11 +155,13 @@ compiles to an admissible `HeistPlan` ahead of time or the command fails.
 ### Resolving built ThePlans artifacts
 
 Compiling Swift source links the user file against a **built** `ThePlans`
-module. There is exactly one resolution path, in this order:
+module. Resolution runs in this order:
 
 1. **`HEIST_THEPLANS_BUILD_DIR`** — the deterministic override. Set it to a
-   directory containing `Modules/ThePlans.swiftmodule` and
-   `ThePlans.build/*.swift.o`. This is what CI uses:
+   SwiftPM build directory containing `Modules/ThePlans.swiftmodule` and
+   `ThePlans.build/*.swift.o`, or an Xcode products directory containing
+   `ThePlans.framework`. This is what CI uses for SwiftPM command-line
+   compilation:
 
    ```bash
    swift build --package-path ButtonHeist --product heist-plan
@@ -170,12 +172,18 @@ module. There is exactly one resolution path, in this order:
 2. **Local package discovery** — absent the override, the local ButtonHeist
    checkout's `.build` directories are searched for the same artifacts.
 
+3. **Xcode products discovery** — Xcode/Tuist test runs can also compile
+   against a products directory containing `ThePlans.framework`. The compiler
+   checks standard Xcode build environment variables and the running test
+   executable's ancestor directories.
+
 The compiler never builds `ThePlans` from source on demand. If no built
 artifacts are found, compilation fails with a diagnostic that lists every path
 that was searched and tells you to run
 `swift build --package-path ButtonHeist --product heist-plan` (or set
-`HEIST_THEPLANS_BUILD_DIR`). Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace which
-resolution branch was taken.
+`HEIST_THEPLANS_BUILD_DIR`). In Xcode/Tuist tests, the diagnostic also lists
+candidate products directories. Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace
+which resolution branch was taken.
 
 ## Explicit Non-Goals
 

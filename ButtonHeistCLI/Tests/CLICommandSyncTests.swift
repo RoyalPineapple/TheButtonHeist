@@ -306,6 +306,39 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testStopHeistStillSendsOnlyHeistOutputByDefault() {
+        let arguments = StopHeistCommand.requestParameters(outputPath: "recording.heist")
+
+        XCTAssertEqual(arguments[.output], .string("recording.heist"))
+        XCTAssertNil(arguments[.swiftOutput])
+        XCTAssertNil(arguments[.sampleParameter])
+        XCTAssertNil(arguments[.sampleValue])
+    }
+
+    func testStopHeistCanSendSwiftOutputAndSampleRewrite() throws {
+        let command = try StopHeistCommand.parse([
+            "--output",
+            "recording.heist",
+            "--swift-output",
+            "recording.swift",
+            "--sample-parameter",
+            "query",
+            "--sample-value",
+            "milk",
+        ])
+        let arguments = StopHeistCommand.requestParameters(
+            outputPath: command.outputPath,
+            swiftOutputPath: command.swiftOutputPath,
+            sampleParameter: command.sampleParameter,
+            sampleValue: command.sampleValue
+        )
+
+        XCTAssertEqual(arguments[.output], .string("recording.heist"))
+        XCTAssertEqual(arguments[.swiftOutput], .string("recording.swift"))
+        XCTAssertEqual(arguments[.sampleParameter], .string("query"))
+        XCTAssertEqual(arguments[.sampleValue], .string("milk"))
+    }
+
     func testSharedRequestBuilderParsesCanonicalMachineJSON() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
             from: #"{"command":"type_text","text":"hello"}"#

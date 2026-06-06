@@ -85,12 +85,18 @@ output mode.
 ```bash
 buttonheist start_heist --app com.example.app
 # run the flow
-buttonheist stop_heist --output recording.heist
+buttonheist stop_heist \
+  --output recording.heist \
+  --swift-output Recording.swift \
+  --sample-parameter query \
+  --sample-value milk
 buttonheist run_heist --path recording.heist --junit report.xml
 ```
 
 Heist replay uses durable semantic selectors and matchers. Capture-local
-annotations are recording evidence and diagnostics, not replay identity.
+annotations are recording evidence and diagnostics, not replay identity. The
+optional Swift output is deterministic authoring source; the `.heist` package
+remains the replay artifact.
 
 ### JSON-Lines Mode
 

@@ -63,6 +63,71 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
 }
 
 @Test
+func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
+    let plan = try HeistPlan("RecordedTarget", targetParameter: "target") { target in
+        Activate(target)
+            .expect(.absent(target), timeout: .seconds(2))
+
+        WaitFor(.present(target), timeout: .seconds(1))
+
+        If {
+            Case(.present(target)) {
+                CustomAction("Archive", on: target)
+                    .expect(.changed(.screen(where: .present(target))), timeout: .seconds(3))
+            }
+
+            Else {
+                Fail("target missing")
+            }
+        }
+
+        WaitFor(timeout: .seconds(4)) {
+            Case(.absent(target)) {
+                Warn("target removed")
+            }
+        }
+    }
+
+    let rendered = try plan.canonicalSwiftDSL()
+
+    #expect(rendered == """
+    try HeistPlan("RecordedTarget", targetParameter: "target") { target in
+        Activate(target)
+            .expect(.absent(target), timeout: .seconds(2))
+
+        WaitFor(.present(target), timeout: .seconds(1))
+
+        If {
+            Case(.present(target)) {
+                CustomAction("Archive", on: target)
+                    .expect(.changed(.screen(where: .present(target))), timeout: .seconds(3))
+            }
+
+            Else {
+                Fail("target missing")
+            }
+        }
+
+        WaitFor(timeout: .seconds(4)) {
+            Case(.absent(target)) {
+                Warn("target removed")
+            }
+        }
+    }
+    """)
+
+    #if SWIFT_PACKAGE && (os(macOS) || os(Linux))
+    let source = """
+    import ThePlans
+
+    let heist = \(rendered)
+    """
+    let compiled = try await compileCanonicalHeist(source)
+    #expect(try compiled.canonicalSwiftDSL() == rendered)
+    #endif
+}
+
+@Test
 func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
     enum LibraryScreen {
         static let tapAddButton = HeistDef<Void>("AddButton.tap") {
@@ -299,6 +364,40 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
         _ = try jsonPlan.canonicalSwiftDSL()
     }
 }
+
+#if SWIFT_PACKAGE && (os(macOS) || os(Linux))
+private func compileCanonicalHeist(_ source: String) async throws -> HeistPlan {
+    let tempDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("canonical-swift-compile-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: tempDirectory) }
+    let sourceURL = tempDirectory.appendingPathComponent("Canonical.swift")
+    try source.write(to: sourceURL, atomically: true, encoding: .utf8)
+    let result = await HeistCompiler(configuration: .init(packageRoot: buttonHeistPackageRoot()))
+        .compileFile(sourceURL, entry: "heist")
+    switch result {
+    case .success(let plan, _):
+        return plan
+    case .failure(let diagnostics):
+        throw CompileBackFailure(diagnostics: diagnostics.map(\.description))
+    }
+}
+
+private func buttonHeistPackageRoot() -> URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+}
+
+private struct CompileBackFailure: Error, CustomStringConvertible {
+    let diagnostics: [String]
+
+    var description: String {
+        diagnostics.joined(separator: "\n")
+    }
+}
+#endif
 
 private let fullASTJSON = """
 {

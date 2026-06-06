@@ -127,7 +127,11 @@ buttonheist activate \
   --label "Search" \
   --traits button
 
-buttonheist stop_heist --output search-flow.heist
+buttonheist stop_heist \
+  --output search-flow.heist \
+  --swift-output SearchFlow.swift \
+  --sample-parameter query \
+  --sample-value milk
 buttonheist run_heist --path search-flow.heist --junit search-flow.xml
 ```
 
@@ -269,6 +273,10 @@ During a recording, Button Heist observes successful runtime evidence and stores
 durable semantic steps. It skips reads, failed actions, and viewport setup for a
 later semantic action. Runtime IDs, capture IDs, live object handles, and screen
 geometry stay out of durable semantic identity.
+
+`stop_heist` writes the replayable `.heist` package and can also write
+deterministic Swift DSL source for review. Exact sample values can be lifted into
+a root string parameter when the rewrite is safe.
 
 A good recorded step reads like intent:
 

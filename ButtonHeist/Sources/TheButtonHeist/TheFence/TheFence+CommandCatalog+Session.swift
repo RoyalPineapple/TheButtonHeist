@@ -70,8 +70,13 @@ enum HeistRecordingCommand: String, CaseIterable, FenceCommand {
                 command, family: .heistRecording,
                 requestDecoder: TheFence.decodeStopHeistRequest,
                 requiresConnectionBeforeDispatch: false,
-                parameters: [param(.output, .string, required: true)],
-                description: "Stop heist recording and save a deterministic semantic heist fixture."
+                parameters: [
+                    param(.output, .string, required: true),
+                    param(.swiftOutput, .string),
+                    param(.sampleParameter, .string),
+                    param(.sampleValue, .string),
+                ],
+                description: "Stop heist recording and save a deterministic semantic heist fixture plus optional Swift DSL source."
             )
         }
     }

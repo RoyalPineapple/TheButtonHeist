@@ -122,7 +122,7 @@ public enum FenceResponse {
     case sessionState(payload: SessionStatePayload)
     case targets([String: TargetConfig], defaultTarget: String?)
     case heistStarted
-    case heistStopped(path: String, stepCount: Int)
+    case heistStopped(path: String, swiftPath: String? = nil, stepCount: Int)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     var actionResult: ActionResult? {

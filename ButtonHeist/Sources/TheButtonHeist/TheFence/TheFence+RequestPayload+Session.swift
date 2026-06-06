@@ -15,6 +15,8 @@ extension TheFence {
 
     struct StopHeistRequest {
         let outputPath: String
+        let swiftOutputPath: String?
+        let sampleRewrite: RecordedHeistSwiftExport.SampleRewrite?
     }
 
     static func decodePingRequest(
@@ -112,8 +114,34 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
+        let swiftOutputPath = try arguments.schemaString("swiftOutput")
+        let sampleParameter = try arguments.schemaString("sampleParameter")
+        let sampleValue = try arguments.schemaString("sampleValue")
+        guard (sampleParameter == nil) == (sampleValue == nil) else {
+            throw FenceError.invalidRequest("sample rewrite requires both sampleParameter and sampleValue")
+        }
+        let sampleRewrite: RecordedHeistSwiftExport.SampleRewrite?
+        if let sampleParameter, let sampleValue {
+            guard swiftOutputPath != nil else {
+                throw FenceError.invalidRequest("sample rewrite requires swiftOutput")
+            }
+            guard HeistParameterName.isValid(sampleParameter) else {
+                throw FenceError.invalidRequest("sample rewrite parameter must be a Swift-style identifier")
+            }
+            guard !sampleValue.isEmpty else {
+                throw FenceError.invalidRequest("sample rewrite value must not be empty")
+            }
+            sampleRewrite = RecordedHeistSwiftExport.SampleRewrite(
+                parameterName: sampleParameter,
+                sampleValue: sampleValue
+            )
+        } else {
+            sampleRewrite = nil
+        }
         let request = StopHeistRequest(
-            outputPath: try arguments.requiredSchemaString("output")
+            outputPath: try arguments.requiredSchemaString("output"),
+            swiftOutputPath: swiftOutputPath,
+            sampleRewrite: sampleRewrite
         )
         return DecodedRequestDispatch { fence, _ in try fence.handleStopHeist(request) }
     }

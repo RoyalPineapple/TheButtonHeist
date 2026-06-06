@@ -95,6 +95,22 @@ struct ToolSyncTests {
         #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
     }
 
+    @Test("stop_heist schema exposes optional Swift export fields without combinators")
+    func stopHeistSchemaExposesSwiftExportFields() throws {
+        let tool = try #require(ToolDefinitions.all.first { $0.name == "stop_heist" })
+
+        for field in ["output", "swiftOutput", "sampleParameter", "sampleValue"] {
+            #expect(
+                schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
+                "stop_heist schema must expose \(field)"
+            )
+        }
+        #expect(schemaValue(at: ["required"], in: tool.inputSchema) == .array([.string("output")]))
+        #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
+        #expect(schemaValue(at: ["anyOf"], in: tool.inputSchema) == nil)
+        #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)
+    }
+
     @Test("heist discovery schemas expose validated plan source without top-level combinators")
     func heistDiscoverySchemasExposePlanSourceWithoutTopLevelCombinators() throws {
         let listHeists = try #require(ToolDefinitions.all.first { $0.name == "list_heists" })

@@ -29,8 +29,9 @@ public extension HeistPlan {
 private struct HeistCanonicalSwiftDSLRenderer {
     func render(_ plan: HeistPlan) throws -> String {
         let definitions = try renderDefinitions(plan.definitions, path: [], indent: 0)
-        let body = try render(steps: plan.body, indent: 1, environment: .empty)
-        let heistHeader = plan.name.map { "try HeistPlan(\(quote($0))) {" } ?? "try HeistPlan {"
+        let environment = try RenderEnvironment.empty.binding(parameter: plan.parameter)
+        let body = try render(steps: plan.body, indent: 1, environment: environment)
+        let heistHeader = try renderRootHeistHeader(plan)
         let heist = """
         \(heistHeader)
         \(body)
@@ -42,6 +43,23 @@ private struct HeistCanonicalSwiftDSLRenderer {
 
         \(heist)
         """
+    }
+
+    private func renderRootHeistHeader(_ plan: HeistPlan) throws -> String {
+        let nameArgument = plan.name.map(quote)
+        switch plan.parameter {
+        case .none:
+            guard let nameArgument else { return "try HeistPlan {" }
+            return "try HeistPlan(\(nameArgument)) {"
+        case .string(let parameter):
+            try validateParameter(parameter)
+            let prefix = nameArgument.map { "\($0), " } ?? ""
+            return "try HeistPlan(\(prefix)parameter: \(quote(parameter))) { \(parameter) in"
+        case .elementTarget(let parameter):
+            try validateParameter(parameter)
+            let prefix = nameArgument.map { "\($0), " } ?? ""
+            return "try HeistPlan(\(prefix)targetParameter: \(quote(parameter))) { \(parameter) in"
+        }
     }
 
     private func render(
@@ -564,7 +582,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
                 break
             }
         }
-        return "ElementPredicateTemplate(\(try renderElementPredicateTemplateFields(predicate, environment: environment)))"
+        return ".element(\(try renderElementPredicateTemplateFields(predicate, environment: environment)))"
     }
 
     private func renderElementPredicateFields(_ predicate: ElementPredicate) -> String {

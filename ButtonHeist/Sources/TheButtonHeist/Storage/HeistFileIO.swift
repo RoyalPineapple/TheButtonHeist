@@ -14,6 +14,17 @@ enum HeistFileIO {
             ))
         }
     }
+
+    static func writeSwiftSource(_ source: String, to path: URL) throws {
+        do {
+            try source.write(to: path, atomically: true, encoding: .utf8)
+        } catch {
+            throw StorageError.heistRecording(.heistWriteFailed(
+                path: path.path,
+                reason: String(describing: error)
+            ))
+        }
+    }
 }
 
 extension HeistStore {
