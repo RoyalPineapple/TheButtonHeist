@@ -1,20 +1,20 @@
 import ThePlans
 import Foundation
 
-// MARK: - Heist Playback Report
+// MARK: - Heist JUnit Report
 
-/// JUnit-compatible summary from playing back a `.heist` file.
+/// JUnit-compatible summary derived from a `HeistExecutionResult`.
 ///
 /// The rows are an adapter projection from the structured heist execution tree,
 /// not the product model for heist results.
-public struct HeistPlaybackReport: Sendable, Equatable {
+public struct HeistJUnitReport: Sendable, Equatable {
     /// Name derived from the input file (e.g. "navigation-flow" from "navigation-flow.heist").
     public let heistName: String
     /// Bundle identifier of the app the heist targets.
     public let app: String
-    /// Total number of report rows for the executed playback path.
+    /// Total number of report rows for the executed heist.
     public let totalStepCount: Int
-    /// Total wall-clock time for the entire playback, in seconds.
+    /// Total wall-clock time for the entire heist, in seconds.
     public let totalTimeSeconds: Double
     /// Step outcomes in execution order for the JUnit adapter.
     public let steps: [StepResult]
@@ -42,10 +42,10 @@ public struct HeistPlaybackReport: Sendable, Equatable {
 
 // MARK: - Step Result
 
-extension HeistPlaybackReport {
+extension HeistJUnitReport {
     /// The outcome of executing a single heist step.
     public struct StepResult: Sendable, Equatable {
-        /// 0-based display index in the playback report.
+        /// 0-based display index in the report.
         public let index: Int
         /// Heist report action or structural step name.
         public let command: String
@@ -90,15 +90,15 @@ extension HeistPlaybackReport {
     }
 }
 
-// MARK: - Playback Error Kind
+// MARK: - Report Error Kind
 
-extension HeistPlaybackReport {
-    /// Classification of why a playback step failed.
+extension HeistJUnitReport {
+    /// Classification of why a step failed.
     ///
-    /// Playback-only failures (`fenceError`, `thrown`) live here; action-level
+    /// Adapter-only failures (`fenceError`, `thrown`) live here; action-level
     /// failures wrap `ErrorKind` directly so there's no mirrored case list to
     /// keep in sync.
-    public enum PlaybackErrorKind: Sendable, Equatable {
+    public enum ReportErrorKind: Sendable, Equatable {
         /// Command-level error (invalid command, missing connection, etc.).
         case commandError
         /// An unexpected exception was thrown during step execution.
@@ -119,18 +119,18 @@ extension HeistPlaybackReport {
 
 // MARK: - Outcome
 
-extension HeistPlaybackReport {
+extension HeistJUnitReport {
     /// Whether a step passed or failed, with failure diagnostics.
     public enum Outcome: Sendable, Equatable {
         case passed
-        case failed(message: String, errorKind: PlaybackErrorKind?)
+        case failed(message: String, errorKind: ReportErrorKind?)
 
         public var failureMessage: String? {
             if case .failed(let message, _) = self { return message }
             return nil
         }
 
-        public var failureType: PlaybackErrorKind? {
+        public var failureType: ReportErrorKind? {
             if case .failed(_, let kind) = self { return kind }
             return nil
         }
@@ -139,7 +139,7 @@ extension HeistPlaybackReport {
 
 // MARK: - JUnit XML
 
-extension HeistPlaybackReport {
+extension HeistJUnitReport {
     /// Generate a JUnit XML report string.
     ///
     /// The structure follows the JUnit XML schema consumed by CI systems

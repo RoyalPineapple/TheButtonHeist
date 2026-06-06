@@ -1,8 +1,8 @@
 import TheScore
 
-/// Diagnostic context captured when a heist playback step fails.
-/// Each case carries exactly the data produced by that failure mode.
-public enum PlaybackFailure: Sendable {
+/// Diagnostic context captured when a heist step fails, consumed by the report
+/// adapter. Each case carries exactly the data produced by that failure mode.
+public enum ReportFailure: Sendable {
     /// TheFence returned a .error response (unknown command, invalid request, etc.)
     case fenceError(step: FailedStep, message: String, interface: Interface?, diagnosticCaptureFailure: String?)
     /// The action executed but returned a non-success ActionResult
@@ -63,7 +63,7 @@ public enum PlaybackFailure: Sendable {
     }
 
     /// Return a copy with the interface snapshot attached.
-    func withInterface(_ interface: Interface?) -> PlaybackFailure {
+    func withInterface(_ interface: Interface?) -> ReportFailure {
         switch self {
         case .fenceError(let step, let message, _, let diagnosticCaptureFailure):
             return .fenceError(
@@ -91,7 +91,7 @@ public enum PlaybackFailure: Sendable {
     }
 
     /// Return a copy with a typed diagnostic-capture failure attached.
-    func withDiagnosticCaptureFailure(_ message: String) -> PlaybackFailure {
+    func withDiagnosticCaptureFailure(_ message: String) -> ReportFailure {
         switch self {
         case .fenceError(let step, let errorMessage, let interface, _):
             return .fenceError(

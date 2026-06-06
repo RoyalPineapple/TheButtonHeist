@@ -78,7 +78,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         if case .heistExecution(_, let result, _) = response {
             let name = prepared.path
                 .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
-            let report = fence.playbackReport(
+            let report = fence.junitReport(
                 for: result,
                 heistName: name,
                 totalTimeSeconds: Double(result.totalTimingMs) / 1000

@@ -1,7 +1,7 @@
 import XCTest
 @testable import TheScore
 
-final class HeistPlaybackReportTests: XCTestCase {
+final class HeistJUnitReportTests: XCTestCase {
 
     // MARK: - Report Construction
 
@@ -23,7 +23,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     }
 
     func testEmptyReport() {
-        let report = HeistPlaybackReport(
+        let report = HeistJUnitReport(
             heistName: "empty",
             app: "com.test.app",
             totalStepCount: 0,
@@ -38,7 +38,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     // MARK: - Step Display Name
 
     func testDisplayNameWithLabel() {
-        let step = HeistPlaybackReport.StepResult(
+        let step = HeistJUnitReport.StepResult(
             index: 2,
             command: "activate",
             target: semanticTarget(label: "Submit"),
@@ -49,7 +49,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     }
 
     func testDisplayNameWithIdentifier() {
-        let step = HeistPlaybackReport.StepResult(
+        let step = HeistJUnitReport.StepResult(
             index: 0,
             command: "swipe",
             target: semanticTarget(identifier: "scroll-view"),
@@ -60,7 +60,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     }
 
     func testDisplayNameWithoutTarget() {
-        let step = HeistPlaybackReport.StepResult(
+        let step = HeistJUnitReport.StepResult(
             index: 5,
             command: "type_text",
             target: nil,
@@ -71,7 +71,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     }
 
     func testDisplayNamePrefersLabelOverIdentifier() {
-        let step = HeistPlaybackReport.StepResult(
+        let step = HeistJUnitReport.StepResult(
             index: 1,
             command: "activate",
             target: semanticTarget(label: "OK", identifier: "ok-button"),
@@ -84,13 +84,13 @@ final class HeistPlaybackReportTests: XCTestCase {
     // MARK: - Outcome Properties
 
     func testOutcomePassedProperties() {
-        let outcome = HeistPlaybackReport.Outcome.passed
+        let outcome = HeistJUnitReport.Outcome.passed
         XCTAssertNil(outcome.failureMessage)
         XCTAssertNil(outcome.failureType)
     }
 
     func testOutcomeFailedProperties() {
-        let outcome = HeistPlaybackReport.Outcome.failed(
+        let outcome = HeistJUnitReport.Outcome.failed(
             message: "timeout waiting for element",
             errorKind: .action(.timeout)
         )
@@ -99,7 +99,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     }
 
     func testOutcomeFailedWithNilErrorKind() {
-        let outcome = HeistPlaybackReport.Outcome.failed(
+        let outcome = HeistJUnitReport.Outcome.failed(
             message: "connection lost",
             errorKind: nil
         )
@@ -152,7 +152,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     }
 
     func testJunitXMLEmptySteps() {
-        let report = HeistPlaybackReport(
+        let report = HeistJUnitReport(
             heistName: "empty",
             app: "com.test.app",
             totalStepCount: 0,
@@ -169,7 +169,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     // MARK: - JUnit XML: Escaping
 
     func testJunitXMLEscapesSpecialCharacters() {
-        let step = HeistPlaybackReport.StepResult(
+        let step = HeistJUnitReport.StepResult(
             index: 0,
             command: "activate",
             target: semanticTarget(label: "Save & Continue <now>"),
@@ -179,7 +179,7 @@ final class HeistPlaybackReportTests: XCTestCase {
                 errorKind: nil
             )
         )
-        let report = HeistPlaybackReport(
+        let report = HeistJUnitReport(
             heistName: "escape-test",
             app: "com.test.app",
             totalStepCount: 5,
@@ -197,13 +197,13 @@ final class HeistPlaybackReportTests: XCTestCase {
     // MARK: - JUnit XML: Timing
 
     func testJunitXMLIncludesTotalTiming() {
-        let report = HeistPlaybackReport(
+        let report = HeistJUnitReport(
             heistName: "timing",
             app: "com.test.app",
             totalStepCount: 1,
             totalTimeSeconds: 1.234,
             steps: [
-                HeistPlaybackReport.StepResult(
+                HeistJUnitReport.StepResult(
                     index: 0, command: "activate", target: nil,
                     timeSeconds: 1.234, outcome: .passed
                 ),
@@ -217,14 +217,14 @@ final class HeistPlaybackReportTests: XCTestCase {
     // MARK: - JUnit XML: Failure Body
 
     func testJunitXMLFailureBodyIncludesTarget() {
-        let step = HeistPlaybackReport.StepResult(
+        let step = HeistJUnitReport.StepResult(
             index: 0,
             command: "swipe",
             target: semanticTarget(label: "List", identifier: "main-list"),
             timeSeconds: 0.5,
             outcome: .failed(message: "swipe failed", errorKind: .action(.actionFailed))
         )
-        let report = HeistPlaybackReport(
+        let report = HeistJUnitReport(
             heistName: "target-test",
             app: "com.test.app",
             totalStepCount: 10,
@@ -261,10 +261,10 @@ final class HeistPlaybackReportTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeReport(
-        outcomes: [HeistPlaybackReport.Outcome], totalStepCount: Int? = nil
-    ) -> HeistPlaybackReport {
+        outcomes: [HeistJUnitReport.Outcome], totalStepCount: Int? = nil
+    ) -> HeistJUnitReport {
         let steps = outcomes.enumerated().map { index, outcome in
-            HeistPlaybackReport.StepResult(
+            HeistJUnitReport.StepResult(
                 index: index,
                 command: "activate",
                 target: semanticTarget(label: "Button \(index)"),
@@ -272,7 +272,7 @@ final class HeistPlaybackReportTests: XCTestCase {
                 outcome: outcome
             )
         }
-        return HeistPlaybackReport(
+        return HeistJUnitReport(
             heistName: "test-heist",
             app: "com.test.app",
             totalStepCount: totalStepCount ?? outcomes.count,
