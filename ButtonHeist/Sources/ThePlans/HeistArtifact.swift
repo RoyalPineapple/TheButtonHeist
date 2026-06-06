@@ -103,7 +103,6 @@ public enum HeistArtifactCodec {
             plan: plan,
             packageURL: packageURL
         )
-        try validateArtifactEntryAdmission(plan: plan, packageURL: packageURL)
         let manifest = HeistArtifactManifest(
             format: manifestPayload.format,
             entry: entry,
@@ -132,8 +131,6 @@ public enum HeistArtifactCodec {
             plan: artifact.plan,
             packageURL: packageURL
         )
-        try validateArtifactEntryAdmission(plan: artifact.plan, packageURL: packageURL)
-
         let fileManager = FileManager.default
         let parent = packageURL.deletingLastPathComponent()
         let temporaryURL = parent.appendingPathComponent(
@@ -187,10 +184,22 @@ public enum HeistArtifactCodec {
     }
 
     public static func decodePlanJSON(_ data: Data, at url: URL) throws -> HeistPlan {
+        let raw = try decodeUnvalidatedPlanJSON(data, at: url)
+        do {
+            return try raw.validatedForRuntime()
+        } catch {
+            throw HeistArtifactCodecError.invalidPlan(path: url.path, reason: String(describing: error))
+        }
+    }
+
+    @_spi(ButtonHeistInternals) public static func decodeUnvalidatedPlanJSON(
+        _ data: Data,
+        at url: URL
+    ) throws -> UnvalidatedHeistPlan {
         let version = try decodePlanVersion(from: data, at: url)
         try validateWritablePlanVersion(version, path: url.path)
         do {
-            return try JSONDecoder().decode(HeistPlan.self, from: data)
+            return try JSONDecoder().decode(UnvalidatedHeistPlan.self, from: data)
         } catch {
             throw HeistArtifactCodecError.invalidPlan(path: url.path, reason: String(describing: error))
         }
@@ -316,13 +325,6 @@ public enum HeistArtifactCodec {
         return manifestEntry
     }
 
-    private static func validateArtifactEntryAdmission(plan: HeistPlan, packageURL: URL) throws {
-        let failures = plan.runtimeAdmissionFailures()
-        if let failure = failures.first(where: { $0.contract == "entry heist must be parameterless" }) {
-            throw HeistArtifactCodecError.artifactEntryAdmissionFailed(path: packageURL.path, failure: failure)
-        }
-    }
-
     private static func artifactEntryCorrection(for plan: HeistPlan) -> String {
         guard let planName = plan.name,
               !planName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -331,8 +333,7 @@ public enum HeistArtifactCodec {
         }
         return """
         Set manifest.json entry to \(quoted(planName)), the root plan name. \
-        Do not use the .heist directory name, a definition name, a registry key, \
-        or a parameterized capability as artifact entry.
+        Do not use the .heist directory name, a definition name, or a registry key.
         """
     }
 
@@ -384,7 +385,6 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
     case invalidManifestEntry(path: String, contract: String, observed: String, correction: String)
     case invalidManifestFormat(path: String, observed: String)
     case unsupportedArtifactVersion(path: String, observed: Int)
-    case artifactEntryAdmissionFailed(path: String, failure: HeistPlanAdmissionFailure)
     case missingPlanVersion(path: String)
     case invalidPlanVersion(path: String, observed: String)
     case unsupportedPlanVersion(path: String, observed: Int)
@@ -425,8 +425,6 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
             Invalid .heist artifact at \(path): unsupported formatVersion \(observed). \
             This Button Heist build supports formatVersion \(currentHeistArtifactFormatVersion).
             """
-        case .artifactEntryAdmissionFailed(let path, let failure):
-            return "Invalid .heist artifact at \(path): \(failure)"
         case .missingPlanVersion(let path):
             return "Invalid heist plan at \(path): missing version."
         case .invalidPlanVersion(let path, let observed):

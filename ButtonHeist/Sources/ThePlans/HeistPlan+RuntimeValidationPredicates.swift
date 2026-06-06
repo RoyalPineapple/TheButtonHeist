@@ -1,6 +1,6 @@
 import Foundation
 
-extension HeistPlanRuntimeAdmissionValidator {
+extension HeistPlanRuntimeValidator {
     mutating func validatePredicate(
         _ predicate: AccessibilityPredicateExpr,
         path: String,

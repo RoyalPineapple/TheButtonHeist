@@ -1,5 +1,6 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 extension TheFence {
@@ -64,12 +65,13 @@ extension TheFence {
 
     func sendAndAwaitHeistExecution(
         _ plan: HeistPlan,
+        argument: HeistArgument = .none,
         timeout: TimeInterval
     ) async throws -> HeistExecutionResult {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
         return try await pendingRequests.waitForHeistExecution(requestId: requestId, timeout: timeout) {
-            let outcome = self.handoff.send(.heistPlan(plan), requestId: requestId)
+            let outcome = self.handoff.send(.heistPlan(HeistPlanRun(plan: plan, argument: argument)), requestId: requestId)
             if case .failed(let failure) = outcome {
                 self.pendingRequests.resolveHeistExecution(
                     requestId: requestId,

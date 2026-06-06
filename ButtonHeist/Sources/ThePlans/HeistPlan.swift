@@ -23,6 +23,22 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         parameter: HeistParameter = .none,
         definitions: [HeistPlan] = [],
         body: [HeistStep]
+    ) throws {
+        self = try UnvalidatedHeistPlan(
+            version: version,
+            name: name,
+            parameter: parameter,
+            definitions: definitions.map(UnvalidatedHeistPlan.init),
+            body: body
+        ).validatedForRuntime()
+    }
+
+    init(
+        runtimeValidatedVersion version: Int,
+        name: String? = nil,
+        parameter: HeistParameter = .none,
+        definitions: [HeistPlan] = [],
+        body: [HeistStep]
     ) {
         self.version = version
         self.name = name
@@ -31,47 +47,12 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         self.body = body
     }
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case version, name, parameter, definitions, body
-    }
-
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let decodedVersion = try container.decode(Int.self, forKey: .version)
-        guard decodedVersion == Self.currentVersion else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .version,
-                in: container,
-                debugDescription: "Unsupported heist plan version \(decodedVersion). " +
-                    "This Button Heist build supports version \(Self.currentVersion)."
-            )
-        }
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan")
-        version = decodedVersion
-        name = try container.decodeIfPresent(String.self, forKey: .name)
-        parameter = try container.decodeIfPresent(HeistParameter.self, forKey: .parameter) ?? .none
-        definitions = try container.decodeIfPresent([HeistPlan].self, forKey: .definitions) ?? []
-        body = try container.decode([HeistStep].self, forKey: .body)
-        guard !body.isEmpty || !definitions.isEmpty else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .body,
-                in: container,
-                debugDescription: "HeistPlan requires a non-empty body or definitions"
-            )
-        }
+        self = try UnvalidatedHeistPlan(from: decoder).validatedForRuntime()
     }
 
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(version, forKey: .version)
-        try container.encodeIfPresent(name, forKey: .name)
-        if parameter != .none {
-            try container.encode(parameter, forKey: .parameter)
-        }
-        if !definitions.isEmpty {
-            try container.encode(definitions, forKey: .definitions)
-        }
-        try container.encode(body, forKey: .body)
+        try UnvalidatedHeistPlan(self).encode(to: encoder)
     }
 }
 

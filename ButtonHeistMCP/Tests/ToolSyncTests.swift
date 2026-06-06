@@ -67,19 +67,24 @@ struct ToolSyncTests {
         )
     }
 
-    @Test("run_heist schema exposes only the plan, never Swift authoring inputs")
+    @Test("run_heist schema exposes plan source and root argument, never Swift authoring inputs")
     func runHeistSchemaExposesOnlyPlan() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "run_heist" })
 
         // The MCP run_heist tool exposes the canonical HeistPlan fields and a
-        // `path`, so agents can drive composable inline plans (definitions,
-        // parameters, named heists) without a Swift toolchain.
-        for field in ["path", "version", "name", "parameter", "definitions", "body"] {
+        // `path`, plus `argument` for parameterized root heists, so agents can
+        // drive composable inline plans without a Swift toolchain.
+        for field in ["path", "argument", "version", "name", "parameter", "definitions", "body"] {
             #expect(
                 schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
                 "run_heist schema must expose \(field)"
             )
         }
+        #expect(schemaValue(at: ["properties", "argument", "properties", "type", "enum"], in: tool.inputSchema) == .array([
+            .string("none"),
+            .string("strings"),
+            .string("element_target"),
+        ]))
 
         // Swift compilation lives entirely in the CLI/heist-plan authoring tools.
         // The MCP run_heist tool accepts only canonical plan IR — no source_file,
@@ -89,7 +94,7 @@ struct ToolSyncTests {
         #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
     }
 
-    @Test("heist discovery schemas expose admitted plan source without top-level combinators")
+    @Test("heist discovery schemas expose validated plan source without top-level combinators")
     func heistDiscoverySchemasExposePlanSourceWithoutTopLevelCombinators() throws {
         let listHeists = try #require(ToolDefinitions.all.first { $0.name == "list_heists" })
         let describeHeist = try #require(ToolDefinitions.all.first { $0.name == "describe_heist" })

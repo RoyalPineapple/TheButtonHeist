@@ -1,7 +1,262 @@
 import Foundation
 
-public struct HeistPlanRuntimeAdmissionLimits: Sendable, Equatable {
-    public static let standard = HeistPlanRuntimeAdmissionLimits()
+@_spi(ButtonHeistInternals) public struct UnvalidatedHeistPlan: Codable, Sendable, Equatable {
+    public let version: Int
+    public let name: String?
+    public let parameter: HeistParameter
+    public let definitions: [UnvalidatedHeistPlan]
+    public let body: [UnvalidatedHeistStep]
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case version, name, parameter, definitions, body
+    }
+
+    public init(
+        version: Int = HeistPlan.currentVersion,
+        name: String? = nil,
+        parameter: HeistParameter = .none,
+        definitions: [UnvalidatedHeistPlan] = [],
+        body: [HeistStep]
+    ) {
+        self.version = version
+        self.name = name
+        self.parameter = parameter
+        self.definitions = definitions
+        self.body = body.map(UnvalidatedHeistStep.init)
+    }
+
+    init(_ plan: HeistPlan) {
+        version = plan.version
+        name = plan.name
+        parameter = plan.parameter
+        definitions = plan.definitions.map(UnvalidatedHeistPlan.init)
+        body = plan.body.map(UnvalidatedHeistStep.init)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedVersion = try container.decode(Int.self, forKey: .version)
+        guard decodedVersion == HeistPlan.currentVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .version,
+                in: container,
+                debugDescription: "Unsupported heist plan version \(decodedVersion). " +
+                    "This Button Heist build supports version \(HeistPlan.currentVersion)."
+            )
+        }
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan")
+        version = decodedVersion
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        parameter = try container.decodeIfPresent(HeistParameter.self, forKey: .parameter) ?? .none
+        definitions = try container.decodeIfPresent([UnvalidatedHeistPlan].self, forKey: .definitions) ?? []
+        body = try container.decode([UnvalidatedHeistStep].self, forKey: .body)
+        guard !body.isEmpty || !definitions.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .body,
+                in: container,
+                debugDescription: "HeistPlan requires a non-empty body or definitions"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encodeIfPresent(name, forKey: .name)
+        if parameter != .none {
+            try container.encode(parameter, forKey: .parameter)
+        }
+        if !definitions.isEmpty {
+            try container.encode(definitions, forKey: .definitions)
+        }
+        try container.encode(body, forKey: .body)
+    }
+
+    public func validatedForRuntime(
+        limits: HeistPlanRuntimeValidationLimits = .standard
+    ) throws -> HeistPlan {
+        var validator = HeistPlanRuntimeValidator(limits: limits)
+        return try validator.validate(self)
+    }
+
+    func uncheckedPlanForRuntimeValidation() -> HeistPlan {
+        HeistPlan(
+            runtimeValidatedVersion: version,
+            name: name,
+            parameter: parameter,
+            definitions: definitions.map { $0.uncheckedPlanForRuntimeValidation() },
+            body: body.map(\.uncheckedStepForRuntimeValidation)
+        )
+    }
+}
+
+@_spi(ButtonHeistInternals) public enum UnvalidatedHeistStep: Codable, Sendable, Equatable {
+    case action(ActionStep)
+    case wait(WaitStep)
+    case conditional(ConditionalStep)
+    case waitForCases(WaitForCasesStep)
+    case forEachElement(ForEachElementStep)
+    case forEachString(ForEachStringStep)
+    case warn(WarnStep)
+    case fail(FailStep)
+    indirect case heist(UnvalidatedHeistPlan)
+    case invoke(HeistInvocationStep)
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case type, action, wait, conditional, waitForCases = "wait_for_cases"
+        case forEachElement = "for_each_element"
+        case forEachString = "for_each_string"
+        case warn, fail, heist, invoke
+    }
+
+    private enum StepType: String, Codable {
+        case action
+        case wait
+        case conditional
+        case waitForCases = "wait_for_cases"
+        case forEachElement = "for_each_element"
+        case forEachString = "for_each_string"
+        case warn
+        case fail
+        case heist
+        case invoke
+    }
+
+    init(_ step: HeistStep) {
+        switch step {
+        case .action(let step):
+            self = .action(step)
+        case .wait(let step):
+            self = .wait(step)
+        case .conditional(let step):
+            self = .conditional(step)
+        case .waitForCases(let step):
+            self = .waitForCases(step)
+        case .forEachElement(let step):
+            self = .forEachElement(step)
+        case .forEachString(let step):
+            self = .forEachString(step)
+        case .warn(let step):
+            self = .warn(step)
+        case .fail(let step):
+            self = .fail(step)
+        case .heist(let plan):
+            self = .heist(UnvalidatedHeistPlan(plan))
+        case .invoke(let step):
+            self = .invoke(step)
+        }
+    }
+
+    var uncheckedStepForRuntimeValidation: HeistStep {
+        switch self {
+        case .action(let step):
+            return .action(step)
+        case .wait(let step):
+            return .wait(step)
+        case .conditional(let step):
+            return .conditional(step)
+        case .waitForCases(let step):
+            return .waitForCases(step)
+        case .forEachElement(let step):
+            return .forEachElement(step)
+        case .forEachString(let step):
+            return .forEachString(step)
+        case .warn(let step):
+            return .warn(step)
+        case .fail(let step):
+            return .fail(step)
+        case .heist(let plan):
+            return .heist(plan.uncheckedPlanForRuntimeValidation())
+        case .invoke(let step):
+            return .invoke(step)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(StepType.self, forKey: .type)
+        switch type {
+        case .action:
+            try decoder.rejectUnknownKeys(allowed: ["type", "action"], typeName: "action heist step")
+            self = .action(try container.decode(ActionStep.self, forKey: .action))
+        case .wait:
+            try decoder.rejectUnknownKeys(allowed: ["type", "wait"], typeName: "wait heist step")
+            self = .wait(try container.decode(WaitStep.self, forKey: .wait))
+        case .conditional:
+            try decoder.rejectUnknownKeys(allowed: ["type", "conditional"], typeName: "conditional heist step")
+            self = .conditional(try container.decode(ConditionalStep.self, forKey: .conditional))
+        case .waitForCases:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.waitForCases.stringValue],
+                typeName: "wait_for_cases heist step"
+            )
+            self = .waitForCases(try container.decode(WaitForCasesStep.self, forKey: .waitForCases))
+        case .forEachElement:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.forEachElement.stringValue],
+                typeName: "for_each_element heist step"
+            )
+            self = .forEachElement(try container.decode(ForEachElementStep.self, forKey: .forEachElement))
+        case .forEachString:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.forEachString.stringValue],
+                typeName: "for_each_string heist step"
+            )
+            self = .forEachString(try container.decode(ForEachStringStep.self, forKey: .forEachString))
+        case .warn:
+            try decoder.rejectUnknownKeys(allowed: ["type", "warn"], typeName: "warn heist step")
+            self = .warn(try container.decode(WarnStep.self, forKey: .warn))
+        case .fail:
+            try decoder.rejectUnknownKeys(allowed: ["type", "fail"], typeName: "fail heist step")
+            self = .fail(try container.decode(FailStep.self, forKey: .fail))
+        case .heist:
+            try decoder.rejectUnknownKeys(allowed: ["type", "heist"], typeName: "heist group step")
+            self = .heist(try container.decode(UnvalidatedHeistPlan.self, forKey: .heist))
+        case .invoke:
+            try decoder.rejectUnknownKeys(allowed: ["type", "invoke"], typeName: "invoke heist step")
+            self = .invoke(try container.decode(HeistInvocationStep.self, forKey: .invoke))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .action(let step):
+            try container.encode(StepType.action, forKey: .type)
+            try container.encode(step, forKey: .action)
+        case .wait(let step):
+            try container.encode(StepType.wait, forKey: .type)
+            try container.encode(step, forKey: .wait)
+        case .conditional(let step):
+            try container.encode(StepType.conditional, forKey: .type)
+            try container.encode(step, forKey: .conditional)
+        case .waitForCases(let step):
+            try container.encode(StepType.waitForCases, forKey: .type)
+            try container.encode(step, forKey: .waitForCases)
+        case .forEachElement(let step):
+            try container.encode(StepType.forEachElement, forKey: .type)
+            try container.encode(step, forKey: .forEachElement)
+        case .forEachString(let step):
+            try container.encode(StepType.forEachString, forKey: .type)
+            try container.encode(step, forKey: .forEachString)
+        case .warn(let step):
+            try container.encode(StepType.warn, forKey: .type)
+            try container.encode(step, forKey: .warn)
+        case .fail(let step):
+            try container.encode(StepType.fail, forKey: .type)
+            try container.encode(step, forKey: .fail)
+        case .heist(let plan):
+            try container.encode(StepType.heist, forKey: .type)
+            try container.encode(plan, forKey: .heist)
+        case .invoke(let step):
+            try container.encode(StepType.invoke, forKey: .type)
+            try container.encode(step, forKey: .invoke)
+        }
+    }
+}
+
+@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeValidationLimits: Sendable, Equatable {
+    public static let standard = HeistPlanRuntimeValidationLimits()
 
     public let maxTotalSteps: Int
     public let maxNestedStepDepth: Int
@@ -39,7 +294,7 @@ public struct HeistPlanRuntimeAdmissionLimits: Sendable, Equatable {
     }
 }
 
-public struct HeistPlanAdmissionFailure: Sendable, Equatable, CustomStringConvertible {
+@_spi(ButtonHeistInternals) public struct HeistPlanValidationFailure: Sendable, Equatable, CustomStringConvertible {
     public let path: String
     public let contract: String
     public let observed: String
@@ -62,40 +317,24 @@ public struct HeistPlanAdmissionFailure: Sendable, Equatable, CustomStringConver
     }
 }
 
-public struct HeistPlanAdmissionError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let failures: [HeistPlanAdmissionFailure]
+@_spi(ButtonHeistInternals) public struct HeistPlanValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+    public let failures: [HeistPlanValidationFailure]
 
-    public init(failures: [HeistPlanAdmissionFailure]) {
+    public init(failures: [HeistPlanValidationFailure]) {
         self.failures = failures
     }
 
     public var description: String {
-        guard let first = failures.first else { return "heist plan admission failed" }
+        guard let first = failures.first else { return "heist plan validation failed" }
         let suffix = failures.count > 1 ? " (+\(failures.count - 1) more)" : ""
-        return "heist plan admission failed: \(first)\(suffix)"
+        return "heist plan validation failed: \(first)\(suffix)"
     }
 }
 
-public extension HeistPlan {
-    func runtimeAdmissionFailures(
-        limits: HeistPlanRuntimeAdmissionLimits = .standard
-    ) -> [HeistPlanAdmissionFailure] {
-        var validator = HeistPlanRuntimeAdmissionValidator(limits: limits)
-        return validator.validate(self)
-    }
+struct HeistPlanRuntimeValidator: HeistPlanTraversalVisitor {
+    let limits: HeistPlanRuntimeValidationLimits
 
-    func assertRuntimeAdmissible(
-        limits: HeistPlanRuntimeAdmissionLimits = .standard
-    ) throws {
-        let failures = runtimeAdmissionFailures(limits: limits)
-        guard failures.isEmpty else { throw HeistPlanAdmissionError(failures: failures) }
-    }
-}
-
-struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
-    let limits: HeistPlanRuntimeAdmissionLimits
-
-    var failures: [HeistPlanAdmissionFailure] = []
+    var failures: [HeistPlanValidationFailure] = []
     var stepCount = 0
     var totalStringBytes = 0
     var reportedStepLimit = false
@@ -104,11 +343,18 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
 
-    init(limits: HeistPlanRuntimeAdmissionLimits) {
+    init(limits: HeistPlanRuntimeValidationLimits) {
         self.limits = limits
     }
 
-    mutating func validate(_ plan: HeistPlan) -> [HeistPlanAdmissionFailure] {
+    mutating func validate(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
+        let plan = raw.uncheckedPlanForRuntimeValidation()
+        let failures = failures(in: plan)
+        guard failures.isEmpty else { throw HeistPlanValidationError(failures: failures) }
+        return plan
+    }
+
+    mutating func failures(in plan: HeistPlan) -> [HeistPlanValidationFailure] {
         let traversal = HeistPlanTraversal()
         traversal.walk(plan, visitor: &self)
         return failures
@@ -116,17 +362,6 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
 
     mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {
         validatePlanHeader(plan, path: context.path, requiresName: false)
-        // The root/entry heist is parameterless. Parameterized reusable
-        // capabilities are run by name through a scratch root that calls
-        // RunHeist with an explicit argument — they are not artifact entries.
-        if plan.parameter != .none {
-            fail(
-                path: "\(context.path).parameter",
-                contract: "entry heist must be parameterless",
-                observed: plan.parameter.kind.rawValue,
-                correction: "Run a parameterized capability through a scratch root heist that calls RunHeist with an argument."
-            )
-        }
     }
 
     mutating func visitDefinitions(_ definitions: [HeistPlan], context: HeistTraversalContext) {
@@ -572,7 +807,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         observed: String,
         correction: String
     ) {
-        failures.append(HeistPlanAdmissionFailure(
+        failures.append(HeistPlanValidationFailure(
             path: path,
             contract: contract,
             observed: observed,
@@ -598,7 +833,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
 private struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
     let valuePath: String
 
-    var failures: [HeistPlanAdmissionFailure] = []
+    var failures: [HeistPlanValidationFailure] = []
 
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
@@ -644,7 +879,7 @@ private struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
         observed: String,
         correction: String
     ) {
-        failures.append(HeistPlanAdmissionFailure(
+        failures.append(HeistPlanValidationFailure(
             path: path,
             contract: contract,
             observed: observed,

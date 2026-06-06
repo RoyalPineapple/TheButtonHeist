@@ -55,14 +55,16 @@ struct HeistPlanTraversal {
         _ plan: HeistPlan,
         visitor: inout V
     ) {
+        let rootScope = HeistReferenceScope.empty.binding(parameter: plan.parameter)
+        let rootEnvironment = HeistExecutionEnvironment.runtimeValidationPlaceholder(for: plan.parameter)
         let context = HeistTraversalContext(
             path: "$",
             depth: 0,
             stepIndex: nil,
             nextStep: nil,
             allowsCollectionLoops: true,
-            scope: .empty,
-            environment: .empty,
+            scope: rootScope,
+            environment: rootEnvironment,
             definitionScope: HeistDefinitionScope(definitions: plan.definitions),
             invocationStack: []
         )
@@ -80,8 +82,8 @@ struct HeistPlanTraversal {
             path: "$.body",
             depth: 1,
             allowsCollectionLoops: true,
-            scope: .empty,
-            environment: .empty,
+            scope: rootScope,
+            environment: rootEnvironment,
             definitionScope: context.definitionScope,
             invocationStack: [],
             visitor: &visitor
@@ -464,6 +466,20 @@ struct HeistDefinitionScope {
             definition: child,
             namePath: namePath + [next]
         )
+    }
+}
+
+extension HeistExecutionEnvironment {
+    static func runtimeValidationPlaceholder(for parameter: HeistParameter) -> HeistExecutionEnvironment {
+        guard let parameterName = parameter.name else { return .empty }
+        switch parameter {
+        case .none:
+            return .empty
+        case .strings:
+            return .empty.binding(string: "__heist_parameter__", to: parameterName)
+        case .elementTarget:
+            return .empty.binding(target: .predicate(.identifier("__heist_parameter__")), to: parameterName)
+        }
     }
 }
 

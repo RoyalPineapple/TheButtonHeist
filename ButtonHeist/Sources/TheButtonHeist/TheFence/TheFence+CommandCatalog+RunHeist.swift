@@ -11,10 +11,11 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .heistRuntime,
                 requestDecoder: TheFence.decodeRunHeistCommandRequest,
-                parameters: Self.planSourceParameters,
+                parameters: [Self.rootArgumentParameter] + Self.planSourceParameters,
                 description: "Execute a typed heist plan, supplied inline (canonical HeistPlan fields: " +
                     "version, name, parameter, definitions, body) or loaded by the fence from a `path` " +
-                    "to a .heist package artifact. Provide exactly one source: a path or an inline plan."
+                    "to a .heist package artifact. Provide exactly one source: a path or an inline plan. " +
+                    "Use `argument` when the root heist declares a strings or element_target parameter."
             )
         case .listHeists:
             return TheFence.Command.commandDescriptor(
@@ -31,7 +32,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 ] + Self.planSourceParameters,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "List a summary menu of the root entry and named reusable heists derived " +
-                    "from one admitted plan. Set `detail` to `detailed` to include derived command " +
+                    "from one runtime-validated plan. Set `detail` to `detailed` to include derived command " +
                     "names, nested heist calls, counts, and safe semantic surface summaries. The plan " +
                     "is supplied inline (canonical HeistPlan fields: version, name, parameter, " +
                     "definitions, body) or loaded from a `path` to a .heist package artifact."
@@ -45,7 +46,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     param(.heist, .string, required: true),
                 ] + Self.planSourceParameters,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Describe one root entry or reusable heist from an admitted plan. The " +
+                description: "Describe one root entry or reusable heist from a runtime-validated plan. The " +
                     "`heist` parameter selects the entry/capability name; the plan is supplied inline " +
                     "(canonical HeistPlan fields: version, name, parameter, definitions, body) or " +
                     "loaded from a `path` to a .heist package artifact."
@@ -91,5 +92,31 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 arrayItemAdditionalProperties: true
             ),
         ]
+    }
+
+    private static var rootArgumentParameter: FenceParameterSpec {
+        param(
+            .argument,
+            .object,
+            objectProperties: [
+                param(
+                    .type,
+                    .string,
+                    required: true,
+                    enumValues: ["none", "strings", "element_target"]
+                ),
+                param(
+                    .values,
+                    .array,
+                    arrayItemType: .string
+                ),
+                param(
+                    .target,
+                    .object,
+                    objectAdditionalProperties: true
+                ),
+            ],
+            objectAdditionalProperties: false
+        )
     }
 }

@@ -5,8 +5,8 @@ public enum HeistCatalogRole: String, Codable, Sendable, Equatable {
     case capability
 }
 
-public enum HeistAdmissionStatus: String, Codable, Sendable, Equatable {
-    case admitted
+public enum HeistValidationStatus: String, Codable, Sendable, Equatable {
+    case validated
 }
 
 public enum HeistCatalogDetail: String, Codable, CaseIterable, Sendable, Equatable {
@@ -27,7 +27,7 @@ public struct HeistCatalogEntry: Codable, Sendable, Equatable {
     public let waitCount: Int?
     public let expectationCount: Int?
     public let semanticSurfaces: [String]?
-    public let admissionStatus: HeistAdmissionStatus?
+    public let validationStatus: HeistValidationStatus?
 
     public init(
         name: String,
@@ -42,7 +42,7 @@ public struct HeistCatalogEntry: Codable, Sendable, Equatable {
         waitCount: Int? = nil,
         expectationCount: Int? = nil,
         semanticSurfaces: [String]? = nil,
-        admissionStatus: HeistAdmissionStatus? = nil
+        validationStatus: HeistValidationStatus? = nil
     ) {
         self.name = name
         self.role = role
@@ -56,7 +56,7 @@ public struct HeistCatalogEntry: Codable, Sendable, Equatable {
         self.waitCount = waitCount
         self.expectationCount = expectationCount
         self.semanticSurfaces = semanticSurfaces
-        self.admissionStatus = admissionStatus
+        self.validationStatus = validationStatus
     }
 }
 
@@ -103,7 +103,7 @@ public struct HeistDescription: Codable, Sendable, Equatable {
     public let parameterName: HeistReferenceName?
     public let requiresArgument: Bool
     public let summary: String?
-    public let admissionStatus: HeistAdmissionStatus
+    public let validationStatus: HeistValidationStatus
     public let semanticSurface: HeistSemanticSurface
 
     public init(
@@ -113,7 +113,7 @@ public struct HeistDescription: Codable, Sendable, Equatable {
         parameterName: HeistReferenceName?,
         requiresArgument: Bool,
         summary: String?,
-        admissionStatus: HeistAdmissionStatus,
+        validationStatus: HeistValidationStatus,
         semanticSurface: HeistSemanticSurface
     ) {
         self.name = name
@@ -122,7 +122,7 @@ public struct HeistDescription: Codable, Sendable, Equatable {
         self.parameterName = parameterName
         self.requiresArgument = requiresArgument
         self.summary = summary
-        self.admissionStatus = admissionStatus
+        self.validationStatus = validationStatus
         self.semanticSurface = semanticSurface
     }
 }
@@ -155,21 +155,11 @@ public struct HeistCatalogError: Error, Sendable, Equatable, CustomStringConvert
 }
 
 public extension HeistPlan {
-    func admittedHeistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistCatalog {
-        try heistCatalog(detail: detail)
-    }
-
-    func describeAdmittedHeist(named requestedName: String) throws -> HeistDescription {
-        try describeHeist(named: requestedName)
-    }
-
     func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> HeistCatalog {
-        try assertRuntimeAdmissible()
         return try uncheckedHeistCatalog(detail: detail)
     }
 
     func describeHeist(named requestedName: String) throws -> HeistDescription {
-        try assertRuntimeAdmissible()
         return try uncheckedDescribeHeist(named: requestedName)
     }
 }
@@ -196,7 +186,7 @@ private extension HeistPlan {
             parameterName: heist.entry.parameterName,
             requiresArgument: heist.entry.requiresArgument,
             summary: nil,
-            admissionStatus: .admitted,
+            validationStatus: .validated,
             semanticSurface: HeistSemanticSurfaceBuilder.surface(for: heist)
         )
     }
@@ -211,10 +201,10 @@ private extension HeistPlan {
         let rootScope = HeistDefinitionScope(definitions: definitions)
         var heists: [ResolvedCatalogHeist] = [
             ResolvedCatalogHeist(
-                entry: catalogEntry(name: rootName, role: .entry, parameter: .none),
+                entry: catalogEntry(name: rootName, role: .entry, parameter: parameter),
                 plan: self,
                 definitionScope: rootScope,
-                environment: .empty,
+                environment: Self.discoveryEnvironment(for: parameter),
                 invocationStack: []
             ),
         ]
@@ -258,15 +248,7 @@ private extension HeistPlan {
     }
 
     static func discoveryEnvironment(for parameter: HeistParameter) -> HeistExecutionEnvironment {
-        guard let name = parameter.name else { return .empty }
-        switch parameter {
-        case .none:
-            return .empty
-        case .strings:
-            return .empty.binding(string: "__heist_parameter__", to: name)
-        case .elementTarget:
-            return .empty.binding(target: .predicate(.identifier("__heist_parameter__")), to: name)
-        }
+        HeistExecutionEnvironment.runtimeValidationPlaceholder(for: parameter)
     }
 
     func catalogEntry(
@@ -324,7 +306,7 @@ private extension HeistPlan {
             waitCount: surface.waits.count,
             expectationCount: surface.expectations.count,
             semanticSurfaces: surface.semanticSurfaces.isEmpty ? nil : surface.semanticSurfaces,
-            admissionStatus: .admitted
+            validationStatus: .validated
         )
     }
 
@@ -348,7 +330,7 @@ private extension HeistPlan {
         if !surface.waits.isEmpty || !surface.expectations.isEmpty {
             appendUnique("assertion", to: &tags)
         }
-        if surface.actionCommands.contains("typeText") {
+        if surface.actionCommands.contains("typeText") || surface.actionCommands.contains("type_text") {
             appendUnique("text-input", to: &tags)
         }
         if surface.actionCommands.contains(where: Self.isViewportAction) {
@@ -371,17 +353,20 @@ private extension HeistPlan {
             "performCustomAction",
             "rotor",
             "editAction",
+            "edit_action",
             "setPasteboard",
+            "set_pasteboard",
             "resignFirstResponder",
+            "resign_first_responder",
         ].contains(command)
     }
 
     static func isGestureAction(_ command: String) -> Bool {
-        ["oneFingerTap", "longPress", "swipe", "drag"].contains(command)
+        ["oneFingerTap", "one_finger_tap", "longPress", "long_press", "swipe", "drag"].contains(command)
     }
 
     static func isViewportAction(_ command: String) -> Bool {
-        ["scroll", "scrollToVisible", "scrollToEdge"].contains(command)
+        ["scroll", "scrollToVisible", "scroll_to_visible", "scrollToEdge", "scroll_to_edge"].contains(command)
     }
 }
 

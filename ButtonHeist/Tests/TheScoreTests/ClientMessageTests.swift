@@ -133,7 +133,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testHeistPlanClientMessageRoundTrip() throws {
         let saveTarget = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]))
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(saveTarget),
                     expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
@@ -148,14 +148,16 @@ final class ClientMessageTests: XCTestCase {
                 )),
             ]
         )
-        let message = ClientMessage.heistPlan(plan)
+        let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
 
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        guard case .heistPlan(let decodedPlan) = decoded else {
+        guard case .heistPlan(let decodedRun) = decoded else {
             return XCTFail("Expected heistPlan, got \(decoded)")
         }
+        let decodedPlan = decodedRun.plan
+        XCTAssertEqual(decodedRun.argument, .none)
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
               case .activate(let decodedTarget) = decodedAction.command,
@@ -165,8 +167,34 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decodedTarget, .target(saveTarget))
     }
 
+    func testHeistPlanClientMessageRoundTripPreservesRootArgument() throws {
+        let plan = try HeistPlan(
+            name: "search",
+            parameter: .strings(name: "query"),
+            body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("query"),
+                    target: .target(.predicate(.label("Search")))
+                ))),
+            ]
+        )
+        let message = ClientMessage.heistPlan(HeistPlanRun(
+            plan: plan,
+            argument: .strings([.literal("milk")])
+        ))
+
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        guard case .heistPlan(let decodedRun) = decoded else {
+            return XCTFail("Expected heistPlan, got \(decoded)")
+        }
+        XCTAssertEqual(decodedRun.plan, plan)
+        XCTAssertEqual(decodedRun.argument, .strings([.literal("milk")]))
+    }
+
     func testHeistPlanEnvelopeRoundTrip() throws {
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .typeText(TypeTextTarget(
                     text: "hello",
@@ -176,15 +204,15 @@ final class ClientMessageTests: XCTestCase {
         ])
         let envelope = RequestEnvelope(
             requestId: "heist-1",
-            message: .heistPlan(plan)
+            message: .heistPlan(HeistPlanRun(plan: plan))
         )
 
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
 
         XCTAssertEqual(decoded.requestId, "heist-1")
-        guard case .heistPlan(let decodedPlan) = decoded.message,
-              let step = decodedPlan.body.first,
+        guard case .heistPlan(let decodedRun) = decoded.message,
+              let step = decodedRun.plan.body.first,
               case .action(let action) = step,
               case .typeText(let text, let target) = action.command,
               action.expectation == nil else {

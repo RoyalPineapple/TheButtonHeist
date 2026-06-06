@@ -5,12 +5,11 @@ public extension HeistPlan {
         from data: Data,
         sourceURL: URL = URL(fileURLWithPath: "compiled-swift-heist-output.json")
     ) throws -> HeistPlan {
-        let plan = try HeistArtifactCodec.decodePlanJSON(
+        let raw = try HeistArtifactCodec.decodeUnvalidatedPlanJSON(
             data,
             at: sourceURL
         )
-        try plan.assertRuntimeAdmissible()
-        return plan
+        return try raw.validatedForRuntime()
     }
 
     func canonicalHeistJSONData() throws -> Data {
@@ -146,7 +145,6 @@ public struct HeistSourceCompiler: Sendable {
         import ThePlans
 
         let plan: HeistPlan = try \(entry.name)()
-        try plan.assertRuntimeAdmissible()
         FileHandle.standardOutput.write(try plan.canonicalHeistJSONData())
         """
         try wrapper.write(

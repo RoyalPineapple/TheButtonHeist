@@ -199,7 +199,8 @@ final class MockConnection: TransportReachabilityConnecting {
         for message: ClientMessage,
         handler: (ClientMessage) -> ServerMessage
     ) -> ServerMessage? {
-        guard case .heistPlan(let plan) = message else { return nil }
+        guard case .heistPlan(let run) = message else { return nil }
+        let plan = run.plan
 
         var stepResults: [HeistExecutionStepResult] = []
         var failedIndex: Int?

@@ -121,12 +121,12 @@ final class CLICommandSyncTests: XCTestCase {
     func testRunHeistInlinePlanPreservesAllCanonicalFields() throws {
         // An inline plan with name, nested definitions (carrying a parameter),
         // and an invoke body must survive serialization without dropping fields.
-        let definition = HeistPlan(
+        let definition = try HeistPlan(
             name: "addToCart",
             parameter: .strings(name: "item"),
             body: [.warn(WarnStep(message: "x"))]
         )
-        let plan = HeistPlan(
+        let plan = try HeistPlan(
             name: "flow",
             definitions: [definition],
             body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .strings([.literal("Milk")])))]
@@ -175,10 +175,42 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNil(arguments[.body])
     }
 
+    func testRunHeistForwardsRootArgumentWithPathSource() throws {
+        let arguments = try RunHeistCommand.planArguments(
+            inline: nil,
+            fromFile: nil,
+            path: "Search.heist",
+            entry: nil,
+            argument: #"{"type":"strings","values":["milk"]}"#
+        )
+
+        XCTAssertEqual(arguments[.path], .string("Search.heist"))
+        XCTAssertEqual(arguments[.argument], .object([
+            "type": .string("strings"),
+            "values": .array([.string("milk")]),
+        ]))
+    }
+
+    func testRunHeistForwardsRootArgumentWithInlineSource() throws {
+        let arguments = try RunHeistCommand.planArguments(
+            inline: #"{"version":1,"name":"search","parameter":{"type":"strings","name":"query"},"body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
+            fromFile: nil,
+            path: nil,
+            entry: nil,
+            argument: #"{"type":"strings","values":["milk"]}"#
+        )
+
+        XCTAssertEqual(arguments[.name], .string("search"))
+        XCTAssertEqual(arguments[.argument], .object([
+            "type": .string("strings"),
+            "values": .array([.string("milk")]),
+        ]))
+    }
+
     func testRunHeistCompilesSwiftSourceToTemporaryHeistArtifact() throws {
         // Swift source compiles to a temp .heist the fence reads — the plan
         // crosses through the canonical codec, never a parameter round-trip.
-        let plan = HeistPlan(name: "swiftFlow", body: [.warn(WarnStep(message: "from swift"))])
+        let plan = try HeistPlan(name: "swiftFlow", body: [.warn(WarnStep(message: "from swift"))])
         let prepared = try RunHeistCommand.prepareInput(
             path: "Flow.swift",
             entry: "makeHeist",

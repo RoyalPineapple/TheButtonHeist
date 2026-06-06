@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 @testable import AccessibilitySnapshotParser
+@_spi(ButtonHeistInternals) import ThePlans
 @testable import TheInsideJob
 @testable import TheScore
 
@@ -549,7 +550,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Home", "Login"]),
         ])
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Home"))),
@@ -576,7 +577,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Settings"]),
         ])
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Home"))),
@@ -598,7 +599,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Settings"]),
         ])
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
@@ -624,7 +625,7 @@ final class TheBrainsActionTests: XCTestCase {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Settings"]),
         ])
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
@@ -652,7 +653,7 @@ final class TheBrainsActionTests: XCTestCase {
             observedState(labels: ["Loading"]),
             observedState(labels: ["Home"]),
         ])
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 1,
                 cases: [
@@ -678,7 +679,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [observedState(labels: ["Home"])],
             unavailableObservationCount: 1
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 1,
                 cases: [
@@ -705,7 +706,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [observedState(labels: ["Settings"])],
             observedTimeouts: { observedTimeouts.append($0) }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
@@ -723,7 +724,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistWaitTimeoutZeroTurnsObservationCrankOnce() async throws {
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .wait(WaitStep(
                 predicate: .state(.present(ElementPredicate(label: "Never Appears"))),
                 timeout: 0
@@ -749,7 +750,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [observedState(labels: ["Home"])],
             observedTimeouts: { observedTimeouts.append($0) }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .wait(WaitStep(
                 predicate: .state(.present(ElementPredicate(label: "Home"))),
                 timeout: 0
@@ -868,7 +869,7 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .wait)
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(ElementPredicate(label: "Submit"))),
                 expectation: expectation
@@ -886,43 +887,19 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.expectation?.actual, "no observed accessibility trace")
     }
 
-    func testHeistRuntimeAdmissionRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
-        var executedCommands: [ClientMessage] = []
-        var observedScopes: [SemanticObservationScope] = []
-        let runtime = heistRuntime(
-            observations: [],
-            execute: { command in
-                executedCommands.append(command)
-                return ActionResult(success: true, method: .activate)
-            },
-            observedScopes: { observedScopes.append($0) }
-        )
-        let plan = HeistPlan(body: [
+    func testHeistRuntimeValidationRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
+        let raw = UnvalidatedHeistPlan(body: [
             .action(try ActionStep(command: .activate(.ref("missing")))),
         ])
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorKind, ErrorKind.validationError)
-        XCTAssertTrue(result.message?.contains("$.body[0].action.command.payload.target") == true)
-        XCTAssertTrue(result.message?.contains("target_ref must resolve") == true)
-        XCTAssertTrue(heist.steps.isEmpty)
-        XCTAssertTrue(executedCommands.isEmpty)
-        XCTAssertTrue(observedScopes.isEmpty)
+        XCTAssertThrowsError(try raw.validatedForRuntime()) { error in
+            XCTAssertTrue(String(describing: error).contains("$.body[0].action.command.payload.target"))
+            XCTAssertTrue(String(describing: error).contains("target_ref must resolve"))
+        }
     }
 
-    func testHeistRuntimeAdmissionRejectsInvalidStringLoopBeforeDispatch() async throws {
-        var executedCommands: [ClientMessage] = []
-        let runtime = heistRuntime(
-            observations: [],
-            execute: { command in
-                executedCommands.append(command)
-                return ActionResult(success: true, method: .typeText)
-            }
-        )
-        let plan = HeistPlan(body: [
+    func testHeistRuntimeValidationRejectsInvalidStringLoopBeforeDispatch() async throws {
+        let raw = UnvalidatedHeistPlan(body: [
             .forEachString(try ForEachStringStep(
                 values: [""],
                 parameter: "item",
@@ -935,35 +912,24 @@ final class TheBrainsActionTests: XCTestCase {
             )),
         ])
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorKind, ErrorKind.validationError)
-        XCTAssertTrue(result.message?.contains("text must be non-empty") == true)
-        XCTAssertTrue(executedCommands.isEmpty)
+        XCTAssertThrowsError(try raw.validatedForRuntime()) { error in
+            XCTAssertTrue(String(describing: error).contains("text must be non-empty"))
+        }
     }
 
-    func testHeistRuntimeAdmissionRejectsOversizedForEachBeforeObservation() async throws {
-        var observedScopes: [SemanticObservationScope] = []
-        let runtime = heistRuntime(
-            observations: [],
-            observedScopes: { observedScopes.append($0) }
-        )
-        let plan = HeistPlan(body: [
+    func testHeistRuntimeValidationRejectsOversizedForEachBeforeObservation() async throws {
+        let raw = UnvalidatedHeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
-                limit: HeistPlanRuntimeAdmissionLimits.standard.maxForEachElementLimit + 1,
+                limit: HeistPlanRuntimeValidationLimits.standard.maxForEachElementLimit + 1,
                 parameter: "target",
                 body: [.action(try ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
 
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorKind, .validationError)
-        XCTAssertTrue(result.message?.contains("max for_each_element limit") == true)
-        XCTAssertTrue(observedScopes.isEmpty)
+        XCTAssertThrowsError(try raw.validatedForRuntime()) { error in
+            XCTAssertTrue(String(describing: error).contains("max for_each_element limit"))
+        }
     }
 
     func testHeistInvocationExecutesHelperDependenciesInInvokedDefinitionScope() async throws {
@@ -975,12 +941,12 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .activate)
             }
         )
-        let plan = HeistPlan(definitions: [
-            HeistPlan(
+        let plan = try UnvalidatedHeistPlan(definitions: [
+            UnvalidatedHeistPlan(
                 name: "addToCart",
                 parameter: .strings(name: "item"),
                 definitions: [
-                    HeistPlan(name: "tapAddButton", body: [
+                    UnvalidatedHeistPlan(name: "tapAddButton", body: [
                         .action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Add to Cart"))))),
                     ]),
                 ],
@@ -992,9 +958,9 @@ final class TheBrainsActionTests: XCTestCase {
         ], body: [
             .invoke(HeistInvocationStep(
                 path: ["addToCart"],
-                argument: .strings([.literal("Milk")])
-            )),
-        ])
+            argument: .strings([.literal("Milk")])
+        )),
+        ]).validatedForRuntime()
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
@@ -1003,6 +969,61 @@ final class TheBrainsActionTests: XCTestCase {
             .activate(.predicate(ElementPredicate(label: "Milk"))),
             .activate(.predicate(ElementPredicate(label: "Add to Cart"))),
         ])
+    }
+
+    func testHeistExecutionBindsRootStringArgument() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .typeText)
+            }
+        )
+        let plan = try HeistPlan(
+            name: "search",
+            parameter: .strings(name: "query"),
+            body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("query"),
+                    target: .target(.predicate(.label("Search")))
+                ))),
+            ]
+        )
+
+        let result = await brains.executeHeistPlanForTest(
+            plan,
+            argument: .strings([.literal("milk")]),
+            runtime: runtime
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(executedCommands, [
+            .typeText(TypeTextTarget(
+                text: "milk",
+                elementTarget: .predicate(ElementPredicate(label: "Search"))
+            )),
+        ])
+    }
+
+    func testHeistExecutionRejectsMissingRootArgument() async throws {
+        let runtime = heistRuntime(observations: [])
+        let plan = try HeistPlan(
+            name: "search",
+            parameter: .strings(name: "query"),
+            body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("query"),
+                    target: .target(.predicate(.label("Search")))
+                ))),
+            ]
+        )
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorKind, .validationError)
+        XCTAssertEqual(result.message, "Could not bind root heist argument: heist argument type none does not match parameter type strings")
     }
 
     func testHeistInvocationAllowsSameLeafDefinitionNamesInDifferentScopes() async throws {
@@ -1014,11 +1035,11 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .activate)
             }
         )
-        let plan = HeistPlan(definitions: [
-            HeistPlan(
+        let plan = try HeistPlan(definitions: [
+            try HeistPlan(
                 name: "setup",
                 definitions: [
-                    HeistPlan(name: "setup", body: [
+                    try HeistPlan(name: "setup", body: [
                         .action(try ActionStep(command: .activate(.target(.predicate(.label("Nested Setup")))))),
                     ]),
                 ],
@@ -1038,13 +1059,13 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testHeistExecutionRuntimeRejectsSelfInvocationOutsideLocalScopeWhenAdmissionIsBypassed() async throws {
+    func testHeistExecutionRuntimeRejectsSelfInvocationOutsideLocalScopeWhenValidationIsBypassed() async throws {
         let runtime = heistRuntime(observations: [])
-        let plan = HeistPlan(definitions: [
-            HeistPlan(name: "repeat", body: [
+        let plan = try UnvalidatedHeistPlan(definitions: [
+            UnvalidatedHeistPlan(name: "repeat", body: [
                 .invoke(HeistInvocationStep(path: ["repeat"])),
             ]),
-        ], body: [])
+        ], body: []).validatedForRuntime()
 
         let results = await brains.executeHeistSteps(
             [.invoke(HeistInvocationStep(path: ["repeat"]))],
@@ -1082,7 +1103,7 @@ final class TheBrainsActionTests: XCTestCase {
                 ActionResult(success: true, method: .activate, accessibilityTrace: trace)
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(ElementPredicate(label: "Controls Demo"))),
                 expectation: expectation
@@ -1121,7 +1142,7 @@ final class TheBrainsActionTests: XCTestCase {
                 )
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(ElementPredicate(label: "Submit"))),
                 expectation: expectation
@@ -1144,7 +1165,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [observedState(labels: ["Home"])],
             observedScopes: { observedScopes.append($0) }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Home"))),
@@ -1168,7 +1189,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [observedState(labels: ["Loading"])],
             observedScopes: { observedScopes.append($0) }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
@@ -1192,7 +1213,7 @@ final class TheBrainsActionTests: XCTestCase {
             observations: [observedState(labels: ["Loading"])],
             observedScopes: { observedScopes.append($0) }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
@@ -1219,7 +1240,7 @@ final class TheBrainsActionTests: XCTestCase {
             observedState(labels: ["Loading"]),
             observedState(labels: ["Loading", "Toast"]),
         ])
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 1,
                 cases: [
@@ -1249,7 +1270,7 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             observedScopes: { observedScopes.append($0) }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 20,
@@ -1288,7 +1309,7 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .activate)
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 1,
@@ -1326,7 +1347,7 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .activate)
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 10,
@@ -1371,7 +1392,7 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .activate)
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 10,
@@ -1414,7 +1435,7 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .activate)
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 10,
@@ -1453,7 +1474,7 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .activate)
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 10,
@@ -1491,7 +1512,7 @@ final class TheBrainsActionTests: XCTestCase {
                 )
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 10,
@@ -1547,7 +1568,7 @@ final class TheBrainsActionTests: XCTestCase {
                 )
             }
         )
-        let plan = HeistPlan(body: [
+        let plan = try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 10,
@@ -2281,7 +2302,7 @@ final class TheBrainsActionTests: XCTestCase {
             }
         }
 
-        let result = await brains.executeHeistPlan(HeistPlan(body: [step]))
+        let result = await brains.executeHeistPlan(try HeistPlan(body: [step]))
         guard case .heistExecution(let heist) = result.payload,
               let stepResult = heist.steps.first,
               let actionResult = stepResult.actionResult else {

@@ -62,7 +62,14 @@ extension Array where Element == (ClientMessage, String?) {
     /// the one-step heist pipeline.
     var sentHeistPlan: HeistPlan? {
         for (message, _) in self {
-            if case .heistPlan(let plan) = message { return plan }
+            if case .heistPlan(let run) = message { return run.plan }
+        }
+        return nil
+    }
+
+    var sentHeistRun: HeistPlanRun? {
+        for (message, _) in self {
+            if case .heistPlan(let run) = message { return run }
         }
         return nil
     }

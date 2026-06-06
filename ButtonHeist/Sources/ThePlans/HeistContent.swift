@@ -46,7 +46,7 @@ private extension HeistPlan {
                 debugDescription: "HeistPlan requires a non-empty body or definitions"
             ))
         }
-        return HeistPlan(name: name, definitions: definitions, body: body)
+        return try HeistPlan(name: name, definitions: definitions, body: body)
     }
 }
 
@@ -138,7 +138,7 @@ public enum HeistBuilder {
             }
             if existing.isNamespaceDefinition, definition.isNamespaceDefinition {
                 merged[existingIndex] = HeistPlan(
-                    version: existing.version,
+                    runtimeValidatedVersion: existing.version,
                     name: existing.name,
                     parameter: existing.parameter,
                     definitions: mergeDefinitions(existing.definitions + definition.definitions),
@@ -236,10 +236,22 @@ public struct HeistDef<Input>: Sendable {
         body: [HeistStep]
     ) -> HeistPlan {
         guard let first = path.first else {
-            return HeistPlan(name: nil, parameter: parameter, definitions: definitions, body: body)
+            return HeistPlan(
+                runtimeValidatedVersion: HeistPlan.currentVersion,
+                name: nil,
+                parameter: parameter,
+                definitions: definitions,
+                body: body
+            )
         }
         guard path.count > 1 else {
-            return HeistPlan(name: first, parameter: parameter, definitions: definitions, body: body)
+            return HeistPlan(
+                runtimeValidatedVersion: HeistPlan.currentVersion,
+                name: first,
+                parameter: parameter,
+                definitions: definitions,
+                body: body
+            )
         }
         let child = Self.makeDefinition(
             path: Array(path.dropFirst()),
@@ -247,7 +259,12 @@ public struct HeistDef<Input>: Sendable {
             definitions: definitions,
             body: body
         )
-        return HeistPlan(name: first, definitions: [child], body: [])
+        return HeistPlan(
+            runtimeValidatedVersion: HeistPlan.currentVersion,
+            name: first,
+            definitions: [child],
+            body: []
+        )
     }
 
     private static func pathComponents(_ path: String) -> [String] {

@@ -143,7 +143,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
-        let plan = HeistPlan(body: [.conditional(conditional)])
+        let plan = try HeistPlan(body: [.conditional(conditional)])
         let childResult = HeistExecutionStepResult(
             index: 0,
             path: "$.body[0].conditional.cases[0].body[0]",
@@ -184,7 +184,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
             expectation: WaitStep(predicate: expected, timeout: 1)
         ))
-        let plan = HeistPlan(body: [action])
+        let plan = try HeistPlan(body: [action])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
@@ -213,8 +213,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.humanFormatted().contains("[expectations: 1/1 met]"))
     }
 
-    func testCompactHeistFormattingReportsFailStepMessage() {
-        let plan = HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
+    func testCompactHeistFormattingReportsFailStepMessage() throws {
+        let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
@@ -234,8 +234,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(output.contains("[0] fail -> error: Unknown screen"), output)
     }
 
-    func testPublicHeistJSONReportsFailStepMessage() {
-        let plan = HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
+    func testPublicHeistJSONReportsFailStepMessage() throws {
+        let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
@@ -271,7 +271,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
-        let plan = HeistPlan(body: [.conditional(conditional)])
+        let plan = try HeistPlan(body: [.conditional(conditional)])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
@@ -346,7 +346,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             ],
             elseBody: [elseStep]
         )
-        let plan = HeistPlan(body: [.conditional(conditional)])
+        let plan = try HeistPlan(body: [.conditional(conditional)])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
@@ -400,7 +400,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             parameter: "item",
             body: [try HeistStep.action(ActionStep(command: .typeText(text: .ref("item"), target: nil)))]
         )
-        let plan = HeistPlan(body: [.forEachString(forEach)])
+        let plan = try HeistPlan(body: [.forEachString(forEach)])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(

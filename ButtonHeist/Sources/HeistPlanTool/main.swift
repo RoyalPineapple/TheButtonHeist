@@ -97,20 +97,11 @@ enum HeistPlanIO {
     static func readValidatedPlan(from path: String) throws -> HeistPlan {
         let url = URL(fileURLWithPath: path)
         do {
-            let plan = try HeistArtifactCodec.readPlan(from: url)
-            try validate(plan)
-            return plan
+            return try HeistArtifactCodec.readPlan(from: url)
         } catch let error as HeistArtifactCodecError {
             throw ValidationError(error.description)
         } catch {
             throw ValidationError("failed to read \(path): \(error)")
-        }
-    }
-
-    static func validate(_ plan: HeistPlan) throws {
-        let failures = plan.runtimeAdmissionFailures()
-        guard failures.isEmpty else {
-            throw ValidationError("heist plan admission failed:\n\(diagnostics(for: failures))")
         }
     }
 
@@ -132,15 +123,4 @@ enum HeistPlanIO {
         }
     }
 
-    private static func diagnostics(for failures: [HeistPlanAdmissionFailure]) -> String {
-        failures.map { failure in
-            """
-            - path: \(failure.path)
-              contract: \(failure.contract)
-              observed: \(failure.observed)
-              correction: \(failure.correction)
-            """
-        }
-        .joined(separator: "\n")
-    }
 }

@@ -18,6 +18,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
 
             Examples:
               buttonheist run_heist --path Flow.heist
+              buttonheist run_heist --path Search.heist --argument '{"type":"strings","values":["milk"]}'
               buttonheist run_heist --path Flow.swift --entry makeHeist
               buttonheist run_heist --path Flow.heist --junit report.xml
               buttonheist run_heist --plan '{"version":1,"body":[{"type":"warn","warn":{"message":"Check"}}]}'
@@ -35,6 +36,9 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
 
     @Option(name: .long, help: "Path to a JSON file containing a canonical heist plan object")
     var planFromFile: String?
+
+    @Option(name: .long, help: "Root heist argument as canonical HeistArgument JSON object.")
+    var argument: String?
 
     @Option(name: .long, help: "Zero-argument Swift entry symbol returning HeistPlan.")
     var entry: String?
@@ -54,7 +58,8 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             inline: plan,
             fromFile: planFromFile,
             path: prepared.path,
-            entry: prepared.entry
+            entry: prepared.entry,
+            argument: argument
         )
 
         guard let junitPath = junit else {
@@ -138,7 +143,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         // Write the plan exactly as compiled. The artifact file name carries the
         // run name for reporting; it must not be stamped into the plan's `name`,
         // which is a Swift-identifier-constrained semantic field and would fail
-        // runtime admission for a non-identifier file name.
+        // runtime validation for a non-identifier file name.
         try HeistArtifactCodec.writePlan(plan, to: artifact)
         return PreparedInput(path: artifact.path, entry: nil, cleanup: {
             try? FileManager.default.removeItem(at: directory)
@@ -161,6 +166,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         fromFile: String?,
         path: String?,
         entry: String?,
+        argument: String? = nil,
         commandName: String = Self.cliCommandName
     ) throws -> CLIRequestParameters {
         let suppliedSources = [inline != nil, fromFile != nil, path != nil].filter { $0 }.count
@@ -183,7 +189,11 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
                 )
             }
             // Forward the artifact path; the fence reads the package into a HeistPlan.
-            return [.path: .string(path)]
+            var request: CLIRequestParameters = [.path: .string(path)]
+            if let argument {
+                request.set(.argument, try parseRootArgument(argument))
+            }
+            return request
         }
 
         if entry != nil {
@@ -195,7 +205,11 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             fromFile: fromFile,
             optionName: "plan"
         )
-        return try requestParameters(from: fields)
+        var request = try requestParameters(from: fields)
+        if let argument {
+            request.set(.argument, try parseRootArgument(argument))
+        }
+        return request
     }
 
     private static func requestParameters(from fields: [String: HeistValue]) throws -> CLIRequestParameters {
@@ -207,5 +221,22 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             request.set(key, value)
         }
         return request
+    }
+
+    private static func parseRootArgument(_ rawValue: String) throws -> HeistValue {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw ValidationError("--argument must be a JSON object")
+        }
+        let value: HeistValue
+        do {
+            value = try JSONDecoder().decode(HeistValue.self, from: Data(trimmed.utf8))
+        } catch {
+            throw ValidationError("--argument must be valid JSON: \(error)")
+        }
+        guard case .object = value else {
+            throw ValidationError("--argument must be a JSON object")
+        }
+        return value
     }
 }

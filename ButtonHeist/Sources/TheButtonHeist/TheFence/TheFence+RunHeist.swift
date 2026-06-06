@@ -1,5 +1,6 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 extension TheFence {
@@ -7,7 +8,7 @@ extension TheFence {
     // MARK: - Heist Execution and Session State
 
     func handleRunHeist(_ request: RunHeistRequest) async throws -> FenceResponse {
-        try await runHeistPlan(request.plan, timeout: Timeouts.longActionSeconds)
+        try await runHeistPlan(request.plan, argument: request.argument, timeout: Timeouts.longActionSeconds)
     }
 
     func handleListHeists(_ request: ListHeistsRequest) -> FenceResponse {
@@ -21,9 +22,13 @@ extension TheFence {
     /// Dispatch a `HeistPlan` to the device and project its execution into a
     /// `.heistExecution` response. Single commands and composed heists share
     /// this one path — a single command is just a one-step plan.
-    func runHeistPlan(_ plan: HeistPlan, timeout: TimeInterval) async throws -> FenceResponse {
+    func runHeistPlan(
+        _ plan: HeistPlan,
+        argument: HeistArgument = .none,
+        timeout: TimeInterval
+    ) async throws -> FenceResponse {
         let heistStart = CFAbsoluteTimeGetCurrent()
-        let executionResult = try await sendAndAwaitHeistExecution(plan, timeout: timeout)
+        let executionResult = try await sendAndAwaitHeistExecution(plan, argument: argument, timeout: timeout)
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000)
         let result = HeistExecutionResult(
             steps: executionResult.steps,
@@ -46,12 +51,12 @@ extension TheFence {
     ///
     /// A `wait` command becomes a single wait step; UI action commands become
     /// action steps carrying the request's `expect` predicate on the final
-    /// step. Any non-heist-admissible message falls back to the direct path.
+    /// step. Any non-heist-valid message falls back to the direct path.
     func singleStepHeistPlan(for parsed: ParsedRequest) throws -> HeistPlan? {
         guard let messages = parsed.executableMessages, !messages.isEmpty else { return nil }
 
         if messages.count == 1, case .wait(let target) = messages[0] {
-            return HeistPlan(body: [.wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))])
+            return try HeistPlan(body: [.wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))])
         }
 
         let expectationStep = parsed.expectationPayload.expectation.map {
@@ -75,7 +80,7 @@ extension TheFence {
             let expectation = index == messages.count - 1 ? expectationStep : nil
             steps.append(.action(try ActionStep(command: actionCommand, expectation: expectation)))
         }
-        return HeistPlan(body: steps)
+        return try HeistPlan(body: steps)
     }
 
     func executeSingleStepHeist(_ parsed: ParsedRequest, plan: HeistPlan) async throws -> FenceResponse {

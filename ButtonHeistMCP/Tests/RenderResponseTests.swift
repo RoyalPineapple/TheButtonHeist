@@ -73,7 +73,7 @@ struct RenderResponseTests {
                 waitCount: 1,
                 expectationCount: 1,
                 semanticSurfaces: ["label=Checkout", "identifier=confirm_button", "traits=button"],
-                admissionStatus: .admitted
+                validationStatus: .validated
             ),
         ]))
 
@@ -87,7 +87,7 @@ struct RenderResponseTests {
         #expect(text.contains("actions: activate"))
         #expect(text.contains("waits=1 expectations=1"))
         #expect(text.contains("semantic surfaces: label=Checkout, identifier=confirm_button, traits=button"))
-        #expect(text.contains("admission=admitted"))
+        #expect(text.contains("validation=validated"))
         #expect(!text.contains("predicate("))
         #expect(!text.contains("point("))
         #expect(!text.contains("heistId"))
