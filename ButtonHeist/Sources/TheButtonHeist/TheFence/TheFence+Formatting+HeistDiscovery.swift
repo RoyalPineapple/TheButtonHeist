@@ -4,7 +4,7 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactHeistCatalog(_ catalog: HeistCatalog) -> String {
+    func compactHeistCatalog(_ catalog: HeistDiscoveryCatalog) -> String {
         guard !catalog.heists.isEmpty else { return "heists: none" }
         let lines = catalog.heists.flatMap { entry in
             catalogLines(for: entry, indent: "  ")
@@ -23,7 +23,7 @@ extension FenceResponse {
         return lines.joined(separator: "\n")
     }
 
-    func formatHeistCatalogHuman(_ catalog: HeistCatalog) -> String {
+    func formatHeistCatalogHuman(_ catalog: HeistDiscoveryCatalog) -> String {
         guard !catalog.heists.isEmpty else { return "No heists" }
         var lines = ["Heists:"]
         lines.append(contentsOf: catalog.heists.flatMap { entry in

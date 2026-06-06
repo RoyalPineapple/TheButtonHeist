@@ -1,6 +1,6 @@
 import Foundation
 
-@_spi(ButtonHeistInternals) import ThePlans
+import ThePlans
 import TheScore
 
 extension TheFence {
@@ -11,7 +11,7 @@ extension TheFence {
     }
 
     struct ListHeistsRequest {
-        let catalog: HeistCatalog
+        let catalog: HeistDiscoveryCatalog
     }
 
     struct DescribeHeistRequest {
@@ -122,31 +122,19 @@ private extension TheFence {
             }
             plan = try loadHeistPlan(fromArtifactPath: path, commandName: commandName)
         } else {
-            plan = try translateRuntimeValidationErrors {
-                try decodeRawHeistPlanSource(from: arguments, dropping: droppingPlanKeys)
-                    .validatedForRuntime()
-            }
+            plan = try loadInlineHeistPlan(from: arguments, commandName: commandName, dropping: droppingPlanKeys)
         }
         return plan
     }
 
-    func translateRuntimeValidationErrors<T>(_ body: () throws -> T) throws -> T {
-        do {
-            return try body()
-        } catch let error as HeistPlanValidationError {
-            throw FenceError.invalidRequest(error.description)
-        }
-    }
-
     /// Read a heist plan from a `.heist` package artifact the operator handed us.
     ///
-    /// `.heist` is the enforced run artifact: the fence — not the caller — opens
-    /// the package and turns it into a `HeistPlan` value through the single
-    /// canonical reader (`HeistArtifactCodec.readPlan`), so the plan reaches the
-    /// runtime as Swift objects rather than surviving a JSON→parameter→JSON
-    /// round-trip. The package's `plan.json` is internal to the artifact and is
-    /// not itself a run input. Swift DSL source is compiled by the CLI authoring
-    /// path, not here.
+    /// `.heist` is the enforced run artifact: TheFence selects the source, then
+    /// asks ThePlans' heist planning boundary for a validated `HeistPlan`. The plan
+    /// reaches the runtime as Swift objects rather than surviving a
+    /// JSON→parameter→JSON round-trip. The package's `plan.json` is internal to
+    /// the artifact and is not itself a run input. Swift DSL source is compiled
+    /// by the CLI authoring path, not here.
     ///
     /// The plan is run exactly as authored — the fence does not stamp the file
     /// name into the plan's `name`. `name` is a Swift-identifier-constrained
@@ -167,18 +155,17 @@ private extension TheFence {
             )
         }
         do {
-            // The artifact codec decodes and validates the plan before
-            // returning a HeistPlan that is ready for runtime behavior.
-            return try HeistArtifactCodec.readPlan(from: url)
+            return try HeistPlanning.readPlan(from: url)
         } catch let error as HeistArtifactCodecError {
             throw FenceError.invalidRequest(error.description)
         }
     }
 
-    func decodeRawHeistPlanSource(
+    func loadInlineHeistPlan(
         from arguments: CommandArgumentEnvelope,
+        commandName: String,
         dropping keys: Set<String> = []
-    ) throws -> UnvalidatedHeistPlan {
+    ) throws -> HeistPlan {
         var values = arguments.argumentValues
         values.removeValue(forKey: "requestId")
         for key in keys {
@@ -186,28 +173,12 @@ private extension TheFence {
         }
         let data = try JSONEncoder().encode(HeistValue.object(values))
         do {
-            return try JSONDecoder().decode(UnvalidatedHeistPlan.self, from: data)
-        } catch DecodingError.dataCorrupted(let context) {
-            throw SchemaValidationError(
-                field: context.codingPath.map(\.stringValue).joined(separator: "."),
-                observed: "invalid heist plan",
-                expected: context.debugDescription
+            return try HeistPlanning.decodePlanJSON(
+                data,
+                sourceURL: URL(fileURLWithPath: "\(commandName)-inline-plan.json")
             )
-        } catch DecodingError.keyNotFound(let key, let context) {
-            throw SchemaValidationError(
-                field: (context.codingPath + [key]).map(\.stringValue).joined(separator: "."),
-                observed: "missing",
-                expected: "heist plan field"
-            )
-        } catch DecodingError.typeMismatch(_, let context),
-                DecodingError.valueNotFound(_, let context) {
-            throw SchemaValidationError(
-                field: context.codingPath.map(\.stringValue).joined(separator: "."),
-                observed: "invalid heist plan",
-                expected: context.debugDescription
-            )
-        } catch {
-            throw FenceError.invalidRequest("Invalid heist plan: \(error.localizedDescription)")
+        } catch let error as HeistArtifactCodecError {
+            throw FenceError.invalidRequest(error.description)
         }
     }
 
@@ -215,36 +186,20 @@ private extension TheFence {
         guard let value = arguments.argumentValues["argument"] else { return .none }
         let data = try JSONEncoder().encode(value)
         do {
-            return try JSONDecoder().decode(HeistArgument.self, from: data)
-        } catch DecodingError.dataCorrupted(let context) {
-            throw SchemaValidationError(
-                field: (["argument"] + context.codingPath.map(\.stringValue)).joined(separator: "."),
-                observed: "invalid heist argument",
-                expected: context.debugDescription
+            return try HeistPlanning.decodeArgumentJSON(
+                data,
+                sourceURL: URL(fileURLWithPath: "run_heist-argument.json")
             )
-        } catch DecodingError.keyNotFound(let key, let context) {
-            throw SchemaValidationError(
-                field: (["argument"] + (context.codingPath + [key]).map(\.stringValue)).joined(separator: "."),
-                observed: "missing",
-                expected: "heist argument field"
-            )
-        } catch DecodingError.typeMismatch(_, let context),
-                DecodingError.valueNotFound(_, let context) {
-            throw SchemaValidationError(
-                field: (["argument"] + context.codingPath.map(\.stringValue)).joined(separator: "."),
-                observed: "invalid heist argument",
-                expected: context.debugDescription
-            )
-        } catch {
-            throw FenceError.invalidRequest("Invalid heist argument: \(error.localizedDescription)")
+        } catch let error as HeistPlanningError {
+            throw FenceError.invalidRequest(error.description)
         }
     }
 
     func validateRootHeistArgument(_ argument: HeistArgument, for plan: HeistPlan) throws {
         do {
-            _ = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
-        } catch {
-            throw FenceError.invalidRequest("run_heist argument does not match root heist parameter: \(error)")
+            try HeistPlanning.validateRootArgument(argument, for: plan)
+        } catch let error as HeistPlanningError {
+            throw FenceError.invalidRequest(error.description)
         }
     }
 

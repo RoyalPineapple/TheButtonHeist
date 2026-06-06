@@ -5,7 +5,7 @@ import ThePlans
 import TheScore
 
 struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
-    typealias SwiftHeistCompiler = (_ source: URL, _ entry: String) throws -> HeistPlan
+    typealias SwiftHeistCompiler = @Sendable (_ source: URL, _ entry: String) async -> HeistCompilationResult<HeistPlan>
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -51,7 +51,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         // Swift DSL source is compiled to a temporary .heist package up front,
         // so every run dispatches a .heist the fence reads — the plan is never
         // re-encoded through a lossy parameter round-trip.
-        let prepared = try Self.prepareInput(path: path, entry: entry)
+        let prepared = try await Self.prepareInput(path: path, entry: entry)
         defer { prepared.cleanup() }
 
         let request = try Self.planArguments(
@@ -117,9 +117,9 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         path: String?,
         entry: String?,
         compileSwiftFile: SwiftHeistCompiler = { source, entry in
-            try HeistSourceCompiler().compileSwiftFile(source, entry: entry)
+            await HeistCompiler().compileFile(source, entry: entry)
         }
-    ) throws -> PreparedInput {
+    ) async throws -> PreparedInput {
         guard let path, path.lowercased().hasSuffix(".swift") else {
             return PreparedInput(path: path, entry: entry, cleanup: {})
         }
@@ -130,10 +130,11 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         let source = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         let name = source.deletingPathExtension().lastPathComponent
         let plan: HeistPlan
-        do {
-            plan = try compileSwiftFile(source, entry)
-        } catch {
-            throw ValidationError("failed to compile Swift heist source: \(error)")
+        switch await compileSwiftFile(source, entry) {
+        case .success(let compiledPlan, _):
+            plan = compiledPlan
+        case .failure(let diagnostics):
+            throw ValidationError("failed to compile Swift heist source: \(formatCompilationDiagnostics(diagnostics))")
         }
 
         let directory = FileManager.default.temporaryDirectory
@@ -239,4 +240,8 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         }
         return value
     }
+}
+
+private func formatCompilationDiagnostics(_ diagnostics: [HeistCompilationDiagnostic]) -> String {
+    diagnostics.map(\.description).joined(separator: "\n")
 }

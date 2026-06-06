@@ -117,7 +117,7 @@ public enum FenceResponse {
         result: HeistExecutionResult,
         accessibilityTrace: AccessibilityTrace? = nil
     )
-    case heistCatalog(HeistCatalog)
+    case heistCatalog(HeistDiscoveryCatalog)
     case heistDescription(HeistDescription)
     case sessionState(payload: SessionStatePayload)
     case targets([String: TargetConfig], defaultTarget: String?)

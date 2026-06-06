@@ -3,7 +3,7 @@ import Foundation
 import ThePlans
 
 @main
-struct HeistPlanTool: ParsableCommand {
+struct HeistPlanTool: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heist-plan",
         abstract: "Validate and convert Button Heist plans.",
@@ -63,7 +63,7 @@ struct Canonicalize: ParsableCommand {
     }
 }
 
-struct Compile: ParsableCommand {
+struct Compile: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "compile",
         abstract: "Compile Swift DSL source into a .heist package or .json HeistPlan IR."
@@ -72,8 +72,8 @@ struct Compile: ParsableCommand {
     @Argument(help: "Path to a Swift source file that imports ThePlans.")
     var source: String
 
-    @Option(name: .long, help: "Zero-argument entry symbol returning HeistPlan.")
-    var entry: String
+    @Option(name: .long, help: "Entry symbol returning or containing a HeistPlan.")
+    var entry: String = "heist"
 
     @Option(name: .long, help: "Path to write .heist package or .json HeistPlan IR.")
     var output: String
@@ -84,20 +84,31 @@ struct Compile: ParsableCommand {
         }
     }
 
-    func run() throws {
-        let plan = try HeistSourceCompiler().compileSwiftFile(
+    func run() async throws {
+        let result = await HeistCompiler().compileFile(
             URL(fileURLWithPath: source),
             entry: entry
         )
+        let plan: HeistPlan
+        switch result {
+        case .success(let compiledPlan, _):
+            plan = compiledPlan
+        case .failure(let diagnostics):
+            throw ValidationError(formatCompilationDiagnostics(diagnostics))
+        }
         try HeistPlanIO.writeCanonicalJSON(for: plan, to: output)
     }
+}
+
+private func formatCompilationDiagnostics(_ diagnostics: [HeistCompilationDiagnostic]) -> String {
+    diagnostics.map(\.description).joined(separator: "\n")
 }
 
 enum HeistPlanIO {
     static func readValidatedPlan(from path: String) throws -> HeistPlan {
         let url = URL(fileURLWithPath: path)
         do {
-            return try HeistArtifactCodec.readPlan(from: url)
+            return try HeistPlanning.readPlan(from: url)
         } catch let error as HeistArtifactCodecError {
             throw ValidationError(error.description)
         } catch {

@@ -1,6 +1,6 @@
 import Foundation
 
-public extension HeistPlan {
+extension HeistPlan {
     static func decodeValidatedHeistJSON(
         from data: Data,
         sourceURL: URL = URL(fileURLWithPath: "compiled-swift-heist-output.json")
@@ -11,7 +11,9 @@ public extension HeistPlan {
         )
         return try raw.validatedForRuntime()
     }
+}
 
+public extension HeistPlan {
     func canonicalHeistJSONData() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -20,10 +22,10 @@ public extension HeistPlan {
 }
 
 #if os(macOS) || os(Linux)
-public struct HeistSourceCompiler: Sendable {
-    public let packageRoot: URL?
+struct HeistSourceCompiler: Sendable {
+    let packageRoot: URL?
 
-    public init(packageRoot: URL? = nil) {
+    init(packageRoot: URL? = nil) {
         self.packageRoot = packageRoot
     }
 
@@ -33,7 +35,7 @@ public struct HeistSourceCompiler: Sendable {
     static let sharedModuleCacheDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent("buttonheist-heist-plan-module-cache", isDirectory: true)
 
-    public func compileSwiftFile(
+    func compileSwiftFile(
         _ source: URL,
         entry: String
     ) throws -> HeistPlan {
@@ -52,12 +54,6 @@ public struct HeistSourceCompiler: Sendable {
         try FileManager.default.createDirectory(at: tempURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempURL) }
 
-        let compileDirectory = try writeCompileDirectory(
-            at: tempURL,
-            source: source,
-            entry: entry
-        )
-
         let buildDirectory = tempURL.appendingPathComponent("Build", isDirectory: true)
         try FileManager.default.createDirectory(at: buildDirectory, withIntermediateDirectories: true)
 
@@ -69,12 +65,34 @@ public struct HeistSourceCompiler: Sendable {
         let moduleCache = Self.sharedModuleCacheDirectory
         try FileManager.default.createDirectory(at: moduleCache, withIntermediateDirectories: true)
 
-        return try compile(
-            source: source,
-            compileDirectory: compileDirectory,
-            buildDirectory: buildDirectory,
-            moduleCache: moduleCache,
-            artifacts: artifacts
+        var compileDiagnostics: [String] = []
+        for resolution in HeistSourceEntryResolution.allCases {
+            let compileDirectory = try writeCompileDirectory(
+                at: tempURL,
+                source: source,
+                entry: entry,
+                resolution: resolution
+            )
+
+            do {
+                return try compile(
+                    source: source,
+                    compileDirectory: compileDirectory,
+                    buildDirectory: buildDirectory,
+                    moduleCache: moduleCache,
+                    artifacts: artifacts
+                )
+            } catch let error as HeistSourceCompilerError {
+                guard case .compileFailed(_, let diagnostics) = error else {
+                    throw error
+                }
+                compileDiagnostics.append(diagnostics)
+            }
+        }
+
+        throw HeistSourceCompilerError.compileFailed(
+            source.path,
+            compileDiagnostics.joined(separator: "\n")
         )
     }
 
@@ -110,7 +128,7 @@ public struct HeistSourceCompiler: Sendable {
         )
 
         guard result.exitCode == 0 else {
-            throw HeistSourceCompilerError.compileFailed(
+            throw HeistSourceCompilerError.executionFailed(
                 source.path,
                 result.diagnostics
             )
@@ -118,6 +136,8 @@ public struct HeistSourceCompiler: Sendable {
 
         do {
             return try HeistPlan.decodeValidatedHeistJSON(from: result.stdout, sourceURL: source)
+        } catch let error as HeistPlanValidationError {
+            throw HeistSourceCompilerError.runtimeValidationFailed(error.description)
         } catch {
             throw HeistSourceCompilerError.invalidCompilerOutput(String(describing: error))
         }
@@ -126,7 +146,8 @@ public struct HeistSourceCompiler: Sendable {
     private func writeCompileDirectory(
         at tempURL: URL,
         source: URL,
-        entry: HeistSourceEntrySymbol
+        entry: HeistSourceEntrySymbol,
+        resolution: HeistSourceEntryResolution
     ) throws -> URL {
         let sourcesURL = tempURL
             .appendingPathComponent("Sources", isDirectory: true)
@@ -134,17 +155,15 @@ public struct HeistSourceCompiler: Sendable {
         try FileManager.default.createDirectory(at: sourcesURL, withIntermediateDirectories: true)
 
         let userSource = try String(contentsOf: source, encoding: .utf8)
-        try userSource.write(
-            to: sourcesURL.appendingPathComponent("PlanSource.swift"),
-            atomically: true,
-            encoding: .utf8
-        )
-
         let wrapper = """
+        \(sourceLocationDirective(for: source))
+        \(userSource)
+
+        #sourceLocation()
         import Foundation
         import ThePlans
 
-        let plan: HeistPlan = try \(entry.name)()
+        let plan: HeistPlan = \(resolution.planExpression(for: entry))
         FileHandle.standardOutput.write(try plan.canonicalHeistJSONData())
         """
         try wrapper.write(
@@ -175,23 +194,35 @@ public struct HeistSourceCompiler: Sendable {
             artifacts.modulesDirectory.path,
             "-o",
             executableURL.path,
-            compileDirectory.appendingPathComponent("PlanSource.swift").path,
             compileDirectory.appendingPathComponent("main.swift").path,
         ]
         arguments.append(contentsOf: artifacts.objectFiles.map(\.path))
         return arguments
     }
+
+    private func sourceLocationDirective(for source: URL) -> String {
+        "#sourceLocation(file: \(swiftStringLiteral(source.path)), line: 1)"
+    }
+
+    private func swiftStringLiteral(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: #"\"#, with: #"\\"#)
+            .replacingOccurrences(of: #"""#, with: #"\""#)
+        return #""\#(escaped)""#
+    }
 }
 
-public enum HeistSourceCompilerError: Error, Sendable, Equatable, CustomStringConvertible {
+enum HeistSourceCompilerError: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidEntry(String)
     case sourceFileNotFound(String)
     case packageRootNotFound
     case buildArtifactsNotFound(searched: [String], hint: String)
     case compileFailed(String, String)
+    case executionFailed(String, String)
     case invalidCompilerOutput(String)
+    case runtimeValidationFailed(String)
 
-    public var description: String {
+    var description: String {
         switch self {
         case .invalidEntry(let entry):
             return "invalid Swift heist entry symbol: \(entry)"
@@ -214,8 +245,26 @@ public enum HeistSourceCompilerError: Error, Sendable, Equatable, CustomStringCo
             """
         case .compileFailed(let path, let diagnostics):
             return "failed to compile Swift heist source \(path): \(diagnostics)"
+        case .executionFailed(let path, let diagnostics):
+            return "compiled Swift heist source \(path) failed while evaluating entry: \(diagnostics)"
         case .invalidCompilerOutput(let diagnostics):
             return "compiled Swift heist did not emit valid HeistPlan JSON: \(diagnostics)"
+        case .runtimeValidationFailed(let diagnostics):
+            return "compiled Swift heist failed runtime validation: \(diagnostics)"
+        }
+    }
+}
+
+private enum HeistSourceEntryResolution: CaseIterable {
+    case value
+    case function
+
+    func planExpression(for entry: HeistSourceEntrySymbol) -> String {
+        switch self {
+        case .value:
+            return entry.name
+        case .function:
+            return "try \(entry.name)()"
         }
     }
 }
@@ -235,6 +284,13 @@ private struct HeistSourceEntrySymbol {
 
 private enum LocalThePlansPackage {
     static func resolve() throws -> URL {
+        guard let packageRoot = resolveCandidates().first else {
+            throw HeistSourceCompilerError.packageRootNotFound
+        }
+        return packageRoot
+    }
+
+    static func resolveCandidates() -> [URL] {
         let currentDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let executableURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         let sourceURL = URL(fileURLWithPath: #filePath).standardizedFileURL
@@ -242,23 +298,30 @@ private enum LocalThePlansPackage {
             + candidateRoots(from: executableURL)
             + candidateRoots(from: sourceURL)
 
+        var packageRoots: [URL] = []
         for candidate in candidates {
+            if isButtonHeistPackageRoot(candidate) {
+                appendUnique(candidate, to: &packageRoots)
+            }
             let nested = candidate.appendingPathComponent("ButtonHeist", isDirectory: true)
             if isButtonHeistPackageRoot(nested) {
-                return nested
-            }
-            if isButtonHeistPackageRoot(candidate) {
-                return candidate
+                appendUnique(nested, to: &packageRoots)
             }
             let sibling = candidate
                 .deletingLastPathComponent()
                 .appendingPathComponent("ButtonHeist", isDirectory: true)
             if isButtonHeistPackageRoot(sibling) {
-                return sibling
+                appendUnique(sibling, to: &packageRoots)
             }
         }
 
-        throw HeistSourceCompilerError.packageRootNotFound
+        return packageRoots
+    }
+
+    private static func appendUnique(_ url: URL, to urls: inout [URL]) {
+        let standardized = url.standardizedFileURL
+        guard !urls.contains(standardized) else { return }
+        urls.append(standardized)
     }
 
     private static func candidateRoots(from url: URL) -> [URL] {
@@ -311,21 +374,34 @@ private struct ThePlansBuildArtifacts {
             return artifacts
         }
 
-        HeistSourceCompilerTrace.write("resolving ButtonHeist package root")
-        let packageRoot = try explicitPackageRoot ?? LocalThePlansPackage.resolve()
-        HeistSourceCompilerTrace.write("resolved ButtonHeist package root: \(packageRoot.path)")
-        let candidates = try candidateBuildDirectories(in: packageRoot)
-        for buildDirectory in candidates {
-            if let artifacts = try resolveBuildDirectory(buildDirectory) {
-                return artifacts
+        let packageRoots: [URL]
+        if let explicitPackageRoot {
+            packageRoots = [explicitPackageRoot.standardizedFileURL]
+        } else {
+            HeistSourceCompilerTrace.write("resolving ButtonHeist package roots")
+            packageRoots = LocalThePlansPackage.resolveCandidates()
+        }
+        guard !packageRoots.isEmpty else {
+            throw HeistSourceCompilerError.packageRootNotFound
+        }
+
+        var searched: [String] = []
+        for packageRoot in packageRoots {
+            HeistSourceCompilerTrace.write("checking ButtonHeist package root: \(packageRoot.path)")
+            let candidates = try candidateBuildDirectories(in: packageRoot)
+            searched.append(contentsOf: candidates.map(\.path))
+            for buildDirectory in candidates {
+                if let artifacts = try resolveBuildDirectory(buildDirectory) {
+                    return artifacts
+                }
             }
         }
 
         throw HeistSourceCompilerError.buildArtifactsNotFound(
-            searched: candidates.map(\.path),
+            searched: searched,
             hint: """
             No built ThePlans artifacts found under \
-            \(packageRoot.appendingPathComponent(".build").path). \
+            \(packageRoots.map { $0.appendingPathComponent(".build").path }.joined(separator: " or ")). \
             Build them with `swift build --package-path ButtonHeist --product heist-plan`, \
             or set \(environmentOverrideKey) to a directory containing \
             Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o.
