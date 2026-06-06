@@ -470,12 +470,10 @@ final class SemanticObservationStream {
             return true
         }
 
-        guard await tripwire.waitForAllClear(timeout: 0.5) else {
-            latestSettleFailureDiagnostic = "visible observation blocked: app motion did not clear before settle"
-            markDirtyFromTripwire()
-            await Task.yield()
-            return true
-        }
+        // Layer quiet is only advisory for passive semantic observation. Complex
+        // apps can have unrelated CALayer motion forever; the AX-tree settle
+        // loop below is the correctness signal for accessibility actions.
+        let layerGateWasClear = tripwire.latestReading?.isSettled ?? tripwire.allClear()
 
         let baselineSignal = latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal()
         let settleSession = SettleSession.live(stash: stash, tripwire: tripwire, timeoutMs: 1_000)
@@ -485,7 +483,10 @@ final class SemanticObservationStream {
         )
 
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
-            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: settle)
+            latestSettleFailureDiagnostic = Self.failureDiagnostic(
+                for: settle,
+                layerGateWasClear: layerGateWasClear
+            )
             markDirtyFromTripwire()
             await Task.yield()
             return true
@@ -496,7 +497,10 @@ final class SemanticObservationStream {
         return true
     }
 
-    private static func failureDiagnostic(for outcome: SettleSession.Outcome) -> String {
+    private static func failureDiagnostic(
+        for outcome: SettleSession.Outcome,
+        layerGateWasClear: Bool? = nil
+    ) -> String {
         var parts = ["settle \(outcome.outcome.outcomeDescription)"]
         if let finalScreen = outcome.finalScreen {
             parts.append("last parsed: \(finalScreen.liveCapture.hierarchy.sortedElements.count) elements")
@@ -505,6 +509,9 @@ final class SemanticObservationStream {
         }
         if let instability = outcome.instabilityDescription {
             parts.append(instability)
+        }
+        if layerGateWasClear == false {
+            parts.append("layer motion still active while AX settle ran")
         }
         return parts.joined(separator: "; ")
     }

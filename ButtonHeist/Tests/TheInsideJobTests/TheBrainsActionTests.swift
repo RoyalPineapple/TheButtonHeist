@@ -787,7 +787,8 @@ final class TheBrainsActionTests: XCTestCase {
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
         XCTAssertDiagnostic(step.actionResult?.message, contains: [
-            "no settled semantic observation available",
+            "last settled: sequence ",
+            "last delta:",
         ])
     }
 
@@ -2600,11 +2601,17 @@ final class TheBrainsActionTests: XCTestCase {
         normalizingTimeoutDuration: Bool
     ) -> String? {
         guard normalizingTimeoutDuration else { return message }
-        return message?.replacingOccurrences(
-            of: #"timed out after [0-9.]+s"#,
-            with: "timed out after <duration>s",
-            options: .regularExpression
-        )
+        return message?
+            .replacingOccurrences(
+                of: #"timed out after [0-9.]+s"#,
+                with: "timed out after <duration>s",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"last settled: sequence [0-9]+"#,
+                with: "last settled: sequence <sequence>",
+                options: .regularExpression
+            )
     }
 
     private func withNoTraversableWindows<T>(
