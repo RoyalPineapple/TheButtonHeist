@@ -94,6 +94,14 @@ grep -Fq "$EXPECTED_RELEASE_URL/$CLI_TEMPLATE_PATH" "$BUTTONHEIST_FORMULA_TEMPLA
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE CLI URL does not match release contract"
 grep -Fq "$EXPECTED_RELEASE_URL/$MCP_TEMPLATE_PATH" "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE MCP URL does not match release contract"
+grep -Fq 'bin.install "heist-plan"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
+    || fail "$BUTTONHEIST_FORMULA_TEMPLATE must install the heist-plan compiler"
+grep -Fq 'lib.install "ThePlans"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
+    || fail "$BUTTONHEIST_FORMULA_TEMPLATE must install ThePlans compiler artifacts under lib"
+grep -Fq 'ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule' "$BUTTONHEIST_FORMULA_TEMPLATE" \
+    || fail "$BUTTONHEIST_FORMULA_TEMPLATE test must assert installed arm64 ThePlans artifacts"
+grep -Fq 'ThePlans/arm64-apple-macosx/release/description.json' "$BUTTONHEIST_FORMULA_TEMPLATE" \
+    || fail "$BUTTONHEIST_FORMULA_TEMPLATE test must assert installed ThePlans description.json"
 
 "$SCRIPT_DIR/check-parser-contract.sh"
 

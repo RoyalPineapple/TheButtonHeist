@@ -103,6 +103,14 @@ jobs:
             -output .build/buttonheist-mcp
           file .build/buttonheist-mcp
 
+      - name: Build heist-plan compiler artifacts (arm64)
+        run: |
+          swift build --package-path ButtonHeist -c release --arch arm64 --product heist-plan
+          test -x ButtonHeist/.build/arm64-apple-macosx/release/heist-plan
+          test -f ButtonHeist/.build/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule
+          test -f ButtonHeist/.build/arm64-apple-macosx/release/description.json
+          find ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build -name '*.swift.o' -print -quit | grep -q .
+
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
@@ -185,8 +193,18 @@ jobs:
 
           # CLI + frameworks
           cp ButtonHeistCLI/.build/buttonheist dist/
-          tar -czf "dist/${CLI_ARCHIVE}" -C dist buttonheist ButtonHeistFrameworks
+          cp ButtonHeist/.build/arm64-apple-macosx/release/heist-plan dist/
+          mkdir -p dist/ThePlans/arm64-apple-macosx/release
+          cp -R \
+            ButtonHeist/.build/arm64-apple-macosx/release/Modules \
+            ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build \
+            dist/ThePlans/arm64-apple-macosx/release/
+          cp ButtonHeist/.build/arm64-apple-macosx/release/description.json \
+            dist/ThePlans/arm64-apple-macosx/release/
+          tar -czf "dist/${CLI_ARCHIVE}" -C dist buttonheist heist-plan ButtonHeistFrameworks ThePlans
           rm dist/buttonheist
+          rm dist/heist-plan
+          rm -rf dist/ThePlans
 
           # MCP
           cp ButtonHeistMCP/.build/buttonheist-mcp dist/
