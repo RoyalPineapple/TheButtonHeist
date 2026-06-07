@@ -17,13 +17,26 @@ final class TheStash {
         self.burglar = TheBurglar(tripwire: tripwire)
     }
 
-    // MARK: - Mutable State
+    // MARK: - Observed Live Evidence
 
     private var latestObservedSemanticWorld: SemanticScreen = .empty
+
+    // MARK: - Dispatch-Only Live Capture
+
     private var liveCapture: LiveCapture = .empty
+
+    // MARK: - Settled Semantic Truth
+
     private var settledSemanticWorld: SemanticScreen = .empty
+    /// Last clean visible hierarchy, with dispatch refs stripped.
+    private var settledVisibleCapture: LiveCapture = .empty
     private var settledVisibleIds: Set<HeistId> = []
-    private var diagnosticEvidence: Screen?
+
+    // MARK: - Failed-Settle Diagnostic Evidence
+
+    private var failedSettleDiagnosticEvidence: Screen?
+
+    // MARK: - Observation Scheduling
 
     lazy var semanticObservationStream = SemanticObservationStream(stash: self, tripwire: tripwire)
 
@@ -35,9 +48,11 @@ final class TheStash {
         semanticObservationStream.latestObservation
     }
 
-    var latestSettledSemanticObservationIsDirty: Bool {
-        semanticObservationStream.latestObservationIsDirty
+    var latestSettledSemanticObservationInvalidated: Bool {
+        semanticObservationStream.latestSettledObservationInvalidated
     }
+
+    // MARK: - Interaction Cursor State
 
     /// Held rotor cursor — the single current selection while in rotor mode.
     /// Entering rotor mode on a host starts at index 0; subsequent steps cycle
@@ -66,8 +81,8 @@ final class TheStash {
 
     /// Last settled accessibility world Button Heist believes. Semantic
     /// resolution and normal interface reads use this as truth.
-    var settledScreen: Screen {
-        Screen(semantic: settledSemanticWorld, liveCapture: liveCapture)
+    var settledSemanticScreen: Screen {
+        Screen(semantic: settledSemanticWorld, liveCapture: settledVisibleCapture)
     }
 
     /// Current observed live viewport. Use this only for visible/debug reads
@@ -100,8 +115,8 @@ final class TheStash {
 
     /// Last non-clean settle evidence. Reporting and trace code may consume it;
     /// semantic target resolution must not.
-    var latestSettleDiagnosticEvidence: Screen? {
-        diagnosticEvidence
+    var latestFailedSettleDiagnosticEvidence: Screen? {
+        failedSettleDiagnosticEvidence
     }
 
     // MARK: - Aliases
@@ -114,7 +129,7 @@ final class TheStash {
     /// reads, matchers, scroll dispatch, and tab-bar geometry all need it
     /// without spelling out live-capture internals
     /// every time.
-    var currentHierarchy: [AccessibilityHierarchy] {
+    var latestObservedLiveHierarchy: [AccessibilityHierarchy] {
         liveCapture.hierarchy
     }
 
@@ -191,7 +206,7 @@ final class TheStash {
 
     /// Elements in matcher/diagnostic order.
     var orderedSemanticElements: [ScreenElement] {
-        settledScreen.orderedElements
+        settledSemanticScreen.orderedElements
     }
 
     /// Hash of committed semantic memory. Deliberately excludes live viewport
@@ -207,26 +222,26 @@ final class TheStash {
 
     /// Screen name from the settled screen (first header element by traversal order).
     var lastScreenName: String? {
-        settledScreen.name
+        settledSemanticScreen.name
     }
 
     /// Slugified screen name for machine use (e.g. "controls_demo").
     var lastScreenId: String? {
-        settledScreen.id
+        settledSemanticScreen.id
     }
 
     // MARK: - Cache Control
 
     /// Clear cached element data (used on suspend).
     func clearCache() {
-        clearCommittedScreen()
+        clearWorldForLifecycleReset()
     }
 
     /// Clear screen-level state on screen change. Screens are values, so
     /// "clear screen" is identical to "clear everything" — the next parse
     /// produces a fresh screen.
     func clearScreen() {
-        clearCommittedScreen()
+        clearWorldForLifecycleReset()
     }
 
     /// TheTripwire handles window access and animation detection.
@@ -245,7 +260,7 @@ final class TheStash {
     func parse() -> Screen? {
         guard let result = burglar.parse() else { return nil }
         let screen = TheBurglar.buildScreen(from: result)
-        storeObservedAccessibilityEvidence(from: screen)
+        recordParsedObservedEvidence(from: screen)
         return screen
     }
 
@@ -271,30 +286,39 @@ final class TheStash {
         parse()
     }
 
-    func storeSettledSemanticObservationForStream(_ screen: Screen) {
+    @discardableResult
+    func commitSettledVisibleWorld(_ screen: Screen) -> Screen {
+        let committedScreen = screenByRefreshingSettledSemanticWorld(with: screen)
+        commitSettledWorld(committedScreen)
+        return settledSemanticScreen
+    }
+
+    @discardableResult
+    func commitSettledDiscoveryWorld(_ screen: Screen) -> Screen {
         commitSettledWorld(screen)
+        return settledSemanticScreen
     }
 
-    func recordSettleDiagnosticEvidence(_ screen: Screen?) {
+    func recordFailedSettleDiagnosticEvidence(_ screen: Screen?) {
         if let screen {
-            storeObservedAccessibilityEvidence(from: screen)
+            recordParsedObservedEvidence(from: screen)
         }
-        diagnosticEvidence = screen
-        semanticObservationStream.markDirtyFromTripwire()
+        failedSettleDiagnosticEvidence = screen
+        semanticObservationStream.invalidateLatestSettledObservation()
     }
 
-    func recordObservedAccessibilityEvidence(_ screen: Screen) {
-        storeObservedAccessibilityEvidence(from: screen)
+    func recordParsedObservedEvidence(_ screen: Screen) {
+        recordParsedObservedEvidence(from: screen)
     }
 
     func installScreenForTesting(_ screen: Screen) {
-        _ = semanticObservationStream.commitSettledObservation(screen)
+        _ = semanticObservationStream.commitSettledVisibleObservation(screen)
     }
 
     /// Starting value for page-by-page exploration. Exploration carries a local
     /// Screen union and hands the final observation back to the stream.
     func explorationBaseline() -> Screen {
-        settledScreen
+        settledSemanticScreen
     }
 
     /// Apply visible settled refresh semantics without retaining settled live
@@ -373,6 +397,10 @@ final class TheStash {
         liveCapture.containerObject(forPath: path)
     }
 
+    func liveContainer(forPath path: TreePath) -> AccessibilityContainer? {
+        liveCapture.hierarchy.containerPaths.first { $0.path == path }?.container
+    }
+
     func liveScrollContainer(matching scrollView: UIScrollView) -> AccessibilityContainer? {
         liveCapture.scrollableContainerViews.first { _, ref in
             ref.view === scrollView
@@ -391,25 +419,27 @@ final class TheStash {
         liveCapture.scrollableContainerViewsByPath[path]?.view
     }
 
-    private func clearCommittedScreen() {
+    private func clearWorldForLifecycleReset() {
         latestObservedSemanticWorld = .empty
         liveCapture = .empty
         settledSemanticWorld = .empty
+        settledVisibleCapture = .empty
         settledVisibleIds = []
-        diagnosticEvidence = nil
-        semanticObservationStream.clearLatestObservation()
+        failedSettleDiagnosticEvidence = nil
+        semanticObservationStream.clearSettledObservationHistory()
     }
 
-    private func storeObservedAccessibilityEvidence(from screen: Screen) {
+    private func recordParsedObservedEvidence(from screen: Screen) {
         latestObservedSemanticWorld = screen.semantic
         liveCapture = screen.liveCapture
     }
 
     private func commitSettledWorld(_ screen: Screen) {
         settledSemanticWorld = screen.semantic
+        settledVisibleCapture = screen.liveCapture.strippingDispatchReferences()
         settledVisibleIds = screen.visibleIds
-        storeObservedAccessibilityEvidence(from: screen)
-        diagnosticEvidence = nil
+        recordParsedObservedEvidence(from: screen)
+        failedSettleDiagnosticEvidence = nil
     }
 
     // MARK: - Interface Read Helpers
@@ -419,7 +449,7 @@ final class TheStash {
     /// Thin reader over `WireConversion.toInterface` — exists because callers
     /// need the interface of the settled screen, not an arbitrary one.
     func interface(timestamp: Date = Date()) -> Interface {
-        WireConversion.toInterface(from: settledScreen, timestamp: timestamp)
+        WireConversion.toInterface(from: settledSemanticScreen, timestamp: timestamp)
     }
 
     /// Current semantic screen projection used for traces and deltas.
@@ -428,7 +458,7 @@ final class TheStash {
     /// by exploration, so off-viewport targetable elements participate in
     /// post-action deltas.
     func semanticInterface(timestamp: Date = Date()) -> Interface {
-        WireConversion.toSemanticInterface(from: settledScreen, timestamp: timestamp)
+        WireConversion.toSemanticInterface(from: settledSemanticScreen, timestamp: timestamp)
     }
 
     /// Single-build semantic variant for state capture and delta projection.

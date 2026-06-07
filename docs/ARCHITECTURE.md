@@ -3,7 +3,7 @@
 Button Heist lets callers write programs against an app's accessibility
 contract. Semantic intent enters the runtime; Button Heist owns target
 resolution, reveal, element inflation, action execution, settling, and
-evidence; callers receive settled semantic evidence for validation, recording,
+evidence; callers receive settled semantic evidence for validation,
 reporting, or the next step.
 
 This document names the load-bearing runtime pieces. The canonical product
@@ -121,10 +121,9 @@ then watches later settled captures until the requested accessibility predicate
 matches or the timeout expires. `element_disappeared` means current absence; it
 is not proof of a prior appearance/removal event.
 
-### Record and Replay
+### Replay
 
-Heist recording stores canonical command names plus portable matchers and
-expectations. Replay sends those same public commands through TheFence, so a
+Heist replay executes authored `HeistPlan` artifacts through TheFence, so a
 failure points at the accessibility contract that changed.
 
 ## Reference Docs
@@ -138,8 +137,6 @@ failure points at the accessibility contract that changed.
 - [MCP Agent Guide](MCP-AGENT-GUIDE.md) - practical tool-use patterns for
   agents.
 - [Heist Format](HEIST-FORMAT.md) - generated heist artifact and plan IR format.
-- [Recording Contract](RECORDING-CONTRACT.md) - how runtime evidence becomes
-  durable semantic heist steps.
 - [Element Inflation](ELEMENT-INFLATION.md) - semantic target to inflated live
   target boundary.
 - [Auth](AUTH.md) - authentication, approval, and session locking.

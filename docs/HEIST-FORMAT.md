@@ -30,7 +30,7 @@ after decoding. Runtime execution still receives a `HeistPlan`; it does not
 execute artifact internals or Swift source.
 
 Plain JSON with a `.heist` extension is invalid. Use `.json` for raw HeistPlan
-IR, or generate a `.heist` package from Swift DSL, live composition, or export.
+IR, or generate a `.heist` package from Swift DSL, canonical source, or export.
 
 ## Manifest
 

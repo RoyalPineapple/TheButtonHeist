@@ -155,9 +155,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(before.elements.count, 1)
     }
 
-    func testInteractionObservationBeforeStateDoesNotReuseDirtySettledObservation() async {
+    func testInteractionObservationBeforeStateDoesNotReuseInvalidatedSettledObservation() async {
         installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
-        brains.stash.markDirtyFromTripwire()
+        brains.stash.invalidateSettledObservationFromTripwire()
 
         let current = await withNoTraversableWindows {
             await brains.interactionObservation.prepareBeforeState(timeout: 0.001)
@@ -165,7 +165,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertNil(
             current,
-            "dirty settled state must not be returned when no live tree is readable"
+            "invalidated settled observation must not be returned when no live tree is readable"
         )
     }
 
@@ -224,7 +224,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
         XCTAssertEqual(result.method, .activate)
         XCTAssertTrue(
-            brains.stash.settledScreen.orderedElements.contains { $0.element.label == "Visible Evidence Action" },
+            brains.stash.settledSemanticScreen.orderedElements.contains { $0.element.label == "Visible Evidence Action" },
             "the observed full tree should be committed so action resolution sees live evidence"
         )
     }
@@ -903,10 +903,10 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(beforeScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
 
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(matchedScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -931,7 +931,7 @@ final class TheBrainsActionTests: XCTestCase {
             ))
         }
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(beforeScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
 
         let receipt = await receiptTask.value
 
@@ -1903,7 +1903,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [stash = brains.stash] in
-            stash.markDirtyFromTripwire()
+            stash.invalidateSettledObservationFromTripwire()
         }
         brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
         await brains.tripwire.yieldFrames(3)
@@ -2398,7 +2398,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         brains.clearCache()
 
-        XCTAssertEqual(brains.stash.settledScreen, .empty)
+        XCTAssertEqual(brains.stash.settledSemanticScreen, .empty)
     }
 
     // MARK: - Accessibility Tree Availability

@@ -3,24 +3,16 @@ import TheScore
 
 public extension TheFence.Command {
     static var mcpServerInstructions: String {
-        let selectorKeys = inlineList(ElementTarget.selectorFieldNames.map { "target.\($0)" })
-        let disambiguatorKeys = inlineList(ElementTarget.disambiguatorFieldNames.map { "target.\($0)" })
-        let expectationKey = activate.descriptor.parameter(named: .expect)?.key ?? FenceParameterKey.expect.rawValue
         return """
             Button Heist drives iOS apps through the accessibility layer — the same interface \
-            VoiceOver uses. Target elements with flat ElementTarget selector fields: \(selectorKeys), \
-            not by screen coordinates. \(disambiguatorKeys) only disambiguates matcher results. \
-            The core loop is: \(inlineCode(getInterface.rawValue)) \
-            to read the app accessibility state, then \(inlineCode(activate.rawValue)) \
-            or \(inlineCode(typeText.rawValue)) to express semantic intent with \
-            an \(inlineCode(expectationKey)) attached. Use \(inlineCode(scroll.rawValue)), \
-            \(inlineCode(swipe.rawValue)), and other gesture tools only when the \
-            viewport movement or gesture is the intent. When an action produces \
-            a transient state (spinner, loading overlay), call \(inlineCode(wait.rawValue)) \
-            with a predicate to ride through settled observations. Use \
-            \(inlineCode(runHeist.rawValue)) for multi-step sequences with per-step \
-            expectations. Use \(inlineCode(startHeist.rawValue))/\
-            \(inlineCode(stopHeist.rawValue)) to record replayable .heist files. \
+            VoiceOver uses. Read state with \(inlineCode(getInterface.rawValue)) and \
+            \(inlineCode(getScreen.rawValue)); act with \(inlineCode(perform.rawValue)) using a \
+            single ButtonHeist DSL step in the \(inlineCode("step")) field, such as \
+            \(inlineCode(#"Activate(.label("Pay")).expect(.changed(.screen()))"#)). \
+            Use \(inlineCode(runHeist.rawValue)) for full `HeistPlan { ... }` programs with \
+            definitions, branching, waits with bodies, loops, warnings, failures, or multiple steps. \
+            Runtime ButtonHeist source is not arbitrary Swift and never uses host-language compilation. \
+            JSON plan IR is internal/generated, not the agent authoring surface. \
             Full guide: docs/MCP-AGENT-GUIDE.md.
             """
     }

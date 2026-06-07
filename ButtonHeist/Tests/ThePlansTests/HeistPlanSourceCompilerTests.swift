@@ -93,6 +93,80 @@ import ThePlans
     try assertCanonicalRoundTrip(plan)
 }
 
+@Test func `runtime parser accepts the complete durable ButtonHeist DSL surface`() throws {
+    let source = """
+    HeistPlan("RuntimeSurface", targetParameter: "rootTarget") { rootTarget in
+        HeistDef<String>("Cart.addItem", parameter: "item") { item in
+            Activate(.label(item))
+                .expect(.present(.label("Added")))
+        }
+
+        HeistDef<ElementTarget>("Messages.archive", parameter: "message") { message in
+            CustomAction("Archive", on: message)
+        }
+
+        Activate(rootTarget)
+        Activate(.label("Pay"))
+            .expect(.changed(.screen()))
+
+        WaitFor(.present(.label("Receipt")), timeout: .seconds(5)) {
+            Warn("Receipt appeared")
+        }.else {
+            Fail("Receipt did not appear")
+        }
+
+        If {
+            Case(.present(.label("Cart"))) {
+                Warn("Cart ready")
+            }
+            Else {
+                Warn("Cart missing")
+            }
+        }
+
+        If(.present(.label("Pay"))) {
+            Warn("Pay visible")
+        }.else {
+            Warn("Pay missing")
+        }
+
+        ForEach(["Milk", "Bread"]) { item in
+            RunHeist("Cart.addItem", item)
+        }
+
+        ForEach(.matching(.element(label: "Message", traits: [.button])), limit: 2) { message in
+            RunHeist("Messages.archive", message)
+        }
+    }
+    """
+
+    let plan = try HeistPlanSourceCompiler().compile(source)
+
+    #expect(plan.name == "RuntimeSurface")
+    #expect(plan.parameter == .elementTarget(name: "rootTarget"))
+    #expect(plan.body.map(\.testKind) == [
+        .action,
+        .action,
+        .waitForCases,
+        .conditional,
+        .conditional,
+        .forEachString,
+        .forEachElement,
+    ])
+
+    let cart = try #require(plan.definitions.first { $0.name == "Cart" })
+    let addItem = try #require(cart.definitions.first { $0.name == "addItem" })
+    #expect(addItem.parameter == .string(name: "item"))
+    #expect(addItem.body.map(\.testKind) == [.action])
+
+    let messages = try #require(plan.definitions.first { $0.name == "Messages" })
+    let archive = try #require(messages.definitions.first { $0.name == "archive" })
+    #expect(archive.parameter == .elementTarget(name: "message"))
+    #expect(archive.body.map(\.testKind) == [.action])
+
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `inline plan source ForEach string compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     ForEach(["a", "b"]) { item in
@@ -608,4 +682,34 @@ private func expect(_ string: String, contains substring: String) {
         Issue.record("Expected error to contain '\(substring)', got: \(string)")
     }
     #expect(string.contains(substring))
+}
+
+private enum ParsedHeistStepKind: Equatable {
+    case action
+    case wait
+    case conditional
+    case waitForCases
+    case forEachElement
+    case forEachString
+    case warn
+    case fail
+    case heist
+    case invoke
+}
+
+private extension HeistStep {
+    var testKind: ParsedHeistStepKind {
+        switch self {
+        case .action: return .action
+        case .wait: return .wait
+        case .conditional: return .conditional
+        case .waitForCases: return .waitForCases
+        case .forEachElement: return .forEachElement
+        case .forEachString: return .forEachString
+        case .warn: return .warn
+        case .fail: return .fail
+        case .heist: return .heist
+        case .invoke: return .invoke
+        }
+    }
 }

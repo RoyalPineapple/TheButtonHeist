@@ -281,7 +281,7 @@ import TheScore
 
         init(event: SettledSemanticObservationEvent) {
             sequence = event.sequence
-            hash = event.currentCaptureRef?.hash
+            hash = event.latestCaptureRef?.hash
         }
 
         var description: String {

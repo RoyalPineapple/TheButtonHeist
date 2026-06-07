@@ -8,7 +8,7 @@ ButtonHeist language.
 
 Treat checked-in Swift files like product code, but keep the boundary explicit:
 Swift may wrap, select, name, organize, and call heists outside the DSL. If a
-behavior must survive `.heist`, JSON, recording, catalog discovery, MCP
+behavior must survive `.heist`, JSON, catalog discovery, MCP
 composition, or canonical rendering, express it as `HeistDef`, `RunHeist`,
 `If`, `WaitFor`, `ForEach`, `Warn`, `Fail`, actions, targets, and expectations.
 Durable loops must use Button Heist's explicit `ForEach` primitive, not native

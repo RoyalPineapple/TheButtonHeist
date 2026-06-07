@@ -40,8 +40,8 @@ public final class TheFence {
         var fileConfig: ButtonHeistFileConfig?
         /// Direct host:port target. Legacy configs may still carry a fingerprint.
         var directDevice: DiscoveredDevice?
-        /// Test/config override for heist and screenshot storage root.
-        var heistStoreBaseDirectory: URL?
+        /// Test/config override for screenshot artifact storage root.
+        var artifactBaseDirectory: URL?
         /// Extra client-side headroom beyond a server-owned wait timeout.
         var postActionExpectationTimeoutBuffer: TimeInterval
 
@@ -52,7 +52,7 @@ public final class TheFence {
             autoReconnect: Bool = true,
             fileConfig: ButtonHeistFileConfig? = nil,
             directDevice: DiscoveredDevice? = nil,
-            heistStoreBaseDirectory: URL? = nil,
+            artifactBaseDirectory: URL? = nil,
             postActionExpectationTimeoutBuffer: TimeInterval = 5
         ) {
             self.deviceFilter = deviceFilter
@@ -61,7 +61,7 @@ public final class TheFence {
             self.autoReconnect = autoReconnect
             self.fileConfig = fileConfig
             self.directDevice = directDevice
-            self.heistStoreBaseDirectory = heistStoreBaseDirectory
+            self.artifactBaseDirectory = artifactBaseDirectory
             self.postActionExpectationTimeoutBuffer = postActionExpectationTimeoutBuffer
         }
     }
@@ -83,17 +83,12 @@ public final class TheFence {
             lastFailure: sessionFailurePayload
         )
     }
-    let heistStore: HeistStore
     let screenshotArtifacts: ScreenshotArtifactWriter
     let pendingRequests = PendingRequestTrackers()
 
-    // Lifecycle owners
-    let heistRecording = FenceHeistRecordingLifecycle()
-
     public init(configuration: Configuration) {
         self.config = configuration
-        self.heistStore = HeistStore(baseDirectory: configuration.heistStoreBaseDirectory)
-        self.screenshotArtifacts = ScreenshotArtifactWriter(baseDirectory: configuration.heistStoreBaseDirectory)
+        self.screenshotArtifacts = ScreenshotArtifactWriter(baseDirectory: configuration.artifactBaseDirectory)
         let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
         self.handoff.token = configuredToken
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value

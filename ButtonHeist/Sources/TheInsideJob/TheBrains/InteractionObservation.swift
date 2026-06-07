@@ -6,7 +6,7 @@ import TheScore
 /// Owns the before/body/after observation contract for executable interactions.
 ///
 /// It coordinates settled semantic evidence. It does not choose command
-/// payloads, resolve element inflation, decide recording policy, or format reports.
+/// payloads, resolve element inflation, choose durable selectors, or format reports.
 @MainActor
 final class InteractionObservation {
     private let stash: TheStash

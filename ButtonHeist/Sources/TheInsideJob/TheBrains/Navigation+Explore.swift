@@ -25,7 +25,7 @@ extension Navigation {
             return exploration.finish(startTime: startTime)
         }
 
-        exploration.manifest.addPendingContainers(stash.currentHierarchy.scrollableContainers)
+        exploration.manifest.addPendingContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
         if await scanPendingContainers(target: target, exploration: &exploration) {
             return exploration.finish(startTime: startTime)
         }

@@ -69,7 +69,8 @@ extension TheStash {
         guard let object = liveContainerObject(forPath: containerTarget.path) else {
             return .objectUnavailable
         }
-        guard let geometry = Self.liveGeometry(for: containerTarget.container) else {
+        guard let liveContainer = liveContainer(forPath: containerTarget.path),
+              let geometry = Self.liveGeometry(for: liveContainer) else {
             return .geometryUnavailable
         }
         return .resolved(LiveContainerTarget(

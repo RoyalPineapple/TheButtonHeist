@@ -103,7 +103,7 @@ public extension HeistExecutionStepResult {
         return reportCommandName ?? reportStepName
     }
 
-    /// Wire message type for an action-kind step. Prefers the recorded command;
+    /// Wire message type for an action-kind step. Prefers the reported command;
     /// falls back to the delivered action method.
     var reportClientWireType: ClientWireMessageType? {
         guard kind == .action else { return nil }
@@ -388,7 +388,7 @@ private extension HeistExecutionStepResult {
 
 private extension ActionMethod {
     /// The client wire message type a delivered action method corresponds to,
-    /// used to recover a command name when no recorded command is present.
+    /// used to recover a command name when no reported command is present.
     var heistReportWireType: ClientWireMessageType? {
         switch self {
         case .activate: return .activate

@@ -66,14 +66,6 @@ extension FenceResponse {
                 let isDefault = name == defaultTarget ? " *" : ""
                 return "\(name): \(target.device)\(isDefault)"
             }.joined(separator: "\n")
-        case .heistStarted:
-            return "heist recording started"
-        case .heistStopped(let path, let swiftPath, let stepCount):
-            var text = "saved: \(path) (\(stepCount) steps)"
-            if let swiftPath {
-                text += "\nswift: \(swiftPath)"
-            }
-            return text
         }
     }
 

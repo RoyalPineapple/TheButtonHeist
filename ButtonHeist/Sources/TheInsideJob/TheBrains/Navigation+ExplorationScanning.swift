@@ -51,7 +51,7 @@ extension Navigation {
         let hasHOverflow = contentSize.width > container.frame.width + 1
         let hasVOverflow = contentSize.height > container.frame.height + 1
         guard hasHOverflow || hasVOverflow else { return nil }
-        guard Self.hasContentBeyondFrame(of: container, in: stash.currentHierarchy) else { return nil }
+        guard Self.hasContentBeyondFrame(of: container, in: stash.latestObservedLiveHierarchy) else { return nil }
         guard let scrollTarget = scrollableTarget(for: container, contentSize: contentSize) else { return nil }
         return ContainerExploration(
             container: container,
@@ -85,7 +85,7 @@ extension Navigation {
         exploration.markExplored(containerExploration.container)
 
         guard !foundTarget else { return true }
-        exploration.addDiscoveredContainers(stash.currentHierarchy.scrollableContainers)
+        exploration.addDiscoveredContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
         return false
     }
 
@@ -191,7 +191,7 @@ extension Navigation {
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
-        let pairs = stash.currentHierarchy.compactMap(
+        let pairs = stash.latestObservedLiveHierarchy.compactMap(
             context: false,
             container: { isInside, current in isInside || current == container },
             element: { element, _, isInside -> (element: AccessibilityElement, origin: CGPoint?)? in

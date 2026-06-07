@@ -10,40 +10,43 @@ struct ToolRoutingTests {
 
     @Test("direct tools route to same command")
     func directToolRoutesToSameCommand() throws {
-        let operation = try routed(TheFence.Command.startHeist.rawValue, ["identifier": .string("demo")])
+        let operation = try routed(TheFence.Command.connect.rawValue, ["target": .string("demo")])
 
-        #expect(operation.command == .startHeist)
-        #expect(operation.arguments.argumentValues["identifier"] == .string("demo"))
+        #expect(operation.command == .connect)
+        #expect(operation.arguments.argumentValues["target"] == .string("demo"))
     }
 
-    @Test("canonical gesture tools route directly")
-    func canonicalGestureToolsRouteDirectly() throws {
+    @Test("perform routes one DSL step opaquely")
+    func performRoutesOneDSLStepOpaquely() throws {
         let operation = try routed(
-            TheFence.Command.swipe.rawValue,
+            TheFence.Command.perform.rawValue,
             [
-                "target": .object(["heistId": .string("element-1")]),
-                "direction": .string("left"),
+                "step": .string(#"Activate(.label("Pay")).expect(.changed(.screen()))"#),
             ]
         )
 
-        #expect(operation.command == .swipe)
-        #expect(operation.arguments.argumentValues["heistId"] == nil)
-        #expect(operation.arguments.argumentValues["direction"] == .string("left"))
+        #expect(operation.command == .perform)
+        #expect(operation.arguments.argumentValues["step"] == .string(#"Activate(.label("Pay")).expect(.changed(.screen()))"#))
     }
 
-    @Test("dismiss_keyboard routes directly")
-    func dismissKeyboardRoutesDirectly() throws {
-        let operation = try routed(TheFence.Command.dismissKeyboard.rawValue, [:])
-
-        #expect(operation.command == .dismissKeyboard)
-    }
-
-    @Test("edit_action keeps standard edit actions")
-    func editActionKeepsStandardEditActions() throws {
-        let operation = try routed(TheFence.Command.editAction.rawValue, ["action": .string("copy")])
-
-        #expect(operation.command == .editAction)
-        #expect(operation.arguments.argumentValues["action"] == .string("copy"))
+    @Test("granular action tools are not MCP tools")
+    func granularActionToolsAreNotMCPTools() {
+        for name in [
+            "activate",
+            "type_text",
+            "wait",
+            "swipe",
+            "dismiss_keyboard",
+            "edit_action",
+            "scroll",
+        ] {
+            let result = routeToolRequest(name: name)
+            guard case .failure(let error) = result else {
+                Issue.record("Expected routing failure for \(name)")
+                continue
+            }
+            #expect(error.message == "Unknown tool: \(name)")
+        }
     }
 
     @Test("unknown tool returns routing error")

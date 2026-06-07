@@ -32,10 +32,10 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(TheFence.Command.scroll.family, .viewportDebug)
         XCTAssertEqual(TheFence.Command.scrollToVisible.family, .viewportDebug)
         XCTAssertEqual(TheFence.Command.scrollToEdge.family, .viewportDebug)
+        XCTAssertEqual(TheFence.Command.perform.family, .heistRuntime)
         XCTAssertEqual(TheFence.Command.runHeist.family, .heistRuntime)
         XCTAssertEqual(TheFence.Command.listHeists.family, .heistRuntime)
         XCTAssertEqual(TheFence.Command.describeHeist.family, .heistRuntime)
-        XCTAssertEqual(TheFence.Command.startHeist.family, .heistRecording)
 
         XCTAssertNil(ObservationCommand(rawValue: TheFence.Command.wait.rawValue))
         XCTAssertEqual(AssertionCommand.wait.command, .wait)
@@ -228,14 +228,14 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testViewportDebugCommandsArePublicActionsButNotDurableHeistPrimitives() async throws {
+    func testViewportDebugCommandsAreCLIDirectOnlyAndRejectedByHeistGate() async throws {
         let (fence, _) = makeConnectedFence()
 
         for command in [TheFence.Command.scroll, .scrollToVisible, .scrollToEdge] {
             let descriptor = command.descriptor
             XCTAssertEqual(descriptor.family, .viewportDebug, command.rawValue)
             XCTAssertEqual(descriptor.cliExposure, .directCommand, command.rawValue)
-            XCTAssertEqual(descriptor.mcpExposure, .directTool, command.rawValue)
+            XCTAssertEqual(descriptor.mcpExposure, .notExposed, command.rawValue)
             XCTAssertNotNil(command.appInteractionCommand, command.rawValue)
             XCTAssertNotNil(command.viewportDebugCommand, command.rawValue)
             XCTAssertNil(command.heistPrimitiveCommand, command.rawValue)
@@ -266,8 +266,10 @@ final class WireCommandParityTests: XCTestCase {
         let target = targetArgumentValue(identifier: "target")
         switch command {
         case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getSessionState,
-             .listTargets, .startHeist, .dismissKeyboard:
+             .listTargets, .dismissKeyboard:
             return [:]
+        case .perform:
+            return ["step": .string(#"Activate(.label("Pay"))"#)]
         case .oneFingerTap:
             return ["point": .object(["x": .double(12), "y": .double(34)])]
         case .longPress:
@@ -324,8 +326,6 @@ final class WireCommandParityTests: XCTestCase {
             ]
         case .connect:
             return ["target": .string("default")]
-        case .stopHeist:
-            return ["output": .string("contract.heist")]
         }
     }
 

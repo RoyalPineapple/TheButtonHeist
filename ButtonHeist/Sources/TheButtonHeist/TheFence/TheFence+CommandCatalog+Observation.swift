@@ -20,8 +20,8 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                     Read the app accessibility hierarchy, optionally scoped to a subtree.
 
                     containerName is ButtonHeist's generated name for a container in the current interface capture. \
-                    It is useful for inspection and viewport/debug commands. It is not a semantic target and is not \
-                    recorded into heists.
+                    It is useful for inspection and viewport/debug commands. It is not a semantic target or durable \
+                    heist selector.
                     """
             )
         case .getScreen:
@@ -50,6 +50,7 @@ enum AssertionCommand: String, CaseIterable, FenceCommand, HeistPrimitiveCommand
         TheFence.Command.commandDescriptor(
             command, family: .assertion,
             requestDecoder: TheFence.decodeWaitRequest,
+            mcpExposure: .notExposed,
             parameters: FenceParameterBlocks.wait,
             mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
             description: "Assert that an accessibility predicate is satisfied within timeout "

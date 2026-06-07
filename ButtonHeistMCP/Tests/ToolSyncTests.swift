@@ -35,6 +35,23 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("MCP tool surface stays source-oriented")
+    func mcpToolSurfaceStaysSourceOriented() {
+        let expected = [
+            "connect",
+            "describe_heist",
+            "get_interface",
+            "get_pasteboard",
+            "get_screen",
+            "get_session_state",
+            "list_heists",
+            "perform",
+            "run_heist",
+        ].sorted()
+
+        #expect(ToolDefinitions.all.map(\.name).sorted() == expected)
+    }
+
     @Test("get_interface subtree container is an object-only matcher")
     func getInterfaceSubtreeContainerSchemaIsObjectOnly() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "get_interface" })
@@ -114,17 +131,18 @@ struct ToolSyncTests {
         #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)
     }
 
-    @Test("stop_heist schema exposes optional Swift export fields without combinators")
-    func stopHeistSchemaExposesSwiftExportFields() throws {
-        let tool = try #require(ToolDefinitions.all.first { $0.name == "stop_heist" })
+    @Test("perform schema exposes one step source without plan IR")
+    func performSchemaExposesOneStepSourceWithoutPlanIR() throws {
+        let tool = try #require(ToolDefinitions.all.first { $0.name == "perform" })
 
-        for field in ["output", "swiftOutput", "sampleParameter", "sampleValue"] {
+        #expect(schemaValue(at: ["properties", "step"], in: tool.inputSchema) != nil)
+        #expect(schemaValue(at: ["required"], in: tool.inputSchema) == .array([.string("step")]))
+        for field in ["source", "path", "plan", "version", "name", "parameter", "definitions", "body"] {
             #expect(
-                schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
-                "stop_heist schema must expose \(field)"
+                schemaValue(at: ["properties", field], in: tool.inputSchema) == nil,
+                "perform schema must not expose \(field)"
             )
         }
-        #expect(schemaValue(at: ["required"], in: tool.inputSchema) == .array([.string("output")]))
         #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
         #expect(schemaValue(at: ["anyOf"], in: tool.inputSchema) == nil)
         #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)

@@ -19,7 +19,7 @@ struct SettledSemanticObservationEvent {
     let trace: AccessibilityTrace
     let delta: AccessibilityTrace.Delta?
 
-    var currentCaptureRef: AccessibilityTrace.CaptureRef? {
+    var latestCaptureRef: AccessibilityTrace.CaptureRef? {
         trace.captures.last.map(AccessibilityTrace.CaptureRef.init(capture:))
     }
 }
@@ -53,21 +53,34 @@ final class SemanticObservationStream {
     private weak var stash: TheStash?
     private let tripwire: TheTripwire
 
+    // MARK: - Subscription State
+
     private var nextSubscriptionID: UInt64 = 0
     private var subscriptions: [UInt64: SemanticObservationScope] = [:]
+
+    // MARK: - Waiter State
 
     private var nextSettledWaiterID: UInt64 = 0
     private var settledWaitersByID: [UInt64: SettledSemanticWaiter] = [:]
 
     private var nextCycleWaiterID: UInt64 = 0
     private var cycleWaiters: [UInt64: SemanticObservationCycleWaiter] = [:]
+
+    // MARK: - Cycle Sequencing State
+
     private var cycleSequence: UInt64 = 0
     private var cycleInProgress = false
 
+    // MARK: - Subscriber-Facing Settled Observation History
+
     private var settledSequence: UInt64 = 0
     private(set) var latestEvent: SettledSemanticObservationEvent?
-    private(set) var latestObservationIsDirty = true
+    /// Invalidates only `latestEvent` as a clean waiter result. Settled
+    /// semantic truth remains in `TheStash` until the next explicit commit.
+    private(set) var latestSettledObservationInvalidated = true
     private(set) var latestSettleFailureDiagnostic: String?
+
+    // MARK: - Passive Observation Scheduling
 
     private(set) var passiveObservationTask: Task<Void, Never>?
     private var discoveryObservation: DiscoveryObservation?
@@ -93,7 +106,7 @@ final class SemanticObservationStream {
     func start(discovery: @escaping DiscoveryObservation) {
         discoveryObservation = discovery
         guard passiveObservationTask == nil else { return }
-        latestObservationIsDirty = true
+        latestSettledObservationInvalidated = true
         passiveObservationTask = Task { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
@@ -122,7 +135,7 @@ final class SemanticObservationStream {
         subscriptions[id] = nil
     }
 
-    func currentSubscribedScope() -> SemanticObservationScope {
+    func subscribedObservationScope() -> SemanticObservationScope {
         subscriptions.values.max() ?? .visible
     }
 
@@ -186,18 +199,18 @@ final class SemanticObservationStream {
 
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
-            stash.recordSettleDiagnosticEvidence(outcome.finalScreen)
+            stash.recordFailedSettleDiagnosticEvidence(outcome.finalScreen)
             return nil
         }
 
         guard let screen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
-            stash.recordSettleDiagnosticEvidence(nil)
+            stash.recordFailedSettleDiagnosticEvidence(nil)
             return nil
         }
 
         if outcome.outcome.didSettleCleanly {
-            let event = commitSettledObservation(screen, scope: .visible)
+            let event = commitSettledVisibleObservation(screen)
             return VisibleSemanticObservationEvidence(
                 screen: event.observation.screen,
                 tripwireSignal: event.observation.tripwireSignal,
@@ -207,20 +220,34 @@ final class SemanticObservationStream {
         }
 
         latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
-        stash.recordSettleDiagnosticEvidence(screen)
+        stash.recordFailedSettleDiagnosticEvidence(screen)
         return nil
     }
 
     @discardableResult
-    func commitSettledObservation(
+    func commitSettledVisibleObservation(_ screen: Screen) -> SettledSemanticObservationEvent {
+        publishCommittedObservation(screen, scope: .visible)
+    }
+
+    @discardableResult
+    func commitSettledDiscoveryObservation(_ screen: Screen) -> SettledSemanticObservationEvent {
+        publishCommittedObservation(screen, scope: .discovery)
+    }
+
+    @discardableResult
+    private func publishCommittedObservation(
         _ screen: Screen,
-        scope: SemanticObservationScope = .visible
+        scope: SemanticObservationScope
     ) -> SettledSemanticObservationEvent {
         guard let stash else {
             preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
         }
-        let committedScreen = screenForCommit(screen, scope: scope, stash: stash)
-        stash.storeSettledSemanticObservationForStream(committedScreen)
+        switch scope {
+        case .visible:
+            stash.commitSettledVisibleWorld(screen)
+        case .discovery:
+            stash.commitSettledDiscoveryWorld(screen)
+        }
         return publishCurrentSettledObservation(scope: scope, stash: stash)
     }
 
@@ -253,33 +280,33 @@ final class SemanticObservationStream {
 
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
-            stash.recordSettleDiagnosticEvidence(outcome.finalScreen)
+            stash.recordFailedSettleDiagnosticEvidence(outcome.finalScreen)
             return (outcome, nil, nil)
         }
 
         guard let finalScreen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
-            stash.recordSettleDiagnosticEvidence(nil)
+            stash.recordFailedSettleDiagnosticEvidence(nil)
             return (outcome, nil, nil)
         }
         if outcome.outcome.didSettleCleanly {
-            return (outcome, commitSettledObservation(finalScreen, scope: .visible), nil)
+            return (outcome, commitSettledVisibleObservation(finalScreen), nil)
         }
 
         latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
-        stash.recordSettleDiagnosticEvidence(finalScreen)
-        return (outcome, nil, stash.latestSettleDiagnosticEvidence)
+        stash.recordFailedSettleDiagnosticEvidence(finalScreen)
+        return (outcome, nil, stash.latestFailedSettleDiagnosticEvidence)
     }
 
-    func clearLatestObservation() {
+    func clearSettledObservationHistory() {
         latestEvent = nil
-        latestObservationIsDirty = true
+        latestSettledObservationInvalidated = true
         passiveObservationSettledReading = nil
         latestSettleFailureDiagnostic = nil
     }
 
-    func markDirtyFromTripwire() {
-        latestObservationIsDirty = true
+    func invalidateLatestSettledObservation() {
+        latestSettledObservationInvalidated = true
     }
 
     private func publishCurrentSettledObservation(
@@ -290,12 +317,12 @@ final class SemanticObservationStream {
         let observation = SettledSemanticObservation(
             sequence: settledSequence,
             scope: scope,
-            screen: stash.settledScreen,
+            screen: stash.settledSemanticScreen,
             tripwireSignal: tripwire.tripwireSignal()
         )
         let event = makeEvent(observation: observation, previous: latestEvent, stash: stash)
         latestEvent = event
-        latestObservationIsDirty = false
+        latestSettledObservationInvalidated = false
         latestSettleFailureDiagnostic = nil
         passiveObservationSettledReading = tripwire.latestReading
         completeWaiters(with: event)
@@ -345,19 +372,6 @@ final class SemanticObservationStream {
         return timeout
     }
 
-    private func screenForCommit(
-        _ screen: Screen,
-        scope: SemanticObservationScope,
-        stash: TheStash
-    ) -> Screen {
-        switch scope {
-        case .visible:
-            return stash.screenByRefreshingSettledSemanticWorld(with: screen)
-        case .discovery:
-            return screen
-        }
-    }
-
     private static func timeoutMilliseconds(from timeout: Double?) -> Int {
         guard let timeout else { return SettleSession.defaultTimeoutMs }
         guard timeout > 0 else { return 0 }
@@ -387,7 +401,7 @@ final class SemanticObservationStream {
         scope: SemanticObservationScope,
         after sequence: UInt64?
     ) -> SettledSemanticObservationEvent? {
-        guard !latestObservationIsDirty,
+        guard !latestSettledObservationInvalidated,
               let latest = latestEvent,
               latest.scope >= scope,
               latest.sequence > (sequence ?? 0)
@@ -450,7 +464,7 @@ final class SemanticObservationStream {
     }
 
     private func runPassiveObservationCycle() async {
-        let scope = currentSubscribedScope()
+        let scope = subscribedObservationScope()
         cycleInProgress = true
         let didObserve = await performObservationCycle(scope: scope)
         cycleInProgress = false
@@ -470,16 +484,16 @@ final class SemanticObservationStream {
             return await observeVisibleSemanticState(stash: stash)
         case .discovery:
             guard let discoveryObservation else {
-                markDirtyFromTripwire()
+                invalidateLatestSettledObservation()
                 await Task.yield()
                 return true
             }
             guard let exploredScreen = await discoveryObservation() else {
-                markDirtyFromTripwire()
+                invalidateLatestSettledObservation()
                 await Task.yield()
                 return true
             }
-            _ = commitSettledObservation(exploredScreen, scope: .discovery)
+            _ = commitSettledDiscoveryObservation(exploredScreen)
             await Task.yield()
             return true
         }
@@ -487,7 +501,7 @@ final class SemanticObservationStream {
 
     private func observeVisibleSemanticState(stash: TheStash) async -> Bool {
         if let reading = tripwire.latestReading,
-           !latestObservationIsDirty,
+           !latestSettledObservationInvalidated,
            passiveObservationSettledReading?.tick == reading.tick {
             _ = await Task.cancellableSleep(for: .milliseconds(100))
             return true
@@ -510,12 +524,12 @@ final class SemanticObservationStream {
                 for: settle,
                 layerGateWasClear: layerGateWasClear
             )
-            stash.recordSettleDiagnosticEvidence(settle.finalScreen)
+            stash.recordFailedSettleDiagnosticEvidence(settle.finalScreen)
             await Task.yield()
             return true
         }
 
-        _ = commitSettledObservation(screen, scope: .visible)
+        _ = commitSettledVisibleObservation(screen)
         await Task.yield()
         return true
     }

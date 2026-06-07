@@ -473,7 +473,7 @@ macOS client outside it, and CLI/MCP fronts for humans and agents.
 | `TheScore` | Wire models, traces, predicates, and results shared across boundaries |
 | `ButtonHeistCLI` | Command-line adapter |
 | `ButtonHeistMCP` | MCP adapter for agents |
-| `HeistStore` / `ScreenshotArtifactWriter` | Deterministic heist and screenshot artifacts |
+| `HeistArtifactCodec` / `ScreenshotArtifactWriter` | Deterministic heist and screenshot artifacts |
 
 ## Development
 
