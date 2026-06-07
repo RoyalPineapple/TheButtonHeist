@@ -85,6 +85,77 @@ import TheScore
         #expect(suggestion.reasons.contains("Sibling row context is preserved."))
     }
 
+    @Test("Missing target chooses renamed duplicate by neighbor context")
+    func missingTargetChoosesRenamedDuplicateByNeighborContext() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = evidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Delete"),
+            ]),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Remove"),
+                ("Bread", "Remove"),
+            ]),
+            succeeded: false
+        )
+
+        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+
+        #expect(suggestion.failureKind == .missingTarget)
+        #expect(suggestion.newResolvedElement.label == "Remove")
+        #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
+        #expect(suggestion.reasons.contains("Sibling row context is preserved."))
+        #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
+    }
+
+    @Test("Missing target does not guess from the only compatible role")
+    func missingTargetDoesNotGuessFromTheOnlyCompatibleRole() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = evidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Delete", traits: [.button], actions: [.activate]),
+            ]),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Checkout", traits: [.button], actions: [.activate]),
+            ]),
+            succeeded: false
+        )
+
+        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+    }
+
+    @Test("Missing target does not use traversal ordinal without matching neighbors")
+    func missingTargetDoesNotUseTraversalOrdinalWithoutMatchingNeighbors() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = evidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Delete"),
+            ]),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Bread", "Remove"),
+                ("Eggs", "Remove"),
+            ]),
+            succeeded: false
+        )
+
+        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+    }
+
     @Test("Ambiguous duplicate labels produce minimum disambiguating matcher")
     func ambiguousDuplicateLabelsProduceMinimumDisambiguatingMatcher() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
@@ -176,15 +247,31 @@ import TheScore
         let runtimeIdentifier = "view-A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
         let last = evidence(
             target: target,
-            before: makeTestInterface(elements: [
-                element(label: "Delete", identifier: runtimeIdentifier, traits: [.button], actions: [.activate]),
+            before: makeTestInterface(nodes: [
+                testContainer(makeTestAccessibilityContainer(), children: [
+                    testElement(element(label: "Milk", traits: [.staticText])),
+                    testElement(element(
+                        label: "Delete",
+                        identifier: runtimeIdentifier,
+                        traits: [.button],
+                        actions: [.activate]
+                    )),
+                ]),
             ]),
             succeeded: true
         )
         let current = evidence(
             target: target,
-            before: makeTestInterface(elements: [
-                element(label: "Remove", identifier: runtimeIdentifier, traits: [.button], actions: [.activate]),
+            before: makeTestInterface(nodes: [
+                testContainer(makeTestAccessibilityContainer(), children: [
+                    testElement(element(label: "Milk", traits: [.staticText])),
+                    testElement(element(
+                        label: "Remove",
+                        identifier: runtimeIdentifier,
+                        traits: [.button],
+                        actions: [.activate]
+                    )),
+                ]),
             ]),
             succeeded: false
         )
@@ -253,8 +340,8 @@ import TheScore
         ])
         let last = evidence(
             target: target,
-            before: makeTestInterface(elements: [
-                element(label: "Delete", traits: [.button], actions: [.activate]),
+            before: listInterface(rows: [
+                ("Milk", "Delete"),
             ]),
             afterDelta: nil,
             afterSnapshot: afterSnapshot,
@@ -262,8 +349,8 @@ import TheScore
         )
         let current = evidence(
             target: target,
-            before: makeTestInterface(elements: [
-                element(label: "Remove", traits: [.button], actions: [.activate]),
+            before: listInterface(rows: [
+                ("Milk", "Remove"),
             ]),
             afterDelta: nil,
             afterSnapshot: nil,
