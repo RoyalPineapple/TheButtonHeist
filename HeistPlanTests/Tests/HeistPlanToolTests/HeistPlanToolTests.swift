@@ -63,7 +63,7 @@ struct HeistPlanToolTests {
 
         #expect(result.exitCode == 0, "\(result.stderr)")
         #expect(result.stdout == """
-        try HeistPlan("loginFlow") {
+        HeistPlan("loginFlow") {
             TypeText("alex@example.com", into: .identifier("email"))
                 .expect(.present(.value("alex@example.com")), timeout: .seconds(1))
 
