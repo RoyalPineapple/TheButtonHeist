@@ -33,9 +33,9 @@ import ThePlans
             Activate(.label(item))
         }
 
-        Activate(.label("Pay")).expect(.screenChanged)
+        Activate(.label("Pay")).expect(.changed(.screen()))
 
-        WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)) {
+        WaitFor(.present(.label("Receipt")), timeout: .seconds(5)) {
             Warn("Receipt appeared")
         }.else {
             Fail("Receipt did not appear")
@@ -363,19 +363,6 @@ import ThePlans
             expectationWaiver: "reason"
         )),
     ])
-
-    let screenChanged = try HeistPlanSourceCompiler().compile(root(#"Activate(.label("Pay")).expect(.screenChanged)"#))
-    #expect(screenChanged.body == [
-        .action(try ActionStep(
-            command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
-        )),
-    ])
-
-    let exists = try HeistPlanSourceCompiler().compile(root(#"WaitFor(.exists(.label("Receipt")))"#))
-    #expect(exists.body == [
-        .wait(WaitStep(predicate: .present(.label("Receipt")), timeout: 0)),
-    ])
 }
 
 @Test func `reported agent grammar mistakes fail with corrections`() throws {
@@ -440,6 +427,12 @@ import ThePlans
     expect(caseAfterElse, contains: "Case must appear before Else")
     let changeAlias = compileError(root(#"Activate(.label("Pay")).expect(.changed(.screenChanged))"#))
     expect(changeAlias, contains: "unsupported change predicate '.screenChanged'")
+
+    let screenChangedAlias = compileError(root(#"Activate(.label("Pay")).expect(.screenChanged)"#))
+    expect(screenChangedAlias, contains: "unsupported accessibility predicate '.screenChanged'")
+
+    let existsAlias = compileError(root(#"WaitFor(.exists(.label("Receipt")))"#))
+    expect(existsAlias, contains: "unsupported accessibility predicate '.exists'")
 }
 
 @Test func `runtime parser rejects arbitrary Swift and bypass shapes`() throws {

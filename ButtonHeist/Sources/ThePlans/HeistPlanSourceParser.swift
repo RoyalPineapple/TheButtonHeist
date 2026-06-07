@@ -841,13 +841,8 @@ struct HeistPlanSourceParser {
             let change = try parseChangePredicateExpr()
             try expectSymbol(")")
             return .changed(change)
-        case "screenChanged":
-            if consumeSymbol("(") {
-                try expectSymbol(")")
-            }
-            return .changed(.screen())
-        case "present", "exists":
-            return .state(try parsePresentAbsentState(name: name == "exists" ? "present" : name))
+        case "present":
+            return .state(try parsePresentAbsentState(name: name))
         case "absent":
             return .state(try parsePresentAbsentState(name: name))
         case "all":
@@ -900,8 +895,8 @@ struct HeistPlanSourceParser {
             allowedPrefixes: ["AccessibilityPredicate.State", "StatePredicateExpr"]
         )
         switch name {
-        case "present", "exists", "absent":
-            return try parsePresentAbsentState(name: name == "exists" ? "present" : name)
+        case "present", "absent":
+            return try parsePresentAbsentState(name: name)
         case "all":
             return try parseAllState()
         default:
