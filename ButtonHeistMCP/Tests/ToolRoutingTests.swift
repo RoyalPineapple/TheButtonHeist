@@ -63,11 +63,11 @@ struct ToolRoutingTests {
         // `plan` string is forwarded verbatim to TheFence/ThePlans.
         let arguments = try ButtonHeistMCPServer.decodeArguments(
             [
-                "plan": .string("Activate(.label(\"Pay\"))"),
+                "plan": .string("HeistPlan { Activate(.label(\"Pay\")) }"),
             ]
         )
 
-        #expect(arguments.argumentValues["plan"] == .string("Activate(.label(\"Pay\"))"))
+        #expect(arguments.argumentValues["plan"] == .string("HeistPlan { Activate(.label(\"Pay\")) }"))
     }
 
     @Test("run_heist tool schema exposes plan source")

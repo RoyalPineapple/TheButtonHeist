@@ -4,9 +4,17 @@ Button Heist uses three file roles:
 
 | Role | Meaning |
 |------|---------|
-| `.swift` | Preferred editable source. Agents and humans should author Swift DSL. |
-| `.json` | Explicit raw `HeistPlan` JSON IR for debug, import, and export. |
+| `.swift` | Preferred editable source for humans authoring rich Swift DSL files. |
+| `.json` | Explicit raw `HeistPlan` JSON IR for debug, import, export, and generated tooling. Do not use it as the agent-facing heist authoring format. |
 | `.heist` | Generated package artifact. Do not hand-author it. |
+
+Agents authoring heists through MCP should prefer canonical ButtonHeist source
+strings in `run_heist(plan:)`. That source is Swift-like ButtonHeist DSL, not
+arbitrary Swift execution. It accepts the constructs Button Heist can render
+canonically and rejects imports, variables, functions, native Swift control
+flow, interpolation, custom calls, body-local `try`, `await`, and unbounded
+loops. The source must be rooted at `HeistPlan { ... }`, optionally with a name
+or root parameter.
 
 A `.heist` path is an Apple-native package directory:
 
@@ -72,8 +80,10 @@ generate a fresh `.heist` package.
 **Current plan version**: `1`
 
 `plan.json` stores a `HeistPlan`: the canonical runtime and wire contract for
-semantic Button Heist tests. Swift DSL source, live-composed heists, and
-explicit raw JSON IR all converge on this value.
+semantic Button Heist tests. Swift DSL source, canonical ButtonHeist source,
+live-composed heists, and explicit raw JSON IR all converge on this value. JSON
+is storage, wire, and internal IR. It is not the authored surface for humans or
+agents.
 
 The plan is not a transcript of viewport mechanics. Normal heists express
 semantic intent and semantic outcomes; Button Heist owns reveal, element inflation,

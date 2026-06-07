@@ -27,7 +27,7 @@ extension TheFence.CommandArgumentEnvelope {
         if let expected = GestureDuration.validationFailure(for: value) {
             throw SchemaValidationError(field: "duration", observed: value, expected: expected)
         }
-        return try GestureDuration(seconds: value)
+        return GestureDuration(seconds: value)
     }
 
     func boundedPositiveInteger(_ key: String, minimum: Int, maximum: Int) throws -> Int? {

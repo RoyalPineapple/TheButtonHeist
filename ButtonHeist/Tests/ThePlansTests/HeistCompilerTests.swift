@@ -110,6 +110,195 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `compileFile allows Swift wrapper outside selected heist`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "Wrapped.swift",
+            """
+            import ThePlans
+
+            enum StoreFlows {
+                static func checkout() throws -> HeistPlan {
+                    try HeistPlan("Checkout") {
+                        Warn("ok")
+                    }
+                }
+            }
+
+            let heist = try StoreFlows.checkout()
+            """
+        )
+
+        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+
+        #expect(diagnostics.isEmpty)
+        #expect(plan.name == "Checkout")
+        #expect(plan.body == [.warn(WarnStep(message: "ok"))])
+    }
+
+    @Test
+    func `compileFile ignores Swift wrapper strings that mention HeistPlan`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "WrapperStrings.swift",
+            #"""
+            import ThePlans
+
+            let template = """
+            HeistPlan {
+                let x = 1
+            }
+            """
+
+            let rawTemplate = #"HeistPlan { if true { Warn("not real DSL") } }"#
+
+            let heist = try HeistPlan("WrapperStrings") {
+                Warn("ok")
+            }
+            """#
+        )
+
+        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+
+        #expect(diagnostics.isEmpty)
+        #expect(plan.name == "WrapperStrings")
+        #expect(plan.body == [.warn(WarnStep(message: "ok"))])
+    }
+
+    @Test
+    func `compileFile ignores Swift wrapper comments and return types that mention HeistPlan`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "WrapperComments.swift",
+            """
+            import ThePlans
+
+            /*
+                /*
+                    inner block
+                */
+                HeistPlan {
+                    let x = 1
+                }
+            */
+
+            func makeHeist() throws -> /* wrapped return type */ HeistPlan {
+                try HeistPlan("WrapperComments") {
+                    Warn("ok")
+                }
+            }
+
+            let heist = try makeHeist()
+            """
+        )
+
+        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+
+        #expect(diagnostics.isEmpty)
+        #expect(plan.name == "WrapperComments")
+        #expect(plan.body == [.warn(WarnStep(message: "ok"))])
+    }
+
+    @Test
+    func `compileFile allows trusted Swift frontend helpers to emit a validated plan`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "TrustedFrontend.swift",
+            """
+            import ThePlans
+
+            func payLabel() -> String { "Pay" }
+
+            let heist = try HeistPlan("TrustedFrontend") {
+                Activate(.label(payLabel()))
+                    .expect(.changed(.screen()))
+            }
+            """
+        )
+
+        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+
+        #expect(diagnostics.isEmpty)
+        #expect(plan.name == "TrustedFrontend")
+        #expect(plan.body == [
+            .action(try ActionStep(
+                command: .activate(.predicate(.label("Pay"))),
+                expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+            )),
+        ])
+    }
+
+    @Test
+    func `compileFile allows trusted Swift frontend to emit raw validated HeistPlan AST`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "RawBody.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan(name: "RawBody", body: [
+                .warn(WarnStep(message: "raw")),
+            ])
+            """
+        )
+
+        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+
+        #expect(diagnostics.isEmpty)
+        #expect(plan.name == "RawBody")
+        #expect(plan.body == [.warn(WarnStep(message: "raw"))])
+    }
+
+    @Test
+    func `result builders do not accept native Swift control flow in heist body`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "NativeIf.swift",
+            """
+            import ThePlans
+
+            let shouldPay = true
+            let heist = try HeistPlan("NativeIf") {
+                if shouldPay {
+                    Activate(.label("Pay"))
+                }
+            }
+            """
+        )
+
+        let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let text = diagnostics.map(\.description).joined(separator: "\n")
+
+        #expect(text.contains("Failed to compile Swift heist source"))
+    }
+
+    @Test
+    func `result builders do not accept native Swift control flow in heist definitions`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "NativeIfInDefinition.swift",
+            """
+            import ThePlans
+
+            let heist = try HeistPlan("NativeIfInDefinition") {
+                HeistDef<Void>("Helper") {
+                    if Bool.random() {
+                        Warn("raw")
+                    }
+                }
+
+                RunHeist("Helper")
+            }
+            """
+        )
+
+        let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let text = diagnostics.map(\.description).joined(separator: "\n")
+
+        #expect(text.contains("Failed to compile Swift heist source"))
+    }
+
+    @Test
     func `compileDirectory compiles multiple Swift files into one catalog`() async throws {
         let temp = try CompilerTemporaryDirectory()
         _ = try temp.writeSwiftSource(named: "Alpha.swift", namedPlan: "Alpha")
@@ -178,14 +367,11 @@ struct HeistCompilerTests {
     @Test
     func `source compiler remains behind ThePlans boundary`() throws {
         let root = try repositoryRoot()
-        let files = try swiftFiles(in: root).filter {
-            !$0.path.contains("/ButtonHeist/Sources/ThePlans/")
-                && $0.lastPathComponent != "HeistCompilerTests.swift"
-        }
+        let files = try productionSwiftFilesOutsideThePlans(in: root)
 
         for file in files {
             let source = try String(contentsOf: file, encoding: .utf8)
-            #expect(!source.contains("HeistSourceCompiler"), "\(file.path) references HeistSourceCompiler")
+            #expect(!source.contains("HeistPlanSourceCompiler()"), "\(file.path) directly constructs HeistPlanSourceCompiler")
             #expect(!source.contains("HeistSwiftFileCompiler"), "\(file.path) references HeistSwiftFileCompiler")
             #expect(!source.contains("swiftc"), "\(file.path) invokes swiftc")
             #expect(!source.contains("decodeValidatedHeistJSON"), "\(file.path) decodes compiler stdout")

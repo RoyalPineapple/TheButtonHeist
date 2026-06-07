@@ -74,7 +74,7 @@ final class MenuOrderDogfoodHeistTests: XCTestCase {
         let heist = try await Heist {
             try DemoHome.openMenu()
 
-            try ForEach(DemoOrder.itemLabels) { item in
+            ForEach(DemoOrder.itemLabels) { item in
                 try MenuScreen.addItem(item)
             }
 

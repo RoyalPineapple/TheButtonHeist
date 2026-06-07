@@ -28,37 +28,33 @@ public extension HeistPlan {
 
 private struct HeistCanonicalSwiftDSLRenderer {
     func render(_ plan: HeistPlan) throws -> String {
-        let definitions = try renderDefinitions(plan.definitions, path: [], indent: 0)
         let environment = try RenderEnvironment.empty.binding(parameter: plan.parameter)
+        let definitions = try renderDefinitions(plan.definitions, path: [], indent: 1)
         let body = try render(steps: plan.body, indent: 1, environment: environment)
-        let heistHeader = try renderRootHeistHeader(plan)
+        let content = [definitions, body].filter { !$0.isEmpty }.joined(separator: "\n\n")
+        let heistHeader = try renderHeistHeader(plan, callee: "HeistPlan")
         let heist = """
         \(heistHeader)
-        \(body)
+        \(content)
         }
         """
-        guard !definitions.isEmpty else { return heist }
-        return """
-        \(definitions)
-
-        \(heist)
-        """
+        return heist
     }
 
-    private func renderRootHeistHeader(_ plan: HeistPlan) throws -> String {
+    private func renderHeistHeader(_ plan: HeistPlan, callee: String) throws -> String {
         let nameArgument = plan.name.map(quote)
         switch plan.parameter {
         case .none:
-            guard let nameArgument else { return "try HeistPlan {" }
-            return "try HeistPlan(\(nameArgument)) {"
+            guard let nameArgument else { return "\(callee) {" }
+            return "\(callee)(\(nameArgument)) {"
         case .string(let parameter):
             try validateParameter(parameter)
             let prefix = nameArgument.map { "\($0), " } ?? ""
-            return "try HeistPlan(\(prefix)parameter: \(quote(parameter))) { \(parameter) in"
+            return "\(callee)(\(prefix)parameter: \(quote(parameter))) { \(parameter) in"
         case .elementTarget(let parameter):
             try validateParameter(parameter)
             let prefix = nameArgument.map { "\($0), " } ?? ""
-            return "try HeistPlan(\(prefix)targetParameter: \(quote(parameter))) { \(parameter) in"
+            return "\(callee)(\(prefix)targetParameter: \(quote(parameter))) { \(parameter) in"
         }
     }
 
@@ -94,8 +90,9 @@ private struct HeistCanonicalSwiftDSLRenderer {
         case .fail(let fail):
             return line("Fail(\(quote(fail.message)))", indent)
         case .heist(let plan):
+            let environment = try environment.binding(parameter: plan.parameter)
             let body = try render(steps: plan.body, indent: indent + 1, environment: environment)
-            let header = plan.name.map { "try HeistPlan(\(quote($0))) {" } ?? "try HeistPlan {"
+            let header = try renderHeistHeader(plan, callee: "HeistPlan")
             return """
             \(line(header, indent))
             \(body)
@@ -127,38 +124,48 @@ private struct HeistCanonicalSwiftDSLRenderer {
         try validateParameter(name)
         let fullPath = path + [name]
         if definition.body.isEmpty, !definition.definitions.isEmpty, definition.parameter == .none {
-            let nested = try renderDefinitions(definition.definitions, path: fullPath, indent: indent + 1)
-            return """
-            \(line("enum \(name) {", indent))
-            \(nested)
-            \(line("}", indent))
-            """
+            return try renderDefinitions(definition.definitions, path: fullPath, indent: indent)
         }
-        let declaration = indent == 0 ? "let" : "static let"
-        let definitionType = try renderDefinitionType(definition.parameter)
-        let path = quote(fullPath.joined(separator: "."))
         let nestedDefinitions = try renderDefinitions(definition.definitions, path: [], indent: indent + 1)
+        let definitionType = try renderDefinitionType(definition.parameter)
+        let header = try renderDefinitionHeader(definition, type: definitionType, path: fullPath)
 
         switch definition.parameter {
         case .none:
             let body = try render(steps: definition.body, indent: indent + 1, environment: .empty)
             let content = [nestedDefinitions, body].filter { !$0.isEmpty }.joined(separator: "\n\n")
             return """
-            \(line("\(declaration) \(name) = try! \(definitionType)(\(path)) {", indent))
+            \(line(header, indent))
             \(content)
             \(line("}", indent))
             """
         case .string, .elementTarget:
-            let parameterName = try renderDefinitionParameter(definition.parameter)
             let childEnvironment = try RenderEnvironment.empty.binding(parameter: definition.parameter)
             let body = try render(steps: definition.body, indent: indent + 1, environment: childEnvironment)
             let content = [nestedDefinitions, body].filter { !$0.isEmpty }.joined(separator: "\n\n")
-            let parameter = quote(parameterName)
             return """
-            \(line("\(declaration) \(name) = try! \(definitionType)(\(path), parameter: \(parameter)) { \(parameterName) in", indent))
+            \(line(header, indent))
             \(content)
             \(line("}", indent))
             """
+        }
+    }
+
+    private func renderDefinitionHeader(
+        _ definition: HeistPlan,
+        type: String,
+        path: [String]
+    ) throws -> String {
+        let pathArgument = quote(path.joined(separator: "."))
+        switch definition.parameter {
+        case .none:
+            return "\(type)(\(pathArgument)) {"
+        case .string(let parameter):
+            try validateParameter(parameter)
+            return "\(type)(\(pathArgument), parameter: \(quote(parameter))) { \(parameter) in"
+        case .elementTarget(let parameter):
+            try validateParameter(parameter)
+            return "\(type)(\(pathArgument), parameter: \(quote(parameter))) { \(parameter) in"
         }
     }
 
@@ -171,14 +178,6 @@ private struct HeistCanonicalSwiftDSLRenderer {
         case .none:
             return "HeistDef<Void>"
         }
-    }
-
-    private func renderDefinitionParameter(_ parameter: HeistParameter) throws -> String {
-        guard let name = parameter.name else {
-            throw HeistCanonicalSwiftDSLError.invalidParameter("<none>")
-        }
-        try validateParameter(name)
-        return name
     }
 
     private func render(invoke: HeistInvocationStep, environment: RenderEnvironment) throws -> String {
@@ -311,6 +310,17 @@ private struct HeistCanonicalSwiftDSLRenderer {
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
+        if conditional.cases.count == 1 {
+            return try renderSingleCaseBranches(
+                callee: "If",
+                predicate: conditional.cases[0].predicate,
+                timeout: nil,
+                body: conditional.cases[0].body,
+                elseBody: conditional.elseBody,
+                indent: indent,
+                environment: environment
+            )
+        }
         let cases = try renderCases(
             conditional.cases,
             elseBody: conditional.elseBody,
@@ -329,6 +339,17 @@ private struct HeistCanonicalSwiftDSLRenderer {
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
+        if waitForCases.cases.count == 1 {
+            return try renderSingleCaseBranches(
+                callee: "WaitFor",
+                predicate: waitForCases.cases[0].predicate,
+                timeout: waitForCases.timeout,
+                body: waitForCases.cases[0].body,
+                elseBody: waitForCases.elseBody,
+                indent: indent,
+                environment: environment
+            )
+        }
         let cases = try renderCases(
             waitForCases.cases,
             elseBody: waitForCases.elseBody,
@@ -340,6 +361,33 @@ private struct HeistCanonicalSwiftDSLRenderer {
         \(cases)
         \(line("}", indent))
         """
+    }
+
+    private func renderSingleCaseBranches(
+        callee: String,
+        predicate: AccessibilityPredicateExpr,
+        timeout: Double?,
+        body: [HeistStep],
+        elseBody: [HeistStep]?,
+        indent: Int,
+        environment: RenderEnvironment
+    ) throws -> String {
+        let timeoutArgument = timeout.map { "\(renderTimeout($0))" } ?? ""
+        let renderedBody = try render(steps: body, indent: indent + 1, environment: environment)
+        var source = """
+        \(line("\(callee)(\(try render(predicate: predicate, environment: environment))\(timeoutArgument)) {", indent))
+        \(renderedBody)
+        \(line("}", indent))
+        """
+        if let elseBody {
+            source += "\n"
+            source += line(".else {", indent)
+            source += "\n"
+            source += try render(steps: elseBody, indent: indent + 1, environment: environment)
+            source += "\n"
+            source += line("}", indent)
+        }
+        return source
     }
 
     private func renderCases(
@@ -385,7 +433,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
         let childEnvironment = environment.bindingTargetReference(forEach.parameter)
         let body = try render(steps: forEach.body, indent: indent + 1, environment: childEnvironment)
         return """
-        \(line("try ForEach(.matching(\(render(predicate: forEach.matching))), limit: \(forEach.limit)) { \(forEach.parameter) in", indent))
+        \(line("ForEach(.matching(\(render(predicate: forEach.matching))), limit: \(forEach.limit)) { \(forEach.parameter) in", indent))
         \(body)
         \(line("}", indent))
         """
@@ -401,7 +449,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
         let values = forEach.values.map(quote).joined(separator: ", ")
         let body = try render(steps: forEach.body, indent: indent + 1, environment: childEnvironment)
         return """
-        \(line("try ForEach([\(values)]) { \(forEach.parameter) in", indent))
+        \(line("ForEach([\(values)]) { \(forEach.parameter) in", indent))
         \(body)
         \(line("}", indent))
         """
@@ -629,7 +677,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(duration: GestureDuration) -> String {
-        "try! GestureDuration(seconds: \(decimal(duration.seconds)))"
+        "GestureDuration(seconds: \(decimal(duration.seconds)))"
     }
 
     private func renderTraits(_ label: String, _ traits: [HeistTrait]) -> String? {

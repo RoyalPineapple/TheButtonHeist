@@ -32,7 +32,7 @@ func `representative heist plan encodes decodes validates and renders`() throws 
     #expect(decoded.lint(.strictTest).isEmpty)
 
     let rendered = try decoded.canonicalSwiftDSL()
-    #expect(rendered.contains(#"try HeistPlan("loginFlow")"#))
+    #expect(rendered.contains(#"HeistPlan("loginFlow")"#))
     #expect(rendered.contains(#"TypeText("alex@example.com", into: .identifier("email"))"#))
     #expect(rendered.contains(#"Activate(.label("Submit"))"#))
 }

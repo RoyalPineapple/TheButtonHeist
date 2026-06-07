@@ -21,22 +21,12 @@ extension TheBrains {
             return caseResolutionFailure(index: index, path: path, kind: .conditional, start: start, error: error)
         }
 
-        guard let observation = await runtime.observeSemanticState(resolvedCases.observationScope, nil, nil) else {
-            return caseObservationFailure(index: index, path: path, kind: .conditional, start: start)
-        }
-
-        let evaluated = PredicateCaseSelection.evaluate(resolvedCases, observation: observation)
-        let selection = HeistCaseSelectionResult(
-            cases: evaluated.cases,
-            selectedCaseIndex: evaluated.selectedCaseIndex,
-            elapsedMs: elapsedMilliseconds(since: start),
-            lastObservedSummary: observation.summary
-        )
+        let selection = await runtime.waitForCases(resolvedCases, 0)
         return await dispatchPredicateCases(
             PredicateCaseDispatch(
                 selection: selection,
                 cases: resolvedCases,
-                elseBody: step.elseBody,
+                elseBody: step.elseBody ?? [],
                 path: path,
                 kind: .conditional,
                 intent: .conditional,
@@ -154,26 +144,6 @@ extension TheBrains {
             },
             abortedAtChildPath: abortedAtChildPath,
             children: children
-        )
-    }
-
-    private func caseObservationFailure(
-        index _: Int,
-        path: String,
-        kind: HeistExecutionStepKind,
-        start: CFAbsoluteTime
-    ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
-            path: path,
-            kind: kind,
-            status: .failed,
-            durationMs: elapsedMilliseconds(since: start),
-            intent: kind == .waitForCases ? .waitForCases(timeout: 0) : .conditional,
-            failure: HeistFailureDetail(
-                category: .runtimeUnavailable,
-                contract: "settled accessibility state is observable before case evaluation",
-                observed: "no settled accessibility state"
-            )
         )
     }
 

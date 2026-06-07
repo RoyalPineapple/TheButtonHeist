@@ -140,7 +140,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testLongPressTargetRoundTrip() throws {
         let target = LongPressTarget(
             selection: .element(.predicate(ElementPredicate(label: "cell_1"))),
-            duration: try GestureDuration(seconds: 1.5)
+            duration: GestureDuration(seconds: 1.5)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
@@ -151,7 +151,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testLongPressTargetWithPointRoundTrip() throws {
         let target = LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 100, y: 200)),
-            duration: try GestureDuration(seconds: 0.8)
+            duration: GestureDuration(seconds: 0.8)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
@@ -201,7 +201,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let target = DragTarget(
             start: .element(.predicate(ElementPredicate(label: "handle"))),
             end: ScreenPoint(x: 200, y: 300),
-            duration: try GestureDuration(seconds: 0.8)
+            duration: GestureDuration(seconds: 0.8)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DragTarget.self, from: data)

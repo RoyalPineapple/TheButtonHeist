@@ -1,14 +1,17 @@
 # Swift Heist Authoring Boundary
 
 Swift Heist is the editable source form for authoring heists. Treat the Swift
-DSL like product code: it can use helper functions, local variables, comments,
-and formatting to make a heist easy to read and maintain. Durable loops must
-use Button Heist's explicit `ForEach` primitives, not native Swift `for`.
+file like product code, but keep the language boundary explicit: Swift may wrap,
+select, name, organize, and call heists outside the DSL. Inside `HeistPlan {}`,
+`HeistDef {}`, `If`, `WaitFor`, `ForEach`, `Case`, and `Else` bodies, the source
+is pure ButtonHeist DSL. Durable loops must use Button Heist's explicit
+`ForEach` primitive, not native Swift `for`.
 
-`HeistPlan` is the execution model. A Swift DSL file builds a `HeistPlan`;
-standalone `.json` files are explicit raw HeistPlan IR for debug, import, and
-export; generated `.heist` package directories store `manifest.json` and
-canonical `plan.json`.
+`HeistPlan` is the execution model. Humans may author rich Swift DSL files that
+build a `HeistPlan`. Agents should prefer canonical ButtonHeist source strings
+when sending compact heists through MCP. Standalone `.json` files are explicit
+raw HeistPlan IR for debug, import, and export; generated `.heist` package
+directories store `manifest.json` and canonical `plan.json`.
 
 Decoding `.json` IR or a `.heist` package reconstructs an executable
 `HeistPlan` with the body, targets, arguments, and expectations required for
@@ -21,40 +24,56 @@ details. In particular, JSON does not recover:
 - local variables, constants, or their names
 - source grouping, whitespace, formatting, or review intent
 
-At runtime, Button Heist executes only `HeistPlan`. The Swift DSL is the source
-authoring language; `.json` is raw IR; `.heist` is a generated package artifact.
-Swift DSL and canonical plan JSON are two projections of the same AST. That
-AST belongs to the broader [Accessibility Contract](ACCESSIBILITY-CONTRACT.md):
-semantic intent enters the runtime and settled semantic evidence comes back.
+At runtime, Button Heist executes only `HeistPlan`. The Swift DSL is the human
+source authoring language; canonical ButtonHeist source is the constrained
+runtime authoring language accepted by `run_heist(plan:)`; `.json` is raw IR;
+`.heist` is a generated package artifact. Swift DSL, canonical source, and
+canonical plan JSON are projections of the same AST. That AST belongs to the
+broader [Accessibility Contract](ACCESSIBILITY-CONTRACT.md): semantic intent
+enters the runtime and settled semantic evidence comes back.
 
 Reusable heist helpers that should survive JSON must be written as heist
 definitions, not arbitrary Swift functions:
 
 ```swift
-enum LibraryScreen {
-    static let addToCart = HeistDef<String>("addToCart") { input in
-        Activate(.label(input))
+let heist = try HeistPlan("purchaseFlow") {
+    HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+        Activate(.label(item))
 
         Activate(.label("Add to Cart"))
             .expect(.present(.label("Cart")))
     }
-}
 
-try HeistPlan("purchaseFlow") {
-    LibraryScreen.addToCart("Milk")
-    LibraryScreen.addToCart("Bread")
+    RunHeist("LibraryScreen.addToCart", "Milk")
+    RunHeist("LibraryScreen.addToCart", "Bread")
 }
 ```
 
-`HeistDef` values carry their definition dependency and invocation path into
-`HeistPlan`. Canonical Swift rendering can reproduce equivalent definitions
-and invocations, but it does not preserve arbitrary helper function names,
-source grouping, comments, or local constants.
+Swift wrappers can still factor source outside the DSL. If you want Swift, wrap
+the heist in Swift:
+
+```swift
+func checkoutPlan() throws -> HeistPlan {
+    try HeistPlan("purchaseFlow") {
+        HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+            Activate(.label(item))
+            Activate(.label("Add to Cart"))
+        }
+
+        RunHeist("LibraryScreen.addToCart", "Milk")
+    }
+}
+```
+
+`HeistDef` bodies carry their definition dependency and invocation path into
+`HeistPlan`. Canonical rendering can reproduce equivalent definitions and
+invocations, but it does not preserve arbitrary helper function names, source
+grouping, comments, local constants, or native Swift calls.
 
 Semantic actions should describe user intent and expected semantic outcome:
 
 ```swift
-try HeistPlan {
+HeistPlan {
     TypeText("milk", into: .label("Search"))
         .expect(.present(.element(label: "Search", value: "milk")))
 
@@ -104,20 +123,21 @@ Rotor("Headings", on: .label("Article"), direction: .next)
 `ForEach` has two durable authoring forms:
 
 ```swift
-try ForEach(.matching(.label("Delete")), limit: 20) { target in
+ForEach(.matching(.label("Delete")), limit: 20) { target in
     Activate(target)
         .expect(.absent(target), timeout: .seconds(2))
 }
 
-try ForEach(["Milk", "Eggs"]) { item in
+ForEach(["Milk", "Eggs"]) { item in
     TypeText(item, into: .label("Add item"))
         .expect(.present(.label(item)), timeout: .seconds(2))
 }
 ```
 
-Do not use native Swift `for` inside `Heist {}`. The heist result builder does
-not lower native loops because native loops flatten at authoring time and lose
-loop intent. If a loop should survive JSON, write `ForEach`.
+Do not use native Swift `for` inside `HeistPlan {}` or any nested DSL body. The
+heist source compiler does not lower native loops because native loops flatten
+at authoring time and lose loop intent. If a loop should survive JSON, write
+`ForEach`.
 
 Semantic `ForEach` serializes as `for_each_element`. Finite string `ForEach`
 serializes as `for_each_string`. Runtime `ForEach` repeats semantic intent;
@@ -148,13 +168,28 @@ The runtime never compiles arbitrary Swift. Local `.swift` files remain authorin
 tool inputs only: compile them with the CLI or `heist-plan`, then run the
 resulting plan or artifact.
 
-For MCP, `run_heist` also accepts compact plan source via the `plan` field. That
-string is not sent to `swiftc` and is not executed as Swift. It is parsed by
-ThePlans as constrained ButtonHeist plan source, lowered to a `HeistPlan`, and
-validated through the same runtime plan pipeline as structured JSON plan input.
-The MCP tool still does not expose local Swift authoring inputs such as
-`source_file` or `entry`. Compact plan source uses plan constructs directly, so
-write `ForEach(...)` rather than Swift authoring syntax such as `try ForEach`.
+For MCP, `run_heist` accepts canonical ButtonHeist source via the `plan` field.
+That string is not sent to `swiftc` and is not executed as Swift. It is parsed
+by ThePlans as constrained ButtonHeist source, lowered to a `HeistPlan`, and
+validated through the same runtime plan pipeline as structured plan input. The
+MCP tool still does not expose local Swift authoring inputs such as
+`source_file` or `entry`.
+
+This runtime compiler accepts only ButtonHeist DSL constructs: semantic and
+durable mechanical actions, expectations and expectation waivers, `If`,
+`WaitFor`, `Case`, `Else`, `ForEach`, `RunHeist`, `Warn`, `Fail`, canonical
+`HeistDef` definitions, and the `HeistPlan { ... }` root wrapper emitted by
+canonical rendering. It rejects arbitrary Swift such as imports, variables,
+functions, native `if`/`for`/`while`/`switch`, interpolation, custom calls,
+body-local `try`, `await`, package imports, and unbounded loops. Agents should
+send the full canonical source returned by `canonicalSwiftDSL()`. Body-only
+statement snippets are not a supported authored surface.
+
+Canonical sugar may elide an implied wrapper when the remaining spelling is the
+same DSL concept: `Activate(.label("Pay"))` is shorthand for a target built from
+the `.label("Pay")` predicate, and `WaitFor(.present(.label("Pay")))` is
+shorthand for a state predicate. Sugar must not create a second spelling for the
+same idea; write `.changed(.screen())`, not a renamed predicate alias.
 
 There is no runtime Swift execution and no hidden fallback: a local Swift file
 either compiles to an admissible `HeistPlan` ahead of time or the command fails.
@@ -202,6 +237,7 @@ Swift Heist does not preserve:
 - hidden pre-action viewport movement for semantic actions
 - viewport/debug commands as durable action steps
 - arbitrary dynamic code over the wire
+- raw JSON IR as the agent-facing authoring format
 - generic variables beyond scoped `target_ref` and string refs
 
 The durable language intentionally excludes unbounded loops, sleeps, retries,

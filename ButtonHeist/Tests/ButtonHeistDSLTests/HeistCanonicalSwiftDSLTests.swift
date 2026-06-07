@@ -41,12 +41,12 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
             }
         }
 
-        try ForEach(.matching(.label("Delete")), limit: 20) { target in
+        ForEach(.matching(.label("Delete")), limit: 20) { target in
             Activate(target)
                 .expect(.absent(target), timeout: .seconds(2))
         }
 
-        try ForEach(["Milk", "Eggs"]) { item in
+        ForEach(["Milk", "Eggs"]) { item in
             TypeText(item, into: .label("Add item"))
                 .expect(.present(.label(item)), timeout: .seconds(2))
         }
@@ -91,27 +91,22 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
     let rendered = try plan.canonicalSwiftDSL()
 
     #expect(rendered == """
-    try HeistPlan("RecordedTarget", targetParameter: "target") { target in
+    HeistPlan("RecordedTarget", targetParameter: "target") { target in
         Activate(target)
             .expect(.absent(target), timeout: .seconds(2))
 
         WaitFor(.present(target), timeout: .seconds(1))
 
-        If {
-            Case(.present(target)) {
-                CustomAction("Archive", on: target)
-                    .expect(.changed(.screen(where: .present(target))), timeout: .seconds(3))
-            }
-
-            Else {
-                Fail("target missing")
-            }
+        If(.present(target)) {
+            CustomAction("Archive", on: target)
+                .expect(.changed(.screen(where: .present(target))), timeout: .seconds(3))
+        }
+        .else {
+            Fail("target missing")
         }
 
-        WaitFor(timeout: .seconds(4)) {
-            Case(.absent(target)) {
-                Warn("target removed")
-            }
+        WaitFor(.absent(target), timeout: .seconds(4)) {
+            Warn("target removed")
         }
     }
     """)
@@ -120,7 +115,7 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
     let source = """
     import ThePlans
 
-    let heist = \(rendered)
+    let heist = try \(rendered)
     """
     let compiled = try await compileCanonicalHeist(source)
     #expect(try compiled.canonicalSwiftDSL() == rendered)
@@ -145,21 +140,17 @@ func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
     }
 
     #expect(try plan.canonicalSwiftDSL() == """
-    enum LibraryScreen {
-        static let addToCart = try! HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
-            enum AddButton {
-                static let tap = try! HeistDef<Void>("AddButton.tap") {
-                    Activate(.label("Add to Cart"))
-                }
+    HeistPlan("purchaseFlow") {
+        HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+            HeistDef<Void>("AddButton.tap") {
+                Activate(.label("Add to Cart"))
             }
 
             Activate(.label(item))
 
             RunHeist("AddButton.tap")
         }
-    }
 
-    try HeistPlan("purchaseFlow") {
         RunHeist("LibraryScreen.addToCart", "Milk")
     }
     """)
@@ -183,17 +174,15 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
     }
 
     #expect(try plan.canonicalSwiftDSL() == """
-    enum SearchScreen {
-        static let search = try! HeistDef<String>("SearchScreen.search", parameter: "query") { query in
+    HeistPlan("searchFlow") {
+        HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
                 .expect(.present(.value(query)), timeout: .seconds(1))
 
             Activate(.label("Search"))
                 .expect(.changed(.screen(where: .present(.label(query)))), timeout: .seconds(5))
         }
-    }
 
-    try HeistPlan("searchFlow") {
         RunHeist("SearchScreen.search", "milk")
     }
     """)
@@ -234,7 +223,7 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
         .action(try ActionStep(command: .dismissKeyboard)),
     ])
     #expect(try plan.canonicalSwiftDSL() == """
-    try HeistPlan {
+    HeistPlan {
         SetPasteboard("milk")
 
         Edit(.paste)
@@ -261,7 +250,7 @@ func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
         )))),
     ])
     #expect(try plan.canonicalSwiftDSL() == """
-    try HeistPlan {
+    HeistPlan {
         CustomAction("Archive", on: .label("Message"))
 
         Rotor("Headings", on: .label("Article"), direction: .next)
@@ -282,7 +271,7 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
 
     #expect(command.durableHeistActionFailure == nil)
     #expect(try plan.canonicalSwiftDSL() == """
-    try HeistPlan {
+    HeistPlan {
         Mechanical.Swipe(.label("Carousel"), from: UnitPoint(x: 0.8, y: 0.5), to: UnitPoint(x: 0.2, y: 0.5))
     }
     """)
@@ -567,38 +556,32 @@ private let invalidStringLoopParameterJSON = """
 """
 
 private let fullCanonicalSwiftDSL = """
-try HeistPlan {
+HeistPlan {
     Activate(.label("Sign In"))
         .expect(.present(.label("Home")), timeout: .seconds(5))
 
     WaitFor(.absent(.label("Loading")), timeout: .seconds(1))
 
-    If {
-        Case(.present(.label("Home"))) {
-            Warn("home")
-        }
-
-        Else {
-            Fail("unknown")
-        }
+    If(.present(.label("Home"))) {
+        Warn("home")
+    }
+    .else {
+        Fail("unknown")
     }
 
-    WaitFor(timeout: .seconds(8)) {
-        Case(.present(.label("Results"))) {
-            Warn("results")
-        }
-
-        Else {
-            Fail("timeout")
-        }
+    WaitFor(.present(.label("Results")), timeout: .seconds(8)) {
+        Warn("results")
+    }
+    .else {
+        Fail("timeout")
     }
 
-    try ForEach(.matching(.label("Delete")), limit: 20) { target in
+    ForEach(.matching(.label("Delete")), limit: 20) { target in
         Activate(target)
             .expect(.absent(target), timeout: .seconds(2))
     }
 
-    try ForEach(["Milk", "Eggs"]) { item in
+    ForEach(["Milk", "Eggs"]) { item in
         TypeText(item, into: .label("Add item"))
             .expect(.present(.label(item)), timeout: .seconds(2))
     }

@@ -3,10 +3,12 @@ import Foundation
 public protocol HeistContent {
     var heistSteps: [HeistStep] { get }
     var heistDefinitions: [HeistPlan] { get }
+    var heistBuildDiagnostics: [String] { get }
 }
 
 public extension HeistContent {
     var heistDefinitions: [HeistPlan] { [] }
+    var heistBuildDiagnostics: [String] { [] }
 }
 
 public extension HeistPlan {
@@ -66,6 +68,7 @@ private extension HeistPlan {
         _ content: () throws -> some HeistContent
     ) throws {
         let content = try content()
+        try Self.throwIfBuildDiagnostics(content.heistBuildDiagnostics)
         self = try Self.validatedDSLPlan(
             name: name,
             definitions: content.heistDefinitions,
@@ -79,6 +82,7 @@ private extension HeistPlan {
         _ content: () throws -> some HeistContent
     ) throws {
         let content = try content()
+        try Self.throwIfBuildDiagnostics(content.heistBuildDiagnostics)
         guard !content.heistSteps.isEmpty || !content.heistDefinitions.isEmpty else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: [HeistPlanCodingKey("body")],
@@ -100,6 +104,19 @@ private extension HeistPlan {
             ))
         }
         return try HeistPlan(name: name, definitions: definitions, body: body)
+    }
+
+    static func throwIfBuildDiagnostics(_ diagnostics: [String]) throws {
+        guard !diagnostics.isEmpty else { return }
+        throw HeistPlanBuildError(diagnostics: diagnostics)
+    }
+}
+
+public struct HeistPlanBuildError: Error, Sendable, Equatable, CustomStringConvertible {
+    public let diagnostics: [String]
+
+    public var description: String {
+        "ButtonHeist plan build failed: \(diagnostics.joined(separator: "; "))"
     }
 }
 
@@ -133,6 +150,7 @@ extension HeistPlan: HeistContent {
 public struct EmptyHeistContent: HeistContent {
     public let heistSteps: [HeistStep] = []
     public let heistDefinitions: [HeistPlan] = []
+    public let heistBuildDiagnostics: [String] = []
 
     public init() {}
 }
@@ -154,27 +172,9 @@ public enum HeistBuilder {
     public static func buildBlock(_ components: any HeistContent...) -> some HeistContent {
         HeistStepList(
             components.flatMap(\.heistSteps),
-            definitions: mergeDefinitions(components.flatMap(\.heistDefinitions))
+            definitions: mergeDefinitions(components.flatMap(\.heistDefinitions)),
+            diagnostics: components.flatMap(\.heistBuildDiagnostics)
         )
-    }
-
-    public static func buildOptional(_ component: (any HeistContent)?) -> some HeistContent {
-        HeistStepList(
-            component?.heistSteps ?? [],
-            definitions: component?.heistDefinitions ?? []
-        )
-    }
-
-    public static func buildEither(first component: some HeistContent) -> some HeistContent {
-        component
-    }
-
-    public static func buildEither(second component: some HeistContent) -> some HeistContent {
-        component
-    }
-
-    public static func buildLimitedAvailability(_ component: some HeistContent) -> some HeistContent {
-        component
     }
 
     private static func mergeDefinitions(_ definitions: [HeistPlan]) -> [HeistPlan] {
@@ -214,10 +214,16 @@ private extension HeistPlan {
 private struct HeistStepList: HeistContent {
     let heistSteps: [HeistStep]
     let heistDefinitions: [HeistPlan]
+    let heistBuildDiagnostics: [String]
 
-    init(_ heistSteps: [HeistStep], definitions: [HeistPlan] = []) {
+    init(
+        _ heistSteps: [HeistStep],
+        definitions: [HeistPlan] = [],
+        diagnostics: [String] = []
+    ) {
         self.heistSteps = heistSteps
         self.heistDefinitions = definitions
+        self.heistBuildDiagnostics = diagnostics
     }
 }
 
@@ -271,6 +277,9 @@ public struct HeistDef<Input>: Sendable {
     ) -> HeistDefinitionBuildResult {
         do {
             let content = try content()
+            guard content.heistBuildDiagnostics.isEmpty else {
+                return .failure(content.heistBuildDiagnostics.joined(separator: "; "))
+            }
             return .success(makeDefinition(
                 path: path,
                 parameter: parameter,
@@ -363,6 +372,28 @@ public extension HeistDef where Input == Void {
     }
 }
 
+extension HeistDef: HeistContent {
+    public var heistSteps: [HeistStep] { [] }
+
+    public var heistDefinitions: [HeistPlan] {
+        switch definitionResult {
+        case .success(let definition):
+            return [definition]
+        case .failure:
+            return []
+        }
+    }
+
+    public var heistBuildDiagnostics: [String] {
+        switch definitionResult {
+        case .success:
+            return []
+        case .failure(let message):
+            return ["HeistDef \(path.joined(separator: ".")) is invalid: \(message)"]
+        }
+    }
+}
+
 public extension HeistDef where Input == String {
     func callAsFunction(_ input: String) throws -> some HeistContent {
         try invocation(argument: .string(.literal(input)))
@@ -438,22 +469,30 @@ public struct ElementMatches: Sendable, Equatable {
 public struct ForEach<Content: HeistContent>: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlan]
+    public let heistBuildDiagnostics: [String]
 
     public init(
         _ values: [String],
         parameter: String = "item",
         @HeistBuilder content: (StringExpr) throws -> Content
-    ) throws {
-        let item = try StringExpr(ref: parameter)
-        let content = try content(item)
-        self.heistSteps = [
-            .forEachString(try ForEachStringStep(
+    ) {
+        do {
+            let parameter = try HeistParameterName.normalized(parameter)
+            let item = try StringExpr(ref: parameter)
+            let content = try content(item)
+            let step = try ForEachStringStep(
                 values: values,
                 parameter: parameter,
                 body: content.heistSteps
-            )),
-        ]
-        self.heistDefinitions = content.heistDefinitions
+            )
+            self.heistSteps = [.forEachString(step)]
+            self.heistDefinitions = content.heistDefinitions
+            self.heistBuildDiagnostics = content.heistBuildDiagnostics
+        } catch {
+            self.heistSteps = []
+            self.heistDefinitions = []
+            self.heistBuildDiagnostics = ["ForEach string loop is invalid: \(String(describing: error))"]
+        }
     }
 
     public init(
@@ -461,16 +500,24 @@ public struct ForEach<Content: HeistContent>: HeistContent {
         limit: Int = 20,
         parameter: String = "target",
         @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-    ) throws {
-        let target = try ElementTargetExpr(ref: parameter)
-        let content = try content(target)
-        let step = try ForEachElementStep(
-            matching: matches.predicate,
-            limit: limit,
-            parameter: parameter,
-            body: content.heistSteps
-        )
-        self.heistSteps = [.forEachElement(step)]
-        self.heistDefinitions = content.heistDefinitions
+    ) {
+        do {
+            let parameter = try HeistParameterName.normalized(parameter)
+            let target = try ElementTargetExpr(ref: parameter)
+            let content = try content(target)
+            let step = try ForEachElementStep(
+                matching: matches.predicate,
+                limit: limit,
+                parameter: parameter,
+                body: content.heistSteps
+            )
+            self.heistSteps = [.forEachElement(step)]
+            self.heistDefinitions = content.heistDefinitions
+            self.heistBuildDiagnostics = content.heistBuildDiagnostics
+        } catch {
+            self.heistSteps = []
+            self.heistDefinitions = []
+            self.heistBuildDiagnostics = ["ForEach element loop is invalid: \(String(describing: error))"]
+        }
     }
 }

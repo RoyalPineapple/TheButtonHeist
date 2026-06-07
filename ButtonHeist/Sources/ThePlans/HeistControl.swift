@@ -11,6 +11,7 @@ public extension Double {
 public struct WaitFor: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlan]
+    public let heistBuildDiagnostics: [String]
 
     public init(
         _ predicate: AccessibilityPredicateExpr,
@@ -18,6 +19,7 @@ public struct WaitFor: HeistContent {
     ) {
         heistSteps = [.wait(WaitStep(predicate: predicate, timeout: timeout))]
         heistDefinitions = []
+        heistBuildDiagnostics = []
     }
 
     @_disfavoredOverload
@@ -29,32 +31,108 @@ public struct WaitFor: HeistContent {
     }
 
     public init(
+        _ predicate: AccessibilityPredicateExpr,
+        timeout: Double = 0,
+        @HeistBuilder _ content: () -> some HeistContent
+    ) {
+        let content = content()
+        self.init(
+            timeout: timeout,
+            cases: [PredicateCase(predicate: predicate, body: content.heistSteps)],
+            elseBody: nil,
+            definitions: content.heistDefinitions,
+            diagnostics: content.heistBuildDiagnostics
+        )
+    }
+
+    @_disfavoredOverload
+    public init(
+        _ predicate: AccessibilityPredicate,
+        timeout: Double = 0,
+        @HeistBuilder _ content: () -> some HeistContent
+    ) {
+        self.init(.predicate(predicate), timeout: timeout, content)
+    }
+
+    public init(
         timeout: Double,
         @PredicateBranchBuilder _ branches: () -> PredicateBranches
     ) {
         let branchSet = branches()
-        heistSteps = [.waitForCases(makeWaitForCasesStep(
+        self.init(
             timeout: timeout,
             cases: branchSet.cases,
-            elseBody: branchSet.elseBody
+            elseBody: branchSet.elseBody,
+            definitions: branchSet.definitions,
+            diagnostics: branchSet.diagnostics
+        )
+    }
+
+    public func `else`(
+        @HeistBuilder _ content: () -> some HeistContent
+    ) -> WaitFor {
+        guard heistSteps.count == 1,
+              case .waitForCases(let step) = heistSteps[0] else {
+            preconditionFailure("ButtonHeistDSL WaitFor else requires a WaitFor(predicate) case body")
+        }
+        guard step.elseBody == nil else {
+            preconditionFailure("ButtonHeistDSL WaitFor accepts at most one else body")
+        }
+        let content = content()
+        return WaitFor(
+            timeout: step.timeout,
+            cases: step.cases,
+            elseBody: content.heistSteps,
+            definitions: heistDefinitions + content.heistDefinitions,
+            diagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
+        )
+    }
+
+    private init(
+        timeout: Double,
+        cases: [PredicateCase],
+        elseBody: [HeistStep]?,
+        definitions: [HeistPlan],
+        diagnostics: [String]
+    ) {
+        heistSteps = [.waitForCases(makeWaitForCasesStep(
+            timeout: timeout,
+            cases: cases,
+            elseBody: elseBody
         ))]
-        heistDefinitions = branchSet.definitions
+        heistDefinitions = definitions
+        heistBuildDiagnostics = diagnostics
     }
 }
 
 public struct If: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlan]
+    public let heistBuildDiagnostics: [String]
+
+    public init(
+        @PredicateBranchBuilder _ branches: () -> PredicateBranches
+    ) {
+        let branchSet = branches()
+        self.init(
+            cases: branchSet.cases,
+            elseBody: branchSet.elseBody,
+            definitions: branchSet.definitions,
+            diagnostics: branchSet.diagnostics
+        )
+    }
 
     public init(
         _ predicate: AccessibilityPredicateExpr,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()
-        heistSteps = [.conditional(makeConditionalStep(
-            cases: [PredicateCase(predicate: predicate, body: content.heistSteps)]
-        ))]
-        heistDefinitions = content.heistDefinitions
+        self.init(
+            cases: [PredicateCase(predicate: predicate, body: content.heistSteps)],
+            elseBody: nil,
+            definitions: content.heistDefinitions,
+            diagnostics: content.heistBuildDiagnostics
+        )
     }
 
     @_disfavoredOverload
@@ -65,38 +143,37 @@ public struct If: HeistContent {
         self.init(.predicate(predicate), content)
     }
 
-    public init(
-        _ predicate: AccessibilityPredicateExpr,
-        @HeistBuilder _ content: () -> some HeistContent,
-        @HeistBuilder otherwise: () -> some HeistContent
-    ) {
+    public func `else`(
+        @HeistBuilder _ content: () -> some HeistContent
+    ) -> If {
+        guard heistSteps.count == 1,
+              case .conditional(let step) = heistSteps[0] else {
+            preconditionFailure("ButtonHeistDSL If else requires an If(predicate) case body")
+        }
+        guard step.elseBody == nil else {
+            preconditionFailure("ButtonHeistDSL If accepts at most one else body")
+        }
         let content = content()
-        let otherwise = otherwise()
-        heistSteps = [.conditional(makeConditionalStep(
-            cases: [PredicateCase(predicate: predicate, body: content.heistSteps)],
-            elseBody: otherwise.heistSteps
-        ))]
-        heistDefinitions = content.heistDefinitions + otherwise.heistDefinitions
+        return If(
+            cases: step.cases,
+            elseBody: content.heistSteps,
+            definitions: heistDefinitions + content.heistDefinitions,
+            diagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
+        )
     }
 
-    @_disfavoredOverload
-    public init(
-        _ predicate: AccessibilityPredicate,
-        @HeistBuilder _ content: () -> some HeistContent,
-        @HeistBuilder otherwise: () -> some HeistContent
+    private init(
+        cases: [PredicateCase],
+        elseBody: [HeistStep]?,
+        definitions: [HeistPlan],
+        diagnostics: [String]
     ) {
-        self.init(.predicate(predicate), content, otherwise: otherwise)
-    }
-
-    public init(
-        @PredicateBranchBuilder _ branches: () -> PredicateBranches
-    ) {
-        let branchSet = branches()
         heistSteps = [.conditional(makeConditionalStep(
-            cases: branchSet.cases,
-            elseBody: branchSet.elseBody
+            cases: cases,
+            elseBody: elseBody
         ))]
-        heistDefinitions = branchSet.definitions
+        heistDefinitions = definitions
+        heistBuildDiagnostics = diagnostics
     }
 }
 
@@ -110,7 +187,8 @@ public struct Case {
         let content = content()
         predicateBranch = .case(
             PredicateCase(predicate: predicate, body: content.heistSteps),
-            definitions: content.heistDefinitions
+            definitions: content.heistDefinitions,
+            diagnostics: content.heistBuildDiagnostics
         )
     }
 
@@ -130,7 +208,11 @@ public struct Else {
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         let content = content()
-        predicateBranch = .else(content.heistSteps, definitions: content.heistDefinitions)
+        predicateBranch = .else(
+            content.heistSteps,
+            definitions: content.heistDefinitions,
+            diagnostics: content.heistBuildDiagnostics
+        )
     }
 }
 
@@ -153,14 +235,15 @@ public struct Fail: HeistContent {
 }
 
 public enum PredicateBranch {
-    case `case`(PredicateCase, definitions: [HeistPlan])
-    case `else`([HeistStep], definitions: [HeistPlan])
+    case `case`(PredicateCase, definitions: [HeistPlan], diagnostics: [String])
+    case `else`([HeistStep], definitions: [HeistPlan], diagnostics: [String])
 }
 
 public struct PredicateBranches {
     public let cases: [PredicateCase]
     public let elseBody: [HeistStep]?
     public let definitions: [HeistPlan]
+    public let diagnostics: [String]
 }
 
 @resultBuilder
@@ -177,35 +260,26 @@ public enum PredicateBranchBuilder {
         components.flatMap { $0 }
     }
 
-    public static func buildOptional(_ component: [PredicateBranch]?) -> [PredicateBranch] {
-        component ?? []
-    }
-
-    public static func buildEither(first component: [PredicateBranch]) -> [PredicateBranch] {
-        component
-    }
-
-    public static func buildEither(second component: [PredicateBranch]) -> [PredicateBranch] {
-        component
-    }
-
     public static func buildFinalResult(_ branches: [PredicateBranch]) -> PredicateBranches {
         var cases: [PredicateCase] = []
         var elseBody: [HeistStep]?
         var definitions: [HeistPlan] = []
+        var diagnostics: [String] = []
         for branch in branches {
             switch branch {
-            case .case(let predicateCase, let branchDefinitions):
+            case .case(let predicateCase, let branchDefinitions, let branchDiagnostics):
                 precondition(elseBody == nil, "Case must appear before Else in a heist branch block")
                 cases.append(predicateCase)
                 definitions.append(contentsOf: branchDefinitions)
-            case .else(let steps, let branchDefinitions):
+                diagnostics.append(contentsOf: branchDiagnostics)
+            case .else(let steps, let branchDefinitions, let branchDiagnostics):
                 precondition(elseBody == nil, "A heist branch block accepts at most one Else")
                 elseBody = steps
                 definitions.append(contentsOf: branchDefinitions)
+                diagnostics.append(contentsOf: branchDiagnostics)
             }
         }
-        return PredicateBranches(cases: cases, elseBody: elseBody, definitions: definitions)
+        return PredicateBranches(cases: cases, elseBody: elseBody, definitions: definitions, diagnostics: diagnostics)
     }
 }
 

@@ -5,7 +5,7 @@ import Foundation
 // - HeistPlanExpressions.swift owns scoped expression/reference types.
 // - HeistPlan+RuntimeValidation*.swift owns the single runtime validation boundary.
 // - HeistPlan+Validation.swift owns linting and composition-quality checks only.
-// - HeistPlanSourceCompiler/Lexer/Parser.swift owns compact source compilation.
+// - HeistPlanSourceCompiler/Lexer/Parser.swift owns canonical ButtonHeist source compilation.
 // - HeistSwiftFileCompiler.swift owns authored Swift-file compilation.
 // - HeistPlan+CanonicalSwiftDSL.swift owns canonical Swift DSL rendering.
 // - HeistArtifact.swift owns .heist package read/write.

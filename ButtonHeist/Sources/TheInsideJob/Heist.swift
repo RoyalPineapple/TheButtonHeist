@@ -148,7 +148,7 @@ public struct Heist: Sendable {
         @HeistBuilder _ content: (StringExpr) throws -> Content
     ) async throws {
         let plan = try HeistPlan {
-            try ForEach(values, parameter: parameter, content: content)
+            ForEach(values, parameter: parameter, content: content)
         }
         self.result = try await Self.execute(plan, argument: .none, runtime: .shared)
     }
@@ -161,7 +161,7 @@ public struct Heist: Sendable {
         @HeistBuilder _ content: (StringExpr) throws -> Content
     ) async throws {
         let plan = try HeistPlan {
-            try ForEach(values, parameter: parameter, content: content)
+            ForEach(values, parameter: parameter, content: content)
         }
         self.result = try await Self.execute(plan, argument: .none, runtime: runtime)
     }

@@ -53,7 +53,7 @@ struct RecordedHeistSwiftExport: Sendable {
             source: """
             import ThePlans
 
-            let heist = \(rendered)
+            let heist = try \(rendered)
             """,
             plan: sourcePlan,
             diagnostics: rewriteResult.diagnostics

@@ -23,7 +23,6 @@ struct HeistSwiftFileCompiler: Sendable {
         guard FileManager.default.fileExists(atPath: source.path) else {
             throw HeistSwiftFileCompilerError.sourceFileNotFound(source.path)
         }
-
         HeistSwiftFileCompilerTrace.write("preparing Swift heist compile")
         let artifacts = try ThePlansBuildArtifacts.resolve(explicitPackageRoot: packageRoot)
         HeistSwiftFileCompilerTrace.write("using built ThePlans artifacts at \(artifacts.buildDirectory.path)")
@@ -135,10 +134,9 @@ struct HeistSwiftFileCompiler: Sendable {
             .appendingPathComponent("PlanCompiler", isDirectory: true)
         try FileManager.default.createDirectory(at: sourcesURL, withIntermediateDirectories: true)
 
-        let userSource = try String(contentsOf: source, encoding: .utf8)
         let wrapper = """
         \(sourceLocationDirective(for: source))
-        \(userSource)
+        \(try String(contentsOf: source, encoding: .utf8))
 
         #sourceLocation()
         import Foundation

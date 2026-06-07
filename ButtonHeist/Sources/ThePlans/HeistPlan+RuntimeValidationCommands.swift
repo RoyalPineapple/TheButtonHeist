@@ -26,10 +26,17 @@ extension HeistPlanRuntimeValidator {
             validateGesturePointSelection(target.selection, path: "\(path).payload", scope: scope)
         case .mechanicalLongPress(let target):
             validateGesturePointSelection(target.selection, path: "\(path).payload", scope: scope)
+            validateGestureDuration(target.duration, path: "\(path).payload.duration")
         case .mechanicalSwipe(let target):
             validateSwipe(target, path: "\(path).payload", scope: scope)
+            if let duration = target.duration {
+                validateGestureDuration(duration, path: "\(path).payload.duration")
+            }
         case .mechanicalDrag(let target):
             validateDrag(target, path: "\(path).payload", scope: scope)
+            if let duration = target.duration {
+                validateGestureDuration(duration, path: "\(path).payload.duration")
+            }
         case .viewportScroll(let target):
             validateScroll(target.selection, path: "\(path).payload", scope: scope)
         case .viewportScrollToEdge(let target):
@@ -57,6 +64,21 @@ extension HeistPlanRuntimeValidator {
         if case .element(let target) = selection {
             validateElementTarget(target, path: "\(path).element")
         }
+    }
+
+    mutating func validateGestureDuration(
+        _ duration: GestureDuration,
+        path: String
+    ) {
+        guard let expected = GestureDuration.validationFailure(for: duration.seconds) else {
+            return
+        }
+        fail(
+            path: path,
+            contract: "gesture duration must be \(expected)",
+            observed: "\(duration.seconds)",
+            correction: "Use a finite duration greater than 0 and no more than \(GestureDuration.maximumSeconds) seconds."
+        )
     }
 
     mutating func validateSwipe(

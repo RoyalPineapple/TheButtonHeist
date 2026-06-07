@@ -8,7 +8,11 @@ public struct GestureDuration: Codable, Sendable, Equatable, CustomStringConvert
 
     public let seconds: Double
 
-    public init(seconds: Double) throws {
+    public init(seconds: Double) {
+        self.seconds = seconds
+    }
+
+    public init(validatingSeconds seconds: Double) throws {
         if let expected = Self.validationFailure(for: seconds) {
             throw GestureProjectionError.invalidDuration(observed: seconds, expected: expected)
         }
@@ -21,7 +25,7 @@ public struct GestureDuration: Codable, Sendable, Equatable, CustomStringConvert
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        try self.init(seconds: try container.decode(Double.self))
+        try self.init(validatingSeconds: try container.decode(Double.self))
     }
 
     public func encode(to encoder: Encoder) throws {
