@@ -78,7 +78,7 @@ private extension ErrorKind {
         case .authFailure:
             return nil
         case .authApprovalPending:
-            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
+            return FenceError.legacyAuthApprovalRecoveryHint
         case .general:
             return nil
         }

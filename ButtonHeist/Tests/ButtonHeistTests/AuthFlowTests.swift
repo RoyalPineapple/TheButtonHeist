@@ -218,7 +218,7 @@ final class AuthFlowTests: XCTestCase {
 
         try conn.handleMessage(encode(.error(ServerError(
             kind: .authApprovalPending,
-            message: "Approval timed out — user did not respond to the approval prompt on the device."
+            message: "Legacy server is waiting for UI approval."
         ))))
 
         XCTAssertEqual(serverError?.kind, .authApprovalPending)

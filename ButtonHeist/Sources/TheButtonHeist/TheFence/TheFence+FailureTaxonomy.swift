@@ -91,7 +91,7 @@ public extension FenceError {
         case .authFailed(let message):
             return Self.authFailureRecoveryHint(for: message)
         case .authApprovalPending:
-            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
+            return Self.legacyAuthApprovalRecoveryHint
         case .notConnected:
             return "Check that the app is running, then retry the command. Use 'buttonheist list_devices' to see available devices."
         case .actionTimeout:

@@ -56,8 +56,8 @@ public struct AuthApprovalPendingPayload: Codable, Sendable, Equatable {
     public let hint: String
 
     public init(
-        message: String = "Waiting for approval on the device.",
-        hint: String = "Tap Allow on the iOS device to continue."
+        message: String = "Received legacy auth-approval response from the app.",
+        hint: String = "Rebuild or reinstall the app, then retry with the configured token."
     ) {
         self.message = message
         self.hint = hint

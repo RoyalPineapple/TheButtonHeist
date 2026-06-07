@@ -19,6 +19,8 @@ enum DisconnectReason: Error, LocalizedError {
     case sessionLocked(String)
     case protocolMismatch(String)
     case localDisconnect
+    // Legacy certificate-pinning failures are retained for old diagnostics only.
+    // Current clients authenticate with token-derived TLS PSK.
     case certificateMismatch
     case missingFingerprint
     case missingToken
@@ -118,11 +120,11 @@ enum DisconnectReason: Error, LocalizedError {
             return HandoffFailureDiagnostic(
                 operation: .connection,
                 target: nil,
-                cause: "Auth approval pending: \(message)",
+                cause: "Legacy auth approval response: \(message)",
                 errorCode: "auth.approval_pending",
                 phase: .authentication,
                 retryable: true,
-                hint: "Waiting for approval on the device. Tap Allow on the iOS device to continue."
+                hint: FenceError.legacyAuthApprovalRecoveryHint
             )
         case .sessionLocked(let message):
             return HandoffFailureDiagnostic(
@@ -159,21 +161,21 @@ enum DisconnectReason: Error, LocalizedError {
             return HandoffFailureDiagnostic(
                 operation: .transport,
                 target: nil,
-                cause: "Server certificate fingerprint does not match expected value",
+                cause: "Legacy TLS certificate fingerprint does not match expected value",
                 errorCode: "tls.certificate_mismatch",
                 phase: .tls,
                 retryable: false,
-                hint: "Refresh the configured device fingerprint before reconnecting."
+                hint: "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
             )
         case .missingFingerprint:
             return HandoffFailureDiagnostic(
                 operation: .transport,
                 target: nil,
-                cause: "No TLS fingerprint available for non-loopback device — cannot establish secure connection",
+                cause: "Legacy TLS certificate fingerprint is unavailable for this device",
                 errorCode: "tls.missing_fingerprint",
                 phase: .tls,
                 retryable: false,
-                hint: "Use a loopback simulator target or configure the device's TLS certificate fingerprint."
+                hint: "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
             )
         case .missingToken:
             return HandoffFailureDiagnostic(

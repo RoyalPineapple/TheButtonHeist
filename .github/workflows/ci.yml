@@ -185,7 +185,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     env:
-      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData
+      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-tests
 
     steps:
       - name: Checkout repository
@@ -243,6 +243,8 @@ jobs:
         timeout-minutes: 20
         run: |
           set -eo pipefail
+          echo "IOS_TEST_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
+          trap 'echo "IOS_TEST_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
 
           xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
@@ -259,19 +261,102 @@ jobs:
         timeout-minutes: 20
         run: |
           set -eo pipefail
+          echo "IOS_TEST_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
+          trap 'echo "IOS_TEST_RUN_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
           echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
           xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
             -destination "$DEST" \
             -derivedDataPath "$DERIVED_DATA_PATH"
 
-      - name: Build remaining iOS app targets
+      - name: Report iOS test timings
+        if: always()
+        run: |
+          append_duration() {
+            local label="$1"
+            local start="$2"
+            local end="$3"
+            if [[ -n "$start" && -n "$end" && "$end" -ge "$start" ]]; then
+              local duration=$((end - start))
+              printf '| %s | %dm %02ds |\n' "$label" $((duration / 60)) $((duration % 60)) >> "$GITHUB_STEP_SUMMARY"
+            else
+              printf '| %s | unavailable |\n' "$label" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
+          echo "## iOS Test Timings" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Phase | Duration |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|----------|" >> "$GITHUB_STEP_SUMMARY"
+          append_duration "Build TheInsideJobTests" "${IOS_TEST_BUILD_START:-}" "${IOS_TEST_BUILD_END:-}"
+          append_duration "Run TheInsideJobTests" "${IOS_TEST_RUN_START:-}" "${IOS_TEST_RUN_END:-}"
+
+  ios-demo-gates:
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-demo
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+      - name: Boot simulator in background
+        run: |
+          set -eo pipefail
+          read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
+          import subprocess, json
+          runtimes = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
+          devices = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
+          for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
+              if rt["platform"] != "iOS" or not rt["isAvailable"]:
+                  continue
+              for dev in devices.get(rt["identifier"], []):
+                  if dev["name"] == "iPhone 16 Pro" and dev["isAvailable"]:
+                      print(dev["udid"], rt["version"])
+                      raise SystemExit(0)
+          raise SystemExit("No available iPhone 16 Pro simulator found")
+          PYEOF
+          )
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
+          echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
+          xcrun simctl boot "$SIM_UDID" || true
+          # Boot continues asynchronously — don't wait for bootstatus here
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
+
+      - name: Install Tuist
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
+
+      - name: Install Tuist dependencies
+        timeout-minutes: 12
+        run: tuist install
+
+      - name: Generate project
+        timeout-minutes: 5
+        run: |
+          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
+          ./scripts/clean-generated-projects.sh
+
+      - name: Build iOS app targets
         timeout-minutes: 12
         run: |
           set -eo pipefail
+          echo "IOS_DEMO_BUILD_START=$(date +%s)" >> "$GITHUB_ENV"
+          trap 'echo "IOS_DEMO_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
 
-          for scheme in "UIKitTestApp" "ResearchApp"; do
+          for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
             echo "Building $scheme..."
             xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
               -destination "$DEST" \
@@ -302,6 +387,8 @@ jobs:
         timeout-minutes: 12
         run: |
           set -eo pipefail
+          echo "IOS_DEMO_SMOKE_START=$(date +%s)" >> "$GITHUB_ENV"
+          trap 'echo "IOS_DEMO_SMOKE_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
           scripts/e2e-demo-smoke.sh \
             --skip-generate \
@@ -313,9 +400,33 @@ jobs:
         timeout-minutes: 8
         run: |
           set -eo pipefail
+          echo "IOS_DEMO_LIFECYCLE_START=$(date +%s)" >> "$GITHUB_ENV"
+          trap 'echo "IOS_DEMO_LIFECYCLE_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
           scripts/e2e-lifecycle-gate.py \
             --sim-udid "$SIM_UDID" \
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
+
+      - name: Report iOS demo timings
+        if: always()
+        run: |
+          append_duration() {
+            local label="$1"
+            local start="$2"
+            local end="$3"
+            if [[ -n "$start" && -n "$end" && "$end" -ge "$start" ]]; then
+              local duration=$((end - start))
+              printf '| %s | %dm %02ds |\n' "$label" $((duration / 60)) $((duration % 60)) >> "$GITHUB_STEP_SUMMARY"
+            else
+              printf '| %s | unavailable |\n' "$label" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
+          echo "## iOS Demo Timings" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Phase | Duration |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|----------|" >> "$GITHUB_STEP_SUMMARY"
+          append_duration "Build iOS app targets" "${IOS_DEMO_BUILD_START:-}" "${IOS_DEMO_BUILD_END:-}"
+          append_duration "Run demo CLI smoke" "${IOS_DEMO_SMOKE_START:-}" "${IOS_DEMO_SMOKE_END:-}"
+          append_duration "Run demo lifecycle gate" "${IOS_DEMO_LIFECYCLE_START:-}" "${IOS_DEMO_LIFECYCLE_END:-}"
