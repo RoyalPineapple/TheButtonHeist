@@ -1,6 +1,8 @@
 import Foundation
 import Testing
-@testable import TheScore
+import ThePlans
+import TheScore
+@testable import HeistDoctorCore
 
 @Suite struct HeistRepairSuggesterTests {
 
@@ -274,6 +276,43 @@ import Testing
         #expect(suggestion.caveats.contains("Last successful evidence used a full after snapshot because compact diff was unavailable."))
     }
 
+    @Test("Doctor derives suggestions from receipt pair")
+    func doctorDerivesSuggestionsFromReceiptPair() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let lastPass = receipt(
+            path: "$.body[0]",
+            status: .passed,
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Delete"),
+                ("Bread", "Archive"),
+            ]),
+            after: makeTestInterface(elements: [
+                element(label: "Bread", traits: [.staticText]),
+                element(label: "Archive", traits: [.button], actions: [.activate]),
+            ]),
+            actionSucceeded: true
+        )
+        let newFail = receipt(
+            path: "$.body[0]",
+            status: .failed,
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Remove"),
+                ("Bread", "Archive"),
+            ]),
+            after: nil,
+            actionSucceeded: false
+        )
+
+        let suggestion = try #require(HeistDoctor.suggestions(lastPass: lastPass, newFail: newFail).first)
+
+        #expect(suggestion.stepPath == "$.body[0]")
+        #expect(suggestion.failureKind == .missingTarget)
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Remove")))
+        #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
+    }
+
     private func request(
         _ last: HeistStepRepairEvidence,
         _ current: HeistStepRepairEvidence
@@ -337,6 +376,49 @@ import Testing
             }
             return matches.count
         }
+    }
+
+    private func receipt(
+        path: String,
+        status: HeistExecutionStepStatus,
+        target: ElementTarget,
+        before: Interface,
+        after: Interface?,
+        actionSucceeded: Bool
+    ) -> HeistExecutionResult {
+        let trace = after
+            .map { AccessibilityTrace(first: before).appending($0) }
+            ?? AccessibilityTrace(first: before)
+        let step = HeistExecutionStepResult(
+            path: path,
+            kind: .action,
+            status: status,
+            durationMs: 1,
+            intent: .action(command: "activate", target: target.description),
+            evidence: .action(HeistActionEvidence(
+                command: .activate(.target(target)),
+                actionResult: ActionResult(
+                    success: actionSucceeded,
+                    method: .activate,
+                    message: actionSucceeded ? nil : "No element matching \(target)",
+                    errorKind: actionSucceeded ? nil : .elementNotFound,
+                    accessibilityTrace: trace
+                )
+            )),
+            failure: status == .failed
+                ? HeistFailureDetail(
+                    category: .targetResolution,
+                    contract: "action dispatch succeeds",
+                    observed: "No element matching \(target)",
+                    expected: target.description
+                )
+                : nil
+        )
+        return HeistExecutionResult(
+            steps: [step],
+            durationMs: 1,
+            abortedAtPath: status == .failed ? path : nil
+        )
     }
 
     private func element(
