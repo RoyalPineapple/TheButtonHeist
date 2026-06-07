@@ -27,6 +27,28 @@ final class TheFenceHandlerTests: XCTestCase {
 
     // MARK: - Helpers
 
+    private static let pureRuntimeHeistSource = """
+    HeistPlan("agentFlow") {
+        HeistDef<String>("Cart.addItem", parameter: "item") { item in
+            Activate(.label(item))
+        }
+
+        Warn("start")
+        Activate(.label("Pay"))
+
+        ForEach(["Milk", "Bread"]) { item in
+            RunHeist("Cart.addItem", item)
+        }
+    }
+    """
+
+    private static let nativeSwiftRuntimeSource = """
+    HeistPlan {
+        let label = "Pay"
+        Activate(.label(label))
+    }
+    """
+
     /// Assert that executing a typed operation returns a `.error(...)` response containing the substring.
     @ButtonHeistActor
     private func assertValidationError(
@@ -421,6 +443,25 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRunHeistExecutesPureRuntimeSourceThroughValidatedPlan() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+
+        let response = try await fence.execute(command: .runHeist, values: [
+            "plan": .string(Self.pureRuntimeHeistSource),
+        ])
+
+        guard case .heistExecution(let plan, let result, _) = response else {
+            return XCTFail("Expected heistExecution response, got \(response)")
+        }
+        XCTAssertEqual(plan.name, "agentFlow")
+        XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
+        XCTAssertEqual(mockConn.sent.sentHeistRun?.argument, HeistArgument.none)
+        XCTAssertEqual(result.steps.map(\.kind), [.warn, .action, .forEachString])
+        XCTAssertFalse(result.isFailure)
+    }
+
+    @ButtonHeistActor
     func testRunHeistRejectsNonHeistAndEmptyInput() async {
         let fence = TheFence(configuration: .init())
         // Standalone .json is internal to the package, and plan source is an
@@ -652,6 +693,62 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(catalog.heists.map(\.name), ["shop", "addToCart"])
         XCTAssertEqual(catalog.heists[1].parameterKind, .string)
         XCTAssertTrue(catalog.heists[1].requiresArgument)
+    }
+
+    @ButtonHeistActor
+    func testDiscoveryCommandsUseSamePureRuntimeSourceAsRunHeist() async throws {
+        let fence = TheFence(configuration: .init())
+        let sourceArguments = TheFence.CommandArgumentEnvelope(values: [
+            "plan": .string(Self.pureRuntimeHeistSource),
+            "detail": .string("detailed"),
+        ])
+
+        let listResponse = try await fence.execute(command: .listHeists, arguments: sourceArguments)
+        guard case .heistCatalog(let catalog) = listResponse else {
+            return XCTFail("Expected heistCatalog response, got \(listResponse)")
+        }
+        XCTAssertEqual(catalog.heists.map(\.name), ["agentFlow", "Cart", "Cart.addItem"])
+        let addItem = try XCTUnwrap(catalog.heists.first { $0.name == "Cart.addItem" })
+        XCTAssertEqual(addItem.parameterKind, .string)
+        XCTAssertEqual(addItem.actionCommands, ["activate"])
+        XCTAssertEqual(addItem.validationStatus, .validated)
+
+        let describeResponse = try await fence.execute(
+            command: .describeHeist,
+            arguments: TheFence.CommandArgumentEnvelope(values: [
+                "plan": .string(Self.pureRuntimeHeistSource),
+                "heist": .string("Cart.addItem"),
+            ])
+        )
+        guard case .heistDescription(let description) = describeResponse else {
+            return XCTFail("Expected heistDescription response, got \(describeResponse)")
+        }
+        XCTAssertEqual(description.name, "Cart.addItem")
+        XCTAssertEqual(description.parameterKind, .string)
+        XCTAssertEqual(description.semanticSurface.actionCommands, ["activate"])
+        XCTAssertEqual(description.semanticSurface.targetPredicates, [#"predicate(label=stringRef("item"))"#])
+    }
+
+    @ButtonHeistActor
+    func testRuntimeSourceRejectsNativeSwiftAtFenceBoundary() async {
+        await assertValidationError(
+            command: .runHeist,
+            arguments: ["plan": .string(Self.nativeSwiftRuntimeSource)],
+            contains: "let declarations are not supported inside ButtonHeist DSL bodies"
+        )
+        await assertValidationError(
+            command: .listHeists,
+            arguments: ["plan": .string(Self.nativeSwiftRuntimeSource)],
+            contains: "let declarations are not supported inside ButtonHeist DSL bodies"
+        )
+        await assertValidationError(
+            command: .describeHeist,
+            arguments: [
+                "heist": .string("agentFlow"),
+                "plan": .string(Self.nativeSwiftRuntimeSource),
+            ],
+            contains: "let declarations are not supported inside ButtonHeist DSL bodies"
+        )
     }
 
     @ButtonHeistActor

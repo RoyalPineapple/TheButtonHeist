@@ -38,6 +38,34 @@ HeistPlan {
 
 The `plan` string is ButtonHeist source, not arbitrary Swift. It accepts the canonical DSL constructs rendered by Button Heist and rejects imports, variables, functions, native Swift control flow, interpolation, custom calls, body-local `try`, `await`, and unbounded loops. JSON plan IR is internal/generated; use source for compact authoring unless you are passing a generated `.heist` artifact path.
 
+Use the same source string for discovery before execution. `list_heists(plan:)` shows the root entry and reusable `HeistDef` capabilities; `describe_heist(plan:)` describes one of those entries. These examples are copyable into `run_heist(plan:)` by removing the discovery-specific fields:
+
+```text
+list_heists detail="detailed" plan: """
+HeistPlan("shop") {
+    HeistDef<String>("Cart.addItem", parameter: "item") { item in
+        Activate(.label(item))
+    }
+
+    RunHeist("Cart.addItem", "Milk")
+}
+"""
+```
+
+```text
+describe_heist heist="Cart.addItem" plan: """
+HeistPlan("shop") {
+    HeistDef<String>("Cart.addItem", parameter: "item") { item in
+        Activate(.label(item))
+    }
+
+    RunHeist("Cart.addItem", "Milk")
+}
+"""
+```
+
+Do not author heists as raw `version`/`name`/`parameter`/`definitions`/`body` JSON. That shape is internal IR for generated artifacts, storage, wire transport, and debugging.
+
 ## Trace Semantics
 
 Screen changes create full baselines. Same-screen changes are patches on top of the current baseline.
