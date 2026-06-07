@@ -9,8 +9,13 @@ public struct HeistStepRepairEvidence: Codable, Sendable, Equatable {
     public let stepPath: String
     public let actionKind: String
     public let target: ElementTarget
+    /// Parsed Interface hierarchy captured before the action. This is the
+    /// durable world-model snapshot repair uses to rerun predicates and recover
+    /// local semantic context around the original target; it is not raw AX data.
     public let beforeSnapshot: Interface
+    /// Compact parsed-world-model transition evidence captured after the action.
     public let afterDelta: AccessibilityTrace.Delta?
+    /// Parsed Interface fallback when a compact transition delta is unavailable.
     public let afterSnapshot: Interface?
     public let result: HeistStepRepairResult
 
@@ -251,117 +256,213 @@ public enum HeistRepairSuggester {
         currentFailure: HeistStepRepairEvidence
     ) -> [ScoredCandidate] {
         let old = oldResolved.element
-        let oldStableTraits = stableTraits(old)
-        let oldSiblingText = normalizedSet(oldResolved.siblingText)
-        let oldHeaderText = normalizedSet(oldResolved.headerText)
-        let afterEvidence = deltaEvidenceStrings(lastSuccess.afterDelta)
-            .union(deltaEvidenceStrings(currentFailure.afterDelta))
-        let compatibleCandidateCount = currentScreen.elements
-            .filter { !actionFamily.isKnown || actionFamily.isSupported(by: $0.element) }
-            .count
+        let context = CandidateScoringContext(
+            old: old,
+            oldStableTraits: stableTraits(old),
+            oldSiblingText: normalizedSet(oldResolved.siblingText),
+            oldHeaderText: normalizedSet(oldResolved.headerText),
+            afterEvidence: deltaEvidenceStrings(lastSuccess.afterDelta)
+                .union(deltaEvidenceStrings(currentFailure.afterDelta)),
+            expectationEvidence: expectationEvidenceStrings(lastSuccess.result.expectation)
+                .union(expectationEvidenceStrings(currentFailure.result.expectation)),
+            compatibleCandidateCount: currentScreen.elements
+                .filter { !actionFamily.isKnown || actionFamily.isSupported(by: $0.element) }
+                .count,
+            currentElementCount: currentScreen.elements.count,
+            preferredCandidates: preferredCandidates,
+            failureKind: failureKind,
+            actionFamily: actionFamily
+        )
 
-        return currentScreen.elements.compactMap { candidate -> ScoredCandidate? in
-            var score = 0
-            var reasons: [String] = []
-            var caveats: [String] = []
-            let element = candidate.element
+        return currentScreen.elements.compactMap { scoredCandidate($0, context: context) }
+        .sorted(by: ScoredCandidate.precedes)
+    }
 
-            if preferredCandidates.contains(candidate.id) {
-                score += 25
-                reasons.append("Old target is one of the current matches.")
-            }
+    private static func scoredCandidate(
+        _ candidate: RepairScreen.Element,
+        context: CandidateScoringContext
+    ) -> ScoredCandidate? {
+        var score = CandidateScore()
+        let element = candidate.element
 
-            if let identifier = stableIdentifier(element.identifier),
-               let oldIdentifier = stableIdentifier(old.identifier),
-               ElementPredicate.stringEquals(identifier, oldIdentifier) {
-                score += 90
-                reasons.append("Accessibility identifier is unchanged.")
-            }
+        scorePreferredMatch(candidate, context: context, into: &score)
+        scoreIdentifierContinuity(element, context: context, into: &score)
+        scoreTextContinuity(element, context: context, into: &score)
+        scoreCapabilityOverlap(element, context: context, into: &score)
+        scoreNeighborContext(candidate, context: context, into: &score)
+        scoreOutcomeEvidence(element, context: context, into: &score)
+        scoreActionFamily(element, context: context, into: &score)
 
-            if let label = nonEmpty(element.label), let oldLabel = nonEmpty(old.label) {
-                if ElementPredicate.stringEquals(label, oldLabel) {
-                    score += 50
-                    reasons.append("Label is unchanged.")
-                } else {
-                    let similarity = stringSimilarity(label, oldLabel)
-                    if similarity >= 0.62 {
-                        score += Int((similarity * 35).rounded())
-                        reasons.append("Label is a close semantic rename.")
-                    }
-                }
-            }
+        if context.failureKind == .wrongCapability, element == context.old {
+            score.add(-30)
+        }
+        guard score.value > 0 else { return nil }
+        if context.failureKind == .missingTarget, !hasStrongContinuity(score.continuitySignals) {
+            return nil
+        }
+        return ScoredCandidate(
+            element: candidate,
+            score: score.value,
+            reasons: unique(score.reasons),
+            caveats: unique(score.caveats),
+            continuitySignals: score.continuitySignals
+        )
+    }
 
-            if let value = nonEmpty(element.value), let oldValue = nonEmpty(old.value),
-               ElementPredicate.stringEquals(value, oldValue) {
-                score += 20
-                reasons.append("Value is unchanged.")
-            }
+    private static func scorePreferredMatch(
+        _ candidate: RepairScreen.Element,
+        context: CandidateScoringContext,
+        into score: inout CandidateScore
+    ) {
+        guard context.preferredCandidates.contains(candidate.id) else { return }
+        score.add(25, reason: "Old target is one of the current matches.")
+    }
 
-            let traitOverlap = oldStableTraits.intersection(stableTraits(element))
-            if !traitOverlap.isEmpty {
-                score += min(30, traitOverlap.count * 15)
-                reasons.append("Control role traits are compatible.")
-            }
+    private static func scoreIdentifierContinuity(
+        _ element: HeistElement,
+        context: CandidateScoringContext,
+        into score: inout CandidateScore
+    ) {
+        guard let identifier = stableIdentifier(element.identifier),
+              let oldIdentifier = stableIdentifier(context.old.identifier),
+              ElementPredicate.stringEquals(identifier, oldIdentifier)
+        else { return }
+        score.add(90, reason: "Accessibility identifier is unchanged.", signal: .identifier)
+    }
 
-            let actionOverlap = Set(old.actions).intersection(element.actions)
-            if !actionOverlap.isEmpty {
-                score += 10
-                reasons.append("Element actions are compatible.")
-            }
+    private static func scoreTextContinuity(
+        _ element: HeistElement,
+        context: CandidateScoringContext,
+        into score: inout CandidateScore
+    ) {
+        scoreTextPair(
+            value: element.label,
+            oldValue: context.old.label,
+            exactPoints: 50,
+            renamePoints: 35,
+            exactReason: "Label is unchanged.",
+            renameReason: "Label is a close semantic rename.",
+            into: &score
+        )
+        scoreTextPair(
+            value: element.value,
+            oldValue: context.old.value,
+            exactPoints: 20,
+            renamePoints: 20,
+            exactReason: "Value is unchanged.",
+            renameReason: "Value is a close semantic rename.",
+            into: &score
+        )
+    }
 
-            let rotorOverlap = Set((old.rotors ?? []).map(\.name)).intersection((element.rotors ?? []).map(\.name))
-            if !rotorOverlap.isEmpty {
-                score += 5
-                reasons.append("Rotor capability is compatible.")
-            }
+    private static func scoreTextPair(
+        value: String?,
+        oldValue: String?,
+        exactPoints: Int,
+        renamePoints: Int,
+        exactReason: String,
+        renameReason: String,
+        into score: inout CandidateScore
+    ) {
+        guard let value = nonEmpty(value), let oldValue = nonEmpty(oldValue) else { return }
+        if ElementPredicate.stringEquals(value, oldValue) {
+            score.add(exactPoints, reason: exactReason, signal: .text)
+            return
+        }
+        let similarity = stringSimilarity(value, oldValue)
+        guard similarity >= 0.62 else { return }
+        score.add(Int((similarity * Double(renamePoints)).rounded()), reason: renameReason, signal: .text)
+    }
 
-            let siblingOverlap = oldSiblingText.intersection(normalizedSet(candidate.siblingText))
-            if !siblingOverlap.isEmpty {
-                score += min(45, siblingOverlap.count * 35)
-                reasons.append("Sibling row context is preserved.")
-            }
+    private static func scoreCapabilityOverlap(
+        _ element: HeistElement,
+        context: CandidateScoringContext,
+        into score: inout CandidateScore
+    ) {
+        let traitOverlap = context.oldStableTraits.intersection(stableTraits(element))
+        if !traitOverlap.isEmpty {
+            score.add(min(30, traitOverlap.count * 15), reason: "Control role traits are compatible.")
+        }
 
-            let headerOverlap = oldHeaderText.intersection(normalizedSet(candidate.headerText))
-            if !headerOverlap.isEmpty {
-                score += min(20, headerOverlap.count * 10)
-                reasons.append("Header context is preserved.")
-            }
+        let actionOverlap = Set(context.old.actions).intersection(element.actions)
+        if !actionOverlap.isEmpty {
+            score.add(10, reason: "Element actions are compatible.")
+        }
 
-            if !afterEvidence.isDisjoint(with: normalizedIdentityText(element)) {
-                score += 5
-                reasons.append("After-diff evidence mentions the same semantic element.")
-            }
+        let rotorOverlap = Set((context.old.rotors ?? []).map(\.name)).intersection((element.rotors ?? []).map(\.name))
+        if !rotorOverlap.isEmpty {
+            score.add(5, reason: "Rotor capability is compatible.")
+        }
+    }
 
-            if actionFamily.isKnown {
-                if actionFamily.isSupported(by: element) {
-                    score += 15
-                    reasons.append("Element supports the same action family.")
-                    if failureKind == .missingTarget, compatibleCandidateCount == 1 {
-                        score += 25
-                        reasons.append("It is the only current element with a compatible action family.")
-                    }
-                } else {
-                    score -= 40
-                    caveats.append("Candidate does not expose the same action family.")
-                }
-            } else if failureKind == .missingTarget, currentScreen.elements.count == 1 {
-                score += 25
-                reasons.append("It is the only current semantic candidate.")
-            }
-
-            if failureKind == .wrongCapability, candidate.element == old {
-                score -= 30
-            }
-
-            guard score > 0 else { return nil }
-            return ScoredCandidate(
-                element: candidate,
-                score: score,
-                reasons: unique(reasons),
-                caveats: unique(caveats)
+    private static func scoreNeighborContext(
+        _ candidate: RepairScreen.Element,
+        context: CandidateScoringContext,
+        into score: inout CandidateScore
+    ) {
+        let siblingOverlap = context.oldSiblingText.intersection(normalizedSet(candidate.siblingText))
+        if !siblingOverlap.isEmpty {
+            score.add(
+                min(45, siblingOverlap.count * 35),
+                reason: "Sibling row context is preserved.",
+                signal: .neighborContext
             )
         }
-        .sorted(by: ScoredCandidate.precedes)
+
+        let headerOverlap = context.oldHeaderText.intersection(normalizedSet(candidate.headerText))
+        if !headerOverlap.isEmpty {
+            score.add(
+                min(20, headerOverlap.count * 10),
+                reason: "Header context is preserved.",
+                signal: .neighborContext
+            )
+        }
+    }
+
+    private static func scoreOutcomeEvidence(
+        _ element: HeistElement,
+        context: CandidateScoringContext,
+        into score: inout CandidateScore
+    ) {
+        let identityText = normalizedIdentityText(element)
+        if !context.afterEvidence.isDisjoint(with: identityText) {
+            score.add(5, reason: "After-diff evidence mentions the same semantic element.", signal: .afterEvidence)
+        }
+        if !context.expectationEvidence.isDisjoint(with: identityText) {
+            score.add(
+                5,
+                reason: "Expectation evidence mentions the same semantic element.",
+                signal: .expectationEvidence
+            )
+        }
+    }
+
+    private static func scoreActionFamily(
+        _ element: HeistElement,
+        context: CandidateScoringContext,
+        into score: inout CandidateScore
+    ) {
+        if context.actionFamily.isKnown {
+            scoreKnownActionFamily(element, context: context, into: &score)
+        } else if context.failureKind == .missingTarget, context.currentElementCount == 1 {
+            score.add(25, reason: "It is the only current semantic candidate.")
+        }
+    }
+
+    private static func scoreKnownActionFamily(
+        _ element: HeistElement,
+        context: CandidateScoringContext,
+        into score: inout CandidateScore
+    ) {
+        guard context.actionFamily.isSupported(by: element) else {
+            score.add(-40)
+            score.caveats.append("Candidate does not expose the same action family.")
+            return
+        }
+        score.add(15, reason: "Element supports the same action family.")
+        if context.failureKind == .missingTarget, context.compatibleCandidateCount == 1 {
+            score.add(25, reason: "It is the only current element with a compatible action family.")
+        }
     }
 
     private static func suggestion(
@@ -655,11 +756,47 @@ private enum RepairTargetResolution {
 
 // MARK: - Candidate Scoring
 
+private struct CandidateScoringContext: Sendable, Equatable {
+    let old: HeistElement
+    let oldStableTraits: Set<HeistTrait>
+    let oldSiblingText: Set<String>
+    let oldHeaderText: Set<String>
+    let afterEvidence: Set<String>
+    let expectationEvidence: Set<String>
+    let compatibleCandidateCount: Int
+    let currentElementCount: Int
+    let preferredCandidates: Set<String>
+    let failureKind: HeistRepairFailureKind
+    let actionFamily: RepairActionFamily
+}
+
+private struct CandidateScore: Sendable, Equatable {
+    private(set) var value = 0
+    var reasons: [String] = []
+    var caveats: [String] = []
+    private(set) var continuitySignals = Set<CandidateContinuitySignal>()
+
+    mutating func add(
+        _ points: Int,
+        reason: String? = nil,
+        signal: CandidateContinuitySignal? = nil
+    ) {
+        value += points
+        if let reason {
+            reasons.append(reason)
+        }
+        if let signal {
+            continuitySignals.insert(signal)
+        }
+    }
+}
+
 private struct ScoredCandidate: Sendable, Equatable {
     let element: RepairScreen.Element
     let score: Int
     let reasons: [String]
     let caveats: [String]
+    let continuitySignals: Set<CandidateContinuitySignal>
 
     static func precedes(_ lhs: ScoredCandidate, _ rhs: ScoredCandidate) -> Bool {
         if lhs.score != rhs.score {
@@ -670,6 +807,14 @@ private struct ScoredCandidate: Sendable, Equatable {
         }
         return semanticSortKey(lhs.element.element) < semanticSortKey(rhs.element.element)
     }
+}
+
+private enum CandidateContinuitySignal: Sendable, Hashable {
+    case identifier
+    case text
+    case neighborContext
+    case afterEvidence
+    case expectationEvidence
 }
 
 private enum RepairActionFamily: Sendable, Equatable {
@@ -796,6 +941,14 @@ private func stableTraits(_ element: HeistElement) -> Set<HeistTrait> {
     Set(element.traits.filter { !AccessibilityPolicy.transientTraits.contains($0) })
 }
 
+private func hasStrongContinuity(_ signals: Set<CandidateContinuitySignal>) -> Bool {
+    signals.contains(.identifier)
+        || signals.contains(.text)
+        || signals.contains(.neighborContext)
+        || signals.contains(.afterEvidence)
+        || signals.contains(.expectationEvidence)
+}
+
 private func normalizedIdentityText(_ element: HeistElement) -> Set<String> {
     normalizedSet([stableIdentifier(element.identifier), element.label, element.value, element.hint].compactMap { $0 })
 }
@@ -890,6 +1043,10 @@ private func deltaEvidenceStrings(_ delta: AccessibilityTrace.Delta?) -> Set<Str
         strings.append(contentsOf: payload.transient.flatMap(identityStrings))
         return normalizedSet(strings)
     }
+}
+
+private func expectationEvidenceStrings(_ expectation: ExpectationResult?) -> Set<String> {
+    normalizedSet([expectation?.actual].compactMap { $0 })
 }
 
 private func identityStrings(_ element: HeistElement) -> [String] {
