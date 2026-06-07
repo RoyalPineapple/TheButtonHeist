@@ -464,6 +464,11 @@ final class DogfoodForAllHeistTests: XCTestCase {
             XCTAssertEqual(failure.message, "intentional dogfood failure")
             XCTAssertEqual(failure.result.abortedAtPath, "$.body[2]")
             XCTAssertEqual(failure.result.steps.map(\.kind), [.wait, .warn, .fail])
+            XCTAssertEqual(failure.result.completedStepCount, 3)
+            XCTAssertEqual(failure.result.reportRows.map(\.kind), [.wait, .warn, .fail])
+            XCTAssertEqual(failure.result.reportRows.map(\.path), ["$.body[0]", "$.body[1]", "$.body[2]"])
+            XCTAssertEqual(failure.result.expectationsChecked, 1)
+            XCTAssertEqual(failure.result.expectationsMet, 1)
             XCTAssertEqual(failure.result.warnings, [
                 HeistExecutionWarning(
                     path: "$.body[1]",
