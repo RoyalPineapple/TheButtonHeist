@@ -15,8 +15,11 @@ struct HandoffAdmission {
         case .serverHello:
             return .send(.clientHello)
         case .authRequired:
+            guard let token = validToken(token) else {
+                return .terminalFailure(.disconnected(.missingToken))
+            }
             return .send(.authenticate(AuthenticatePayload(
-                token: token ?? "",
+                token: token,
                 driverId: effectiveDriverId
             )))
         case .authApproved(let payload):
@@ -45,6 +48,13 @@ struct HandoffAdmission {
         case .info, .interface, .actionResult, .screen, .status, .pong:
             return nil
         }
+    }
+
+    private func validToken(_ token: String?) -> String? {
+        guard let token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return token
     }
 }
 

@@ -8,7 +8,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
 
     func testCertificateMismatchDisconnectReason() {
         let reason = DisconnectReason.certificateMismatch
-        XCTAssertTrue(reason.errorDescription?.contains("fingerprint") ?? false)
+        XCTAssertTrue(reason.errorDescription?.contains("Legacy TLS certificate fingerprint") ?? false)
     }
 
     func testAllDisconnectReasonsHaveDescriptions() {
@@ -18,7 +18,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             .eventBacklogOverflow(maxEvents: 512),
             .serverClosed,
             .authFailed("bad token"),
-            .authApprovalPending("Waiting for approval on the device."),
+            .authApprovalPending("Legacy server is waiting for UI approval."),
             .sessionLocked("locked"),
             .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
             .localDisconnect,
@@ -40,7 +40,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             (.eventBacklogOverflow(maxEvents: 512), "transport.event_backlog_overflow", .transport, true),
             (.serverClosed, "transport.server_closed", .transport, true),
             (.authFailed("bad token"), "auth.failed", .authentication, false),
-            (.authApprovalPending("Waiting for approval on the device."), "auth.approval_pending", .authentication, true),
+            (.authApprovalPending("Legacy server is waiting for UI approval."), "auth.approval_pending", .authentication, true),
             (.sessionLocked("busy"), "session.locked", .session, true),
             (
                 .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
@@ -66,8 +66,27 @@ final class DeviceConnectionTLSTests: XCTestCase {
         let message = DisconnectReason.missingFingerprint.connectionFailureMessage
 
         XCTAssertTrue(message.contains("connection failed in tls"))
-        XCTAssertTrue(message.contains("observed No TLS fingerprint available"))
-        XCTAssertTrue(message.contains("configure the device's TLS certificate fingerprint"))
+        XCTAssertTrue(message.contains("observed Legacy TLS certificate fingerprint is unavailable"))
+        XCTAssertTrue(message.contains("Current clients use token-derived TLS PSK"))
+    }
+
+    func testLegacyAuthApprovalPendingHintDoesNotSuggestUIApproval() {
+        let reason = DisconnectReason.authApprovalPending("Legacy server is waiting for UI approval.")
+
+        XCTAssertEqual(reason.hint, FenceError.legacyAuthApprovalRecoveryHint)
+        XCTAssertTrue(reason.connectionFailureMessage.contains("legacy auth-approval response"))
+    }
+
+    func testLegacyCertificateDiagnosticsIdentifyLegacyTransport() {
+        let reasons: [DisconnectReason] = [.certificateMismatch, .missingFingerprint]
+
+        for reason in reasons {
+            XCTAssertTrue(reason.errorDescription?.contains("Legacy TLS certificate fingerprint") ?? false)
+            XCTAssertEqual(
+                reason.hint,
+                "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
+            )
+        }
     }
 
     func testExplicitTokenAuthFailureHintDoesNotSuggestUIApproval() {

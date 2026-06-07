@@ -60,8 +60,8 @@ final class ServerMessageTests: XCTestCase {
 
     func testAuthApprovalPendingEncodeDecode() throws {
         let payload = AuthApprovalPendingPayload(
-            message: "Waiting for approval on the device.",
-            hint: "Tap Allow on the iOS device to continue."
+            message: "Received legacy auth-approval response from the app.",
+            hint: "Rebuild or reinstall the app, then retry with the configured token."
         )
         let message = ServerMessage.authApprovalPending(payload)
         let data = try JSONEncoder().encode(message)

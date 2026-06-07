@@ -140,6 +140,26 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testAuthRequiredWithoutUsableTokenFailsWithoutSendingAuthenticate() async {
+        let tokens: [String?] = [nil, "", " \n"]
+
+        for token in tokens {
+            let handoff = TheHandoff()
+            handoff.token = token
+            let mock = connectPendingMockHandoff(handoff)
+
+            handoff.handleServerMessage(.authRequired, requestId: nil)
+
+            assertFailed(handoff.connectionPhase, failure: .disconnected(.missingToken))
+            XCTAssertTrue(
+                mock.sent.isEmpty,
+                "Handoff must not send authenticate for token \(String(describing: token))"
+            )
+            XCTAssertEqual(mock.disconnectCount, 1)
+        }
+    }
+
+    @ButtonHeistActor
     func testAuthFailureMessageFailsHandoffAndClosesTransport() async {
         let handoff = TheHandoff()
         let mock = connectPendingMockHandoff(handoff)
