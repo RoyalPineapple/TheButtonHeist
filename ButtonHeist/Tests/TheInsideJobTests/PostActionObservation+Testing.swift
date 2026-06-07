@@ -7,7 +7,7 @@ extension PostActionObservation {
     /// observation or explicit screen evidence through the interaction gateway.
     func captureSemanticState() -> BeforeState {
         captureSemanticState(
-            from: stash.settledScreen,
+            from: stash.settledSemanticScreen,
             tripwireSignal: tripwire.tripwireSignal(),
             settledObservationSequence: stash.latestSettledSemanticObservationEvent?.sequence
         )

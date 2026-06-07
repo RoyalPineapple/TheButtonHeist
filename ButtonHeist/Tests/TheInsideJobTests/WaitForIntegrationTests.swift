@@ -140,7 +140,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
     private func mutateVisibleHierarchy(_ body: () -> Void) {
         body()
-        insideJob.brains.stash.markDirtyFromTripwire()
+        insideJob.brains.stash.invalidateSettledObservationFromTripwire()
     }
 
     // MARK: - Passive Observation
@@ -167,7 +167,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let layerSettled = await insideJob.tripwire.waitForAllClear(timeout: 0.2)
         XCTAssertFalse(layerSettled, "Regression setup must keep the CALayer quiet gate blocked")
 
-        insideJob.brains.stash.markDirtyFromTripwire()
+        insideJob.brains.stash.invalidateSettledObservationFromTripwire()
         let observation = await insideJob.brains.interactionObservation.observeSemanticState(
             scope: .visible,
             after: nil,
@@ -409,7 +409,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let addTask = Task { @MainActor in
             await self.insideJob.tripwire.yieldRealFrames(2)
             let label = self.addLabel("WaitForChange-Delayed")
-            self.insideJob.brains.stash.markDirtyFromTripwire()
+            self.insideJob.brains.stash.invalidateSettledObservationFromTripwire()
             return label
         }
 
@@ -435,7 +435,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let removeTask = Task { @MainActor in
             await self.insideJob.tripwire.yieldRealFrames(2)
             label.removeFromSuperview()
-            self.insideJob.brains.stash.markDirtyFromTripwire()
+            self.insideJob.brains.stash.invalidateSettledObservationFromTripwire()
         }
 
         let result = await changedWait(
@@ -519,9 +519,9 @@ final class WaitForIntegrationTests: XCTestCase {
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
         insideJob.brains.stash.installScreenForTesting(offViewportMemory.merging(
-            insideJob.brains.stash.settledScreen
+            insideJob.brains.stash.settledSemanticScreen
         ))
-        XCTAssertNotNil(insideJob.brains.stash.settledScreen.findElement(heistId: offViewportHeistId))
+        XCTAssertNotNil(insideJob.brains.stash.settledSemanticScreen.findElement(heistId: offViewportHeistId))
 
         let mutationTask = Task { @MainActor in
             await self.insideJob.tripwire.yieldRealFrames(2)
@@ -541,7 +541,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(
-            insideJob.brains.stash.settledScreen.findElement(heistId: offViewportHeistId),
+            insideJob.brains.stash.settledSemanticScreen.findElement(heistId: offViewportHeistId),
             "changed wait must refresh visible evidence without deleting explored off-viewport semantic memory"
         )
     }

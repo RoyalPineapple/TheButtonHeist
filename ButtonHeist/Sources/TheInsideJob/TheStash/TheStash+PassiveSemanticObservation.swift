@@ -21,8 +21,8 @@ extension TheStash {
         semanticObservationStream.removeSubscription(id)
     }
 
-    func currentSubscribedObservationScope() -> SemanticObservationScope {
-        semanticObservationStream.currentSubscribedScope()
+    func subscribedObservationScope() -> SemanticObservationScope {
+        semanticObservationStream.subscribedObservationScope()
     }
 
     func observeSettledSemanticObservation(
@@ -41,8 +41,8 @@ extension TheStash {
         semanticObservationStream.latestSettleFailureDiagnostic
     }
 
-    func markDirtyFromTripwire() {
-        semanticObservationStream.markDirtyFromTripwire()
+    func invalidateSettledObservationFromTripwire() {
+        semanticObservationStream.invalidateLatestSettledObservation()
     }
 }
 

@@ -74,7 +74,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             success: false,
             method: .activate,
             before: before,
-            settleOutcome: settledOutcome(finalScreen: brains.stash.settledScreen)
+            settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
         )
 
         XCTAssertEqual(result.errorKind, .actionFailed)
@@ -88,7 +88,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             method: .activate,
             errorKind: .timeout,
             before: before,
-            settleOutcome: settledOutcome(finalScreen: brains.stash.settledScreen)
+            settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
         )
 
         XCTAssertEqual(result.errorKind, .timeout,
@@ -104,7 +104,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             message: "pasteboard empty",
             payload: .value(""),
             before: before,
-            settleOutcome: settledOutcome(finalScreen: brains.stash.settledScreen)
+            settleOutcome: settledOutcome(finalScreen: brains.stash.settledSemanticScreen)
         )
 
         XCTAssertEqual(result.message, "pasteboard empty")
@@ -125,7 +125,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         guard await brains.stash.observeSettledSemanticObservation(scope: .discovery, after: nil, timeout: 2) != nil else {
             throw XCTSkip("No settled discovery observation available")
         }
-        let screen = brains.stash.settledScreen
+        let screen = brains.stash.settledSemanticScreen
         let before = brains.postActionObservation.captureSemanticState()
 
         let result = await brains.interactionObservation.finishAfterAction(
@@ -242,9 +242,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             brains.stash.latestSettledSemanticObservationEvent?.observation.screen.orderedElements.first?.element.label,
             "Save"
         )
-        XCTAssertTrue(brains.stash.latestSettledSemanticObservationIsDirty)
-        XCTAssertEqual(brains.stash.settledScreen.orderedElements.first?.element.label, "Save")
-        XCTAssertEqual(brains.stash.latestSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Saved")
+        XCTAssertTrue(brains.stash.latestSettledSemanticObservationInvalidated)
+        XCTAssertEqual(brains.stash.settledSemanticScreen.orderedElements.first?.element.label, "Save")
+        XCTAssertEqual(brains.stash.latestFailedSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Saved")
         XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Saved")
     }
 
@@ -267,8 +267,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 125)
         XCTAssertEqual(brains.stash.latestSettledSemanticObservationEvent?.sequence, settledSequence)
-        XCTAssertTrue(brains.stash.latestSettledSemanticObservationIsDirty)
-        XCTAssertEqual(brains.stash.settledScreen.orderedElements.first?.element.label, "Save")
+        XCTAssertTrue(brains.stash.latestSettledSemanticObservationInvalidated)
+        XCTAssertEqual(brains.stash.settledSemanticScreen.orderedElements.first?.element.label, "Save")
     }
 
     func testActionResultWithDeltaParseFailureFailsActionResult() async {
@@ -307,7 +307,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -351,9 +351,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(beforeScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(matchedScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -381,7 +381,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(observedScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(observedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -558,7 +558,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         // reduces to refresh-and-commit, and the seeded entry merges into the
         // live parse rather than being pruned.
         seedScreen(elements: [("Seed", .button, "button_seed")])
-        XCTAssertEqual(brains.stash.settledScreen.semantic.elements.count, 1)
+        XCTAssertEqual(brains.stash.settledSemanticScreen.semantic.elements.count, 1)
 
         brains.startSemanticObservation()
         let observation = await brains.stash.observeSettledSemanticObservation(scope: .discovery, after: nil, timeout: 2)
@@ -568,7 +568,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         // settled screen reflects the committed union, not the pre-explore
         // value alone.
         XCTAssertNotNil(observation)
-        XCTAssertGreaterThanOrEqual(brains.stash.settledScreen.semantic.elements.count, 1)
+        XCTAssertGreaterThanOrEqual(brains.stash.settledSemanticScreen.semantic.elements.count, 1)
     }
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
@@ -646,7 +646,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         guard brains.stash.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for swipeable explore test")
         }
-        guard let container = brains.stash.currentHierarchy.scrollableContainers.first(where: {
+        guard let container = brains.stash.latestObservedLiveHierarchy.scrollableContainers.first(where: {
             guard let view = brains.stash.scrollableContainerViews[$0] else { return true }
             return !(view is UIScrollView)
         }) else {

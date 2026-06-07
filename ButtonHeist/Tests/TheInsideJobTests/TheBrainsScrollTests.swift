@@ -364,7 +364,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let entry = try XCTUnwrap(
-            brains.stash.settledScreen.findElement(heistId: "settings_button")
+            brains.stash.settledSemanticScreen.findElement(heistId: "settings_button")
         )
         let result = brains.stash.revealSemanticTarget(entry)
 
@@ -390,7 +390,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let entry = try XCTUnwrap(
-            brains.stash.settledScreen.findElement(heistId: "settings_button")
+            brains.stash.settledSemanticScreen.findElement(heistId: "settings_button")
         )
         let result = brains.stash.revealSemanticTarget(entry)
 
