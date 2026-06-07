@@ -74,15 +74,15 @@ jobs:
 
       - name: Build TheScore
         timeout-minutes: 5
-        run: swift build --target TheScore
+        run: swift build --disable-index-store --target TheScore
 
       - name: Build ButtonHeist
         timeout-minutes: 5
-        run: swift build --target ButtonHeist
+        run: swift build --disable-index-store --target ButtonHeist
 
       - name: Build heist-plan
         timeout-minutes: 5
-        run: swift build --product heist-plan
+        run: swift build --disable-index-store --product heist-plan
 
   heist-plan-tests:
     runs-on: macos-15
@@ -104,7 +104,7 @@ jobs:
 
       - name: Build heist-plan
         timeout-minutes: 8
-        run: swift build --package-path ButtonHeist --product heist-plan
+        run: swift build --disable-index-store --package-path ButtonHeist --product heist-plan
 
       - name: Smoke test heist-plan compile
         timeout-minutes: 12
@@ -116,7 +116,7 @@ jobs:
         timeout-minutes: 15
         env:
           HEIST_PLAN_TOOL: ${{ github.workspace }}/ButtonHeist/.build/debug/heist-plan
-        run: scripts/swift-test-gate.sh HeistPlanTests --disable-xctest
+        run: scripts/swift-test-gate.sh HeistPlanTests --disable-xctest --disable-index-store
 
   macos-tests:
     runs-on: macos-15
@@ -165,21 +165,22 @@ jobs:
         run: |
           set -eo pipefail
           xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
-            -destination 'platform=macOS'
+            -destination 'platform=macOS' \
+            COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Build & test CLI (SwiftPM)
         timeout-minutes: 12
         run: |
           swift package --package-path ButtonHeistCLI resolve
-          swift build --package-path ButtonHeistCLI
-          scripts/swift-test-gate.sh ButtonHeistCLI
+          swift build --disable-index-store --package-path ButtonHeistCLI
+          scripts/swift-test-gate.sh ButtonHeistCLI --disable-index-store
 
       - name: Build & test MCP (SwiftPM)
         timeout-minutes: 12
         run: |
           swift package --package-path ButtonHeistMCP resolve
-          swift build --package-path ButtonHeistMCP
-          scripts/swift-test-gate.sh ButtonHeistMCP
+          swift build --disable-index-store --package-path ButtonHeistMCP
+          scripts/swift-test-gate.sh ButtonHeistMCP --disable-index-store
 
   ios-tests:
     runs-on: macos-15
@@ -247,7 +248,8 @@ jobs:
 
           xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
             -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Wait for simulator boot
         timeout-minutes: 5
@@ -276,7 +278,8 @@ jobs:
             xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
               -destination "$DEST" \
               -derivedDataPath "$DERIVED_DATA_PATH" \
-              build
+              build \
+              COMPILER_INDEX_STORE_ENABLE=NO
           done
 
       - name: Measure framework sizes
