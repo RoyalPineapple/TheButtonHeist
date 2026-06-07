@@ -123,7 +123,7 @@ enum DisconnectReason: Error, LocalizedError {
                 cause: "Legacy auth approval response: \(message)",
                 errorCode: "auth.approval_pending",
                 phase: .authentication,
-                retryable: true,
+                retryable: false,
                 hint: FenceError.legacyAuthApprovalRecoveryHint
             )
         case .sessionLocked(let message):

@@ -149,13 +149,10 @@ absent, the token is used as the driver identity.
 
 `authApprovalPending` and `authApproved` remain wire types for compatibility
 with older clients and servers. The current server does not emit them. Clients
-without a token should fail before starting the TLS connection.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"authenticate","payload":{"token":""}}
-{"buttonHeistVersion":"<semver>","type":"authApprovalPending","payload":{"message":"Waiting for approval on the device.","hint":"Tap Allow on the iOS device to continue."}}
-{"buttonHeistVersion":"<semver>","type":"authApproved","payload":{"token":"auto-generated-token"}}
-```
+without a token should fail before starting the TLS connection. If a client sees
+these legacy messages, it should treat them as an old app/protocol response and
+tell the user to rebuild or reinstall the app, then retry with the configured
+token.
 
 ### Protocol Mismatch
 

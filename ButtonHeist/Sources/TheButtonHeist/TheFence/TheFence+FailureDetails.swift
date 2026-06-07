@@ -58,9 +58,7 @@ private extension ErrorKind {
         switch self {
         case .timeout:
             return true
-        case .authApprovalPending:
-            return true
-        case .elementNotFound, .validationError, .actionFailed, .authFailure, .general:
+        case .elementNotFound, .validationError, .actionFailed, .authFailure, .authApprovalPending, .general:
             return false
         }
     }

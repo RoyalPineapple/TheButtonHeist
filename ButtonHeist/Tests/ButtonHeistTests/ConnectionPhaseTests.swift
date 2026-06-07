@@ -35,7 +35,7 @@ final class ConnectionPhaseTests: XCTestCase {
                 .disconnected(.authApprovalPending("Legacy server is waiting for UI approval.")),
                 "auth.approval_pending",
                 .authentication,
-                true
+                false
             ),
             (.disconnected(.sessionLocked("busy")), "session.locked", .session, true),
             (.timeout, "setup.timeout", .setup, true),

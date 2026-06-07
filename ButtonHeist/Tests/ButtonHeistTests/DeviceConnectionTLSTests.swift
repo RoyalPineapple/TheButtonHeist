@@ -40,7 +40,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             (.eventBacklogOverflow(maxEvents: 512), "transport.event_backlog_overflow", .transport, true),
             (.serverClosed, "transport.server_closed", .transport, true),
             (.authFailed("bad token"), "auth.failed", .authentication, false),
-            (.authApprovalPending("Legacy server is waiting for UI approval."), "auth.approval_pending", .authentication, true),
+            (.authApprovalPending("Legacy server is waiting for UI approval."), "auth.approval_pending", .authentication, false),
             (.sessionLocked("busy"), "session.locked", .session, true),
             (
                 .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
