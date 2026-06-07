@@ -5,7 +5,7 @@ import TheScore
 extension FenceResponse {
 
     func compactHeistFormatted(_ result: HeistExecutionResult, netDelta: AccessibilityTrace.Delta?) -> String {
-        var text = "heist: \(result.completedStepCount) steps in \(result.durationMs)ms"
+        var text = "heist: \(result.executedTopLevelStepCount) top-level steps in \(result.durationMs)ms"
         if let abortedAtPath = result.abortedAtPath {
             text += " (stopped at \(abortedAtPath))"
         }

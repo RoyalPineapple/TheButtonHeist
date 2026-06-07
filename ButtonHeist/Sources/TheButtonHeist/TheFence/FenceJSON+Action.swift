@@ -205,7 +205,9 @@ struct PublicElementUpdate: Encodable {
 struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let status: PublicStatus
     let report: PublicHeistReport
-    let completedSteps: Int
+    let executedTopLevelStepCount: Int
+    let executedNodeCount: Int
+    let reportRowCount: Int
     let durationMs: Int
     let abortedAtPath: String?
     let expectations: PublicHeistExpectations?
@@ -214,7 +216,9 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     init(result: HeistExecutionResult, netDelta: AccessibilityTrace.Delta?) {
         self.status = PublicStatus(result.abortedAtPath == nil ? .ok : .partial)
         self.report = PublicHeistReport(result: result)
-        self.completedSteps = result.completedStepCount
+        self.executedTopLevelStepCount = result.executedTopLevelStepCount
+        self.executedNodeCount = result.executedNodeCount
+        self.reportRowCount = result.reportRows.count
         self.durationMs = result.durationMs
         self.abortedAtPath = result.abortedAtPath
         let checked = result.expectationsChecked
@@ -236,13 +240,17 @@ struct PublicHeistReport: Encodable {
 }
 
 struct PublicHeistReportSummary: Encodable {
-    let completedSteps: Int
+    let executedTopLevelStepCount: Int
+    let executedNodeCount: Int
+    let reportRowCount: Int
     let abortedAtPath: String?
     let durationMs: Int
     let expectations: PublicHeistExpectations?
 
     init(result: HeistExecutionResult) {
-        self.completedSteps = result.completedStepCount
+        self.executedTopLevelStepCount = result.executedTopLevelStepCount
+        self.executedNodeCount = result.executedNodeCount
+        self.reportRowCount = result.reportRows.count
         self.abortedAtPath = result.abortedAtPath
         self.durationMs = result.durationMs
         let checked = result.expectationsChecked

@@ -136,7 +136,7 @@ public enum FenceResponse {
     /// control-flow heists, which keep the full report shape.
     var singleLeafActionRendering: (command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?)? {
         guard case .heistExecution(_, let result, _) = self,
-              result.steps.count == 1,
+              result.executedTopLevelStepCount == 1,
               let step = result.steps.first,
               let actionResult = step.reportActionResult else { return nil }
         switch step.kind {

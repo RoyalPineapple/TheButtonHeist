@@ -48,7 +48,7 @@ extension FenceResponse {
                 options: options
             )
         case .heistExecution(_, let result, _):
-            var text = "Heist: \(result.completedStepCount) step(s) completed in \(result.durationMs)ms"
+            var text = "Heist: \(result.executedTopLevelStepCount) top-level step(s) executed in \(result.durationMs)ms"
             if let abortedAtPath = result.abortedAtPath { text += " (stopped at \(abortedAtPath))" }
             let checked = result.expectationsChecked
             if checked > 0 {

@@ -430,7 +430,7 @@ struct HeistInspection {
     let commands: [TheFence.Command]
     let steps: [HeistStep]
     let executionResult: HeistExecutionResult
-    let completedSteps: Int
+    let executedTopLevelStepCount: Int
     let abortedAtPath: String?
     let durationMs: Int
     let expectationsChecked: Int
@@ -447,7 +447,7 @@ func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
         commands: plannedSteps.map(\.commandForInspection),
         steps: plannedSteps,
         executionResult: result,
-        completedSteps: result.completedStepCount,
+        executedTopLevelStepCount: result.executedTopLevelStepCount,
         abortedAtPath: result.abortedAtPath,
         durationMs: result.durationMs,
         expectationsChecked: result.expectationsChecked,

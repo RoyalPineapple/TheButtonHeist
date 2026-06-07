@@ -13,7 +13,7 @@ public struct HeistJUnitReport: Sendable, Equatable {
     /// Bundle identifier of the app the heist targets.
     public let app: String
     /// Total number of report rows for the executed heist.
-    public let totalStepCount: Int
+    public let reportRowCount: Int
     /// Total wall-clock time for the entire heist, in seconds.
     public let totalTimeSeconds: Double
     /// Step outcomes in execution order for the JUnit adapter.
@@ -22,21 +22,21 @@ public struct HeistJUnitReport: Sendable, Equatable {
     public init(
         heistName: String,
         app: String,
-        totalStepCount: Int,
+        reportRowCount: Int,
         totalTimeSeconds: Double,
         steps: [StepResult]
     ) {
         self.heistName = heistName
         self.app = app
-        self.totalStepCount = totalStepCount
+        self.reportRowCount = reportRowCount
         self.totalTimeSeconds = totalTimeSeconds
         self.steps = steps
     }
 
     // MARK: - Derived Properties
 
-    public var passedCount: Int { steps.count(where: { $0.passed }) }
-    public var failedCount: Int { steps.count(where: { !$0.passed }) }
+    public var passedReportRowCount: Int { steps.count(where: { $0.passed }) }
+    public var failedReportRowCount: Int { steps.count(where: { !$0.passed }) }
     public var allPassed: Bool { steps.allSatisfy(\.passed) }
 }
 
@@ -186,7 +186,7 @@ extension HeistJUnitReport {
     // MARK: - Private Helpers
 
     private func failureBody(failedStep: StepResult) -> String {
-        var body = "Completed \(passedCount)/\(totalStepCount) steps before failure.\n"
+        var body = "Completed \(passedReportRowCount)/\(reportRowCount) report row(s) before failure.\n"
         body += "step: [\(failedStep.index)] \(failedStep.command)\n"
         if let target = failedStep.target {
             var parts: [String] = []

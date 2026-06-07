@@ -26,6 +26,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.first?.reportCommandName, "activate")
         XCTAssertEqual(result.dispatchedActionResults.map(\.method), [.activate])
         XCTAssertEqual(result.reportedActionResults.map(\.method), [.activate])
+        XCTAssertEqual(result.executedTopLevelStepCount, 1)
+        XCTAssertEqual(result.executedNodeCount, 1)
+        XCTAssertEqual(result.reportRows.count, 1)
     }
 
     func testReportFactsUseExecutionTreeInsteadOfPlanSiblingRematch() {
@@ -68,7 +71,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         XCTAssertEqual(result.steps.count, 1)
-        XCTAssertEqual(result.completedStepCount, 1)
+        XCTAssertEqual(result.executedTopLevelStepCount, 1)
+        XCTAssertEqual(result.executedNodeCount, 1)
         XCTAssertEqual(result.abortedAtPath, "$.body[0]")
         XCTAssertEqual(result.reportRows.count, 1)
         XCTAssertEqual(result.reportRows.map(\.path), ["$.body[0]"])
@@ -162,7 +166,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertTrue(result.isFailure)
         XCTAssertEqual(result.firstFailedStep?.path, "$.body[0].heist.body[0]")
         XCTAssertEqual(result.failedStepPath, "$.body[0].heist.body[0]")
+        XCTAssertEqual(result.failedStepKind, .action)
         XCTAssertEqual(result.steps.first?.abortedAtChildPath, "$.body[0].heist.body[0]")
+        XCTAssertEqual(result.executedTopLevelStepCount, 1)
+        XCTAssertEqual(result.executedNodeCount, 2)
+        XCTAssertEqual(result.reportRows.count, 2)
     }
 
     func testConditionalSelectedCaseKeepsOnlySelectedChildren() {
@@ -261,6 +269,20 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.children[1].abortedAtChildPath, "$.body[0].for_each_string.iterations[1].body[0]")
         XCTAssertEqual(node.children[1].children.first?.reportActionResult?.message, "field missing")
         XCTAssertEqual(node.forEachStringEvidence?.failureReason, "iteration 1 failed for value \"Eggs\"")
+        XCTAssertEqual(result.executedTopLevelStepCount, 1)
+        XCTAssertEqual(result.executedNodeCount, 5)
+        XCTAssertEqual(result.reportRows.count, 1)
+    }
+
+    func testForEachMultipleIterationsSeparatesExecutedNodesFromReportRows() {
+        let result = forEachStringSuccessResult()
+        let node = result.steps[0]
+
+        XCTAssertEqual(node.reportStatus, .passed)
+        XCTAssertEqual(node.children.map(\.reportStatus), [.passed, .passed])
+        XCTAssertEqual(result.executedTopLevelStepCount, 1)
+        XCTAssertEqual(result.executedNodeCount, 5)
+        XCTAssertEqual(result.reportRows.map(\.path), ["$.body[0]"])
     }
 
     func testWarnAndFailAreExecutedNodes() {
@@ -287,6 +309,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.map(\.reportStepName), ["warn", "fail"])
         XCTAssertEqual(result.steps.map(\.reportStatus), [.passed, .failed])
         XCTAssertEqual(result.warnings.map(\.message), ["Heads up"])
+        XCTAssertEqual(result.executedTopLevelStepCount, 2)
+        XCTAssertEqual(result.executedNodeCount, 2)
+        XCTAssertEqual(result.reportRows.count, 2)
     }
 
     func testInvokeNodeCarriesCapabilityFrameAndArgument() {
@@ -341,6 +366,20 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.reportDisplayName, "RunHeist(\"LibraryScreen.addToCart\", \"Milk\")")
         XCTAssertTrue(result.isFailure)
         XCTAssertEqual(node.reportStatus, .failed)
+        XCTAssertEqual(result.failedStepPath, child.path)
+        XCTAssertEqual(result.failedStepKind, .action)
+    }
+
+    func testJUnitRowsUseFlattenedReportRows() async {
+        let result = forEachStringSuccessResult()
+        let rows = await Task { @ButtonHeistActor in
+            TheFence(configuration: .init()).reportStepRows(result: result)
+        }.value
+
+        XCTAssertEqual(result.executedTopLevelStepCount, 1)
+        XCTAssertEqual(result.executedNodeCount, 5)
+        XCTAssertEqual(rows.count, result.reportRows.count)
+        XCTAssertEqual(rows.map(\.command), ["for_each_string"])
     }
 
     // MARK: - Fixtures
@@ -509,6 +548,65 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             ],
             durationMs: 30,
             abortedAtPath: failedActionPath
+        )
+    }
+
+    private func forEachStringSuccessResult() -> HeistExecutionResult {
+        let firstIteration = forEachStringIterationStep(
+            ordinal: 0,
+            value: "Milk",
+            actionPath: "$.body[0].for_each_string.iterations[0].body[0]"
+        )
+        let secondIteration = forEachStringIterationStep(
+            ordinal: 1,
+            value: "Eggs",
+            actionPath: "$.body[0].for_each_string.iterations[1].body[0]"
+        )
+        return HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    path: "$.body[0]",
+                    kind: .forEachString,
+                    status: .passed,
+                    durationMs: 30,
+                    intent: .forEachString(parameter: "item", count: 2),
+                    evidence: .forEachString(HeistForEachStringEvidence(
+                        parameter: "item",
+                        count: 2,
+                        iterationCount: 2
+                    )),
+                    children: [firstIteration, secondIteration]
+                ),
+            ],
+            durationMs: 30
+        )
+    }
+
+    private func forEachStringIterationStep(
+        ordinal: Int,
+        value: String,
+        actionPath: String
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: "$.body[0].for_each_string.iterations[\(ordinal)]",
+            kind: .forEachIteration,
+            status: .passed,
+            durationMs: 5,
+            intent: .forEachString(parameter: "item", count: 2),
+            evidence: .forEachString(HeistForEachStringEvidence(
+                parameter: "item",
+                count: 2,
+                iterationCount: ordinal + 1,
+                iterationOrdinal: ordinal,
+                value: value
+            )),
+            children: [
+                actionStep(
+                    path: actionPath,
+                    command: .typeText(text: .literal(value), target: nil),
+                    actionResult: ActionResult(success: true, method: .typeText)
+                ),
+            ]
         )
     }
 
