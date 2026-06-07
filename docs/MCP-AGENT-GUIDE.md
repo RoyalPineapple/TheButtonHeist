@@ -14,9 +14,9 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 **Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
-**Acting**: `perform(step:)` is the single-step control surface. It wraps your `step` as `HeistPlan { <step> }`, compiles it through ThePlans, requires the compiled body to contain exactly one eligible step, then executes that plan through the normal heist runtime.
+**Acting**: `perform(step:)` runs one ButtonHeist DSL instruction. Use it when one line is enough: one action, or one simple wait.
 
-Allowed `perform(step:)` statements are one primitive action or one simple wait:
+Allowed `perform(step:)` statements are one action or one simple wait:
 
 ```swift
 Activate(.label("Pay")).expect(.changed(.screen()))
@@ -32,7 +32,7 @@ DismissKeyboard()
 Mechanical.Tap(.label("Map"))
 Mechanical.LongPress(.label("Message"))
 Mechanical.Swipe(.label("Carousel"), .left)
-Mechanical.Drag(.label("Slider"), to: .point(x: 200, y: 40))
+Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 
 WaitFor(.present(.label("Checkout")), timeout: 5)
 ```
@@ -213,24 +213,39 @@ xcrun simctl delete "$SIM_UDID"
 
 ## Async Changes
 
-For operations that take time (payments, network requests):
-1. `activate target={"label":"Pay","traits":["button"]} expect={"type":"screen_changed"}` — perform accessibility activation and declare the expected outcome
-2. Delta shows spinner, expectation not met → `wait predicate={"type":"screen_changed"}` — server waits until the real screen arrives
+For operations that take time, keep using the DSL:
+
+```swift
+Activate(.label("Pay"))
+    .expect(.changed(.screen()))
+
+WaitFor(.present(.label("Receipt")), timeout: 10)
+```
+
+If the action receipt shows a spinner or loading overlay instead of the final state,
+run a simple `WaitFor(...)` through `perform(step:)`. Button Heist checks the
+current settled hierarchy first, then watches settled accessibility state until the
+predicate is true or the timeout expires.
 
 ## Expectations
 
-Every action is an opportunity to validate. Attaching `expect` costs nothing — the action runs the same way — but turns a command into a verified assertion. Agents that use expectations routinely catch regressions as a side effect of navigation. Agents that do not use expectations are throwing away evidence.
+Every action is an opportunity to validate. Attach `.expect(...)` whenever you
+know what should change:
 
-Before you act, ask: what should change? A toggle flips a value. A nav button changes the screen. A delete removes an element. Form that hypothesis, attach it, and let the result confirm or correct you. Unmet expectations are information, not errors — they tell you what actually happened so you can adapt.
+```swift
+Activate(.label("Continue"))
+    .expect(.changed(.screen()))
 
-Expectations are as specific as you need — say what you know, omit what you don't:
-- `{"type": "elements_changed"}` — something should change (broadest).
-- `{"type": "element_updated"}` — some element's property should change.
-- `{"type": "element_updated", "element": {"label": "Counter"}}` — this specific element should change.
-- `{"type": "element_updated", "element": {"label": "Counter"}, "property": "value"}` — its value specifically.
-- `{"type": "element_updated", "element": {"label": "Counter"}, "property": "value", "to": "5"}` — and it should become "5".
+TypeText("milk", into: .label("Search"))
+    .expect(.present(.element(label: "Search", value: "milk")))
 
-Each level narrows what counts as success. The more specific, the more a failure tells you.
+Activate(.label("Delete"))
+    .expect(.absent(.label("Delete")))
+```
+
+Before you act, ask what should be true afterward. A nav button changes the
+screen. A delete removes an element. Text entry updates a value. Encode that fact
+as the expectation and let the receipt confirm or correct you.
 
 ## Authoring Heists
 

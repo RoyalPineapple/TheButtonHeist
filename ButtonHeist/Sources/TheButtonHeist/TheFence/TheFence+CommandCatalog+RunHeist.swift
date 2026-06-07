@@ -16,20 +16,53 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 parameters: [
                     param(.step, .string, required: true, minLength: 1),
                 ],
-                description: "Perform exactly one primitive ButtonHeist step from `step` source. " +
-                    "The fence wraps it as `HeistPlan { <step> }`, compiles it through ThePlans, " +
-                    "requires one action or simple WaitFor step, then executes it through the heist runtime. " +
-                    "Use run_heist for branching, loops, named heists, warnings, failures, or multiple steps."
+                description: """
+                    Run one ButtonHeist DSL instruction from `step`: one action or one simple wait.
+
+                    Examples:
+                    `Activate(.label("Pay")).expect(.changed(.screen()))`
+                    `TypeText("milk", into: .label("Search")).expect(.changed(.elements))`
+                    `Increment(.label("Quantity"))`
+                    `Decrement(.label("Quantity"))`
+                    `CustomAction("Archive", on: .label("Message"))`
+                    `Rotor("Headings", on: .label("Article"))`
+                    `SetPasteboard("hello")`
+                    `Edit(.paste)`
+                    `DismissKeyboard()`
+                    `Mechanical.Tap(.label("Map"))`
+                    `Mechanical.LongPress(.label("Message"))`
+                    `Mechanical.Swipe(.label("Carousel"), .left)`
+                    `Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))`
+                    `WaitFor(.present(.label("Checkout")), timeout: 5)`
+
+                    Use `perform` when one line is enough. Use `run_heist` when the job needs
+                    multiple instructions, reusable heists, `RunHeist`, `If`/`Else`,
+                    `WaitFor { ... }`, `ForEach`, `Warn`, or `Fail`.
+                    """
             )
         case .runHeist:
             return TheFence.Command.commandDescriptor(
                 command, family: .heistRuntime,
                 requestDecoder: TheFence.decodeRunHeistCommandRequest,
                 parameters: [Self.rootArgumentParameter] + Self.planSourceParameters,
-                description: "Execute a typed heist plan, supplied as canonical ButtonHeist source via `plan`, " +
-                    "or loaded by the fence from a `path` to a .heist package artifact. Provide exactly " +
-                    "one source: path or plan. Use `argument` when the root heist declares a string or " +
-                    "element_target parameter."
+                description: """
+                    Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`.
+
+                    Author plans as ButtonHeist source, not raw JSON IR:
+                    `HeistPlan("shop") { ... }`
+                    `HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
+                    `RunHeist("Cart.addItem", "Milk")`
+                    `If(.present(.label("Pay"))) { ... } Else { ... }`
+                    `WaitFor(.changed(.screen()), timeout: 10) { ... } Else { ... }`
+                    `ForEach(["Milk", "Bread"]) { item in ... }`
+                    `ForEach(.matching(.label("Delete")), limit: 20) { target in ... }`
+                    `Warn("message")`
+                    `Fail("message")`
+
+                    Provide exactly one source: `path` or `plan`. Use `argument` when the root
+                    heist takes a string or element target. Runtime source is restricted
+                    ButtonHeist DSL, not arbitrary Swift.
+                    """
             )
         case .listHeists:
             return TheFence.Command.commandDescriptor(
@@ -45,11 +78,8 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     ),
                 ] + Self.planSourceParameters,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "List a summary menu of the root entry and named reusable heists derived " +
-                    "from one runtime-validated plan. Set `detail` to `detailed` to include derived command " +
-                    "names, nested heist calls, counts, and safe semantic surface summaries. The plan can " +
-                    "be supplied as canonical ButtonHeist source via `plan` or loaded from a `path` to " +
-                    "a .heist package artifact."
+                description: "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` " +
+                    "when composing against available capabilities."
             )
         case .describeHeist:
             return TheFence.Command.commandDescriptor(
@@ -60,9 +90,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     param(.heist, .string, required: true),
                 ] + Self.planSourceParameters,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Describe one root entry or reusable heist from a runtime-validated plan. The " +
-                    "`heist` parameter selects the entry/capability name; the plan can be supplied as " +
-                    "canonical ButtonHeist source via `plan` or loaded from a `path` to a .heist package artifact."
+                description: "Describe one root entry or reusable heist from a plan so an agent can call it safely."
             )
         }
     }

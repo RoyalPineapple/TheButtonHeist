@@ -4,15 +4,15 @@ import TheScore
 public extension TheFence.Command {
     static var mcpServerInstructions: String {
         return """
-            Button Heist drives iOS apps through the accessibility layer — the same interface \
-            VoiceOver uses. Read state with \(inlineCode(getInterface.rawValue)) and \
-            \(inlineCode(getScreen.rawValue)); act with \(inlineCode(perform.rawValue)) using a \
-            single ButtonHeist DSL step in the \(inlineCode("step")) field, such as \
-            \(inlineCode(#"Activate(.label("Pay")).expect(.changed(.screen()))"#)). \
-            Use \(inlineCode(runHeist.rawValue)) for full `HeistPlan { ... }` programs with \
-            definitions, branching, waits with bodies, loops, warnings, failures, or multiple steps. \
-            Runtime ButtonHeist source is not arbitrary Swift and never uses host-language compilation. \
-            JSON plan IR is internal/generated, not the agent authoring surface. \
+            Button Heist turns the app's accessibility hierarchy into a world model for agents. \
+            Read it with \(inlineCode(getInterface.rawValue)); use \(inlineCode(getScreen.rawValue)) \
+            only when pixels or viewport geometry matter. Target controls by accessibility language: \
+            \(inlineCode(#".label("Pay")"#)), \(inlineCode(#".identifier("pay_button")"#)), \
+            \(inlineCode(#".value("Milk")"#)), \(inlineCode(#".element(label: "Pay", traits: [.button])"#)), \
+            and \(inlineCode(#".target(.label("Delete"), ordinal: 1)"#)) when duplicates need an ordinal. \
+            Act with \(inlineCode(perform.rawValue)) for one DSL step; use \(inlineCode(runHeist.rawValue)) \
+            for a full \(inlineCode("HeistPlan { ... }")). Runtime ButtonHeist source is the authoring \
+            surface; raw JSON plan IR is internal/generated. \
             Full guide: docs/MCP-AGENT-GUIDE.md.
             """
     }

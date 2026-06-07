@@ -19,9 +19,11 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                 description: """
                     Read the app accessibility hierarchy, optionally scoped to a subtree.
 
-                    containerName is ButtonHeist's generated name for a container in the current interface capture. \
-                    It is useful for inspection and viewport/debug commands. It is not a semantic target or durable \
-                    heist selector.
+                    Build DSL targets from returned accessibility language: `.label("Pay")`,
+                    `.identifier("pay_button")`, `.value("Milk")`, `.element(label: "Pay",
+                    traits: [.button])`, or `.target(..., ordinal: n)` for duplicates.
+                    `containerName` is for inspection and viewport/debug commands only; it is
+                    not a semantic target or durable heist selector.
                     """
             )
         case .getScreen:

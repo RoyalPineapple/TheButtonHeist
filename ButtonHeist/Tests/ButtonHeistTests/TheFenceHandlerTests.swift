@@ -515,7 +515,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ])), step) { error in
                 XCTAssertTrue(
                     String(describing: error).contains(
-                        "perform accepts one primitive action statement or simple WaitFor statement"
+                        "perform accepts one action statement or one simple WaitFor statement"
                     ),
                     "\(error)"
                 )
