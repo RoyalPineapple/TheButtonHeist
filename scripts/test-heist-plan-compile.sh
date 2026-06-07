@@ -35,7 +35,7 @@ func makeHeist() throws -> HeistPlan {
 SWIFT
 
 cat > "$EXPECTED" <<'SWIFT'
-try HeistPlan("compiled") {
+HeistPlan("compiled") {
     Warn("from Swift")
 }
 SWIFT
