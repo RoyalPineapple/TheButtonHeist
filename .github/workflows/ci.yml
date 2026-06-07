@@ -239,19 +239,62 @@ jobs:
           BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
           ./scripts/clean-generated-projects.sh
 
-      - name: Build iOS app targets
+      - name: Build TheInsideJobTests for iOS
         timeout-minutes: 20
         run: |
           set -eo pipefail
-          DEST="platform=iOS Simulator,id=$SIM_UDID"
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
 
-          for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
+          xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH"
+
+      - name: Wait for simulator boot
+        timeout-minutes: 5
+        run: xcrun simctl bootstatus "$SIM_UDID" -b
+
+      - name: Run iOS tests
+        # Run the hosted iOS test bundle before demo smoke gates so test compile
+        # and runtime failures fail before spending minutes replaying CLI flows.
+        timeout-minutes: 20
+        run: |
+          set -eo pipefail
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
+          echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
+          xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH"
+
+      - name: Build remaining iOS app targets
+        timeout-minutes: 12
+        run: |
+          set -eo pipefail
+          DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
+
+          for scheme in "UIKitTestApp" "ResearchApp"; do
             echo "Building $scheme..."
             xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
               -destination "$DEST" \
               -derivedDataPath "$DERIVED_DATA_PATH" \
               build
           done
+
+      - name: Measure framework sizes
+        run: |
+          DERIVED="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator"
+          echo "## Framework Sizes" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Framework | Size |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----------|------|" >> "$GITHUB_STEP_SUMMARY"
+          for fw in TheInsideJob TheScore ThePlant; do
+            if [ -d "$DERIVED/${fw}.framework" ]; then
+              SIZE=$(du -sh "$DERIVED/${fw}.framework" | cut -f1)
+              echo "| ${fw} | ${SIZE} |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          if [ -d "$DERIVED/BHDemo.app" ]; then
+            APP_SIZE=$(du -sh "$DERIVED/BHDemo.app" | cut -f1)
+            echo "| BHDemo.app (total) | ${APP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Run BH Demo CLI smoke
         # Cold CLI SwiftPM resolution plus simulator install can exceed 5 min
@@ -276,42 +319,3 @@ jobs:
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
-
-      - name: Measure framework sizes
-        run: |
-          DERIVED="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator"
-          echo "## Framework Sizes" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Framework | Size |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----------|------|" >> "$GITHUB_STEP_SUMMARY"
-          for fw in TheInsideJob TheScore ThePlant; do
-            if [ -d "$DERIVED/${fw}.framework" ]; then
-              SIZE=$(du -sh "$DERIVED/${fw}.framework" | cut -f1)
-              echo "| ${fw} | ${SIZE} |" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-          if [ -d "$DERIVED/BHDemo.app" ]; then
-            APP_SIZE=$(du -sh "$DERIVED/BHDemo.app" | cut -f1)
-            echo "| BHDemo.app (total) | ${APP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Wait for simulator boot
-        timeout-minutes: 5
-        run: xcrun simctl bootstatus "$SIM_UDID" -b
-
-      - name: Run iOS tests
-        # 695 tests in a hosted BH Demo bundle on macos-15 runner run right at
-        # the 10-min edge — second-of-the-day decides pass/fail. Bumped to 20
-        # for headroom while the suite stays this size. Structural follow-up:
-        # split integration tests into a slow lane, or profile the worst
-        # offenders.
-        timeout-minutes: 20
-        run: |
-          set -eo pipefail
-          DEST="platform=iOS Simulator,id=$SIM_UDID"
-          echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
-          # The project was already generated above. Calling `tuist test` here
-          # regenerates it and invalidates the SwiftPM build products from the
-          # app builds, including Swift Crypto.
-          xcodebuild test -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
-            -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
