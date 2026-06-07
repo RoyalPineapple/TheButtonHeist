@@ -184,11 +184,13 @@ final class SemanticObservationStream {
 
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            stash.recordSettleDiagnosticEvidence(outcome.finalScreen)
             return nil
         }
 
         guard let screen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            stash.recordSettleDiagnosticEvidence(nil)
             return nil
         }
 
@@ -203,13 +205,8 @@ final class SemanticObservationStream {
         }
 
         latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
-        stash.commitVisibleRefresh(screen)
-        return VisibleSemanticObservationEvidence(
-            screen: stash.currentScreen,
-            tripwireSignal: tripwire.tripwireSignal(),
-            settledObservationSequence: nil,
-            settleOutcome: outcome.outcome
-        )
+        stash.recordSettleDiagnosticEvidence(screen)
+        return nil
     }
 
     @discardableResult
@@ -220,7 +217,8 @@ final class SemanticObservationStream {
         guard let stash else {
             preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
         }
-        stash.storeSettledSemanticObservationForStream(screen)
+        let committedScreen = screenForCommit(screen, scope: scope, stash: stash)
+        stash.storeSettledSemanticObservationForStream(committedScreen)
         return publishCurrentSettledObservation(scope: scope, stash: stash)
     }
 
@@ -252,17 +250,23 @@ final class SemanticObservationStream {
         }
 
         if case .cancelled = outcome.outcome {
+            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            stash.recordSettleDiagnosticEvidence(outcome.finalScreen)
             return (outcome, nil, nil)
         }
 
-        guard let finalScreen = outcome.finalScreen else { return (outcome, nil, nil) }
+        guard let finalScreen = outcome.finalScreen else {
+            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            stash.recordSettleDiagnosticEvidence(nil)
+            return (outcome, nil, nil)
+        }
         if outcome.outcome.didSettleCleanly {
             return (outcome, commitSettledObservation(finalScreen, scope: .visible), nil)
         }
 
         latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
-        stash.commitVisibleRefresh(finalScreen)
-        return (outcome, nil, stash.currentScreen)
+        stash.recordSettleDiagnosticEvidence(finalScreen)
+        return (outcome, nil, stash.latestSettleDiagnosticEvidence)
     }
 
     func clearLatestObservation() {
@@ -284,7 +288,7 @@ final class SemanticObservationStream {
         let observation = SettledSemanticObservation(
             sequence: settledSequence,
             scope: scope,
-            screen: stash.currentScreen,
+            screen: stash.settledScreen,
             tripwireSignal: tripwire.tripwireSignal()
         )
         let event = makeEvent(observation: observation, previous: latestEvent, stash: stash)
@@ -337,6 +341,19 @@ final class SemanticObservationStream {
         guard let timeout else { return nil }
         guard timeout > 0 else { return nil }
         return timeout
+    }
+
+    private func screenForCommit(
+        _ screen: Screen,
+        scope: SemanticObservationScope,
+        stash: TheStash
+    ) -> Screen {
+        switch scope {
+        case .visible:
+            return stash.settledScreen.refreshingVisibleState(with: screen)
+        case .discovery:
+            return screen
+        }
     }
 
     private static func timeoutMilliseconds(from timeout: Double?) -> Int {
@@ -487,7 +504,7 @@ final class SemanticObservationStream {
                 for: settle,
                 layerGateWasClear: layerGateWasClear
             )
-            markDirtyFromTripwire()
+            stash.recordSettleDiagnosticEvidence(settle.finalScreen)
             await Task.yield()
             return true
         }

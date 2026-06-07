@@ -154,15 +154,17 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(payload.edits.added.map(\.label), ["Toast"])
     }
 
-    func testVisibleCommitMarksLatestSettledObservationDirtyWithoutReplacingIt() {
+    func testDiagnosticEvidenceMarksLatestSettledObservationDirtyWithoutReplacingIt() {
         let settled = Screen.makeForTests(elements: [(element(label: "Settled"), "settled")])
         bagman.semanticObservationStream.commitSettledObservation(settled)
         let sequence = bagman.latestSettledSemanticObservation?.sequence
 
-        let visibleRefresh = Screen.makeForTests(elements: [(element(label: "Refresh"), "refresh")])
-        bagman.commitVisibleRefresh(visibleRefresh)
+        let diagnostic = Screen.makeForTests(elements: [(element(label: "Timeout"), "timeout")])
+        bagman.recordSettleDiagnosticEvidence(diagnostic)
 
         XCTAssertEqual(bagman.latestSettledSemanticObservation?.sequence, sequence)
+        XCTAssertEqual(bagman.settledScreen.orderedElements.first?.element.label, "Settled")
+        XCTAssertEqual(bagman.latestSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Timeout")
         XCTAssertTrue(bagman.latestSettledSemanticObservationIsDirty)
     }
 
@@ -204,12 +206,12 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Second")
     }
 
-    func testDirtySettledObservationIsNotReturnedAsCurrentTruth() async {
+    func testDirtySettledObservationIsNotReturnedAsSettledTruth() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitSettledObservation(first)
 
-        let visibleRefresh = Screen.makeForTests(elements: [(element(label: "Refresh"), "refresh")])
-        bagman.commitVisibleRefresh(visibleRefresh)
+        let diagnostic = Screen.makeForTests(elements: [(element(label: "Timeout"), "timeout")])
+        bagman.recordSettleDiagnosticEvidence(diagnostic)
 
         let waiter = Task { @MainActor in
             await bagman.observeSettledSemanticObservation(scope: .visible, after: nil, timeout: 1)
@@ -226,6 +228,23 @@ final class TheStashResolutionTests: XCTestCase {
         let observation = await waiter.value
         XCTAssertEqual(observation?.sequence, 2)
         XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Second")
+    }
+
+    func testTargetResolutionAfterTimeoutUsesSettledWorldNotDiagnosticEvidence() {
+        let settled = Screen.makeForTests(elements: [(element(label: "Settled Action"), "settled_action")])
+        bagman.semanticObservationStream.commitSettledObservation(settled)
+
+        let diagnostic = Screen.makeForTests(elements: [(element(label: "Timeout Action"), "timeout_action")])
+        bagman.recordSettleDiagnosticEvidence(diagnostic)
+
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Settled Action"))).resolved)
+        XCTAssertNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Timeout Action"))).resolved)
+        XCTAssertEqual(
+            bagman.matchScreenElements(ElementPredicate(label: "Timeout Action"), limit: 1),
+            []
+        )
+        XCTAssertEqual(bagman.settledScreen.orderedElements.first?.element.label, "Settled Action")
+        XCTAssertEqual(bagman.latestSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Timeout Action")
     }
 
     func testDiscoveryWaiterIgnoresVisibleObservation() async {
@@ -302,7 +321,7 @@ final class TheStashResolutionTests: XCTestCase {
         var discoveryCount = 0
         bagman.startPassiveSemanticObservation { [bagman] in
             discoveryCount += 1
-            bagman?.commitExploredScreen(second)
+            bagman?.commitExploredSettledScreen(second)
         }
 
         let observation = await bagman.observeSettledSemanticObservation(
@@ -527,6 +546,85 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotEqual(liveTarget.activationPoint, object.accessibilityActivationPoint)
         XCTAssertNotEqual(liveTarget.frame, sourceFrame)
         XCTAssertNotEqual(liveTarget.activationPoint, sourcePoint)
+    }
+
+    func testVisibleResolutionUsesFreshLiveGeometryWithoutReplacingSettledTruth() throws {
+        let staleFrame = CGRect(x: 32, y: 865, width: 240, height: 44)
+        let stalePoint = CGPoint(x: staleFrame.midX, y: staleFrame.midY)
+        let settledElement = AccessibilityElement.make(
+            label: "Rotor Host",
+            identifier: "rotor_host",
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(staleFrame)),
+            activationPoint: stalePoint,
+            customRotors: [.init(name: "Errors")]
+        )
+        let liveObject = UIAccessibilityElement(accessibilityContainer: NSObject())
+        liveObject.accessibilityFrame = staleFrame
+        liveObject.accessibilityActivationPoint = stalePoint
+        bagman.installScreenForTesting(Screen.makeForTests(
+            elements: [(settledElement, "rotor_host")],
+            objects: ["rotor_host": liveObject]
+        ))
+
+        let freshFrame = CGRect(x: 32, y: 320, width: 240, height: 44)
+        let freshPoint = CGPoint(x: freshFrame.midX, y: freshFrame.midY)
+        let freshElement = AccessibilityElement.make(
+            label: "Rotor Host",
+            identifier: "rotor_host",
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(freshFrame)),
+            activationPoint: freshPoint,
+            customRotors: [.init(name: "Errors")]
+        )
+        bagman.recordLivePageObservation(Screen.makeForTests(
+            elements: [(freshElement, "rotor_host")],
+            objects: ["rotor_host": liveObject]
+        ))
+
+        let target: ElementTarget = .predicate(ElementPredicate(identifier: "rotor_host"))
+        let settled = try XCTUnwrap(bagman.resolveTarget(target).resolved)
+        XCTAssertEqual(settled.element.shape.frame, staleFrame)
+        XCTAssertEqual(settled.element.bhResolvedActivationPoint, stalePoint)
+
+        let visible = try XCTUnwrap(bagman.resolveVisibleTarget(target).resolved)
+        XCTAssertEqual(visible.element.shape.frame, freshFrame)
+        XCTAssertEqual(visible.element.bhResolvedActivationPoint, freshPoint)
+
+        guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: settled) else {
+            return XCTFail("Expected fresh live action target")
+        }
+        XCTAssertEqual(liveTarget.frame, freshFrame)
+        XCTAssertEqual(liveTarget.activationPoint, freshPoint)
+        XCTAssertNotEqual(liveTarget.frame, liveObject.accessibilityFrame)
+        XCTAssertNotEqual(liveTarget.activationPoint, liveObject.accessibilityActivationPoint)
+    }
+
+    func testVisibleCommitPreservesKnownDiscoveryUnionWhenRefreshingSameScreen() {
+        let controls = element(label: "Controls Demo", traits: .button)
+        let customRotors = element(label: "Custom Rotors", traits: .button)
+        let discovery = Screen.makeForTests(
+            elements: [(customRotors, "custom_rotors")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    controls,
+                    heistId: "controls_demo",
+                    contentSpaceOrigin: CGPoint(x: 20, y: 120),
+                    scrollContainer: "root_scroll"
+                ),
+            ]
+        )
+        bagman.semanticObservationStream.commitSettledObservation(discovery, scope: .discovery)
+
+        let refreshedBottom = Screen.makeForTests(elements: [(customRotors, "custom_rotors")])
+        bagman.semanticObservationStream.commitSettledObservation(refreshedBottom, scope: .visible)
+
+        XCTAssertEqual(bagman.visibleIds, ["custom_rotors"])
+        XCTAssertEqual(bagman.knownIds, ["controls_demo", "custom_rotors"])
+        XCTAssertEqual(
+            bagman.resolveTarget(.predicate(ElementPredicate(label: "Controls Demo", traits: [.button]))).resolved?.heistId,
+            "controls_demo"
+        )
     }
 
     // MARK: - Matcher Resolution

@@ -484,6 +484,41 @@ final class ScreenTests: XCTestCase {
         XCTAssertEqual(updated.knownIds, ["below_fold_button", "total_staticText"])
     }
 
+    func testRefreshingVisibleStatePreservesKnownOnlyMemoryFromKnownOnlyBaseline() {
+        let knownOnly = makeElement(label: "Below Fold", traits: .button)
+        let visible = makeElement(label: "Visible", traits: .button)
+        let screen = Screen.makeForTests(
+            offViewport: [Screen.OffViewportEntry(knownOnly, heistId: "below_fold_button")]
+        )
+        let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.visibleIds, ["button_visible"])
+        XCTAssertEqual(updated.knownIds, ["below_fold_button", "button_visible"])
+        XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.label, "Below Fold")
+    }
+
+    func testRefreshingVisibleStatePreservesKnownOnlyMemoryWhenKnownViewportAddsElement() {
+        let visible = makeElement(label: "Visible", traits: .button)
+        let added = makeElement(label: "Added", traits: .button)
+        let knownOnly = makeElement(label: "Below Fold", traits: .button)
+        let screen = Screen.makeForTests(
+            elements: [(visible, "button_visible")],
+            offViewport: [Screen.OffViewportEntry(knownOnly, heistId: "below_fold_button")]
+        )
+        let refresh = Screen.makeForTests(elements: [
+            (visible, "button_visible"),
+            (added, "button_added")
+        ])
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.visibleIds, ["button_added", "button_visible"])
+        XCTAssertEqual(updated.knownIds, ["below_fold_button", "button_added", "button_visible"])
+        XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.label, "Below Fold")
+    }
+
     func testRefreshingVisibleStateDropsDisappearedVisibleNonScrollElements() {
         let disappearing = makeElement(label: "Disappearing", traits: .staticText)
         let visible = makeElement(label: "Visible", traits: .button)

@@ -74,7 +74,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             success: false,
             method: .activate,
             before: before,
-            settleOutcome: settledOutcome(finalScreen: brains.stash.currentScreen)
+            settleOutcome: settledOutcome(finalScreen: brains.stash.settledScreen)
         )
 
         XCTAssertEqual(result.errorKind, .actionFailed)
@@ -88,7 +88,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             method: .activate,
             errorKind: .timeout,
             before: before,
-            settleOutcome: settledOutcome(finalScreen: brains.stash.currentScreen)
+            settleOutcome: settledOutcome(finalScreen: brains.stash.settledScreen)
         )
 
         XCTAssertEqual(result.errorKind, .timeout,
@@ -104,7 +104,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             message: "pasteboard empty",
             payload: .value(""),
             before: before,
-            settleOutcome: settledOutcome(finalScreen: brains.stash.currentScreen)
+            settleOutcome: settledOutcome(finalScreen: brains.stash.settledScreen)
         )
 
         XCTAssertEqual(result.message, "pasteboard empty")
@@ -118,14 +118,14 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Post-Action Success Path
 
     func testActionResultWithDeltaSuccessAllowsNoSemanticDelta() async throws {
-        guard brains.stash.recordVisibleSemanticObservation() != nil else {
+        guard brains.stash.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for post-action observation test")
         }
         brains.startSemanticObservation()
         guard await brains.stash.observeSettledSemanticObservation(scope: .discovery, after: nil, timeout: 2) != nil else {
             throw XCTSkip("No settled discovery observation available")
         }
-        let screen = brains.stash.currentScreen
+        let screen = brains.stash.settledScreen
         let before = brains.postActionObservation.captureSemanticState()
 
         let result = await brains.interactionObservation.finishAfterAction(
@@ -238,8 +238,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             settledSequence,
             "timeout evidence must not be published as a new settled observation"
         )
+        XCTAssertEqual(
+            brains.stash.latestSettledSemanticObservationEvent?.observation.screen.orderedElements.first?.element.label,
+            "Save"
+        )
         XCTAssertTrue(brains.stash.latestSettledSemanticObservationIsDirty)
-        XCTAssertEqual(brains.stash.currentScreen.orderedElements.first?.element.label, "Saved")
+        XCTAssertEqual(brains.stash.settledScreen.orderedElements.first?.element.label, "Save")
+        XCTAssertEqual(brains.stash.latestSettleDiagnosticEvidence?.orderedElements.first?.element.label, "Saved")
         XCTAssertEqual(result.accessibilityTrace?.captures.last?.interface.projectedElements.first?.label, "Saved")
     }
 
@@ -247,6 +252,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
+        let settledSequence = brains.stash.latestSettledSemanticObservationEvent?.sequence
 
         let result = await brains.interactionObservation.finishAfterAction(
             success: true,
@@ -260,6 +266,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.errorKind, .actionFailed)
         XCTAssertEqual(result.settled, false)
         XCTAssertEqual(result.settleTimeMs, 125)
+        XCTAssertEqual(brains.stash.latestSettledSemanticObservationEvent?.sequence, settledSequence)
+        XCTAssertTrue(brains.stash.latestSettledSemanticObservationIsDirty)
+        XCTAssertEqual(brains.stash.settledScreen.orderedElements.first?.element.label, "Save")
     }
 
     func testActionResultWithDeltaParseFailureFailsActionResult() async {
@@ -541,28 +550,28 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Semantic Discovery Observation
 
     func testSemanticDiscoveryObservationCommitsUnion() async {
-        // Post-0.2.25: exploration seeds the local union from currentScreen,
+        // Exploration seeds the local union from settled world,
         // merges each parse into it, then commits the union back. There is no
         // pruning — the union is the canonical "all elements seen this cycle".
         // With no scrollable containers in the host hierarchy, semantic discovery
         // reduces to refresh-and-commit, and the seeded entry merges into the
         // live parse rather than being pruned.
         seedScreen(elements: [("Seed", .button, "button_seed")])
-        XCTAssertEqual(brains.stash.currentScreen.semantic.elements.count, 1)
+        XCTAssertEqual(brains.stash.settledScreen.semantic.elements.count, 1)
 
         brains.startSemanticObservation()
         let observation = await brains.stash.observeSettledSemanticObservation(scope: .discovery, after: nil, timeout: 2)
 
         // Either the seed survives (no live parse landed and the union still
         // holds it) or it merges with new live entries — either way, the
-        // currentScreen reflects the committed union, not the pre-explore
+        // settled screen reflects the committed union, not the pre-explore
         // value alone.
         XCTAssertNotNil(observation)
-        XCTAssertGreaterThanOrEqual(brains.stash.currentScreen.semantic.elements.count, 1)
+        XCTAssertGreaterThanOrEqual(brains.stash.settledScreen.semantic.elements.count, 1)
     }
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
-        guard let screen = brains.stash.recordVisibleSemanticObservation(),
+        guard let screen = brains.stash.refreshLiveCapture(),
               let label = screen.visibleIds
                   .compactMap({ screen.findElement(heistId: $0)?.element.label })
                   .first(where: { !$0.isEmpty }) else {
@@ -633,7 +642,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testExploreScreenExploresSwipeableContainer() async throws {
-        guard brains.stash.recordVisibleSemanticObservation() != nil else {
+        guard brains.stash.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for swipeable explore test")
         }
         guard let container = brains.stash.currentHierarchy.scrollableContainers.first(where: {

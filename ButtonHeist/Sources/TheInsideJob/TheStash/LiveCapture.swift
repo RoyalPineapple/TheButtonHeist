@@ -84,6 +84,10 @@ struct LiveCapture: Equatable {
         heistIdByElement[element]
     }
 
+    func element(for heistId: HeistId) -> AccessibilityElement? {
+        heistIdByElement.first { $0.value == heistId }?.key
+    }
+
     func object(for heistId: HeistId) -> NSObject? {
         elementRefs[heistId]?.object
     }

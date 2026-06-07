@@ -56,7 +56,7 @@ final class TheBrainsScrollTests: XCTestCase {
         window.layoutIfNeeded()
         await brains.tripwire.yieldFrames(3)
 
-        guard brains.stash.recordVisibleSemanticObservation() != nil else {
+        guard brains.stash.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
         }
 
@@ -364,7 +364,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let entry = try XCTUnwrap(
-            brains.stash.currentScreen.findElement(heistId: "settings_button")
+            brains.stash.settledScreen.findElement(heistId: "settings_button")
         )
         let result = brains.stash.revealSemanticTarget(entry)
 
@@ -390,7 +390,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let entry = try XCTUnwrap(
-            brains.stash.currentScreen.findElement(heistId: "settings_button")
+            brains.stash.settledScreen.findElement(heistId: "settings_button")
         )
         let result = brains.stash.revealSemanticTarget(entry)
 
@@ -897,7 +897,7 @@ final class TheBrainsScrollTests: XCTestCase {
             window.isHidden = true
         }
         await brains.tripwire.yieldFrames(3)
-        guard brains.stash.recordVisibleSemanticObservation() != nil else {
+        guard brains.stash.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for scroll_to_visible post-reveal regression test")
         }
         if !brains.stash.matchScreenElements(ElementPredicate(label: "Jump Target"), limit: 1).isEmpty {

@@ -28,13 +28,15 @@ If a structure does not fit exactly one row, remove it or inline it.
 ## Approved long-lived state owners
 
 ### 1. TheStash — the settled accessibility world model
-- **Tracks:** the current `Screen` (semantic model) and its `LiveCapture`
-  (disposable UIKit evidence: weak object refs, scroll views, per-path indices).
-- **Why:** there must be exactly one answer to "what is on screen right now."
+- **Tracks:** the settled `Screen`, latest disposable `LiveCapture`, and named
+  non-clean settle diagnostic evidence.
+- **Why:** there must be exactly one answer to "what accessibility world do we
+  believe," while live handles and diagnostics remain separate.
 - **Key:** `heistId` (semantic), `TreePath` / `AccessibilityElement` (capture).
-- **Lifetime:** `currentScreen` is rebound on every parse; `LiveCapture` is
-  viewport-shaped and is **never** unioned across exploration pages.
-- **Invalidation:** last-read-wins. A fresh parse replaces the capture wholesale;
+- **Lifetime:** clean settle updates settled world; live refresh replaces only
+  live capture; non-clean settle records diagnostic evidence and marks settled
+  world dirty without publishing a settled observation.
+- **Invalidation:** live capture is last-read-wins and viewport-shaped;
   `Screen.merging(_:)` is pure last-read-wins on heistId conflict.
 - **Output:** `HeistElement` / `Interface` via `get_interface` (derived on demand).
 

@@ -16,7 +16,7 @@ extension Navigation {
 
     private func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
         let exploration = await exploreScreen(target: target)
-        stash.commitExploredScreen(exploration.screen)
+        stash.commitExploredSettledScreen(exploration.screen)
         return exploration.manifest
     }
 
@@ -24,9 +24,9 @@ extension Navigation {
         let startTime = CACurrentMediaTime()
         var exploration = SemanticExploration(baseline: stash.explorationBaseline())
 
-        exploration.absorb(stash.recordVisibleSemanticObservation())
+        exploration.absorb(stash.refreshLiveCapture())
 
-        if let target, hasTerminalExplorationResolution(target) {
+        if let target, hasTerminalExplorationResolution(target, in: exploration.screen) {
             return exploration.finish(startTime: startTime)
         }
 
@@ -38,8 +38,8 @@ extension Navigation {
         return exploration.finish(startTime: startTime)
     }
 
-    func hasTerminalExplorationResolution(_ target: ElementTarget) -> Bool {
-        switch stash.resolveTarget(target) {
+    func hasTerminalExplorationResolution(_ target: ElementTarget, in screen: Screen) -> Bool {
+        switch stash.resolveTarget(target, in: screen) {
         case .resolved, .ambiguous:
             return true
         case .notFound:

@@ -40,6 +40,11 @@ final class ElementInflation {
         case failed(ElementInflationFailure)
     }
 
+    enum ActivationPointPolicy {
+        case requireOnscreen
+        case liveObjectOnly
+    }
+
     enum ElementInflationFailureStep: String {
         case notFound
         case ambiguous
@@ -102,7 +107,8 @@ final class ElementInflation {
     func inflate(
         for target: ElementTarget,
         method: ActionMethod,
-        deallocatedBoundary: String
+        deallocatedBoundary: String,
+        activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
         // Source screens derive only semantic identity. Reveal and geometry
         // authority always come from the current live graph.
@@ -115,7 +121,7 @@ final class ElementInflation {
             }
             if reveal.didReveal {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                stash.recordVisibleSemanticObservation()
+                stash.refreshLiveCapture()
                 didRevealTarget = true
             }
         case .notFound(let facts):
@@ -135,7 +141,7 @@ final class ElementInflation {
             // A semantic target can outlive its capture-local UIKit object.
             // Refresh once before failing; reveal and activation-point placement
             // own the other bounded refresh points.
-            stash.recordVisibleSemanticObservation()
+            stash.refreshLiveCapture()
             freshTarget = resolveFreshElementTarget(
                 target: target,
                 method: method,
@@ -144,6 +150,9 @@ final class ElementInflation {
         }
         switch freshTarget {
         case .success(let inflatedTarget):
+            guard activationPointPolicy == .requireOnscreen else {
+                return .inflated(inflatedTarget)
+            }
             return await placeElementActivationPoint(
                 inflatedTarget,
                 method: method,
@@ -157,7 +166,7 @@ final class ElementInflation {
     func inflateAfterActivationRetryRefresh(
         for target: ElementTarget
     ) async -> ElementInflationResult {
-        recordVisibleObservationForActivationRetry()
+        refreshLiveCaptureForActivationRetry()
         return await inflate(
             for: target,
             method: .activate,
@@ -165,8 +174,8 @@ final class ElementInflation {
         )
     }
 
-    private func recordVisibleObservationForActivationRetry() {
-        stash.recordVisibleSemanticObservation()
+    private func refreshLiveCaptureForActivationRetry() {
+        stash.refreshLiveCapture()
     }
 
     private func placeElementActivationPoint(
@@ -328,7 +337,7 @@ final class ElementInflation {
             return .failure(.geometryNotActionable(scrollFailedMessage))
         }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        stash.recordVisibleSemanticObservation()
+        stash.refreshLiveCapture()
         return .success(true)
     }
 

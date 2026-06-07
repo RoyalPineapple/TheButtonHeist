@@ -16,6 +16,7 @@ extension Actions {
         target: ElementTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
+        activationPointPolicy: ElementInflation.ActivationPointPolicy = .requireOnscreen,
         deallocatedBoundary: String = "element action",
         preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.InteractionResult?)? = nil,
         action: @MainActor (ElementInflation.InflatedElementTarget) async -> TheSafecracker.InteractionResult
@@ -23,7 +24,8 @@ extension Actions {
         switch await navigation.elementInflation.inflate(
             for: target,
             method: method,
-            deallocatedBoundary: deallocatedBoundary
+            deallocatedBoundary: deallocatedBoundary,
+            activationPointPolicy: activationPointPolicy
         ) {
         case .failed(let failure):
             return failure.interactionResult(commandMethod: method)
