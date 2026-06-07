@@ -22,17 +22,6 @@ struct HandoffAdmission {
                 token: token,
                 driverId: effectiveDriverId
             )))
-        case .authApproved(let payload):
-            // Legacy approval servers sent authApproved after authenticate.
-            // Current servers authenticate during token-derived TLS PSK setup.
-            return .approved(token: payload.token)
-        case .authApprovalPending(let payload):
-            // Legacy UI approval prompts were removed. Do not echo old server
-            // UI instructions; guide users to rebuild and use a token.
-            return .recordFailure(
-                .disconnected(.authApprovalPending(payload.message)),
-                status: FenceError.legacyAuthApprovalRecoveryHint
-            )
         case .sessionLocked(let payload):
             return .terminalFailure(.disconnected(.sessionLocked(payload.message)))
         case .protocolMismatch(let payload):
@@ -44,8 +33,6 @@ struct HandoffAdmission {
             switch serverError.kind {
             case .authFailure:
                 return .terminalFailure(.disconnected(.authFailed(serverError.message)))
-            case .authApprovalPending:
-                return .terminalFailure(.disconnected(.authApprovalPending(serverError.message)))
             default:
                 return nil
             }
@@ -64,7 +51,5 @@ struct HandoffAdmission {
 
 enum HandoffAdmissionDecision {
     case send(ClientMessage)
-    case approved(token: String)
-    case recordFailure(HandoffConnectionError, status: String?)
     case terminalFailure(HandoffConnectionError)
 }

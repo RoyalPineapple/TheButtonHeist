@@ -12,7 +12,6 @@ public enum FenceError: Error {
     case connectionFailure(ConnectionFailure)
     case sessionLocked(String)
     case authFailed(String)
-    case authApprovalPending(String)
     case notConnected
     case actionTimeout
     case actionFailed(String)

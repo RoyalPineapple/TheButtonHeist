@@ -36,7 +36,7 @@ struct HandoffServerMessageRouter {
             return .handled
         case .pong(let payload):
             return .pong(payload, requestId: requestId)
-        case .authApproved, .authApprovalPending, .sessionLocked, .protocolMismatch, .serverHello, .authRequired:
+        case .sessionLocked, .protocolMismatch, .serverHello, .authRequired:
             assertionFailure("HandoffAdmission must consume admission messages before routing")
             return .handled
         }

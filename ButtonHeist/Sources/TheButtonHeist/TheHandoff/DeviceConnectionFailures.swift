@@ -15,7 +15,6 @@ enum DisconnectReason: Error, LocalizedError {
     case eventBacklogOverflow(maxEvents: Int)
     case serverClosed
     case authFailed(String)
-    case authApprovalPending(String)
     case sessionLocked(String)
     case protocolMismatch(String)
     case localDisconnect
@@ -116,16 +115,6 @@ enum DisconnectReason: Error, LocalizedError {
                 retryable: false,
                 hint: hint
             )
-        case .authApprovalPending(let message):
-            return HandoffFailureDiagnostic(
-                operation: .connection,
-                target: nil,
-                cause: "Legacy auth approval response: \(message)",
-                errorCode: "auth.approval_pending",
-                phase: .authentication,
-                retryable: false,
-                hint: FenceError.legacyAuthApprovalRecoveryHint
-            )
         case .sessionLocked(let message):
             return HandoffFailureDiagnostic(
                 operation: .connection,
@@ -215,8 +204,6 @@ extension DisconnectReason: Equatable {
             return lhsMaxEvents == rhsMaxEvents
         case (.authFailed(let lhsReason), .authFailed(let rhsReason)):
             return lhsReason == rhsReason
-        case (.authApprovalPending(let lhsMessage), .authApprovalPending(let rhsMessage)):
-            return lhsMessage == rhsMessage
         case (.sessionLocked(let lhsMessage), .sessionLocked(let rhsMessage)):
             return lhsMessage == rhsMessage
         case (.protocolMismatch(let lhsMessage), .protocolMismatch(let rhsMessage)):

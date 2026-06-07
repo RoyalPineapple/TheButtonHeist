@@ -115,20 +115,6 @@ final class TheMuscleTests: XCTestCase {
         }
     }
 
-    private func authApprovedPayloads(from responses: [Data]) -> [AuthApprovedPayload] {
-        responses.compactMap { data in
-            guard case .authApproved(let payload) = decodeServerMessage(data) else { return nil }
-            return payload
-        }
-    }
-
-    private func authApprovalPendingPayloads(from responses: [Data]) -> [AuthApprovalPendingPayload] {
-        responses.compactMap { data in
-            guard case .authApprovalPending(let payload) = decodeServerMessage(data) else { return nil }
-            return payload
-        }
-    }
-
     private func performHello(clientId: Int, respond: @escaping @Sendable (Data) -> Void) async {
         guard let data = try? JSONEncoder().encode(RequestEnvelope(message: .clientHello)) else {
             XCTFail("Failed to encode clientHello")
@@ -441,8 +427,9 @@ final class TheMuscleTests: XCTestCase {
             return error
         }.first
         XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
-        XCTAssertTrue(authApprovedPayloads(from: responses()).isEmpty)
-        XCTAssertTrue(authApprovalPendingPayloads(from: responses()).isEmpty)
+        let responseText = responses().compactMap { String(data: $0, encoding: .utf8) }.joined(separator: "\n")
+        XCTAssertFalse(responseText.contains("authApproved"))
+        XCTAssertFalse(responseText.contains("authApprovalPending"))
     }
 
     func testGeneratedTokenAuthenticatesWhenProvided() async throws {

@@ -1,33 +1,6 @@
 import ThePlans
 import Foundation
 
-/// Payload sent when a connection is approved via the on-device UI
-public struct AuthApprovedPayload: Codable, Sendable {
-    public let token: String
-
-    public init(token: String) {
-        precondition(!token.isEmpty, "AuthApprovedPayload token must not be empty")
-        self.token = token
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case token
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let token = try container.decode(String.self, forKey: .token)
-        guard !token.isEmpty else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .token,
-                in: container,
-                debugDescription: "authApproved token must not be empty"
-            )
-        }
-        self.token = token
-    }
-}
-
 /// Server identity and capabilities sent after a successful handshake.
 ///
 /// `buttonHeistVersion` is carried by `ResponseEnvelope.buttonHeistVersion`;

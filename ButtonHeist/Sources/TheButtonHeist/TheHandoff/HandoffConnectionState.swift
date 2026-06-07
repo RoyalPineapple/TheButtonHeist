@@ -153,8 +153,6 @@ enum HandoffFailureFormatter {
             return "Ambiguous device target '\(diagnostic.target ?? "(none)")' (matches: \(matches))"
         case "auth.failed":
             return diagnostic.cause.replacingPrefix("Auth failed:", with: "Authentication failed:")
-        case "auth.approval_pending":
-            return diagnostic.cause.replacingPrefix("Auth approval pending:", with: "Authentication approval pending:")
         case "session.locked":
             return diagnostic.cause
         default:

@@ -36,8 +36,6 @@ private extension ErrorKind {
             return "request.action_failed"
         case .authFailure:
             return "auth.failed"
-        case .authApprovalPending:
-            return "auth.approval_pending"
         case .general:
             return "server.general"
         }
@@ -47,7 +45,7 @@ private extension ErrorKind {
         switch self {
         case .elementNotFound, .timeout, .validationError, .actionFailed:
             return .request
-        case .authFailure, .authApprovalPending:
+        case .authFailure:
             return .authentication
         case .general:
             return .server
@@ -58,7 +56,7 @@ private extension ErrorKind {
         switch self {
         case .timeout:
             return true
-        case .elementNotFound, .validationError, .actionFailed, .authFailure, .authApprovalPending, .general:
+        case .elementNotFound, .validationError, .actionFailed, .authFailure, .general:
             return false
         }
     }
@@ -75,8 +73,6 @@ private extension ErrorKind {
             return nil
         case .authFailure:
             return nil
-        case .authApprovalPending:
-            return FenceError.legacyAuthApprovalRecoveryHint
         case .general:
             return nil
         }

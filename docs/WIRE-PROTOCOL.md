@@ -145,14 +145,12 @@ parameter inventories belong in the generated references.
 `driverId` is optional. When present, it is the session-locking identity. When
 absent, the token is used as the driver identity.
 
-### Legacy UI Approval Messages
+### Unsupported Legacy Auth Messages
 
-`authApprovalPending` and `authApproved` remain wire types for compatibility
-with older clients and servers. The current server does not emit them. Clients
-without a token should fail before starting the TLS connection. If a client sees
-these legacy messages, it should treat them as an old app/protocol response and
-tell the user to rebuild or reinstall the app, then retry with the configured
-token.
+`authApprovalPending` and `authApproved` are not valid current server messages.
+Current clients reject either tag as an unsupported auth response and instruct the
+user to rebuild or reinstall the app, then retry with the configured token.
+Clients without a token fail before starting the TLS connection.
 
 ### Protocol Mismatch
 
