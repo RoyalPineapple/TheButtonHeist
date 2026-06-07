@@ -245,8 +245,10 @@ app keeps satisfying the contract.
 A heist is a reusable set of ButtonHeist instructions: do these actions, wait
 for these facts, and keep the receipt.
 
-The Swift DSL is how humans and agents author a heist. At first it just looks
-like ordered instructions:
+Humans can author heists in checked-in Swift files. Agents author runtime
+heists as canonical ButtonHeist source sent through `run_heist(plan:)`. Both
+forms lower to the same `HeistPlan`; Swift is an authoring frontend, not the
+runtime language boundary. At first it just looks like ordered instructions:
 
 ```swift
 import ThePlans
@@ -327,6 +329,21 @@ let heist = try await Heist("milk") { query in
 
 heist.result
 ```
+
+or with an explicit named Swift/test runner boundary:
+
+```swift
+let heist = try await RunHeist("search", argument: "milk") { query in
+    TypeText(query, into: .label("Search"))
+    Activate(.label("Search"))
+}
+
+heist.result
+```
+
+Outside `RunHeist(...) { ... }` is Swift test code. Inside the closure is
+ButtonHeist DSL that lowers to a validated `HeistPlan` and runs through the
+same receipt-producing runtime as MCP `run_heist`.
 
 ## Why It Works
 

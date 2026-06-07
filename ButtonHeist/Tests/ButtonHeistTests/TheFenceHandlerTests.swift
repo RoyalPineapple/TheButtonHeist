@@ -573,9 +573,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunHeistDescriptorAcceptsComposableInlinePlanKeys() async throws {
-        // The descriptor must declare the canonical structured plan fields and
-        // canonical ButtonHeist source so both forms survive request-key validation.
+    func testRunHeistDescriptorRejectsRawJSONIRFieldsAndAcceptsCanonicalSource() async throws {
+        // The descriptor must declare canonical ButtonHeist source but not raw
+        // JSON IR fields. Structured JSON remains an internal codec, not the
+        // public authoring surface.
         let fence = TheFence(configuration: .init())
         let definition = try HeistPlan(
             name: "addToCart",
@@ -587,10 +588,10 @@ final class TheFenceHandlerTests: XCTestCase {
             definitions: [definition],
             body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk"))))]
         )
-        XCTAssertNoThrow(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
+        XCTAssertThrowsError(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
         XCTAssertNoThrow(try fence.parseRequest(
             command: .runHeist,
-            arguments: TheFence.CommandArgumentEnvelope(values: ["plan": .string("HeistPlan { Activate(.label(\"Pay\")) }")])
+            arguments: try Self.planSourceArguments(for: plan)
         ))
     }
 
@@ -608,7 +609,7 @@ final class TheFenceHandlerTests: XCTestCase {
             body: [.warn(WarnStep(message: "ready"))]
         )
 
-        let response = try await fence.execute(command: .listHeists, arguments: try Self.inlineArguments(for: plan))
+        let response = try await fence.execute(command: .listHeists, arguments: try Self.planSourceArguments(for: plan))
 
         guard case .heistCatalog(let catalog) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
@@ -680,7 +681,7 @@ final class TheFenceHandlerTests: XCTestCase {
             definitions: [definition],
             body: [.warn(WarnStep(message: "ready"))]
         )
-        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).argumentValues
         arguments["detail"] = .string("detailed")
 
         let response = try await fence.execute(
@@ -710,16 +711,25 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testListHeistsReturnsValidationFailureDiagnostics() async throws {
         let fence = TheFence(configuration: .init())
-        let raw = UnvalidatedHeistPlan(
-            name: "root",
-            definitions: [
-                UnvalidatedHeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "one"))]),
-                UnvalidatedHeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "two"))]),
-            ],
-            body: [.warn(WarnStep(message: "invalid"))]
-        )
 
-        let response = try await fence.execute(command: .listHeists, arguments: try Self.inlineArguments(for: raw))
+        let response = try await fence.execute(
+            command: .listHeists,
+            arguments: TheFence.CommandArgumentEnvelope(values: [
+                "plan": .string("""
+                HeistPlan("root") {
+                    HeistDef<Void>("duplicate") {
+                        Warn("one")
+                    }
+
+                    HeistDef<Void>("duplicate") {
+                        Warn("two")
+                    }
+
+                    Warn("invalid")
+                }
+                """),
+            ])
+        )
 
         guard case .error(let message, _) = response else {
             return XCTFail("Expected error response, got \(response)")
@@ -734,7 +744,7 @@ final class TheFenceHandlerTests: XCTestCase {
             name: "shop",
             body: [.warn(WarnStep(message: "ready"))]
         )
-        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).argumentValues
         arguments["detail"] = .string("full")
 
         let response = try await fence.execute(
@@ -767,7 +777,7 @@ final class TheFenceHandlerTests: XCTestCase {
             definitions: [definition],
             body: [.warn(WarnStep(message: "ready"))]
         )
-        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).argumentValues
         arguments["heist"] = .string("checkout")
 
         let response = try await fence.execute(
@@ -829,7 +839,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ],
             body: [.warn(WarnStep(message: "ready"))]
         )
-        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).argumentValues
         arguments["heist"] = .string("checkout")
 
         let response = try await fence.execute(
@@ -895,14 +905,20 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertTrue(response.isFailure)
     }
 
-    /// Build a run_heist argument envelope from a plan the way an inline
-    /// `--plan` / MCP request would: the plan's canonical JSON object fields.
+    /// Build a lower-level run_heist argument envelope from the canonical JSON
+    /// object fields. This is intentionally not the public MCP authoring shape.
     private static func inlineArguments(for plan: HeistPlan) throws -> TheFence.CommandArgumentEnvelope {
         let data = try JSONEncoder().encode(plan)
         guard case .object(let fields) = try JSONDecoder().decode(HeistValue.self, from: data) else {
             throw XCTSkip("plan did not encode to a JSON object")
         }
         return TheFence.CommandArgumentEnvelope(values: fields)
+    }
+
+    private static func planSourceArguments(for plan: HeistPlan) throws -> TheFence.CommandArgumentEnvelope {
+        TheFence.CommandArgumentEnvelope(values: [
+            "plan": .string(try plan.canonicalSwiftDSL()),
+        ])
     }
 
     private static func inlineArguments(for plan: UnvalidatedHeistPlan) throws -> TheFence.CommandArgumentEnvelope {

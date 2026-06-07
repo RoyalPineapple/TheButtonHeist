@@ -416,43 +416,44 @@ public extension HeistDef where Input == ElementTarget {
 
 // MARK: - RunHeist
 
+// swiftlint:disable identifier_name
 /// Run a named heist capability from inside a heist body.
 ///
 /// `RunHeist` is the public Button Heist verb for composing capabilities. It
 /// references a capability by name and lowers to the invocation IR; the named
 /// capability must resolve within the closed plan — runtime validation enforces
 /// resolution, arity, type, and non-recursion.
-public struct RunHeist: HeistContent {
-    public let heistSteps: [HeistStep]
+public func RunHeist(_ name: String) -> some HeistContent {
+    runHeistInvocation(name, argument: .none)
+}
 
-    public init(_ name: String) {
-        self.init(name: name, argument: .none)
-    }
+public func RunHeist(_ name: String, _ input: String) -> some HeistContent {
+    runHeistInvocation(name, argument: .string(.literal(input)))
+}
 
-    public init(_ name: String, _ input: String) {
-        self.init(name: name, argument: .string(.literal(input)))
-    }
+public func RunHeist(_ name: String, _ input: StringExpr) -> some HeistContent {
+    runHeistInvocation(name, argument: .string(input))
+}
 
-    public init(_ name: String, _ input: StringExpr) {
-        self.init(name: name, argument: .string(input))
-    }
+@_disfavoredOverload
+public func RunHeist(_ name: String, _ input: ElementTarget) -> some HeistContent {
+    runHeistInvocation(name, argument: .elementTarget(.target(input)))
+}
 
-    @_disfavoredOverload
-    public init(_ name: String, _ input: ElementTarget) {
-        self.init(name: name, argument: .elementTarget(.target(input)))
-    }
+public func RunHeist(_ name: String, _ input: ElementTargetExpr) -> some HeistContent {
+    runHeistInvocation(name, argument: .elementTarget(input))
+}
 
-    public init(_ name: String, _ input: ElementTargetExpr) {
-        self.init(name: name, argument: .elementTarget(input))
-    }
-
-    private init(name: String, argument: HeistArgument) {
-        self.heistSteps = [.invoke(HeistInvocationStep(
+private func runHeistInvocation(_ name: String, argument: HeistArgument) -> HeistInvocationContent {
+    HeistInvocationContent(
+        invocation: HeistInvocationStep(
             path: name.split(separator: ".").map(String.init),
             argument: argument
-        ))]
-    }
+        ),
+        heistDefinitions: []
+    )
 }
+// swiftlint:enable identifier_name
 
 public struct ElementMatches: Sendable, Equatable {
     public let predicate: ElementPredicate
