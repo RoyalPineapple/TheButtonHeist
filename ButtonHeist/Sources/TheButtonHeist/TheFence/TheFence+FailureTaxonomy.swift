@@ -62,9 +62,7 @@ public extension FenceError {
             return true
         case .connectionFailure(let failure):
             return failure.retryable
-        case .authApprovalPending:
-            return true
-        case .invalidRequest, .noMatchingDevice, .authFailed, .actionFailed:
+        case .invalidRequest, .noMatchingDevice, .authFailed, .authApprovalPending, .actionFailed:
             return false
         case .serverError(let serverError):
             return serverError.retryable

@@ -13,6 +13,7 @@ cd "$REPO_ROOT"
 
 KEEP_SIMULATOR=false
 SKIP_GENERATE=false
+SKIP_CLI_BUILD=false
 SIM_NAME=""
 SIM_UDID=""
 DEVICE_TYPE="iPhone 16 Pro"
@@ -32,6 +33,7 @@ Usage: scripts/e2e-demo-smoke.sh [options]
 Options:
   --keep-simulator       Leave the simulator booted after the smoke test.
   --skip-generate        Skip scripts/generate-project.sh before building.
+  --skip-cli-build       Reuse an already-built Button Heist CLI binary.
   --sim-name NAME        Simulator name. Defaults to buttonheist-e2e-{worktree}.
   --sim-udid UDID        Reuse an existing simulator instead of creating one.
   --device-type NAME     Simulator device type. Defaults to "iPhone 16 Pro".
@@ -193,6 +195,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-generate)
             SKIP_GENERATE=true
+            shift
+            ;;
+        --skip-cli-build)
+            SKIP_CLI_BUILD=true
             shift
             ;;
         --sim-name)
@@ -423,8 +429,12 @@ if [[ "$SKIP_GENERATE" == false ]]; then
     ./scripts/generate-project.sh
 fi
 
-log "Building ButtonHeistCLI"
-(cd ButtonHeistCLI && swift build -c "$CLI_CONFIGURATION" --quiet)
+if [[ "$SKIP_CLI_BUILD" == false ]]; then
+    log "Building ButtonHeistCLI"
+    (cd ButtonHeistCLI && swift build -c "$CLI_CONFIGURATION" --quiet)
+elif [[ ! -x "$BUTTONHEIST_BIN" ]]; then
+    fail "prebuilt ButtonHeistCLI binary not found at $BUTTONHEIST_BIN"
+fi
 
 log "Preparing simulator"
 if [[ -n "$SIM_UDID" ]]; then

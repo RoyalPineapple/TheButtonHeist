@@ -381,6 +381,10 @@ jobs:
             echo "| BHDemo.app (total) | ${APP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Build ButtonHeist CLI
+        timeout-minutes: 8
+        run: swift build --package-path ButtonHeistCLI
+
       - name: Run BH Demo CLI smoke
         # Cold CLI SwiftPM resolution plus simulator install can exceed 5 min
         # on macOS runners; keep this bounded without clipping valid replay runs.
@@ -392,6 +396,7 @@ jobs:
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
           scripts/e2e-demo-smoke.sh \
             --skip-generate \
+            --skip-cli-build \
             --sim-udid "$SIM_UDID" \
             --app "$APP" \
             --benchmark-report "$RUNNER_TEMP/buttonheist-demo-benchmark.json"
