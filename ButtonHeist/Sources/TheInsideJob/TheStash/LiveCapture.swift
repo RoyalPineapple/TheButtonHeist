@@ -115,6 +115,24 @@ struct LiveCapture: Equatable {
             ?? element.scrollContentLocation.map { $0.scrollContainer }.flatMap(scrollView(forContainer:))
     }
 
+    /// Value-only copy for settled interface projection. It preserves the
+    /// parsed hierarchy and id maps but drops UIKit refs and dispatch views.
+    func strippingDispatchReferences() -> LiveCapture {
+        LiveCapture(
+            hierarchy: hierarchy,
+            containerNames: containerNames,
+            containerNamesByPath: containerNamesByPath,
+            heistIdByElement: heistIdByElement,
+            elementRefs: [:],
+            containerRefsByPath: [:],
+            containerContentFramesByPath: containerContentFramesByPath,
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:],
+            scrollableContainerViewsByPath: [:],
+            scrollableViewsByContainerName: [:]
+        )
+    }
+
     // MARK: - Refs
 
     // `@unchecked Sendable` rationale: UIView is non-Sendable but the wrapper

@@ -97,7 +97,7 @@ extension Navigation {
     func scrollCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
-        stash.currentHierarchy.scrollableContainers.compactMap { container -> ScrollPlan? in
+        stash.latestObservedLiveHierarchy.scrollableContainers.compactMap { container -> ScrollPlan? in
             guard case .scrollable(let contentSize) = container.type else { return nil }
 
             if let axis, !Self.scrollableAxis(of: container).contains(axis) {
@@ -165,7 +165,7 @@ extension Navigation {
     /// not nav bars (see `safeSwipeFrame`).
     private func currentSwipeSafeBounds() -> CGRect {
         let screen = ScreenMetrics.current.bounds
-        let tabBarTop = stash.currentHierarchy
+        let tabBarTop = stash.latestObservedLiveHierarchy
             .flattenToContainers()
             .compactMap { container -> CGFloat? in
                 guard case .tabBar = container.type else { return nil }

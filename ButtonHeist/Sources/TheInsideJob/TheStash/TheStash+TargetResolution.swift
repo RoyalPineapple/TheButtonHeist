@@ -146,7 +146,7 @@ extension TheStash {
     /// resolution fails with a near-miss suggestion. Live coordinate
     /// revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
-        resolveTarget(target, in: settledScreen, resolutionScope: .known)
+        resolveTarget(target, in: settledSemanticScreen, resolutionScope: .known)
     }
 
     /// Resolve a target against a caller-provided observation value. Used by
