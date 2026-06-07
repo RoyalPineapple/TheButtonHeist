@@ -786,7 +786,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertLessThan(elapsed, 3)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
-        XCTAssertDiagnostic(step.actionResult?.message, contains: [
+        XCTAssertDiagnostic(step.reportActionResult?.message, contains: [
             "last settled: sequence ",
             "last delta:",
         ])
@@ -930,9 +930,9 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(waitedSteps, [try expectation.resolve(in: .empty)])
-        XCTAssertEqual(step.expectationActionResult?.method, .wait)
-        XCTAssertEqual(step.expectation?.met, false)
-        XCTAssertEqual(step.expectation?.actual, "no observed accessibility trace")
+        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.method, .wait)
+        XCTAssertEqual(step.reportExpectation?.met, false)
+        XCTAssertEqual(step.reportExpectation?.actual, "no observed accessibility trace")
     }
 
     func testHeistRuntimeValidationRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
@@ -1156,7 +1156,7 @@ final class TheBrainsActionTests: XCTestCase {
         let recursive = try XCTUnwrap(topLevel.children.first)
         XCTAssertTrue(topLevel.isFailure)
         XCTAssertEqual(recursive.kind, .invoke)
-        XCTAssertEqual(recursive.message, "Unknown heist run \(recursiveName)")
+        XCTAssertEqual(recursive.failure?.observed, "Unknown heist run \(recursiveName)")
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
@@ -1193,11 +1193,11 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.expectationActionResult?.method, .wait)
-        XCTAssertTrue(step.expectationActionResult?.success == true)
-        XCTAssertEqual(step.expectationActionResult?.accessibilityTrace, trace)
-        XCTAssertEqual(step.expectation?.met, true)
-        XCTAssertEqual(step.expectation?.actual, "screenChanged")
+        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.method, .wait)
+        XCTAssertTrue(step.actionEvidence?.expectationActionResult?.success == true)
+        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.accessibilityTrace, trace)
+        XCTAssertEqual(step.reportExpectation?.met, true)
+        XCTAssertEqual(step.reportExpectation?.actual, "screenChanged")
     }
 
     func testHeistActionExpectationUsesWaitFailureDiagnostic() async throws {
@@ -1232,9 +1232,9 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(step.expectationActionResult?.errorKind, .timeout)
-        XCTAssertEqual(step.expectation?.met, false)
-        XCTAssertEqual(step.expectation?.actual, "timed out after 0.2s — expectation not met")
+        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.errorKind, .timeout)
+        XCTAssertEqual(step.reportExpectation?.met, false)
+        XCTAssertEqual(step.reportExpectation?.actual, "timed out after 0.2s — expectation not met")
     }
 
     func testHeistSemanticObservationScopeUsesVisibleForStateCases() async throws {
@@ -2568,7 +2568,7 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlan(try HeistPlan(body: [step]))
         guard case .heistExecution(let heist) = result.payload,
               let stepResult = heist.steps.first,
-              let actionResult = stepResult.actionResult else {
+              let actionResult = stepResult.reportActionResult else {
             XCTFail("Expected heist execution step result for \(command.wireType.rawValue)")
             return result
         }
