@@ -668,7 +668,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             status: failure == nil ? .passed : .failed,
             durationMs: 1,
             intent: command.map {
-                .action(command: $0.clientWireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
+                .action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
             },
             evidence: .action(HeistActionEvidence(
                 command: command,

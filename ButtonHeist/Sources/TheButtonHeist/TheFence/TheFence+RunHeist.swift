@@ -67,7 +67,7 @@ extension TheFence {
         for (index, message) in messages.enumerated() {
             let actionCommand: HeistActionCommand
             do {
-                actionCommand = try HeistActionCommand(clientMessage: message)
+                actionCommand = try HeistActionCommand(internalDispatchMessage: message)
             } catch {
                 // Not representable as a heist action (e.g. a pure read) —
                 // use the direct path.

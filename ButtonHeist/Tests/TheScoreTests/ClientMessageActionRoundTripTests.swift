@@ -2,157 +2,87 @@ import XCTest
 import CoreGraphics
 import TheScore
 
-/// Round-trip coverage for `ClientMessage` action variants and the assorted
-/// gesture/edit/wait targets they wrap. Migrated from `ButtonHeistCLI/Tests/`
-/// where it was checking TheScore wire types from the wrong target.
-///
-/// Where the underlying target struct already has a dedicated round-trip in
-/// `WireTypeRoundTripTests`, the duplicate has been pruned — the message-level
-/// tests below stay as proof that ClientMessage carries them through correctly.
+/// Message-level coverage for mutating behavior now proves those actions are
+/// carried by `ClientMessage.heistPlan`. Individual target payloads keep their
+/// own Codable tests in `WireTypeRoundTripTests`.
 final class ClientMessageActionRoundTripTests: XCTestCase {
 
-    // MARK: - Gesture Targets via ClientMessage
+    func testHeistPlanCarriesSemanticActionCommands() throws {
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "btn"))
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(target))),
+            .action(try ActionStep(command: .rotor(
+                selection: .named("Errors"),
+                target: .target(target),
+                direction: .previous
+            ))),
+            .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
+            .action(try ActionStep(command: .dismissKeyboard)),
+        ])
 
-    func testClientMessageActivateEncoding() throws {
-        let activateMessage = ClientMessage.activate(.predicate(ElementPredicate(identifier: "btn")))
-        let data = try JSONEncoder().encode(activateMessage)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .activate(let target) = decoded {
-            guard case .predicate(let matcher, _) = target else { return XCTFail("Expected .matcher") }
-            XCTAssertEqual(matcher.identifier, "btn")
-        } else {
-            XCTFail("Expected activate message")
+        let decodedPlan = try roundTripHeistPlan(plan)
+        let commands = decodedPlan.body.compactMap { step -> HeistActionCommand? in
+            guard case .action(let action) = step else { return nil }
+            return action.command
         }
+
+        XCTAssertEqual(commands.count, 4)
+        XCTAssertEqual(commands.map(\.wireType), [.activate, .rotor, .editAction, .resignFirstResponder])
     }
 
-    func testClientMessageRotorPreviousEncoding() throws {
-        let message = ClientMessage.rotor(RotorTarget(
-            elementTarget: .predicate(ElementPredicate(label: "Form")),
-            selection: .named("Errors"),
-            direction: .previous
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+    func testHeistPlanCarriesGestureCommands() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Canvas"))
+        let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: point)))),
+            .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+                selection: point,
+                duration: GestureDuration(seconds: 1.0)
+            )))),
+            .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, .left))))),
+            .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+                start: .element(target),
+                end: ScreenPoint(x: 30, y: 40)
+            )))),
+        ])
 
-        if case .rotor(let target) = decoded {
-            XCTAssertEqual(target.elementTarget, ElementTarget.predicate(ElementPredicate(label: "Form")))
-            XCTAssertEqual(target.selection, .named("Errors"))
-            XCTAssertEqual(target.direction, RotorDirection.previous)
-        } else {
-            XCTFail("Expected rotor message")
+        let decodedPlan = try roundTripHeistPlan(plan)
+        let commands = decodedPlan.body.compactMap { step -> HeistActionCommand? in
+            guard case .action(let action) = step else { return nil }
+            return action.command
         }
+
+        XCTAssertEqual(commands.map(\.wireType), [.oneFingerTap, .longPress, .swipe, .drag])
     }
 
-    func testClientMessageRotorRejectsMixedSelectorShape() throws {
-        let json = """
-        {"type":"rotor","payload":{"heistId":"form","rotor":"Errors","rotorIndex":1}}
-        """
+    func testHeistPlanCarriesWaitStep() throws {
+        let plan = try HeistPlan(body: [
+            .wait(WaitStep(predicate: .changed(.elements), timeout: 2)),
+        ])
 
-        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
-    }
+        let decodedPlan = try roundTripHeistPlan(plan)
 
-    func testClientMessageRotorRejectsNegativeIndex() throws {
-        let json = """
-        {"type":"rotor","payload":{"heistId":"form","rotorIndex":-1}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
-    }
-
-    func testClientMessageRotorRejectsInvalidCurrentTextRange() throws {
-        let json = """
-        {"type":"rotor","payload":{"heistId":"form","continuation":{"heistId":"field","textRange":{"startOffset":8,"endOffset":3}}}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
-    }
-
-    func testClientMessageRotorRejectsTextRangeWithoutCurrentItem() throws {
-        let json = """
-        {"type":"rotor","payload":{"heistId":"form","continuation":{"textRange":{"startOffset":3,"endOffset":8}}}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
-    }
-
-    func testClientMessageRotorRejectsLegacyLooseContinuationFields() throws {
-        let json = """
-        {"type":"rotor","payload":{"heistId":"form","currentHeistId":"field"}}
-        """
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
-    }
-
-    func testClientMessageOneFingerTapEncoding() throws {
-        let message = ClientMessage.oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 100, y: 200))))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .oneFingerTap(let target) = decoded {
-            XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 100, y: 200)))
-        } else {
-            XCTFail("Expected oneFingerTap message")
+        guard case .wait(let wait)? = decodedPlan.body.first else {
+            return XCTFail("Expected wait step")
         }
+        XCTAssertEqual(wait.predicate, .changed(.elements))
+        XCTAssertEqual(wait.timeout, 2)
     }
 
-    func testClientMessageLongPressEncoding() throws {
-        let message = ClientMessage.longPress(LongPressTarget(
-            selection: .coordinate(ScreenPoint(x: 50, y: 75)),
-            duration: GestureDuration(seconds: 1.0)
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+    func testPrimitiveActionClientMessageEncodingIsRejected() throws {
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "btn"))
+        let primitiveMessages: [ClientMessage] = [
+            .activate(target),
+            .rotor(RotorTarget(elementTarget: target, selection: .named("Errors"), direction: .previous)),
+            .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 100, y: 200)))),
+            .editAction(EditActionTarget(action: .paste)),
+            .resignFirstResponder,
+        ]
 
-        if case .longPress(let target) = decoded {
-            XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 50, y: 75)))
-            XCTAssertEqual(target.duration.seconds, 1.0)
-        } else {
-            XCTFail("Expected longPress message")
-        }
-    }
-
-    func testClientMessageDragEncoding() throws {
-        let message = ClientMessage.drag(DragTarget(
-            start: .coordinate(ScreenPoint(x: 50, y: 100)),
-            end: ScreenPoint(x: 250, y: 100),
-            duration: GestureDuration(seconds: 0.5)
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .drag(let target) = decoded {
-            XCTAssertEqual(target.start, .coordinate(ScreenPoint(x: 50, y: 100)))
-            XCTAssertEqual(target.end, ScreenPoint(x: 250, y: 100))
-            XCTAssertEqual(target.duration?.seconds, 0.5)
-        } else {
-            XCTFail("Expected drag message")
-        }
-    }
-
-    // MARK: - Edit / ResignFirstResponder
-
-    func testClientMessageEditActionEncoding() throws {
-        let message = ClientMessage.editAction(EditActionTarget(action: .paste))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .editAction(let target) = decoded {
-            XCTAssertEqual(target.action, .paste)
-        } else {
-            XCTFail("Expected editAction message")
-        }
-    }
-
-    func testClientMessageResignFirstResponderEncoding() throws {
-        let message = ClientMessage.resignFirstResponder
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .resignFirstResponder = decoded {
-            // Success
-        } else {
-            XCTFail("Expected resignFirstResponder message")
+        for message in primitiveMessages {
+            XCTAssertThrowsError(try JSONEncoder().encode(message), "\(message)") { error in
+                XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
+            }
         }
     }
 
@@ -199,21 +129,14 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
     }
 
-    // MARK: - Activate with ordinal
-
-    func testActivateMessageWithOrdinalEncoding() throws {
-        let target = ElementTarget.predicate(ElementPredicate(label: "Add", traits: [.button]), ordinal: 1)
-        let message = ClientMessage.activate(target)
+    private func roundTripHeistPlan(_ plan: HeistPlan) throws -> HeistPlan {
+        let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .activate(let decodedTarget) = decoded {
-            guard case .predicate(let matcher, let ordinal) = decodedTarget else { return XCTFail("Expected .matcher") }
-            XCTAssertEqual(matcher.label, "Add")
-            XCTAssertEqual(matcher.traits, [.button])
-            XCTAssertEqual(ordinal, 1)
-        } else {
-            XCTFail("Expected activate message")
+        guard case .heistPlan(let run) = decoded else {
+            throw XCTSkip("Expected heistPlan")
         }
+        return run.plan
     }
 }

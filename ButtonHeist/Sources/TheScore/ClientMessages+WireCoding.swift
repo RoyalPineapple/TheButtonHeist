@@ -34,6 +34,7 @@ extension RequestEnvelope {
         try container.encode(buttonHeistVersion, forKey: .buttonHeistVersion)
         try container.encodeIfPresent(requestId, forKey: .requestId)
         let wire = message.wireRepresentation
+        try rejectInternalMutatingClientMessage(wire.type, codingPath: encoder.codingPath)
         try container.encode(wire.type, forKey: .type)
         if let payload = wire.payload {
             try payload.encode(to: container.superEncoder(forKey: .payload))
@@ -87,6 +88,9 @@ extension ClientMessage {
     // MARK: - Decoding
 
     fileprivate static func decode(from payloadDecoder: Decoder?, type: ClientWireMessageType) throws -> ClientMessage {
+        guard type.isPublicWireRequestType else {
+            throw internalMutatingClientMessage(type, codingPath: payloadDecoder?.codingPath ?? [])
+        }
         func payload() throws -> Decoder {
             guard let payloadDecoder else { throw missingClientPayload(type) }
             return payloadDecoder
@@ -152,6 +156,7 @@ extension ClientMessage {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: ClientMessageCodingKeys.self)
         let wire = wireRepresentation
+        try rejectInternalMutatingClientMessage(wire.type, codingPath: encoder.codingPath)
         try container.encode(wire.type, forKey: .type)
         if let payload = wire.payload {
             try payload.encode(to: container.superEncoder(forKey: .payload))
@@ -171,4 +176,20 @@ private func unexpectedClientPayload(_ type: ClientWireMessageType, codingPath: 
         codingPath: codingPath,
         debugDescription: "\(type.rawValue) must not include a payload"
     ))
+}
+
+private func internalMutatingClientMessage(_ type: ClientWireMessageType, codingPath: [CodingKey]) -> DecodingError {
+    .dataCorrupted(.init(
+        codingPath: codingPath,
+        debugDescription: "\(type.rawValue) is an internal heist dispatch primitive; public mutating requests must be sent as heistPlan"
+    ))
+}
+
+private func rejectInternalMutatingClientMessage(_ type: ClientWireMessageType, codingPath: [CodingKey]) throws {
+    guard type.isPublicWireRequestType else {
+        throw EncodingError.invalidValue(type.rawValue, .init(
+            codingPath: codingPath,
+            debugDescription: "\(type.rawValue) is an internal heist dispatch primitive; public mutating requests must be sent as heistPlan"
+        ))
+    }
 }

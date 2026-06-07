@@ -93,7 +93,7 @@ extension Array where Element == (ClientMessage, String?) {
         return plan.body.compactMap { step in
             switch step {
             case .action(let action):
-                return try? action.command.resolve(in: .empty)
+                return try? action.command.resolveForInternalDispatch(in: .empty)
             case .wait(let wait):
                 guard let resolved = try? wait.resolve(in: .empty) else { return nil }
                 return .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))

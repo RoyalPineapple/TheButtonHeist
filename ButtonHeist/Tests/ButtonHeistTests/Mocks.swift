@@ -311,7 +311,7 @@ final class MockConnection: TransportReachabilityConnecting {
         path: String,
         handler: (ClientMessage) -> ServerMessage
     ) -> HeistExecutionStepResult {
-        guard let command = try? action.command.resolve(in: .empty) else {
+        guard let command = try? action.command.resolveForInternalDispatch(in: .empty) else {
             return HeistExecutionStepResult(
                 path: path,
                 kind: .action,
@@ -524,7 +524,7 @@ final class MockConnection: TransportReachabilityConnecting {
 
     private func mockActionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
         .action(
-            command: command.clientWireType.rawValue,
+            command: command.wireType.rawValue,
             target: command.reportTarget.map(String.init(describing:))
         )
     }

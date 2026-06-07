@@ -245,7 +245,7 @@ private extension TheFence {
     }
 
     func validatePayloadCheckedHeistPrimitive(_ message: ClientMessage, commandName: String) throws {
-        let command = try HeistActionCommand(clientMessage: message)
+        let command = try HeistActionCommand(internalDispatchMessage: message)
         if let failure = command.durableHeistActionFailure {
             throw HeistStepPlanBuildError(
                 message: """

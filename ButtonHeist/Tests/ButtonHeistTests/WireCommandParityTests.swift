@@ -228,7 +228,7 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testViewportDebugCommandsAreDirectOnlyAndRejectedByHeistGate() async throws {
+    func testViewportDebugCommandsArePublicActionsButNotDurableHeistPrimitives() async throws {
         let (fence, _) = makeConnectedFence()
 
         for command in [TheFence.Command.scroll, .scrollToVisible, .scrollToEdge] {
@@ -249,9 +249,12 @@ final class WireCommandParityTests: XCTestCase {
         }
     }
 
-    func testEveryTypedClientMessageOwnsItsWireIdentity() throws {
+    func testEveryPublicTypedClientMessageOwnsItsWireIdentity() throws {
         let samples = try sampleClientMessages()
-        XCTAssertEqual(Set(samples.map(\.wireType)), Set(ClientWireMessageType.allCases))
+        XCTAssertEqual(
+            Set(samples.map(\.wireType)),
+            Set(ClientWireMessageType.allCases.filter(\.isPublicWireRequestType))
+        )
 
         for message in samples {
             XCTAssertEqual(try encodedWireType(for: message), message.wireType, "\(message)")
@@ -328,32 +331,14 @@ final class WireCommandParityTests: XCTestCase {
 
     private func sampleClientMessages() throws -> [ClientMessage] {
         let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
-        let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         return [
             .clientHello,
             .authenticate(AuthenticatePayload(token: "token")),
             .requestInterface(InterfaceQuery()),
             .ping,
             .status,
-            .resignFirstResponder,
             .getPasteboard,
             .requestScreen,
-            .activate(target),
-            .increment(target),
-            .decrement(target),
-            .performCustomAction(CustomActionTarget(elementTarget: target, actionName: "Open")),
-            .rotor(RotorTarget(elementTarget: target, selection: .named("Headings"))),
-            .editAction(EditActionTarget(action: .paste)),
-            .setPasteboard(SetPasteboardTarget(text: "clipboard")),
-            .oneFingerTap(TapTarget(selection: point)),
-            .longPress(LongPressTarget(selection: point)),
-            .swipe(SwipeTarget(selection: .elementDirection(target, .left))),
-            .drag(DragTarget(start: .element(target), end: ScreenPoint(x: 30, y: 40))),
-            .typeText(TypeTextTarget(text: "hello")),
-            .scroll(ScrollTarget(direction: .down)),
-            .scrollToVisible(ScrollToVisibleTarget(elementTarget: target)),
-            .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
-            .wait(WaitTarget(predicate: .changed(.elements), timeout: 1)),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(try ActionStep(command: .activate(target))),
             ]))),
@@ -386,7 +371,7 @@ final class WireCommandParityTests: XCTestCase {
     private func clientMessages(for step: HeistStep) -> [ClientMessage] {
         switch step {
         case .action(let action):
-            guard let command = try? action.command.resolve(in: .empty) else { return [] }
+            guard let command = try? action.command.resolveForInternalDispatch(in: .empty) else { return [] }
             return [command]
         case .wait(let wait):
             guard let resolved = try? wait.resolve(in: .empty) else { return [] }

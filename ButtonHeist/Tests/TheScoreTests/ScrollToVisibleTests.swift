@@ -28,16 +28,21 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertEqual(matcher.label, "Save")
     }
 
-    func testScrollToVisibleClientMessageRoundTrip() throws {
+    func testScrollToVisibleHeistPlanRoundTrip() throws {
         let target = ScrollToVisibleTarget(
             elementTarget: .predicate(ElementPredicate(label: "Settings", traits: [.header]))
         )
-        let message = ClientMessage.scrollToVisible(target)
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .viewportScrollToVisible(.target(target.elementTarget)))),
+        ])
+        let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-        guard case .scrollToVisible(let decodedTarget) = decoded,
-              case .predicate(let matcher, _) = decodedTarget.elementTarget else {
-            return XCTFail("Expected scrollToVisible with matcher")
+        guard case .heistPlan(let run) = decoded,
+              case .action(let action)? = run.plan.body.first,
+              case .viewportScrollToVisible(let decodedTarget) = action.command,
+              case .predicate(let matcher, _) = try decodedTarget.resolve(in: .empty) else {
+            return XCTFail("Expected heistPlan with scrollToVisible action")
         }
         XCTAssertEqual(matcher.label, "Settings")
         XCTAssertEqual(matcher.traits, [.header])
@@ -57,12 +62,12 @@ final class ScrollToVisibleTests: XCTestCase {
         }
     }
 
-    func testScrollToVisibleRequestEnvelopeRejectsUnknownPayloadKey() throws {
+    func testScrollToVisiblePrimitiveRequestEnvelopeIsRejected() throws {
         let data = Data("""
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToVisible","payload":{"label":"Settings","unexpected":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "unexpected""#])
+            assertDecodingError(error, contains: ["public mutating requests must be sent as heistPlan"])
         }
     }
 

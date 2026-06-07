@@ -33,15 +33,20 @@ public struct RequestEnvelope: Codable, Sendable {
 // MARK: - Client -> Server Messages
 
 /// Messages sent from a connected client to the Inside Job server.
+///
+/// Public wire requests are limited to transport/session messages, pure
+/// observation reads, and `heistPlan`. The primitive interaction cases below
+/// are retained only as an internal dispatch carrier after a `HeistActionCommand`
+/// has already been resolved inside the heist runtime; JSON encoding and
+/// decoding reject them.
 public enum ClientMessage: Codable, Sendable, Equatable {
+    // MARK: - Transport / Session
+
     /// Version-negotiation hello sent immediately after receiving serverHello.
     case clientHello
 
     /// Authenticate with a token (sent after clientHello handshake completes)
     case authenticate(AuthenticatePayload)
-
-    /// Request current semantic interface (app accessibility state)
-    case requestInterface(InterfaceQuery)
 
     /// Ping for keepalive
     case ping
@@ -49,7 +54,27 @@ public enum ClientMessage: Codable, Sendable, Equatable {
     /// Lightweight status command (identity + availability) for authenticated clients.
     case status
 
-    // MARK: - Action Commands
+    // MARK: - Pure Read / Observation
+
+    /// Request current semantic interface (app accessibility state)
+    case requestInterface(InterfaceQuery)
+
+    /// Read text from the general pasteboard
+    case getPasteboard
+
+    /// Request a capture of the current screen
+    case requestScreen
+
+    // MARK: - Heist Execution
+
+    /// Execute a typed heist plan with the root argument required by its parameter.
+    case heistPlan(HeistPlanRun)
+
+    // MARK: - Internal Heist Action Dispatch
+    //
+    // These cases are not a public instruction language and must not be sent as
+    // JSON client requests. Public commands lower to a one-step or composed
+    // HeistPlan and cross the wire as `.heistPlan`.
 
     /// Activate an element
     case activate(ElementTarget)
@@ -102,20 +127,10 @@ public enum ClientMessage: Codable, Sendable, Equatable {
     /// Write text to the general pasteboard (in-app, avoids paste dialog for subsequent reads)
     case setPasteboard(SetPasteboardTarget)
 
-    /// Read text from the general pasteboard
-    case getPasteboard
-
     /// Wait until an accessibility predicate is satisfied.
     /// `present`/`absent` poll the current interface; `changed` rides through
     /// intermediate states until the change predicate is met.
     case wait(WaitTarget)
-
-    /// Execute a typed heist plan with the root argument required by its parameter.
-    case heistPlan(HeistPlanRun)
-
-    /// Request a capture of the current screen
-    case requestScreen
-
 }
 
 public struct HeistPlanRun: Codable, Sendable, Equatable {

@@ -1,9 +1,15 @@
 import ThePlans
 
+/// Internal lowering between ThePlans action commands and TheInsideJob's
+/// dispatch implementation.
+///
+/// This is not a public command contract. Public mutation requests cross the
+/// device wire as `ClientMessage.heistPlan`; these conversions only happen
+/// after a heist action has been validated and is about to run in the app.
 public extension HeistActionCommand {
     @_disfavoredOverload
-    init(clientMessage: ClientMessage) throws {
-        switch clientMessage {
+    init(internalDispatchMessage: ClientMessage) throws {
+        switch internalDispatchMessage {
         case .activate(let target):
             self = .activate(.target(target))
         case .increment(let target):
@@ -41,11 +47,11 @@ public extension HeistActionCommand {
             self = .dismissKeyboard
         case .clientHello, .authenticate, .requestInterface, .ping, .status,
              .getPasteboard, .requestScreen, .wait, .heistPlan:
-            throw HeistExpressionError.unsupportedHeistActionCommand(clientMessage.wireType.rawValue)
+            throw HeistExpressionError.unsupportedHeistActionCommand(internalDispatchMessage.wireType.rawValue)
         }
     }
 
-    var clientWireType: ClientWireMessageType {
+    var internalDispatchWireType: ClientWireMessageType {
         switch self {
         case .activate: return .activate
         case .increment: return .increment
@@ -66,7 +72,7 @@ public extension HeistActionCommand {
         }
     }
 
-    func resolve(in environment: HeistExecutionEnvironment) throws -> ClientMessage {
+    func resolveForInternalDispatch(in environment: HeistExecutionEnvironment) throws -> ClientMessage {
         switch self {
         case .activate(let target):
             return .activate(try target.resolve(in: environment))
@@ -113,6 +119,19 @@ public extension HeistActionCommand {
             return .resignFirstResponder
         }
     }
+
+    @_disfavoredOverload
+    init(clientMessage: ClientMessage) throws {
+        try self.init(internalDispatchMessage: clientMessage)
+    }
+
+    var clientWireType: ClientWireMessageType {
+        internalDispatchWireType
+    }
+
+    func resolve(in environment: HeistExecutionEnvironment) throws -> ClientMessage {
+        try resolveForInternalDispatch(in: environment)
+    }
 }
 
 public extension ActionStep {
@@ -124,7 +143,7 @@ public extension ActionStep {
         expectationValidationFailure: String? = nil
     ) throws {
         try self.init(
-            command: HeistActionCommand(clientMessage: command),
+            command: HeistActionCommand(internalDispatchMessage: command),
             expectation: expectation,
             expectationWaiver: expectationWaiver,
             expectationValidationFailure: expectationValidationFailure

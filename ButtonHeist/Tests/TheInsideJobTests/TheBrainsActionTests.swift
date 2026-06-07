@@ -593,6 +593,45 @@ final class TheBrainsActionTests: XCTestCase {
         }
     }
 
+    func testHeistPlanDispatchesEverySupportedActionCommandThroughRuntime() async throws {
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
+        let commands: [HeistActionCommand] = [
+            .activate(.target(target)),
+            .increment(.target(target)),
+            .decrement(.target(target)),
+            .customAction(name: "Archive", target: .target(target)),
+            .rotor(selection: .named("Errors"), target: .target(target), direction: .next),
+            .typeText(text: .literal("hello"), target: .target(target)),
+            .mechanicalTap(TapTarget(selection: point)),
+            .mechanicalLongPress(LongPressTarget(selection: point)),
+            .mechanicalSwipe(SwipeTarget(selection: .point(start: .coordinate(ScreenPoint(x: 20, y: 20)), destination: .direction(.left)))),
+            .mechanicalDrag(DragTarget(start: .coordinate(ScreenPoint(x: 20, y: 20)), end: ScreenPoint(x: 80, y: 80))),
+            .viewportScroll(ScrollTarget(direction: .down)),
+            .viewportScrollToVisible(.target(target)),
+            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
+            .editAction(EditActionTarget(action: .paste)),
+            .setPasteboard(SetPasteboardTarget(text: "clipboard")),
+            .dismissKeyboard,
+        ]
+        var dispatchedTypes: [ClientWireMessageType] = []
+        let runtime = heistRuntime(observations: []) { command in
+            dispatchedTypes.append(command.wireType)
+            return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+        }
+        let plan = try HeistPlan(body: commands.map { .action(try ActionStep(command: $0)) })
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(result.success, result.message ?? "heist failed")
+        XCTAssertEqual(dispatchedTypes, commands.map(\.internalDispatchWireType))
+        guard case .heistExecution(let heist) = result.payload else {
+            return XCTFail("Expected heist execution payload")
+        }
+        XCTAssertEqual(heist.steps.count, commands.count)
+        XCTAssertTrue(heist.steps.allSatisfy { $0.status == .passed })
+    }
+
     func testHeistConditionalSelectsFirstMatchingCaseOnce() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Home", "Login"]),

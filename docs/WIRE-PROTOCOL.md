@@ -22,9 +22,14 @@ session JSON, MCP tools, heist execution, and playback adapt to command names
 such as `get_interface`, `activate`, and `scroll_to_visible`.
 
 The wire protocol is lower-level transport. Its `type` values are TheScore
-message discriminators such as `requestInterface`, `activate`, `requestScreen`,
-and `scrollToVisible`. Use Fence command names at public adapter boundaries and
-wire discriminators only when speaking raw TCP.
+message discriminators such as `requestInterface`, `requestScreen`, `status`,
+and `heistPlan`. Use Fence command names at public adapter boundaries and wire
+discriminators only when speaking raw TCP.
+
+Side-effecting app interactions are not public primitive wire messages. A
+single `activate`, `type_text`, `wait`, `set_pasteboard`, or viewport command is
+a one-step `HeistPlan`; composed flows are multi-step plans. The public
+mutating wire path is always `heistPlan`.
 
 ## Transport
 
@@ -220,21 +225,21 @@ Public action messages identify elements with `ElementTarget` predicate fields
 such as `label`, `identifier`, `value`, `traits`, `excludeTraits`, and optional
 `ordinal`. Durable replay uses the same semantic target shape.
 
-### Semantic Action
+### One-Step Semantic Action
 
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"activate","payload":{"label":"Sign In","traits":["button"]}}
+{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"action","action":{"command":{"type":"activate","payload":{"label":"Sign In","traits":["button"]}}}}]},"argument":{"type":"none"}}}
 ```
 
-Semantic action messages identify elements semantically. The host resolves the
+Semantic action steps identify elements semantically. The host resolves the
 target against current state, moves the viewport if needed, refreshes, acquires
-fresh live geometry, and then dispatches. Cached coordinates from a prior
-capture are not the authority.
+fresh live geometry, and then dispatches through the heist runtime. Cached
+coordinates from a prior capture are not the authority.
 
 Explicit viewport messages such as `scroll`, `scrollToEdge`, and
-`scrollToVisible` expose viewport state because moving the viewport is the
-requested behavior. They are direct viewport/debug commands, not durable heist
-primitives.
+`scrollToVisible` remain public Fence commands because moving the viewport is
+the requested behavior, but they also cross the device wire as one-step
+`heistPlan` requests.
 
 ### Screen Capture
 
@@ -249,13 +254,14 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"wait","payload":{"predicate":{"type":"screen_changed"},"timeout":30}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"screen_changed"},"timeout":30}}]},"argument":{"type":"none"}}}
 ```
 
 The host evaluates the predicate against the current settled accessibility
 state first, then waits for later settled accessibility state until the
 predicate is true or the timeout expires. Absence predicates are satisfied by
-current absence.
+current absence. The response is a heist execution receipt, even for a single
+wait.
 
 ## Action Results
 
