@@ -241,6 +241,54 @@ public enum HeistRepairSuggester {
         }
     }
 
+    public static func noSuggestionReason(for request: HeistRepairRequest) -> String {
+        if !request.lastSuccess.result.succeeded {
+            return "last receipt step did not pass"
+        }
+        if request.currentFailure.result.succeeded {
+            return "current receipt step did not fail"
+        }
+        if request.lastSuccess.stepPath != request.currentFailure.stepPath {
+            return "receipts refer to different step paths"
+        }
+        if !fingerprintsAreCompatible(request.lastSuccess.heistFingerprint, request.currentFailure.heistFingerprint) {
+            return "heist fingerprints are incompatible"
+        }
+
+        let lastScreen = RepairScreen(interface: request.lastSuccess.beforeSnapshot)
+        let currentScreen = RepairScreen(interface: request.currentFailure.beforeSnapshot)
+        guard case .resolved = lastScreen.resolve(request.lastSuccess.target) else {
+            return "old target did not resolve exactly once in the last successful before snapshot"
+        }
+
+        let actionFamily = RepairActionFamily(
+            actionKind: request.currentFailure.actionKind,
+            method: request.currentFailure.result.method ?? request.lastSuccess.result.method
+        )
+        switch currentScreen.resolve(request.lastSuccess.target) {
+        case .resolved(let element, _):
+            if !actionFamily.isKnown || actionFamily.isSupported(by: element.element) {
+                return "old target still resolves and supports the requested action; no target repair needed"
+            }
+            return """
+                old target still resolves but does not support the requested action; \
+                no safe compatible successor satisfied semantic continuity and unique-matcher requirements
+                """
+
+        case .notFound:
+            return """
+                old target is missing in the current before snapshot; \
+                no safe successor satisfied semantic continuity and unique-matcher requirements
+                """
+
+        case .ambiguous:
+            return """
+                old target is ambiguous in the current before snapshot; \
+                no candidate could be safely disambiguated
+                """
+        }
+    }
+
     private static func fingerprintsAreCompatible(_ lhs: String?, _ rhs: String?) -> Bool {
         guard let lhs, let rhs else { return true }
         return lhs == rhs
