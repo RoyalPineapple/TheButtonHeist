@@ -186,6 +186,7 @@ struct HeistCompilerTests {
         for file in files {
             let source = try String(contentsOf: file, encoding: .utf8)
             #expect(!source.contains("HeistSourceCompiler"), "\(file.path) references HeistSourceCompiler")
+            #expect(!source.contains("HeistSwiftFileCompiler"), "\(file.path) references HeistSwiftFileCompiler")
             #expect(!source.contains("swiftc"), "\(file.path) invokes swiftc")
             #expect(!source.contains("decodeValidatedHeistJSON"), "\(file.path) decodes compiler stdout")
         }
@@ -200,6 +201,7 @@ struct HeistCompilerTests {
             "UnvalidatedHeistPlan",
             ".validatedForRuntime(",
             "HeistPlanValidationError",
+            "HeistPlanJSONCodec",
             "HeistArtifactCodec.read",
             "HeistArtifactCodec.decodePlanJSON",
             "JSONDecoder().decode(HeistPlan.self",

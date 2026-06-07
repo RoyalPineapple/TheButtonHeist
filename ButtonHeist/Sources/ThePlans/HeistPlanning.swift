@@ -9,7 +9,7 @@ public enum HeistPlanning {
         _ data: Data,
         sourceURL: URL = URL(fileURLWithPath: "inline-heist-plan.json")
     ) throws -> HeistPlan {
-        try HeistArtifactCodec.decodePlanJSON(data, at: sourceURL)
+        try HeistPlanJSONCodec.decodeValidatedPlan(data, sourceURL: sourceURL)
     }
 
     public static func decodeArgumentJSON(

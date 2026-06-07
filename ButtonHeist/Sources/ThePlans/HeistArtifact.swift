@@ -94,8 +94,8 @@ public enum HeistArtifactCodec {
                 planVersion: planVersion
             )
         }
-        try validateWritablePlanVersion(manifestPayload.planVersion, path: packageURL.path)
-        try validateWritablePlanVersion(planVersion, path: planURL.path)
+        try validateSupportedPlanVersion(manifestPayload.planVersion, path: packageURL.path)
+        try validateSupportedPlanVersion(planVersion, path: planURL.path)
 
         let plan = try decodePlanJSON(planData, at: planURL)
         let entry = try validateArtifactEntry(
@@ -124,8 +124,8 @@ public enum HeistArtifactCodec {
             )
         }
         try validateArtifactEnvelope(manifest: artifact.manifest, packageURL: packageURL)
-        try validateWritablePlanVersion(artifact.manifest.planVersion, path: packageURL.path)
-        try validateWritablePlanVersion(artifact.plan.version, path: packageURL.path)
+        try validateSupportedPlanVersion(artifact.manifest.planVersion, path: packageURL.path)
+        try validateSupportedPlanVersion(artifact.plan.version, path: packageURL.path)
         _ = try validateArtifactEntry(
             manifestEntry: artifact.manifest.entry,
             plan: artifact.plan,
@@ -184,9 +184,10 @@ public enum HeistArtifactCodec {
     }
 
     public static func decodePlanJSON(_ data: Data, at url: URL) throws -> HeistPlan {
-        let raw = try decodeUnvalidatedPlanJSON(data, at: url)
         do {
-            return try raw.validatedForRuntime()
+            return try HeistPlanJSONCodec.decodeValidatedPlan(data, sourceURL: url)
+        } catch let error as HeistPlanJSONCodecError {
+            throw artifactPlanError(error)
         } catch {
             throw HeistArtifactCodecError.invalidPlan(path: url.path, reason: String(describing: error))
         }
@@ -196,10 +197,10 @@ public enum HeistArtifactCodec {
         _ data: Data,
         at url: URL
     ) throws -> UnvalidatedHeistPlan {
-        let version = try decodePlanVersion(from: data, at: url)
-        try validateWritablePlanVersion(version, path: url.path)
         do {
-            return try JSONDecoder().decode(UnvalidatedHeistPlan.self, from: data)
+            return try HeistPlanJSONCodec.decodeUnvalidatedPlan(data, sourceURL: url)
+        } catch let error as HeistPlanJSONCodecError {
+            throw artifactPlanError(error)
         } catch {
             throw HeistArtifactCodecError.invalidPlan(path: url.path, reason: String(describing: error))
         }
@@ -342,28 +343,33 @@ public enum HeistArtifactCodec {
     }
 
     private static func decodePlanVersion(from data: Data, at url: URL) throws -> Int {
-        let object: Any
         do {
-            object = try JSONSerialization.jsonObject(with: data)
+            return try HeistPlanJSONCodec.decodePlanVersion(from: data, sourceURL: url)
+        } catch let error as HeistPlanJSONCodecError {
+            throw artifactPlanError(error)
         } catch {
             throw HeistArtifactCodecError.invalidPlan(path: url.path, reason: String(describing: error))
         }
-
-        guard let dictionary = object as? [String: Any] else {
-            throw HeistArtifactCodecError.invalidPlan(path: url.path, reason: "expected JSON object")
-        }
-        guard let version = dictionary["version"] else {
-            throw HeistArtifactCodecError.missingPlanVersion(path: url.path)
-        }
-        guard let intVersion = version as? Int else {
-            throw HeistArtifactCodecError.invalidPlanVersion(path: url.path, observed: String(describing: version))
-        }
-        return intVersion
     }
 
-    private static func validateWritablePlanVersion(_ version: Int, path: String) throws {
-        guard version == currentHeistPlanVersion else {
-            throw HeistArtifactCodecError.unsupportedPlanVersion(path: path, observed: version)
+    private static func validateSupportedPlanVersion(_ version: Int, path: String) throws {
+        do {
+            try HeistPlanJSONCodec.requireSupportedPlanVersion(version, sourceURL: URL(fileURLWithPath: path))
+        } catch let error as HeistPlanJSONCodecError {
+            throw artifactPlanError(error)
+        }
+    }
+
+    private static func artifactPlanError(_ error: HeistPlanJSONCodecError) -> HeistArtifactCodecError {
+        switch error {
+        case .invalidPlan(let source, let reason):
+            return .invalidPlan(path: source, reason: reason)
+        case .missingVersion(let source):
+            return .missingPlanVersion(path: source)
+        case .invalidVersion(let source, let observed):
+            return .invalidPlanVersion(path: source, observed: observed)
+        case .unsupportedVersion(let source, let observed):
+            return .unsupportedPlanVersion(path: source, observed: observed)
         }
     }
 }

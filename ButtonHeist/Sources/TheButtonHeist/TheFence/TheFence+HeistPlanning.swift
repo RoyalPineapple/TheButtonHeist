@@ -190,8 +190,8 @@ private extension TheFence {
                 data,
                 sourceURL: URL(fileURLWithPath: "\(commandName)-inline-plan.json")
             )
-        } catch let error as HeistArtifactCodecError {
-            throw FenceError.invalidRequest(error.description)
+        } catch {
+            throw FenceError.invalidRequest(String(describing: error))
         }
     }
 
