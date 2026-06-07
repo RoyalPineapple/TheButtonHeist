@@ -205,11 +205,19 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let summary = report?["summary"] as? [String: Any]
         let reportExpectations = summary?["expectations"] as? [String: Any]
 
+        XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 2)
+        XCTAssertEqual(json["executedNodeCount"] as? Int, 2)
+        XCTAssertEqual(json["reportRowCount"] as? Int, 2)
+        XCTAssertEqual(summary?["executedTopLevelStepCount"] as? Int, 2)
+        XCTAssertEqual(summary?["executedNodeCount"] as? Int, 2)
+        XCTAssertEqual(summary?["reportRowCount"] as? Int, 2)
         XCTAssertEqual(expectations?["checked"] as? Int, 1)
         XCTAssertEqual(expectations?["met"] as? Int, 1)
         XCTAssertEqual(reportExpectations?["checked"] as? Int, 1)
         XCTAssertEqual(reportExpectations?["met"] as? Int, 1)
+        XCTAssertTrue(response.compactFormatted().contains("heist: 2 top-level steps in 5ms"))
         XCTAssertTrue(response.compactFormatted().contains("[expectations: 1/1]"))
+        XCTAssertTrue(response.humanFormatted().contains("Heist: 2 top-level step(s) executed in 5ms"))
         XCTAssertTrue(response.humanFormatted().contains("[expectations: 1/1 met]"))
     }
 
@@ -284,13 +292,20 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json["completedSteps"] as? Int, 2)
-        XCTAssertEqual(summary["completedSteps"] as? Int, 2)
+        XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 2)
+        XCTAssertEqual(json["executedNodeCount"] as? Int, 2)
+        XCTAssertEqual(json["reportRowCount"] as? Int, 2)
+        XCTAssertEqual(summary["executedTopLevelStepCount"] as? Int, 2)
+        XCTAssertEqual(summary["executedNodeCount"] as? Int, 2)
+        XCTAssertEqual(summary["reportRowCount"] as? Int, 2)
         XCTAssertEqual(nodes.count, 2)
         XCTAssertEqual(nodes.map { $0["path"] as? String }, ["$.body[0]", "$.body[1]"])
-        XCTAssertTrue(compact.contains("heist: 2 steps"), compact)
+        XCTAssertTrue(compact.contains("heist: 2 top-level steps"), compact)
         XCTAssertFalse(compact.contains("after"), compact)
-        XCTAssertTrue(response.humanFormatted().contains("Heist: 2 step(s) completed"), response.humanFormatted())
+        XCTAssertTrue(
+            response.humanFormatted().contains("Heist: 2 top-level step(s) executed"),
+            response.humanFormatted()
+        )
     }
 
     func testPublicHeistJSONReportsNestedSelectedCaseFailureAsTreeNodes() throws {
@@ -499,16 +514,24 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         let json = publicJSONObject(response)
         let report = try XCTUnwrap(json["report"] as? [String: Any])
+        let summary = try XCTUnwrap(report["summary"] as? [String: Any])
         let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
         let root = try XCTUnwrap(nodes.first)
         let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
         let children = try XCTUnwrap(root["children"] as? [[String: Any]])
         let compact = response.compactFormatted()
 
+        XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 1)
+        XCTAssertEqual(json["executedNodeCount"] as? Int, 5)
+        XCTAssertEqual(json["reportRowCount"] as? Int, 1)
+        XCTAssertEqual(summary["executedTopLevelStepCount"] as? Int, 1)
+        XCTAssertEqual(summary["executedNodeCount"] as? Int, 5)
+        XCTAssertEqual(summary["reportRowCount"] as? Int, 1)
         XCTAssertEqual(root["kind"] as? String, "for_each_string")
         XCTAssertNotNil(evidence["forEachString"])
         XCTAssertEqual(root["abortedAtChildPath"] as? String, failedActionPath)
         XCTAssertEqual(children.map { $0["kind"] as? String }, ["for_each_iteration", "for_each_iteration"])
+        XCTAssertTrue(compact.contains("heist: 1 top-level steps in 30ms"), compact)
         XCTAssertTrue(compact.contains("[0] for_each_string -> error: for_each_string stopped"), compact)
     }
 

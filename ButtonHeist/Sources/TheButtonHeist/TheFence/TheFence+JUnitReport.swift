@@ -20,7 +20,7 @@ extension TheFence {
         return HeistJUnitReport(
             heistName: heistName,
             app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
-            totalStepCount: stepRows.count,
+            reportRowCount: stepRows.count,
             totalTimeSeconds: totalTimeSeconds,
             steps: stepRows
         )

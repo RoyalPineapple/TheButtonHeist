@@ -8,6 +8,11 @@ import Foundation
 // `HeistExecutionResult.steps` without a second report model.
 
 public extension HeistExecutionStepResult {
+    /// Number of executed receipt nodes in this subtree, including this node.
+    var executedNodeCount: Int {
+        1 + children.reduce(0) { $0 + $1.executedNodeCount }
+    }
+
     var isFailure: Bool {
         status == .failed || children.contains(where: \.isFailure)
     }
@@ -278,9 +283,15 @@ public extension Array where Element == HeistExecutionStepResult {
 }
 
 public extension HeistExecutionResult {
-    /// Steps that actually began execution/evaluation.
-    var completedStepCount: Int {
+    /// Top-level heist body steps that actually began execution/evaluation.
+    var executedTopLevelStepCount: Int {
         steps.count
+    }
+
+    /// All executed receipt nodes in the tree, including nested structural
+    /// frames, iterations, and leaf action/wait/warn/fail nodes.
+    var executedNodeCount: Int {
+        steps.reduce(0) { $0 + $1.executedNodeCount }
     }
 
     /// Whether any step in the execution tree failed.
@@ -298,6 +309,7 @@ public extension HeistExecutionResult {
         firstFailedStep?.path
     }
 
+    /// Kind of the first failed receipt node, not a flattened report-row kind.
     var failedStepKind: HeistExecutionStepKind? {
         firstFailedStep?.kind
     }
