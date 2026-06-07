@@ -90,7 +90,7 @@ public enum ClientMessage: Codable, Sendable, Equatable {
     case scroll(ScrollTarget)
 
     /// One-shot scroll: jump to a known element's position in its scroll view.
-    /// Fails if the element has no recorded content-space position.
+    /// Fails if the element has no observed content-space position.
     case scrollToVisible(ScrollToVisibleTarget)
 
     /// Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right)

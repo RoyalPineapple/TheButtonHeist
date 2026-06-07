@@ -61,8 +61,6 @@ enum CLICommandAdapterCatalog {
         .getSessionState: GetSessionStateCommand.self,
         .connect: ConnectCommand.self,
         .listTargets: ListTargetsCommand.self,
-        .startHeist: StartHeistCommand.self,
-        .stopHeist: StopHeistCommand.self,
     ]
 
     // MARK: - Catalog Projection

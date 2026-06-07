@@ -95,8 +95,8 @@ Transport classes do **not** own auth. See the earned-ledger note below.
   from the tree on demand and never stored. Flattening is an output concern and
   must not drive runtime failure logic.
 
-### 6. HeistStore / ScreenshotStore — durable artifacts only
-- **Tracks:** `.heist` files and screenshot bytes on disk.
+### 6. Artifact Stores — durable artifacts only
+- **Tracks:** `.heist` package files and screenshot bytes on disk.
 - **Why:** artifacts outlive the process.
 - **Key:** file path.
 - **Lifetime:** until deleted from disk.

@@ -10,6 +10,11 @@ extension TheFence {
         let argument: HeistArgument
     }
 
+    struct PerformRequest {
+        let plan: HeistPlan
+        let step: PerformableHeistStep
+    }
+
     struct ListHeistsRequest {
         let catalog: HeistDiscoveryCatalog
     }
@@ -20,6 +25,47 @@ extension TheFence {
 
     struct HeistStepPlanBuildError: Error {
         let message: String
+    }
+
+    enum PerformableHeistStep: Sendable, Equatable {
+        case action(ActionStep)
+        case wait(WaitStep)
+
+        var heistStep: HeistStep {
+            switch self {
+            case .action(let action):
+                return .action(action)
+            case .wait(let wait):
+                return .wait(wait)
+            }
+        }
+    }
+
+    enum PerformStepValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+        case wrongStepCount(Int)
+        case unsupportedStep
+
+        var description: String {
+            switch self {
+            case .wrongStepCount:
+                return Self.guidance
+            case .unsupportedStep:
+                return Self.guidance
+            }
+        }
+
+        private static let guidance = """
+        perform accepts one primitive action statement or simple WaitFor statement. \
+        Use run_heist for branching, loops, named heists, warnings, failures, or multiple steps.
+        """
+    }
+
+    func decodePerformRequest(_ arguments: CommandArgumentEnvelope) throws -> PerformRequest {
+        try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: Command.perform.rawValue)
+        let source = try arguments.requiredSchemaString("step")
+        let plan = try loadInlinePerformStepSource(source)
+        let step = try performableStep(in: plan)
+        return PerformRequest(plan: plan, step: step)
     }
 
     /// Canonical `HeistPlan` root fields that constitute a structured inline plan.
@@ -39,6 +85,40 @@ extension TheFence {
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
         return RunHeistRequest(plan: plan, argument: argument)
+    }
+
+    func loadInlinePerformStepSource(_ source: String) throws -> HeistPlan {
+        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw FenceError.invalidRequest("perform step must not be empty")
+        }
+        return try loadInlinePlanSource(
+            """
+            HeistPlan {
+            \(source)
+            }
+            """,
+            commandName: Command.perform.rawValue
+        )
+    }
+
+    func performableStep(in plan: HeistPlan) throws -> PerformableHeistStep {
+        guard plan.definitions.isEmpty else {
+            throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
+        }
+        guard plan.body.count == 1, let step = plan.body.first else {
+            throw FenceError.invalidRequest(PerformStepValidationError.wrongStepCount(plan.body.count).description)
+        }
+        switch step {
+        case .action(let action):
+            guard action.command.isPerformPrimitive else {
+                throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
+            }
+            return .action(action)
+        case .wait(let wait):
+            return .wait(wait)
+        case .conditional, .waitForCases, .forEachElement, .forEachString, .warn, .fail, .heist, .invoke:
+            throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
+        }
     }
 
     func decodeListHeistsRequest(_ arguments: CommandArgumentEnvelope) throws -> ListHeistsRequest {
@@ -106,6 +186,19 @@ extension TheFence {
             command: message,
             expectation: actionExpectationStep(for: request)
         ))
+    }
+}
+
+private extension HeistActionCommand {
+    var isPerformPrimitive: Bool {
+        switch self {
+        case .activate, .increment, .decrement, .customAction, .rotor,
+             .typeText, .mechanicalTap, .mechanicalLongPress, .mechanicalSwipe,
+             .mechanicalDrag, .editAction, .setPasteboard, .dismissKeyboard:
+            return true
+        case .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
+            return false
+        }
     }
 }
 

@@ -34,7 +34,6 @@ extension TheFence {
         }
 
         let dispatched = try await dispatchWithErrorLogging(parsed)
-        recordHeistStep(parsed, actionResult: nil, expectation: nil)
         return dispatched.response
     }
 

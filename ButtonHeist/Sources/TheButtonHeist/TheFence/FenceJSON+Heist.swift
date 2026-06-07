@@ -2,18 +2,6 @@ import Foundation
 
 import TheScore
 
-struct PublicHeistStartedResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
-    let recording = true
-}
-
-struct PublicHeistStoppedResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
-    let path: String
-    let swiftPath: String?
-    let stepCount: Int
-}
-
 struct PublicHeistCatalogResponse: FencePublicJSONResponse {
     let status = PublicStatus.ok
     let heists: [HeistCatalogEntry]

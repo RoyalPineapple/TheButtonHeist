@@ -4,6 +4,6 @@ import Foundation
 /// defaults here over duplicating literals across entry points.
 public enum Defaults {
     /// Bundle identifier of the `BH Demo` app — the default target for
-    /// `start_heist` and benchmark runs when no explicit `--app` is supplied.
+    /// CLI and benchmark runs when no explicit app is supplied.
     public static let demoAppBundleID = "com.buttonheist.testapp"
 }

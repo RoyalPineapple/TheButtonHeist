@@ -45,7 +45,7 @@ public enum AccessibilityPolicy {
     /// Consumed by:
     /// - TheBurglar content-space disambiguation
     /// - `AccessibilityTrace.Delta.between` (functional-move pairing)
-    /// - `MinimumPredicateSelector` (recording matcher construction — adds state only
+    /// - `MinimumPredicateSelector` (matcher suggestion — adds state only
     ///   when semantic predicates remain ambiguous)
     public static let transientTraits: Set<HeistTrait> = [
         .selected,

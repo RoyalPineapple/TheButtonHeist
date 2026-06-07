@@ -63,14 +63,6 @@ extension FenceResponse {
             return Self.formatSessionStateHuman(payload)
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
-        case .heistStarted:
-            return "Heist recording started"
-        case .heistStopped(let path, let swiftPath, let stepCount):
-            var text = "Heist saved: \(path) (\(stepCount) steps)"
-            if let swiftPath {
-                text += "\nSwift DSL saved: \(swiftPath)"
-            }
-            return text
         }
     }
 

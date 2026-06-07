@@ -316,7 +316,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
 
         #expect(reason.contains("viewport debug command"))
 
-        // Durability is a recording/DSL concern, not runtime validation:
+        // Durability is a canonical DSL concern, not runtime validation:
         // viewport commands construct as runtime-valid plans but cannot render
         // to canonical Swift DSL.
 
