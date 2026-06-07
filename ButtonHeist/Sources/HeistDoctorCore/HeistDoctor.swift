@@ -14,7 +14,14 @@ public enum HeistDoctor {
             lastSuccess: try repairEvidence(from: lastStep, expectedStatus: .passed),
             currentFailure: try repairEvidence(from: currentStep, expectedStatus: .failed)
         )
-        return HeistRepairSuggester.suggestions(for: request)
+        let suggestions = HeistRepairSuggester.suggestions(for: request)
+        guard !suggestions.isEmpty else {
+            throw HeistDoctorError.noSafeSuggestion(
+                path: currentStep.path,
+                reason: HeistRepairSuggester.noSuggestionReason(for: request)
+            )
+        }
+        return suggestions
     }
 
     private static func selectedCurrentFailure(
@@ -105,7 +112,7 @@ public enum HeistDoctor {
     }
 }
 
-public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertible {
+public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertible, LocalizedError {
     case noFailedStep
     case stepNotFound(path: String)
     case nonActionStep(path: String, kind: HeistExecutionStepKind)
@@ -114,6 +121,7 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
     case missingTarget(path: String)
     case missingActionResult(path: String)
     case missingTrace(path: String)
+    case noSafeSuggestion(path: String, reason: String)
 
     public var description: String {
         switch self {
@@ -133,7 +141,13 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
             return "action step at \(path) has no action result"
         case .missingTrace(let path):
             return "action step at \(path) has no accessibility trace"
+        case .noSafeSuggestion(let path, let reason):
+            return "unable to make a repair suggestion for action step at \(path): \(reason)"
         }
+    }
+
+    public var errorDescription: String? {
+        description
     }
 }
 

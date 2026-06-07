@@ -28,6 +28,27 @@ import TheScore
         #expect(HeistRepairSuggester.suggestions(for: HeistRepairRequest(lastSuccess: last, currentFailure: current)).isEmpty)
     }
 
+    @Test("Last success missing target returns no suggestion")
+    func lastSuccessMissingTargetReturnsNoSuggestion() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = evidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Archive", traits: [.button], actions: [.activate]),
+            ]),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Remove"),
+            ]),
+            succeeded: false
+        )
+
+        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+    }
+
     @Test("Evidence must belong to the same failing step")
     func evidenceMustBelongToTheSameFailingStep() {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
@@ -46,6 +67,50 @@ import TheScore
                 element(label: "Remove", traits: [.button], actions: [.activate]),
             ]),
             succeeded: false
+        )
+
+        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+    }
+
+    @Test("Incompatible heist fingerprints return no suggestion")
+    func incompatibleHeistFingerprintsReturnNoSuggestion() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = evidence(
+            heistFingerprint: "last-plan",
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Delete"),
+            ]),
+            succeeded: true
+        )
+        let current = evidence(
+            heistFingerprint: "different-plan",
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Remove"),
+            ]),
+            succeeded: false
+        )
+
+        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+    }
+
+    @Test("Current target that still resolves needs no target repair")
+    func currentTargetThatStillResolvesNeedsNoTargetRepair() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let before = listInterface(rows: [
+            ("Milk", "Delete"),
+        ])
+        let last = evidence(
+            target: target,
+            before: before,
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: before,
+            succeeded: false,
+            expectation: ExpectationResult(met: false, predicate: nil, actual: "Expected item count to change")
         )
 
         #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
@@ -185,6 +250,7 @@ import TheScore
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
         #expect(suggestion.confidence == .low)
         #expect(suggestion.caveats.contains("Suggested matcher uses ordinal as last-resort disambiguation."))
+        #expect(suggestion.reasons.contains("Sibling row context is preserved."))
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
 
@@ -400,6 +466,122 @@ import TheScore
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
     }
 
+    @Test("Doctor returns an error when no safe successor exists")
+    func doctorReturnsErrorWhenNoSafeSuccessorExists() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let lastPass = receipt(
+            path: "$.body[0]",
+            status: .passed,
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Delete", traits: [.button], actions: [.activate]),
+            ]),
+            after: nil,
+            actionSucceeded: true
+        )
+        let newFail = receipt(
+            path: "$.body[0]",
+            status: .failed,
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Checkout", traits: [.button], actions: [.activate]),
+            ]),
+            after: nil,
+            actionSucceeded: false
+        )
+
+        let reason = noSafeSuggestionReason(lastPass: lastPass, newFail: newFail, expectedPath: "$.body[0]")
+
+        #expect(reason.contains("old target is missing"))
+        #expect(reason.contains("semantic continuity"))
+    }
+
+    @Test("Doctor returns an error when no target repair is needed")
+    func doctorReturnsErrorWhenNoTargetRepairIsNeeded() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let before = listInterface(rows: [
+            ("Milk", "Delete"),
+        ])
+        let lastPass = receipt(
+            path: "$.body[0]",
+            status: .passed,
+            target: target,
+            before: before,
+            after: nil,
+            actionSucceeded: true
+        )
+        let newFail = receipt(
+            path: "$.body[0]",
+            status: .failed,
+            target: target,
+            before: before,
+            after: nil,
+            actionSucceeded: false
+        )
+
+        let reason = noSafeSuggestionReason(lastPass: lastPass, newFail: newFail, expectedPath: "$.body[0]")
+
+        #expect(reason.contains("old target still resolves"))
+        #expect(reason.contains("no target repair needed"))
+    }
+
+    @Test("Doctor suggestions do not mutate receipts")
+    func doctorSuggestionsDoNotMutateReceipts() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let lastPass = receipt(
+            path: "$.body[0]",
+            status: .passed,
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Delete"),
+            ]),
+            after: makeTestInterface(elements: [
+                element(label: "Done", traits: [.staticText]),
+            ]),
+            actionSucceeded: true
+        )
+        let newFail = receipt(
+            path: "$.body[0]",
+            status: .failed,
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Remove"),
+            ]),
+            after: nil,
+            actionSucceeded: false
+        )
+        let originalLastPass = lastPass
+        let originalNewFail = newFail
+
+        _ = try HeistDoctor.suggestions(lastPass: lastPass, newFail: newFail)
+
+        #expect(lastPass == originalLastPass)
+        #expect(newFail == originalNewFail)
+    }
+
+    private func noSafeSuggestionReason(
+        lastPass: HeistExecutionResult,
+        newFail: HeistExecutionResult,
+        expectedPath: String
+    ) -> String {
+        do {
+            _ = try HeistDoctor.suggestions(lastPass: lastPass, newFail: newFail)
+            Issue.record("Expected no safe suggestion error")
+            return ""
+        } catch let error as HeistDoctorError {
+            guard case .noSafeSuggestion(let path, let reason) = error else {
+                Issue.record("Expected no safe suggestion error, got \(error)")
+                return ""
+            }
+            #expect(error.errorDescription == error.description)
+            #expect(path == expectedPath)
+            return reason
+        } catch {
+            Issue.record("Expected HeistDoctorError, got \(error)")
+            return ""
+        }
+    }
+
     private func request(
         _ last: HeistStepRepairEvidence,
         _ current: HeistStepRepairEvidence
@@ -408,6 +590,7 @@ import TheScore
     }
 
     private func evidence(
+        heistFingerprint: String? = nil,
         stepPath: String = "$.steps[0]",
         actionKind: String = "activate",
         target: ElementTarget,
@@ -418,6 +601,7 @@ import TheScore
         expectation: ExpectationResult? = nil
     ) -> HeistStepRepairEvidence {
         HeistStepRepairEvidence(
+            heistFingerprint: heistFingerprint,
             stepPath: stepPath,
             actionKind: actionKind,
             target: target,
