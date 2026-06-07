@@ -251,6 +251,48 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(nodes?.first?["message"] as? String, "Unknown screen")
     }
 
+    func testAbortedHeistOutputCountsOnlyReceiptNodes() throws {
+        let plan = try HeistPlan(body: [
+            .warn(WarnStep(message: "before")),
+            .fail(FailStep(message: "stop")),
+            .warn(WarnStep(message: "after")),
+        ])
+        let result = HeistExecutionResult(
+            steps: [
+                warnReceiptStep(path: "$.body[0]", message: "before"),
+                HeistExecutionStepResult(
+                    path: "$.body[1]",
+                    kind: .fail,
+                    status: .failed,
+                    durationMs: 1,
+                    intent: .fail(message: "stop"),
+                    failure: HeistFailureDetail(
+                        category: .explicitFailure,
+                        contract: "explicit heist failure",
+                        observed: "stop"
+                    )
+                ),
+            ],
+            durationMs: 2,
+            abortedAtPath: "$.body[1]"
+        )
+        let response = FenceResponse.heistExecution(plan: plan, result: result)
+
+        let json = publicJSONObject(response)
+        let report = try XCTUnwrap(json["report"] as? [String: Any])
+        let summary = try XCTUnwrap(report["summary"] as? [String: Any])
+        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let compact = response.compactFormatted()
+
+        XCTAssertEqual(json["completedSteps"] as? Int, 2)
+        XCTAssertEqual(summary["completedSteps"] as? Int, 2)
+        XCTAssertEqual(nodes.count, 2)
+        XCTAssertEqual(nodes.map { $0["path"] as? String }, ["$.body[0]", "$.body[1]"])
+        XCTAssertTrue(compact.contains("heist: 2 steps"), compact)
+        XCTAssertFalse(compact.contains("after"), compact)
+        XCTAssertTrue(response.humanFormatted().contains("Heist: 2 step(s) completed"), response.humanFormatted())
+    }
+
     func testPublicHeistJSONReportsNestedSelectedCaseFailureAsTreeNodes() throws {
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.target(.predicate(ElementPredicate(label: "Continue"))))

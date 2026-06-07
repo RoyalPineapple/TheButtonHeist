@@ -68,9 +68,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         XCTAssertEqual(result.steps.count, 1)
+        XCTAssertEqual(result.completedStepCount, 1)
         XCTAssertEqual(result.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(result.reportRows.count, 1)
         XCTAssertEqual(result.reportRows.map(\.path), ["$.body[0]"])
         XCTAssertEqual(result.steps.map(\.reportStatus), [.failed])
+        XCTAssertEqual(result.expectationsChecked, 0)
+        XCTAssertEqual(result.expectationsMet, 0)
         XCTAssertEqual(result.steps.first?.reportActionResult?.message, "Delete failed")
     }
 

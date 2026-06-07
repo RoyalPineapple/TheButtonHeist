@@ -1,5 +1,16 @@
 import Foundation
 
+// ThePlans ownership map:
+// - HeistPlan.swift owns the runtime-validated plan IR and Codable wire shape.
+// - HeistPlanExpressions.swift owns scoped expression/reference types.
+// - HeistPlan+RuntimeValidation*.swift owns the single runtime validation boundary.
+// - HeistPlan+Validation.swift owns linting and composition-quality checks only.
+// - HeistPlanSourceCompiler/Lexer/Parser.swift owns compact source compilation.
+// - HeistSwiftFileCompiler.swift owns authored Swift-file compilation.
+// - HeistPlan+CanonicalSwiftDSL.swift owns canonical Swift DSL rendering.
+// - HeistArtifact.swift owns .heist package read/write.
+// - HeistPlan+Discovery.swift and HeistPlan+Description.swift own discovery and description.
+
 // MARK: - Heist Plan
 
 /// Canonical ordered automation contract.

@@ -84,7 +84,7 @@ public actor HeistCompiler {
         do {
             try Task.checkCancellation()
 #if os(macOS) || os(Linux)
-            let plan = try HeistSourceCompiler(packageRoot: configuration.packageRoot)
+            let plan = try HeistSwiftFileCompiler(packageRoot: configuration.packageRoot)
                 .compileSwiftFile(source, entry: entry)
             try Task.checkCancellation()
             return .success(plan, diagnostics: [])
@@ -243,7 +243,7 @@ private extension HeistCompiler {
         entry: String?
     ) -> [HeistCompilationDiagnostic] {
 #if os(macOS) || os(Linux)
-        if let compilerError = error as? HeistSourceCompilerError {
+        if let compilerError = error as? HeistSwiftFileCompilerError {
             return diagnostics(for: compilerError, source: source, entry: entry)
         }
 #endif
@@ -255,7 +255,7 @@ private extension HeistCompiler {
 
 #if os(macOS) || os(Linux)
     static func diagnostics(
-        for error: HeistSourceCompilerError,
+        for error: HeistSwiftFileCompilerError,
         source: URL?,
         entry: String?
     ) -> [HeistCompilationDiagnostic] {
