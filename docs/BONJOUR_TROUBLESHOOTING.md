@@ -56,26 +56,25 @@ log show --predicate 'process == "mDNSResponder"' --last 5m --style compact 2>&1
 
 ## Recovering Connection Info from Logs
 
-If the app launched without explicit env vars, logs can recover the port and
-instance ID. Generated tokens are redacted; omit `BUTTONHEIST_TOKEN` to request
-on-device approval, then reuse the `BUTTONHEIST_TOKEN=...` status printed after
-approval.
+If the app launched without explicit env vars, logs can recover the port,
+instance ID, and generated token. The generated token is intentionally printed
+because console access is the authority boundary for this debug tool.
 
 ```bash
 xcrun simctl spawn $SIM_UDID log show \
   --predicate 'subsystem == "com.buttonheist.theinsidejob" AND category == "server"' \
-  --last 5m --style compact 2>&1 | grep -E "listening on port|Instance ID|token=<redacted>"
+  --last 5m --style compact 2>&1 | grep -E "listening on port|Instance ID|BUTTONHEIST_TOKEN="
 ```
 
 Output:
 ```
 Server listening on port 23456
-token=<redacted>
+Generated ButtonHeist token: BUTTONHEIST_TOKEN=5d3d0b56-63a0-4f46-9e8b-b0a0bb42b690
 Instance ID: a1b2c3d4
 ```
 
-Then request approval directly:
-`BUTTONHEIST_DEVICE="127.0.0.1:23456" buttonheist json_lines`.
+Then connect directly with that token:
+`BUTTONHEIST_DEVICE="127.0.0.1:23456" BUTTONHEIST_TOKEN="5d3d0b56-63a0-4f46-9e8b-b0a0bb42b690" buttonheist json_lines`.
 For automation, configure `INSIDEJOB_TOKEN` explicitly at launch and pass the
 same value as `BUTTONHEIST_TOKEN`.
 

@@ -45,7 +45,7 @@ final class DeviceConnection: TransportReachabilityConnecting {
         connection.send(content: content, completion: completion)
     }
 
-    private let expectedFingerprint: String?
+    private let token: String?
 
     /// Single consumer Task driving NW callbacks into the actor in order.
     /// Replaced on each `connect()`; cancelled in `disconnect()`. The for-await
@@ -57,30 +57,24 @@ final class DeviceConnection: TransportReachabilityConnecting {
     var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
     private var tlsFailureTracker: TLSFailureTracker?
 
-    init(device: DiscoveredDevice) {
+    init(device: DiscoveredDevice, token: String? = nil) {
         self.device = device
-        self.expectedFingerprint = device.certFingerprint
+        self.token = token
     }
 
     func connect() {
         deviceConnectionLogger.info("Connecting to \(self.device.name)...")
 
-        let parameters: NWParameters
-        if let expectedFingerprint {
-            let tracker = TLSFailureTracker()
-            tlsFailureTracker = tracker
-            parameters = Self.makeTLSParameters(expectedFingerprint: expectedFingerprint, failureTracker: tracker)
-            deviceConnectionLogger.info("TLS enabled, verifying fingerprint: \(expectedFingerprint.prefix(20))...")
-        } else if Self.isLoopbackEndpoint(device.endpoint) {
+        guard let token = Self.validToken(token) else {
             tlsFailureTracker = nil
-            parameters = Self.makeLoopbackTLSParameters()
-            deviceConnectionLogger.warning("No TLS fingerprint available for loopback endpoint, allowing direct simulator connection")
-        } else {
-            tlsFailureTracker = nil
-            deviceConnectionLogger.error("No TLS fingerprint available — refusing plain TCP connection")
-            onEvent?(.disconnected(.missingFingerprint))
+            deviceConnectionLogger.error("No TLS token available — refusing connection")
+            onEvent?(.disconnected(.missingToken))
             return
         }
+
+        tlsFailureTracker = nil
+        let parameters = Self.makeTLSParameters(token: token)
+        deviceConnectionLogger.info("TLS enabled with token-derived PSK")
 
         let conn = NWConnection(to: device.endpoint, using: parameters)
 
@@ -147,6 +141,13 @@ final class DeviceConnection: TransportReachabilityConnecting {
         case .connected(let active): return active.connection
         case .disconnected: return nil
         }
+    }
+
+    private nonisolated static func validToken(_ token: String?) -> String? {
+        guard let token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return token
     }
 
     /// Internal for testing: state updates are normally dispatched by the

@@ -8,8 +8,7 @@ struct MuscleHandshakePhase {
         envelope: RequestEnvelope,
         respond: @escaping TheMuscleAdmission.ResponseHandler,
         clientRegistry: inout TheMuscleClientRegistry,
-        tokenAdmission: inout SessionAdmission,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
+        tokenAdmission: inout SessionAdmission
     ) -> MuscleAdmissionDecision {
         guard envelope.buttonHeistVersion == buttonHeistVersion else {
             muscleAuthenticationLogger.warning(
@@ -40,8 +39,7 @@ struct MuscleHandshakePhase {
                 payload: payload,
                 respond: respond,
                 clientRegistry: &clientRegistry,
-                tokenAdmission: &tokenAdmission,
-                uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
+                tokenAdmission: &tokenAdmission
             )
         default:
             return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(
@@ -76,8 +74,7 @@ struct MuscleHandshakePhase {
         payload: AuthenticatePayload,
         respond: @escaping TheMuscleAdmission.ResponseHandler,
         clientRegistry: inout TheMuscleClientRegistry,
-        tokenAdmission: inout SessionAdmission,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
+        tokenAdmission: inout SessionAdmission
     ) -> MuscleAdmissionDecision {
         guard clientRegistry.phase(for: clientId)?.hasCompletedHello == true else {
             return .handled(MuscleAuthenticationRejection.unauthenticatedMessage(
@@ -98,15 +95,7 @@ struct MuscleHandshakePhase {
         }
 
         if payload.token.isEmpty {
-            return MuscleUIApprovalPhase.request(
-                clientId,
-                address: phase.address,
-                driverId: payload.driverId,
-                clientRegistry: &clientRegistry,
-                tokenAdmission: tokenAdmission,
-                respond: respond,
-                uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
-            )
+            return .handled(.response(.error(tokenAdmission.emptyTokenError()), respond: respond, disconnect: clientId))
         }
 
         return MuscleTokenAuthenticationPhase.authenticate(

@@ -38,7 +38,7 @@ public final class TheFence {
         /// Resolved `.buttonheist.json` config (device filter, token, output paths).
         /// Supplied by the CLI/MCP entry points from discovered config files.
         var fileConfig: ButtonHeistFileConfig?
-        /// Direct host:port target with optional TLS fingerprint from config.
+        /// Direct host:port target. Legacy configs may still carry a fingerprint.
         var directDevice: DiscoveredDevice?
         /// Test/config override for heist and screenshot storage root.
         var heistStoreBaseDirectory: URL?

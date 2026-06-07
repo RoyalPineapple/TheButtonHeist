@@ -176,8 +176,8 @@ final class StartupConfigurationTests: XCTestCase {
             port: 0
         )
 
-        XCTAssertNil(runtimeConfiguration.token)
-        XCTAssertEqual(runtimeConfiguration.tokenSource, .generated)
+        XCTAssertEqual(runtimeConfiguration.token, "startup-token")
+        XCTAssertEqual(runtimeConfiguration.tokenSource, .environment)
         XCTAssertEqual(runtimeConfiguration.instanceIdSource, .generated)
         XCTAssertEqual(runtimeConfiguration.preferredPort, 0)
         XCTAssertEqual(runtimeConfiguration.preferredPortSource, .defaultValue)

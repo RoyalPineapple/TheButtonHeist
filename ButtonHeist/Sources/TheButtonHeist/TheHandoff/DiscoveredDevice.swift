@@ -23,7 +23,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     private let advertisedDeviceName: String?
     /// Instance identifier from Bonjour TXT record (human-readable label)
     let instanceId: String?
-    /// TLS certificate fingerprint from Bonjour TXT record (sha256:hex)
+    /// Legacy TLS certificate fingerprint from older Bonjour TXT records. Current PSK transport ignores it.
     let certFingerprint: String?
     /// Connection scope advertised or inferred at discovery time.
     let connectionType: ConnectionScope

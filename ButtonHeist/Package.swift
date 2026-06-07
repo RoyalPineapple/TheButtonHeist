@@ -19,8 +19,6 @@ let package = Package(
     dependencies: [
         .package(path: "../submodules/AccessibilitySnapshotBH"),
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
-        .package(url: "https://github.com/apple/swift-certificates", .upToNextMinor(from: "1.18.0")),
-        .package(url: "https://github.com/apple/swift-crypto", .upToNextMinor(from: "3.15.0")),
     ],
     targets: [
         .target(
@@ -63,8 +61,6 @@ let package = Package(
                     package: "AccessibilitySnapshotBH",
                     condition: .when(platforms: [.iOS])
                 ),
-                .product(name: "X509", package: "swift-certificates"),
-                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Sources/TheInsideJob",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
@@ -81,7 +77,6 @@ let package = Package(
             dependencies: [
                 "TheScore",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
-                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Sources/TheButtonHeist",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
@@ -108,7 +103,6 @@ let package = Package(
             name: "ButtonHeistTests",
             dependencies: [
                 "ButtonHeist", "TheScore",
-                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/ButtonHeistTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
@@ -117,7 +111,6 @@ let package = Package(
             name: "TheInsideJobTests",
             dependencies: [
                 "TheInsideJob", "TheScore",
-                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/TheInsideJobTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

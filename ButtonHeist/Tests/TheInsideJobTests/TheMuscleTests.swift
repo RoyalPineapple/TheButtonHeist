@@ -228,7 +228,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testMessageRateAdmissionReturnsGeneralErrorForFirstOverLimitFrame() throws {
         var admission = TheMuscleAdmission(
-            tokenSource: .generated("good-token"),
+            tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
         )
@@ -240,7 +240,6 @@ final class TheMuscleTests: XCTestCase {
                 1,
                 data: data,
                 respond: { _ in },
-                uiApprovalUnavailableDiagnostic: nil,
                 at: now
             )
         }
@@ -249,7 +248,6 @@ final class TheMuscleTests: XCTestCase {
             1,
             data: data,
             respond: { _ in },
-            uiApprovalUnavailableDiagnostic: nil,
             at: now
         ) else {
             return XCTFail("Expected over-limit frame to be handled by admission")
@@ -267,7 +265,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testMessageRateAdmissionNotifiesOnlyOncePerWindow() throws {
         var admission = TheMuscleAdmission(
-            tokenSource: .generated("good-token"),
+            tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
         )
@@ -279,7 +277,6 @@ final class TheMuscleTests: XCTestCase {
                 1,
                 data: data,
                 respond: { _ in },
-                uiApprovalUnavailableDiagnostic: nil,
                 at: now
             )
         }
@@ -288,7 +285,6 @@ final class TheMuscleTests: XCTestCase {
             1,
             data: data,
             respond: { _ in },
-            uiApprovalUnavailableDiagnostic: nil,
             at: now
         ) else {
             return XCTFail("Expected first over-limit frame to be handled")
@@ -299,7 +295,6 @@ final class TheMuscleTests: XCTestCase {
             1,
             data: data,
             respond: { _ in },
-            uiApprovalUnavailableDiagnostic: nil,
             at: now
         ) else {
             return XCTFail("Expected repeated over-limit frame to be handled")
@@ -310,7 +305,6 @@ final class TheMuscleTests: XCTestCase {
             1,
             data: data,
             respond: { _ in },
-            uiApprovalUnavailableDiagnostic: nil,
             at: now.addingTimeInterval(1.1)
         ) else {
             return XCTFail("Expected next-window frame to continue through normal admission")
@@ -325,7 +319,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testMessageRateAdmissionLimitsAuthenticatedMessagesBeforeDispatch() throws {
         var admission = TheMuscleAdmission(
-            tokenSource: .generated("good-token"),
+            tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
         )
@@ -338,7 +332,6 @@ final class TheMuscleTests: XCTestCase {
             1,
             data: helloData,
             respond: respond,
-            uiApprovalUnavailableDiagnostic: nil,
             at: now
         ) else {
             return XCTFail("Expected client hello to be handled")
@@ -348,7 +341,6 @@ final class TheMuscleTests: XCTestCase {
             1,
             data: try encodeAuth(token: "good-token"),
             respond: respond,
-            uiApprovalUnavailableDiagnostic: nil,
             at: now
         ) else {
             return XCTFail("Expected valid token to request authentication completion")
@@ -362,7 +354,6 @@ final class TheMuscleTests: XCTestCase {
                 1,
                 data: pingData,
                 respond: respond,
-                uiApprovalUnavailableDiagnostic: nil,
                 at: nextWindow
             ) else {
                 return XCTFail("Expected authenticated message to reach dispatch before rate limit")
@@ -373,7 +364,6 @@ final class TheMuscleTests: XCTestCase {
             1,
             data: pingData,
             respond: respond,
-            uiApprovalUnavailableDiagnostic: nil,
             at: nextWindow
         ) else {
             return XCTFail("Expected over-limit authenticated message to be handled by admission")
@@ -432,13 +422,13 @@ final class TheMuscleTests: XCTestCase {
             guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
             return error
         }.first
-        XCTAssertTrue(authFailure?.message.contains("generated the session token") == true)
+        XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
         let connections = await muscle.activeSessionConnections
         XCTAssertFalse(connections.contains(1))
         XCTAssertEqual(connections.count, 0)
     }
 
-    func testGeneratedTokenEmptyTokenTriggersPendingApproval() async throws {
+    func testGeneratedTokenRejectsEmptyTokenWithoutUIApproval() async throws {
         await muscle.tearDown()
         muscle = makeMuscle(explicitToken: nil)
         sink = CallbackSink()
@@ -446,61 +436,29 @@ final class TheMuscleTests: XCTestCase {
         let (respond, responses) = collectResponses()
         try await authenticate(clientId: 1, token: "", respond: respond)
 
-        await muscle.approveClient(1)
-
-        let payload = try XCTUnwrap(authApprovedPayloads(from: responses()).first)
-        XCTAssertNotNil(payload.token)
+        let authFailure = responses().compactMap { data -> ServerError? in
+            guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
+            return error
+        }.first
+        XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
+        XCTAssertTrue(authApprovedPayloads(from: responses()).isEmpty)
+        XCTAssertTrue(authApprovalPendingPayloads(from: responses()).isEmpty)
     }
 
-    func testGeneratedTokenEmptyTokenReportsApprovalPendingBeforePromptResponse() async throws {
-        await muscle.tearDown()
-        muscle = makeMuscle(explicitToken: nil)
-        sink = CallbackSink()
-        await installCallbacks()
-        let (respond, responses) = collectResponses()
-
-        try await authenticate(clientId: 1, token: "", respond: respond)
-
-        let payload = try XCTUnwrap(authApprovalPendingPayloads(from: responses()).first)
-        XCTAssertEqual(payload.message, "Waiting for approval on the device.")
-        XCTAssertEqual(payload.hint, "Tap Allow on the iOS device to continue.")
-    }
-
-    func testGeneratedTokenIsReturnedAfterUIApproval() async throws {
+    func testGeneratedTokenAuthenticatesWhenProvided() async throws {
         await muscle.tearDown()
         muscle = makeMuscle(explicitToken: nil)
         sink = CallbackSink()
         await installCallbacks()
         let generatedToken = await muscle.sessionToken
-        let (respond, responses) = collectResponses()
-        try await authenticate(clientId: 1, token: "", respond: respond)
 
-        await muscle.approveClient(1)
+        try await authenticate(clientId: 1, token: generatedToken, respond: respondSink())
 
-        let payload = try XCTUnwrap(authApprovedPayloads(from: responses()).first)
-        XCTAssertEqual(payload.token, generatedToken)
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.contains(1))
     }
 
-    func testApprovalPayloadIsDerivedFromTokenSource() async throws {
-        let explicitResponses = collectResponses()
-        try await authenticate(clientId: 1, token: "", respond: explicitResponses.respond)
-        XCTAssertTrue(authApprovedPayloads(from: explicitResponses.responses()).isEmpty)
-
-        await muscle.tearDown()
-        muscle = makeMuscle(explicitToken: nil)
-        sink = CallbackSink()
-        await installCallbacks()
-
-        let generatedToken = await muscle.sessionToken
-        let generatedResponses = collectResponses()
-        try await authenticate(clientId: 2, token: "", respond: generatedResponses.respond)
-        await muscle.approveClient(2)
-
-        let payload = try XCTUnwrap(authApprovedPayloads(from: generatedResponses.responses()).first)
-        XCTAssertEqual(payload.token, generatedToken)
-    }
-
-    func testGeneratedTokenInvalidTokenSuggestsUIApproval() async throws {
+    func testGeneratedTokenInvalidTokenSuggestsConfiguredToken() async throws {
         await muscle.tearDown()
         muscle = makeMuscle(explicitToken: nil)
         sink = CallbackSink()
@@ -515,11 +473,11 @@ final class TheMuscleTests: XCTestCase {
         }.first
         XCTAssertEqual(
             authFailure?.message,
-            "Invalid token. Retry without a token to request a fresh session."
+            "Invalid token. Retry with the configured token."
         )
     }
 
-    func testGeneratedTokenRejectsEmptyTokenWhileSessionActive() async throws {
+    func testGeneratedTokenStillRejectsEmptyTokenWhileSessionActive() async throws {
         await muscle.tearDown()
         muscle = makeMuscle(explicitToken: nil)
         sink = CallbackSink()
@@ -530,9 +488,11 @@ final class TheMuscleTests: XCTestCase {
 
         try await authenticate(clientId: 2, token: "", respond: respond)
 
-        let payload = try XCTUnwrap(sessionLockedPayloads(from: responses()).first)
-        XCTAssertTrue(payload.message.contains("UI approval is unavailable"))
-        XCTAssertEqual(payload.activeConnections, 1)
+        let authFailure = responses().compactMap { data -> ServerError? in
+            guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
+            return error
+        }.first
+        XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
         let connections = await muscle.activeSessionConnections
         XCTAssertFalse(connections.contains(2))
     }

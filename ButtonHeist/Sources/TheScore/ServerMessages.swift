@@ -43,10 +43,10 @@ public enum ServerMessage: Codable, Sendable {
     /// Server requires authentication (sent after successful hello handshake)
     case authRequired
 
-    /// Server is waiting on the on-device approval prompt for this connection.
+    /// Legacy compatibility: older servers used this while waiting on on-device approval.
     case authApprovalPending(AuthApprovalPendingPayload)
 
-    /// Authentication approved via on-device UI — includes token for future reconnections
+    /// Legacy compatibility: older servers used this to return an approved token.
     case authApproved(AuthApprovedPayload)
 
     /// Server info on connection

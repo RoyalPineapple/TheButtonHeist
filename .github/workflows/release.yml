@@ -168,9 +168,6 @@ jobs:
           FRAMEWORKS=(
             TheInsideJob TheScore
             AccessibilitySnapshotParser AccessibilitySnapshotParser_ObjC
-            X509 Crypto SwiftASN1
-            CCryptoBoringSSL CCryptoBoringSSLShims CryptoBoringWrapper
-            _CertificateInternals _CryptoExtras
           )
           for fw in "${FRAMEWORKS[@]}"; do
             cp -R "${PRODUCTS_DIR}/${fw}.framework" dist/ButtonHeistFrameworks/

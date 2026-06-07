@@ -100,9 +100,7 @@ final class TheHandoff {
     // MARK: - Injectable Closures
 
     var makeDiscovery: () -> any DeviceDiscovering = { DeviceDiscovery() }
-    var makeConnection: (DiscoveredDevice) -> any DeviceConnecting = {
-        DeviceConnection(device: $0)
-    }
+    var makeConnection: ((DiscoveredDevice) -> any DeviceConnecting)?
 
     // MARK: - Discovery / Connection Handles
 

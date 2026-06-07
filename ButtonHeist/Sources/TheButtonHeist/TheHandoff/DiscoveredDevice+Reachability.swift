@@ -8,11 +8,11 @@ extension Array where Element == DiscoveredDevice {
     /// Uses a passive transport/TLS-ready probe as a lightweight liveness check.
     /// Reachability never enters the post-handshake session lifecycle or asks
     /// the server for pre-auth identity.
-    func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
+    func reachable(token: String? = nil, timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
         await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
             for (index, device) in self.enumerated() {
                 group.addTask {
-                    let reachable = await device.reachability(timeout: timeout).isReachable
+                    let reachable = await device.reachability(token: token, timeout: timeout).isReachable
                     return reachable ? (index, device) : (index, nil)
                 }
             }
@@ -26,10 +26,7 @@ extension Array where Element == DiscoveredDevice {
 }
 
 @ButtonHeistActor
-var makeReachabilityConnection: (DiscoveredDevice) -> any TransportReachabilityConnecting = { device in
-    let connection = DeviceConnection(device: device)
-    return connection
-}
+var makeReachabilityConnection: ((DiscoveredDevice) -> any TransportReachabilityConnecting)?
 
 enum DeviceReachability: Equatable {
     case reachable
@@ -46,13 +43,13 @@ enum DeviceReachability: Equatable {
 
 extension DiscoveredDevice {
     @ButtonHeistActor
-    func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
-        await reachability(timeout: timeout).isReachable
+    func isReachable(token: String? = nil, timeout: TimeInterval = 1.5) async -> Bool {
+        await reachability(token: token, timeout: timeout).isReachable
     }
 
     @ButtonHeistActor
-    func reachability(timeout: TimeInterval = 1.5) async -> DeviceReachability {
-        let connection = makeReachabilityConnection(self)
+    func reachability(token: String? = nil, timeout: TimeInterval = 1.5) async -> DeviceReachability {
+        let connection = makeReachabilityConnection?(self) ?? DeviceConnection(device: self, token: token)
         let deviceName = name
         let resolver = ReachabilityResolver()
 

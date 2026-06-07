@@ -4,6 +4,7 @@ import Foundation
 @ButtonHeistActor
 struct ReachableDeviceScanner {
     let getDiscoveredDevices: () -> [DiscoveredDevice]
+    var token: String?
 
     func scan(
         timeout: TimeInterval = 3.0,
@@ -28,7 +29,7 @@ struct ReachableDeviceScanner {
 
             if !dueDevices.isEmpty {
                 let retryAt = Date().addingTimeInterval(retryInterval)
-                let reachable = await dueDevices.reachable(timeout: probeTimeout)
+                let reachable = await dueDevices.reachable(token: token, timeout: probeTimeout)
                 let reachableDeviceIDs = Set(reachable.map(\.id))
                 for device in dueDevices {
                     if reachableDeviceIDs.contains(device.id) {

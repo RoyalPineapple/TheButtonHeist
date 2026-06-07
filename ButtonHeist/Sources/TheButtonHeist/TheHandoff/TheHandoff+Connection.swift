@@ -15,7 +15,7 @@ extension TheHandoff {
     func openConnection(to device: DiscoveredDevice) -> UUID {
         let attemptID = connectionLifecycle.beginConnecting(device: device)
 
-        connection = makeConnection(device)
+        connection = makeConnection?(device) ?? DeviceConnection(device: device, token: token)
         connection?.onEvent = { [weak self, attemptID] event in
             self?.handleConnectionEvent(event, attemptID: attemptID, device: device)
         }

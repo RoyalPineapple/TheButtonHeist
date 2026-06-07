@@ -30,7 +30,6 @@ extension TheInsideJob {
 
     func logStartupSummary(
         actualPort: UInt16,
-        tlsFingerprint: String,
         bonjourServiceName: String?
     ) {
         let scopeNames = runtimeConfiguration.allowedScopes.map(\.rawValue).sorted().joined(separator: ",")
@@ -47,13 +46,12 @@ extension TheInsideJob {
             "instanceIdentifier=\(effectiveInstanceId)(\(runtimeConfiguration.instanceIdSource.label))",
             "allowedScopes=\(scopeNames)(\(runtimeConfiguration.allowedScopesSource.label))",
             "sessionTimeout=\(runtimeConfiguration.sessionReleaseTimeout.value)s(\(runtimeConfiguration.sessionReleaseTimeout.source.label))",
-            "tls=enabled fingerprint=\(tlsFingerprint)",
+            "tls=psk",
             bonjourDescription
         ].joined(separator: " ")
-        if runtimeConfiguration.tokenSource == .generated {
-            insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=<redacted>")
-        } else {
-            insideJobLogger.info("Startup summary: \(fields, privacy: .public)")
+        insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=<redacted>")
+        if runtimeConfiguration.tokenSource == .generated, let token = runtimeConfiguration.token {
+            insideJobLogger.warning("Generated ButtonHeist token: BUTTONHEIST_TOKEN=\(token, privacy: .public)")
         }
     }
 }

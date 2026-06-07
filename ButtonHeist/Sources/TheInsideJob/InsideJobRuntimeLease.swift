@@ -11,7 +11,6 @@ final class InsideJobRuntimeLease {
 
     let transport: ServerTransport
     let actualPort: UInt16
-    let tlsFingerprint: String
     let bonjourServiceName: String?
     private var isActive = false
     private var releaseTask: Task<Void, Never>?
@@ -19,12 +18,10 @@ final class InsideJobRuntimeLease {
     init(
         transport: ServerTransport,
         actualPort: UInt16,
-        tlsFingerprint: String,
         bonjourServiceName: String?
     ) {
         self.transport = transport
         self.actualPort = actualPort
-        self.tlsFingerprint = tlsFingerprint
         self.bonjourServiceName = bonjourServiceName
     }
 

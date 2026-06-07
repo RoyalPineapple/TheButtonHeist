@@ -10,7 +10,6 @@ extension TheInsideJob {
         let lease = try await startRuntimeLease(phase: "startup", leavesStoppedOnFailure: true)
         logStartupSummary(
             actualPort: lease.actualPort,
-            tlsFingerprint: lease.tlsFingerprint,
             bonjourServiceName: lease.bonjourServiceName
         )
         return lease
@@ -40,10 +39,10 @@ extension TheInsideJob {
     }
 
     private func startRuntimeLease(phase: String, leavesStoppedOnFailure: Bool) async throws -> InsideJobRuntimeLease {
-        let identity = try makeTLSIdentity(phase: phase)
-        insideJobLogger.info("TLS identity ready: \(identity.fingerprint)")
+        let token = try requireRuntimeToken(phase: phase)
+        insideJobLogger.info("TLS PSK material ready")
 
-        let transport = transportFactory(identity, runtimeConfiguration.allowedScopes)
+        let transport = transportFactory(token, runtimeConfiguration.allowedScopes)
         installTransportOverflowHandler(transport)
         await getaway.wireTransport(transport)
 
@@ -57,7 +56,6 @@ extension TheInsideJob {
             return InsideJobRuntimeLease(
                 transport: transport,
                 actualPort: actualPort,
-                tlsFingerprint: identity.fingerprint,
                 bonjourServiceName: serviceName
             )
         } catch {
@@ -69,30 +67,13 @@ extension TheInsideJob {
         }
     }
 
-    static func defaultTLSIdentityProvider() throws -> TLSIdentity {
-        do {
-            return try TLSIdentity.getOrCreate()
-        } catch {
-            throw InsideJobStartupError.tlsIdentityUnavailable(
-                phase: "identity-creation",
-                reason: error.localizedDescription
-            )
-        }
-    }
-
-    func makeTLSIdentity(phase: String) throws -> TLSIdentity {
-        do {
-            return try tlsIdentityProvider()
-        } catch let error as InsideJobStartupError {
+    func requireRuntimeToken(phase: String) throws -> String {
+        guard let token = runtimeConfiguration.token,
+              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             getaway.identity.tlsActive = false
-            throw error
-        } catch {
-            getaway.identity.tlsActive = false
-            throw InsideJobStartupError.tlsIdentityUnavailable(
-                phase: phase,
-                reason: error.localizedDescription
-            )
+            throw InsideJobStartupError.tokenRequired(phase: phase)
         }
+        return token
     }
 
     func installTransportOverflowHandler(_ transport: ServerTransport) {

@@ -3,12 +3,15 @@
 import Foundation
 
 enum InsideJobStartupError: Error, LocalizedError, Equatable, Sendable {
-    case tlsIdentityUnavailable(phase: String, reason: String)
+    case tokenRequired(phase: String)
 
     var errorDescription: String? {
         switch self {
-        case .tlsIdentityUnavailable(let phase, let reason):
-            return "TLS identity unavailable during \(phase); listener was not started and Bonjour was not published. \(reason)"
+        case .tokenRequired(let phase):
+            return """
+            InsideJob token required during \(phase); listener was not started and Bonjour was not published. \
+            Set INSIDEJOB_TOKEN, InsideJobToken, or call TheInsideJob.configure(token:).
+            """
         }
     }
 }

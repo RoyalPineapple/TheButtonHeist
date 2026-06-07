@@ -164,8 +164,8 @@ target resolution, TLS trust, authentication, session state, keepalive, and
 bounded reconnect.
 
 Connection diagnostics are exposed as product-level failures: transport
-failure, auth failure, approval pending/timeout, session lock, protocol
-version mismatch, missing TLS fingerprint for non-loopback targets, backlog
+failure, auth failure, session lock, protocol version mismatch, missing token,
+backlog
 overflow, no discovered device, or no matching target.
 
 Named targets live in `.buttonheist.json` or
@@ -176,16 +176,15 @@ Named targets live in `.buttonheist.json` or
   "targets": {
     "demo": {
       "device": "<host>:<port>",
-      "token": "my-token",
-      "certFingerprint": "sha256:<hex>"
+      "token": "my-token"
     }
   },
   "default": "demo"
 }
 ```
 
-Non-loopback direct targets require configured or persisted TLS trust, normally
-through `certFingerprint`.
+Existing configs may still contain `certFingerprint`; the current
+Network.framework PSK transport ignores it and uses the target token instead.
 
 ## ButtonHeistMCP
 

@@ -19,7 +19,6 @@ actor TheMuscle {
     private let sessionTokenSource: SessionTokenSource
     private var admission: TheMuscleAdmission
     private var session: TheMuscleSession
-    private let approvalPrompts: MuscleApprovalPromptCallbacks
     private var delivery: ClientDelivery = .unwired
     private var sessionReleaseTimer: Task<Void, Never>?
     private var sessionReleaseTimerGeneration: UInt64 = 0
@@ -33,12 +32,11 @@ actor TheMuscle {
 
     // MARK: - Init
 
-    /// Caller must be on `@MainActor` because `AlertPresenter` is MainActor-isolated.
+    /// Caller must be on `@MainActor` because runtime assembly is MainActor-isolated.
     @MainActor
     init(
         explicitToken: String?,
-        sessionReleaseTimeout: TimeInterval,
-        alerts: AlertPresenter? = nil
+        sessionReleaseTimeout: TimeInterval
     ) {
         let tokenSource = SessionTokenSource(explicitToken: explicitToken)
         self.sessionTokenSource = tokenSource
@@ -50,7 +48,6 @@ actor TheMuscle {
         self.session = TheMuscleSession(
             releaseTimeout: sessionReleaseTimeout
         )
-        self.approvalPrompts = MuscleApprovalPromptCallbacks(alerts: alerts ?? AlertPresenter())
     }
 
     // MARK: - Test Seams
@@ -144,8 +141,7 @@ actor TheMuscle {
         await resolveAdmissionDecision(admission.admitClientMessage(
             clientId,
             data: data,
-            respond: respond,
-            uiApprovalUnavailableDiagnostic: session.uiApprovalUnavailableDiagnostic()
+            respond: respond
         ))
     }
 
@@ -155,25 +151,11 @@ actor TheMuscle {
         applySessionReleaseTimerAction(session.removeConnection(clientId))
     }
 
-    func approveClient(_ clientId: Int) async {
-        guard let authentication = admission.approvalAuthentication(clientId) else { return }
-        await completeAuthentication(authentication)
-    }
-
-    func denyClient(_ clientId: Int) async {
-        await applyAdmissionEffect(admission.denyClient(clientId))
-    }
-
     func tearDown() async {
         admission.removeAllClients()
         cancelAllAuthenticationDeadlines()
         delayedDisconnects.cancelAll()
-        let approvalPrompts = approvalPrompts
-        await MainActor.run {
-            approvalPrompts.cancelAll()
-        }
         await releaseSession()
-        await dismissAlert()
     }
 
     // MARK: - Admission Orchestration
@@ -224,12 +206,6 @@ actor TheMuscle {
             }
         }
 
-        if let clientId = effect.approvalPromptClientId {
-            await showApprovalAlert(clientId: clientId)
-        }
-        if effect.dismissApprovalPrompt {
-            await dismissAlert()
-        }
         if let clientId = effect.delayedDisconnectClientId {
             scheduleDelayedDisconnect(clientId)
         }
@@ -309,26 +285,6 @@ actor TheMuscle {
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
         sessionReleaseTimerGeneration &+= 1
-    }
-
-    // MARK: - Alert Presentation
-
-    /// Present the connection-approval UI for `clientId`.
-    private func showApprovalAlert(clientId: Int) async {
-        await approvalPrompts.show(
-            clientId: clientId,
-            onAllow: { [weak self] in
-                await self?.approveClient(clientId)
-            },
-            onDeny: { [weak self] in
-                await self?.denyClient(clientId)
-            }
-        )
-    }
-
-    private func dismissAlert() async {
-        let approvalPrompts = approvalPrompts
-        await approvalPrompts.dismiss()
     }
 
     // MARK: - Helpers

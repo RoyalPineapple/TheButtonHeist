@@ -1,12 +1,10 @@
 import XCTest
 import Network
-import Security
-import CryptoKit
-import os
+
+import TheScore
 @testable import TheInsideJob
 
-/// Integration tests for TLS transport over real TCP connections.
-/// Verifies end-to-end TLS handshake, fingerprint pinning, and data exchange.
+/// Integration tests for token-derived Network.framework TLS-PSK transport.
 final class TLSIntegrationTests: XCTestCase {
 
     private var server: SimpleSocketServer!
@@ -22,12 +20,9 @@ final class TLSIntegrationTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // MARK: - TLS Handshake
-
-    func testTLSHandshakeWithFingerprintPinning() async throws {
-        let identity = try makeEphemeralIdentityOrSkip()
-        let generatedTLSParams = await identity.makeTLSParameters()
-        let tlsParams = try XCTUnwrap(generatedTLSParams, "TLS parameters must be created")
+    func testTLSHandshakeWithPreSharedKey() async throws {
+        let token = "correct horse battery staple"
+        let tlsParams = ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
 
         let connected = expectation(description: "client connected to server")
         let callbacks = SocketServerCallbacks(
@@ -36,11 +31,10 @@ final class TLSIntegrationTests: XCTestCase {
         let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams, callbacks: callbacks)
         XCTAssertGreaterThan(port, 0)
 
-        let clientParams = Self.makeClientTLSParameters(expectedFingerprint: identity.fingerprint)
         let connection = NWConnection(
             host: .ipv6(.loopback),
             port: NWEndpoint.Port(rawValue: port)!,
-            using: clientParams
+            using: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
         )
 
         let clientReady = expectation(description: "client TLS handshake complete")
@@ -55,10 +49,8 @@ final class TLSIntegrationTests: XCTestCase {
         connection.cancel()
     }
 
-    func testDataExchangeOverTLS() async throws {
-        let identity = try makeEphemeralIdentityOrSkip()
-        let tlsParams = await identity.makeTLSParameters()!
-
+    func testDataExchangeOverTLSPreSharedKey() async throws {
+        let token = "shared-token"
         let echoMessage = Data("hello-tls\n".utf8)
         let echoReceived = expectation(description: "server received message")
 
@@ -68,13 +60,17 @@ final class TLSIntegrationTests: XCTestCase {
                 echoReceived.fulfill()
             }
         )
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams, callbacks: callbacks)
+        let port = try await server.startAsync(
+            port: 0,
+            bindToLoopback: true,
+            tlsParameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token),
+            callbacks: callbacks
+        )
 
-        let clientParams = Self.makeClientTLSParameters(expectedFingerprint: identity.fingerprint)
         let connection = NWConnection(
             host: .ipv6(.loopback),
             port: NWEndpoint.Port(rawValue: port)!,
-            using: clientParams
+            using: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
         )
 
         let clientReady = expectation(description: "client ready")
@@ -99,18 +95,17 @@ final class TLSIntegrationTests: XCTestCase {
         connection.cancel()
     }
 
-    func testWrongFingerprintRejectsConnection() async throws {
-        let identity = try makeEphemeralIdentityOrSkip()
-        let tlsParams = await identity.makeTLSParameters()!
+    func testWrongPreSharedKeyRejectsConnection() async throws {
+        let port = try await server.startAsync(
+            port: 0,
+            bindToLoopback: true,
+            tlsParameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: "server-token")
+        )
 
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams)
-
-        let wrongFingerprint = "sha256:" + String(repeating: "ab", count: 32)
-        let clientParams = Self.makeClientTLSParameters(expectedFingerprint: wrongFingerprint)
         let connection = NWConnection(
             host: .ipv6(.loopback),
             port: NWEndpoint.Port(rawValue: port)!,
-            using: clientParams
+            using: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: "client-token")
         )
 
         let connectionFailed = expectation(description: "connection should fail or not reach ready")
@@ -130,12 +125,7 @@ final class TLSIntegrationTests: XCTestCase {
     }
 
     func testPassiveReachabilityDoesNotSendUnauthenticatedStatusOverTLS() async throws {
-        let identity = try makeEphemeralIdentityOrSkip()
-        let tlsParams = await identity.makeTLSParameters()!
-
-        // Use the instance server directly (cleaned up by tearDown) instead of
-        // ServerTransport, which uses fire-and-forget Task cleanup that can
-        // leave lingering state between test runner invocations.
+        let token = "probe-token"
         let clientConnected = expectation(description: "client connected")
         let unexpectedPreAuthData = expectation(description: "no unauthenticated status probe")
         unexpectedPreAuthData.isInverted = true
@@ -148,13 +138,17 @@ final class TLSIntegrationTests: XCTestCase {
                 unexpectedPreAuthData.fulfill()
             }
         )
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams, callbacks: callbacks)
+        let port = try await server.startAsync(
+            port: 0,
+            bindToLoopback: true,
+            tlsParameters: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token),
+            callbacks: callbacks
+        )
 
-        let clientParams = Self.makeClientTLSParameters(expectedFingerprint: identity.fingerprint)
         let connection = NWConnection(
             host: .ipv6(.loopback),
             port: NWEndpoint.Port(rawValue: port)!,
-            using: clientParams
+            using: ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
         )
 
         let clientReady = expectation(description: "client ready")
@@ -168,37 +162,6 @@ final class TLSIntegrationTests: XCTestCase {
         await fulfillment(of: [unexpectedPreAuthData], timeout: 0.2)
 
         connection.cancel()
-    }
-
-    // MARK: - Helpers
-
-    private static func makeClientTLSParameters(expectedFingerprint: String) -> NWParameters {
-        let tlsOptions = NWProtocolTLS.Options()
-
-        sec_protocol_options_set_min_tls_protocol_version(
-            tlsOptions.securityProtocolOptions,
-            .TLSv13
-        )
-
-        let expected = expectedFingerprint
-        sec_protocol_options_set_verify_block(
-            tlsOptions.securityProtocolOptions,
-            { _, trust, completionHandler in
-                let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
-                guard let chain = SecTrustCopyCertificateChain(secTrust) as? [SecCertificate],
-                      let leaf = chain.first else {
-                    completionHandler(false)
-                    return
-                }
-                let derData = SecCertificateCopyData(leaf) as Data
-                let hash = SHA256.hash(data: derData)
-                let actual = "sha256:" + hash.map { String(format: "%02x", $0) }.joined()
-                completionHandler(actual == expected)
-            },
-            DispatchQueue(label: "com.buttonheist.tls.test.verify")
-        )
-
-        return NWParameters(tls: tlsOptions)
     }
 
     private func receiveData(from connection: NWConnection, timeout: TimeInterval = 5.0) async throws -> Data {
