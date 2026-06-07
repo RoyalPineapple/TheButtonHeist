@@ -8,7 +8,7 @@ _Generated from `TheFence.Command.descriptors`._
 |---------|--------|-----|-----|-------------|
 | `activate` | `semanticAction` | `activate` | - | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
 | `connect` | `session` | `connect` | direct | Establish or switch the active connection to a Button Heist app. |
-| `describe_heist` | `heistRuntime` | `describe_heist` | direct | Describe one root entry or reusable heist from a runtime-validated plan. The `heist` parameter selects the entry/capability name; the plan can be supplied as canonical ButtonHeist source via `plan` or loaded from a `path` to a .heist package artifact. |
+| `describe_heist` | `heistRuntime` | `describe_heist` | direct | Describe one root entry or reusable heist from a plan so an agent can call it safely. |
 | `dismiss_keyboard` | `semanticAction` | `dismiss_keyboard` | - | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `spatialAction` | `drag` | - | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
 | `edit_action` | `semanticAction` | `edit_action` | - | Perform an edit action on the current first responder. |
@@ -17,14 +17,14 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_screen` | `observation` | `get_screen` | direct | Capture a PNG screenshot with optional inline data and interface state. |
 | `get_session_state` | `session` | `get_session_state` | direct | Inspect connection, device, and last-action session state. |
 | `list_devices` | `session` | `list_devices` | - | List discovered iOS devices and configured connection targets. |
-| `list_heists` | `heistRuntime` | `list_heists` | direct | List a summary menu of the root entry and named reusable heists derived from one runtime-validated plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan can be supplied as canonical ButtonHeist source via `plan` or loaded from a `path` to a .heist package artifact. |
+| `list_heists` | `heistRuntime` | `list_heists` | direct | List the root entry and reusable heists in a plan. Use `detail: "detailed"` when composing against available capabilities. |
 | `list_targets` | `session` | `list_targets` | - | List configured connection targets and the default target. |
 | `long_press` | `spatialAction` | `long_press` | - | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
 | `one_finger_tap` | `spatialAction` | `one_finger_tap` | - | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
-| `perform` | `heistRuntime` | - | direct | Perform exactly one primitive ButtonHeist step from `step` source. The fence wraps it as `HeistPlan { <step> }`, compiles it through ThePlans, requires one action or simple WaitFor step, then executes it through the heist runtime. Use run_heist for branching, loops, named heists, warnings, failures, or multiple steps. |
+| `perform` | `heistRuntime` | - | direct | Run one ButtonHeist DSL instruction from `step`: one action or one simple wait. |
 | `ping` | `session` | `ping` | - | Check connection health without reading accessibility state. |
 | `rotor` | `semanticAction` | `rotor` | - | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
-| `run_heist` | `heistRuntime` | `run_heist` | direct | Execute a typed heist plan, supplied as canonical ButtonHeist source via `plan`, or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: path or plan. Use `argument` when the root heist declares a string or element_target parameter. |
+| `run_heist` | `heistRuntime` | `run_heist` | direct | Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`. |
 | `scroll` | `viewportDebug` | `scroll` | - | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
 | `scroll_to_edge` | `viewportDebug` | `scroll_to_edge` | - | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
 | `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | - | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
@@ -72,7 +72,7 @@ Parameters:
 
 ### `describe_heist`
 
-Describe one root entry or reusable heist from a runtime-validated plan. The `heist` parameter selects the entry/capability name; the plan can be supplied as canonical ButtonHeist source via `plan` or loaded from a `path` to a .heist package artifact.
+Describe one root entry or reusable heist from a plan so an agent can call it safely.
 
 - Family: `heistRuntime`
 - CLI: direct command `describe_heist`
@@ -143,7 +143,11 @@ Parameters:
 
 Read the app accessibility hierarchy, optionally scoped to a subtree.
 
-containerName is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection and viewport/debug commands. It is not a semantic target or durable heist selector.
+Build DSL targets from returned accessibility language: `.label("Pay")`,
+`.identifier("pay_button")`, `.value("Milk")`, `.element(label: "Pay",
+traits: [.button])`, or `.target(..., ordinal: n)` for duplicates.
+`containerName` is for inspection and viewport/debug commands only; it is
+not a semantic target or durable heist selector.
 
 - Family: `observation`
 - CLI: direct command `get_interface`
@@ -220,7 +224,7 @@ _None._
 
 ### `list_heists`
 
-List a summary menu of the root entry and named reusable heists derived from one runtime-validated plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan can be supplied as canonical ButtonHeist source via `plan` or loaded from a `path` to a .heist package artifact.
+List the root entry and reusable heists in a plan. Use `detail: "detailed"` when composing against available capabilities.
 
 - Family: `heistRuntime`
 - CLI: direct command `list_heists`
@@ -287,7 +291,27 @@ Parameters:
 
 ### `perform`
 
-Perform exactly one primitive ButtonHeist step from `step` source. The fence wraps it as `HeistPlan { <step> }`, compiles it through ThePlans, requires one action or simple WaitFor step, then executes it through the heist runtime. Use run_heist for branching, loops, named heists, warnings, failures, or multiple steps.
+Run one ButtonHeist DSL instruction from `step`: one action or one simple wait.
+
+Examples:
+`Activate(.label("Pay")).expect(.changed(.screen()))`
+`TypeText("milk", into: .label("Search")).expect(.changed(.elements))`
+`Increment(.label("Quantity"))`
+`Decrement(.label("Quantity"))`
+`CustomAction("Archive", on: .label("Message"))`
+`Rotor("Headings", on: .label("Article"))`
+`SetPasteboard("hello")`
+`Edit(.paste)`
+`DismissKeyboard()`
+`Mechanical.Tap(.label("Map"))`
+`Mechanical.LongPress(.label("Message"))`
+`Mechanical.Swipe(.label("Carousel"), .left)`
+`Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))`
+`WaitFor(.present(.label("Checkout")), timeout: 5)`
+
+Use `perform` when one line is enough. Use `run_heist` when the job needs
+multiple instructions, reusable heists, `RunHeist`, `If`/`Else`,
+`WaitFor { ... }`, `ForEach`, `Warn`, or `Fail`.
 
 - Family: `heistRuntime`
 - CLI: not exposed
@@ -335,7 +359,22 @@ Parameters:
 
 ### `run_heist`
 
-Execute a typed heist plan, supplied as canonical ButtonHeist source via `plan`, or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: path or plan. Use `argument` when the root heist declares a string or element_target parameter.
+Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`.
+
+Author plans as ButtonHeist source, not raw JSON IR:
+`HeistPlan("shop") { ... }`
+`HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
+`RunHeist("Cart.addItem", "Milk")`
+`If(.present(.label("Pay"))) { ... } Else { ... }`
+`WaitFor(.changed(.screen()), timeout: 10) { ... } Else { ... }`
+`ForEach(["Milk", "Bread"]) { item in ... }`
+`ForEach(.matching(.label("Delete")), limit: 20) { target in ... }`
+`Warn("message")`
+`Fail("message")`
+
+Provide exactly one source: `path` or `plan`. Use `argument` when the root
+heist takes a string or element target. Runtime source is restricted
+ButtonHeist DSL, not arbitrary Swift.
 
 - Family: `heistRuntime`
 - CLI: direct command `run_heist`

@@ -55,8 +55,8 @@ extension TheFence {
         }
 
         private static let guidance = """
-        perform accepts one primitive action statement or simple WaitFor statement. \
-        Use run_heist for branching, loops, named heists, warnings, failures, or multiple steps.
+        perform accepts one action statement or one simple WaitFor statement. \
+        Use run_heist for branching, loops, reusable heists, warnings, failures, or multiple steps.
         """
     }
 
