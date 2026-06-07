@@ -84,7 +84,7 @@ final class MenuOrderDogfoodHeistTests: XCTestCase {
         XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke, .forEachString, .invoke])
         XCTAssertEqual(heist.result.steps.first?.reportDisplayName, #"RunHeist("DemoHome.openMenu")"#)
         XCTAssertEqual(heist.result.steps.last?.reportDisplayName, #"RunHeist("MenuScreen.checkout")"#)
-        XCTAssertEqual(heist.result.steps[1].forEachResult?.iterationCount, DemoOrder.itemLabels.count)
+        XCTAssertEqual(heist.result.steps[1].forEachStringEvidence?.iterationCount, DemoOrder.itemLabels.count)
     }
 }
 

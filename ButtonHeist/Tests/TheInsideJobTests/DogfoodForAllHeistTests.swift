@@ -243,7 +243,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             .invoke,
             .invoke,
         ])
-        XCTAssertEqual(heist.result.steps[1].forEachResult?.iterationCount, 2)
+        XCTAssertEqual(heist.result.steps[1].forEachStringEvidence?.iterationCount, 2)
     }
 
     func testPublicRootInputsAndPrebuiltPlansDriveDemoApp() async throws {
@@ -342,10 +342,10 @@ final class DogfoodForAllHeistTests: XCTestCase {
             .forEachElement,
             .invoke,
         ])
-        XCTAssertEqual(heist.result.steps[1].caseSelection?.selectedCaseIndex, 0)
-        XCTAssertEqual(heist.result.steps[2].caseSelection?.selectedCaseIndex, 0)
-        XCTAssertEqual(heist.result.steps[3].forEachResult?.matchedCount, 1)
-        XCTAssertEqual(heist.result.steps[3].forEachResult?.iterationCount, 1)
+        XCTAssertEqual(heist.result.steps[1].caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(heist.result.steps[2].caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(heist.result.steps[3].forEachElementEvidence?.matchedCount, 1)
+        XCTAssertEqual(heist.result.steps[3].forEachElementEvidence?.iterationCount, 1)
         XCTAssertEqual(heist.result.warnings.map(\.message), [
             "conditional matched Controls Demo",
             "wait case matched Controls Demo",
@@ -430,7 +430,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             .wait,
             .invoke,
         ])
-        XCTAssertEqual(heist.result.steps[6].forEachResult?.matchedCount, 1)
+        XCTAssertEqual(heist.result.steps[6].forEachElementEvidence?.matchedCount, 1)
         XCTAssertTrue(heist.result.actionMethods.contains(.setPasteboard))
         XCTAssertTrue(heist.result.actionMethods.contains(.editAction))
         XCTAssertTrue(heist.result.actionMethods.contains(.customAction))
@@ -462,12 +462,11 @@ final class DogfoodForAllHeistTests: XCTestCase {
             XCTAssertEqual(failure.failedStepPath, "$.body[2]")
             XCTAssertEqual(failure.failedStepKind, .fail)
             XCTAssertEqual(failure.message, "intentional dogfood failure")
-            XCTAssertEqual(failure.result.steps.map(\.kind), [.wait, .warn, .fail, .skipped])
-            XCTAssertEqual(failure.result.steps.last?.skipped?.afterFailedIndex, 2)
+            XCTAssertEqual(failure.result.abortedAtPath, "$.body[2]")
+            XCTAssertEqual(failure.result.steps.map(\.kind), [.wait, .warn, .fail])
             XCTAssertEqual(failure.result.warnings, [
                 HeistExecutionWarning(
                     path: "$.body[1]",
-                    displayName: "warn",
                     message: "before dogfood failure"
                 ),
             ])
@@ -495,7 +494,7 @@ private extension HeistExecutionResult {
 
 private extension HeistExecutionStepResult {
     var actionMethods: [ActionMethod] {
-        (actionResult.map { [$0.method] } ?? []) + children.flatMap(\.actionMethods)
+        (dispatchedActionResult.map { [$0.method] } ?? []) + children.flatMap(\.actionMethods)
     }
 }
 
