@@ -144,20 +144,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
         let plan = try HeistPlan(body: [.conditional(conditional)])
-        let childResult = HeistExecutionStepResult(
-            index: 0,
+        let childResult = actionReceiptStep(
             path: "$.body[0].conditional.cases[0].body[0]",
-            kind: .action,
-            actionResult: ActionResult(success: true, method: .activate),
-            expectation: ExpectationResult(met: true, predicate: expected),
-            durationMs: 1
+            result: ActionResult(success: true, method: .activate),
+            expectation: ExpectationResult(met: true, predicate: expected)
         )
         let result = HeistExecutionResult(steps: [
-                HeistExecutionStepResult(
-                    index: 0,
+                caseReceiptStep(
                     kind: .conditional,
-                    durationMs: 1,
-                    caseSelection: HeistCaseSelectionResult(
+                    status: .passed,
+                    selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicate,
@@ -170,7 +166,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     children: [childResult]
                 ),
             ],
-            totalTimingMs: 1
+            durationMs: 1
         )
 
         let output = FenceResponse.heistExecution(plan: plan, result: result).humanFormatted()
@@ -184,18 +180,22 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
             expectation: WaitStep(predicate: expected, timeout: 1)
         ))
-        let plan = try HeistPlan(body: [action])
+        let plan = try HeistPlan(body: [
+            .warn(WarnStep(message: "starting checkout")),
+            action,
+        ])
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .action,
-                    actionResult: ActionResult(success: true, method: .activate),
-                    expectation: ExpectationResult(met: true, predicate: expected, actual: "matched"),
-                    durationMs: 5
+                warnReceiptStep(path: "$.body[0]", message: "starting checkout"),
+                actionReceiptStep(
+                    path: "$.body[1]",
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
+                    result: ActionResult(success: true, method: .activate),
+                    expectationActionResult: ActionResult(success: true, method: .wait),
+                    expectation: ExpectationResult(met: true, predicate: expected, actual: "matched")
                 ),
             ],
-            totalTimingMs: 5
+            durationMs: 5
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
@@ -217,16 +217,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .fail,
-                    message: "Unknown screen",
-                    durationMs: 1,
-                    stopsHeist: true
-                ),
+                failReceiptStep(message: "Unknown screen"),
             ],
-            totalTimingMs: 1,
-            failedIndex: 0
+            durationMs: 1,
+            abortedAtPath: "$.body[0]"
         )
 
         let output = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
@@ -238,16 +232,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
-                    kind: .fail,
-                    message: "Unknown screen",
-                    durationMs: 1,
-                    stopsHeist: true
-                ),
+                failReceiptStep(message: "Unknown screen"),
             ],
-            totalTimingMs: 1,
-            failedIndex: 0
+            durationMs: 1,
+            abortedAtPath: "$.body[0]"
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
@@ -272,14 +260,28 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
         let plan = try HeistPlan(body: [.conditional(conditional)])
+        let childPath = "$.body[0].conditional.cases[0].body[0]"
+        let childResult = actionReceiptStep(
+            path: childPath,
+            command: .activate(.target(.predicate(ElementPredicate(label: "Continue")))),
+            result: ActionResult(
+                success: false,
+                method: .activate,
+                message: "nested button failed",
+                errorKind: .actionFailed
+            ),
+            failure: HeistFailureDetail(
+                category: .action,
+                contract: "activate command succeeds",
+                observed: "nested button failed"
+            )
+        )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
+                caseReceiptStep(
                     kind: .conditional,
-                    durationMs: 9,
-                    stopsHeist: true,
-                    caseSelection: HeistCaseSelectionResult(
+                    status: .failed,
+                    selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: casePredicate,
@@ -289,25 +291,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         selectedCaseIndex: 0,
                         elapsedMs: 1
                     ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].conditional.cases[0].body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(
-                                success: false,
-                                method: .activate,
-                                message: "nested button failed",
-                                errorKind: .actionFailed
-                            ),
-                            durationMs: 8,
-                            stopsHeist: true
-                        ),
-                    ]
+                    failure: HeistFailureDetail(
+                        category: .invocation,
+                        contract: "selected case completes without failure",
+                        observed: "child failed at \(childPath)"
+                    ),
+                    children: [childResult]
                 ),
             ],
-            totalTimingMs: 9,
-            failedIndex: 0
+            durationMs: 9,
+            abortedAtPath: childPath
         )
 
         let json = publicJSONObject(.heistExecution(plan: plan, result: result))
@@ -316,14 +309,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let root = try XCTUnwrap(nodes.first)
         let children = try XCTUnwrap(root["children"] as? [[String: Any]])
         let child = try XCTUnwrap(children.first)
-        let caseSelection = try XCTUnwrap(root["caseSelection"] as? [String: Any])
+        let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
         let action = try XCTUnwrap(child["action"] as? [String: Any])
         let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
 
         XCTAssertNil(json["results"])
         XCTAssertEqual(root["path"] as? String, "$.body[0]")
         XCTAssertEqual(root["kind"] as? String, "if")
-        XCTAssertEqual(caseSelection["selectedCaseIndex"] as? Int, 0)
+        XCTAssertNotNil(evidence["caseSelection"])
+        XCTAssertEqual(root["abortedAtChildPath"] as? String, childPath)
         XCTAssertEqual(child["path"] as? String, "$.body[0].conditional.cases[0].body[0]")
         XCTAssertEqual(child["kind"] as? String, "action")
         XCTAssertEqual(child["status"] as? String, "failed")
@@ -347,13 +341,18 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             elseBody: [elseStep]
         )
         let plan = try HeistPlan(body: [.conditional(conditional)])
+        let childPath = "$.body[0].conditional.else_body[0]"
+        let childResult = actionReceiptStep(
+            path: childPath,
+            command: .activate(.target(.predicate(ElementPredicate(label: "Fallback")))),
+            result: ActionResult(success: true, method: .activate)
+        )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
-                    index: 0,
+                caseReceiptStep(
                     kind: .conditional,
-                    durationMs: 3,
-                    caseSelection: HeistCaseSelectionResult(
+                    status: .passed,
+                    selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
                                 predicate: predicate,
@@ -364,31 +363,23 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         elapsedMs: 1,
                         elseRan: true
                     ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].conditional.else_body[0]",
-                            kind: .action,
-                            actionResult: ActionResult(success: true, method: .activate),
-                            durationMs: 2
-                        ),
-                    ]
+                    children: [childResult]
                 ),
             ],
-            totalTimingMs: 3
+            durationMs: 3
         )
 
         let json = publicJSONObject(.heistExecution(plan: plan, result: result))
         let report = try XCTUnwrap(json["report"] as? [String: Any])
         let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
         let root = try XCTUnwrap(nodes.first)
-        let caseSelection = try XCTUnwrap(root["caseSelection"] as? [String: Any])
+        let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
         let children = try XCTUnwrap(root["children"] as? [[String: Any]])
         let compact = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
 
         XCTAssertEqual(root["kind"] as? String, "if")
-        XCTAssertEqual(caseSelection["elseRan"] as? Bool, true)
-        XCTAssertNil(caseSelection["selectedCaseIndex"])
+        XCTAssertEqual(root["status"] as? String, "passed")
+        XCTAssertNotNil(evidence["caseSelection"])
         XCTAssertEqual(children.first?["path"] as? String, "$.body[0].conditional.else_body[0]")
         XCTAssertTrue(compact.contains("[0] if"), compact)
         XCTAssertTrue(compact.contains("[1] activate"), compact)
@@ -401,66 +392,66 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             body: [try HeistStep.action(ActionStep(command: .typeText(text: .ref("item"), target: nil)))]
         )
         let plan = try HeistPlan(body: [.forEachString(forEach)])
+        let firstIteration = forEachStringIterationReceiptStep(
+            ordinal: 0,
+            value: "Milk",
+            status: .passed,
+            children: [
+                actionReceiptStep(
+                    path: "$.body[0].for_each_string.iterations[0].body[0]",
+                    command: .typeText(text: .ref("item"), target: nil),
+                    result: ActionResult(success: true, method: .typeText)
+                ),
+            ]
+        )
+        let failedActionPath = "$.body[0].for_each_string.iterations[1].body[0]"
+        let failedAction = actionReceiptStep(
+            path: failedActionPath,
+            command: .typeText(text: .ref("item"), target: nil),
+            result: ActionResult(
+                success: false,
+                method: .typeText,
+                message: "field missing",
+                errorKind: .elementNotFound
+            ),
+            failure: HeistFailureDetail(
+                category: .action,
+                contract: "type_text command succeeds",
+                observed: "field missing"
+            )
+        )
+        let secondIteration = forEachStringIterationReceiptStep(
+            ordinal: 1,
+            value: "Eggs",
+            status: .failed,
+            failureReason: "iteration 1 failed for value \"Eggs\"",
+            children: [failedAction]
+        )
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
-                    index: 0,
                     path: "$.body[0]",
                     kind: .forEachString,
-                    message: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"",
+                    status: .failed,
                     durationMs: 30,
-                    stopsHeist: true,
-                    forEachResult: HeistForEachResult(
-                        matchedCount: 2,
-                        limit: 2,
+                    intent: .forEachString(parameter: "item", count: 2),
+                    evidence: .forEachString(HeistForEachStringEvidence(
+                        parameter: "item",
+                        count: 2,
                         iterationCount: 2,
                         failureReason: "iteration 1 failed for value \"Eggs\""
+                    )),
+                    failure: HeistFailureDetail(
+                        category: .loop,
+                        contract: "for_each_string completes all 2 value(s)",
+                        observed: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
                     ),
-                    children: [
-                        HeistExecutionStepResult(
-                            index: 0,
-                            path: "$.body[0].for_each_string.iterations[0]",
-                            kind: .forEachIteration,
-                            message: "iteration 0 value \"Milk\"",
-                            durationMs: 5,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_string.iterations[0].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(success: true, method: .typeText),
-                                    durationMs: 5
-                                ),
-                            ]
-                        ),
-                        HeistExecutionStepResult(
-                            index: 1,
-                            path: "$.body[0].for_each_string.iterations[1]",
-                            kind: .forEachIteration,
-                            message: "iteration 1 value \"Eggs\"",
-                            durationMs: 6,
-                            stopsHeist: true,
-                            children: [
-                                HeistExecutionStepResult(
-                                    index: 0,
-                                    path: "$.body[0].for_each_string.iterations[1].body[0]",
-                                    kind: .action,
-                                    actionResult: ActionResult(
-                                        success: false,
-                                        method: .typeText,
-                                        message: "field missing",
-                                        errorKind: .elementNotFound
-                                    ),
-                                    durationMs: 6,
-                                    stopsHeist: true
-                                ),
-                            ]
-                        ),
-                    ]
+                    abortedAtChildPath: failedActionPath,
+                    children: [firstIteration, secondIteration]
                 ),
             ],
-            totalTimingMs: 30,
-            failedIndex: 0
+            durationMs: 30,
+            abortedAtPath: failedActionPath
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
@@ -468,13 +459,13 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let report = try XCTUnwrap(json["report"] as? [String: Any])
         let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
         let root = try XCTUnwrap(nodes.first)
-        let forEachResult = try XCTUnwrap(root["forEachResult"] as? [String: Any])
+        let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
         let children = try XCTUnwrap(root["children"] as? [[String: Any]])
         let compact = response.compactFormatted()
 
         XCTAssertEqual(root["kind"] as? String, "for_each_string")
-        XCTAssertEqual(forEachResult["matchedCount"] as? Int, 2)
-        XCTAssertEqual(forEachResult["iterationCount"] as? Int, 2)
+        XCTAssertNotNil(evidence["forEachString"])
+        XCTAssertEqual(root["abortedAtChildPath"] as? String, failedActionPath)
         XCTAssertEqual(children.map { $0["kind"] as? String }, ["for_each_iteration", "for_each_iteration"])
         XCTAssertTrue(compact.contains("[0] for_each_string -> error: for_each_string stopped"), compact)
     }
@@ -596,6 +587,110 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertTrue(output.contains("✓ Screenshot saved: /tmp/screen.png"), output)
         XCTAssertTrue(output.contains("interface: unavailable"), output)
+    }
+
+    private func actionReceiptStep(
+        path: String = "$.body[0]",
+        command: HeistActionCommand? = .activate(.target(.predicate(ElementPredicate(label: "Button")))),
+        result: ActionResult,
+        expectationActionResult: ActionResult? = nil,
+        expectation: ExpectationResult? = nil,
+        failure: HeistFailureDetail? = nil
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: .action,
+            status: failure == nil ? .passed : .failed,
+            durationMs: 1,
+            intent: command.map {
+                .action(command: $0.clientWireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
+            },
+            evidence: .action(HeistActionEvidence(
+                command: command,
+                actionResult: result,
+                expectationActionResult: expectationActionResult,
+                expectation: expectation
+            )),
+            failure: failure
+        )
+    }
+
+    private func warnReceiptStep(path: String, message: String) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: .warn,
+            status: .passed,
+            durationMs: 1,
+            intent: .warn(message: message),
+            evidence: .warning(HeistExecutionWarning(path: path, message: message))
+        )
+    }
+
+    private func failReceiptStep(message: String) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: "$.body[0]",
+            kind: .fail,
+            status: .failed,
+            durationMs: 1,
+            intent: .fail(message: message),
+            failure: HeistFailureDetail(
+                category: .explicitFailure,
+                contract: "explicit heist failure",
+                observed: message
+            )
+        )
+    }
+
+    private func caseReceiptStep(
+        kind: HeistExecutionStepKind,
+        status: HeistExecutionStepStatus,
+        selection: HeistCaseSelectionResult,
+        failure: HeistFailureDetail? = nil,
+        children: [HeistExecutionStepResult]
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: "$.body[0]",
+            kind: kind,
+            status: status,
+            durationMs: 3,
+            intent: kind == .waitForCases ? .waitForCases(timeout: selection.timeout ?? 0) : .conditional,
+            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
+            failure: failure,
+            abortedAtChildPath: children.firstFailedStep?.path,
+            children: children
+        )
+    }
+
+    private func forEachStringIterationReceiptStep(
+        ordinal: Int,
+        value: String,
+        status: HeistExecutionStepStatus,
+        failureReason: String? = nil,
+        children: [HeistExecutionStepResult]
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: "$.body[0].for_each_string.iterations[\(ordinal)]",
+            kind: .forEachIteration,
+            status: status,
+            durationMs: 1,
+            evidence: .forEachString(HeistForEachStringEvidence(
+                parameter: "item",
+                count: 2,
+                iterationCount: 2,
+                iterationOrdinal: ordinal,
+                value: value,
+                failureReason: failureReason
+            )),
+            failure: failureReason.map {
+                HeistFailureDetail(
+                    category: .loop,
+                    contract: "iteration \(ordinal) completes",
+                    observed: $0
+                )
+            },
+            abortedAtChildPath: children.firstFailedStep?.path,
+            children: children
+        )
     }
 
     private func formattingFixtureInterface() -> Interface {

@@ -15,7 +15,14 @@ extension TheBrains {
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         guard let observation = await runtime.observeSemanticState(.discovery, nil, nil) else {
-            return forEachUnavailableResult(index: index, path: path, start: start, limit: step.limit)
+            return forEachUnavailableResult(
+                index: index,
+                path: path,
+                start: start,
+                parameter: step.parameter,
+                matching: step.matching,
+                limit: step.limit
+            )
         }
 
         var matchSignature = ForEachMatchSignature(
@@ -24,7 +31,15 @@ extension TheBrains {
         )
         let matchedCount = matchSignature.count
         if matchedCount > step.limit {
-            return forEachLimitResult(index: index, path: path, start: start, matchedCount: matchedCount, limit: step.limit)
+            return forEachLimitResult(
+                index: index,
+                path: path,
+                start: start,
+                parameter: step.parameter,
+                matching: step.matching,
+                matchedCount: matchedCount,
+                limit: step.limit
+            )
         }
 
         var iterationNodes: [HeistExecutionStepResult] = []
@@ -48,19 +63,20 @@ extension TheBrains {
             )
             iterationCount += 1
 
-            let iterationFailed = iterationResults.contains(where: \.isFailure)
-            iterationNodes.append(HeistExecutionStepResult(
-                index: iterationIndex,
+            let abortedAtChildPath = iterationResults.firstFailedStep?.path
+            iterationNodes.append(forEachElementIterationResult(
                 path: iterationPath,
-                kind: .forEachIteration,
-                message: "iteration \(iterationIndex) target ordinal \(nextOrdinal)",
-                durationMs: elapsedMilliseconds(since: iterationStart),
-                stopsHeist: iterationFailed,
+                start: iterationStart,
+                step: step,
+                matchedCount: matchedCount,
+                iterationIndex: iterationIndex,
+                targetOrdinal: nextOrdinal,
+                abortedAtChildPath: abortedAtChildPath,
                 children: iterationResults
             ))
 
-            if iterationFailed {
-                failureReason = "iteration \(iterationIndex) failed"
+            if let abortedAtChildPath {
+                failureReason = "iteration \(iterationIndex) failed at \(abortedAtChildPath)"
                 break
             }
 
@@ -86,30 +102,93 @@ extension TheBrains {
             }
         }
 
+        return forEachElementResult(
+            path: path,
+            start: start,
+            step: step,
+            matchedCount: matchedCount,
+            iterationCount: iterationCount,
+            failureReason: failureReason,
+            iterationNodes: iterationNodes
+        )
+    }
+
+    private func forEachElementIterationResult(
+        path: String,
+        start: CFAbsoluteTime,
+        step: ForEachElementStep,
+        matchedCount: Int,
+        iterationIndex: Int,
+        targetOrdinal: Int,
+        abortedAtChildPath: String?,
+        children: [HeistExecutionStepResult]
+    ) -> HeistExecutionStepResult {
+        let currentElement = ElementTarget.predicate(step.matching, ordinal: targetOrdinal)
         return HeistExecutionStepResult(
-            index: index,
+            path: path,
+            kind: .forEachIteration,
+            status: abortedAtChildPath == nil ? .passed : .failed,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: .forEachElement(parameter: step.parameter, matching: step.matching.description, limit: step.limit),
+            evidence: .forEachElement(HeistForEachElementEvidence(
+                parameter: step.parameter,
+                matching: step.matching,
+                limit: step.limit,
+                matchedCount: matchedCount,
+                iterationCount: iterationIndex + 1,
+                iterationOrdinal: iterationIndex,
+                targetOrdinal: targetOrdinal,
+                targetSummary: currentElement.description,
+                failureReason: abortedAtChildPath.map { "child failed at \($0)" }
+            )),
+            failure: abortedAtChildPath.map {
+                childFailureDetail(category: .loop, childPath: $0)
+            },
+            abortedAtChildPath: abortedAtChildPath,
+            children: children
+        )
+    }
+
+    private func forEachElementResult(
+        path: String,
+        start: CFAbsoluteTime,
+        step: ForEachElementStep,
+        matchedCount: Int,
+        iterationCount: Int,
+        failureReason: String?,
+        iterationNodes: [HeistExecutionStepResult]
+    ) -> HeistExecutionStepResult {
+        let abortedAtChildPath = iterationNodes.firstFailedStep?.path
+        return HeistExecutionStepResult(
             path: path,
             kind: .forEachElement,
-            message: forEachMessage(
-                matchedCount: matchedCount,
-                iterationCount: iterationCount,
-                failureReason: failureReason
-            ),
+            status: failureReason == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
-            stopsHeist: failureReason != nil,
-            forEachResult: HeistForEachResult(
-                matchedCount: matchedCount,
+            intent: .forEachElement(parameter: step.parameter, matching: step.matching.description, limit: step.limit),
+            evidence: .forEachElement(HeistForEachElementEvidence(
+                parameter: step.parameter,
+                matching: step.matching,
                 limit: step.limit,
+                matchedCount: matchedCount,
                 iterationCount: iterationCount,
                 failureReason: failureReason
-            ),
+            )),
+            failure: failureReason.map {
+                HeistFailureDetail(
+                    category: .loop,
+                    contract: "for_each_element completes all matched iterations",
+                    observed: $0,
+                    expected: "\(matchedCount) iteration(s)"
+                )
+            },
+            abortedAtChildPath: abortedAtChildPath,
             children: iterationNodes
         )
     }
 
     func executeForEachStringStep(
         _ step: ForEachStringStep,
-        index: Int,
+        index _: Int,
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
@@ -133,110 +212,122 @@ extension TheBrains {
             )
             iterationCount += 1
 
-            let iterationFailed = iterationResults.contains(where: \.isFailure)
+            let abortedAtChildPath = iterationResults.firstFailedStep?.path
             iterationNodes.append(HeistExecutionStepResult(
-                index: valueIndex,
                 path: iterationPath,
                 kind: .forEachIteration,
-                message: "iteration \(valueIndex) value \"\(value)\"",
+                status: abortedAtChildPath == nil ? .passed : .failed,
                 durationMs: elapsedMilliseconds(since: iterationStart),
-                stopsHeist: iterationFailed,
+                intent: .forEachString(parameter: step.parameter, count: step.values.count),
+                evidence: .forEachString(HeistForEachStringEvidence(
+                    parameter: step.parameter,
+                    count: step.values.count,
+                    iterationCount: iterationCount,
+                    iterationOrdinal: valueIndex,
+                    value: value,
+                    failureReason: abortedAtChildPath.map { "child failed at \($0)" }
+                )),
+                failure: abortedAtChildPath.map {
+                    childFailureDetail(category: .loop, childPath: $0)
+                },
+                abortedAtChildPath: abortedAtChildPath,
                 children: iterationResults
             ))
 
-            if iterationFailed {
-                failureReason = "iteration \(valueIndex) failed for value \"\(value)\""
+            if let abortedAtChildPath {
+                failureReason = "iteration \(valueIndex) failed for value \"\(value)\" at \(abortedAtChildPath)"
                 break
             }
         }
 
+        let abortedAtChildPath = iterationNodes.firstFailedStep?.path
         return HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: .forEachString,
-            message: forEachStringMessage(
-                valueCount: step.values.count,
-                iterationCount: iterationCount,
-                failureReason: failureReason
-            ),
+            status: failureReason == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
-            stopsHeist: failureReason != nil,
-            forEachResult: HeistForEachResult(
-                matchedCount: step.values.count,
-                limit: step.values.count,
+            intent: .forEachString(parameter: step.parameter, count: step.values.count),
+            evidence: .forEachString(HeistForEachStringEvidence(
+                parameter: step.parameter,
+                count: step.values.count,
                 iterationCount: iterationCount,
                 failureReason: failureReason
-            ),
+            )),
+            failure: failureReason.map {
+                HeistFailureDetail(
+                    category: .loop,
+                    contract: "for_each_string completes all values",
+                    observed: $0,
+                    expected: "\(step.values.count) value(s)"
+                )
+            },
+            abortedAtChildPath: abortedAtChildPath,
             children: iterationNodes
         )
     }
 
     private func forEachUnavailableResult(
-        index: Int,
+        index _: Int,
         path: String,
         start: CFAbsoluteTime,
+        parameter: String,
+        matching: ElementPredicate,
         limit: Int
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
-            index: index,
+        let observed = "could not observe settled semantic hierarchy before evaluating for_each_element"
+        return HeistExecutionStepResult(
             path: path,
             kind: .forEachElement,
-            message: "Could not observe settled semantic hierarchy before evaluating for_each",
+            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
-            stopsHeist: true,
-            forEachResult: HeistForEachResult(
-                matchedCount: 0,
+            intent: .forEachElement(parameter: parameter, matching: matching.description, limit: limit),
+            evidence: .forEachElement(HeistForEachElementEvidence(
+                parameter: parameter,
+                matching: matching,
                 limit: limit,
+                matchedCount: 0,
                 iterationCount: 0,
-                failureReason: "semantic hierarchy unavailable"
+                failureReason: observed
+            )),
+            failure: HeistFailureDetail(
+                category: .runtimeUnavailable,
+                contract: "settled semantic hierarchy is observable before for_each_element matching",
+                observed: observed
             )
         )
     }
 
     private func forEachLimitResult(
-        index: Int,
+        index _: Int,
         path: String,
         start: CFAbsoluteTime,
+        parameter: String,
+        matching: ElementPredicate,
         matchedCount: Int,
         limit: Int
     ) -> HeistExecutionStepResult {
-        let reason = "matched \(matchedCount) element(s), exceeding for_each limit \(limit)"
+        let observed = "matched \(matchedCount) element(s), exceeding for_each_element limit \(limit)"
         return HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: .forEachElement,
-            message: reason,
+            status: .failed,
             durationMs: elapsedMilliseconds(since: start),
-            stopsHeist: true,
-            forEachResult: HeistForEachResult(
-                matchedCount: matchedCount,
+            intent: .forEachElement(parameter: parameter, matching: matching.description, limit: limit),
+            evidence: .forEachElement(HeistForEachElementEvidence(
+                parameter: parameter,
+                matching: matching,
                 limit: limit,
+                matchedCount: matchedCount,
                 iterationCount: 0,
-                failureReason: reason
+                failureReason: observed
+            )),
+            failure: HeistFailureDetail(
+                category: .loop,
+                contract: "for_each_element matched count does not exceed limit",
+                observed: observed,
+                expected: "at most \(limit) element(s)"
             )
         )
-    }
-
-    private func forEachMessage(
-        matchedCount: Int,
-        iterationCount: Int,
-        failureReason: String?
-    ) -> String {
-        if let failureReason {
-            return "for_each stopped after \(iterationCount) of \(matchedCount) iteration(s): \(failureReason)"
-        }
-        return "for_each completed \(iterationCount) iteration(s) from \(matchedCount) matched element(s)"
-    }
-
-    private func forEachStringMessage(
-        valueCount: Int,
-        iterationCount: Int,
-        failureReason: String?
-    ) -> String {
-        if let failureReason {
-            return "for_each_string stopped after \(iterationCount) of \(valueCount) iteration(s): \(failureReason)"
-        }
-        return "for_each_string completed \(iterationCount) iteration(s) from \(valueCount) value(s)"
     }
 }
 

@@ -71,7 +71,7 @@ extension TheFence {
             return .actionFailed(
                 step: failedStep,
                 result: result,
-                expectation: expectationFailed ? step.expectation : nil,
+                expectation: expectationFailed ? step.reportExpectation : nil,
                 interface: nil,
                 diagnosticCaptureFailure: nil
             )

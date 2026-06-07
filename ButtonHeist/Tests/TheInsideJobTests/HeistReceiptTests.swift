@@ -12,9 +12,9 @@ final class HeistReceiptTests: XCTestCase {
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(heist.result.steps.first?.message, "ok")
+        XCTAssertEqual(heist.result.steps.first?.reportMessage, "ok")
         XCTAssertEqual(heist.result.warnings, [
-            HeistExecutionWarning(path: "$.body[0]", displayName: "warn", message: "ok"),
+            HeistExecutionWarning(path: "$.body[0]", message: "ok"),
         ])
     }
 
@@ -31,7 +31,7 @@ final class HeistReceiptTests: XCTestCase {
         let heist = try await Heist(plan, argument: .none, runtime: .insideJob(job))
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(heist.result.steps.first?.message, "prebuilt")
+        XCTAssertEqual(heist.result.steps.first?.reportMessage, "prebuilt")
         XCTAssertFalse(job.isRunning)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
@@ -73,8 +73,8 @@ final class HeistReceiptTests: XCTestCase {
 
         let step = try XCTUnwrap(heist.result.steps.first)
         XCTAssertEqual(step.kind, .forEachString)
-        XCTAssertEqual(step.forEachResult?.matchedCount, 2)
-        XCTAssertEqual(step.forEachResult?.iterationCount, 2)
+        XCTAssertEqual(step.forEachStringEvidence?.count, 2)
+        XCTAssertEqual(step.forEachStringEvidence?.iterationCount, 2)
         XCTAssertEqual(capture.plan?.parameter, HeistParameter.none)
         guard case .forEachString(let forEach)? = capture.plan?.body.first else {
             return XCTFail("Expected array initializer to build a ForEachString root step")
@@ -96,8 +96,8 @@ final class HeistReceiptTests: XCTestCase {
         }
 
         XCTAssertEqual(heist.result.warnings, [
-            HeistExecutionWarning(path: "$.body[0]", displayName: "warn", message: "root"),
-            HeistExecutionWarning(path: "$.body[1].invoke.body[0]", displayName: "warn", message: "nested"),
+            HeistExecutionWarning(path: "$.body[0]", message: "root"),
+            HeistExecutionWarning(path: "$.body[1].invoke.body[0]", message: "nested"),
         ])
     }
 
@@ -129,8 +129,8 @@ final class HeistReceiptTests: XCTestCase {
             XCTFail("Expected failed heist to throw")
         } catch let failure as Heist.Failure {
             XCTAssertEqual(failure.failedStepPath, "$.body[1]")
-            XCTAssertEqual(failure.result.steps.map(\.kind), [.warn, .fail, .skipped])
-            XCTAssertEqual(failure.result.steps.last?.skipped?.afterFailedIndex, 1)
+            XCTAssertEqual(failure.result.abortedAtPath, "$.body[1]")
+            XCTAssertEqual(failure.result.steps.map(\.kind), [.warn, .fail])
             XCTAssertFalse(job.isRunning)
             XCTAssertFalse(job.brains.semanticObservationIsActive)
             XCTAssertFalse(job.tripwire.isPulseRunning)
@@ -152,7 +152,7 @@ final class HeistReceiptTests: XCTestCase {
 
         XCTAssertEqual(heist.result.steps.map(\.path), direct.steps.map(\.path))
         XCTAssertEqual(heist.result.steps.map(\.kind), direct.steps.map(\.kind))
-        XCTAssertEqual(heist.result.steps.map(\.message), direct.steps.map(\.message))
+        XCTAssertEqual(heist.result.steps.map(\.reportMessage), direct.steps.map(\.reportMessage))
     }
 }
 

@@ -138,14 +138,13 @@ public enum FenceResponse {
         guard case .heistExecution(_, let result, _) = self,
               result.steps.count == 1,
               let step = result.steps.first,
-              let actionResult = step.actionResult else { return nil }
+              let actionResult = step.reportActionResult else { return nil }
         switch step.kind {
         case .action:
-            guard let command = step.actionCommand
-                .flatMap({ TheFence.Command(clientWireType: $0.clientWireType) }) else { return nil }
-            return (command, actionResult, step.expectation)
+            guard let command = step.reportClientWireType.flatMap(TheFence.Command.init(clientWireType:)) else { return nil }
+            return (command, actionResult, step.reportExpectation)
         case .wait:
-            return (.wait, actionResult, step.expectation)
+            return (.wait, actionResult, step.reportExpectation)
         default:
             return nil
         }
@@ -173,8 +172,6 @@ public enum FenceResponse {
             if let expectation, !expectation.met { return true }
             return false
         case .heistExecution(_, let result, _):
-            // Failure is driven by any failed step, not by `failedIndex` alone:
-            // a result with a failed child and a nil `failedIndex` is failure.
             return result.isFailure
         }
     }

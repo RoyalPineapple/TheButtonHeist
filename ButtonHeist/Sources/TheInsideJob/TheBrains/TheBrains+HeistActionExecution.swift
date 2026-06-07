@@ -28,14 +28,11 @@ extension TheBrains {
     ///
     /// A step is an optional command followed by an optional predicate wait. An
     /// action step has a command and an optional expectation; a wait step has no
-    /// command and the wait is the whole step. The wait is seeded with the
-    /// action's own pre-action trace as its change baseline when there was an
-    /// action, and with no baseline otherwise — that single difference is what
-    /// distinguishes "did my action cause this" from "wait for this to happen".
+    /// command and the wait is the whole step.
     func executeStep(
         command: HeistActionCommand?,
         wait: WaitStep?,
-        index: Int,
+        index _: Int,
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
@@ -49,29 +46,39 @@ extension TheBrains {
             do {
                 resolvedCommand = try command.resolve(in: environment)
             } catch {
+                let observed = "could not resolve heist action command: \(error)"
                 return HeistExecutionStepResult(
-                    index: index,
                     path: path,
                     kind: .action,
-                    actionCommand: command,
-                    message: "could not resolve heist action command: \(error)",
+                    status: .failed,
                     durationMs: elapsedMilliseconds(since: start),
-                    stopsHeist: true
+                    intent: actionIntent(command),
+                    evidence: .action(HeistActionEvidence(command: command, actionResult: nil)),
+                    failure: HeistFailureDetail(
+                        category: .targetResolution,
+                        contract: "action command resolves before dispatch",
+                        observed: observed,
+                        expected: command.reportTarget.map(String.init(describing:))
+                    )
                 )
             }
             actionResult = await runtime.execute(resolvedCommand)
         }
 
-        // No predicate to wait on, or the command already failed — return the
-        // action outcome as-is (a failed action is not re-checked).
+        // No predicate to wait on, or the command already failed: return the
+        // action outcome as-is. A failed action is not re-checked.
         guard let wait, actionResult?.success != false else {
+            let failure = actionDispatchFailure(command: command, result: actionResult)
             return HeistExecutionStepResult(
-                index: index,
                 path: path,
                 kind: kind,
-                actionCommand: command,
-                actionResult: actionResult,
-                durationMs: elapsedMilliseconds(since: start)
+                status: failure == nil ? .passed : .failed,
+                durationMs: elapsedMilliseconds(since: start),
+                intent: command.map(actionIntent) ?? wait.map(waitIntent),
+                evidence: command.map {
+                    .action(HeistActionEvidence(command: $0, actionResult: actionResult))
+                },
+                failure: failure
             )
         }
 
@@ -82,7 +89,7 @@ extension TheBrains {
             return waitResolutionFailure(
                 command: command,
                 actionResult: actionResult,
-                index: index,
+                wait: wait,
                 path: path,
                 start: start,
                 error: error
@@ -90,53 +97,170 @@ extension TheBrains {
         }
 
         let receipt = await runtime.wait(resolvedWait, actionResult?.accessibilityTrace)
+        if let command {
+            let failure = expectationFailure(
+                wait: wait,
+                receipt: receipt
+            )
+            return HeistExecutionStepResult(
+                path: path,
+                kind: .action,
+                status: failure == nil ? .passed : .failed,
+                durationMs: elapsedMilliseconds(since: start),
+                intent: actionIntent(command),
+                evidence: .action(HeistActionEvidence(
+                    command: command,
+                    actionResult: actionResult,
+                    expectationActionResult: receipt.actionResult,
+                    expectation: receipt.expectation
+                )),
+                failure: failure
+            )
+        }
+
+        let failure = waitFailure(wait: wait, receipt: receipt)
         return HeistExecutionStepResult(
-            index: index,
             path: path,
-            kind: kind,
-            actionCommand: command,
-            actionResult: command == nil ? receipt.actionResult : actionResult,
-            expectationActionResult: command == nil ? nil : receipt.actionResult,
-            expectation: receipt.expectation,
-            durationMs: elapsedMilliseconds(since: start)
+            kind: .wait,
+            status: failure == nil ? .passed : .failed,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: waitIntent(wait),
+            evidence: .wait(HeistWaitEvidence(
+                actionResult: receipt.actionResult,
+                expectation: receipt.expectation,
+                baselineSummary: nil,
+                finalSummary: receipt.expectation.actual
+            )),
+            failure: failure
         )
     }
 
     private func waitResolutionFailure(
         command: HeistActionCommand?,
         actionResult: ActionResult?,
-        index: Int,
+        wait: WaitStep,
         path: String,
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        guard command != nil else {
-            // A pure wait whose predicate can't resolve is a hard step failure.
+        guard let command else {
+            let observed = "could not resolve heist wait predicate: \(error)"
             return HeistExecutionStepResult(
-                index: index,
                 path: path,
                 kind: .wait,
-                message: "could not resolve heist wait predicate: \(error)",
+                status: .failed,
                 durationMs: elapsedMilliseconds(since: start),
-                stopsHeist: true
+                intent: waitIntent(wait),
+                failure: HeistFailureDetail(
+                    category: .wait,
+                    contract: "wait predicate resolves before evaluation",
+                    observed: observed,
+                    expected: wait.predicate.description
+                )
             )
         }
-        // The action already ran; report the unresolvable expectation as a
-        // failed expectation on the action step.
+
+        let expectationActionResult = ActionResultBuilder(method: .wait).failure(errorKind: .actionFailed)
+        let expectation = ExpectationResult(
+            met: false,
+            predicate: nil,
+            actual: "could not resolve heist expectation: \(error)"
+        )
         return HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: .action,
-            actionCommand: command,
-            actionResult: actionResult,
-            expectationActionResult: ActionResultBuilder(method: .wait).failure(errorKind: .actionFailed),
-            expectation: ExpectationResult(
-                met: false,
-                predicate: nil,
-                actual: "could not resolve heist expectation: \(error)"
-            ),
-            durationMs: elapsedMilliseconds(since: start)
+            status: .failed,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: actionIntent(command),
+            evidence: .action(HeistActionEvidence(
+                command: command,
+                actionResult: actionResult,
+                expectationActionResult: expectationActionResult,
+                expectation: expectation
+            )),
+            failure: HeistFailureDetail(
+                category: .expectation,
+                contract: "action expectation predicate resolves before evaluation",
+                observed: expectation.actual ?? "could not resolve heist expectation",
+                expected: wait.predicate.description
+            )
         )
+    }
+
+    private func actionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
+        .action(
+            command: command.clientWireType.rawValue,
+            target: command.reportTarget.map(String.init(describing:))
+        )
+    }
+
+    private func waitIntent(_ wait: WaitStep) -> HeistStepIntent {
+        .wait(predicate: wait.predicate.description, timeout: wait.timeout)
+    }
+
+    private func actionDispatchFailure(
+        command: HeistActionCommand?,
+        result: ActionResult?
+    ) -> HeistFailureDetail? {
+        guard let command else { return nil }
+        guard let result else {
+            return HeistFailureDetail(
+                category: .action,
+                contract: "action dispatch returns a result",
+                observed: "no action result returned",
+                expected: command.clientWireType.rawValue
+            )
+        }
+        guard !result.success else { return nil }
+        return HeistFailureDetail(
+            category: result.errorKind == .elementNotFound ? .targetResolution : .action,
+            contract: "action dispatch succeeds",
+            observed: actionObserved(result),
+            expected: command.reportTarget.map(String.init(describing:))
+        )
+    }
+
+    private func expectationFailure(
+        wait: WaitStep,
+        receipt: HeistWaitReceipt
+    ) -> HeistFailureDetail? {
+        guard !receipt.actionResult.success || !receipt.expectation.met else { return nil }
+        return HeistFailureDetail(
+            category: .expectation,
+            contract: "post-action expectation is met",
+            observed: expectationObserved(receipt),
+            expected: wait.predicate.description
+        )
+    }
+
+    private func waitFailure(
+        wait: WaitStep,
+        receipt: HeistWaitReceipt
+    ) -> HeistFailureDetail? {
+        guard !receipt.actionResult.success || !receipt.expectation.met else { return nil }
+        return HeistFailureDetail(
+            category: .wait,
+            contract: "wait predicate is met before timeout",
+            observed: expectationObserved(receipt),
+            expected: wait.predicate.description
+        )
+    }
+
+    private func actionObserved(_ result: ActionResult) -> String {
+        [
+            result.message,
+            result.errorKind.map { "errorKind=\($0.rawValue)" },
+            result.settled.map { "settled=\($0)" },
+        ].compactMap { $0 }.joined(separator: "; ")
+    }
+
+    private func expectationObserved(_ receipt: HeistWaitReceipt) -> String {
+        [
+            receipt.expectation.actual,
+            receipt.actionResult.message,
+            receipt.actionResult.errorKind.map { "errorKind=\($0.rawValue)" },
+            receipt.actionResult.settled.map { "settled=\($0)" },
+        ].compactMap { $0 }.joined(separator: "; ")
     }
 }
 

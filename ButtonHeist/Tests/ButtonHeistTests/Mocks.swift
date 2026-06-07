@@ -203,46 +203,27 @@ final class MockConnection: TransportReachabilityConnecting {
         let plan = run.plan
 
         var stepResults: [HeistExecutionStepResult] = []
-        var failedIndex: Int?
         for (index, step) in plan.body.enumerated() {
-            if let failedIndex {
-                let skipped = HeistExecutionSkippedStepResult(
-                    index: index,
-                    reason: "skipped: heist stopped after step \(failedIndex)",
-                    afterFailedIndex: failedIndex
-                )
-                stepResults.append(HeistExecutionStepResult(
-                    index: index,
-                    path: "$.body[\(index)]",
-                    kind: .skipped,
-                    durationMs: heistStepDurationMs,
-                    skipped: skipped
-                ))
-                continue
-            }
-
             let stepResult = heistStepResult(
                 for: step,
                 index: index,
                 path: "$.body[\(index)]",
                 handler: handler
             )
-            let shouldStop = stepResult.isFailure
-            stepResults.append(stepResult.markingStop(shouldStop))
-            if shouldStop {
-                failedIndex = index
-            }
+            stepResults.append(stepResult)
+            if stepResult.isFailure { break }
         }
+        let abortedAtPath = stepResults.firstFailedStep?.path
 
         let result = HeistExecutionResult(
             steps: stepResults,
-            totalTimingMs: 0,
-            failedIndex: failedIndex
+            durationMs: 0,
+            abortedAtPath: abortedAtPath
         )
         return .actionResult(ActionResult(
-            success: failedIndex == nil,
+            success: abortedAtPath == nil,
             method: .heistPlan,
-            errorKind: failedIndex == nil ? nil : .actionFailed,
+            errorKind: abortedAtPath == nil ? nil : .actionFailed,
             payload: .heistExecution(result)
         ))
     }
@@ -267,45 +248,59 @@ final class MockConnection: TransportReachabilityConnecting {
         case .forEachString(let forEach):
             return heistForEachStringStepResult(for: forEach, index: index, path: path)
         case .heist(let plan):
+            let children = plan.body.enumerated().map { childIndex, childStep in
+                heistStepResult(
+                    for: childStep,
+                    index: childIndex,
+                    path: "\(path).heist.body[\(childIndex)]",
+                    handler: handler
+                )
+            }
+            let abortedAtChildPath = children.firstFailedStep?.path
             return HeistExecutionStepResult(
-                index: index,
                 path: path,
                 kind: .heist,
-                message: plan.name.map { "heist \($0)" },
+                status: abortedAtChildPath == nil ? .passed : .failed,
                 durationMs: heistStepDurationMs,
-                children: plan.body.enumerated().map { childIndex, childStep in
-                    heistStepResult(
-                        for: childStep,
-                        index: childIndex,
-                        path: "\(path).heist.body[\(childIndex)]",
-                        handler: handler
-                    )
-                }
+                intent: .heist(name: plan.name),
+                evidence: .invocation(HeistInvocationEvidence(
+                    name: plan.name.map { "heist \($0)" },
+                    childFailedPath: abortedAtChildPath
+                )),
+                failure: abortedAtChildPath.map { mockChildFailure($0, category: .invocation) },
+                abortedAtChildPath: abortedAtChildPath,
+                children: children
             )
         case .invoke(let invoke):
             return HeistExecutionStepResult(
-                index: index,
                 path: path,
                 kind: .invoke,
-                message: "invoke \(invoke.path.joined(separator: "."))",
-                durationMs: heistStepDurationMs
+                status: .passed,
+                durationMs: heistStepDurationMs,
+                intent: .invoke(path: invoke.path.joined(separator: "."), argument: nil),
+                evidence: .invocation(HeistInvocationEvidence(invocation: invoke, name: invoke.path.joined(separator: ".")))
             )
         case .warn(let warn):
             return HeistExecutionStepResult(
-                index: index,
                 path: path,
                 kind: .warn,
-                message: warn.message,
-                durationMs: heistStepDurationMs
+                status: .passed,
+                durationMs: heistStepDurationMs,
+                intent: .warn(message: warn.message),
+                evidence: .warning(HeistExecutionWarning(path: path, message: warn.message))
             )
         case .fail(let fail):
             return HeistExecutionStepResult(
-                index: index,
                 path: path,
                 kind: .fail,
-                message: fail.message,
+                status: .failed,
                 durationMs: heistStepDurationMs,
-                stopsHeist: true
+                intent: .fail(message: fail.message),
+                failure: HeistFailureDetail(
+                    category: .explicitFailure,
+                    contract: "explicit heist failure",
+                    observed: fail.message
+                )
             )
         }
     }
@@ -318,31 +313,37 @@ final class MockConnection: TransportReachabilityConnecting {
     ) -> HeistExecutionStepResult {
         guard let command = try? action.command.resolve(in: .empty) else {
             return HeistExecutionStepResult(
-                index: index,
                 path: path,
                 kind: .action,
-                actionResult: ActionResult(
-                    success: false,
-                    method: .heistPlan,
-                    message: "mock could not resolve heist action command",
-                    errorKind: .validationError
-                ),
-                durationMs: heistStepDurationMs
+                status: .failed,
+                durationMs: heistStepDurationMs,
+                intent: mockActionIntent(action.command),
+                evidence: .action(HeistActionEvidence(command: action.command, actionResult: nil)),
+                failure: HeistFailureDetail(
+                    category: .targetResolution,
+                    contract: "action command resolves before dispatch",
+                    observed: "mock could not resolve heist action command"
+                )
             )
         }
         let actionResult = actionResult(for: command, handler: handler)
         let expectation = actionResult.success
             ? heistExpectation(for: action.expectation, handler: handler)
             : nil
+        let failure = mockActionFailure(command: action.command, actionResult: actionResult, expectation: expectation?.result)
         return HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: .action,
-            actionCommand: action.command,
-            actionResult: actionResult,
-            expectationActionResult: expectation?.actionResult,
-            expectation: expectation?.result,
-            durationMs: heistStepDurationMs
+            status: failure == nil ? .passed : .failed,
+            durationMs: heistStepDurationMs,
+            intent: mockActionIntent(action.command),
+            evidence: .action(HeistActionEvidence(
+                command: action.command,
+                actionResult: actionResult,
+                expectationActionResult: expectation?.actionResult,
+                expectation: expectation?.result
+            )),
+            failure: failure
         )
     }
 
@@ -354,29 +355,40 @@ final class MockConnection: TransportReachabilityConnecting {
     ) -> HeistExecutionStepResult {
         guard let resolved = try? wait.resolve(in: .empty) else {
             return HeistExecutionStepResult(
-                index: index,
                 path: path,
                 kind: .wait,
-                actionResult: ActionResult(
-                    success: false,
-                    method: .wait,
-                    message: "mock could not resolve heist wait predicate",
-                    errorKind: .validationError
-                ),
-                durationMs: heistStepDurationMs
+                status: .failed,
+                durationMs: heistStepDurationMs,
+                intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
+                failure: HeistFailureDetail(
+                    category: .wait,
+                    contract: "wait predicate resolves before evaluation",
+                    observed: "mock could not resolve heist wait predicate",
+                    expected: wait.predicate.description
+                )
             )
         }
         let result = actionResult(
             for: .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout)),
             handler: handler
         )
+        let expectation = resolved.predicate.validate(against: result)
+        let failure = (!result.success || !expectation.met)
+            ? HeistFailureDetail(
+                category: .wait,
+                contract: "wait predicate is met before timeout",
+                observed: expectation.actual ?? result.message ?? "wait failed",
+                expected: wait.predicate.description
+            )
+            : nil
         return HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: .wait,
-            actionResult: result,
-            expectation: resolved.predicate.validate(against: result),
-            durationMs: heistStepDurationMs
+            status: failure == nil ? .passed : .failed,
+            durationMs: heistStepDurationMs,
+            intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
+            evidence: .wait(HeistWaitEvidence(actionResult: result, expectation: expectation)),
+            failure: failure
         )
     }
 
@@ -386,16 +398,16 @@ final class MockConnection: TransportReachabilityConnecting {
         path: String
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: .conditional,
-            message: "mock conditionals do not execute nested steps",
+            status: .passed,
             durationMs: heistStepDurationMs,
-            caseSelection: HeistCaseSelectionResult(
+            intent: .conditional,
+            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
                 cases: mockCaseResults(for: conditional.cases),
                 selectedCaseIndex: nil,
                 elapsedMs: heistStepDurationMs
-            )
+            )))
         )
     }
 
@@ -404,18 +416,25 @@ final class MockConnection: TransportReachabilityConnecting {
         index: Int,
         path: String
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
-            index: index,
+        let selection = HeistCaseSelectionResult(
+            cases: mockCaseResults(for: waitForCases.cases),
+            selectedCaseIndex: nil,
+            elapsedMs: heistStepDurationMs,
+            timeout: waitForCases.timeout,
+            timedOut: true
+        )
+        return HeistExecutionStepResult(
             path: path,
             kind: .waitForCases,
-            message: "mock wait_for_cases timed out",
+            status: .failed,
             durationMs: heistStepDurationMs,
-            caseSelection: HeistCaseSelectionResult(
-                cases: mockCaseResults(for: waitForCases.cases),
-                selectedCaseIndex: nil,
-                elapsedMs: heistStepDurationMs,
-                timeout: waitForCases.timeout,
-                timedOut: true
+            intent: .waitForCases(timeout: waitForCases.timeout),
+            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
+            failure: HeistFailureDetail(
+                category: .wait,
+                contract: "wait_for_cases selects a case before timeout or runs else",
+                observed: "mock wait_for_cases timed out",
+                expected: waitForCases.cases.map(\.predicate.description).joined(separator: "; ")
             )
         )
     }
@@ -426,17 +445,22 @@ final class MockConnection: TransportReachabilityConnecting {
         path: String
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: .forEachElement,
-            message: "mock for_each did not match elements",
+            status: .passed,
             durationMs: heistStepDurationMs,
-            forEachResult: HeistForEachResult(
-                matchedCount: 0,
+            intent: .forEachElement(
+                parameter: forEach.parameter,
+                matching: forEach.matching.description,
+                limit: forEach.limit
+            ),
+            evidence: .forEachElement(HeistForEachElementEvidence(
+                parameter: forEach.parameter,
+                matching: forEach.matching,
                 limit: forEach.limit,
-                iterationCount: 0,
-                failureReason: nil
-            )
+                matchedCount: 0,
+                iterationCount: 0
+            ))
         )
     }
 
@@ -446,17 +470,16 @@ final class MockConnection: TransportReachabilityConnecting {
         path: String
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
-            index: index,
             path: path,
             kind: .forEachString,
-            message: "mock for_each_string completed \(forEach.values.count) iteration(s)",
+            status: .passed,
             durationMs: heistStepDurationMs,
-            forEachResult: HeistForEachResult(
-                matchedCount: forEach.values.count,
-                limit: forEach.values.count,
-                iterationCount: forEach.values.count,
-                failureReason: nil
-            )
+            intent: .forEachString(parameter: forEach.parameter, count: forEach.values.count),
+            evidence: .forEachString(HeistForEachStringEvidence(
+                parameter: forEach.parameter,
+                count: forEach.values.count,
+                iterationCount: forEach.values.count
+            ))
         )
     }
 
@@ -497,6 +520,46 @@ final class MockConnection: TransportReachabilityConnecting {
             handler: handler
         )
         return (waitResult, resolved.predicate.validate(against: waitResult))
+    }
+
+    private func mockActionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
+        .action(
+            command: command.clientWireType.rawValue,
+            target: command.reportTarget.map(String.init(describing:))
+        )
+    }
+
+    private func mockActionFailure(
+        command: HeistActionCommand,
+        actionResult: ActionResult,
+        expectation: ExpectationResult?
+    ) -> HeistFailureDetail? {
+        if !actionResult.success {
+            return HeistFailureDetail(
+                category: actionResult.errorKind == .elementNotFound ? .targetResolution : .action,
+                contract: "action dispatch succeeds",
+                observed: actionResult.message ?? actionResult.errorKind?.rawValue ?? "action failed",
+                expected: command.reportTarget.map(String.init(describing:))
+            )
+        }
+        if let expectation, !expectation.met {
+            return HeistFailureDetail(
+                category: .expectation,
+                contract: "post-action expectation is met",
+                observed: expectation.actual ?? "expectation not met",
+                expected: expectation.predicate?.description
+            )
+        }
+        return nil
+    }
+
+    private func mockChildFailure(_ childPath: String, category: HeistFailureCategory) -> HeistFailureDetail {
+        HeistFailureDetail(
+            category: category,
+            contract: "child execution completes without failure",
+            observed: "child failed at \(childPath)",
+            expected: "all executed child steps pass"
+        )
     }
 
     private func actionResult(
@@ -543,26 +606,6 @@ final class MockConnection: TransportReachabilityConnecting {
              .ping, .status, .requestScreen:
             return .heistPlan
         }
-    }
-}
-
-private extension HeistExecutionStepResult {
-    func markingStop(_ stop: Bool) -> HeistExecutionStepResult {
-        guard stop != stopsHeist else { return self }
-        return HeistExecutionStepResult(
-            index: index,
-            path: path,
-            kind: kind,
-            actionResult: actionResult,
-            expectationActionResult: expectationActionResult,
-            expectation: expectation,
-            message: message,
-            durationMs: durationMs,
-            stopsHeist: stop,
-            skipped: skipped,
-            caseSelection: caseSelection,
-            children: children
-        )
     }
 }
 

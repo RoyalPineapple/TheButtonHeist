@@ -86,7 +86,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             let report = fence.junitReport(
                 for: result,
                 heistName: name,
-                totalTimeSeconds: Double(result.totalTimingMs) / 1000
+                totalTimeSeconds: Double(result.durationMs) / 1000
             )
             try report.junitXML().write(to: URL(fileURLWithPath: junitPath), atomically: true, encoding: .utf8)
             logStatus("JUnit report written to \(junitPath)")

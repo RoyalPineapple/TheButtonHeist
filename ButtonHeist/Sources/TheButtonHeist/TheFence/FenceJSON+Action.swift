@@ -206,18 +206,17 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let status: PublicStatus
     let report: PublicHeistReport
     let completedSteps: Int
-    let totalTimingMs: Int
-    let failedIndex: Int?
+    let durationMs: Int
+    let abortedAtPath: String?
     let expectations: PublicHeistExpectations?
     let netDelta: PublicDelta?
 
     init(result: HeistExecutionResult, netDelta: AccessibilityTrace.Delta?) {
-        let failedIndex = result.stoppedFailedIndex
-        self.status = PublicStatus(failedIndex == nil ? .ok : .partial)
+        self.status = PublicStatus(result.abortedAtPath == nil ? .ok : .partial)
         self.report = PublicHeistReport(result: result)
         self.completedSteps = result.completedStepCount
-        self.totalTimingMs = result.totalTimingMs
-        self.failedIndex = failedIndex
+        self.durationMs = result.durationMs
+        self.abortedAtPath = result.abortedAtPath
         let checked = result.expectationsChecked
         self.expectations = checked > 0
             ? PublicHeistExpectations(checked: checked, met: result.expectationsMet)
@@ -238,14 +237,14 @@ struct PublicHeistReport: Encodable {
 
 struct PublicHeistReportSummary: Encodable {
     let completedSteps: Int
-    let failedIndex: Int?
-    let totalTimingMs: Int
+    let abortedAtPath: String?
+    let durationMs: Int
     let expectations: PublicHeistExpectations?
 
     init(result: HeistExecutionResult) {
         self.completedSteps = result.completedStepCount
-        self.failedIndex = result.stoppedFailedIndex
-        self.totalTimingMs = result.totalTimingMs
+        self.abortedAtPath = result.abortedAtPath
+        self.durationMs = result.durationMs
         let checked = result.expectationsChecked
         self.expectations = checked > 0
             ? PublicHeistExpectations(checked: checked, met: result.expectationsMet)
@@ -263,23 +262,27 @@ struct PublicHeistReportNode: Encodable {
     let status: String
     let message: String?
     let durationMs: Int
+    let intent: HeistStepIntent?
+    let evidence: HeistStepEvidence?
+    let failure: HeistFailureDetail?
+    let abortedAtChildPath: String?
     let action: PublicHeistReportAction?
     let expectation: PublicExpectationResult?
-    let caseSelection: HeistCaseSelectionResult?
-    let forEachResult: HeistForEachResult?
     let children: [PublicHeistReportNode]
 
     init(step: HeistExecutionStepResult) {
         self.path = step.path
         self.kind = step.reportStepName
-        self.capability = step.invocation?.capabilityName
-        self.status = step.reportStatus.rawValue
+        self.capability = step.invocationEvidence?.invocation?.capabilityName
+        self.status = step.status.rawValue
         self.message = step.reportMessage
         self.durationMs = step.durationMs
+        self.intent = step.intent
+        self.evidence = step.evidence
+        self.failure = step.failure
+        self.abortedAtChildPath = step.abortedAtChildPath
         self.action = PublicHeistReportAction(step: step)
         self.expectation = step.reportExpectation.map(PublicExpectationResult.init(result:))
-        self.caseSelection = step.caseSelection
-        self.forEachResult = step.forEachResult
         self.children = step.children.map(PublicHeistReportNode.init(step:))
     }
 }

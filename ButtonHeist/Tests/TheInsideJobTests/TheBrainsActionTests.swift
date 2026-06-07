@@ -616,7 +616,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .conditional)
-        XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -639,7 +639,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(heist.steps.map(\.kind), [.conditional, .warn])
-        XCTAssertEqual(heist.steps.first?.caseSelection?.selectedCaseIndex, nil)
+        XCTAssertEqual(heist.steps.first?.caseSelectionEvidence?.selection.selectedCaseIndex, nil)
     }
 
     func testHeistWaitForCasesTimeoutWithoutElseFails() async throws {
@@ -664,8 +664,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(step.kind, .waitForCases)
-        XCTAssertEqual(step.caseSelection?.timedOut, true)
-        XCTAssertEqual(step.caseSelection?.elseRan, false)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.timedOut, true)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.elseRan, false)
     }
 
     func testHeistWaitForCasesTimeoutWithElseRunsElse() async throws {
@@ -690,8 +690,8 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelection?.timedOut, true)
-        XCTAssertEqual(step.caseSelection?.elseRan, true)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.timedOut, true)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.elseRan, true)
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -717,7 +717,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -743,7 +743,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -786,7 +786,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertLessThan(elapsed, 3)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
-        XCTAssertDiagnostic(step.actionResult?.message, contains: [
+        XCTAssertDiagnostic(step.reportActionResult?.message, contains: [
             "last settled: sequence ",
             "last delta:",
         ])
@@ -930,9 +930,9 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(waitedSteps, [try expectation.resolve(in: .empty)])
-        XCTAssertEqual(step.expectationActionResult?.method, .wait)
-        XCTAssertEqual(step.expectation?.met, false)
-        XCTAssertEqual(step.expectation?.actual, "no observed accessibility trace")
+        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.method, .wait)
+        XCTAssertEqual(step.reportExpectation?.met, false)
+        XCTAssertEqual(step.reportExpectation?.actual, "no observed accessibility trace")
     }
 
     func testHeistRuntimeValidationRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
@@ -1156,7 +1156,7 @@ final class TheBrainsActionTests: XCTestCase {
         let recursive = try XCTUnwrap(topLevel.children.first)
         XCTAssertTrue(topLevel.isFailure)
         XCTAssertEqual(recursive.kind, .invoke)
-        XCTAssertEqual(recursive.message, "Unknown heist run \(recursiveName)")
+        XCTAssertEqual(recursive.failure?.observed, "unknown heist run \(recursiveName)")
     }
 
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
@@ -1193,11 +1193,11 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.expectationActionResult?.method, .wait)
-        XCTAssertTrue(step.expectationActionResult?.success == true)
-        XCTAssertEqual(step.expectationActionResult?.accessibilityTrace, trace)
-        XCTAssertEqual(step.expectation?.met, true)
-        XCTAssertEqual(step.expectation?.actual, "screenChanged")
+        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.method, .wait)
+        XCTAssertTrue(step.actionEvidence?.expectationActionResult?.success == true)
+        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.accessibilityTrace, trace)
+        XCTAssertEqual(step.reportExpectation?.met, true)
+        XCTAssertEqual(step.reportExpectation?.actual, "screenChanged")
     }
 
     func testHeistActionExpectationUsesWaitFailureDiagnostic() async throws {
@@ -1232,9 +1232,9 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(step.expectationActionResult?.errorKind, .timeout)
-        XCTAssertEqual(step.expectation?.met, false)
-        XCTAssertEqual(step.expectation?.actual, "timed out after 0.2s — expectation not met")
+        XCTAssertEqual(step.actionEvidence?.expectationActionResult?.errorKind, .timeout)
+        XCTAssertEqual(step.reportExpectation?.met, false)
+        XCTAssertEqual(step.reportExpectation?.actual, "timed out after 0.2s — expectation not met")
     }
 
     func testHeistSemanticObservationScopeUsesVisibleForStateCases() async throws {
@@ -1335,8 +1335,8 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
-        XCTAssertEqual(step.caseSelection?.cases.first?.result.met, true)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.cases.first?.result.met, true)
     }
 
     func testHeistForEachWithZeroMatchesSucceedsWithoutIterations() async throws {
@@ -1360,7 +1360,7 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
-        let forEachResult = try XCTUnwrap(step.forEachResult)
+        let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .forEachElement)
@@ -1399,14 +1399,14 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
-        let forEachResult = try XCTUnwrap(step.forEachResult)
+        let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
 
         XCTAssertFalse(result.success)
         XCTAssertTrue(executedCommands.isEmpty)
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.limit, 1)
         XCTAssertEqual(forEachResult.iterationCount, 0)
-        XCTAssertEqual(forEachResult.failureReason, "matched 2 element(s), exceeding for_each limit 1")
+        XCTAssertEqual(forEachResult.failureReason, "matched 2 element(s), exceeding for_each_element limit 1")
         XCTAssertTrue(step.children.isEmpty)
     }
 
@@ -1438,7 +1438,7 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
-        let forEachResult = try XCTUnwrap(step.forEachResult)
+        let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(forEachResult.matchedCount, 3)
@@ -1483,7 +1483,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachResult)
+        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachElementEvidence)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(forEachResult.iterationCount, 2)
@@ -1522,7 +1522,7 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
-        let forEachResult = try XCTUnwrap(step.forEachResult)
+        let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(forEachResult.matchedCount, 2)
@@ -1563,7 +1563,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachResult)
+        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachElementEvidence)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(forEachResult.matchedCount, 2)
@@ -1602,7 +1602,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachResult)
+        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachElementEvidence)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(forEachResult.matchedCount, 2)
@@ -1613,7 +1613,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testHeistForEachBodyFailureStopsHeistAndSkipsFollowingTopLevelSteps() async throws {
+    func testHeistForEachBodyFailureStopsBeforeFollowingTopLevelSteps() async throws {
         let matching = ElementPredicate(label: "Delete")
         let initialState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
@@ -1637,20 +1637,22 @@ final class TheBrainsActionTests: XCTestCase {
                 parameter: "target",
                 body: [.action(try ActionStep(command: .activate(.ref("target"))))]
             )),
-            .warn(WarnStep(message: "should be skipped")),
+            .warn(WarnStep(message: "should not run")),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let forEachStep = try XCTUnwrap(heist.steps.first)
-        let forEachResult = try XCTUnwrap(forEachStep.forEachResult)
+        let forEachResult = try XCTUnwrap(forEachStep.forEachElementEvidence)
+        let failedActionPath = "$.body[0].for_each_element.iterations[0].body[0]"
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(heist.failedIndex, 0)
-        XCTAssertEqual(heist.steps.map(\.kind), [.forEachElement, .skipped])
+        XCTAssertEqual(heist.abortedAtPath, failedActionPath)
+        XCTAssertEqual(heist.steps.map(\.kind), [.forEachElement])
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 1)
-        XCTAssertEqual(forEachResult.failureReason, "iteration 0 failed")
+        XCTAssertEqual(forEachResult.failureReason, "iteration 0 failed at \(failedActionPath)")
+        XCTAssertEqual(forEachStep.abortedAtChildPath, failedActionPath)
         XCTAssertEqual(forEachStep.children.map(\.kind), [.forEachIteration])
         XCTAssertEqual(forEachStep.children.first?.children.map(\.kind), [.action])
     }
@@ -1705,7 +1707,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let forEachResult = try XCTUnwrap(heist.steps.first?.forEachResult)
+        let forEachResult = try XCTUnwrap(heist.steps.first?.forEachElementEvidence)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(forEachResult.iterationCount, 2)
@@ -2566,7 +2568,7 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlan(try HeistPlan(body: [step]))
         guard case .heistExecution(let heist) = result.payload,
               let stepResult = heist.steps.first,
-              let actionResult = stepResult.actionResult else {
+              let actionResult = stepResult.reportActionResult else {
             XCTFail("Expected heist execution step result for \(command.wireType.rawValue)")
             return result
         }
