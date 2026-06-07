@@ -137,6 +137,35 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `compileFile ignores Swift wrapper strings that mention HeistPlan`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "WrapperStrings.swift",
+            #"""
+            import ThePlans
+
+            let template = """
+            HeistPlan {
+                let x = 1
+            }
+            """
+
+            let rawTemplate = #"HeistPlan { if true { Warn("not real DSL") } }"#
+
+            let heist = try HeistPlan("WrapperStrings") {
+                Warn("ok")
+            }
+            """#
+        )
+
+        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+
+        #expect(diagnostics.isEmpty)
+        #expect(plan.name == "WrapperStrings")
+        #expect(plan.body == [.warn(WarnStep(message: "ok"))])
+    }
+
+    @Test
     func `compileFile rejects native control flow inside heist body`() async throws {
         let temp = try CompilerTemporaryDirectory()
         let source = try temp.writeSwiftSource(

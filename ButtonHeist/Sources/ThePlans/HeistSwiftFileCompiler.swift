@@ -265,18 +265,28 @@ private enum HeistSwiftSubsetValidator {
         var ranges: [Range<String.Index>] = []
         var index = source.startIndex
         while index < source.endIndex {
-            guard let found = source[index...].range(of: "HeistPlan") else {
-                break
+            index = skipTrivia(from: index, in: source)
+            guard index < source.endIndex else { break }
+
+            if let afterString = indexAfterString(startingAt: index, in: source) {
+                index = afterString
+                continue
             }
-            let start = found.lowerBound
-            index = found.upperBound
+
+            let start = index
+            guard source[index...].hasPrefix("HeistPlan") else {
+                index = source.index(after: index)
+                continue
+            }
+            let afterName = source.index(index, offsetBy: "HeistPlan".count)
             guard isIdentifierBoundary(before: start, in: source),
-                  isIdentifierBoundary(after: found.upperBound, in: source),
+                  isIdentifierBoundary(after: afterName, in: source),
                   !isTypeAnnotationOrReturn(start, in: source),
-                  let afterName = nextNonTriviaIndex(after: found.upperBound, in: source),
-                  source[afterName] == "(" || source[afterName] == "{",
-                  let bodyStart = firstBodyBrace(after: found.upperBound, in: source),
+                  let afterTrivia = nextNonTriviaIndex(after: afterName, in: source),
+                  source[afterTrivia] == "(" || source[afterTrivia] == "{",
+                  let bodyStart = firstBodyBrace(after: afterName, in: source),
                   let bodyEnd = matchingBrace(from: bodyStart, in: source) else {
+                index = afterName
                 continue
             }
             ranges.append(start..<source.index(after: bodyEnd))
@@ -313,8 +323,8 @@ private enum HeistSwiftSubsetValidator {
             guard cursor < source.endIndex else { return nil }
             let character = source[cursor]
             if character == "{" { return cursor }
-            if character == "\"" {
-                cursor = indexAfterString(startingAt: cursor, in: source) ?? source.endIndex
+            if let afterString = indexAfterString(startingAt: cursor, in: source) {
+                cursor = afterString
             } else if character == "(" {
                 cursor = indexAfterBalanced(open: "(", close: ")", startingAt: cursor, in: source) ?? source.endIndex
             } else {
@@ -340,9 +350,8 @@ private enum HeistSwiftSubsetValidator {
             cursor = skipTrivia(from: cursor, in: source)
             guard cursor < source.endIndex else { return nil }
             let character = source[cursor]
-            if character == "\"" {
-                guard let next = indexAfterString(startingAt: cursor, in: source) else { return nil }
-                cursor = next
+            if let afterString = indexAfterString(startingAt: cursor, in: source) {
+                cursor = afterString
                 continue
             }
             if character == open {
@@ -407,20 +416,83 @@ private enum HeistSwiftSubsetValidator {
     }
 
     private static func indexAfterString(startingAt start: String.Index, in source: String) -> String.Index? {
-        var cursor = source.index(after: start)
+        guard let opening = stringOpening(startingAt: start, in: source) else { return nil }
+        let quote = opening.quote
+        let hashCount = opening.hashCount
+
+        if startsWithTripleQuote(at: quote, in: source) {
+            var cursor = source.index(quote, offsetBy: 3)
+            while cursor < source.endIndex {
+                if startsWithTripleQuote(at: cursor, in: source),
+                   let afterDelimiter = indexAfterHashes(
+                    after: source.index(cursor, offsetBy: 3),
+                    count: hashCount,
+                    in: source
+                   ) {
+                    return afterDelimiter
+                }
+                cursor = source.index(after: cursor)
+            }
+            return nil
+        }
+
+        var cursor = source.index(after: quote)
         while cursor < source.endIndex {
-            if source[cursor] == "\\" {
+            if hashCount == 0, source[cursor] == "\\" {
                 cursor = source.index(after: cursor)
                 guard cursor < source.endIndex else { return nil }
                 cursor = source.index(after: cursor)
                 continue
             }
             if source[cursor] == "\"" {
-                return source.index(after: cursor)
+                let afterQuote = source.index(after: cursor)
+                if let afterDelimiter = indexAfterHashes(after: afterQuote, count: hashCount, in: source) {
+                    return afterDelimiter
+                }
             }
             cursor = source.index(after: cursor)
         }
         return nil
+    }
+
+    private static func stringOpening(
+        startingAt start: String.Index,
+        in source: String
+    ) -> (quote: String.Index, hashCount: Int)? {
+        var cursor = start
+        var hashCount = 0
+        while cursor < source.endIndex, source[cursor] == "#" {
+            hashCount += 1
+            cursor = source.index(after: cursor)
+        }
+        guard cursor < source.endIndex, source[cursor] == "\"" else { return nil }
+        return (cursor, hashCount)
+    }
+
+    private static func startsWithTripleQuote(at index: String.Index, in source: String) -> Bool {
+        guard index < source.endIndex,
+              source[index] == "\"" else {
+            return false
+        }
+        let second = source.index(after: index)
+        guard second < source.endIndex, source[second] == "\"" else {
+            return false
+        }
+        let third = source.index(after: second)
+        return third < source.endIndex && source[third] == "\""
+    }
+
+    private static func indexAfterHashes(
+        after index: String.Index,
+        count: Int,
+        in source: String
+    ) -> String.Index? {
+        var cursor = index
+        for _ in 0..<count {
+            guard cursor < source.endIndex, source[cursor] == "#" else { return nil }
+            cursor = source.index(after: cursor)
+        }
+        return cursor
     }
 }
 
