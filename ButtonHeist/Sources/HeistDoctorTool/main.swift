@@ -7,8 +7,10 @@ import TheScore
 struct HeistDoctorCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heist-doctor",
-        abstract: "Suggest offline heist target repairs from two execution receipts",
+        abstract: "Beta: suggest offline heist target repairs from two execution receipts",
         discussion: """
+            heist-doctor is a beta, suggestion-only offline tool.
+
             heist-doctor reads durable HeistExecutionResult JSON receipts. It
             compares a last passing run with a new failing run and prints repair
             candidates for the failed action step. It never connects to an app,
@@ -74,7 +76,7 @@ struct HeistDoctorCommand: ParsableCommand {
             return "No repair suggestions."
         }
 
-        var lines = ["Repair suggestions (\(suggestions.count))"]
+        var lines = ["Repair suggestions (beta, \(suggestions.count))"]
         for (index, suggestion) in suggestions.enumerated() {
             lines.append("")
             lines.append("[\(index + 1)] \(suggestion.failureKind.rawValue) confidence=\(suggestion.confidence.rawValue)")
@@ -116,5 +118,6 @@ enum HeistDoctorOutputFormat: String, ExpressibleByArgument {
 }
 
 private struct HeistDoctorJSONReport: Encodable {
+    let featureStatus = "beta"
     let suggestions: [HeistRepairSuggestion]
 }
