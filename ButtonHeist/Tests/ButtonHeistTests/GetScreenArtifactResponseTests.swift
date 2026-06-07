@@ -196,7 +196,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         pngData: String,
         interface: Interface
     ) -> TheFence {
-        let config = TheFence.Configuration(heistStoreBaseDirectory: tempDirectory)
+        let config = TheFence.Configuration(artifactBaseDirectory: tempDirectory)
         let (fence, mockConnection) = makeConnectedFence(configuration: config)
         mockConnection.autoResponse = { message in
             switch message {

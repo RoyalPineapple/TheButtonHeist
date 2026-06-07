@@ -605,11 +605,11 @@ struct HeistPlanRuntimeValidator: HeistPlanTraversalVisitor {
     ) {
         validateCommandExpressions(command, path: path, scope: scope)
         // Durability (serialize/render canonically) is an authoring concern, not
-        // an execution one. It is enforced where heists are persisted — recording
-        // and canonical Swift DSL rendering — not here, so a transient plan (a
+        // an execution one. It is enforced where heists are persisted or rendered
+        // as canonical Swift DSL — not here, so a transient plan (a
         // single command or an inline run_heist) can execute any valid command,
         // including viewport commands. This keeps single-step and heist execution
-        // on one pipeline; viewport commands still never enter recordings or the DSL.
+        // on one pipeline; viewport commands still never enter the authored DSL.
         do {
             try command.assertResolvedPayloadAdmissible(in: environment)
         } catch {

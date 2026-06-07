@@ -8,7 +8,7 @@ Generated references are the source of truth for executable surface area:
 - [Accessibility Contract](ACCESSIBILITY-CONTRACT.md) - canonical product
   contract, boundary map, and conformance cases
 - [Command Reference](reference/commands.md) - canonical `TheFence.Command`
-  names, CLI exposure, heist/playback eligibility, and parameters
+  names, CLI exposure, heist execution eligibility, and parameters
 - [MCP Tool Reference](reference/mcp-tools.md) - MCP adapter tools projected
   from the Fence command contract
 - [Wire Protocol](WIRE-PROTOCOL.md) - transport envelopes, handshake,
@@ -18,8 +18,8 @@ Generated references are the source of truth for executable surface area:
 ## Contract Layers
 
 Button Heist has one product command contract: `TheFence.Command`. CLI
-commands, JSON-lines stdin, MCP tools, heist execution, and playback all route
-through that contract. MCP exposes one tool per exposed command, projected from
+commands, JSON-lines stdin, MCP tools, and heist execution all route through
+that contract. MCP exposes one tool per exposed command, projected from
 Fence-owned command descriptors.
 
 The raw wire protocol lives one layer lower in TheScore. Wire message
@@ -110,9 +110,8 @@ is not geometry authority.
 
 Durable flows use semantic selectors and matchers: accessibility identifier,
 label, value, traits, excluded traits, and ordinal as a last-resort
-disambiguator. Heist recording derives minimum matchers from captures so
-playback can run across device sizes and layout changes without depending on
-transient handles or coordinates.
+disambiguator. Minimum matcher utilities can derive portable suggestions from
+settled captures without depending on transient handles or coordinates.
 
 ## Captures, Traces, and Deltas
 
@@ -132,10 +131,10 @@ they do not replace the underlying captures.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence/`
 
-TheFence is the shared orchestration layer for CLI, JSON-lines stdin, MCP,
-heist execution, and playback. It owns command parsing, schema validation,
-connection coordination through TheHandoff, typed responses, heist planning,
-expectations, and recording/replay integration.
+TheFence is the shared orchestration layer for CLI, JSON-lines stdin, MCP, and
+heist execution. It owns command parsing, schema validation, connection
+coordination through TheHandoff, typed responses, heist planning, expectations,
+receipts, and replay integration.
 
 Use the generated [Command Reference](reference/commands.md) for command names
 and parameters.
@@ -144,8 +143,8 @@ and parameters.
 
 - `connect` verifies transport, handshake/authentication, and session
   ownership. Observation still starts with `get_interface`.
-- `run_heist` accepts a typed `HeistPlan`; recordings and playback use the same
-  plan contract.
+- `run_heist` accepts a typed `HeistPlan`; execution uses the same plan contract
+  for source strings and `.heist` artifacts.
 - Commands that support `expect` validate the expectation against the action
   result and report the observed outcome.
 - Typed responses serialize to human, compact, and JSON forms from the same

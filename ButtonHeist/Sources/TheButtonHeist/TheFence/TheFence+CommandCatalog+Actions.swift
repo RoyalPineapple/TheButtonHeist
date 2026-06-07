@@ -12,6 +12,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeOneFingerTapRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial tap. An element target supplies live geometry; "
                     + "ordinary accessible controls should use the semantic command path."
@@ -20,6 +21,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeLongPressRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial long press on a point "
@@ -29,6 +31,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeSwipeRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial swipe using exactly one typed intent: "
@@ -38,6 +41,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeDragRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.dragIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 description: "Explicit mechanical/spatial drag using exactly one typed intent: "
@@ -58,6 +62,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.container, .string),
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
@@ -70,6 +75,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToVisibleRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
                 description: "Explicit viewport/debug operation: move the viewport until a "
                     + "semantic target is visible and report its fresh geometry."
@@ -78,6 +84,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToEdgeRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.container, .string),
                     param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
@@ -104,6 +111,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeActivateRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.action, .string)] + FenceParameterBlocks.expectation,
                 description: "Perform primary accessibility activation on a semantic UI element, "
@@ -113,6 +121,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeRotorRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.rotor, .string),
                     param(.rotorIndex, .integer, minimum: 0),
@@ -130,6 +139,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeTypeTextRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + [param(.text, .string, required: true, minLength: 1)] + FenceParameterBlocks.expectation,
                 description: "Type non-empty text, optionally after inflating a semantic target."
             )
@@ -137,6 +147,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeEditActionRequest,
+                mcpExposure: .notExposed,
                 parameters: [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + FenceParameterBlocks.expectation,
                 description: "Perform an edit action on the current first responder."
             )
@@ -144,6 +155,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeSetPasteboardRequest,
+                mcpExposure: .notExposed,
                 parameters: [param(.text, .string, required: true)] + FenceParameterBlocks.expectation,
                 description: "Write text to the general pasteboard from within the app."
             )
@@ -151,6 +163,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeDismissKeyboardRequest,
+                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.expectation,
                 description: "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
             )

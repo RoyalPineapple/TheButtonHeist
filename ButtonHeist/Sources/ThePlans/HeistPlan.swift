@@ -15,10 +15,11 @@ import Foundation
 
 /// Canonical ordered automation contract.
 ///
-/// Swift DSL source, dynamic agent JSON, live composition, and run-heist all converge
-/// on this value. DSL syntax is source authoring; `HeistPlan` is the product
-/// contract executed by the runtime. The plan stores semantic structure; it
-/// does not observe UI state, settle, report, compose live interactions, or dispatch actions.
+/// Swift DSL source, runtime ButtonHeist source, generated JSON IR, and
+/// run-heist all converge on this value. DSL syntax is source authoring;
+/// `HeistPlan` is the product contract executed by the runtime. The plan stores
+/// semantic structure; it does not observe UI state, settle, report, compose
+/// live interactions, or dispatch actions.
 public struct HeistPlan: Codable, Sendable, Equatable {
     public static let currentVersion = 1
 

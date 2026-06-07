@@ -11,6 +11,7 @@ enum SessionCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .session,
                 requestDecoder: TheFence.decodePingRequest,
+                mcpExposure: .notExposed,
                 requiresConnectionBeforeDispatch: false,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "Check connection health without reading accessibility state."
@@ -19,6 +20,7 @@ enum SessionCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .session,
                 requestDecoder: TheFence.decodeListDevicesRequest,
+                mcpExposure: .notExposed,
                 requiresConnectionBeforeDispatch: false,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "List discovered iOS devices and configured connection targets."
@@ -43,40 +45,10 @@ enum SessionCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .session,
                 requestDecoder: TheFence.decodeListTargetsRequest,
+                mcpExposure: .notExposed,
                 requiresConnectionBeforeDispatch: false,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "List configured connection targets and the default target."
-            )
-        }
-    }
-}
-
-enum HeistRecordingCommand: String, CaseIterable, FenceCommand {
-    case startHeist = "start_heist"
-    case stopHeist = "stop_heist"
-
-    var descriptor: FenceCommandDescriptor {
-        switch self {
-        case .startHeist:
-            return TheFence.Command.commandDescriptor(
-                command, family: .heistRecording,
-                requestDecoder: TheFence.decodeStartHeistRequest,
-                requiresConnectionBeforeDispatch: false,
-                parameters: [param(.app, .string), param(.identifier, .string)],
-                description: "Start composing successful interactions into a semantic heist test."
-            )
-        case .stopHeist:
-            return TheFence.Command.commandDescriptor(
-                command, family: .heistRecording,
-                requestDecoder: TheFence.decodeStopHeistRequest,
-                requiresConnectionBeforeDispatch: false,
-                parameters: [
-                    param(.output, .string, required: true),
-                    param(.swiftOutput, .string),
-                    param(.sampleParameter, .string),
-                    param(.sampleValue, .string),
-                ],
-                description: "Stop heist recording and save a deterministic semantic heist fixture plus optional Swift DSL source."
             )
         }
     }

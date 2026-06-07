@@ -2,7 +2,7 @@
 
 The CLI is the terminal adapter for Button Heist. It routes through
 `TheFence.Command`, the same product command contract used by JSON-lines stdin,
-MCP, heist execution, and playback.
+MCP, and heist execution.
 
 This README covers build, targeting, and common workflows. It does not maintain
 a hand-written command or parameter catalog.
@@ -10,7 +10,7 @@ a hand-written command or parameter catalog.
 Generated references:
 
 - [Command Reference](../docs/reference/commands.md) - canonical commands,
-  CLI exposure, heist/playback eligibility, and parameters
+  CLI exposure, heist execution eligibility, and parameters
 - [MCP Tool Reference](../docs/reference/mcp-tools.md) - MCP adapter tools
 - [API](../docs/API.md) - product invariants and integration context
 
@@ -80,23 +80,15 @@ the command's purpose. They are not setup for ordinary semantic actions.
 Screenshots write artifact files by default; inline PNG data is an explicit raw
 output mode.
 
-### Record and Replay
+### Replay Authored Heists
 
 ```bash
-buttonheist start_heist --app com.example.app
-# run the flow
-buttonheist stop_heist \
-  --output recording.heist \
-  --swift-output Recording.swift \
-  --sample-parameter query \
-  --sample-value milk
-buttonheist run_heist --path recording.heist --junit report.xml
+buttonheist run_heist --path checkout.heist --junit report.xml
 ```
 
 Heist replay uses durable semantic selectors and matchers. Capture-local
-annotations are recording evidence and diagnostics, not replay identity. The
-optional Swift output is deterministic authoring source; the `.heist` package
-remains the replay artifact.
+annotations are evidence and diagnostics, not replay identity. The `.heist`
+package is an authored replay artifact.
 
 ### JSON-Lines Mode
 

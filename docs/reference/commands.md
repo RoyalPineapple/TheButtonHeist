@@ -6,33 +6,32 @@ _Generated from `TheFence.Command.descriptors`._
 
 | Command | Family | CLI | MCP | Description |
 |---------|--------|-----|-----|-------------|
-| `activate` | `semanticAction` | `activate` | direct | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
+| `activate` | `semanticAction` | `activate` | - | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
 | `connect` | `session` | `connect` | direct | Establish or switch the active connection to a Button Heist app. |
 | `describe_heist` | `heistRuntime` | `describe_heist` | direct | Describe one root entry or reusable heist from a runtime-validated plan. The `heist` parameter selects the entry/capability name; the plan can be supplied as canonical ButtonHeist source via `plan` or loaded from a `path` to a .heist package artifact. |
-| `dismiss_keyboard` | `semanticAction` | `dismiss_keyboard` | direct | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
-| `drag` | `spatialAction` | `drag` | direct | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
-| `edit_action` | `semanticAction` | `edit_action` | direct | Perform an edit action on the current first responder. |
+| `dismiss_keyboard` | `semanticAction` | `dismiss_keyboard` | - | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
+| `drag` | `spatialAction` | `drag` | - | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
+| `edit_action` | `semanticAction` | `edit_action` | - | Perform an edit action on the current first responder. |
 | `get_interface` | `observation` | `get_interface` | direct | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `observation` | `get_pasteboard` | direct | Read text from the general pasteboard. |
 | `get_screen` | `observation` | `get_screen` | direct | Capture a PNG screenshot with optional inline data and interface state. |
 | `get_session_state` | `session` | `get_session_state` | direct | Inspect connection, device, and last-action session state. |
-| `list_devices` | `session` | `list_devices` | direct | List discovered iOS devices and configured connection targets. |
+| `list_devices` | `session` | `list_devices` | - | List discovered iOS devices and configured connection targets. |
 | `list_heists` | `heistRuntime` | `list_heists` | direct | List a summary menu of the root entry and named reusable heists derived from one runtime-validated plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan can be supplied as canonical ButtonHeist source via `plan` or loaded from a `path` to a .heist package artifact. |
-| `list_targets` | `session` | `list_targets` | direct | List configured connection targets and the default target. |
-| `long_press` | `spatialAction` | `long_press` | direct | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
-| `one_finger_tap` | `spatialAction` | `one_finger_tap` | direct | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
-| `ping` | `session` | `ping` | direct | Check connection health without reading accessibility state. |
-| `rotor` | `semanticAction` | `rotor` | direct | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
+| `list_targets` | `session` | `list_targets` | - | List configured connection targets and the default target. |
+| `long_press` | `spatialAction` | `long_press` | - | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
+| `one_finger_tap` | `spatialAction` | `one_finger_tap` | - | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
+| `perform` | `heistRuntime` | - | direct | Perform exactly one primitive ButtonHeist step from `step` source. The fence wraps it as `HeistPlan { <step> }`, compiles it through ThePlans, requires one action or simple WaitFor step, then executes it through the heist runtime. Use run_heist for branching, loops, named heists, warnings, failures, or multiple steps. |
+| `ping` | `session` | `ping` | - | Check connection health without reading accessibility state. |
+| `rotor` | `semanticAction` | `rotor` | - | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
 | `run_heist` | `heistRuntime` | `run_heist` | direct | Execute a typed heist plan, supplied as canonical ButtonHeist source via `plan`, or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: path or plan. Use `argument` when the root heist declares a string or element_target parameter. |
-| `scroll` | `viewportDebug` | `scroll` | direct | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
-| `scroll_to_edge` | `viewportDebug` | `scroll_to_edge` | direct | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
-| `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | direct | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
-| `set_pasteboard` | `semanticAction` | `set_pasteboard` | direct | Write text to the general pasteboard from within the app. |
-| `start_heist` | `heistRecording` | `start_heist` | direct | Start composing successful interactions into a semantic heist test. |
-| `stop_heist` | `heistRecording` | `stop_heist` | direct | Stop heist recording and save a deterministic semantic heist fixture plus optional Swift DSL source. |
-| `swipe` | `spatialAction` | `swipe` | direct | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
-| `type_text` | `semanticAction` | `type_text` | direct | Type non-empty text, optionally after inflating a semantic target. |
-| `wait` | `assertion` | `wait` | direct | Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state. |
+| `scroll` | `viewportDebug` | `scroll` | - | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
+| `scroll_to_edge` | `viewportDebug` | `scroll_to_edge` | - | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
+| `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | - | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
+| `set_pasteboard` | `semanticAction` | `set_pasteboard` | - | Write text to the general pasteboard from within the app. |
+| `swipe` | `spatialAction` | `swipe` | - | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
+| `type_text` | `semanticAction` | `type_text` | - | Type non-empty text, optionally after inflating a semantic target. |
+| `wait` | `assertion` | `wait` | - | Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state. |
 
 ## Details
 
@@ -42,7 +41,7 @@ Perform primary accessibility activation on a semantic UI element, or one of its
 
 - Family: `semanticAction`
 - CLI: direct command `activate`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -94,7 +93,7 @@ Dismiss the on-screen keyboard through the current first responder or keyboard a
 
 - Family: `semanticAction`
 - CLI: direct command `dismiss_keyboard`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -110,7 +109,7 @@ Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint 
 
 - Family: `spatialAction`
 - CLI: direct command `drag`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -129,7 +128,7 @@ Perform an edit action on the current first responder.
 
 - Family: `semanticAction`
 - CLI: direct command `edit_action`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -144,7 +143,7 @@ Parameters:
 
 Read the app accessibility hierarchy, optionally scoped to a subtree.
 
-containerName is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection and viewport/debug commands. It is not a semantic target and is not recorded into heists.
+containerName is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection and viewport/debug commands. It is not a semantic target or durable heist selector.
 
 - Family: `observation`
 - CLI: direct command `get_interface`
@@ -212,7 +211,7 @@ List discovered iOS devices and configured connection targets.
 
 - Family: `session`
 - CLI: direct command `list_devices`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: no
 
 Parameters:
@@ -242,7 +241,7 @@ List configured connection targets and the default target.
 
 - Family: `session`
 - CLI: direct command `list_targets`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: no
 
 Parameters:
@@ -255,7 +254,7 @@ Explicit mechanical/spatial long press on a point or element-relative point for 
 
 - Family: `spatialAction`
 - CLI: direct command `long_press`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -274,7 +273,7 @@ Explicit mechanical/spatial tap. An element target supplies live geometry; ordin
 
 - Family: `spatialAction`
 - CLI: direct command `one_finger_tap`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -286,13 +285,28 @@ Parameters:
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
+### `perform`
+
+Perform exactly one primitive ButtonHeist step from `step` source. The fence wraps it as `HeistPlan { <step> }`, compiles it through ThePlans, requires one action or simple WaitFor step, then executes it through the heist runtime. Use run_heist for branching, loops, named heists, warnings, failures, or multiple steps.
+
+- Family: `heistRuntime`
+- CLI: not exposed
+- MCP: direct tool
+- Connection before dispatch: yes
+
+Parameters:
+
+| Parameter | Type | Required | Default | Values |
+|-----------|------|----------|---------|--------|
+| `step` | `string` | yes | - | - |
+
 ### `ping`
 
 Check connection health without reading accessibility state.
 
 - Family: `session`
 - CLI: direct command `ping`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: no
 
 Parameters:
@@ -305,7 +319,7 @@ Move through an element rotor by direction. The server holds the rotor cursor wh
 
 - Family: `semanticAction`
 - CLI: direct command `rotor`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -342,7 +356,7 @@ Explicit viewport/debug operation: scroll one page in the visible viewport, with
 
 - Family: `viewportDebug`
 - CLI: direct command `scroll`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -361,7 +375,7 @@ Explicit viewport/debug operation: scroll the visible viewport, a semantic targe
 
 - Family: `viewportDebug`
 - CLI: direct command `scroll_to_edge`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -380,7 +394,7 @@ Explicit viewport/debug operation: move the viewport until a semantic target is 
 
 - Family: `viewportDebug`
 - CLI: direct command `scroll_to_visible`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -397,7 +411,7 @@ Write text to the general pasteboard from within the app.
 
 - Family: `semanticAction`
 - CLI: direct command `set_pasteboard`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -408,47 +422,13 @@ Parameters:
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
-### `start_heist`
-
-Start composing successful interactions into a semantic heist test.
-
-- Family: `heistRecording`
-- CLI: direct command `start_heist`
-- MCP: direct tool
-- Connection before dispatch: no
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `app` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-
-### `stop_heist`
-
-Stop heist recording and save a deterministic semantic heist fixture plus optional Swift DSL source.
-
-- Family: `heistRecording`
-- CLI: direct command `stop_heist`
-- MCP: direct tool
-- Connection before dispatch: no
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `output` | `string` | yes | - | - |
-| `swiftOutput` | `string` | no | - | - |
-| `sampleParameter` | `string` | no | - | - |
-| `sampleValue` | `string` | no | - | - |
-
 ### `swipe`
 
 Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.
 
 - Family: `spatialAction`
 - CLI: direct command `swipe`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -469,7 +449,7 @@ Type non-empty text, optionally after inflating a semantic target.
 
 - Family: `semanticAction`
 - CLI: direct command `type_text`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:
@@ -487,7 +467,7 @@ Assert that an accessibility predicate is satisfied within timeout by evaluating
 
 - Family: `assertion`
 - CLI: direct command `wait`
-- MCP: direct tool
+- MCP: not exposed
 - Connection before dispatch: yes
 
 Parameters:

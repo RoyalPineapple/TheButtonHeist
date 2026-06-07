@@ -11,6 +11,10 @@ extension TheFence {
         try await runHeistPlan(request.plan, argument: request.argument, timeout: Timeouts.longActionSeconds)
     }
 
+    func handlePerform(_ request: PerformRequest) async throws -> FenceResponse {
+        try await runHeistPlan(request.plan, timeout: performTimeout(for: request.step))
+    }
+
     func handleListHeists(_ request: ListHeistsRequest) -> FenceResponse {
         .heistCatalog(request.catalog)
     }
@@ -75,7 +79,7 @@ extension TheFence {
             }
             // Any executable command runs through the one pipeline, including
             // viewport commands. Heist execution no longer enforces durability
-            // (that is a recording/DSL concern), so a single command and a
+            // (that is an authoring/DSL concern), so a single command and a
             // composed heist share the same executor.
             let expectation = index == messages.count - 1 ? expectationStep : nil
             steps.append(.action(try ActionStep(command: actionCommand, expectation: expectation)))
@@ -84,12 +88,7 @@ extension TheFence {
     }
 
     func executeSingleStepHeist(_ parsed: ParsedRequest, plan: HeistPlan) async throws -> FenceResponse {
-        let response = try await runHeistPlan(plan, timeout: singleStepTimeout(for: parsed))
-        if case .heistExecution(_, let result, _) = response {
-            let step = result.steps.last
-            recordHeistStep(parsed, actionResult: step?.dispatchedActionResult, expectation: step?.reportExpectation)
-        }
-        return response
+        try await runHeistPlan(plan, timeout: singleStepTimeout(for: parsed))
     }
 
     private func singleStepTimeout(for parsed: ParsedRequest) -> TimeInterval {
@@ -106,6 +105,23 @@ extension TheFence {
         guard parsed.expectationPayload.expectation != nil else { return actionBudget }
         let expectationTimeout = min(parsed.expectationPayload.timeout ?? 10, 30)
         return actionBudget + expectationTimeout + config.postActionExpectationTimeoutBuffer
+    }
+
+    private func performTimeout(for step: PerformableHeistStep) -> TimeInterval {
+        switch step {
+        case .wait(let wait):
+            return wait.timeout + config.postActionExpectationTimeoutBuffer
+        case .action(let action):
+            let actionBudget: TimeInterval
+            switch action.command {
+            case .typeText:
+                actionBudget = Timeouts.longActionSeconds
+            default:
+                actionBudget = Timeouts.actionSeconds
+            }
+            guard let expectation = action.expectation else { return actionBudget }
+            return actionBudget + min(expectation.timeout, 30) + config.postActionExpectationTimeoutBuffer
+        }
     }
 
     private static func heistAccessibilityTrace(

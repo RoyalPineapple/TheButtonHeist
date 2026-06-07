@@ -101,8 +101,8 @@ public enum ResultPayload: Codable, Sendable, Equatable {
 
 /// Semantic subject the runtime resolved immediately before dispatching an action.
 ///
-/// This is result evidence, not a replay selector. Recording code can combine it
-/// with settled before/after traces to choose a minimum matcher later.
+/// This is result evidence, not a replay selector. Offline suggestion tooling can
+/// combine it with settled before/after traces to choose a minimum matcher later.
 public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
     public enum Source: String, Codable, Sendable {
         case resolvedSemanticTarget

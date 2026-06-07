@@ -34,8 +34,7 @@ extension FenceResponse {
         return text
     }
 
-    /// Screen id of the last step that ran with trace evidence (action or
-    /// wait), if recorded.
+    /// Screen id of the last step that ran with trace evidence (action or wait).
     private static func finalScreenId(_ result: HeistExecutionResult) -> String? {
         result.traceResultsInExecutionOrder
             .compactMap { $0.accessibilityTrace?.endpointScreenId }

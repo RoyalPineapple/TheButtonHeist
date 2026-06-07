@@ -68,7 +68,7 @@ final class AccessibilityPolicyTests: XCTestCase {
     /// `transientTraits` is wire-format-adjacent: it determines what
     /// fields appear in `ElementIdentitySignature` (functional-move
     /// pairing) and what gets stripped from minimal matchers in heists.
-    /// Changes here ripple into recorded `.heist` files.
+    /// Changes here ripple into generated `.heist` artifacts.
     func testTransientTraitsContentLocked() {
         XCTAssertEqual(AccessibilityPolicy.transientTraits, [
             .selected,
@@ -81,8 +81,8 @@ final class AccessibilityPolicyTests: XCTestCase {
     }
 
     /// `synthesisPriority` ordering is wire-format: it determines the
-    /// suffix of every synthesised `heistId`. Reordering breaks recorded
-    /// heists. Locked by `SynthesisDeterminismTests` on the iOS side; this
+    /// suffix of every synthesised `heistId`. Reordering breaks stable
+    /// heist identity. Locked by `SynthesisDeterminismTests` on the iOS side; this
     /// test pins the contents byte-for-byte.
     func testSynthesisPriorityOrderLocked() {
         XCTAssertEqual(AccessibilityPolicy.synthesisPriority, [

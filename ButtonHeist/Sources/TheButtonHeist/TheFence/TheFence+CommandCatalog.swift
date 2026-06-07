@@ -9,7 +9,6 @@ public enum FenceCommandFamily: String, Sendable, CaseIterable {
     case spatialAction
     case viewportDebug
     case heistRuntime
-    case heistRecording
 }
 
 protocol FenceCommand: RawRepresentable, CaseIterable, Sendable
@@ -52,7 +51,6 @@ enum FenceCommandRegistry {
         .init(family: .spatialAction, descriptors: SpatialActionCommand.descriptors),
         .init(family: .viewportDebug, descriptors: ViewportDebugCommand.descriptors),
         .init(family: .heistRuntime, descriptors: HeistRuntimeCommand.descriptors),
-        .init(family: .heistRecording, descriptors: HeistRecordingCommand.descriptors),
     ]
 
     static let descriptors: [FenceCommandDescriptor] = TheFence.Command.allCases.map(descriptor(for:))
@@ -130,14 +128,13 @@ extension TheFence {
         case setPasteboard = "set_pasteboard"
         case getPasteboard = "get_pasteboard"
         case dismissKeyboard = "dismiss_keyboard"
+        case perform
         case runHeist = "run_heist"
         case listHeists = "list_heists"
         case describeHeist = "describe_heist"
         case getSessionState = "get_session_state"
         case connect
         case listTargets = "list_targets"
-        case startHeist = "start_heist"
-        case stopHeist = "stop_heist"
     }
 }
 

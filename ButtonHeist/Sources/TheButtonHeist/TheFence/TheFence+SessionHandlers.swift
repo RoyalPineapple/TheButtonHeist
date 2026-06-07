@@ -71,7 +71,7 @@ extension TheFence {
             autoReconnect: config.autoReconnect,
             fileConfig: config.fileConfig,
             directDevice: resolvedDirectDevice,
-            heistStoreBaseDirectory: config.heistStoreBaseDirectory
+            artifactBaseDirectory: config.artifactBaseDirectory
         )
         config = newConfig
 

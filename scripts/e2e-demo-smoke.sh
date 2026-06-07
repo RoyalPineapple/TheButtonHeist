@@ -43,7 +43,7 @@ Options:
   --app PATH             Reuse a prebuilt BHDemo.app instead of building it.
   --cli-configuration C  SwiftPM CLI configuration: debug or release. Defaults to debug.
   --heist PATH           Heist fixture to replay. Defaults to tests/fixtures/bh-demo-smoke.heist.
-  --skip-heist-playback  Skip replaying the recorded heist fixture.
+  --skip-heist-playback  Skip replaying the heist fixture.
   --benchmark-report P   Write per-command timing measurements to PATH.
   -h, --help             Show this help.
 
@@ -575,7 +575,7 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '%s' "$PLAYBACK_ROOT_JSON" | json_expect_ok "playback root get_interface"
     printf '%s' "$PLAYBACK_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
 
-    log "Replaying recorded heist"
+    log "Replaying heist fixture"
     PLAYBACK_JSON="$(run_cli_json run_heist --path "$HEIST_PATH")"
     printf '%s' "$PLAYBACK_JSON" | json_expect_ok "run_heist"
     PLAYBACK_FINAL_JSON="$(run_cli_json get_interface)"

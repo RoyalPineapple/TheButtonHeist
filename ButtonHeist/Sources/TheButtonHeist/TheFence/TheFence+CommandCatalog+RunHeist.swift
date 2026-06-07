@@ -1,12 +1,26 @@
 import ThePlans
 
 enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
+    case perform
     case runHeist = "run_heist"
     case listHeists = "list_heists"
     case describeHeist = "describe_heist"
 
     var descriptor: FenceCommandDescriptor {
         switch self {
+        case .perform:
+            return TheFence.Command.commandDescriptor(
+                command, family: .heistRuntime,
+                requestDecoder: TheFence.decodePerformCommandRequest,
+                cliExposure: .notExposed,
+                parameters: [
+                    param(.step, .string, required: true, minLength: 1),
+                ],
+                description: "Perform exactly one primitive ButtonHeist step from `step` source. " +
+                    "The fence wraps it as `HeistPlan { <step> }`, compiles it through ThePlans, " +
+                    "requires one action or simple WaitFor step, then executes it through the heist runtime. " +
+                    "Use run_heist for branching, loops, named heists, warnings, failures, or multiple steps."
+            )
         case .runHeist:
             return TheFence.Command.commandDescriptor(
                 command, family: .heistRuntime,

@@ -121,8 +121,6 @@ public enum FenceResponse {
     case heistDescription(HeistDescription)
     case sessionState(payload: SessionStatePayload)
     case targets([String: TargetConfig], defaultTarget: String?)
-    case heistStarted
-    case heistStopped(path: String, swiftPath: String? = nil, stepCount: Int)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     var actionResult: ActionResult? {
@@ -163,7 +161,7 @@ public enum FenceResponse {
         switch self {
         case .ok, .status, .pong, .devices, .interface, .screenshot, .screenshotData,
              .heistCatalog, .heistDescription,
-             .sessionState, .targets, .heistStarted, .heistStopped:
+             .sessionState, .targets:
             return false
         case .error:
             return true

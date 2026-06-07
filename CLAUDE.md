@@ -467,7 +467,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## heistId synthesis is wire-format-stable
 
-`synthesizeBaseId(_:)` in `TheStash.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break recorded heists and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
+`synthesizeBaseId(_:)` in `TheStash.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break fixture references and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
 
 The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run `tuist test TheInsideJobTests` first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
 
