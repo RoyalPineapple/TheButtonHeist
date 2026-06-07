@@ -4,7 +4,8 @@ import Testing
 
 @Suite struct HeistRepairSuggesterTests {
 
-    @Test func `Last success must resolve exactly once`() {
+    @Test("Last success must resolve exactly once")
+    func lastSuccessMustResolveExactlyOnce() {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
         let last = evidence(
             target: target,
@@ -25,7 +26,8 @@ import Testing
         #expect(HeistRepairSuggester.suggestions(for: HeistRepairRequest(lastSuccess: last, currentFailure: current)).isEmpty)
     }
 
-    @Test func `Evidence must belong to the same failing step`() {
+    @Test("Evidence must belong to the same failing step")
+    func evidenceMustBelongToTheSameFailingStep() {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
         let last = evidence(
             stepPath: "$.steps[0]",
@@ -47,7 +49,8 @@ import Testing
         #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
     }
 
-    @Test func `Missing target suggests renamed equivalent using row context`() throws {
+    @Test("Missing target suggests renamed equivalent using row context")
+    func missingTargetSuggestsRenamedEquivalentUsingRowContext() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
         let last = evidence(
             target: target,
@@ -80,7 +83,8 @@ import Testing
         #expect(suggestion.reasons.contains("Sibling row context is preserved."))
     }
 
-    @Test func `Ambiguous duplicate labels produce minimum disambiguating matcher`() throws {
+    @Test("Ambiguous duplicate labels produce minimum disambiguating matcher")
+    func ambiguousDuplicateLabelsProduceMinimumDisambiguatingMatcher() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
         let last = evidence(
             target: target,
@@ -111,7 +115,8 @@ import Testing
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
 
-    @Test func `Wrong action capability blocks unsupported suggestions`() {
+    @Test("Wrong action capability blocks unsupported suggestions")
+    func wrongActionCapabilityBlocksUnsupportedSuggestions() {
         let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
         let last = evidence(
             actionKind: "increment",
@@ -133,7 +138,8 @@ import Testing
         #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
     }
 
-    @Test func `Wrong action capability can suggest a compatible successor with lowered confidence`() throws {
+    @Test("Wrong action capability can suggest a compatible successor with lowered confidence")
+    func wrongActionCapabilityCanSuggestACompatibleSuccessorWithLoweredConfidence() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
         let last = evidence(
             actionKind: "increment",
@@ -162,7 +168,8 @@ import Testing
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
 
-    @Test func `Suggested payload excludes geometry and runtime identifiers`() throws {
+    @Test("Suggested payload excludes geometry and runtime identifiers")
+    func suggestedPayloadExcludesGeometryAndRuntimeIdentifiers() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
         let runtimeIdentifier = "view-A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
         let last = evidence(
@@ -194,7 +201,8 @@ import Testing
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
 
-    @Test func `After diff explains value changes without requiring full after snapshot`() throws {
+    @Test("After diff explains value changes without requiring full after snapshot")
+    func afterDiffExplainsValueChangesWithoutRequiringFullAfterSnapshot() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
         let changed = element(label: "Quantity", value: "2", traits: [.staticText])
         let last = evidence(
@@ -235,7 +243,8 @@ import Testing
         #expect(suggestion.caveats.isEmpty)
     }
 
-    @Test func `Full after snapshot is optional escalation when compact diff is absent`() throws {
+    @Test("Full after snapshot is optional escalation when compact diff is absent")
+    func fullAfterSnapshotIsOptionalEscalationWhenCompactDiffIsAbsent() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
         let afterSnapshot = makeTestInterface(elements: [
             element(label: "Done", traits: [.staticText]),
