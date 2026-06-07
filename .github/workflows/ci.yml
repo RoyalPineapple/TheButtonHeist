@@ -263,7 +263,9 @@ jobs:
           echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
           xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
             -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -parallel-testing-enabled YES \
+            -parallel-testing-worker-count 2
 
       - name: Build remaining iOS app targets
         timeout-minutes: 12
