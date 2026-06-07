@@ -373,14 +373,24 @@ private enum HeistSwiftSubsetValidator {
     }
 
     private static func previousNonTriviaIndex(before index: String.Index, in source: String) -> String.Index? {
-        var cursor = index
-        while cursor > source.startIndex {
-            cursor = source.index(before: cursor)
-            if !source[cursor].isWhitespace {
-                return cursor
+        var cursor = source.startIndex
+        var previous: String.Index?
+        while cursor < index {
+            let nonTrivia = skipTrivia(from: cursor, in: source)
+            if nonTrivia != cursor {
+                cursor = nonTrivia
+                continue
             }
+            if let afterString = indexAfterString(startingAt: cursor, in: source),
+               afterString <= index {
+                previous = source.index(before: afterString)
+                cursor = afterString
+                continue
+            }
+            previous = cursor
+            cursor = source.index(after: cursor)
         }
-        return nil
+        return previous
     }
 
     private static func skipTrivia(from index: String.Index, in source: String) -> String.Index {
@@ -400,11 +410,18 @@ private enum HeistSwiftSubsetValidator {
             }
             if source[cursor] == "/", next < source.endIndex, source[next] == "*" {
                 cursor = source.index(after: next)
-                while cursor < source.endIndex {
+                var depth = 1
+                while cursor < source.endIndex, depth > 0 {
                     let after = source.index(after: cursor)
-                    if source[cursor] == "*", after < source.endIndex, source[after] == "/" {
+                    if source[cursor] == "/", after < source.endIndex, source[after] == "*" {
+                        depth += 1
                         cursor = source.index(after: after)
-                        break
+                        continue
+                    }
+                    if source[cursor] == "*", after < source.endIndex, source[after] == "/" {
+                        depth -= 1
+                        cursor = source.index(after: after)
+                        continue
                     }
                     cursor = after
                 }

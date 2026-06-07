@@ -166,6 +166,40 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `compileFile ignores Swift wrapper comments and return types that mention HeistPlan`() async throws {
+        let temp = try CompilerTemporaryDirectory()
+        let source = try temp.writeSwiftSource(
+            named: "WrapperComments.swift",
+            """
+            import ThePlans
+
+            /*
+                /*
+                    inner block
+                */
+                HeistPlan {
+                    let x = 1
+                }
+            */
+
+            func makeHeist() throws -> /* wrapped return type */ HeistPlan {
+                try HeistPlan("WrapperComments") {
+                    Warn("ok")
+                }
+            }
+
+            let heist = try makeHeist()
+            """
+        )
+
+        let (plan, diagnostics) = try await requireSuccess(HeistCompiler().compileFile(source))
+
+        #expect(diagnostics.isEmpty)
+        #expect(plan.name == "WrapperComments")
+        #expect(plan.body == [.warn(WarnStep(message: "ok"))])
+    }
+
+    @Test
     func `compileFile rejects native control flow inside heist body`() async throws {
         let temp = try CompilerTemporaryDirectory()
         let source = try temp.writeSwiftSource(
