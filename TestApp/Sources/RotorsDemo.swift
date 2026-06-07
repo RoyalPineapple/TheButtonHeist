@@ -23,14 +23,14 @@ struct RotorsDemo: View {
                 }
             }
 
-            Section("Release Notes") {
-                TextRangeRotorView()
-                    .frame(minHeight: 160)
-            }
-
             Section("UIKit Rotor Host") {
                 UIKitRotorHostView()
                     .frame(height: 104)
+            }
+
+            Section("Release Notes") {
+                TextRangeRotorView()
+                    .frame(minHeight: 160)
             }
         }
         .accessibilityElement(children: .contain)
