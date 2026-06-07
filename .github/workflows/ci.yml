@@ -247,7 +247,8 @@ jobs:
 
           xcodebuild build-for-testing -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
             -destination "$DEST" \
-            -derivedDataPath "$DERIVED_DATA_PATH"
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -showBuildTimingSummary
 
       - name: Wait for simulator boot
         timeout-minutes: 5
@@ -276,6 +277,7 @@ jobs:
             xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
               -destination "$DEST" \
               -derivedDataPath "$DERIVED_DATA_PATH" \
+              -showBuildTimingSummary \
               build
           done
 
