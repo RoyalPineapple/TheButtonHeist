@@ -370,7 +370,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 ])
             ), "path + \(field) must fail") { error in
                 XCTAssertTrue(
-                    String(describing: error).contains("run_heist accepts either a path or an inline plan, not both"),
+                    String(describing: error).contains("run_heist accepts exactly one plan source"),
                     "path + \(field): \(error)"
                 )
             }
@@ -378,11 +378,52 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRunHeistRejectsPlanSourceCombinedWithPathOrStructuredPlanFields() async throws {
+        let fence = TheFence(configuration: .init())
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: [
+                "path": .string("/tmp/Flow.heist"),
+                "plan": .string("Activate(.label(\"Pay\"))"),
+            ])
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("run_heist accepts exactly one plan source"), "\(error)")
+        }
+
+        let plan = try HeistPlan(body: [.warn(WarnStep(message: "x"))])
+        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        arguments["plan"] = .string("Activate(.label(\"Pay\"))")
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: arguments)
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("run_heist accepts exactly one plan source"), "\(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testRunHeistDecodesHeistPlanSourceThroughThePlans() async throws {
+        let fence = TheFence(configuration: .init())
+        let request = try fence.decodeRunHeistRequest(
+            TheFence.CommandArgumentEnvelope(values: [
+                "plan": .string("""
+                Activate(.label("Pay")).expect(.screenChanged)
+                """),
+            ])
+        )
+
+        XCTAssertEqual(request.plan.body, [
+            .action(try ActionStep(
+                command: .activate(.predicate(.label("Pay"))),
+                expectation: WaitStep(predicate: .screenChanged, timeout: 0)
+            )),
+        ])
+    }
+
+    @ButtonHeistActor
     func testRunHeistRejectsNonHeistAndEmptyInput() async {
         let fence = TheFence(configuration: .init())
-        // Standalone .json is internal to the package; .swift is compiled by the
-        // CLI authoring path, never inspected or compiled at the fence boundary.
-        for path in ["Flow.txt", "Flow.json", "Flow.swift"] {
+        // Standalone .json is internal to the package, and plan source is an
+        // inline field rather than a local file path accepted by the fence.
+        for path in ["Flow.txt", "Flow.json", "Flow.plan"] {
             XCTAssertThrowsError(try fence.decodeRunHeistRequest(
                 TheFence.CommandArgumentEnvelope(values: ["path": .string(path)])
             )) { error in
@@ -531,9 +572,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testRunHeistDescriptorAcceptsComposableInlinePlanKeys() async throws {
-        // The descriptor must declare the canonical plan fields so an inline
-        // plan with definitions/parameter/name survives request-key validation
-        // (the path that MCP and CLI inline plans travel).
+        // The descriptor must declare the canonical structured plan fields and
+        // compact plan source so both forms survive request-key validation.
         let fence = TheFence(configuration: .init())
         let definition = try HeistPlan(
             name: "addToCart",
@@ -546,6 +586,10 @@ final class TheFenceHandlerTests: XCTestCase {
             body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk"))))]
         )
         XCTAssertNoThrow(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
+        XCTAssertNoThrow(try fence.parseRequest(
+            command: .runHeist,
+            arguments: TheFence.CommandArgumentEnvelope(values: ["plan": .string("Activate(.label(\"Pay\"))")])
+        ))
     }
 
     @ButtonHeistActor

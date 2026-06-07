@@ -144,13 +144,20 @@ only in the authoring tools:
 - `heist-plan compile Flow.swift --entry makeHeist --output Flow.heist` compiles
   and persists a `.heist` package (or `.json` IR) without running it.
 
-The runtime never compiles Swift. `TheFence`, the MCP server, and `TheInsideJob`
-have no knowledge of Swift source — they accept only canonical plan IR. The MCP
-`run_heist` tool therefore exposes only the plan schema; there is no `source_file`
-input. Compile with the CLI or `heist-plan`, then run the resulting plan.
+The runtime never compiles arbitrary Swift. Local `.swift` files remain authoring
+tool inputs only: compile them with the CLI or `heist-plan`, then run the
+resulting plan or artifact.
 
-There is no runtime Swift execution and no hidden fallback: a Swift source either
-compiles to an admissible `HeistPlan` ahead of time or the command fails.
+For MCP, `run_heist` also accepts compact plan source via the `plan` field. That
+string is not sent to `swiftc` and is not executed as Swift. It is parsed by
+ThePlans as constrained ButtonHeist plan source, lowered to a `HeistPlan`, and
+validated through the same runtime plan pipeline as structured JSON plan input.
+The MCP tool still does not expose local Swift authoring inputs such as
+`source_file` or `entry`. Compact plan source uses plan constructs directly, so
+write `ForEach(...)` rather than Swift authoring syntax such as `try ForEach`.
+
+There is no runtime Swift execution and no hidden fallback: a local Swift file
+either compiles to an admissible `HeistPlan` ahead of time or the command fails.
 
 ### Resolving built ThePlans artifacts
 

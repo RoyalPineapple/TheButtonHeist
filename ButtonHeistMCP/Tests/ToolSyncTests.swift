@@ -67,14 +67,15 @@ struct ToolSyncTests {
         )
     }
 
-    @Test("run_heist schema exposes plan source and root argument, never Swift authoring inputs")
+    @Test("run_heist schema exposes plan sources and root argument without schema combinators")
     func runHeistSchemaExposesOnlyPlan() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "run_heist" })
 
         // The MCP run_heist tool exposes the canonical HeistPlan fields and a
-        // `path`, plus `argument` for parameterized root heists, so agents can
-        // drive composable inline plans without a Swift toolchain.
-        for field in ["path", "argument", "version", "name", "parameter", "definitions", "body"] {
+        // `path`, compact plan source, plus `argument` for
+        // parameterized root heists. Source exclusivity is enforced in request
+        // decoding rather than with top-level oneOf/anyOf/allOf.
+        for field in ["path", "plan", "argument", "version", "name", "parameter", "definitions", "body"] {
             #expect(
                 schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
                 "run_heist schema must expose \(field)"
@@ -85,14 +86,10 @@ struct ToolSyncTests {
             .string("string"),
             .string("element_target"),
         ]))
-        #expect(schemaValue(at: ["properties", "argument", "properties", "values"], in: tool.inputSchema) == nil)
 
-        // Swift compilation lives entirely in the CLI/heist-plan authoring tools.
-        // The MCP run_heist tool accepts only canonical plan IR — no source_file,
-        // no entry, and no oneOf adapter branch.
-        #expect(schemaValue(at: ["properties", "source_file"], in: tool.inputSchema) == nil)
-        #expect(schemaValue(at: ["properties", "entry"], in: tool.inputSchema) == nil)
         #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
+        #expect(schemaValue(at: ["anyOf"], in: tool.inputSchema) == nil)
+        #expect(schemaValue(at: ["allOf"], in: tool.inputSchema) == nil)
     }
 
     @Test("stop_heist schema exposes optional Swift export fields without combinators")

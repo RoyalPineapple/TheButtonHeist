@@ -21,8 +21,51 @@ public extension HeistPlan {
     }
 }
 
+enum HeistSourceInput: Sendable, Equatable {
+    case inlinePlanSource(source: String, sourceName: String)
 #if os(macOS) || os(Linux)
+    case swiftFile(URL, entry: String)
+#endif
+}
+
 struct HeistSourceCompiler: Sendable {
+    let packageRoot: URL?
+
+    init(packageRoot: URL? = nil) {
+        self.packageRoot = packageRoot
+    }
+
+    func compile(_ source: HeistSourceInput) throws -> HeistPlan {
+        switch source {
+        case .inlinePlanSource(let source, let sourceName):
+            return try HeistPlanSourceCompiler().compile(source, sourceName: sourceName)
+#if os(macOS) || os(Linux)
+        case .swiftFile(let url, let entry):
+            return try HeistSwiftFileSourceCompiler(packageRoot: packageRoot)
+                .compileSwiftFile(url, entry: entry)
+#endif
+        }
+    }
+
+    func compileHeistPlanSource(
+        _ source: String,
+        sourceName: String = "inline-heist-plan"
+    ) throws -> HeistPlan {
+        try compile(.inlinePlanSource(source: source, sourceName: sourceName))
+    }
+
+#if os(macOS) || os(Linux)
+    func compileSwiftFile(
+        _ source: URL,
+        entry: String
+    ) throws -> HeistPlan {
+        try compile(.swiftFile(source, entry: entry))
+    }
+#endif
+}
+
+#if os(macOS) || os(Linux)
+private struct HeistSwiftFileSourceCompiler: Sendable {
     let packageRoot: URL?
 
     init(packageRoot: URL? = nil) {
@@ -434,7 +477,10 @@ private struct ThePlansBuildArtifacts {
         guard FileManager.default.fileExists(atPath: module.path) else {
             return nil
         }
-        let objectFiles = try swiftObjectFiles(in: objectsDirectory)
+        let objectFiles = try activeSwiftObjectFiles(
+            in: buildDirectory,
+            moduleName: "ThePlans"
+        ) ?? swiftObjectFiles(in: objectsDirectory)
         guard !objectFiles.isEmpty else {
             return nil
         }
@@ -552,6 +598,37 @@ private struct ThePlansBuildArtifacts {
                 return values.isRegularFile == true
             }
             .sorted { $0.path < $1.path }
+    }
+
+    private static func activeSwiftObjectFiles(
+        in buildDirectory: URL,
+        moduleName: String
+    ) throws -> [URL]? {
+        let descriptionURL = buildDirectory.appendingPathComponent("description.json")
+        guard let data = try? Data(contentsOf: descriptionURL),
+              let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let swiftCommands = root["swiftCommands"] as? [String: Any] else {
+            return nil
+        }
+
+        for commandValue in swiftCommands.values {
+            guard let command = commandValue as? [String: Any],
+                  command["moduleName"] as? String == moduleName,
+                  let objectPaths = command["objects"] as? [String] else {
+                continue
+            }
+
+            let objectFiles = try objectPaths.compactMap { path -> URL? in
+                let url = URL(fileURLWithPath: path)
+                guard url.lastPathComponent.hasSuffix(".swift.o") else { return nil }
+                let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+                guard values.isRegularFile == true else { return nil }
+                return url
+            }
+            return objectFiles.sorted { $0.path < $1.path }
+        }
+
+        return nil
     }
 }
 
