@@ -10,14 +10,9 @@ import AccessibilitySnapshotParser
 
 extension Navigation {
 
-    fileprivate func observeSemanticDiscovery() async {
-        _ = await exploreAndPrune()
-    }
-
-    private func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        let exploration = await exploreScreen(target: target)
-        stash.commitExploredSettledScreen(exploration.screen)
-        return exploration.manifest
+    fileprivate func observeSemanticDiscovery() async -> Screen? {
+        let exploration = await exploreScreen()
+        return exploration.screen
     }
 
     func exploreScreen(target: ElementTarget? = nil) async -> ExploredScreen {
@@ -53,8 +48,8 @@ extension TheBrains {
     func startSemanticObservation() {
         semanticObservationIsActive = true
         stash.startPassiveSemanticObservation { [weak navigation] in
-            guard let navigation else { return }
-            await navigation.observeSemanticDiscovery()
+            guard let navigation else { return nil }
+            return await navigation.observeSemanticDiscovery()
         }
     }
 }

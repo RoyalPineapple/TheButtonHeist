@@ -10,11 +10,11 @@ import TheScore
 
 extension TheStash {
 
-    /// Which part of the committed interface state a lookup should read.
+    /// Which part of the interface state a lookup should read.
     enum InterfaceElementScope {
-        /// Elements in the live accessibility hierarchy from the most recent parse.
+        /// Elements in the observed live accessibility hierarchy from the most recent parse.
         case visible
-        /// Elements retained on the committed screen value, including an exploration union.
+        /// Elements retained in settled semantic truth, including an exploration union.
         case known
     }
 
@@ -223,16 +223,15 @@ extension TheStash {
 
     /// Looks up an element by heistId in the selected scope.
     ///
-    /// `.known` reads the committed semantic element map, including any
-    /// exploration union. `.visible` only returns ids backed by the latest live
-    /// hierarchy parse.
+    /// `.known` reads settled semantic truth, including any exploration union.
+    /// `.visible` reads the latest observed parser output and only returns ids
+    /// backed by the latest live hierarchy parse.
     func screenElement(heistId: HeistId, in scope: InterfaceElementScope) -> ScreenElement? {
-        guard let entry = knownElement(heistId: heistId) else { return nil }
         switch scope {
         case .visible:
-            return liveContains(heistId: heistId) ? liveScreenElement(heistId: heistId) ?? entry : nil
+            return liveContains(heistId: heistId) ? liveScreenElement(heistId: heistId) : nil
         case .known:
-            return entry
+            return knownElement(heistId: heistId)
         }
     }
 

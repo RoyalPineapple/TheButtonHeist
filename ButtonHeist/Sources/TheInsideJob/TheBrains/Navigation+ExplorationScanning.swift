@@ -156,7 +156,6 @@ extension Navigation {
 
     private func absorbVisiblePage(in exploration: inout SemanticExploration) -> Bool {
         guard let parsed = stash.semanticPageForExploration() else { return false }
-        stash.recordLivePageObservation(parsed)
         exploration.absorb(parsed)
         return true
     }
