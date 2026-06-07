@@ -19,6 +19,8 @@ enum DisconnectReason: Error, LocalizedError {
     case sessionLocked(String)
     case protocolMismatch(String)
     case localDisconnect
+    // Legacy certificate-pinning failures are retained for old diagnostics only.
+    // Current clients authenticate with token-derived TLS PSK.
     case certificateMismatch
     case missingFingerprint
     case missingToken
@@ -118,7 +120,7 @@ enum DisconnectReason: Error, LocalizedError {
             return HandoffFailureDiagnostic(
                 operation: .connection,
                 target: nil,
-                cause: "Auth approval pending: \(message)",
+                cause: "Legacy auth approval response: \(message)",
                 errorCode: "auth.approval_pending",
                 phase: .authentication,
                 retryable: true,

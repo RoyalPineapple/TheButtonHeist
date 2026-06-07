@@ -348,7 +348,7 @@ jobs:
           BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
           ./scripts/clean-generated-projects.sh
 
-      - name: Build iOS demo app targets
+      - name: Build iOS app targets
         timeout-minutes: 12
         run: |
           set -eo pipefail
@@ -356,7 +356,7 @@ jobs:
           trap 'echo "IOS_DEMO_BUILD_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
 
-          for scheme in "UIKitTestApp" "ResearchApp"; do
+          for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
             echo "Building $scheme..."
             xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
               -destination "$DEST" \
@@ -427,6 +427,6 @@ jobs:
           echo "## iOS Demo Timings" >> "$GITHUB_STEP_SUMMARY"
           echo "| Phase | Duration |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|----------|" >> "$GITHUB_STEP_SUMMARY"
-          append_duration "Build demo app targets" "${IOS_DEMO_BUILD_START:-}" "${IOS_DEMO_BUILD_END:-}"
+          append_duration "Build iOS app targets" "${IOS_DEMO_BUILD_START:-}" "${IOS_DEMO_BUILD_END:-}"
           append_duration "Run demo CLI smoke" "${IOS_DEMO_SMOKE_START:-}" "${IOS_DEMO_SMOKE_END:-}"
           append_duration "Run demo lifecycle gate" "${IOS_DEMO_LIFECYCLE_START:-}" "${IOS_DEMO_LIFECYCLE_END:-}"

@@ -46,7 +46,7 @@ extension FenceError: LocalizedError {
                 """
         case .authApprovalPending(let message):
             return """
-                Auth approval pending: \(message)
+                Legacy auth approval response: \(message)
                   \(Self.legacyAuthApprovalRecoveryHint)
                 """
         case .notConnected:

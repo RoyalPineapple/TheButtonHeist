@@ -198,8 +198,8 @@ final class TheHandoffStateTests: XCTestCase {
 
         handoff.handleServerMessage(
             .authApprovalPending(AuthApprovalPendingPayload(
-                message: "Waiting for user approval",
-                hint: "Approve on device"
+                message: "Legacy server is waiting for UI approval.",
+                hint: "Old server UI approval hint."
             )),
             requestId: nil
         )
@@ -209,9 +209,9 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.connectedDevice)
         XCTAssertEqual(
             handoff.connectionDiagnosticFailure,
-            .disconnected(.authApprovalPending("Waiting for user approval"))
+            .disconnected(.authApprovalPending("Legacy server is waiting for UI approval."))
         )
-        XCTAssertEqual(statuses, ["Approve on device"])
+        XCTAssertEqual(statuses, [FenceError.legacyAuthApprovalRecoveryHint])
         XCTAssertEqual(mock.disconnectCount, 0)
     }
 
