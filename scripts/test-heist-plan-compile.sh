@@ -62,6 +62,24 @@ echo "Rendering compiled heist package as canonical Swift"
 "$HEIST_PLAN_TOOL" render-swift "$OUTPUT" > "$RENDERED"
 diff -u "$EXPECTED" "$RENDERED"
 
+echo "Compiling Swift fixture through installed-prefix artifacts"
+INSTALLED_PREFIX="$TMP_DIR/installed-prefix"
+INSTALLED_TOOL="$INSTALLED_PREFIX/bin/heist-plan"
+INSTALLED_OUTPUT="$TMP_DIR/installed.heist"
+mkdir -p "$INSTALLED_PREFIX/bin" "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release"
+cp "$HEIST_PLAN_TOOL" "$INSTALLED_TOOL"
+cp -R \
+    "$HEIST_THEPLANS_BUILD_DIR/Modules" \
+    "$HEIST_THEPLANS_BUILD_DIR/ThePlans.build" \
+    "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release/"
+cp "$HEIST_THEPLANS_BUILD_DIR/description.json" \
+    "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release/"
+(
+    unset HEIST_THEPLANS_BUILD_DIR
+    HEIST_SOURCE_COMPILER_TRACE=1 "$INSTALLED_TOOL" compile "$SOURCE" --entry makeHeist --output "$INSTALLED_OUTPUT"
+)
+"$INSTALLED_TOOL" validate "$INSTALLED_OUTPUT"
+
 # Negative: a missing build directory override must fail with an actionable
 # diagnostic that names what was searched and how to fix it. This guards the
 # single-resolution contract — there is no hidden fallback to building ThePlans
