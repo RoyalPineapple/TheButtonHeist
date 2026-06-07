@@ -9,11 +9,6 @@ struct SessionAdmission {
         case lockedOut(until: Date, attempts: Int)
     }
 
-    enum EmptyTokenDecision: Equatable, Sendable {
-        case requestUIApproval
-        case rejectExplicitTokenRequired(ServerError)
-    }
-
     enum TokenDecision: Equatable, Sendable {
         case accepted(driverIdentity: String)
         case rejected(message: String, attempts: Int, lockedOut: Bool)
@@ -31,14 +26,11 @@ struct SessionAdmission {
         self.lockoutDuration = lockoutDuration
     }
 
-    func decideEmptyToken() -> EmptyTokenDecision {
-        guard tokenSource.allowsUIApproval else {
-            return .rejectExplicitTokenRequired(ServerError(
-                kind: .authFailure,
-                message: "UI approval is available only when InsideJob generated the session token. Retry with the configured token."
-            ))
-        }
-        return .requestUIApproval
+    func emptyTokenError() -> ServerError {
+        ServerError(
+            kind: .authFailure,
+            message: "Token is required. Retry with the configured token."
+        )
     }
 
     mutating func decideToken(_ token: String, driverId: String?, address: String, now: Date = Date()) -> TokenDecision {

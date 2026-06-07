@@ -12,15 +12,12 @@ enum TransportEvent: Sendable {
 }
 
 enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
-    case tlsIdentityRequired
-    case tlsParametersUnavailable(fingerprint: String)
+    case tlsTokenRequired
 
     var errorDescription: String? {
         switch self {
-        case .tlsIdentityRequired:
-            return "TLS identity is required before listener startup; listener was not started and Bonjour was not published."
-        case .tlsParametersUnavailable(let fingerprint):
-            return "TLS parameters could not be created for identity \(fingerprint); listener was not started and Bonjour was not published."
+        case .tlsTokenRequired:
+            return "TLS token is required before listener startup; listener was not started and Bonjour was not published."
         }
     }
 }
@@ -37,8 +34,8 @@ final class ServerTransport {
     /// The underlying TCP server (actor-isolated).
     nonisolated let server: SimpleSocketServer
 
-    /// TLS identity for encrypted transport. Nil is accepted only for inert tests.
-    private nonisolated let tlsIdentity: TLSIdentity?
+    /// Token used to derive TLS pre-shared key material. Nil is accepted only for inert tests.
+    private nonisolated let token: String?
 
     /// In-flight stop task for deterministic lifecycle transitions.
     @MainActor private var stopTask: Task<Void, Never>?
@@ -85,9 +82,9 @@ final class ServerTransport {
 
     // MARK: - Init
 
-    nonisolated init(tlsIdentity: TLSIdentity? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
+    nonisolated init(token: String? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.server = SimpleSocketServer(allowedScopes: allowedScopes)
-        self.tlsIdentity = tlsIdentity
+        self.token = token
         let eventStream = TransportEventStream(bufferLimit: Self.eventStreamBufferLimit)
         self.eventStream = eventStream
         self.events = eventStream.events
@@ -107,12 +104,10 @@ final class ServerTransport {
             self.stopTask = nil
         }
 
-        guard let tlsIdentity else {
-            throw ServerTransportError.tlsIdentityRequired
+        guard let token = token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ServerTransportError.tlsTokenRequired
         }
-        guard let params = await tlsIdentity.makeTLSParameters() else {
-            throw ServerTransportError.tlsParametersUnavailable(fingerprint: tlsIdentity.fingerprint)
-        }
+        let params = ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
         if let startOverride {
             let actualPort = try await startOverride(port, bindToLoopback)
             return actualPort
@@ -175,7 +170,6 @@ final class ServerTransport {
         advertisement.publish(
             serviceName: serviceName,
             port: server.listeningPort,
-            tlsFingerprint: tlsIdentity?.fingerprint,
             simulatorUDID: simulatorUDID,
             installationId: installationId,
             instanceId: instanceId,

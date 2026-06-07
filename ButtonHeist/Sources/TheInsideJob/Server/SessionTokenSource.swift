@@ -3,40 +3,19 @@ import Foundation
 /// Source of truth for session token lifecycle and token-derived auth behavior.
 enum SessionTokenSource: Sendable {
     case configured(String)
-    case generated(String)
 
     init(explicitToken: String?) {
-        if let explicitToken {
-            self = .configured(explicitToken)
-        } else {
-            self = .generated(UUID().uuidString)
-        }
+        self = .configured(explicitToken ?? GeneratedSessionToken.make())
     }
 
     var token: String {
         switch self {
-        case .configured(let token), .generated(let token): return token
+        case .configured(let token): return token
         }
-    }
-
-    var uiApprovalPayload: String? {
-        switch self {
-        case .configured: return nil
-        case .generated(let token): return token
-        }
-    }
-
-    var allowsUIApproval: Bool {
-        uiApprovalPayload != nil
     }
 
     var invalidTokenMessage: String {
-        switch self {
-        case .configured:
-            return "Invalid token. Retry with the configured token."
-        case .generated:
-            return "Invalid token. Retry without a token to request a fresh session."
-        }
+        "Invalid token. Retry with the configured token."
     }
 
     func effectiveDriverId(driverId: String?) -> String {

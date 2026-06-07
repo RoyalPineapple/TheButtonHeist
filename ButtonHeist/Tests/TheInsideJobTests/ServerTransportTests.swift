@@ -25,14 +25,14 @@ final class ServerTransportTests: XCTestCase {
     }
 
     @MainActor
-    func testStartWithoutTLSIdentityFailsClosedBeforeListenerStarts() async throws {
+    func testStartWithoutTokenFailsClosedBeforeListenerStarts() async throws {
         let transport = ServerTransport()
 
         do {
             _ = try await transport.start(port: 0, bindToLoopback: true)
-            XCTFail("Expected ServerTransport to reject listener startup without TLS")
+            XCTFail("Expected ServerTransport to reject listener startup without token")
         } catch let error as ServerTransportError {
-            XCTAssertEqual(error, .tlsIdentityRequired)
+            XCTAssertEqual(error, .tlsTokenRequired)
         } catch {
             XCTFail("Expected ServerTransportError, got \(error)")
         }
@@ -77,7 +77,6 @@ final class ServerTransportTests: XCTestCase {
         advertisement.publish(
             serviceName: "TXT Test",
             port: 12345,
-            tlsFingerprint: "fingerprint",
             simulatorUDID: "sim",
             additionalTXT: ["first": "one"]
         )
@@ -87,13 +86,13 @@ final class ServerTransportTests: XCTestCase {
         XCTAssertEqual(txt["first"].flatMap { String(data: $0, encoding: .utf8) }, "one")
         XCTAssertEqual(txt["second"].flatMap { String(data: $0, encoding: .utf8) }, "two")
         XCTAssertEqual(txt[TXTRecordKey.simUDID.rawValue].flatMap { String(data: $0, encoding: .utf8) }, "sim")
-        XCTAssertEqual(txt[TXTRecordKey.certFingerprint.rawValue].flatMap { String(data: $0, encoding: .utf8) }, "fingerprint")
+        XCTAssertEqual(txt[TXTRecordKey.transport.rawValue].flatMap { String(data: $0, encoding: .utf8) }, "tls-psk")
     }
 
     @MainActor
     func testStopUnpublishesBonjour() {
         let advertisement = BonjourAdvertisement()
-        advertisement.publish(serviceName: "Stop Test", port: 12345, tlsFingerprint: "fingerprint")
+        advertisement.publish(serviceName: "Stop Test", port: 12345)
 
         advertisement.stop()
 

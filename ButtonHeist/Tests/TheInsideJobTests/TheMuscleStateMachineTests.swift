@@ -5,7 +5,7 @@ import XCTest
 final class TheMuscleStateMachineTests: XCTestCase {
     func testSessionAdmissionLocksAddressAfterConfiguredFailures() {
         var admission = SessionAdmission(
-            tokenSource: .generated("good-token"),
+            tokenSource: .configured("good-token"),
             maxFailedAttempts: 2,
             lockoutDuration: 30
         )
@@ -17,7 +17,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         ) else {
             return XCTFail("Expected the first bad token to be rejected")
         }
-        XCTAssertEqual(firstMessage, "Invalid token. Retry without a token to request a fresh session.")
+        XCTAssertEqual(firstMessage, "Invalid token. Retry with the configured token.")
         XCTAssertEqual(firstAttempts, 1)
         XCTAssertFalse(firstLockedOut)
 

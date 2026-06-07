@@ -48,7 +48,7 @@ must never be treated as stable identity.
 ### 2. TheMuscle — auth / admission / session state inside the app
 - **Owner:** `TheMuscleAdmission` (holds `TheMuscleClientRegistry`).
 - **Tracks:** each client's `ClientAuthenticationState` phase
-  (`connected → helloValidated → pendingApproval → authenticated`).
+  (`connected → helloValidated → authenticated`).
 - **Why:** admission is a security boundary; one place decides who is in.
 - **Key:** `clientId: Int` (allocated by the transport).
 - **Lifetime:** per connected client, from connect to disconnect.

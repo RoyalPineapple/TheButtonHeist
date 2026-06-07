@@ -5,9 +5,9 @@ import Foundation
 /// Kept separate from FenceError because DisconnectReason is a value type
 /// used by `ConnectionEvent.disconnected`, not a thrown error. It carries
 /// transport-level detail (bufferOverflow, eventBacklogOverflow,
-/// serverClosed, networkError, certificateMismatch, protocolMismatch,
-/// localDisconnect) that callers never need to catch. FenceError is
-/// the single thrown error type for all of TheFence, TheHandoff, and
+/// serverClosed, networkError, protocolMismatch, localDisconnect, missingToken,
+/// and legacy certificate failures) that callers never need to catch. FenceError
+/// is the single thrown error type for all of TheFence, TheHandoff, and
 /// DeviceResolver.
 enum DisconnectReason: Error, LocalizedError {
     case networkError(Error)
@@ -21,6 +21,7 @@ enum DisconnectReason: Error, LocalizedError {
     case localDisconnect
     case certificateMismatch
     case missingFingerprint
+    case missingToken
 
     static func buttonHeistVersionMismatch(serverVersion: String, clientVersion: String) -> DisconnectReason {
         .protocolMismatch(buttonHeistVersionMismatchMessage(serverVersion: serverVersion, clientVersion: clientVersion))
@@ -174,6 +175,16 @@ enum DisconnectReason: Error, LocalizedError {
                 retryable: false,
                 hint: "Use a loopback simulator target or configure the device's TLS certificate fingerprint."
             )
+        case .missingToken:
+            return HandoffFailureDiagnostic(
+                operation: .transport,
+                target: nil,
+                cause: "No token available for TLS pre-shared-key authentication",
+                errorCode: "tls.missing_token",
+                phase: .tls,
+                retryable: false,
+                hint: "Set BUTTONHEIST_TOKEN, pass --token, or configure a target token."
+            )
         }
     }
 
@@ -195,7 +206,8 @@ extension DisconnectReason: Equatable {
              (.serverClosed, .serverClosed),
              (.localDisconnect, .localDisconnect),
              (.certificateMismatch, .certificateMismatch),
-             (.missingFingerprint, .missingFingerprint):
+             (.missingFingerprint, .missingFingerprint),
+             (.missingToken, .missingToken):
             return true
         case (.eventBacklogOverflow(let lhsMaxEvents), .eventBacklogOverflow(let rhsMaxEvents)):
             return lhsMaxEvents == rhsMaxEvents

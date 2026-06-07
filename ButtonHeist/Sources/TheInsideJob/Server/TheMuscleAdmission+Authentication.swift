@@ -12,10 +12,8 @@ struct MuscleAuthenticationFlow {
     private var clientRegistry = TheMuscleClientRegistry()
     private var messageRateLimiters: [Int: MessageRateLimiter] = [:]
     private var tokenAdmission: SessionAdmission
-    private let tokenSource: SessionTokenSource
 
     init(tokenSource: SessionTokenSource, maxFailedAttempts: Int, lockoutDuration: TimeInterval) {
-        self.tokenSource = tokenSource
         self.tokenAdmission = SessionAdmission(
             tokenSource: tokenSource,
             maxFailedAttempts: maxFailedAttempts,
@@ -41,7 +39,6 @@ struct MuscleAuthenticationFlow {
         _ clientId: Int,
         data: Data,
         respond: @escaping TheMuscleAdmission.ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?,
         at now: Date = Date()
     ) -> MuscleAdmissionDecision {
         if let rateLimitEffect = rateLimitEffect(clientId, respond: respond, at: now) {
@@ -64,8 +61,7 @@ struct MuscleAuthenticationFlow {
             envelope: envelope,
             respond: respond,
             clientRegistry: &clientRegistry,
-            tokenAdmission: &tokenAdmission,
-            uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
+            tokenAdmission: &tokenAdmission
         )
     }
 
@@ -79,12 +75,6 @@ struct MuscleAuthenticationFlow {
         case .token:
             muscleAuthenticationLogger.info("Client \(authentication.clientId) authenticated with token")
             return .none
-        case .uiApproval(let approvedToken):
-            muscleAuthenticationLogger.info("Client \(authentication.clientId) approved via UI")
-            return .response(
-                .authApproved(AuthApprovedPayload(token: approvedToken)),
-                respond: authentication.respond
-            )
         }
     }
 
@@ -98,44 +88,10 @@ struct MuscleAuthenticationFlow {
         return .response(.sessionLocked(payload), respond: respond, disconnect: clientId)
     }
 
-    mutating func denyClient(_ clientId: Int) -> MuscleAdmissionEffect {
-        guard case .pendingApproval(let address, let respond, _) = clientRegistry.phase(for: clientId) else {
-            return .none
-        }
-
-        clientRegistry.restoreHelloValidated(clientId, address: address)
-        muscleAuthenticationLogger.info("Client \(clientId) denied via UI")
-        return .response(
-            .error(ServerError(kind: .authFailure, message: "Connection denied by user")),
-            respond: respond,
-            disconnect: clientId
-        )
-    }
-
-    mutating func approvalAuthentication(_ clientId: Int) -> MuscleAuthentication? {
-        guard case .pendingApproval(let address, let respond, let driverId) = clientRegistry.phase(for: clientId) else {
-            return nil
-        }
-        guard let approvedToken = tokenSource.uiApprovalPayload else {
-            return nil
-        }
-
-        return MuscleAuthentication(
-            clientId: clientId,
-            address: address,
-            driverIdentity: tokenSource.effectiveDriverId(driverId: driverId),
-            respond: respond,
-            source: .uiApproval(approvedToken: approvedToken)
-        )
-    }
-
     mutating func removeClient(_ clientId: Int) -> MuscleAdmissionEffect {
         messageRateLimiters.removeValue(forKey: clientId)
-        let removed = clientRegistry.remove(clientId)
-        guard case .pendingApproval = removed else { return .none }
-        var effect = MuscleAdmissionEffect.none
-        effect.dismissApprovalPrompt = true
-        return effect
+        _ = clientRegistry.remove(clientId)
+        return .none
     }
 
     func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> MuscleAdmissionEffect {

@@ -146,7 +146,7 @@ sequenceDiagram
 
 ### Manual Connection (for debugging)
 
-The protocol requires TLS before any JSON messages and token authentication before commands. Plain `nc` is not a valid production client. For manual debugging, prefer `buttonheist connect host:port` or an MCP named target that carries the endpoint and token; non-loopback direct clients must also provide the expected TLS fingerprint.
+The protocol requires TLS before any JSON messages and token authentication before commands. Plain `nc` is not a valid production client. For manual debugging, prefer `buttonheist connect host:port` or an MCP named target that carries the endpoint and token.
 
 ## Message Protocol
 
@@ -161,8 +161,7 @@ TLS parameters. Plain TCP startup exists only through explicitly named test
 helpers.
 
 ```swift
-let tlsIdentity = try TLSIdentity.create()
-let parameters = try tlsIdentity.serverParameters()
+let parameters = ButtonHeistTLSPreSharedKey.makeNetworkParameters(token: token)
 let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
 parameters.requiredLocalEndpoint = .hostPort(host: host, port: NWEndpoint.Port(rawValue: port)!)
 let listener = try NWListener(using: parameters)

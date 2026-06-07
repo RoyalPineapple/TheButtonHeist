@@ -37,8 +37,7 @@ public final class TheInsideJob {
             let runtimeConfiguration = args?.runtimeConfiguration
                 ?? InsideJobRuntimeConfiguration.resolve(startupConfiguration: StartupConfiguration.resolve())
             let instance = TheInsideJob(
-                runtimeConfiguration: runtimeConfiguration,
-                tlsIdentityProvider: Self.defaultTLSIdentityProvider
+                runtimeConfiguration: runtimeConfiguration
             )
             sharedState = .live(instance)
             return instance
@@ -91,8 +90,7 @@ public final class TheInsideJob {
     let getaway: TheGetaway
 
     let runtimeConfiguration: InsideJobRuntimeConfiguration
-    let tlsIdentityProvider: @MainActor () throws -> TLSIdentity
-    let transportFactory: @MainActor (TLSIdentity, Set<ConnectionScope>) -> ServerTransport
+    let transportFactory: @MainActor (String, Set<ConnectionScope>) -> ServerTransport
     var pendingTransportStopTask: Task<Void, Never>?
     let lifecycleBoundaryTasks = LifecycleBoundaryTasks()
     /// The Task spawned from `appWillEnterForeground` to bridge `@objc` ->
@@ -130,7 +128,7 @@ public final class TheInsideJob {
             instanceId: instanceId,
             allowedScopes: allowedScopes,
             port: port,
-            tlsIdentityProvider: Self.defaultTLSIdentityProvider
+            transportFactory: { ServerTransport(token: $0, allowedScopes: $1) }
         )
     }
 
@@ -139,9 +137,8 @@ public final class TheInsideJob {
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0,
-        tlsIdentityProvider: @escaping @MainActor () throws -> TLSIdentity,
-        transportFactory: @escaping @MainActor (TLSIdentity, Set<ConnectionScope>) -> ServerTransport = {
-            ServerTransport(tlsIdentity: $0, allowedScopes: $1)
+        transportFactory: @escaping @MainActor (String, Set<ConnectionScope>) -> ServerTransport = {
+            ServerTransport(token: $0, allowedScopes: $1)
         }
     ) {
         self.init(
@@ -152,27 +149,23 @@ public final class TheInsideJob {
                 allowedScopes: allowedScopes,
                 port: port
             ),
-            tlsIdentityProvider: tlsIdentityProvider,
             transportFactory: transportFactory
         )
     }
 
     convenience init(startupConfiguration: StartupConfiguration) {
         self.init(
-            runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(startupConfiguration: startupConfiguration),
-            tlsIdentityProvider: Self.defaultTLSIdentityProvider
+            runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(startupConfiguration: startupConfiguration)
         )
     }
 
     init(
         runtimeConfiguration: InsideJobRuntimeConfiguration,
-        tlsIdentityProvider: @escaping @MainActor () throws -> TLSIdentity,
-        transportFactory: @escaping @MainActor (TLSIdentity, Set<ConnectionScope>) -> ServerTransport = {
-            ServerTransport(tlsIdentity: $0, allowedScopes: $1)
+        transportFactory: @escaping @MainActor (String, Set<ConnectionScope>) -> ServerTransport = {
+            ServerTransport(token: $0, allowedScopes: $1)
         }
     ) {
         self.runtimeConfiguration = runtimeConfiguration
-        self.tlsIdentityProvider = tlsIdentityProvider
         self.transportFactory = transportFactory
         self.muscle = TheMuscle(
             explicitToken: runtimeConfiguration.token,

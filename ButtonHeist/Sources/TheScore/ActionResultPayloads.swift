@@ -10,9 +10,9 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case timeout
     case validationError
     case actionFailed
-    /// Authentication failed (rejected token, denied UI prompt, rate-limited).
+    /// Authentication failed (rejected token or rate-limited).
     case authFailure
-    /// Authentication is blocked on the on-device approval prompt.
+    /// Legacy compatibility with older servers that exposed on-device approval.
     case authApprovalPending
     /// General server error not tied to a specific action.
     case general
@@ -50,7 +50,7 @@ public struct ServerError: Codable, Sendable, Equatable {
     }
 }
 
-/// Non-terminal auth status sent while InsideJob waits for user approval.
+/// Legacy non-terminal auth status used by older InsideJob approval flows.
 public struct AuthApprovalPendingPayload: Codable, Sendable, Equatable {
     public let message: String
     public let hint: String

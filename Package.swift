@@ -22,8 +22,6 @@ let package = Package(
         // via scripts/check-parser-contract.sh and scripts/bump-parser.sh.
         .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.14.1"),
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
-        .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
     ],
     targets: [
         .target(
@@ -66,8 +64,6 @@ let package = Package(
                     package: "AccessibilitySnapshotBH",
                     condition: .when(platforms: [.iOS])
                 ),
-                .product(name: "X509", package: "swift-certificates"),
-                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "ButtonHeist/Sources/TheInsideJob",
             swiftSettings: [.swiftLanguageMode(.v6)]
@@ -84,7 +80,6 @@ let package = Package(
             dependencies: [
                 "TheScore",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
-                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "ButtonHeist/Sources/TheButtonHeist",
             swiftSettings: [.swiftLanguageMode(.v6)]

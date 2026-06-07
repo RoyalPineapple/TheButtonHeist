@@ -13,13 +13,6 @@ import Foundation
 struct TheMuscleClientRegistry {
     private var clients: [Int: ClientAuthenticationState] = [:]
 
-    var hasPendingApproval: Bool {
-        clients.values.contains { phase in
-            if case .pendingApproval = phase { return true }
-            return false
-        }
-    }
-
     mutating func registerAddress(_ clientId: Int, address: String) {
         clients[clientId] = .connected(address: address)
     }
@@ -46,20 +39,7 @@ struct TheMuscleClientRegistry {
         return phase
     }
 
-    mutating func beginApproval(
-        _ clientId: Int,
-        address: String,
-        respond: @escaping ClientAuthenticationState.ResponseHandler,
-        driverId: String?
-    ) {
-        clients[clientId] = .pendingApproval(address: address, respond: respond, driverId: driverId)
-    }
-
     mutating func authenticate(_ clientId: Int, address: String) {
         clients[clientId] = .authenticated(address: address)
-    }
-
-    mutating func restoreHelloValidated(_ clientId: Int, address: String) {
-        clients[clientId] = .helloValidated(address: address)
     }
 }

@@ -24,6 +24,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             .localDisconnect,
             .certificateMismatch,
             .missingFingerprint,
+            .missingToken,
         ]
 
         for reason in reasons {
@@ -48,6 +49,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             (.localDisconnect, "client.local_disconnect", .client, false),
             (.certificateMismatch, "tls.certificate_mismatch", .tls, false),
             (.missingFingerprint, "tls.missing_fingerprint", .tls, false),
+            (.missingToken, "tls.missing_token", .tls, false),
         ]
 
         for (reason, code, phase, retryable) in cases {
@@ -79,16 +81,14 @@ final class DeviceConnectionTLSTests: XCTestCase {
     // MARK: - DeviceConnection Init (actor-isolated)
 
     @ButtonHeistActor
-    func testDeviceConnectionStoresFingerprintFromDevice() async {
-        let fingerprint = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+    func testDeviceConnectionStoresTokenFromInitializer() async {
         let device = DiscoveredDevice(
             id: "test",
             name: "TestApp#abc",
-            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil),
-            certFingerprint: fingerprint
+            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         )
 
-        let connection = DeviceConnection(device: device)
+        let connection = DeviceConnection(device: device, token: "token")
         XCTAssertNotNil(connection)
     }
 
@@ -105,7 +105,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testConnectWithoutFingerprintOnNonLoopbackEmitsMissingFingerprint() async {
+    func testConnectWithoutTokenEmitsMissingToken() async {
         let device = DiscoveredDevice(
             id: "test",
             name: "TestApp#abc",
@@ -121,7 +121,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
 
         connection.connect()
 
-        XCTAssertEqual(disconnectReason, .missingFingerprint)
+        XCTAssertEqual(disconnectReason, .missingToken)
     }
 
     // MARK: - Loopback Detection

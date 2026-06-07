@@ -16,7 +16,6 @@ final class RuntimeLeaseObservationTests: XCTestCase {
         lease = InsideJobRuntimeLease(
             transport: ServerTransport(),
             actualPort: 0,
-            tlsFingerprint: "test-fingerprint",
             bonjourServiceName: nil
         )
     }

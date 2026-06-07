@@ -17,7 +17,7 @@ private let autoStartTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialSta
 /// Called from Objective-C +load method to auto-start the server.
 /// Configuration via environment variables (highest priority) or Info.plist:
 /// - INSIDEJOB_DISABLE / InsideJobDisableAutoStart: Set to true to disable
-/// - INSIDEJOB_TOKEN / InsideJobToken: Auth token (auto-generated if not set)
+/// - INSIDEJOB_TOKEN / InsideJobToken: Auth token and TLS PSK input; generated and logged if absent
 /// - INSIDEJOB_ID / InsideJobInstanceId: Human-readable instance identifier
 /// - INSIDEJOB_PORT / InsideJobPort: Fixed TCP port to listen on (0 or unset = any available)
 /// - INSIDEJOB_SCOPE / InsideJobScope: Allowed connection scopes

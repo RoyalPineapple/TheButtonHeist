@@ -129,26 +129,6 @@ struct SessionLease {
         return releaseDeadline
     }
 
-    func uiApprovalUnavailableDiagnostic() -> SessionLockDiagnostic? {
-        switch phase {
-        case .active(let driverId, _):
-            return diagnostic(
-                baseMessage: "UI approval is unavailable while a ButtonHeist session is active",
-                ownerDriverId: driverId,
-                activeConnections: 1
-            )
-        case .draining(let driverId, let releaseDeadline):
-            return diagnostic(
-                baseMessage: "UI approval is unavailable while a ButtonHeist session is draining",
-                ownerDriverId: driverId,
-                activeConnections: 0,
-                remainingTimeoutSeconds: max(0, releaseDeadline.timeIntervalSince(Date()))
-            )
-        case .idle:
-            return nil
-        }
-    }
-
     private func diagnostic(
         baseMessage: String = "Session is locked by another driver",
         ownerDriverId: String,

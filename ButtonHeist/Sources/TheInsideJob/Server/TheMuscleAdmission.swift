@@ -17,8 +17,6 @@ enum ClientAdmission: Sendable {
 struct MuscleAdmissionEffect {
     var outputs: [MuscleAdmissionOutput] = []
     var delayedDisconnectClientId: Int?
-    var approvalPromptClientId: Int?
-    var dismissApprovalPrompt = false
 
     static let none = MuscleAdmissionEffect()
 
@@ -62,7 +60,6 @@ struct MuscleAuthentication {
 
 enum MuscleAuthenticationSource {
     case token
-    case uiApproval(approvedToken: String)
 }
 
 enum MuscleAdmissionDecision {
@@ -101,14 +98,12 @@ struct TheMuscleAdmission {
         _ clientId: Int,
         data: Data,
         respond: @escaping ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?,
         at now: Date = Date()
     ) -> MuscleAdmissionDecision {
         authentication.admitClientMessage(
             clientId,
             data: data,
             respond: respond,
-            uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic,
             at: now
         )
     }
@@ -123,14 +118,6 @@ struct TheMuscleAdmission {
         respond: @escaping ResponseHandler
     ) -> MuscleAdmissionEffect {
         authentication.rejectForSessionLock(clientId, diagnostic: diagnostic, respond: respond)
-    }
-
-    mutating func denyClient(_ clientId: Int) -> MuscleAdmissionEffect {
-        authentication.denyClient(clientId)
-    }
-
-    mutating func approvalAuthentication(_ clientId: Int) -> MuscleAuthentication? {
-        authentication.approvalAuthentication(clientId)
     }
 
     mutating func removeClient(_ clientId: Int) -> MuscleAdmissionEffect {

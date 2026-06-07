@@ -44,10 +44,6 @@ struct TheMuscleSession {
         lease.activeSessionConnectionCount
     }
 
-    func uiApprovalUnavailableDiagnostic() -> SessionLease.SessionLockDiagnostic? {
-        lease.uiApprovalUnavailableDiagnostic()
-    }
-
     mutating func acquire(driverIdentity: String, clientId: Int) -> Acquisition {
         switch lease.acquire(driverIdentity: driverIdentity, clientId: clientId) {
         case .accepted(let notifyActiveChanged, let shouldCancelReleaseTimer):

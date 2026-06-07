@@ -24,7 +24,6 @@ final class BonjourAdvertisement: NSObject {
     func publish(
         serviceName: String,
         port: UInt16,
-        tlsFingerprint: String?,
         simulatorUDID: String? = nil,
         installationId: String? = nil,
         instanceId: String? = nil,
@@ -32,10 +31,6 @@ final class BonjourAdvertisement: NSObject {
     ) {
         guard port > 0 else {
             logger.error("Cannot advertise: server not started")
-            return
-        }
-        guard let tlsFingerprint else {
-            logger.error("Cannot advertise: TLS identity is not active")
             return
         }
 
@@ -63,8 +58,7 @@ final class BonjourAdvertisement: NSObject {
                 txtDict[key] = data
             }
         }
-        txtDict[TXTRecordKey.certFingerprint.rawValue] = Data(tlsFingerprint.utf8)
-        txtDict[TXTRecordKey.transport.rawValue] = Data("tls".utf8)
+        txtDict[TXTRecordKey.transport.rawValue] = Data("tls-psk".utf8)
 
         currentTXT = txtDict
         service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))

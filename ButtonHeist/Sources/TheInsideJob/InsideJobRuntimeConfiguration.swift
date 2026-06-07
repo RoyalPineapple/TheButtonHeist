@@ -22,9 +22,13 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         allowedScopes: Set<ConnectionScope>?,
         port: UInt16
     ) -> InsideJobRuntimeConfiguration {
+        let resolvedToken = resolvedRuntimeToken(
+            explicitToken: token,
+            startupToken: startupConfiguration.token
+        )
         return InsideJobRuntimeConfiguration(
-            token: token,
-            tokenSource: token == nil ? .generated : .api,
+            token: resolvedToken.value,
+            tokenSource: resolvedToken.source,
             instanceId: instanceId,
             instanceIdSource: instanceId == nil ? .generated : .api,
             preferredPort: port,
@@ -36,9 +40,13 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     }
 
     static func resolve(startupConfiguration: StartupConfiguration) -> InsideJobRuntimeConfiguration {
-        InsideJobRuntimeConfiguration(
-            token: startupConfiguration.token.value,
-            tokenSource: startupConfiguration.token.source,
+        let resolvedToken = resolvedRuntimeToken(
+            explicitToken: nil,
+            startupToken: startupConfiguration.token
+        )
+        return InsideJobRuntimeConfiguration(
+            token: resolvedToken.value,
+            tokenSource: resolvedToken.source,
             instanceId: startupConfiguration.instanceId.value,
             instanceIdSource: startupConfiguration.instanceId.source,
             preferredPort: startupConfiguration.preferredPort.value,
@@ -47,6 +55,26 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             allowedScopesSource: startupConfiguration.allowedScopes.source,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout
         )
+    }
+
+    private static func resolvedRuntimeToken(
+        explicitToken: String?,
+        startupToken: ResolvedStartupValue<String?>
+    ) -> ResolvedStartupValue<String> {
+        if let explicitToken = nonEmptyToken(explicitToken) {
+            return ResolvedStartupValue(value: explicitToken, source: .api)
+        }
+        if let startupTokenValue = nonEmptyToken(startupToken.value) {
+            return ResolvedStartupValue(value: startupTokenValue, source: startupToken.source)
+        }
+        return ResolvedStartupValue(value: GeneratedSessionToken.make(), source: .generated)
+    }
+
+    private static func nonEmptyToken(_ token: String?) -> String? {
+        guard let token, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return token
     }
 
     init(

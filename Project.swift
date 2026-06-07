@@ -97,7 +97,6 @@ let project = Project(
             dependencies: [
                 .target(name: "TheScore"),
                 .external(name: "AccessibilitySnapshotParser"),
-                .external(name: "X509"),
             ]
         ),
 

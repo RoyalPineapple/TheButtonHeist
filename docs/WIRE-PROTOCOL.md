@@ -33,14 +33,14 @@ wire discriminators only when speaking raw TCP.
 - Service type `_buttonheist._tcp`
 - OS-assigned port by default
 - IPv6 dual-stack listener
-- TLS 1.3+ with self-signed ECDSA certificates
+- TLS with token-derived pre-shared key material
 
 Default connection scope is `simulator,usb`. Bonjour/LAN discovery is opt-in
 with `network` scope.
 
-Non-loopback clients must verify a SHA-256 TLS certificate fingerprint from
-configuration, persisted trust, or Bonjour discovery. Loopback simulator
-clients may use TLS without pinning.
+Clients must provide the same token as the server before connecting. The token
+derives the TLS pre-shared key and is also sent in the JSON `authenticate`
+payload after the hello handshake.
 
 ## Discovery
 
@@ -48,20 +48,18 @@ clients may use TLS without pinning.
 
 Bonjour is published only when `INSIDEJOB_SCOPE` includes `network`.
 
-TXT metadata includes app/device identity, transport mode, and certificate
-fingerprint:
+TXT metadata includes app/device identity and transport mode:
 
 ```text
 simudid=<simulator UDID when available>
 installationid=<stable app installation identifier>
 instanceid=<human-readable instance id>
 devicename=<device name>
-certfp=sha256:<64 hex chars>
-transport=tls
+transport=tls-psk
 ```
 
-The Bonjour fingerprint enables trust-on-first-discovery for local development.
-mDNS itself does not provide integrity protection.
+The token is not advertised over Bonjour. mDNS itself does not provide
+integrity protection.
 
 ### USB
 
@@ -92,9 +90,6 @@ sequenceDiagram
         Client->>Server: authenticate
         alt Success
             Server-->>Client: info
-        else UI approval
-            Server-->>Client: authApprovalPending
-            Server-->>Client: authApproved / error
         else Failure
             Server-->>Client: error / sessionLocked
             Server--xClient: close
@@ -150,19 +145,17 @@ parameter inventories belong in the generated references.
 `driverId` is optional. When present, it is the session-locking identity. When
 absent, the token is used as the driver identity.
 
-### UI Approval
+### Legacy UI Approval Messages
 
-When the server uses an auto-generated token, a client may request on-device
-approval by authenticating with an empty token.
+`authApprovalPending` and `authApproved` remain wire types for compatibility
+with older clients and servers. The current server does not emit them. Clients
+without a token should fail before starting the TLS connection.
 
 ```json
 {"buttonHeistVersion":"<semver>","type":"authenticate","payload":{"token":""}}
 {"buttonHeistVersion":"<semver>","type":"authApprovalPending","payload":{"message":"Waiting for approval on the device.","hint":"Tap Allow on the iOS device to continue."}}
 {"buttonHeistVersion":"<semver>","type":"authApproved","payload":{"token":"auto-generated-token"}}
 ```
-
-After `authApproved`, the client should persist the token and use it for future
-connections.
 
 ### Protocol Mismatch
 
