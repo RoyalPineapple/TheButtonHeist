@@ -583,7 +583,10 @@ private struct RepairScreen {
         }
         let siblingsByParent = Dictionary(grouping: indexed) { parentPath($0.path) }
         var headers: [String] = []
-        self.elements = indexed.map { core in
+        var elements: [Element] = []
+        elements.reserveCapacity(indexed.count)
+
+        for core in indexed {
             let siblings = (siblingsByParent[parentPath(core.path)] ?? [])
                 .filter { $0.id != core.id }
                 .compactMap { primaryText($0.element) }
@@ -599,8 +602,9 @@ private struct RepairScreen {
             if core.element.traits.contains(.header), let header = primaryText(core.element) {
                 headers.append(header)
             }
-            return element
+            elements.append(element)
         }
+        self.elements = elements
     }
 
     func resolve(_ target: ElementTarget) -> RepairTargetResolution {
