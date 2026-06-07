@@ -1,17 +1,26 @@
 # Swift Heist Authoring Boundary
 
-Swift Heist is the editable source form for authoring heists. Treat the Swift
-file like product code, but keep the language boundary explicit: Swift may wrap,
-select, name, organize, and call heists outside the DSL. Inside `HeistPlan {}`,
-`HeistDef {}`, `If`, `WaitFor`, `ForEach`, `Case`, and `Else` bodies, the source
-is pure ButtonHeist DSL. Durable loops must use Button Heist's explicit
-`ForEach` primitive, not native Swift `for`.
+ButtonHeist's durable language is `HeistPlan`. Canonical ButtonHeist source is
+the runtime text form of that language; it is parsed by ThePlans and never by
+`swiftc`. Swift files are a trusted local authoring frontend that may generate a
+validated `HeistPlan`, but arbitrary Swift structure is not itself durable
+ButtonHeist language.
+
+Treat checked-in Swift files like product code, but keep the boundary explicit:
+Swift may wrap, select, name, organize, and call heists outside the DSL. If a
+behavior must survive `.heist`, JSON, recording, catalog discovery, MCP
+composition, or canonical rendering, express it as `HeistDef`, `RunHeist`,
+`If`, `WaitFor`, `ForEach`, `Warn`, `Fail`, actions, targets, and expectations.
+Durable loops must use Button Heist's explicit `ForEach` primitive, not native
+Swift `for`.
 
 `HeistPlan` is the execution model. Humans may author rich Swift DSL files that
 build a `HeistPlan`. Agents should prefer canonical ButtonHeist source strings
 when sending compact heists through MCP. Standalone `.json` files are explicit
 raw HeistPlan IR for debug, import, and export; generated `.heist` package
-directories store `manifest.json` and canonical `plan.json`.
+directories store `manifest.json` and canonical `plan.json`. Public MCP tools
+advertise only `plan` source strings and `.heist` artifact `path`s, not the raw
+JSON IR fields.
 
 Decoding `.json` IR or a `.heist` package reconstructs an executable
 `HeistPlan` with the body, targets, arguments, and expectations required for
@@ -24,13 +33,14 @@ details. In particular, JSON does not recover:
 - local variables, constants, or their names
 - source grouping, whitespace, formatting, or review intent
 
-At runtime, Button Heist executes only `HeistPlan`. The Swift DSL is the human
-source authoring language; canonical ButtonHeist source is the constrained
-runtime authoring language accepted by `run_heist(plan:)`; `.json` is raw IR;
-`.heist` is a generated package artifact. Swift DSL, canonical source, and
-canonical plan JSON are projections of the same AST. That AST belongs to the
-broader [Accessibility Contract](ACCESSIBILITY-CONTRACT.md): semantic intent
-enters the runtime and settled semantic evidence comes back.
+At runtime, Button Heist executes only `HeistPlan`. Swift result builders are
+convenience for building AST values; they are not the language contract and do
+not preserve Swift source structure. Canonical ButtonHeist source is the
+constrained runtime authoring language accepted by `run_heist(plan:)`; `.json`
+is raw IR; `.heist` is a generated package artifact. Swift DSL, canonical
+source, and canonical plan JSON are projections of the same AST. That AST
+belongs to the broader [Accessibility Contract](ACCESSIBILITY-CONTRACT.md):
+semantic intent enters the runtime and settled semantic evidence comes back.
 
 Reusable heist helpers that should survive JSON must be written as heist
 definitions, not arbitrary Swift functions:
@@ -69,6 +79,33 @@ func checkoutPlan() throws -> HeistPlan {
 `HeistPlan`. Canonical rendering can reproduce equivalent definitions and
 invocations, but it does not preserve arbitrary helper function names, source
 grouping, comments, local constants, or native Swift calls.
+
+## Swift Test Runner Boundary
+
+In app and UI tests, Swift calls the job and ButtonHeist describes the job. The
+host-language runner boundary is:
+
+```swift
+try await RunHeist("addToCart", argument: "Milk") { item in
+    Activate(.label(item))
+    Activate(.label("Add to Cart"))
+        .expect(.present(.label("Cart")))
+}
+```
+
+Outside `RunHeist(...) { ... }` is Swift: tests may choose data, await the
+receipt, and assert on failures. Inside the closure is ButtonHeist DSL that
+lowers to `HeistPlan`, validates through the normal plan contract, executes
+through the in-app heist runtime, and returns the normal receipt.
+
+Inside a durable plan, `RunHeist("Name", argument)` remains the composition
+step that invokes a named reusable heist. It is not a Swift helper call:
+
+```swift
+HeistPlan("purchaseFlow") {
+    RunHeist("LibraryScreen.addToCart", "Milk")
+}
+```
 
 Semantic actions should describe user intent and expected semantic outcome:
 
@@ -160,7 +197,7 @@ only in the authoring tools:
 - `buttonheist run_heist Flow.swift --entry makeHeist` compiles the Swift source
   to a `HeistPlan`, validates that plan for runtime behavior, then sends it down
   the ordinary `run_heist` path — identical to passing a `.heist` package or
-  `.json` IR.
+  canonical ButtonHeist `plan` source.
 - `heist-plan compile Flow.swift --entry makeHeist --output Flow.heist` compiles
   and persists a `.heist` package (or `.json` IR) without running it.
 
@@ -171,8 +208,9 @@ resulting plan or artifact.
 For MCP, `run_heist` accepts canonical ButtonHeist source via the `plan` field.
 That string is not sent to `swiftc` and is not executed as Swift. It is parsed
 by ThePlans as constrained ButtonHeist source, lowered to a `HeistPlan`, and
-validated through the same runtime plan pipeline as structured plan input. The
-MCP tool still does not expose local Swift authoring inputs such as
+validated through the same runtime plan pipeline as `.heist` artifacts and
+compiled Swift authoring output. The MCP tool still does not expose local
+Swift authoring inputs such as
 `source_file` or `entry`.
 
 This runtime compiler accepts only ButtonHeist DSL constructs: semantic and

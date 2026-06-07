@@ -115,26 +115,18 @@ final class WireCommandParityTests: XCTestCase {
         )
     }
 
-    func testRunHeistDescriptorAdvertisesPublicJSONPlanStepTypes() {
+    func testRunHeistDescriptorDoesNotAdvertiseRawJSONIRFields() {
         let descriptor = TheFence.Command.descriptor(for: .runHeist)
-        let body = descriptor.parameters.first { $0.key == "body" }
-        let type = body?.arrayItemProperties.first { $0.key == "type" }
+        let keys = Set(descriptor.parameters.map(\.key))
 
-        XCTAssertEqual(
-            type?.enumValues,
-            [
-                "action",
-                "wait",
-                "conditional",
-                "wait_for_cases",
-                "for_each_element",
-                "for_each_string",
-                "heist",
-                "invoke",
-                "warn",
-                "fail",
-            ]
-        )
+        XCTAssertTrue(keys.contains("path"))
+        XCTAssertTrue(keys.contains("plan"))
+        XCTAssertTrue(keys.contains("argument"))
+        XCTAssertFalse(keys.contains("version"))
+        XCTAssertFalse(keys.contains("name"))
+        XCTAssertFalse(keys.contains("parameter"))
+        XCTAssertFalse(keys.contains("definitions"))
+        XCTAssertFalse(keys.contains("body"))
     }
 
     func testDescriptorLookupFindsEquivalentNestedParameters() {
@@ -312,30 +304,20 @@ final class WireCommandParityTests: XCTestCase {
             return ["text": .string("clipboard")]
         case .runHeist, .listHeists:
             return [
-                "version": .int(HeistPlan.currentVersion),
-                "body": .array([heistStepValue(
-                    type: "action",
-                    payload: [
-                        "command": .object([
-                            "type": .string(ClientWireMessageType.activate.rawValue),
-                            "payload": target,
-                        ]),
-                    ]
-                )]),
+                "plan": .string("""
+                HeistPlan("entry") {
+                    Warn("ready")
+                }
+                """),
             ]
         case .describeHeist:
             return [
                 "heist": .string("entry"),
-                "version": .int(HeistPlan.currentVersion),
-                "body": .array([heistStepValue(
-                    type: "action",
-                    payload: [
-                        "command": .object([
-                            "type": .string(ClientWireMessageType.activate.rawValue),
-                            "payload": target,
-                        ]),
-                    ]
-                )]),
+                "plan": .string("""
+                HeistPlan("entry") {
+                    Warn("ready")
+                }
+                """),
             ]
         case .connect:
             return ["target": .string("default")]

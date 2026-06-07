@@ -88,14 +88,19 @@ struct ToolSyncTests {
     func runHeistSchemaExposesOnlyPlan() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "run_heist" })
 
-        // The MCP run_heist tool exposes the canonical HeistPlan fields and a
-        // `path`, canonical ButtonHeist source, plus `argument` for
-        // parameterized root heists. Source exclusivity is enforced in request
-        // decoding rather than with top-level oneOf/anyOf/allOf.
-        for field in ["path", "plan", "argument", "version", "name", "parameter", "definitions", "body"] {
+        // The MCP run_heist tool exposes only public authoring sources:
+        // canonical ButtonHeist source, .heist artifact path, and root
+        // argument. Raw JSON IR fields remain internal and are not advertised.
+        for field in ["path", "plan", "argument"] {
             #expect(
                 schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
                 "run_heist schema must expose \(field)"
+            )
+        }
+        for field in ["version", "name", "parameter", "definitions", "body"] {
+            #expect(
+                schemaValue(at: ["properties", field], in: tool.inputSchema) == nil,
+                "run_heist schema must not expose raw JSON IR field \(field)"
             )
         }
         #expect(schemaValue(at: ["properties", "argument", "properties", "type", "enum"], in: tool.inputSchema) == .array([
@@ -131,10 +136,16 @@ struct ToolSyncTests {
         let describeHeist = try #require(ToolDefinitions.all.first { $0.name == "describe_heist" })
 
         for tool in [listHeists, describeHeist] {
-            for field in ["path", "plan", "version", "name", "parameter", "definitions", "body"] {
+            for field in ["path", "plan"] {
                 #expect(
                     schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
                     "\(tool.name) schema must expose \(field)"
+                )
+            }
+            for field in ["version", "name", "parameter", "definitions", "body"] {
+                #expect(
+                    schemaValue(at: ["properties", field], in: tool.inputSchema) == nil,
+                    "\(tool.name) schema must not expose raw JSON IR field \(field)"
                 )
             }
             #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)

@@ -50,6 +50,20 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertEqual(capture.plan?.parameter, .string(name: "input"))
     }
 
+    func testRunHeistSwiftBoundaryBindsOneStringArgument() async throws {
+        let job = TheInsideJob(token: "in-app-runheist-string-test")
+        let capture = RuntimeCapture(job: job)
+
+        let heist = try await RunHeist("addToCart", argument: "Milk", runtime: capture.runtime) { _ in
+            Warn("adding")
+        }
+
+        XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
+        XCTAssertEqual(capture.argument, .string(.literal("Milk")))
+        XCTAssertEqual(capture.plan?.name, "addToCart")
+        XCTAssertEqual(capture.plan?.parameter, .string(name: "input"))
+    }
+
     func testSingleElementTargetRootHeistBindsOneRootArgument() async throws {
         let job = TheInsideJob(token: "in-app-heist-target-test")
         let capture = RuntimeCapture(job: job)

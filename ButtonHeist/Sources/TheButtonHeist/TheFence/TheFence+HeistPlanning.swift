@@ -23,7 +23,10 @@ extension TheFence {
     }
 
     /// Canonical `HeistPlan` root fields that constitute a structured inline plan.
-    /// `path`, `plan`, and these fields are mutually exclusive plan sources.
+    /// `path`, `plan`, and these fields are mutually exclusive plan sources. These
+    /// keys are intentionally not present in public descriptors; they remain here
+    /// only so generated/internal callers can be rejected or decoded by explicit
+    /// lower-level tests without making raw JSON IR an advertised authoring surface.
     static let inlinePlanFieldKeys: Set<String> = ["version", "name", "parameter", "definitions", "body"]
 
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {
@@ -120,14 +123,15 @@ private extension TheFence {
         let plan = try arguments.schemaString("plan")
         guard acceptsInlinePlanSource || plan == nil else {
             throw FenceError.invalidRequest(
-                "\(commandName) does not accept inline ButtonHeist source; use path or structured plan fields"
+                "\(commandName) does not accept inline ButtonHeist source; use path"
             )
         }
         let hasInlinePlan = arguments.argumentValues.keys.contains { Self.inlinePlanFieldKeys.contains($0) }
         let sourceCount = [path != nil, plan != nil, hasInlinePlan].filter { $0 }.count
         guard sourceCount == 1 else {
             throw FenceError.invalidRequest(
-                "\(commandName) accepts exactly one plan source: path, plan, or structured plan fields"
+                "\(commandName) accepts exactly one plan source: path or plan. " +
+                "Raw JSON IR fields are internal and cannot be combined with public sources."
             )
         }
 
