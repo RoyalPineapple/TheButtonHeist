@@ -310,6 +310,17 @@ private struct HeistCanonicalSwiftDSLRenderer {
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
+        if conditional.cases.count == 1 {
+            return try renderSingleCaseBranches(
+                callee: "If",
+                predicate: conditional.cases[0].predicate,
+                timeout: nil,
+                body: conditional.cases[0].body,
+                elseBody: conditional.elseBody,
+                indent: indent,
+                environment: environment
+            )
+        }
         let cases = try renderCases(
             conditional.cases,
             elseBody: conditional.elseBody,
@@ -328,6 +339,17 @@ private struct HeistCanonicalSwiftDSLRenderer {
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
+        if waitForCases.cases.count == 1 {
+            return try renderSingleCaseBranches(
+                callee: "WaitFor",
+                predicate: waitForCases.cases[0].predicate,
+                timeout: waitForCases.timeout,
+                body: waitForCases.cases[0].body,
+                elseBody: waitForCases.elseBody,
+                indent: indent,
+                environment: environment
+            )
+        }
         let cases = try renderCases(
             waitForCases.cases,
             elseBody: waitForCases.elseBody,
@@ -339,6 +361,33 @@ private struct HeistCanonicalSwiftDSLRenderer {
         \(cases)
         \(line("}", indent))
         """
+    }
+
+    private func renderSingleCaseBranches(
+        callee: String,
+        predicate: AccessibilityPredicateExpr,
+        timeout: Double?,
+        body: [HeistStep],
+        elseBody: [HeistStep]?,
+        indent: Int,
+        environment: RenderEnvironment
+    ) throws -> String {
+        let timeoutArgument = timeout.map { "\(renderTimeout($0))" } ?? ""
+        let renderedBody = try render(steps: body, indent: indent + 1, environment: environment)
+        var source = """
+        \(line("\(callee)(\(try render(predicate: predicate, environment: environment))\(timeoutArgument)) {", indent))
+        \(renderedBody)
+        \(line("}", indent))
+        """
+        if let elseBody {
+            source += "\n"
+            source += line(".else {", indent)
+            source += "\n"
+            source += try render(steps: elseBody, indent: indent + 1, environment: environment)
+            source += "\n"
+            source += line("}", indent)
+        }
+        return source
     }
 
     private func renderCases(

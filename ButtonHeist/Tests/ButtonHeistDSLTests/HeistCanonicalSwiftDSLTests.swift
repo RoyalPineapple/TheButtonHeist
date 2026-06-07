@@ -97,21 +97,16 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
 
         WaitFor(.present(target), timeout: .seconds(1))
 
-        If {
-            Case(.present(target)) {
-                CustomAction("Archive", on: target)
-                    .expect(.changed(.screen(where: .present(target))), timeout: .seconds(3))
-            }
-
-            Else {
-                Fail("target missing")
-            }
+        If(.present(target)) {
+            CustomAction("Archive", on: target)
+                .expect(.changed(.screen(where: .present(target))), timeout: .seconds(3))
+        }
+        .else {
+            Fail("target missing")
         }
 
-        WaitFor(timeout: .seconds(4)) {
-            Case(.absent(target)) {
-                Warn("target removed")
-            }
+        WaitFor(.absent(target), timeout: .seconds(4)) {
+            Warn("target removed")
         }
     }
     """)
@@ -567,24 +562,18 @@ HeistPlan {
 
     WaitFor(.absent(.label("Loading")), timeout: .seconds(1))
 
-    If {
-        Case(.present(.label("Home"))) {
-            Warn("home")
-        }
-
-        Else {
-            Fail("unknown")
-        }
+    If(.present(.label("Home"))) {
+        Warn("home")
+    }
+    .else {
+        Fail("unknown")
     }
 
-    WaitFor(timeout: .seconds(8)) {
-        Case(.present(.label("Results"))) {
-            Warn("results")
-        }
-
-        Else {
-            Fail("timeout")
-        }
+    WaitFor(.present(.label("Results")), timeout: .seconds(8)) {
+        Warn("results")
+    }
+    .else {
+        Fail("timeout")
     }
 
     ForEach(.matching(.label("Delete")), limit: 20) { target in

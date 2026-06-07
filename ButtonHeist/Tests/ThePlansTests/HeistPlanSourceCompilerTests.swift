@@ -26,6 +26,17 @@ import ThePlans
     #expect(plan == expected)
 }
 
+@Test func `inline plan source unicode string escapes preserve following characters`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root(#"""
+    Warn("A\u0062C")
+    """#))
+    let expected = try HeistPlan(body: [
+        .warn(WarnStep(message: "AbC")),
+    ])
+
+    #expect(plan == expected)
+}
+
 @Test func `runtime authored product DSL compiles through canonical parser`() throws {
     let source = """
     HeistPlan("checkout") {
@@ -385,13 +396,24 @@ import ThePlans
     expect(nativeIf, contains: "native Swift if/else is not supported")
     expect(nativeIf, contains: "If { Case(...) { ... } Else { ... } }")
 
-    let shorthandIf = compileError(root("""
+    let ifShorthand = try HeistPlanSourceCompiler().compile(root("""
     If(.present(.label("Pay"))) {
         Activate(.label("Pay"))
+    }.else {
+        Fail("missing")
     }
     """))
-    expect(shorthandIf, contains: "If(predicate) is not canonical ButtonHeist source")
-    expect(shorthandIf, contains: "If { Case(...) { ... } Else { ... } }")
+    #expect(ifShorthand.body == [
+        .conditional(try ConditionalStep(
+            cases: [
+                PredicateCase(
+                    predicate: .present(.label("Pay")),
+                    body: [.action(try ActionStep(command: .activate(.predicate(.label("Pay")))))]
+                ),
+            ],
+            elseBody: [.fail(FailStep(message: "missing"))]
+        )),
+    ])
 
     let unknownAction = compileError(root(#"Tap(.label("Pay"))"#))
     expect(unknownAction, contains: "unsupported ButtonHeist source statement 'Tap'")

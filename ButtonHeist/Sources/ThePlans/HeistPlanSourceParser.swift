@@ -653,14 +653,11 @@ struct HeistPlanSourceParser {
         let timeout = try parseTrailingTimeout(defaultValue: 0) ?? 0
         try expectSymbol(")")
         if currentToken.isSymbol("{") {
-            let body = try parseHeistBlock()
-            let elseBody = try parseLowercaseElseChainIfPresent()
+            let branches = try parseSinglePredicateBranches(predicate: predicate, chainContext: "WaitFor")
             return .waitForCases(try WaitForCasesStep(
                 timeout: timeout,
-                cases: [
-                    PredicateCase(predicate: predicate, body: body),
-                ],
-                elseBody: elseBody
+                cases: branches.cases,
+                elseBody: branches.elseBody
             ))
         }
         return .wait(WaitStep(predicate: predicate, timeout: timeout))
@@ -668,7 +665,10 @@ struct HeistPlanSourceParser {
 
     private mutating func parseIf() throws -> HeistStep {
         if consumeSymbol("(") {
-            throw error(previous, "If(predicate) is not canonical ButtonHeist source. Use If { Case(...) { ... } Else { ... } }")
+            let predicate = try parseAccessibilityPredicateExpr()
+            try expectSymbol(")")
+            let branches = try parseSinglePredicateBranches(predicate: predicate, chainContext: "If")
+            return .conditional(try ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))
         }
         let branches = try parsePredicateBranches()
         return .conditional(try ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))
@@ -786,18 +786,30 @@ struct HeistPlanSourceParser {
         return (cases, elseBody)
     }
 
+    private mutating func parseSinglePredicateBranches(
+        predicate: AccessibilityPredicateExpr,
+        chainContext: String
+    ) throws -> (
+        cases: [PredicateCase],
+        elseBody: [HeistStep]?
+    ) {
+        let body = try parseHeistBlock()
+        let elseBody = try parseLowercaseElseChainIfPresent(chainContext: chainContext)
+        return ([PredicateCase(predicate: predicate, body: body)], elseBody)
+    }
+
     private mutating func parseHeistBlock() throws -> [HeistStep] {
         try expectSymbol("{")
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
         return body.steps
     }
 
-    private mutating func parseLowercaseElseChainIfPresent() throws -> [HeistStep]? {
+    private mutating func parseLowercaseElseChainIfPresent(chainContext: String) throws -> [HeistStep]? {
         guard consumeSymbol(".") else { return nil }
         let token = currentToken
         let chain = try parseIdentifier()
         guard chain == "else" else {
-            throw error(token, "unsupported WaitFor chain '.\(chain)'")
+            throw error(token, "unsupported \(chainContext) chain '.\(chain)'")
         }
         return try parseHeistBlock()
     }

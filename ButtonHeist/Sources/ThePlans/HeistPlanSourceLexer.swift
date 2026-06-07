@@ -145,6 +145,7 @@ struct HeistPlanSourceLexer {
                 case "0": text.append("\0")
                 case "u":
                     text.append(try lexUnicodeEscape())
+                    continue
                 default:
                     throw error("unsupported string escape '\\\(escaped)'")
                 }
