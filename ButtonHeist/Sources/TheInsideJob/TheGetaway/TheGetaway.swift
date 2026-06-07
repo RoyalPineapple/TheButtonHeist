@@ -80,17 +80,24 @@ final class TheGetaway {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .requestScreen:
             await handleScreen(requestId: requestId, respond: respond)
-        case .wait(let target):
-            let result = await brains.performWait(target: target)
-            sendMessage(.actionResult(result), requestId: requestId, respond: respond)
-            await brains.recordSentState()
-
-        // Interactions
-        default:
+        case .heistPlan:
             let actionResult = await brains.executeCommand(message)
             await recordAndRespond(
                 command: message,
                 actionResult: actionResult,
+                requestId: requestId,
+                respond: respond
+            )
+        case .activate, .increment, .decrement, .performCustomAction, .rotor,
+             .editAction, .setPasteboard, .resignFirstResponder,
+             .oneFingerTap, .longPress, .swipe, .drag,
+             .typeText, .scroll, .scrollToVisible, .scrollToEdge,
+             .wait:
+            sendMessage(
+                .error(ServerError(
+                    kind: .validationError,
+                    message: "\(message.wireType.rawValue) is an internal heist dispatch primitive; send a heistPlan request"
+                )),
                 requestId: requestId,
                 respond: respond
             )

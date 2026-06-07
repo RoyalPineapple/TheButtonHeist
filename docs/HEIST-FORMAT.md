@@ -225,8 +225,8 @@ Supported step types:
 
 ## Actions And Expectations
 
-An action step wraps a `ClientMessage` plus either an expectation or an explicit
-expectation waiver:
+An action step wraps a `HeistActionCommand` plus either an expectation or an
+explicit expectation waiver:
 
 ```json
 {

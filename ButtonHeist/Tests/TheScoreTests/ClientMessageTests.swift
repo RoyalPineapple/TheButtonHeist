@@ -90,13 +90,13 @@ final class ClientMessageTests: XCTestCase {
         let messages: [ClientMessage] = [
             .clientHello,
             .requestInterface(InterfaceQuery()),
-            .performCustomAction(CustomActionTarget(
-                elementTarget: .predicate(ElementPredicate(identifier: "menu")),
-                actionName: "Open"
-            )),
-            .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))),
-            .scrollToVisible(ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Save")))),
-            .wait(WaitTarget(predicate: .changed(.elements), timeout: 1.0)),
+            .ping,
+            .status,
+            .getPasteboard,
+            .requestScreen,
+            .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
+                .action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Save"))))),
+            ]))),
         ]
 
         for message in messages {
@@ -234,15 +234,49 @@ final class ClientMessageTests: XCTestCase {
         )
     }
 
-    func testActivatePredicateWireShape() throws {
-        let message = ClientMessage.activate(.predicate(ElementPredicate(label: "Log In")))
+    func testPrimitiveMutatingClientMessagesAreNotPublicWireEncodable() throws {
+        let messages: [ClientMessage] = [
+            .activate(.predicate(ElementPredicate(label: "Save"))),
+            .typeText(TypeTextTarget(text: "hello")),
+            .setPasteboard(SetPasteboardTarget(text: "clipboard")),
+            .wait(WaitTarget(predicate: .changed(.elements), timeout: 1)),
+        ]
+
+        for message in messages {
+            XCTAssertThrowsError(try JSONEncoder().encode(message), "\(message)") { error in
+                XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
+            }
+        }
+    }
+
+    func testPrimitiveMutatingRequestEnvelopeJSONIsRejected() throws {
+        let primitiveRequests = [
+            #"{"buttonHeistVersion":"\#(TheScore.buttonHeistVersion)","type":"activate","payload":{"label":"Save"}}"#,
+            #"{"buttonHeistVersion":"\#(TheScore.buttonHeistVersion)","type":"wait","payload":{"predicate":{"type":"elements_changed"}}}"#,
+            #"{"buttonHeistVersion":"\#(TheScore.buttonHeistVersion)","type":"setPasteboard","payload":{"text":"clipboard"}}"#,
+        ]
+
+        for json in primitiveRequests {
+            XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: Data(json.utf8)), json) { error in
+                XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
+            }
+        }
+    }
+
+    func testSingleActivateWireShapeIsHeistPlan() throws {
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Log In"))))),
+        ])
+        let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
         let data = try JSONEncoder().encode(message)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(object["type"] as? String, "activate")
+        XCTAssertEqual(object["type"] as? String, "heistPlan")
         let payload = try XCTUnwrap(object["payload"] as? [String: Any])
-        XCTAssertEqual(payload["label"] as? String, "Log In")
-        XCTAssertNil(payload["heistId"])
+        let planObject = try XCTUnwrap(payload["plan"] as? [String: Any])
+        let body = try XCTUnwrap(planObject["body"] as? [[String: Any]])
+        let firstStep = try XCTUnwrap(body.first)
+        XCTAssertEqual(firstStep["type"] as? String, "action")
     }
 
     func testRequestScreenshotEncodeDecode() throws {
@@ -259,22 +293,18 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - TypeText Tests
 
     func testTypeTextWithTextOnly() throws {
-        let message = ClientMessage.typeText(TypeTextTarget(text: "Hello"))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        let target = TypeTextTarget(text: "Hello")
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
-        if case .typeText(let target) = decoded {
-            XCTAssertEqual(target.text, "Hello")
-            XCTAssertNil(target.elementTarget)
-        } else {
-            XCTFail("Expected typeText, got \(decoded)")
-        }
+        XCTAssertEqual(decoded.text, "Hello")
+        XCTAssertNil(decoded.elementTarget)
     }
 
     func testTypeTextRejectsMissingTextOnDecode() throws {
-        let json = #"{"type":"typeText","payload":{}}"#
+        let json = #"{}"#
 
-        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
+        XCTAssertThrowsError(try JSONDecoder().decode(TypeTextTarget.self, from: Data(json.utf8)))
     }
 
     func testTypeTextWithElementTarget() throws {
@@ -282,15 +312,11 @@ final class ClientMessageTests: XCTestCase {
             text: "Hello",
             elementTarget: .predicate(ElementPredicate(identifier: "nameField"))
         )
-        let message = ClientMessage.typeText(target)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
-        guard case .typeText(let decodedTarget) = decoded else {
-            return XCTFail("Expected typeText, got \(decoded)")
-        }
-        XCTAssertEqual(decodedTarget.text, "Hello")
-        if case .predicate(let matcher, _) = decodedTarget.elementTarget {
+        XCTAssertEqual(decoded.text, "Hello")
+        if case .predicate(let matcher, _) = decoded.elementTarget {
             XCTAssertEqual(matcher.identifier, "nameField")
         } else {
             XCTFail("Expected .matcher elementTarget")
@@ -300,31 +326,31 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - SetPasteboard Tests
 
     func testSetPasteboardRoundTrip() throws {
-        let message = ClientMessage.setPasteboard(SetPasteboardTarget(text: "clipboard content"))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        let target = SetPasteboardTarget(text: "clipboard content")
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(SetPasteboardTarget.self, from: data)
 
-        if case .setPasteboard(let target) = decoded {
-            XCTAssertEqual(target.text, "clipboard content")
-        } else {
-            XCTFail("Expected setPasteboard, got \(decoded)")
-        }
+        XCTAssertEqual(decoded.text, "clipboard content")
     }
 
-    func testSetPasteboardEnvelopeRoundTrip() throws {
+    func testSetPasteboardEnvelopeUsesHeistPlan() throws {
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "hello")))),
+        ])
         let envelope = RequestEnvelope(
             requestId: "pb-set",
-            message: .setPasteboard(SetPasteboardTarget(text: "hello"))
+            message: .heistPlan(HeistPlanRun(plan: plan))
         )
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
 
         XCTAssertEqual(decoded.requestId, "pb-set")
-        if case .setPasteboard(let target) = decoded.message {
-            XCTAssertEqual(target.text, "hello")
-        } else {
-            XCTFail("Expected setPasteboard, got \(decoded.message)")
+        guard case .heistPlan(let run) = decoded.message,
+              case .action(let step)? = run.plan.body.first,
+              case .setPasteboard(let target) = step.command else {
+            return XCTFail("Expected heistPlan setPasteboard, got \(decoded.message)")
         }
+        XCTAssertEqual(target.text, "hello")
     }
 
     // MARK: - GetPasteboard Tests
@@ -361,28 +387,27 @@ final class ClientMessageTests: XCTestCase {
 
     func testWaitAbsentRoundTrip() throws {
         let target = WaitTarget(predicate: .state(.absent(ElementPredicate(label: "Loading", traits: [.staticText]))), timeout: 5.0)
-        let message = ClientMessage.wait(target)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        if case .wait(let wait) = decoded, case .state(.absent(let predicate)) = wait.predicate {
+        if case .state(.absent(let predicate)) = decoded.predicate {
             XCTAssertEqual(predicate.label, "Loading")
             XCTAssertEqual(predicate.traits, [.staticText])
-            XCTAssertEqual(wait.timeout, 5.0)
+            XCTAssertEqual(decoded.timeout, 5.0)
         } else {
             XCTFail("Expected wait(.absent), got \(decoded)")
         }
     }
 
     func testWaitPresentRoundTrip() throws {
-        let message = ClientMessage.wait(WaitTarget(predicate: .state(.present(ElementPredicate(identifier: "spinner")))))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        let target = WaitTarget(predicate: .state(.present(ElementPredicate(identifier: "spinner"))))
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        if case .wait(let wait) = decoded, case .state(.present(let predicate)) = wait.predicate {
+        if case .state(.present(let predicate)) = decoded.predicate {
             XCTAssertEqual(predicate.identifier, "spinner")
-            XCTAssertNil(wait.timeout)
-            XCTAssertEqual(wait.resolvedTimeout, 10.0)
+            XCTAssertNil(decoded.timeout)
+            XCTAssertEqual(decoded.resolvedTimeout, 10.0)
         } else {
             XCTFail("Expected wait(.present), got \(decoded)")
         }
@@ -394,42 +419,38 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testWaitChangedScreenRoundTrip() throws {
-        let message = ClientMessage.wait(WaitTarget(predicate: .changed(.screen()), timeout: 15.0))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        let target = WaitTarget(predicate: .changed(.screen()), timeout: 15.0)
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        guard case .wait(let target) = decoded else {
-            return XCTFail("Expected wait, got \(decoded)")
-        }
-        XCTAssertEqual(target.predicate, .changed(.screen()))
-        XCTAssertEqual(target.timeout, 15.0)
+        XCTAssertEqual(decoded.predicate, .changed(.screen()))
+        XCTAssertEqual(decoded.timeout, 15.0)
     }
 
     func testWaitChangedDisappearedRoundTrip() throws {
-        let message = ClientMessage.wait(
-            WaitTarget(predicate: .changed(.disappeared(ElementPredicate(label: "Loading"))), timeout: 5.0)
-        )
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        let target = WaitTarget(predicate: .changed(.disappeared(ElementPredicate(label: "Loading"))), timeout: 5.0)
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        guard case .wait(let target) = decoded else {
-            return XCTFail("Expected wait, got \(decoded)")
-        }
-        XCTAssertEqual(target.predicate, .changed(.disappeared(ElementPredicate(label: "Loading"))))
-        XCTAssertEqual(target.timeout, 5.0)
+        XCTAssertEqual(decoded.predicate, .changed(.disappeared(ElementPredicate(label: "Loading"))))
+        XCTAssertEqual(decoded.timeout, 5.0)
     }
 
-    func testWaitEnvelopeRoundTrip() throws {
+    func testWaitEnvelopeUsesHeistPlan() throws {
+        let plan = try HeistPlan(body: [
+            .wait(WaitStep(predicate: .changed(.elements), timeout: 8.0)),
+        ])
         let envelope = RequestEnvelope(
             requestId: "wait-1",
-            message: .wait(WaitTarget(predicate: .changed(.elements), timeout: 8.0))
+            message: .heistPlan(HeistPlanRun(plan: plan))
         )
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
 
         XCTAssertEqual(decoded.requestId, "wait-1")
-        guard case .wait(let target) = decoded.message else {
-            return XCTFail("Expected wait, got \(decoded.message)")
+        guard case .heistPlan(let run) = decoded.message,
+              case .wait(let target)? = run.plan.body.first else {
+            return XCTFail("Expected heistPlan wait, got \(decoded.message)")
         }
         XCTAssertEqual(target.predicate, .changed(.elements))
         XCTAssertEqual(target.timeout, 8.0)
@@ -551,22 +572,17 @@ final class ClientMessageTests: XCTestCase {
                 end: UnitPoint(x: 0.2, y: 0.5)
             )
         )
-        let message = ClientMessage.swipe(swipe)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        let data = try JSONEncoder().encode(swipe)
+        let decoded = try JSONDecoder().decode(SwipeTarget.self, from: data)
 
-        if case .swipe(let target) = decoded {
-            XCTAssertEqual(
-                target.selection,
-                .unitElement(
-                    .predicate(ElementPredicate(identifier: "scrollable")),
-                    start: UnitPoint(x: 0.8, y: 0.5),
-                    end: UnitPoint(x: 0.2, y: 0.5)
-                )
+        XCTAssertEqual(
+            decoded.selection,
+            .unitElement(
+                .predicate(ElementPredicate(identifier: "scrollable")),
+                start: UnitPoint(x: 0.8, y: 0.5),
+                end: UnitPoint(x: 0.2, y: 0.5)
             )
-        } else {
-            XCTFail("Expected swipe, got \(decoded)")
-        }
+        )
     }
 }
 

@@ -54,6 +54,42 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
     case wait, heistPlan
 }
 
+/// High-level ownership classification for client-to-server message types.
+public enum ClientMessageCategory: String, Sendable, Equatable {
+    case transportSession
+    case pureReadObservation
+    case mutatingAppInteraction
+    case heistExecution
+}
+
+public extension ClientWireMessageType {
+    /// Product-level classification for the client message surface.
+    ///
+    /// Mutating app interactions, including one-shot waits that need heist
+    /// receipts, are intentionally not public direct wire requests. Public
+    /// callers send them as `heistPlan` instead.
+    var category: ClientMessageCategory {
+        switch self {
+        case .clientHello, .authenticate, .ping, .status:
+            return .transportSession
+        case .requestInterface, .getPasteboard, .requestScreen:
+            return .pureReadObservation
+        case .heistPlan:
+            return .heistExecution
+        case .activate, .increment, .decrement, .performCustomAction, .rotor,
+             .oneFingerTap, .longPress, .swipe, .drag,
+             .typeText, .editAction, .setPasteboard,
+             .scroll, .scrollToVisible, .scrollToEdge, .resignFirstResponder,
+             .wait:
+            return .mutatingAppInteraction
+        }
+    }
+
+    var isPublicWireRequestType: Bool {
+        category != .mutatingAppInteraction
+    }
+}
+
 /// Explicit server-to-client wire message discriminator used at JSON boundaries.
 public enum ServerWireMessageType: String, DirectionalWireMessageType {
     public static let directionName = "server"

@@ -105,16 +105,18 @@ flowchart LR
 ### Act
 
 1. TheFence parses a boundary request into `TheFence.Command`.
-2. TheGetaway routes the command to TheBrains.
-3. TheBrains captures before-state, performs the action, waits for stable UI, and
+2. TheFence lowers the request into a one-step or composed `HeistPlan` and sends
+   `ClientMessage.heistPlan`.
+3. TheGetaway routes the plan to TheBrains' heist runtime.
+4. TheBrains captures before-state, performs the action, waits for stable UI, and
    parses after-state.
-4. `ScreenClassifier` classifies the settled result.
-5. The response includes the action receipt, accessibility trace, derived delta,
+5. `ScreenClassifier` classifies the settled result.
+6. The response includes the heist execution receipt, accessibility trace, derived delta,
    and optional expectation result.
 
 ### Wait
 
-`wait` is server-owned. TheInsideJob checks the current settled state first,
+`wait` is a one-step heist. TheInsideJob checks the current settled state first,
 then watches later settled captures until the requested accessibility predicate
 matches or the timeout expires. `element_disappeared` means current absence; it
 is not proof of a prior appearance/removal event.

@@ -44,7 +44,7 @@ extension TheBrains {
         if let command {
             let resolvedCommand: ClientMessage
             do {
-                resolvedCommand = try command.resolve(in: environment)
+                resolvedCommand = try command.resolveForInternalDispatch(in: environment)
             } catch {
                 let observed = "could not resolve heist action command: \(error)"
                 return HeistExecutionStepResult(
@@ -189,7 +189,7 @@ extension TheBrains {
 
     private func actionIntent(_ command: HeistActionCommand) -> HeistStepIntent {
         .action(
-            command: command.clientWireType.rawValue,
+            command: command.wireType.rawValue,
             target: command.reportTarget.map(String.init(describing:))
         )
     }
@@ -208,7 +208,7 @@ extension TheBrains {
                 category: .action,
                 contract: "action dispatch returns a result",
                 observed: "no action result returned",
-                expected: command.clientWireType.rawValue
+                expected: command.wireType.rawValue
             )
         }
         guard !result.success else { return nil }

@@ -1728,6 +1728,59 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
+    @ButtonHeistActor
+    func testPublicMutatingCommandsSendOnlyHeistPlanOverDeviceWire() async throws {
+        let target = targetValue(identifier: "target")
+        let cases: [(command: TheFence.Command, arguments: [String: HeistValue])] = [
+            (.activate, ["target": target]),
+            (.activate, ["target": target, "action": .string("increment")]),
+            (.activate, ["target": target, "action": .string("decrement")]),
+            (.activate, ["target": target, "action": .string("Archive")]),
+            (.rotor, ["target": target, "rotor": .string("Errors")]),
+            (.oneFingerTap, ["point": .object(["x": .double(12), "y": .double(34)])]),
+            (.longPress, ["point": .object(["x": .double(12), "y": .double(34)])]),
+            (.swipe, [
+                "elementDirection": .object([
+                    "element": target,
+                    "direction": .string(SwipeDirection.left.rawValue),
+                ]),
+            ]),
+            (.drag, [
+                "elementToPoint": .object([
+                    "element": target,
+                    "end": .object(["x": .double(120), "y": .double(240)]),
+                ]),
+            ]),
+            (.typeText, ["text": .string("hello"), "target": target]),
+            (.editAction, ["action": .string(EditAction.paste.rawValue)]),
+            (.setPasteboard, ["text": .string("clipboard")]),
+            (.dismissKeyboard, [:]),
+            (.wait, [
+                "predicate": .object(["type": .string("elements_changed")]),
+                "timeout": .double(1),
+            ]),
+            (.scroll, ["direction": .string(ScrollDirection.down.rawValue)]),
+            (.scrollToVisible, ["target": target]),
+            (.scrollToEdge, ["edge": .string(ScrollEdge.bottom.rawValue)]),
+        ]
+
+        for testCase in cases {
+            let (fence, mockConn) = makeConnectedFence()
+
+            _ = try await fence.execute(command: testCase.command, values: testCase.arguments)
+
+            XCTAssertEqual(mockConn.sent.count, 1, testCase.command.rawValue)
+            guard case .heistPlan(let run) = mockConn.sent.first?.0 else {
+                return XCTFail("Expected \(testCase.command.rawValue) to send heistPlan, got \(String(describing: mockConn.sent.first?.0))")
+            }
+            XCTAssertEqual(run.plan.body.count, 1, testCase.command.rawValue)
+            XCTAssertFalse(
+                mockConn.sent.contains { $0.0.wireType.category == .mutatingAppInteraction },
+                "\(testCase.command.rawValue) sent primitive mutating wire message"
+            )
+        }
+    }
+
     // MARK: - Scroll Action Validation
 
     @ButtonHeistActor
@@ -2127,6 +2180,21 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: ["expect": .object(["type": .string("screen_changed")])],
             contains: "valid get_pasteboard parameter"
         )
+    }
+
+    @ButtonHeistActor
+    func testPureReadCommandsRemainDirectWireMessages() async throws {
+        let (interfaceFence, interfaceConn) = makeConnectedFence()
+        _ = try await interfaceFence.execute(command: .getInterface)
+        guard case .requestInterface = interfaceConn.sent.last?.0 else {
+            return XCTFail("Expected get_interface to send requestInterface, got \(String(describing: interfaceConn.sent.last?.0))")
+        }
+
+        let (pasteboardFence, pasteboardConn) = makeConnectedFence()
+        _ = try await pasteboardFence.execute(command: .getPasteboard)
+        guard case .getPasteboard = pasteboardConn.sent.last?.0 else {
+            return XCTFail("Expected get_pasteboard to send getPasteboard, got \(String(describing: pasteboardConn.sent.last?.0))")
+        }
     }
 
     // MARK: - Ping

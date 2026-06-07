@@ -23,8 +23,9 @@ that contract. MCP exposes one tool per exposed command, projected from
 Fence-owned command descriptors.
 
 The raw wire protocol lives one layer lower in TheScore. Wire message
-discriminators such as `requestInterface` and `scrollToVisible` are transport
-names, not the public CLI/MCP command namespace.
+discriminators such as `requestInterface` and `heistPlan` are transport names,
+not the public CLI/MCP command namespace. Side-effecting public commands lower
+to one-step or composed `HeistPlan`s before crossing the device wire.
 
 ## TheInsideJob
 
@@ -98,7 +99,8 @@ state.
 Explicit viewport commands are different: `scroll`, `scroll_to_visible`, and
 `scroll_to_edge` expose viewport state because moving the viewport is the
 caller's intent. They are direct viewport/debug commands, not durable heist
-primitives.
+primitives, but they still execute through the heist pipeline as public
+side-effecting commands.
 
 ## Element Identity
 

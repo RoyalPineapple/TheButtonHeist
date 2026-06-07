@@ -86,15 +86,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testSimpleCommandRequestEnvelopeRejectsUnknownPayloadKey() throws {
-        let data = Data("""
-        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"typeText","payload":{"text":"hello","foo":"bar"}}
-        """.utf8)
-        XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown type text target field "foo""#])
-        }
-    }
-
     // MARK: - CustomActionTarget
 
     func testCustomActionTargetRoundTrip() throws {
@@ -337,12 +328,12 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollRequestEnvelopeRejectsUnknownPayloadKey() throws {
+    func testScrollPrimitiveRequestEnvelopeIsRejected() throws {
         let data = Data("""
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scroll","payload":{"direction":"down","containerName":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll target field "containerName""#])
+            assertDecodingError(error, contains: ["public mutating requests must be sent as heistPlan"])
         }
     }
 
@@ -390,12 +381,12 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollToEdgeRequestEnvelopeRejectsUnknownPayloadKey() throws {
+    func testScrollToEdgePrimitiveRequestEnvelopeIsRejected() throws {
         let data = Data("""
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToEdge","payload":{"edge":"bottom","unexpected":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "unexpected""#])
+            assertDecodingError(error, contains: ["public mutating requests must be sent as heistPlan"])
         }
     }
 
