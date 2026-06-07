@@ -69,8 +69,6 @@ final class TheHandoff {
     var onServerMessage: (@ButtonHeistActor (ServerMessage, String?) -> Void)?
     /// Transport send failures reported after Network.framework processes an enqueued write.
     var onSendFailure: (@ButtonHeistActor (DeviceSendFailure, String?) -> Void)?
-    /// Auth approved. The parameter is the approved token.
-    var onAuthApproved: (@ButtonHeistActor (String) -> Void)?
     // MARK: - Configuration
 
     var token: String? {

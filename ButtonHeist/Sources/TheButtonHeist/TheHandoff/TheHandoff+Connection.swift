@@ -156,14 +156,6 @@ extension TheHandoff {
         switch decision {
         case .send(let message):
             sendAdmissionMessage(message)
-        case .approved(let token):
-            serverMessages.token = token
-            onAuthApproved?(token)
-        case .recordFailure(let failure, let status):
-            connectionLifecycle.recordAttemptFailure(failure)
-            if let status {
-                onStatus?(status)
-            }
         case .terminalFailure(let failure):
             failActiveConnection(failure)
         }

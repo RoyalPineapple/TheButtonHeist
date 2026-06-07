@@ -58,7 +58,7 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
 public enum ServerWireMessageType: String, DirectionalWireMessageType {
     public static let directionName = "server"
 
-    case serverHello, protocolMismatch, authRequired, authApprovalPending, authApproved, info, interface
+    case serverHello, protocolMismatch, authRequired, info, interface
     case pong, status, error, actionResult, screen, sessionLocked
 }
 

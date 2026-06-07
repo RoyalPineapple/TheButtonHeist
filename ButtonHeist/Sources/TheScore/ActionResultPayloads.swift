@@ -12,8 +12,6 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case actionFailed
     /// Authentication failed (rejected token or rate-limited).
     case authFailure
-    /// Legacy compatibility with older servers that exposed on-device approval.
-    case authApprovalPending
     /// General server error not tied to a specific action.
     case general
 }
@@ -47,20 +45,6 @@ public struct ServerError: Codable, Sendable, Equatable {
         }
         self.kind = kind
         self.message = message
-    }
-}
-
-/// Legacy non-terminal auth status used by older InsideJob approval flows.
-public struct AuthApprovalPendingPayload: Codable, Sendable, Equatable {
-    public let message: String
-    public let hint: String
-
-    public init(
-        message: String = "Received legacy auth-approval response from the app.",
-        hint: String = "Rebuild or reinstall the app, then retry with the configured token."
-    ) {
-        self.message = message
-        self.hint = hint
     }
 }
 

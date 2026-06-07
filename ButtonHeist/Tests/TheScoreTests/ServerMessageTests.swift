@@ -58,20 +58,10 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
-    func testAuthApprovalPendingEncodeDecode() throws {
-        let payload = AuthApprovalPendingPayload(
-            message: "Received legacy auth-approval response from the app.",
-            hint: "Rebuild or reinstall the app, then retry with the configured token."
-        )
-        let message = ServerMessage.authApprovalPending(payload)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+    func testLegacyAuthApprovalPendingIsNotAValidServerMessage() {
+        let data = Data(#"{"type":"authApprovalPending","payload":{"message":"Waiting","hint":"Old UI approval hint"}}"#.utf8)
 
-        if case .authApprovalPending(let decodedPayload) = decoded {
-            XCTAssertEqual(decodedPayload, payload)
-        } else {
-            XCTFail("Expected authApprovalPending, got \(decoded)")
-        }
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: data))
     }
 
     func testInterfaceEncodeDecode() throws {

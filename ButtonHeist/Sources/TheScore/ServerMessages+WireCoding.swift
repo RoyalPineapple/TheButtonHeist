@@ -54,10 +54,8 @@ extension ServerMessage {
         switch self {
         case .serverHello: return (.serverHello, nil)
         case .authRequired: return (.authRequired, nil)
-        case .authApprovalPending(let payload): return (.authApprovalPending, payload)
         case .pong(let payload): return (.pong, payload)
         case .protocolMismatch(let payload): return (.protocolMismatch, payload)
-        case .authApproved(let payload): return (.authApproved, payload)
         case .error(let payload): return (.error, payload)
         case .sessionLocked(let payload): return (.sessionLocked, payload)
         case .info(let payload): return (.info, payload)
@@ -87,10 +85,8 @@ extension ServerMessage {
         case .authRequired:
             try noPayload()
             return .authRequired
-        case .authApprovalPending: return .authApprovalPending(try AuthApprovalPendingPayload(from: try payload()))
         case .pong: return .pong(try PongPayload(from: try payload()))
         case .protocolMismatch: return .protocolMismatch(try ProtocolMismatchPayload(from: try payload()))
-        case .authApproved: return .authApproved(try AuthApprovedPayload(from: try payload()))
         case .error: return .error(try ServerError(from: try payload()))
         case .sessionLocked: return .sessionLocked(try SessionLockedPayload(from: try payload()))
         case .info: return .info(try ServerInfo(from: try payload()))

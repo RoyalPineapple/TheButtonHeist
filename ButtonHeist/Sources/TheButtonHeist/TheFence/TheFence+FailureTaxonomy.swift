@@ -21,8 +21,6 @@ public extension FenceError {
             return "session.locked"
         case .authFailed:
             return "auth.failed"
-        case .authApprovalPending:
-            return "auth.approval_pending"
         case .notConnected:
             return "connection.not_connected"
         case .actionTimeout:
@@ -48,7 +46,7 @@ public extension FenceError {
             return failure.phase
         case .sessionLocked:
             return .session
-        case .authFailed, .authApprovalPending:
+        case .authFailed:
             return .authentication
         case .serverError(let serverError):
             return serverError.phase
@@ -62,7 +60,7 @@ public extension FenceError {
             return true
         case .connectionFailure(let failure):
             return failure.retryable
-        case .invalidRequest, .noMatchingDevice, .authFailed, .authApprovalPending, .actionFailed:
+        case .invalidRequest, .noMatchingDevice, .authFailed, .actionFailed:
             return false
         case .serverError(let serverError):
             return serverError.retryable
@@ -88,8 +86,6 @@ public extension FenceError {
                 "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
         case .authFailed(let message):
             return Self.authFailureRecoveryHint(for: message)
-        case .authApprovalPending:
-            return Self.legacyAuthApprovalRecoveryHint
         case .notConnected:
             return "Check that the app is running, then retry the command. Use 'buttonheist list_devices' to see available devices."
         case .actionTimeout:

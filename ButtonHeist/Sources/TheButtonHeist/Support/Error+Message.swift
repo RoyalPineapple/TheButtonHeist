@@ -45,8 +45,6 @@ extension FenceError {
             return "Session locked: \(message)"
         case .authFailed(let message):
             return "Auth failed: \(message)"
-        case .authApprovalPending(let message):
-            return "Auth approval pending: \(message)"
         case .notConnected:
             return "Not connected to device."
         case .actionTimeout:

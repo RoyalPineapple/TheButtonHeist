@@ -18,7 +18,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
             .eventBacklogOverflow(maxEvents: 512),
             .serverClosed,
             .authFailed("bad token"),
-            .authApprovalPending("Legacy server is waiting for UI approval."),
             .sessionLocked("locked"),
             .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
             .localDisconnect,
@@ -40,7 +39,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
             (.eventBacklogOverflow(maxEvents: 512), "transport.event_backlog_overflow", .transport, true),
             (.serverClosed, "transport.server_closed", .transport, true),
             (.authFailed("bad token"), "auth.failed", .authentication, false),
-            (.authApprovalPending("Legacy server is waiting for UI approval."), "auth.approval_pending", .authentication, false),
             (.sessionLocked("busy"), "session.locked", .session, true),
             (
                 .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
@@ -68,13 +66,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
         XCTAssertTrue(message.contains("connection failed in tls"))
         XCTAssertTrue(message.contains("observed Legacy TLS certificate fingerprint is unavailable"))
         XCTAssertTrue(message.contains("Current clients use token-derived TLS PSK"))
-    }
-
-    func testLegacyAuthApprovalPendingHintDoesNotSuggestUIApproval() {
-        let reason = DisconnectReason.authApprovalPending("Legacy server is waiting for UI approval.")
-
-        XCTAssertEqual(reason.hint, FenceError.legacyAuthApprovalRecoveryHint)
-        XCTAssertTrue(reason.connectionFailureMessage.contains("legacy auth-approval response"))
     }
 
     func testLegacyCertificateDiagnosticsIdentifyLegacyTransport() {

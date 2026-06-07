@@ -4,9 +4,6 @@ extension FenceError: LocalizedError {
     static let actionTimeoutRecoveryHint =
         "The app may be busy on its main thread, processing a long-running UI update, " +
         "or sending a large response. The connection is preserved; retry the command on the same session."
-    static let legacyAuthApprovalRecoveryHint =
-        "Received a legacy auth-approval response from the app. Rebuild or reinstall " +
-        "the app, then retry with the configured token."
 
     public var errorDescription: String? {
         switch self {
@@ -43,11 +40,6 @@ extension FenceError: LocalizedError {
             return """
                 \(base)
                   \(hint)
-                """
-        case .authApprovalPending(let message):
-            return """
-                Legacy auth approval response: \(message)
-                  \(Self.legacyAuthApprovalRecoveryHint)
                 """
         case .notConnected:
             return """

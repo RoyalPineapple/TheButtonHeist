@@ -72,11 +72,6 @@ public final class TheFence {
         didSet { handoff.onStatus = onStatus }
     }
 
-    /// Fires when the server approves authentication. The parameter is the
-    /// approved token, or `nil` when the server accepted a previously-held
-    /// session.
-    public var onAuthApproved: (@ButtonHeistActor (String) -> Void)?
-
     // Dependencies
     var config: Configuration
     let handoff = TheHandoff()
@@ -102,26 +97,7 @@ public final class TheFence {
         let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
         self.handoff.token = configuredToken
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
-        self.handoff.onAuthApproved = { [weak self] token in
-            self?.handleAuthApproved(token)
-        }
         wireUpResponseCallbacks()
-    }
-
-    nonisolated static func authApprovedStatusMessage(token: String, configuredToken: String?) -> String? {
-        guard configuredToken == nil else { return nil }
-        return "BUTTONHEIST_TOKEN=\(token)"
-    }
-
-    private func handleAuthApproved(_ token: String) {
-        if let message = Self.authApprovedStatusMessage(token: token, configuredToken: configuredAuthTokenForStatus) {
-            onStatus?(message)
-        }
-        onAuthApproved?(token)
-    }
-
-    private var configuredAuthTokenForStatus: String? {
-        config.token ?? EnvironmentKey.buttonheistToken.value
     }
 
     private var sessionConnectionPhase: SessionConnectionPhase {

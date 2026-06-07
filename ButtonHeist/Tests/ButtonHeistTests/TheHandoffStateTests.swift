@@ -174,48 +174,6 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthApprovalTimeoutFailsHandoffAndClosesTransport() async {
-        let handoff = TheHandoff()
-        let mock = connectPendingMockHandoff(handoff)
-        let message = "Approval timed out"
-
-        handoff.handleServerMessage(
-            .error(ServerError(kind: .authApprovalPending, message: message)),
-            requestId: nil
-        )
-
-        assertFailed(handoff.connectionPhase, failure: .disconnected(.authApprovalPending(message)))
-        XCTAssertEqual(mock.disconnectCount, 1)
-    }
-
-    @ButtonHeistActor
-    func testAuthApprovalPendingRecordsDiagnosticWithoutMarkingConnected() async {
-        let handoff = TheHandoff()
-        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-        let mock = connectPendingMockHandoff(handoff, device: device)
-        var statuses: [String] = []
-        handoff.onStatus = { statuses.append($0) }
-
-        handoff.handleServerMessage(
-            .authApprovalPending(AuthApprovalPendingPayload(
-                message: "Legacy server is waiting for UI approval.",
-                hint: "Old server UI approval hint."
-            )),
-            requestId: nil
-        )
-
-        assertConnecting(handoff.connectionPhase, device: device)
-        XCTAssertFalse(handoff.isConnected)
-        XCTAssertNil(handoff.connectedDevice)
-        XCTAssertEqual(
-            handoff.connectionDiagnosticFailure,
-            .disconnected(.authApprovalPending("Legacy server is waiting for UI approval."))
-        )
-        XCTAssertEqual(statuses, [FenceError.legacyAuthApprovalRecoveryHint])
-        XCTAssertEqual(mock.disconnectCount, 0)
-    }
-
-    @ButtonHeistActor
     func testSessionLockedFailsHandoffAndClosesTransport() async {
         let handoff = TheHandoff()
         let mock = connectPendingMockHandoff(handoff)

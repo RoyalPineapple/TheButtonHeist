@@ -7,7 +7,6 @@ extension FenceError {
         switch connectionError {
         case .connectionFailed(let message): self = .connectionFailed(message)
         case .disconnected(.authFailed(let reason)): self = .authFailed(reason)
-        case .disconnected(.authApprovalPending(let message)): self = .authApprovalPending(message)
         case .disconnected(.sessionLocked(let message)): self = .sessionLocked(message)
         case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))
         case .timeout: self = .connectionTimeout

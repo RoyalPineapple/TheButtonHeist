@@ -43,6 +43,11 @@ final class AuthFlowTests: XCTestCase {
         try JSONEncoder().encode(ResponseEnvelope(buttonHeistVersion: version, message: message))
     }
 
+    private func rawEnvelope(type: String, payload: String? = nil) -> Data {
+        let payloadFragment = payload.map { #","payload":\#($0)"# } ?? ""
+        return Data(#"{"buttonHeistVersion":"\#(buttonHeistVersion)","type":"\#(type)"\#(payloadFragment)}"#.utf8)
+    }
+
     // MARK: - Tests
 
     @ButtonHeistActor
@@ -89,25 +94,34 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthApprovedEmitsTokenForHandoff() async throws {
+    func testUnsupportedLegacyAuthApprovedEmitsAuthFailureWithoutDisconnectingTransport() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
-        var approvedToken: String?
+        var authFailure: ServerError?
+        var disconnected = false
         conn.onEvent = { event in
-            if case .message(.authApproved(let payload), _) = event {
-                approvedToken = payload.token
+            switch event {
+            case .message(.error(let error), _):
+                authFailure = error
+            case .disconnected:
+                disconnected = true
+            default:
+                break
             }
         }
 
-        let approvalToken = "auto-generated-uuid-token"
-        try conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: approvalToken))))
+        conn.handleMessage(rawEnvelope(type: "authApproved", payload: #"{"token":"abc-123"}"#))
 
-        XCTAssertEqual(approvedToken, approvalToken)
+        XCTAssertEqual(authFailure?.kind, .authFailure)
+        XCTAssertTrue(authFailure?.message.contains("Unsupported auth response 'authApproved'") ?? false)
+        XCTAssertTrue(authFailure?.message.contains("token-derived TLS PSK") ?? false)
+        assertDeviceConnectionConnected(conn)
+        XCTAssertFalse(disconnected)
     }
 
     @ButtonHeistActor
-    func testAuthApprovedFollowedByInfo() async throws {
+    func testInfoConnectsWithoutAuthApprovalMessage() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
@@ -123,9 +137,6 @@ final class AuthFlowTests: XCTestCase {
                 break
             }
         }
-
-        // Simulate approval then info (the normal success flow)
-        try conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: "new-token"))))
 
         let info = ServerInfo(
             appName: "TestApp",
@@ -173,16 +184,16 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthApprovalPendingIsNonTerminalStatus() async throws {
+    func testUnsupportedLegacyAuthApprovalPendingEmitsAuthFailureWithoutDisconnectingTransport() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
-        var pendingPayload: AuthApprovalPendingPayload?
+        var authFailure: ServerError?
         var disconnected = false
         conn.onEvent = { event in
             switch event {
-            case .message(.authApprovalPending(let payload), _):
-                pendingPayload = payload
+            case .message(.error(let error), _):
+                authFailure = error
             case .disconnected:
                 disconnected = true
             default:
@@ -190,16 +201,20 @@ final class AuthFlowTests: XCTestCase {
             }
         }
 
-        let payload = AuthApprovalPendingPayload()
-        try conn.handleMessage(encode(.authApprovalPending(payload)))
+        conn.handleMessage(rawEnvelope(
+            type: "authApprovalPending",
+            payload: #"{"message":"Waiting","hint":"Old UI approval hint"}"#
+        ))
 
-        XCTAssertEqual(pendingPayload, payload)
+        XCTAssertEqual(authFailure?.kind, .authFailure)
+        XCTAssertTrue(authFailure?.message.contains("Unsupported auth response 'authApprovalPending'") ?? false)
+        XCTAssertTrue(authFailure?.message.contains("token-derived TLS PSK") ?? false)
         assertDeviceConnectionConnected(conn)
         XCTAssertFalse(disconnected)
     }
 
     @ButtonHeistActor
-    func testAuthApprovalPendingErrorEmitsErrorWithoutDisconnectingTransport() async throws {
+    func testUnsupportedLegacyAuthApprovalPendingErrorEmitsAuthFailureWithoutDisconnectingTransport() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
@@ -216,12 +231,14 @@ final class AuthFlowTests: XCTestCase {
             }
         }
 
-        try conn.handleMessage(encode(.error(ServerError(
-            kind: .authApprovalPending,
-            message: "Legacy server is waiting for UI approval."
-        ))))
+        conn.handleMessage(rawEnvelope(
+            type: "error",
+            payload: #"{"kind":"authApprovalPending","message":"Legacy server is waiting for UI approval."}"#
+        ))
 
-        XCTAssertEqual(serverError?.kind, .authApprovalPending)
+        XCTAssertEqual(serverError?.kind, .authFailure)
+        XCTAssertTrue(serverError?.message.contains("Unsupported auth response 'error.authApprovalPending'") ?? false)
+        XCTAssertTrue(serverError?.message.contains("token-derived TLS PSK") ?? false)
         assertDeviceConnectionConnected(conn)
         XCTAssertFalse(disconnected)
     }

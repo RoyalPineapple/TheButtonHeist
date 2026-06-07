@@ -6,6 +6,15 @@ extension DeviceConnection {
     // Internal for testing (see AuthFlowTests, AuthFailureTests)
     func handleMessage(_ data: Data) {
         deviceConnectionLogger.debug("Parsing message: \(data.count) bytes")
+        if let legacyAuthResponse = unsupportedLegacyAuthResponse(in: data) {
+            deviceConnectionLogger.error("Unsupported legacy auth response: \(legacyAuthResponse, privacy: .public)")
+            emitMessage(.error(ServerError(
+                kind: .authFailure,
+                message: Self.unsupportedLegacyAuthResponseMessage(type: legacyAuthResponse)
+            )), requestId: nil)
+            return
+        }
+
         guard let envelope = decodeEnvelope(from: data) else {
             if let str = String(data: data, encoding: .utf8) {
                 deviceConnectionLogger.error("Failed to decode: \(str.prefix(200))")
@@ -42,18 +51,9 @@ extension DeviceConnection {
             emitMessage(.protocolMismatch(payload), requestId: envelope.requestId)
         case .authRequired:
             emitMessage(.authRequired, requestId: nil)
-        case .authApprovalPending(let payload):
-            deviceConnectionLogger.info("Auth approval pending: \(payload.message, privacy: .public)")
-            emitMessage(.authApprovalPending(payload), requestId: envelope.requestId)
         case .error(let serverError) where serverError.kind == .authFailure:
             deviceConnectionLogger.error("Auth failed: \(serverError.message)")
             emitMessage(.error(serverError), requestId: nil)
-        case .error(let serverError) where serverError.kind == .authApprovalPending:
-            deviceConnectionLogger.error("Auth approval timed out: \(serverError.message)")
-            emitMessage(.error(serverError), requestId: nil)
-        case .authApproved(let payload):
-            deviceConnectionLogger.info("Auth approved via UI, received token")
-            emitMessage(.authApproved(payload), requestId: nil)
         case .sessionLocked(let payload):
             deviceConnectionLogger.warning("Session locked: \(payload.message, privacy: .public)")
             emitMessage(.sessionLocked(payload), requestId: nil)
@@ -97,5 +97,34 @@ extension DeviceConnection {
             deviceConnectionLogger.error("Failed to decode server response: \(error)")
             return nil
         }
+    }
+
+    private func unsupportedLegacyAuthResponse(in data: Data) -> String? {
+        guard let probe = try? JSONDecoder().decode(ServerWireTypeProbe.self, from: data) else {
+            return nil
+        }
+        switch (probe.type, probe.payload?.kind) {
+        case ("authApprovalPending", _),
+             ("authApproved", _):
+            return probe.type
+        case ("error", "authApprovalPending"):
+            return "error.authApprovalPending"
+        default:
+            return nil
+        }
+    }
+
+    private static func unsupportedLegacyAuthResponseMessage(type: String) -> String {
+        "Unsupported auth response '\(type)'. Button Heist now authenticates with token-derived TLS PSK. " +
+            "Rebuild or reinstall the app and retry with the configured token."
+    }
+}
+
+private struct ServerWireTypeProbe: Decodable {
+    let type: String
+    let payload: Payload?
+
+    struct Payload: Decodable {
+        let kind: String?
     }
 }
