@@ -99,7 +99,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testClientMessageLongPressEncoding() throws {
         let message = ClientMessage.longPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 50, y: 75)),
-            duration: try GestureDuration(seconds: 1.0)
+            duration: GestureDuration(seconds: 1.0)
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
@@ -116,7 +116,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let message = ClientMessage.drag(DragTarget(
             start: .coordinate(ScreenPoint(x: 50, y: 100)),
             end: ScreenPoint(x: 250, y: 100),
-            duration: try GestureDuration(seconds: 0.5)
+            duration: GestureDuration(seconds: 0.5)
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)

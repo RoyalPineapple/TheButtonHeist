@@ -11,13 +11,13 @@ public struct HeistPlanSourceCompiler: Sendable {
             var lexer = HeistPlanSourceLexer(source: source, sourceName: sourceName)
             let tokens = try lexer.lex()
             var parser = HeistPlanSourceParser(tokens: tokens, sourceName: sourceName)
-            let body = try parser.parseProgram()
-            return try UnvalidatedHeistPlan(body: body).validatedForRuntime()
+            let plan = try parser.parseProgram()
+            return try plan.validatedForRuntime()
         } catch let error as HeistPlanSourceCompilerError {
             throw error
         } catch {
             throw HeistPlanSourceCompilerError(
-                message: "compact plan source failed runtime validation: \(String(describing: error))",
+                message: "ButtonHeist source failed runtime validation: \(String(describing: error))",
                 sourceName: sourceName,
                 offset: 0,
                 line: 1,
@@ -46,9 +46,4 @@ public extension HeistPlanning {
     ) throws -> HeistPlan {
         try HeistPlanSourceCompiler().compile(source, sourceName: sourceName)
     }
-}
-
-public extension AccessibilityPredicateExpr {
-    static var screenChanged: AccessibilityPredicateExpr { .changed(.screen()) }
-    static var elementsChanged: AccessibilityPredicateExpr { .changed(.elements) }
 }

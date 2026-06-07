@@ -217,7 +217,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let heist = try await Heist {
             try DogfoodHome.openScreen("Controls Demo")
 
-            try ForEach(["Buttons & Actions", "Display"]) { screen in
+            ForEach(["Buttons & Actions", "Display"]) { screen in
                 try ControlsDemoScreen.openScreen(screen)
                 try DogfoodNavigation.backTo("Controls Demo")
             }
@@ -325,7 +325,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 }
             }
 
-            try ForEach(
+            ForEach(
                 ElementMatches.matching(ElementPredicate(label: "Text Input", traits: [.button])),
                 limit: 1
             ) { target in
@@ -401,7 +401,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
 
             try DogfoodHome.openScreen("Todo List")
 
-            try ForEach(
+            ForEach(
                 ElementMatches.matching(ElementPredicate(
                     label: "Fix bug, High priority",
                     value: "Active"

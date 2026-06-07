@@ -67,12 +67,29 @@ struct ToolSyncTests {
         )
     }
 
+    @Test("No generated MCP tool input schema has a top-level combinator")
+    func noGeneratedToolSchemaHasTopLevelCombinator() {
+        let offending = ToolDefinitions.all.flatMap { tool -> [String] in
+            guard case .object(let schema) = tool.inputSchema else {
+                return ["\(tool.name).inputSchema is not an object"]
+            }
+            return SchemaCombinatorScanner.bannedKeywords.compactMap { keyword in
+                schema[keyword] == nil ? nil : "\(tool.name).inputSchema.\(keyword)"
+            }
+        }
+
+        #expect(
+            offending.isEmpty,
+            "MCP tool input schemas must not use top-level oneOf/anyOf/allOf:\n\(offending.joined(separator: "\n"))"
+        )
+    }
+
     @Test("run_heist schema exposes plan sources and root argument without schema combinators")
     func runHeistSchemaExposesOnlyPlan() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "run_heist" })
 
         // The MCP run_heist tool exposes the canonical HeistPlan fields and a
-        // `path`, compact plan source, plus `argument` for
+        // `path`, canonical ButtonHeist source, plus `argument` for
         // parameterized root heists. Source exclusivity is enforced in request
         // decoding rather than with top-level oneOf/anyOf/allOf.
         for field in ["path", "plan", "argument", "version", "name", "parameter", "definitions", "body"] {
@@ -114,7 +131,7 @@ struct ToolSyncTests {
         let describeHeist = try #require(ToolDefinitions.all.first { $0.name == "describe_heist" })
 
         for tool in [listHeists, describeHeist] {
-            for field in ["path", "version", "name", "parameter", "definitions", "body"] {
+            for field in ["path", "plan", "version", "name", "parameter", "definitions", "body"] {
                 #expect(
                     schemaValue(at: ["properties", field], in: tool.inputSchema) != nil,
                     "\(tool.name) schema must expose \(field)"

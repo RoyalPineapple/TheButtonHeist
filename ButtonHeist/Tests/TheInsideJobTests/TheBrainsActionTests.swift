@@ -2066,7 +2066,7 @@ final class TheBrainsActionTests: XCTestCase {
             DragTarget(
                 start: .coordinate(ScreenPoint(x: 10, y: 10)),
                 end: ScreenPoint(x: .infinity, y: 20),
-                duration: try GestureDuration(seconds: 0.01)
+                duration: GestureDuration(seconds: 0.01)
             )
         )
 

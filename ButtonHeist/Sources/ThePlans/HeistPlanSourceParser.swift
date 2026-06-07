@@ -12,42 +12,233 @@ struct HeistPlanSourceParser {
         self.sourceName = sourceName
     }
 
-    mutating func parseProgram() throws -> [HeistStep] {
-        let body = try parseStatements(untilRightBrace: false)
-        try expect(.eof)
-        return body
+    mutating func parseProgram() throws -> UnvalidatedHeistPlan {
+        if startsRootHeistPlan {
+            let root = try parseRootHeistPlan()
+            let uncheckedRoot = root.uncheckedPlanForRuntimeValidation()
+            try expect(.eof)
+            return UnvalidatedHeistPlan(
+                version: HeistPlan.currentVersion,
+                name: root.name,
+                parameter: root.parameter,
+                definitions: root.definitions,
+                body: uncheckedRoot.body
+            )
+        }
+
+        try rejectForbiddenStatementSyntax()
+        throw error(currentToken, "ButtonHeist source must be a canonical root plan: `HeistPlan { ... }`")
     }
 
-    private mutating func parseStatements(untilRightBrace: Bool) throws -> [HeistStep] {
+    private mutating func parseRootHeistPlan() throws -> UnvalidatedHeistPlan {
+        let name = try parseCalleeName()
+        guard name == ["HeistPlan"] else {
+            throw error(previous, "expected `HeistPlan { ... }`")
+        }
+        return try parseHeistPlanAfterCallee(allowDefinitions: true)
+    }
+
+    private mutating func parseHeistBody(
+        untilRightBrace: Bool,
+        allowDefinitions: Bool
+    ) throws -> ParsedHeistBody {
+        var definitions: [UnvalidatedHeistPlan] = []
         var steps: [HeistStep] = []
+        var seenStep = false
         while true {
             skipSemicolons()
             if atEnd { break }
             if consumeSymbol("}") {
-                if untilRightBrace { return steps }
+                if untilRightBrace {
+                    return ParsedHeistBody(definitions: definitions, steps: steps)
+                }
                 throw error(previous, "unexpected '}'")
+            }
+            if allowDefinitions, startsDefinition {
+                guard !seenStep else {
+                    throw error(currentToken, "canonical HeistDef definitions must appear before actions in their block")
+                }
+                definitions.append(try parseDefinition())
+                continue
             }
             try rejectForbiddenStatementSyntax()
             steps.append(contentsOf: try parseStatement())
+            seenStep = true
         }
         if untilRightBrace {
-            throw error(currentToken, "expected '}' to close compact plan block")
+            throw error(currentToken, "expected '}' to close ButtonHeist source block")
         }
-        return steps
+        return ParsedHeistBody(definitions: definitions, steps: steps)
+    }
+
+    private mutating func parseDefinition() throws -> UnvalidatedHeistPlan {
+        let callee = try parseCalleeName()
+        guard callee == ["HeistDef"] else {
+            throw error(previous, "heist definitions must use `HeistDef<...>(\"Name\") { ... }`")
+        }
+        let parameterKind = try parseHeistDefGeneric()
+        let header = try parseHeistDefHeader(parameterKind: parameterKind)
+        let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: true)
+        return makeDefinition(
+            path: header.path.split(separator: ".").map(String.init),
+            parameter: header.parameter,
+            definitions: mergeDefinitions(body.definitions),
+            body: body.steps
+        )
+    }
+
+    private mutating func parseHeistDefGeneric() throws -> HeistDefinitionParameterKind {
+        try expectSymbol("<")
+        let type = try parseIdentifier()
+        try expectSymbol(">")
+        switch type {
+        case "Void":
+            return .none
+        case "String":
+            return .string
+        case "ElementTarget":
+            return .elementTarget
+        default:
+            throw error(previous, "unsupported HeistDef parameter type '\(type)'")
+        }
+    }
+
+    private mutating func parseHeistDefHeader(
+        parameterKind: HeistDefinitionParameterKind
+    ) throws -> (path: String, parameter: HeistParameter) {
+        try expectSymbol("(")
+        let path = try parseStringLiteral()
+        var parameter = HeistParameter.none
+        if consumeSymbol(",") {
+            try expectIdentifier("parameter")
+            try expectSymbol(":")
+            let parameterName = try parseStringLiteral()
+            switch parameterKind {
+            case .none:
+                throw error(previous, "HeistDef<Void> must not declare parameter:")
+            case .string:
+                parameter = .string(name: parameterName)
+            case .elementTarget:
+                parameter = .elementTarget(name: parameterName)
+            }
+        }
+        try expectSymbol(")")
+
+        switch (parameterKind, parameter) {
+        case (.none, .none), (.string, .string), (.elementTarget, .elementTarget):
+            break
+        case (.string, .none):
+            throw error(previous, "HeistDef<String> must declare `parameter: \"name\"`")
+        case (.elementTarget, .none):
+            throw error(previous, "HeistDef<ElementTarget> must declare `parameter: \"name\"`")
+        default:
+            throw error(previous, "HeistDef parameter type does not match its parameter declaration")
+        }
+        return (path, parameter)
+    }
+
+    private func makeDefinition(
+        path: [String],
+        parameter: HeistParameter,
+        definitions: [UnvalidatedHeistPlan],
+        body: [HeistStep]
+    ) -> UnvalidatedHeistPlan {
+        guard let first = path.first else {
+            return UnvalidatedHeistPlan(parameter: parameter, definitions: definitions, body: body)
+        }
+        guard path.count > 1 else {
+            return UnvalidatedHeistPlan(name: first, parameter: parameter, definitions: definitions, body: body)
+        }
+        return UnvalidatedHeistPlan(
+            name: first,
+            definitions: [
+                makeDefinition(
+                    path: Array(path.dropFirst()),
+                    parameter: parameter,
+                    definitions: definitions,
+                    body: body
+                ),
+            ],
+            body: []
+        )
+    }
+
+    private func mergeDefinitions(_ definitions: [UnvalidatedHeistPlan]) -> [UnvalidatedHeistPlan] {
+        var merged: [UnvalidatedHeistPlan] = []
+        for definition in definitions {
+            guard let name = definition.name,
+                  let existingIndex = merged.firstIndex(where: { $0.name == name }) else {
+                merged.append(definition)
+                continue
+            }
+            let existing = merged[existingIndex]
+            if isNamespace(existing), isNamespace(definition) {
+                merged[existingIndex] = UnvalidatedHeistPlan(
+                    name: name,
+                    definitions: mergeDefinitions(existing.definitions + definition.definitions),
+                    body: []
+                )
+            } else {
+                merged.append(definition)
+            }
+        }
+        return merged
+    }
+
+    private func isNamespace(_ definition: UnvalidatedHeistPlan) -> Bool {
+        definition.parameter == .none && definition.body.isEmpty && !definition.definitions.isEmpty
     }
 
     private mutating func parseStatement() throws -> [HeistStep] {
+        let tryPrefix = try parseTryPrefixIfPresent()
+        if let tryPrefix {
+            if let correction = runHeistCorrectionAfterTryPrefix(startingAt: index) {
+                throw error(
+                    tryPrefix.token,
+                    "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies. Use \(correction)."
+                )
+            }
+            throw error(tryPrefix.token, "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies")
+        }
+
         let name = try parseCalleeName()
 
         switch name {
         case ["Activate"]:
-            return [try parseActionStep(command: parseActivateAction())]
+            return [try parseActionStep(command: parseElementTargetAction("Activate", makeCommand: HeistActionCommand.activate))]
+        case ["Increment"]:
+            return [try parseActionStep(command: parseElementTargetAction("Increment", makeCommand: HeistActionCommand.increment))]
+        case ["Decrement"]:
+            return [try parseActionStep(command: parseElementTargetAction("Decrement", makeCommand: HeistActionCommand.decrement))]
+        case ["TypeText"]:
+            return [try parseActionStep(command: parseTypeTextAction())]
+        case ["CustomAction"]:
+            return [try parseActionStep(command: parseCustomAction())]
+        case ["Rotor"]:
+            return [try parseActionStep(command: parseRotorAction())]
+        case ["SetPasteboard"]:
+            return [try parseActionStep(command: parseSetPasteboardAction())]
+        case ["Edit"]:
+            return [try parseActionStep(command: parseEditAction())]
+        case ["DismissKeyboard"]:
+            return [try parseActionStep(command: parseDismissKeyboardAction())]
+        case ["Mechanical", "Tap"]:
+            return [try parseActionStep(command: parseMechanicalTap())]
+        case ["Mechanical", "LongPress"]:
+            return [try parseActionStep(command: parseMechanicalLongPress())]
+        case ["Mechanical", "Swipe"]:
+            return [try parseActionStep(command: parseMechanicalSwipe())]
+        case ["Mechanical", "Drag"]:
+            return [try parseActionStep(command: parseMechanicalDrag())]
         case ["WaitFor"]:
             return [try parseWaitFor()]
         case ["If"]:
             return [try parseIf()]
         case ["ForEach"]:
             return [try parseForEach()]
+        case ["HeistPlan"]:
+            let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
+            return [.heist(plan.uncheckedPlanForRuntimeValidation())]
         case ["RunHeist"]:
             return [try parseRunHeist()]
         case ["Warn"]:
@@ -55,15 +246,363 @@ struct HeistPlanSourceParser {
         case ["Fail"]:
             return [try parseFail()]
         default:
-            throw error(previous, "unsupported compact plan source statement '\(name.joined(separator: "."))'")
+            throw error(previous, "unsupported ButtonHeist source statement '\(name.joined(separator: "."))'")
         }
     }
 
-    private mutating func parseActivateAction() throws -> HeistActionCommand {
+    private mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> UnvalidatedHeistPlan {
+        let header = try parseHeistPlanHeader()
+        let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: allowDefinitions)
+        return UnvalidatedHeistPlan(
+            version: HeistPlan.currentVersion,
+            name: header.name,
+            parameter: header.parameter,
+            definitions: mergeDefinitions(body.definitions),
+            body: body.steps
+        )
+    }
+
+    private mutating func parseHeistPlanHeader() throws -> (name: String?, parameter: HeistParameter) {
+        var name: String?
+        var parameter = HeistParameter.none
+        guard consumeSymbol("(") else {
+            return (nil, .none)
+        }
+        if currentToken.isSymbol(")") {
+            throw error(currentToken, "empty HeistPlan parentheses are not canonical; use `HeistPlan { ... }`")
+        }
+
+        if lookaheadLabel("parameter") || lookaheadLabel("targetParameter") {
+            parameter = try parseRootHeistParameter()
+        } else {
+            name = try parseStringLiteral()
+            if consumeSymbol(",") {
+                parameter = try parseRootHeistParameter()
+            }
+        }
+        try expectSymbol(")")
+        return (name, parameter)
+    }
+
+    private mutating func parseRootHeistParameter() throws -> HeistParameter {
+        if consumeIdentifier("parameter") != nil {
+            try expectSymbol(":")
+            return .string(name: try parseStringLiteral())
+        }
+        if consumeIdentifier("targetParameter") != nil {
+            try expectSymbol(":")
+            return .elementTarget(name: try parseStringLiteral())
+        }
+        throw error(currentToken, "expected parameter: or targetParameter:")
+    }
+
+    private mutating func parseHeistClosureBody(
+        parameter: HeistParameter,
+        allowDefinitions: Bool
+    ) throws -> ParsedHeistBody {
+        try expectSymbol("{")
+        let previousScope = scope
+        if let parameterName = parameter.name {
+            let localName = try parseIdentifier()
+            try expectIdentifier("in")
+            switch parameter {
+            case .string:
+                scope.stringRefs[localName] = parameterName
+            case .elementTarget:
+                scope.targetRefs[localName] = parameterName
+            case .none:
+                break
+            }
+        }
+        let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: allowDefinitions)
+        scope = previousScope
+        return body
+    }
+
+    private mutating func parseElementTargetAction(
+        _ actionName: String,
+        makeCommand: (ElementTargetExpr) -> HeistActionCommand
+    ) throws -> HeistActionCommand {
         try expectSymbol("(")
         let target = try parseTargetExpr()
+        try rejectActionLevelOrdinalIfPresent(actionName: actionName, target: target)
         try expectSymbol(")")
-        return .activate(target)
+        return makeCommand(target)
+    }
+
+    private mutating func rejectActionLevelOrdinalIfPresent(
+        actionName: String,
+        target: ElementTargetExpr
+    ) throws {
+        guard consumeSymbol(",") else { return }
+        let token = currentToken
+        if consumeIdentifier("ordinal") != nil {
+            try expectSymbol(":")
+            _ = try parseInteger()
+            throw error(
+                token,
+                "Ordinal belongs to the target. Use \(actionName)(.target(\(renderTargetCorrection(target)), ordinal: 0))."
+            )
+        }
+        throw error(token, "\(actionName)(...) accepts a single ElementTargetExpr")
+    }
+
+    private func renderTargetCorrection(_ target: ElementTargetExpr) -> String {
+        switch target {
+        case .predicate(let predicate, _):
+            return renderPredicateCorrection(predicate)
+        case .target(let target):
+            return renderConcreteTargetCorrection(target)
+        case .ref(let reference):
+            return reference
+        }
+    }
+
+    private func renderConcreteTargetCorrection(_ target: ElementTarget) -> String {
+        switch target {
+        case .predicate(let predicate, _):
+            return renderPredicateCorrection(ElementPredicateTemplate(
+                label: predicate.label.map(StringExpr.literal),
+                identifier: predicate.identifier.map(StringExpr.literal),
+                value: predicate.value.map(StringExpr.literal),
+                traits: predicate.traits,
+                excludeTraits: predicate.excludeTraits
+            ))
+        }
+    }
+
+    private func renderPredicateCorrection(_ predicate: ElementPredicateTemplate) -> String {
+        if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
+            switch (predicate.label, predicate.identifier, predicate.value) {
+            case (.some(let label), nil, nil):
+                return ".label(\(renderStringCorrection(label)))"
+            case (nil, .some(let identifier), nil):
+                return ".identifier(\(renderStringCorrection(identifier)))"
+            case (nil, nil, .some(let value)):
+                return ".value(\(renderStringCorrection(value)))"
+            default:
+                break
+            }
+        }
+        var fields: [String] = []
+        if let label = predicate.label { fields.append("label: \(renderStringCorrection(label))") }
+        if let identifier = predicate.identifier { fields.append("identifier: \(renderStringCorrection(identifier))") }
+        if let value = predicate.value { fields.append("value: \(renderStringCorrection(value))") }
+        if !predicate.traits.isEmpty {
+            fields.append("traits: [\(predicate.traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
+        }
+        if !predicate.excludeTraits.isEmpty {
+            fields.append("excludeTraits: [\(predicate.excludeTraits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
+        }
+        return ".element(\(fields.joined(separator: ", ")))"
+    }
+
+    private func renderStringCorrection(_ string: StringExpr) -> String {
+        switch string {
+        case .literal(let value):
+            return quote(value)
+        case .ref(let reference):
+            return reference
+        }
+    }
+
+    private mutating func parseTypeTextAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let text = try parseStringExpr()
+        var target: ElementTargetExpr?
+        if consumeSymbol(",") {
+            try expectIdentifier("into")
+            try expectSymbol(":")
+            target = try parseTargetExpr()
+        }
+        try expectSymbol(")")
+        return .typeText(text: text, target: target)
+    }
+
+    private mutating func parseCustomAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let actionName = try parseStringLiteral()
+        try expectSymbol(",")
+        try expectIdentifier("on")
+        try expectSymbol(":")
+        let target = try parseTargetExpr()
+        try expectSymbol(")")
+        return .customAction(name: actionName, target: target)
+    }
+
+    private mutating func parseRotorAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let rotorName = try parseStringLiteral()
+        try expectSymbol(",")
+        try expectIdentifier("on")
+        try expectSymbol(":")
+        let target = try parseTargetExpr()
+        var direction = RotorDirection.next
+        if consumeSymbol(",") {
+            try expectIdentifier("direction")
+            try expectSymbol(":")
+            direction = try parseEnumCase(RotorDirection.self, role: "rotor direction")
+        }
+        try expectSymbol(")")
+        return .rotor(selection: .named(rotorName), target: target, direction: direction)
+    }
+
+    private mutating func parseSetPasteboardAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let text = try parseStringLiteral()
+        try expectSymbol(")")
+        return .setPasteboard(SetPasteboardTarget(text: text))
+    }
+
+    private mutating func parseEditAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let action = try parseEnumCase(EditAction.self, role: "edit action")
+        try expectSymbol(")")
+        return .editAction(EditActionTarget(action: action))
+    }
+
+    private mutating func parseDismissKeyboardAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        try expectSymbol(")")
+        return .dismissKeyboard
+    }
+
+    private mutating func parseMechanicalTap() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let selection: GesturePointSelection
+        if lookaheadLabel("x") {
+            let point = try parseXYArguments()
+            selection = .coordinate(point)
+        } else {
+            selection = .element(try parseConcreteElementTarget())
+        }
+        try expectSymbol(")")
+        return .mechanicalTap(TapTarget(selection: selection))
+    }
+
+    private mutating func parseMechanicalLongPress() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let selection: GesturePointSelection
+        var duration = GestureDuration.longPressDefault
+        if lookaheadLabel("x") {
+            let point = try parseXYArguments()
+            selection = .coordinate(point)
+            if consumeSymbol(",") {
+                try expectIdentifier("duration")
+                try expectSymbol(":")
+                duration = try parseGestureDuration()
+            }
+        } else {
+            selection = .element(try parseConcreteElementTarget())
+        }
+        try expectSymbol(")")
+        return .mechanicalLongPress(LongPressTarget(selection: selection, duration: duration))
+    }
+
+    private mutating func parseMechanicalSwipe() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let selection: SwipeGestureSelection
+        if lookaheadLabel("from") {
+            try expectIdentifier("from")
+            try expectSymbol(":")
+            let start = try parseScreenPoint()
+            try expectSymbol(",")
+            if lookaheadLabel("to") {
+                try expectIdentifier("to")
+                try expectSymbol(":")
+                selection = .point(start: .coordinate(start), destination: .coordinate(try parseScreenPoint()))
+            } else {
+                let direction = try parseEnumCase(SwipeDirection.self, role: "swipe direction")
+                selection = .point(start: .coordinate(start), destination: .direction(direction))
+            }
+        } else {
+            let target = try parseConcreteElementTarget()
+            try expectSymbol(",")
+            if lookaheadLabel("from") {
+                try expectIdentifier("from")
+                try expectSymbol(":")
+                let start = try parseUnitPoint()
+                try expectSymbol(",")
+                try expectIdentifier("to")
+                try expectSymbol(":")
+                selection = .unitElement(target, start: start, end: try parseUnitPoint())
+            } else {
+                selection = .elementDirection(target, try parseEnumCase(SwipeDirection.self, role: "swipe direction"))
+            }
+        }
+        try expectSymbol(")")
+        return .mechanicalSwipe(SwipeTarget(selection: selection))
+    }
+
+    private mutating func parseMechanicalDrag() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let selection: DragGestureSelection
+        if lookaheadLabel("from") {
+            try expectIdentifier("from")
+            try expectSymbol(":")
+            let start = try parseScreenPoint()
+            try expectSymbol(",")
+            try expectIdentifier("to")
+            try expectSymbol(":")
+            selection = .pointToPoint(start: start, end: try parseScreenPoint())
+        } else {
+            let target = try parseConcreteElementTarget()
+            try expectSymbol(",")
+            try expectIdentifier("to")
+            try expectSymbol(":")
+            selection = .elementToPoint(target, end: try parseScreenPoint())
+        }
+        try expectSymbol(")")
+        return .mechanicalDrag(DragTarget(selection: selection))
+    }
+
+    private mutating func parseConcreteElementTarget() throws -> ElementTarget {
+        let expr = try parseTargetExpr()
+        switch expr {
+        case .target(let target):
+            return target
+        case .predicate(let predicate, let ordinal):
+            return .predicate(try concretePredicate(from: predicate), ordinal: ordinal)
+        case .ref(let reference):
+            throw error(previous, "mechanical actions require a concrete ElementTarget, not target ref '\(reference)'")
+        }
+    }
+
+    private mutating func parseXYArguments() throws -> ScreenPoint {
+        try expectIdentifier("x")
+        try expectSymbol(":")
+        let x = try parseNumber()
+        try expectSymbol(",")
+        try expectIdentifier("y")
+        try expectSymbol(":")
+        let y = try parseNumber()
+        return ScreenPoint(x: x, y: y)
+    }
+
+    private mutating func parseScreenPoint() throws -> ScreenPoint {
+        try expectIdentifier("ScreenPoint")
+        try expectSymbol("(")
+        let point = try parseXYArguments()
+        try expectSymbol(")")
+        return point
+    }
+
+    private mutating func parseUnitPoint() throws -> UnitPoint {
+        try expectIdentifier("UnitPoint")
+        try expectSymbol("(")
+        let point = try parseXYArguments()
+        try expectSymbol(")")
+        return UnitPoint(x: point.x, y: point.y)
+    }
+
+    private mutating func parseGestureDuration() throws -> GestureDuration {
+        try expectIdentifier("GestureDuration")
+        try expectSymbol("(")
+        try expectIdentifier("seconds")
+        try expectSymbol(":")
+        let seconds = try parseNumber()
+        try expectSymbol(")")
+        return GestureDuration(seconds: seconds)
     }
 
     private mutating func parseActionStep(
@@ -80,6 +619,11 @@ struct HeistPlanSourceParser {
                 let timeout = try parseTrailingTimeout(defaultValue: nil)
                 try expectSymbol(")")
                 content = content.expect(predicate, timeout: timeout)
+            case "withoutExpectation":
+                try expectSymbol("(")
+                let reason = try parseStringLiteral()
+                try expectSymbol(")")
+                content = content.withoutExpectation(reason)
             default:
                 throw error(chainToken, "unsupported action chain '.\(chain)'")
             }
@@ -113,18 +657,7 @@ struct HeistPlanSourceParser {
 
     private mutating func parseIf() throws -> HeistStep {
         if consumeSymbol("(") {
-            let predicate = try parseAccessibilityPredicateExpr()
-            try expectSymbol(")")
-            let body = try parseHeistBlock()
-            var elseBody: [HeistStep]?
-            if consumeIdentifier("otherwise") != nil {
-                try expectSymbol(":")
-                elseBody = try parseHeistBlock()
-            }
-            return .conditional(try ConditionalStep(
-                cases: [PredicateCase(predicate: predicate, body: body)],
-                elseBody: elseBody
-            ))
+            throw error(previous, "If(predicate) is not canonical ButtonHeist source. Use If { Case(...) { ... } Else { ... } }")
         }
         let branches = try parsePredicateBranches()
         return .conditional(try ConditionalStep(cases: branches.cases, elseBody: branches.elseBody))
@@ -134,9 +667,8 @@ struct HeistPlanSourceParser {
         try expectSymbol("(")
         if consumeSymbol("[") {
             let values = try parseStringArrayTail()
-            let parameter = try parseOptionalParameterLabel(defaultValue: "item")
             try expectSymbol(")")
-            let closure = try parseClosureParameterBlock(defaultParameterName: parameter, binding: .string)
+            let closure = try parseClosureParameterBlock(binding: .string)
             return .forEachString(try ForEachStringStep(
                 values: values,
                 parameter: closure.referenceName,
@@ -146,20 +678,16 @@ struct HeistPlanSourceParser {
 
         let matching = try parseElementMatches()
         var limit = 20
-        var parameter = "target"
         while consumeSymbol(",") {
             if consumeIdentifier("limit") != nil {
                 try expectSymbol(":")
                 limit = try parseInteger()
-            } else if consumeIdentifier("parameter") != nil {
-                try expectSymbol(":")
-                parameter = try parseStringLiteral()
             } else {
-                throw error(currentToken, "ForEach(.matching(...)) accepts only limit: and parameter:")
+                throw error(currentToken, "ForEach(.matching(...)) accepts only limit:")
             }
         }
         try expectSymbol(")")
-        let closure = try parseClosureParameterBlock(defaultParameterName: parameter, binding: .target)
+        let closure = try parseClosureParameterBlock(binding: .target)
         return .forEachElement(try ForEachElementStep(
             matching: matching,
             limit: limit,
@@ -169,7 +697,11 @@ struct HeistPlanSourceParser {
     }
 
     private mutating func parseElementMatches() throws -> ElementPredicate {
-        try parseQualifiedOrShorthandCall(allowedPrefixes: ["ElementMatches"], expectedName: "matching")
+        try expectSymbol(".")
+        let name = try parseIdentifier()
+        guard name == "matching" else {
+            throw error(previous, "expected .matching(...)")
+        }
         try expectSymbol("(")
         let predicate = try parseElementPredicate()
         try expectSymbol(")")
@@ -245,36 +777,27 @@ struct HeistPlanSourceParser {
 
     private mutating func parseHeistBlock() throws -> [HeistStep] {
         try expectSymbol("{")
-        return try parseStatements(untilRightBrace: true)
+        let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
+        return body.steps
     }
 
     private mutating func parseClosureParameterBlock(
-        defaultParameterName: String,
         binding: HeistPlanSourceBinding
     ) throws -> (referenceName: String, body: [HeistStep]) {
         try expectSymbol("{")
         let localName = try parseIdentifier()
         try expectIdentifier("in")
+        let referenceName = localName
         let previousScope = scope
         switch binding {
         case .string:
-            scope.stringRefs[localName] = defaultParameterName
+            scope.stringRefs[localName] = referenceName
         case .target:
-            scope.targetRefs[localName] = defaultParameterName
+            scope.targetRefs[localName] = referenceName
         }
-        let body = try parseStatements(untilRightBrace: true)
+        let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
         scope = previousScope
-        return (defaultParameterName, body)
-    }
-
-    private mutating func parseOptionalParameterLabel(defaultValue: String) throws -> String {
-        var parameter = defaultValue
-        if consumeSymbol(",") {
-            try expectIdentifier("parameter")
-            try expectSymbol(":")
-            parameter = try parseStringLiteral()
-        }
-        return parameter
+        return (referenceName, body.steps)
     }
 
     private mutating func parseStringArrayTail() throws -> [String] {
@@ -292,10 +815,6 @@ struct HeistPlanSourceParser {
             allowedPrefixes: ["AccessibilityPredicate", "AccessibilityPredicateExpr"]
         )
         switch name {
-        case "screenChanged":
-            return .changed(.screen())
-        case "elementsChanged":
-            return .changed(.elements)
         case "changed":
             try expectSymbol("(")
             let change = try parseChangePredicateExpr()
@@ -315,10 +834,6 @@ struct HeistPlanSourceParser {
     private mutating func parseChangePredicateExpr() throws -> ChangePredicateExpr {
         let name = try parseDotCallName(allowedPrefixes: ["AccessibilityPredicate.Change", "ChangePredicateExpr"])
         switch name {
-        case "screenChanged":
-            return .screen()
-        case "elementsChanged":
-            return .elements
         case "screen":
             try expectSymbol("(")
             var state: StatePredicateExpr?
@@ -528,10 +1043,10 @@ struct HeistPlanSourceParser {
                 value = try parseStringExpr()
             } else if consumeIdentifier("traits") != nil {
                 try expectSymbol(":")
-                traits = try parseTraitArray()
+                traits = try parseTraitArray(role: "traits")
             } else if consumeIdentifier("excludeTraits") != nil {
                 try expectSymbol(":")
-                excludeTraits = try parseTraitArray()
+                excludeTraits = try parseTraitArray(role: "excludeTraits")
             } else {
                 throw error(currentToken, ".element(...) accepts label, identifier, value, traits, and excludeTraits")
             }
@@ -546,11 +1061,14 @@ struct HeistPlanSourceParser {
         )
     }
 
-    private mutating func parseTraitArray() throws -> [HeistTrait] {
+    private mutating func parseTraitArray(role: String) throws -> [HeistTrait] {
         try expectSymbol("[")
         var traits: [HeistTrait] = []
         if !consumeSymbol("]") {
             repeat {
+                if case .string = currentToken.kind {
+                    throw error(currentToken, "\(role) must use enum-style syntax like [.\(role == "traits" ? "button" : "header")], not string names")
+                }
                 traits.append(try parseEnumCase(HeistTrait.self, role: "accessibility trait"))
             } while consumeSymbol(",")
             try expectSymbol("]")
@@ -590,6 +1108,12 @@ struct HeistPlanSourceParser {
     private mutating func parseStringExpr() throws -> StringExpr {
         if let string = try parseStringExprIfPresent() {
             return string
+        }
+        if currentTokenIsIdentifier, nextTokenIsSymbol("(") {
+            throw error(
+                currentToken,
+                "arbitrary calls are not supported inside ButtonHeist DSL bodies; wrap the heist in Swift and pass values through parameters or RunHeist"
+            )
         }
         throw error(currentToken, "expected a string literal or scoped string reference")
     }
@@ -680,12 +1204,22 @@ struct HeistPlanSourceParser {
     }
 
     private mutating func parseNumberIfPresent() throws -> Double? {
-        guard case .number(let text) = currentToken.kind else { return nil }
+        var sign = 1.0
+        let signToken = currentToken
+        if consumeSymbol("-") {
+            sign = -1.0
+        }
+        guard case .number(let text) = currentToken.kind else {
+            if sign < 0 {
+                throw error(signToken, "expected a number after '-'")
+            }
+            return nil
+        }
         guard let value = Double(text) else {
             throw error(currentToken, "invalid number '\(text)'")
         }
         advance()
-        return value
+        return sign * value
     }
 
     private mutating func parseStringLiteral() throws -> String {
@@ -732,16 +1266,16 @@ struct HeistPlanSourceParser {
             if consumeSymbol(".") {
                 prefix += ".\(second)"
                 guard allowedPrefixes.contains(prefix) else {
-                    throw error(token, "unsupported plan source type prefix '\(prefix)'")
+                    throw error(token, "unsupported ButtonHeist source type prefix '\(prefix)'")
                 }
                 return try parseIdentifier()
             }
             guard allowedPrefixes.contains(prefix) else {
-                throw error(token, "unsupported plan source type prefix '\(prefix)'")
+                throw error(token, "unsupported ButtonHeist source type prefix '\(prefix)'")
             }
             return second
         }
-        throw error(token, "expected a plan expression beginning with '.'")
+        throw error(token, "expected a ButtonHeist expression beginning with '.'")
     }
 
     private mutating func parseCalleeName() throws -> [String] {
@@ -789,6 +1323,12 @@ struct HeistPlanSourceParser {
         advance()
     }
 
+    private mutating func parseTryPrefixIfPresent() throws -> HeistTryPrefix? {
+        guard let token = consumeIdentifier("try") else { return nil }
+        let forced = consumeSymbol("!")
+        return HeistTryPrefix(token: token, forced: forced)
+    }
+
     @discardableResult
     private mutating func consumeIdentifier(_ name: String) -> HeistPlanSourceToken? {
         guard case .identifier(name) = currentToken.kind else { return nil }
@@ -800,6 +1340,32 @@ struct HeistPlanSourceParser {
     private mutating func consumeSymbol(_ symbol: Character) -> Bool {
         guard currentToken.isSymbol(symbol) else { return false }
         advance()
+        return true
+    }
+
+    private func nextTokenIsIdentifier(_ name: String) -> Bool {
+        guard tokens.indices.contains(index + 1),
+              case .identifier(name) = tokens[index + 1].kind else {
+            return false
+        }
+        return true
+    }
+
+    private func nextTokenIsSymbol(_ symbol: Character) -> Bool {
+        guard tokens.indices.contains(index + 1) else { return false }
+        return tokens[index + 1].isSymbol(symbol)
+    }
+
+    private func tokenIsIdentifier(_ token: HeistPlanSourceToken, _ name: String) -> Bool {
+        guard case .identifier(name) = token.kind else { return false }
+        return true
+    }
+
+    private func lookaheadIdentifier(_ offset: Int, _ name: String) -> Bool {
+        guard tokens.indices.contains(index + offset),
+              case .identifier(name) = tokens[index + offset].kind else {
+            return false
+        }
         return true
     }
 
@@ -821,8 +1387,21 @@ struct HeistPlanSourceParser {
         return values.contains(name)
     }
 
+    private var startsRootHeistPlan: Bool {
+        tokenIsIdentifier(currentToken, "HeistPlan")
+    }
+
+    private var startsDefinition: Bool {
+        tokenIsIdentifier(currentToken, "HeistDef")
+    }
+
     private var atEnd: Bool {
         currentToken.kind == .eof
+    }
+
+    private var currentTokenIsIdentifier: Bool {
+        if case .identifier = currentToken.kind { return true }
+        return false
     }
 
     private var currentToken: HeistPlanSourceToken {
@@ -843,20 +1422,67 @@ struct HeistPlanSourceParser {
         guard case .identifier(let name) = currentToken.kind else { return }
         switch name {
         case "import":
-            throw error(currentToken, "import declarations are not supported in compact plan source")
+            throw error(currentToken, "import declarations are not supported in ButtonHeist source")
         case "let", "var":
-            throw error(currentToken, "\(name) declarations are not supported in compact plan source")
+            throw error(
+                currentToken,
+                "\(name) declarations are not supported inside ButtonHeist DSL bodies; wrap the heist in Swift and pass values through parameters or RunHeist"
+            )
         case "func":
-            throw error(currentToken, "function declarations are not supported in compact plan source")
-        case "class", "struct", "enum", "protocol", "extension", "actor":
-            throw error(currentToken, "type declarations are not supported in compact plan source")
-        case "if", "for", "while", "switch":
-            throw error(currentToken, "native Swift \(name) statements are not supported; use plan source constructs")
+            throw error(currentToken, "function declarations are not supported in ButtonHeist source")
+        case "class", "struct", "protocol", "extension", "actor":
+            throw error(currentToken, "type declarations are not supported in ButtonHeist source")
+        case "enum":
+            throw error(currentToken, "enum declarations are Swift wrapper code, not ButtonHeist DSL body syntax")
+        case "if":
+            throw error(currentToken, "native Swift if/else is not supported inside ButtonHeist DSL bodies. Use If { Case(...) { ... } Else { ... } }")
+        case "for", "while", "switch":
+            throw error(currentToken, "native Swift \(name) statements are not supported; use ButtonHeist constructs such as If, WaitFor, and ForEach")
         case "try":
-            throw error(currentToken, "`try` is not supported in compact plan source; call plan constructs directly")
+            if let correction = runHeistCorrectionAfterTryPrefix(startingAt: index + 1) {
+                throw error(
+                    currentToken,
+                    "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies. Use \(correction)."
+                )
+            }
+            throw error(currentToken, "`try` is only allowed in Swift wrapper code, not inside ButtonHeist DSL bodies")
+        case "await":
+            throw error(currentToken, "`await` is not supported in ButtonHeist source")
         default:
             return
         }
+    }
+
+    private func runHeistCorrectionAfterTryPrefix(startingAt startIndex: Int) -> String? {
+        guard tokens.indices.contains(startIndex),
+              case .identifier(let first) = tokens[startIndex].kind else {
+            return nil
+        }
+        var names = [first]
+        var cursor = startIndex + 1
+        while tokens.indices.contains(cursor), tokens[cursor].isSymbol(".") {
+            let nameIndex = cursor + 1
+            guard tokens.indices.contains(nameIndex),
+                  case .identifier(let name) = tokens[nameIndex].kind else {
+                return nil
+            }
+            names.append(name)
+            cursor = nameIndex + 1
+        }
+        guard names.count > 1,
+              tokens.indices.contains(cursor),
+              tokens[cursor].isSymbol("(") else {
+            return nil
+        }
+        return "RunHeist(\(quote(names.joined(separator: "."))))"
+    }
+
+    private func quote(_ value: String) -> String {
+        if let data = try? JSONEncoder().encode(value),
+           let encoded = String(data: data, encoding: .utf8) {
+            return encoded
+        }
+        return "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 
     private func error(
@@ -873,6 +1499,16 @@ struct HeistPlanSourceParser {
     }
 }
 
+private struct ParsedHeistBody {
+    let definitions: [UnvalidatedHeistPlan]
+    let steps: [HeistStep]
+}
+
+private struct HeistTryPrefix {
+    let token: HeistPlanSourceToken
+    let forced: Bool
+}
+
 private struct HeistPlanSourceScope: Equatable {
     var stringRefs: [String: String] = [:]
     var targetRefs: [String: String] = [:]
@@ -881,4 +1517,10 @@ private struct HeistPlanSourceScope: Equatable {
 private enum HeistPlanSourceBinding {
     case string
     case target
+}
+
+private enum HeistDefinitionParameterKind {
+    case none
+    case string
+    case elementTarget
 }

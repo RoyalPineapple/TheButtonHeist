@@ -383,7 +383,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: [
                 "path": .string("/tmp/Flow.heist"),
-                "plan": .string("Activate(.label(\"Pay\"))"),
+                "plan": .string("HeistPlan { Activate(.label(\"Pay\")) }"),
             ])
         )) { error in
             XCTAssertTrue(String(describing: error).contains("run_heist accepts exactly one plan source"), "\(error)")
@@ -391,7 +391,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let plan = try HeistPlan(body: [.warn(WarnStep(message: "x"))])
         var arguments = try Self.inlineArguments(for: plan).argumentValues
-        arguments["plan"] = .string("Activate(.label(\"Pay\"))")
+        arguments["plan"] = .string("HeistPlan { Activate(.label(\"Pay\")) }")
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: arguments)
         )) { error in
@@ -405,7 +405,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let request = try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: [
                 "plan": .string("""
-                Activate(.label("Pay")).expect(.screenChanged)
+                HeistPlan {
+                    Activate(.label("Pay")).expect(.changed(.screen()))
+                }
                 """),
             ])
         )
@@ -413,7 +415,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(request.plan.body, [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .screenChanged, timeout: 0)
+                expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
             )),
         ])
     }
@@ -573,7 +575,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testRunHeistDescriptorAcceptsComposableInlinePlanKeys() async throws {
         // The descriptor must declare the canonical structured plan fields and
-        // compact plan source so both forms survive request-key validation.
+        // canonical ButtonHeist source so both forms survive request-key validation.
         let fence = TheFence(configuration: .init())
         let definition = try HeistPlan(
             name: "addToCart",
@@ -588,7 +590,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNoThrow(try fence.parseRequest(command: .runHeist, arguments: try Self.inlineArguments(for: plan)))
         XCTAssertNoThrow(try fence.parseRequest(
             command: .runHeist,
-            arguments: TheFence.CommandArgumentEnvelope(values: ["plan": .string("Activate(.label(\"Pay\"))")])
+            arguments: TheFence.CommandArgumentEnvelope(values: ["plan": .string("HeistPlan { Activate(.label(\"Pay\")) }")])
         ))
     }
 
@@ -623,6 +625,32 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(catalog.heists[1].expectationCount)
         XCTAssertNil(catalog.heists[1].semanticSurfaces)
         XCTAssertNil(catalog.heists[1].validationStatus)
+    }
+
+    @ButtonHeistActor
+    func testListHeistsAcceptsCanonicalSourcePlan() async throws {
+        let fence = TheFence(configuration: .init())
+        let response = try await fence.execute(
+            command: .listHeists,
+            arguments: TheFence.CommandArgumentEnvelope(values: [
+                "plan": .string("""
+                HeistPlan("shop") {
+                    HeistDef<String>("addToCart", parameter: "item") { item in
+                        Activate(.label(item))
+                    }
+
+                    Warn("ready")
+                }
+                """),
+            ])
+        )
+
+        guard case .heistCatalog(let catalog) = response else {
+            return XCTFail("Expected heistCatalog response, got \(response)")
+        }
+        XCTAssertEqual(catalog.heists.map(\.name), ["shop", "addToCart"])
+        XCTAssertEqual(catalog.heists[1].parameterKind, .string)
+        XCTAssertTrue(catalog.heists[1].requiresArgument)
     }
 
     @ButtonHeistActor
@@ -754,6 +782,37 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(description.role, .capability)
         XCTAssertEqual(description.semanticSurface.actionCommands, ["activate"])
         XCTAssertEqual(description.semanticSurface.expectations, [#"present(predicate(label="Done"))"#])
+        XCTAssertEqual(description.semanticSurface.targetPredicates, [
+            #"predicate(label="Checkout")"#,
+            #"predicate(label="Done")"#,
+        ])
+    }
+
+    @ButtonHeistActor
+    func testDescribeHeistAcceptsCanonicalSourcePlan() async throws {
+        let fence = TheFence(configuration: .init())
+        let response = try await fence.execute(
+            command: .describeHeist,
+            arguments: TheFence.CommandArgumentEnvelope(values: [
+                "heist": .string("checkout"),
+                "plan": .string("""
+                HeistPlan("shop") {
+                    HeistDef<Void>("checkout") {
+                        Activate(.label("Checkout"))
+                            .expect(.present(.label("Done")), timeout: .seconds(1))
+                    }
+
+                    Warn("ready")
+                }
+                """),
+            ])
+        )
+
+        guard case .heistDescription(let description) = response else {
+            return XCTFail("Expected heistDescription response, got \(response)")
+        }
+        XCTAssertEqual(description.name, "checkout")
+        XCTAssertEqual(description.semanticSurface.actionCommands, ["activate"])
         XCTAssertEqual(description.semanticSurface.targetPredicates, [
             #"predicate(label="Checkout")"#,
             #"predicate(label="Done")"#,

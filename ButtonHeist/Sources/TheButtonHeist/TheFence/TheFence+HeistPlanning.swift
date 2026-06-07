@@ -31,7 +31,7 @@ extension TheFence {
             from: arguments,
             commandName: Command.runHeist.rawValue,
             droppingPlanKeys: ["argument"],
-            acceptsCompactPlanSource: true
+            acceptsInlinePlanSource: true
         )
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
@@ -45,7 +45,7 @@ extension TheFence {
                 from: arguments,
                 commandName: Command.listHeists.rawValue,
                 droppingPlanKeys: ["detail"],
-                acceptsCompactPlanSource: false
+                acceptsInlinePlanSource: true
             )
             return ListHeistsRequest(catalog: try plan.heistCatalog(detail: detail))
         } catch let error as HeistCatalogError {
@@ -60,7 +60,7 @@ extension TheFence {
                 from: arguments,
                 commandName: Command.describeHeist.rawValue,
                 droppingPlanKeys: ["heist"],
-                acceptsCompactPlanSource: false
+                acceptsInlinePlanSource: true
             )
             return DescribeHeistRequest(description: try plan.describeHeist(named: requestedName))
         } catch let error as HeistCatalogError {
@@ -112,15 +112,15 @@ private extension TheFence {
         from arguments: CommandArgumentEnvelope,
         commandName: String,
         droppingPlanKeys: Set<String> = [],
-        acceptsCompactPlanSource: Bool
+        acceptsInlinePlanSource: Bool
     ) throws -> HeistPlan {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
 
         let path = try arguments.schemaString("path")
         let plan = try arguments.schemaString("plan")
-        guard acceptsCompactPlanSource || plan == nil else {
+        guard acceptsInlinePlanSource || plan == nil else {
             throw FenceError.invalidRequest(
-                "\(commandName) does not accept compact plan source; use path or structured plan fields"
+                "\(commandName) does not accept inline ButtonHeist source; use path or structured plan fields"
             )
         }
         let hasInlinePlan = arguments.argumentValues.keys.contains { Self.inlinePlanFieldKeys.contains($0) }

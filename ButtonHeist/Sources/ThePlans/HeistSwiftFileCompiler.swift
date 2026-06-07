@@ -23,6 +23,8 @@ struct HeistSwiftFileCompiler: Sendable {
         guard FileManager.default.fileExists(atPath: source.path) else {
             throw HeistSwiftFileCompilerError.sourceFileNotFound(source.path)
         }
+        let sourceText = try String(contentsOf: source, encoding: .utf8)
+        try HeistSwiftSubsetValidator.validate(sourceText, sourceURL: source)
 
         HeistSwiftFileCompilerTrace.write("preparing Swift heist compile")
         let artifacts = try ThePlansBuildArtifacts.resolve(explicitPackageRoot: packageRoot)
@@ -135,10 +137,9 @@ struct HeistSwiftFileCompiler: Sendable {
             .appendingPathComponent("PlanCompiler", isDirectory: true)
         try FileManager.default.createDirectory(at: sourcesURL, withIntermediateDirectories: true)
 
-        let userSource = try String(contentsOf: source, encoding: .utf8)
         let wrapper = """
         \(sourceLocationDirective(for: source))
-        \(userSource)
+        \(try String(contentsOf: source, encoding: .utf8))
 
         #sourceLocation()
         import Foundation
@@ -198,6 +199,7 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
     case buildArtifactsNotFound(searched: [String], hint: String)
     case compileFailed(String, String)
     case executionFailed(String, String)
+    case invalidButtonHeistSubset(String)
     case invalidCompilerOutput(String)
     case runtimeValidationFailed(String)
 
@@ -226,11 +228,199 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
             return "failed to compile Swift heist source \(path): \(diagnostics)"
         case .executionFailed(let path, let diagnostics):
             return "compiled Swift heist source \(path) failed while evaluating entry: \(diagnostics)"
+        case .invalidButtonHeistSubset(let diagnostics):
+            return "Swift heist source contains non-ButtonHeist DSL body syntax: \(diagnostics)"
         case .invalidCompilerOutput(let diagnostics):
             return "compiled Swift heist did not emit valid HeistPlan JSON: \(diagnostics)"
         case .runtimeValidationFailed(let diagnostics):
             return "compiled Swift heist failed runtime validation: \(diagnostics)"
         }
+    }
+}
+
+private enum HeistSwiftSubsetValidator {
+    static func validate(_ source: String, sourceURL: URL) throws {
+        let expressions = heistPlanExpressions(in: source)
+        guard !expressions.isEmpty else { return }
+
+        var diagnostics: [String] = []
+        for expression in expressions {
+            do {
+                _ = try HeistPlanSourceCompiler().compile(
+                    String(source[expression]),
+                    sourceName: "\(sourceURL.lastPathComponent):HeistPlan"
+                )
+            } catch {
+                diagnostics.append(String(describing: error))
+            }
+        }
+        guard diagnostics.isEmpty else {
+            throw HeistSwiftFileCompilerError.invalidButtonHeistSubset(
+                diagnostics.joined(separator: "\n")
+            )
+        }
+    }
+
+    private static func heistPlanExpressions(in source: String) -> [Range<String.Index>] {
+        var ranges: [Range<String.Index>] = []
+        var index = source.startIndex
+        while index < source.endIndex {
+            guard let found = source[index...].range(of: "HeistPlan") else {
+                break
+            }
+            let start = found.lowerBound
+            index = found.upperBound
+            guard isIdentifierBoundary(before: start, in: source),
+                  isIdentifierBoundary(after: found.upperBound, in: source),
+                  !isTypeAnnotationOrReturn(start, in: source),
+                  let afterName = nextNonTriviaIndex(after: found.upperBound, in: source),
+                  source[afterName] == "(" || source[afterName] == "{",
+                  let bodyStart = firstBodyBrace(after: found.upperBound, in: source),
+                  let bodyEnd = matchingBrace(from: bodyStart, in: source) else {
+                continue
+            }
+            ranges.append(start..<source.index(after: bodyEnd))
+            index = source.index(after: bodyEnd)
+        }
+        return ranges
+    }
+
+    private static func isIdentifierBoundary(before index: String.Index, in source: String) -> Bool {
+        guard index > source.startIndex else { return true }
+        return !isIdentifierPart(source[source.index(before: index)])
+    }
+
+    private static func isIdentifierBoundary(after index: String.Index, in source: String) -> Bool {
+        guard index < source.endIndex else { return true }
+        return !isIdentifierPart(source[index])
+    }
+
+    private static func isIdentifierPart(_ character: Character) -> Bool {
+        character == "_" || character.isLetter || character.isNumber
+    }
+
+    private static func isTypeAnnotationOrReturn(_ index: String.Index, in source: String) -> Bool {
+        guard let previous = previousNonTriviaIndex(before: index, in: source) else {
+            return false
+        }
+        return source[previous] == ":" || source[previous] == ">"
+    }
+
+    private static func firstBodyBrace(after index: String.Index, in source: String) -> String.Index? {
+        var cursor = index
+        while cursor < source.endIndex {
+            cursor = skipTrivia(from: cursor, in: source)
+            guard cursor < source.endIndex else { return nil }
+            let character = source[cursor]
+            if character == "{" { return cursor }
+            if character == "\"" {
+                cursor = indexAfterString(startingAt: cursor, in: source) ?? source.endIndex
+            } else if character == "(" {
+                cursor = indexAfterBalanced(open: "(", close: ")", startingAt: cursor, in: source) ?? source.endIndex
+            } else {
+                cursor = source.index(after: cursor)
+            }
+        }
+        return nil
+    }
+
+    private static func matchingBrace(from open: String.Index, in source: String) -> String.Index? {
+        indexAfterBalanced(open: "{", close: "}", startingAt: open, in: source).map { source.index(before: $0) }
+    }
+
+    private static func indexAfterBalanced(
+        open: Character,
+        close: Character,
+        startingAt start: String.Index,
+        in source: String
+    ) -> String.Index? {
+        var depth = 0
+        var cursor = start
+        while cursor < source.endIndex {
+            cursor = skipTrivia(from: cursor, in: source)
+            guard cursor < source.endIndex else { return nil }
+            let character = source[cursor]
+            if character == "\"" {
+                guard let next = indexAfterString(startingAt: cursor, in: source) else { return nil }
+                cursor = next
+                continue
+            }
+            if character == open {
+                depth += 1
+            } else if character == close {
+                depth -= 1
+                if depth == 0 {
+                    return source.index(after: cursor)
+                }
+            }
+            cursor = source.index(after: cursor)
+        }
+        return nil
+    }
+
+    private static func nextNonTriviaIndex(after index: String.Index, in source: String) -> String.Index? {
+        let cursor = skipTrivia(from: index, in: source)
+        return cursor < source.endIndex ? cursor : nil
+    }
+
+    private static func previousNonTriviaIndex(before index: String.Index, in source: String) -> String.Index? {
+        var cursor = index
+        while cursor > source.startIndex {
+            cursor = source.index(before: cursor)
+            if !source[cursor].isWhitespace {
+                return cursor
+            }
+        }
+        return nil
+    }
+
+    private static func skipTrivia(from index: String.Index, in source: String) -> String.Index {
+        var cursor = index
+        while cursor < source.endIndex {
+            if source[cursor].isWhitespace {
+                cursor = source.index(after: cursor)
+                continue
+            }
+            let next = source.index(after: cursor)
+            if source[cursor] == "/", next < source.endIndex, source[next] == "/" {
+                cursor = next
+                while cursor < source.endIndex, source[cursor] != "\n" {
+                    cursor = source.index(after: cursor)
+                }
+                continue
+            }
+            if source[cursor] == "/", next < source.endIndex, source[next] == "*" {
+                cursor = source.index(after: next)
+                while cursor < source.endIndex {
+                    let after = source.index(after: cursor)
+                    if source[cursor] == "*", after < source.endIndex, source[after] == "/" {
+                        cursor = source.index(after: after)
+                        break
+                    }
+                    cursor = after
+                }
+                continue
+            }
+            return cursor
+        }
+        return cursor
+    }
+
+    private static func indexAfterString(startingAt start: String.Index, in source: String) -> String.Index? {
+        var cursor = source.index(after: start)
+        while cursor < source.endIndex {
+            if source[cursor] == "\\" {
+                cursor = source.index(after: cursor)
+                guard cursor < source.endIndex else { return nil }
+                cursor = source.index(after: cursor)
+                continue
+            }
+            if source[cursor] == "\"" {
+                return source.index(after: cursor)
+            }
+            cursor = source.index(after: cursor)
+        }
+        return nil
     }
 }
 

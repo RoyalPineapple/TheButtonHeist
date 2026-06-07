@@ -24,7 +24,19 @@ Use direct gesture tools such as `swipe`, `drag`, and `one_finger_tap` only when
 
 For `element_disappeared`, the predicate means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
 
-**Composing**: `run_heist` for typed multi-step plans in a single call. Attach an action `expectation` step for inline verification.
+**Composing**: `run_heist` for typed multi-step plans in a single call. Prefer the `plan` field with canonical ButtonHeist source when authoring compact heists as an agent:
+
+```swift
+HeistPlan {
+    Activate(.label("Pay"))
+        .expect(.changed(.screen()))
+
+    TypeText("milk", into: .label("Search"))
+        .expect(.present(.element(label: "Search", value: "milk")))
+}
+```
+
+The `plan` string is ButtonHeist source, not arbitrary Swift. It accepts the canonical DSL constructs rendered by Button Heist and rejects imports, variables, functions, native Swift control flow, interpolation, custom calls, body-local `try`, `await`, and unbounded loops. JSON plan IR is internal/generated; use source for compact authoring unless you are passing a generated `.heist` artifact path.
 
 ## Trace Semantics
 

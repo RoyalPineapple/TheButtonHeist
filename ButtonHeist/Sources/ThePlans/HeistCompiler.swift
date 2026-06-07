@@ -279,6 +279,11 @@ private extension HeistCompiler {
                 "Compiled Swift heist source\(entrySuffix) failed while evaluating the entry: \(bounded(output))",
                 source: source
             )]
+        case .invalidButtonHeistSubset(let output):
+            return [diagnostic(
+                "Swift may wrap the heist, but the selected HeistPlan body must be pure ButtonHeist DSL: \(bounded(output))",
+                source: source
+            )]
         case .invalidCompilerOutput(let output):
             return [diagnostic(
                 "Compiled Swift heist source\(entrySuffix) did not emit valid HeistPlan JSON: \(bounded(output))",

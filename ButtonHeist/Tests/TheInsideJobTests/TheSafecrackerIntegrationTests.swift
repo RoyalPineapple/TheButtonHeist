@@ -49,7 +49,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
         let result = await safecracker.longPress(
             at: screenPoint,
-            duration: try GestureDuration(seconds: 0.1)
+            duration: GestureDuration(seconds: 0.1)
         )
         XCTAssertTrue(result)
     }
@@ -61,7 +61,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let result = await safecracker.swipe(
             from: start,
             to: end,
-            duration: try GestureDuration(seconds: 0.1)
+            duration: GestureDuration(seconds: 0.1)
         )
         XCTAssertTrue(result)
     }
@@ -73,7 +73,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let result = await safecracker.drag(
             from: start,
             to: end,
-            duration: try GestureDuration(seconds: 0.1)
+            duration: GestureDuration(seconds: 0.1)
         )
         XCTAssertTrue(result)
     }

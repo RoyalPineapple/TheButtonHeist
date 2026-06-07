@@ -635,11 +635,11 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
     }
 
     let heist = try HeistPlan {
-        try ForEach(["Milk", "Bread"]) { item in
+        ForEach(["Milk", "Bread"]) { item in
             try LibraryScreen.addToCart(item)
         }
 
-        try ForEach(.matching(.label("Delete")), limit: 20) { target in
+        ForEach(.matching(.label("Delete")), limit: 20) { target in
             try CartScreen.deleteItem(target)
         }
     }
@@ -672,7 +672,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
 @Test
 func stringForEachBuildsRuntimeStringLoop() throws {
     let heist = try HeistPlan {
-        try ForEach(["Milk", "Eggs"]) { item in
+        ForEach(["Milk", "Eggs"]) { item in
             TypeText(item, into: .label("Add item"))
                 .expect(.present(.label(item)), timeout: .seconds(2))
         }
@@ -713,7 +713,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
         )),
     ])
     #expect(try heist.canonicalSwiftDSL() == """
-    try HeistPlan("Search", parameter: "query") { query in
+    HeistPlan("Search", parameter: "query") { query in
         TypeText(query, into: .label("Search"))
             .expect(.present(.value(query)), timeout: .seconds(2))
     }
@@ -724,7 +724,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
 func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     let matching = ElementPredicate.label("Delete")
     let heist = try HeistPlan {
-        try ForEach(.matching(matching), limit: 20) { element in
+        ForEach(.matching(matching), limit: 20) { element in
             Activate(element)
                 .expect(.absent(element), timeout: .seconds(2))
         }
@@ -754,7 +754,7 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
     let heist = try HeistPlan {
         try loginFlow(email: "alex@example.com", password: "secret")
 
-        try ForEach(["Milk", "Eggs"]) { item in
+        ForEach(["Milk", "Eggs"]) { item in
             TypeText(item, into: .label("Add item"))
                 .expect(.present(.label(item)), timeout: .seconds(2))
         }

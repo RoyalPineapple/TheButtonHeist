@@ -134,7 +134,7 @@ struct HeistPlanSourceLexer {
                     throw error("unterminated string escape")
                 }
                 if escaped == "(" {
-                    throw error("string interpolation is not supported in compact plan source")
+                    throw error("string interpolation is not supported in ButtonHeist source")
                 }
                 switch escaped {
                 case "\"": text.append("\"")
@@ -143,6 +143,8 @@ struct HeistPlanSourceLexer {
                 case "r": text.append("\r")
                 case "t": text.append("\t")
                 case "0": text.append("\0")
+                case "u":
+                    text.append(try lexUnicodeEscape())
                 default:
                     throw error("unsupported string escape '\\\(escaped)'")
                 }
@@ -169,6 +171,22 @@ struct HeistPlanSourceLexer {
         } else {
             column += 1
         }
+    }
+
+    private mutating func lexUnicodeEscape() throws -> Character {
+        advance()
+        var scalar = 0
+        for _ in 0..<4 {
+            guard let character = current, let value = character.hexDigitValue else {
+                throw error("unsupported unicode escape; expected four hexadecimal digits after \\u")
+            }
+            scalar = scalar * 16 + value
+            advance()
+        }
+        guard let unicodeScalar = UnicodeScalar(scalar) else {
+            throw error("invalid unicode escape scalar")
+        }
+        return Character(unicodeScalar)
     }
 
     private func token(_ kind: HeistPlanSourceTokenKind, length: Int) -> HeistPlanSourceToken {
@@ -207,7 +225,7 @@ enum HeistPlanSourceTokenKind: Equatable, CustomStringConvertible {
     case symbol(Character)
     case eof
 
-    static let symbolCharacters: Set<Character> = ["(", ")", "{", "}", "[", "]", ",", ":", ".", ";", "="]
+    static let symbolCharacters: Set<Character> = ["(", ")", "{", "}", "[", "]", ",", ":", ".", ";", "=", "!", "<", ">", "-"]
 
     var description: String {
         switch self {
@@ -239,5 +257,19 @@ private extension Character {
 
     var isPlanSourceIdentifierPart: Bool {
         isPlanSourceIdentifierStart || isNumber
+    }
+
+    var hexDigitValue: Int? {
+        guard let scalar = unicodeScalars.first, unicodeScalars.count == 1 else { return nil }
+        switch scalar.value {
+        case 48...57:
+            return Int(scalar.value - 48)
+        case 65...70:
+            return Int(scalar.value - 55)
+        case 97...102:
+            return Int(scalar.value - 87)
+        default:
+            return nil
+        }
     }
 }

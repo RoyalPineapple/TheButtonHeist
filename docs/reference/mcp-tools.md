@@ -8,7 +8,7 @@ _Generated from `TheFence.Command.descriptors`._
 |------|--------|-------------|
 | `activate` | `semanticAction` | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
 | `connect` | `session` | Establish or switch the active connection to a Button Heist app. |
-| `describe_heist` | `heistRuntime` | Describe one root entry or reusable heist from a runtime-validated plan. The `heist` parameter selects the entry/capability name; the plan is supplied as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded from a `path` to a .heist package artifact. |
+| `describe_heist` | `heistRuntime` | Describe one root entry or reusable heist from a runtime-validated plan. The `heist` parameter selects the entry/capability name; the plan can be supplied as canonical ButtonHeist source via `plan`, as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded from a `path` to a .heist package artifact. |
 | `dismiss_keyboard` | `semanticAction` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `spatialAction` | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
 | `edit_action` | `semanticAction` | Perform an edit action on the current first responder. |
@@ -17,13 +17,13 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_screen` | `observation` | Capture a PNG screenshot with optional inline data and interface state. |
 | `get_session_state` | `session` | Inspect connection, device, and last-action session state. |
 | `list_devices` | `session` | List discovered iOS devices and configured connection targets. |
-| `list_heists` | `heistRuntime` | List a summary menu of the root entry and named reusable heists derived from one runtime-validated plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan is supplied as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded from a `path` to a .heist package artifact. |
+| `list_heists` | `heistRuntime` | List a summary menu of the root entry and named reusable heists derived from one runtime-validated plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan can be supplied as canonical ButtonHeist source via `plan`, as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded from a `path` to a .heist package artifact. |
 | `list_targets` | `session` | List configured connection targets and the default target. |
 | `long_press` | `spatialAction` | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
 | `one_finger_tap` | `spatialAction` | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
 | `ping` | `session` | Check connection health without reading accessibility state. |
 | `rotor` | `semanticAction` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
-| `run_heist` | `heistRuntime` | Execute a typed heist plan, supplied as compact plan source via `plan`, as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: path, plan, or structured plan fields. Use `argument` when the root heist declares a string or element_target parameter. |
+| `run_heist` | `heistRuntime` | Execute a typed heist plan, supplied as canonical ButtonHeist source via `plan`, as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: path, plan, or structured plan fields. Use `argument` when the root heist declares a string or element_target parameter. |
 | `scroll` | `viewportDebug` | Explicit viewport/debug operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
 | `scroll_to_edge` | `viewportDebug` | Explicit viewport/debug operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
 | `scroll_to_visible` | `viewportDebug` | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
@@ -67,7 +67,7 @@ Parameters:
 
 ### `describe_heist`
 
-Describe one root entry or reusable heist from a runtime-validated plan. The `heist` parameter selects the entry/capability name; the plan is supplied as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded from a `path` to a .heist package artifact.
+Describe one root entry or reusable heist from a runtime-validated plan. The `heist` parameter selects the entry/capability name; the plan can be supplied as canonical ButtonHeist source via `plan`, as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded from a `path` to a .heist package artifact.
 
 - Family: `heistRuntime`
 
@@ -77,6 +77,7 @@ Parameters:
 |-----------|------|----------|---------|--------|
 | `heist` | `string` | yes | - | - |
 | `path` | `string` | no | - | - |
+| `plan` | `string` | no | - | - |
 | `version` | `integer` | no | - | - |
 | `name` | `string` | no | - | - |
 | `parameter` | `object` | no | - | - |
@@ -192,7 +193,7 @@ _None._
 
 ### `list_heists`
 
-List a summary menu of the root entry and named reusable heists derived from one runtime-validated plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan is supplied as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded from a `path` to a .heist package artifact.
+List a summary menu of the root entry and named reusable heists derived from one runtime-validated plan. Set `detail` to `detailed` to include derived command names, nested heist calls, counts, and safe semantic surface summaries. The plan can be supplied as canonical ButtonHeist source via `plan`, as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded from a `path` to a .heist package artifact.
 
 - Family: `heistRuntime`
 
@@ -202,6 +203,7 @@ Parameters:
 |-----------|------|----------|---------|--------|
 | `detail` | `string` | no | `"summary"` | `summary`, `detailed` |
 | `path` | `string` | no | - | - |
+| `plan` | `string` | no | - | - |
 | `version` | `integer` | no | - | - |
 | `name` | `string` | no | - | - |
 | `parameter` | `object` | no | - | - |
@@ -278,7 +280,7 @@ Parameters:
 
 ### `run_heist`
 
-Execute a typed heist plan, supplied as compact plan source via `plan`, as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: path, plan, or structured plan fields. Use `argument` when the root heist declares a string or element_target parameter.
+Execute a typed heist plan, supplied as canonical ButtonHeist source via `plan`, as structured HeistPlan fields (version, name, parameter, definitions, body), or loaded by the fence from a `path` to a .heist package artifact. Provide exactly one source: path, plan, or structured plan fields. Use `argument` when the root heist declares a string or element_target parameter.
 
 - Family: `heistRuntime`
 

@@ -2,9 +2,9 @@ import Testing
 import ThePlans
 
 @Test func `inline plan source simple Activate compiles to HeistPlan`() throws {
-    let plan = try HeistPlanSourceCompiler().compile("""
+    let plan = try HeistPlanSourceCompiler().compile(root("""
     Activate(.label("Pay"))
-    """)
+    """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
     ])
@@ -13,13 +13,13 @@ import ThePlans
 }
 
 @Test func `inline plan source chained expectation compiles`() throws {
-    let plan = try HeistPlanSourceCompiler().compile("""
-    Activate(.label("Pay")).expect(.screenChanged)
-    """)
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    Activate(.label("Pay")).expect(.changed(.screen()))
+    """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .screenChanged, timeout: 0)
+            expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
         )),
     ])
 
@@ -27,11 +27,11 @@ import ThePlans
 }
 
 @Test func `inline plan source ForEach string compiles`() throws {
-    let plan = try HeistPlanSourceCompiler().compile("""
+    let plan = try HeistPlanSourceCompiler().compile(root("""
     ForEach(["a", "b"]) { item in
         Activate(.label(item)).expect(.present(.label(item)))
     }
-    """)
+    """))
     let expected = try HeistPlan(body: [
         .forEachString(try ForEachStringStep(
             values: ["a", "b"],
@@ -49,12 +49,14 @@ import ThePlans
 }
 
 @Test func `inline plan source WaitFor and If compile`() throws {
-    let plan = try HeistPlanSourceCompiler().compile("""
+    let plan = try HeistPlanSourceCompiler().compile(root("""
     WaitFor(.present(.label("Home")), timeout: .seconds(1))
-    If(.present(.label("Pay"))) {
-        Warn("ready")
+    If {
+        Case(.present(.label("Pay"))) {
+            Warn("ready")
+        }
     }
-    """)
+    """))
     let expected = try HeistPlan(body: [
         .wait(WaitStep(predicate: .state(.present(.label("Home"))), timeout: 1)),
         .conditional(try ConditionalStep(cases: [
@@ -66,11 +68,11 @@ import ThePlans
 }
 
 @Test func `inline plan source ForEach matching compiles`() throws {
-    let plan = try HeistPlanSourceCompiler().compile("""
+    let plan = try HeistPlanSourceCompiler().compile(root("""
     ForEach(.matching(.label("Row")), limit: 2) { target in
         Activate(target).expect(.absent(target))
     }
-    """)
+    """))
     let expected = try HeistPlan(body: [
         .forEachElement(try ForEachElementStep(
             matching: .label("Row"),
@@ -90,9 +92,9 @@ import ThePlans
 
 @Test func `inline plan source RunHeist syntax validates through normal runtime pipeline`() throws {
     #expect(throws: HeistPlanSourceCompilerError.self) {
-        _ = try HeistPlanSourceCompiler().compile("""
+        _ = try HeistPlanSourceCompiler().compile(root("""
         RunHeist("CartScreen.checkout")
-        """)
+        """))
     }
 }
 
@@ -101,12 +103,31 @@ import ThePlans
         "let x = 1",
         "FileManager.default",
         "Process()",
-        #"try ForEach(["a"]) { item in Warn("x") }"#,
+        #"await Warn("x")"#,
     ] {
         #expect(throws: HeistPlanSourceCompilerError.self) {
             _ = try HeistPlanSourceCompiler().compile(source)
         }
     }
+}
+
+@Test func `canonical ForEach string compiles without body try`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    ForEach(["a"]) { item in
+        TypeText(item)
+    }
+    """))
+    let expected = try HeistPlan(body: [
+        .forEachString(try ForEachStringStep(
+            values: ["a"],
+            parameter: "item",
+            body: [
+                .action(try ActionStep(command: .typeText(text: .ref("item"), target: nil))),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
 }
 
 @Test func `inline plan source import Foundation is rejected`() throws {
@@ -136,4 +157,280 @@ import ThePlans
         }
         """)
     }
+}
+
+@Test func `canonical semantic actions round trip through source compiler`() throws {
+    try assertCanonicalRoundTrip(try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Pay"))),
+            expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+        )),
+        .action(try ActionStep(
+            command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
+            expectation: WaitStep(predicate: .present(.value("milk")), timeout: 2)
+        )),
+        .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+        .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"))))),
+        .action(try ActionStep(command: .customAction(name: "Archive", target: .predicate(.label("Message"))))),
+        .action(try ActionStep(command: .rotor(
+            selection: .named("Headings"),
+            target: .predicate(.label("Article")),
+            direction: .previous
+        ))),
+        .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
+        .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
+        .action(try ActionStep(command: .dismissKeyboard)),
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Maybe Later"))),
+            expectationWaiver: "intentionally optional"
+        )),
+        .action(try ActionStep(command: .activate(.predicate(.label("Pay"), ordinal: 0)))),
+        .action(try ActionStep(command: .activate(.predicate(.element(
+            label: "Delete",
+            traits: [.button],
+            excludeTraits: [.header]
+        ))))),
+    ]))
+}
+
+@Test func `canonical mechanical actions round trip through source compiler`() throws {
+    try assertCanonicalRoundTrip(try HeistPlan(body: [
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(
+            selection: .coordinate(ScreenPoint(x: 12, y: 34))
+        )))),
+        .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            selection: .coordinate(ScreenPoint(x: 20, y: 40)),
+            duration: GestureDuration(seconds: 1)
+        )))),
+        .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(
+            .label("Carousel"),
+            start: UnitPoint(x: 0.8, y: 0.5),
+            end: UnitPoint(x: 0.2, y: 0.5)
+        ))))),
+        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            selection: .pointToPoint(start: ScreenPoint(x: 10, y: 10), end: ScreenPoint(x: 100, y: 100))
+        )))),
+    ]))
+}
+
+@Test func `canonical control flow and loops round trip through source compiler`() throws {
+    try assertCanonicalRoundTrip(try HeistPlan(body: [
+        .conditional(try ConditionalStep(
+            cases: [
+                PredicateCase(predicate: .present(.label("Pay")), body: [
+                    .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+                ]),
+            ],
+            elseBody: [.fail(FailStep(message: "Pay button missing"))]
+        )),
+        .waitForCases(try WaitForCasesStep(
+            timeout: 3,
+            cases: [
+                PredicateCase(predicate: .changed(.screen()), body: [.warn(WarnStep(message: "screen changed"))]),
+            ],
+            elseBody: [.fail(FailStep(message: "screen did not change"))]
+        )),
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "itemName",
+            body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("itemName"),
+                    target: .predicate(.label("Add item"))
+                ))),
+            ]
+        )),
+        .forEachElement(try ForEachElementStep(
+            matching: .element(label: "Delete", traits: [.button]),
+            limit: 2,
+            parameter: "rowTarget",
+            body: [
+                .action(try ActionStep(
+                    command: .activate(.ref("rowTarget")),
+                    expectation: WaitStep(predicate: .absent(.ref("rowTarget")), timeout: 2)
+                )),
+            ]
+        )),
+    ]))
+}
+
+@Test func `canonical definitions and root parameters round trip through source compiler`() throws {
+    let tapDefinition = try HeistPlan(
+        name: "tap",
+        body: [.action(try ActionStep(command: .activate(.predicate(.label("Add to Cart")))))]
+    )
+    let addButtonNamespace = try HeistPlan(name: "AddButton", definitions: [tapDefinition], body: [])
+    let addToCart = try HeistPlan(
+        name: "addToCart",
+        parameter: .string(name: "item"),
+        definitions: [addButtonNamespace],
+        body: [
+            .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+            .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
+        ]
+    )
+    let library = try HeistPlan(name: "LibraryScreen", definitions: [addToCart], body: [])
+    let plan = try HeistPlan(
+        name: "purchaseFlow",
+        definitions: [library],
+        body: [
+            .invoke(HeistInvocationStep(
+                path: ["LibraryScreen", "addToCart"],
+                argument: .string(.literal("Milk"))
+            )),
+        ]
+    )
+
+    try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `reported agent target grammar gaps parse`() throws {
+    let ordinal = try HeistPlanSourceCompiler().compile(root(#"Activate(.target(.label("Pay"), ordinal: 0))"#))
+    #expect(ordinal.body == [
+        .action(try ActionStep(command: .activate(.predicate(.label("Pay"), ordinal: 0)))),
+    ])
+
+    let traits = try HeistPlanSourceCompiler().compile(root(#"Activate(.element(label: "Pay", traits: [.button]))"#))
+    #expect(traits.body == [
+        .action(try ActionStep(command: .activate(.predicate(.element(label: "Pay", traits: [.button]))))),
+    ])
+
+    let typeText = try HeistPlanSourceCompiler().compile(root(#"TypeText("milk", into: .label("Search"))"#))
+    #expect(typeText.body == [
+        .action(try ActionStep(command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))))),
+    ])
+
+    let waived = try HeistPlanSourceCompiler().compile(root(#"Activate(.label("Pay")).withoutExpectation("reason")"#))
+    #expect(waived.body == [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Pay"))),
+            expectationWaiver: "reason"
+        )),
+    ])
+}
+
+@Test func `reported agent grammar mistakes fail with corrections`() throws {
+    let stringTraits = compileError(root(#"Activate(.element(label: "Pay", traits: ["button"]))"#))
+    expect(stringTraits, contains: "traits must use enum-style syntax like [.button]")
+
+    let actionOrdinal = compileError(root(#"Activate(.label("Pay"), ordinal: 0)"#))
+    expect(
+        actionOrdinal,
+        contains: #"Ordinal belongs to the target. Use Activate(.target(.label("Pay"), ordinal: 0))."#
+    )
+
+    let nativeIf = compileError(root("""
+    if true {
+        Activate(.label("Pay"))
+    } else {
+        Fail("missing")
+    }
+    """))
+    expect(nativeIf, contains: "native Swift if/else is not supported")
+    expect(nativeIf, contains: "If { Case(...) { ... } Else { ... } }")
+
+    let shorthandIf = compileError(root("""
+    If(.present(.label("Pay"))) {
+        Activate(.label("Pay"))
+    }
+    """))
+    expect(shorthandIf, contains: "If(predicate) is not canonical ButtonHeist source")
+    expect(shorthandIf, contains: "If { Case(...) { ... } Else { ... } }")
+
+    let unknownAction = compileError(root(#"Tap(.label("Pay"))"#))
+    expect(unknownAction, contains: "unsupported ButtonHeist source statement 'Tap'")
+
+    let wrongRunHeistArgument = compileError("""
+    HeistPlan {
+        HeistDef<String>("addItem", parameter: "item") { item in
+            Activate(.label(item))
+        }
+
+        RunHeist("addItem", .label("Milk"))
+    }
+    """)
+    expect(wrongRunHeistArgument, contains: "heist run argument type must match the target parameter")
+
+    let bodyTry = compileError(root("""
+    try ForEach(["Milk"]) { item in
+        Activate(.label(item))
+    }
+    """))
+    expect(bodyTry, contains: "`try` is only allowed in Swift wrapper code")
+
+    let caseAfterElse = compileError(root("""
+    If {
+        Else {
+            Warn("fallback")
+        }
+        Case(.present(.label("Pay"))) {
+            Activate(.label("Pay"))
+        }
+    }
+    """))
+    expect(caseAfterElse, contains: "Case must appear before Else")
+
+    let predicateAlias = compileError(root(#"Activate(.label("Pay")).expect(.screenChanged)"#))
+    expect(predicateAlias, contains: "unsupported accessibility predicate '.screenChanged'")
+
+    let changeAlias = compileError(root(#"Activate(.label("Pay")).expect(.changed(.screenChanged))"#))
+    expect(changeAlias, contains: "unsupported change predicate '.screenChanged'")
+}
+
+@Test func `element actions share the same target grammar`() throws {
+    let source = """
+    HeistPlan("TargetGrammar", targetParameter: "targetRef") { targetRef in
+        Activate(.label("Pay"))
+        Activate(.target(.label("Pay"), ordinal: 0))
+        Activate(targetRef)
+        Increment(.identifier("quantity"))
+        Increment(.target(.identifier("quantity"), ordinal: 0))
+        Increment(targetRef)
+        Decrement(.value("5"))
+        Decrement(.target(.value("5"), ordinal: 0))
+        Decrement(targetRef)
+        TypeText("milk", into: .element(label: "Search", traits: [.searchField]))
+        TypeText("milk", into: .target(.label("Search"), ordinal: 0))
+        TypeText("milk", into: targetRef)
+        CustomAction("Archive", on: .label("Message"))
+        CustomAction("Archive", on: .target(.label("Message"), ordinal: 0))
+        CustomAction("Archive", on: targetRef)
+        Rotor("Headings", on: .label("Article"))
+        Rotor("Headings", on: .target(.label("Article"), ordinal: 0))
+        Rotor("Headings", on: targetRef)
+    }
+    """
+
+    _ = try HeistPlanSourceCompiler().compile(source)
+}
+
+private func assertCanonicalRoundTrip(_ plan: HeistPlan) throws {
+    let source = try plan.canonicalSwiftDSL()
+    let compiled = try HeistPlanSourceCompiler().compile(source)
+    #expect(compiled == plan, "Rendered source did not compile back to the same plan:\n\(source)")
+}
+
+private func compileError(_ source: String) -> String {
+    do {
+        _ = try HeistPlanSourceCompiler().compile(source)
+        Issue.record("Expected source to fail: \(source)")
+        return ""
+    } catch {
+        return String(describing: error)
+    }
+}
+
+private func root(_ body: String) -> String {
+    """
+    HeistPlan {
+    \(body)
+    }
+    """
+}
+
+private func expect(_ string: String, contains substring: String) {
+    if !string.contains(substring) {
+        Issue.record("Expected error to contain '\(substring)', got: \(string)")
+    }
+    #expect(string.contains(substring))
 }
