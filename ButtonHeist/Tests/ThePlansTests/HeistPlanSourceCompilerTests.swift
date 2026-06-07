@@ -26,6 +26,62 @@ import ThePlans
     #expect(plan == expected)
 }
 
+@Test func `runtime authored product DSL compiles through canonical parser`() throws {
+    let source = """
+    HeistPlan("checkout") {
+        HeistDef<String>("Cart.addItem", parameter: "item") { item in
+            Activate(.label(item))
+        }
+
+        Activate(.label("Pay")).expect(.screenChanged)
+
+        WaitFor(.exists(.label("Receipt")), timeout: .seconds(5)) {
+            Warn("Receipt appeared")
+        }.else {
+            Fail("Receipt did not appear")
+        }
+
+        ForEach(["Milk", "Bread"]) { item in
+            RunHeist("Cart.addItem", item)
+        }
+    }
+    """
+
+    let plan = try HeistPlanSourceCompiler().compile(source)
+
+    #expect(plan.name == "checkout")
+    #expect(plan.definitions.first?.name == "Cart")
+    #expect(plan.definitions.first?.definitions.first?.name == "addItem")
+    #expect(plan.body == [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Pay"))),
+            expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+        )),
+        .waitForCases(try WaitForCasesStep(
+            timeout: 5,
+            cases: [
+                PredicateCase(
+                    predicate: .present(.label("Receipt")),
+                    body: [.warn(WarnStep(message: "Receipt appeared"))]
+                ),
+            ],
+            elseBody: [.fail(FailStep(message: "Receipt did not appear"))]
+        )),
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Bread"],
+            parameter: "item",
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["Cart", "addItem"],
+                    argument: .string(.ref("item"))
+                )),
+            ]
+        )),
+    ])
+
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `inline plan source ForEach string compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     ForEach(["a", "b"]) { item in
@@ -307,6 +363,19 @@ import ThePlans
             expectationWaiver: "reason"
         )),
     ])
+
+    let screenChanged = try HeistPlanSourceCompiler().compile(root(#"Activate(.label("Pay")).expect(.screenChanged)"#))
+    #expect(screenChanged.body == [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Pay"))),
+            expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+        )),
+    ])
+
+    let exists = try HeistPlanSourceCompiler().compile(root(#"WaitFor(.exists(.label("Receipt")))"#))
+    #expect(exists.body == [
+        .wait(WaitStep(predicate: .present(.label("Receipt")), timeout: 0)),
+    ])
 }
 
 @Test func `reported agent grammar mistakes fail with corrections`() throws {
@@ -369,12 +438,103 @@ import ThePlans
     }
     """))
     expect(caseAfterElse, contains: "Case must appear before Else")
-
-    let predicateAlias = compileError(root(#"Activate(.label("Pay")).expect(.screenChanged)"#))
-    expect(predicateAlias, contains: "unsupported accessibility predicate '.screenChanged'")
-
     let changeAlias = compileError(root(#"Activate(.label("Pay")).expect(.changed(.screenChanged))"#))
     expect(changeAlias, contains: "unsupported change predicate '.screenChanged'")
+}
+
+@Test func `runtime parser rejects arbitrary Swift and bypass shapes`() throws {
+    let cases: [(String, String)] = [
+        (
+            """
+            import Foundation
+            HeistPlan {
+                Warn("x")
+            }
+            """,
+            "import declarations are not supported"
+        ),
+        (
+            root("""
+            let items = ["Milk", "Bread"]
+            Warn("x")
+            """),
+            "let declarations are not supported"
+        ),
+        (
+            root("""
+            var item = "Milk"
+            Warn("x")
+            """),
+            "var declarations are not supported"
+        ),
+        (
+            root("""
+            func helper() {
+                Warn("x")
+            }
+            """),
+            "function declarations are not supported"
+        ),
+        (
+            root("""
+            if Bool.random() {
+                Warn("x")
+            }
+            """),
+            "native Swift if/else is not supported"
+        ),
+        (
+            root("""
+            for item in ["Milk"] {
+                Warn("x")
+            }
+            """),
+            "native Swift for statements are not supported"
+        ),
+        (
+            root("""
+            switch "x" {
+            default:
+                Warn("x")
+            }
+            """),
+            "native Swift switch statements are not supported"
+        ),
+        (
+            root("""
+            struct Helper {}
+            """),
+            "type declarations are not supported"
+        ),
+        (
+            root("""
+            .init("Bypass") {
+                Warn("x")
+            }
+            """),
+            "expected an identifier"
+        ),
+        (
+            """
+            HeistPlan(body: [
+                .warn(WarnStep(message: "raw"))
+            ])
+            """,
+            "expected a string literal"
+        ),
+        (
+            root(#"Activate(.label(helper()))"#),
+            "arbitrary calls are not supported"
+        ),
+        (
+            root(#"try RunHeist("Cart.addItem")"#),
+            "`try` is only allowed in Swift wrapper code"
+        ),
+    ]
+
+    for (source, expectedDiagnostic) in cases {
+        expect(compileError(source), contains: expectedDiagnostic)
+    }
 }
 
 @Test func `element actions share the same target grammar`() throws {

@@ -652,6 +652,17 @@ struct HeistPlanSourceParser {
         let predicate = try parseAccessibilityPredicateExpr()
         let timeout = try parseTrailingTimeout(defaultValue: 0) ?? 0
         try expectSymbol(")")
+        if currentToken.isSymbol("{") {
+            let body = try parseHeistBlock()
+            let elseBody = try parseLowercaseElseChainIfPresent()
+            return .waitForCases(try WaitForCasesStep(
+                timeout: timeout,
+                cases: [
+                    PredicateCase(predicate: predicate, body: body),
+                ],
+                elseBody: elseBody
+            ))
+        }
         return .wait(WaitStep(predicate: predicate, timeout: timeout))
     }
 
@@ -781,6 +792,16 @@ struct HeistPlanSourceParser {
         return body.steps
     }
 
+    private mutating func parseLowercaseElseChainIfPresent() throws -> [HeistStep]? {
+        guard consumeSymbol(".") else { return nil }
+        let token = currentToken
+        let chain = try parseIdentifier()
+        guard chain == "else" else {
+            throw error(token, "unsupported WaitFor chain '.\(chain)'")
+        }
+        return try parseHeistBlock()
+    }
+
     private mutating func parseClosureParameterBlock(
         binding: HeistPlanSourceBinding
     ) throws -> (referenceName: String, body: [HeistStep]) {
@@ -820,8 +841,13 @@ struct HeistPlanSourceParser {
             let change = try parseChangePredicateExpr()
             try expectSymbol(")")
             return .changed(change)
-        case "present":
-            return .state(try parsePresentAbsentState(name: name))
+        case "screenChanged":
+            if consumeSymbol("(") {
+                try expectSymbol(")")
+            }
+            return .changed(.screen())
+        case "present", "exists":
+            return .state(try parsePresentAbsentState(name: name == "exists" ? "present" : name))
         case "absent":
             return .state(try parsePresentAbsentState(name: name))
         case "all":
@@ -874,8 +900,8 @@ struct HeistPlanSourceParser {
             allowedPrefixes: ["AccessibilityPredicate.State", "StatePredicateExpr"]
         )
         switch name {
-        case "present", "absent":
-            return try parsePresentAbsentState(name: name)
+        case "present", "exists", "absent":
+            return try parsePresentAbsentState(name: name == "exists" ? "present" : name)
         case "all":
             return try parseAllState()
         default:

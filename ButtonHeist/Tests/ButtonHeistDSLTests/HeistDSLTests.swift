@@ -267,8 +267,10 @@ func waitForBuildsWaitStep() throws {
 @Test
 func singleIfBuildsConditionalStep() throws {
     let heist = try HeistPlan {
-        If(.present(.label("Allow"))) {
-            Activate(.label("Allow"))
+        If {
+            Case(.present(.label("Allow"))) {
+                Activate(.label("Allow"))
+            }
         }
     }
 
@@ -280,6 +282,115 @@ func singleIfBuildsConditionalStep() throws {
             ),
         ])),
     ]))
+}
+
+@Test
+func invalidForEachInsideHeistDefFailsPlanBuild() {
+    expectBuildFailure(contains: "ForEach string loop is invalid") {
+        _ = try HeistPlan {
+            HeistDef<Void>("Broken") {
+                ForEach(["Milk"], parameter: "bad name") { _ in
+                    Warn("never")
+                }
+
+                Warn("valid sibling")
+            }
+
+            Warn("root")
+        }
+    }
+}
+
+@Test
+func invalidForEachInsideIfCaseFailsPlanBuild() {
+    expectBuildFailure(contains: "ForEach string loop is invalid") {
+        _ = try HeistPlan {
+            If {
+                Case(.present(.label("Ready"))) {
+                    ForEach(["Milk"], parameter: "bad name") { _ in
+                        Warn("never")
+                    }
+
+                    Warn("valid sibling")
+                }
+
+                Else {
+                    Warn("fallback")
+                }
+            }
+        }
+    }
+}
+
+@Test
+func invalidForEachInsideWaitForCaseFailsPlanBuild() {
+    expectBuildFailure(contains: "ForEach element loop is invalid") {
+        _ = try HeistPlan {
+            WaitFor(timeout: .seconds(1)) {
+                Case(.present(.label("Ready"))) {
+                    ForEach(.matching(.label("Row")), parameter: "bad name") { target in
+                        Activate(target)
+                    }
+
+                    Warn("valid sibling")
+                }
+
+                Else {
+                    Warn("fallback")
+                }
+            }
+        }
+    }
+}
+
+@Test
+func invalidForEachInsideElseFailsPlanBuild() {
+    expectBuildFailure(contains: "ForEach string loop is invalid") {
+        _ = try HeistPlan {
+            If {
+                Case(.present(.label("Ready"))) {
+                    Warn("ready")
+                }
+
+                Else {
+                    ForEach(["Milk"], parameter: "bad name") { _ in
+                        Warn("never")
+                    }
+
+                    Warn("valid sibling")
+                }
+            }
+        }
+    }
+}
+
+@Test
+func invalidForEachInsideNestedBranchBodyFailsPlanBuild() {
+    expectBuildFailure(contains: "ForEach string loop is invalid") {
+        _ = try HeistPlan {
+            If {
+                Case(.present(.label("Outer"))) {
+                    If {
+                        Case(.present(.label("Inner"))) {
+                            ForEach(["Milk"], parameter: "bad name") { _ in
+                                Warn("never")
+                            }
+
+                            Warn("valid sibling")
+                        }
+
+                        Else {
+                            Warn("nested fallback")
+                        }
+                    }
+                }
+
+                Else {
+                    Warn("outer fallback")
+                }
+            }
+        }
+    }
 }
 
 @Test
@@ -786,6 +897,20 @@ func emptyHeistRejectsPlanUsingDecodedHeistPlanContract() {
         #expect(context.debugDescription == "HeistPlan requires a non-empty body or definitions")
     } catch {
         Issue.record("Expected DecodingError.dataCorrupted, got \(error)")
+    }
+}
+
+private func expectBuildFailure(
+    contains expectedDiagnostic: String,
+    _ operation: () throws -> Void
+) {
+    do {
+        try operation()
+        Issue.record("Expected HeistPlanBuildError")
+    } catch let error as HeistPlanBuildError {
+        #expect(error.description.contains(expectedDiagnostic))
+    } catch {
+        Issue.record("Expected HeistPlanBuildError, got \(error)")
     }
 }
 

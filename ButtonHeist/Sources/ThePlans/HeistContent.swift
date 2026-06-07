@@ -177,26 +177,6 @@ public enum HeistBuilder {
         )
     }
 
-    public static func buildOptional(_ component: (any HeistContent)?) -> some HeistContent {
-        HeistStepList(
-            component?.heistSteps ?? [],
-            definitions: component?.heistDefinitions ?? [],
-            diagnostics: component?.heistBuildDiagnostics ?? []
-        )
-    }
-
-    public static func buildEither(first component: some HeistContent) -> some HeistContent {
-        component
-    }
-
-    public static func buildEither(second component: some HeistContent) -> some HeistContent {
-        component
-    }
-
-    public static func buildLimitedAvailability(_ component: some HeistContent) -> some HeistContent {
-        component
-    }
-
     private static func mergeDefinitions(_ definitions: [HeistPlan]) -> [HeistPlan] {
         var merged: [HeistPlan] = []
         for definition in definitions {
@@ -297,6 +277,9 @@ public struct HeistDef<Input>: Sendable {
     ) -> HeistDefinitionBuildResult {
         do {
             let content = try content()
+            guard content.heistBuildDiagnostics.isEmpty else {
+                return .failure(content.heistBuildDiagnostics.joined(separator: "; "))
+            }
             return .success(makeDefinition(
                 path: path,
                 parameter: parameter,
@@ -494,6 +477,7 @@ public struct ForEach<Content: HeistContent>: HeistContent {
         @HeistBuilder content: (StringExpr) throws -> Content
     ) {
         do {
+            let parameter = try HeistParameterName.normalized(parameter)
             let item = try StringExpr(ref: parameter)
             let content = try content(item)
             let step = try ForEachStringStep(
@@ -518,6 +502,7 @@ public struct ForEach<Content: HeistContent>: HeistContent {
         @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
     ) {
         do {
+            let parameter = try HeistParameterName.normalized(parameter)
             let target = try ElementTargetExpr(ref: parameter)
             let content = try content(target)
             let step = try ForEachElementStep(
