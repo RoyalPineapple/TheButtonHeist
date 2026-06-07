@@ -10,12 +10,13 @@ import AccessibilitySnapshotParser
 
 /// Latest parsed interface and disposable UIKit evidence.
 ///
-/// **Ownership.** Owned by `TheStash` as one field of the current `Screen`.
-/// Ephemeral index, not source of truth: keyed by `TreePath` /
-/// `AccessibilityElement` / `HeistId`, rebuilt wholesale on every parse, and
-/// invalidated by the next parse (last-read-wins). It carries weak UIKit refs
-/// and per-path lookups but is **never** unioned across exploration pages and
-/// must never be treated as stable identity. See `docs/DATA-OWNERSHIP.md`.
+/// **Ownership.** Owned by `TheStash` as latest observed live evidence; carried
+/// by `Screen` only as an observation value. Ephemeral index, not source of
+/// truth: keyed by `TreePath` / `AccessibilityElement` / `HeistId`, rebuilt
+/// wholesale on every parse, and invalidated by the next parse (last-read-wins).
+/// It carries weak UIKit refs and per-path lookups but is **never** unioned
+/// across exploration pages and must never be treated as stable identity. See
+/// `docs/DATA-OWNERSHIP.md`.
 struct LiveCapture: Equatable {
     let hierarchy: [AccessibilityHierarchy]
     let containerNames: [AccessibilityContainer: ContainerName]

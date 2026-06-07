@@ -6,8 +6,9 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
-/// The stash holds settled accessibility truth, disposable live action handles,
-/// and explicit diagnostic settle evidence.
+/// The stash stores values: latest observed accessibility evidence, settled
+/// semantic truth, and failed-settle diagnostic evidence. Observation lifecycle
+/// and promotion to settled truth are owned by `SemanticObservationStream`.
 @MainActor
 final class TheStash {
 
@@ -18,8 +19,10 @@ final class TheStash {
 
     // MARK: - Mutable State
 
-    private var settledWorld: Screen = .empty
+    private var latestObservedSemanticWorld: SemanticScreen = .empty
     private var liveCapture: LiveCapture = .empty
+    private var settledSemanticWorld: SemanticScreen = .empty
+    private var settledVisibleIds: Set<HeistId> = []
     private var diagnosticEvidence: Screen?
 
     lazy var semanticObservationStream = SemanticObservationStream(stash: self, tripwire: tripwire)
@@ -64,20 +67,22 @@ final class TheStash {
     /// Last settled accessibility world Button Heist believes. Semantic
     /// resolution and normal interface reads use this as truth.
     var settledScreen: Screen {
-        settledWorld
+        Screen(semantic: settledSemanticWorld, liveCapture: liveCapture)
     }
 
-    /// Current live viewport projected through settled semantic identity.
-    /// Use this only for actionability and geometry, never as semantic truth.
+    /// Current observed live viewport. Use this only for visible/debug reads
+    /// and actionability, never as settled semantic truth.
     var liveVisibleScreen: Screen {
         let visibleElements = Dictionary(
             uniqueKeysWithValues: liveCapture.heistIdByElement.map { element, heistId in
-                let settledEntry = settledWorld.semantic.elements[heistId]
+                let observedEntry = latestObservedSemanticWorld.elements[heistId]
+                let settledEntry = settledSemanticWorld.elements[heistId]
                 return (
                     heistId,
                     ScreenElement(
                         heistId: heistId,
-                        scrollContentLocation: settledEntry?.scrollContentLocation,
+                        scrollContentLocation: settledEntry?.scrollContentLocation
+                            ?? observedEntry?.scrollContentLocation,
                         element: element
                     )
                 )
@@ -87,7 +92,7 @@ final class TheStash {
         return Screen(
             semantic: SemanticScreen(
                 elements: visibleElements,
-                containers: settledWorld.semantic.containers.filter { visibleContainerPaths.contains($0.key) }
+                containers: latestObservedSemanticWorld.containers.filter { visibleContainerPaths.contains($0.key) }
             ),
             liveCapture: liveCapture
         )
@@ -143,12 +148,12 @@ final class TheStash {
 
     /// Number of elements retained in committed semantic memory.
     var knownElementCount: Int {
-        settledWorld.semantic.elements.count
+        settledSemanticWorld.elements.count
     }
 
     /// HeistIds retained in committed semantic memory.
     var knownElementIds: Set<HeistId> {
-        settledWorld.semantic.heistIds
+        settledSemanticWorld.heistIds
     }
 
     /// HeistIds backed by the latest live parse.
@@ -158,27 +163,29 @@ final class TheStash {
 
     /// O(1) lookup in committed semantic memory.
     func knownElement(heistId: HeistId) -> ScreenElement? {
-        settledWorld.findElement(heistId: heistId)
+        settledSemanticWorld.findElement(heistId: heistId)
     }
 
-    /// Latest parsed live element payload for a known heistId.
+    /// Latest observed live element payload for a visible heistId.
     ///
-    /// The heistId and reveal evidence come from settled semantic truth; the
-    /// accessibility element payload comes from the disposable live parse so
-    /// actionability uses fresh geometry.
+    /// The parsed accessibility element and live handles are observational
+    /// evidence only. If the id is also settled, reveal metadata is borrowed
+    /// from settled semantic truth.
     func liveScreenElement(heistId: HeistId) -> ScreenElement? {
-        guard let liveElement = liveCapture.element(for: heistId) else { return nil }
-        let settledEntry = settledWorld.semantic.elements[heistId]
+        guard let liveElement = liveCapture.element(for: heistId),
+              let observedEntry = latestObservedSemanticWorld.elements[heistId] else { return nil }
+        let settledEntry = settledSemanticWorld.elements[heistId]
         return ScreenElement(
             heistId: heistId,
-            scrollContentLocation: settledEntry?.scrollContentLocation,
+            scrollContentLocation: settledEntry?.scrollContentLocation
+                ?? observedEntry.scrollContentLocation,
             element: liveElement
         )
     }
 
     /// Semantic containers in deterministic traversal order.
     var semanticContainersInTraversalOrder: [SemanticScreen.Container] {
-        settledWorld.semantic.containers.values
+        settledSemanticWorld.containers.values
             .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
     }
 
@@ -190,7 +197,7 @@ final class TheStash {
     /// Hash of committed semantic memory. Deliberately excludes live viewport
     /// geometry so scroll position alone does not produce semantic history.
     var semanticHash: String {
-        settledWorld.semanticHash
+        settledSemanticWorld.semanticHash
     }
 
     /// HeistId of the element whose live object is currently first responder.
@@ -230,34 +237,36 @@ final class TheStash {
 
     // MARK: - Parse Pipeline
 
-    /// Read the live accessibility tree and produce a Screen value.
-    /// Pure: does not touch settled world, live capture, or diagnostics.
+    /// Read the live accessibility tree and produce one observation value.
+    /// Every successful parse refreshes latest observed/live evidence, but it
+    /// never promotes settled semantic truth.
     /// Returns nil if no accessible windows exist (loading screen,
     /// app backgrounded, etc.).
     func parse() -> Screen? {
         guard let result = burglar.parse() else { return nil }
-        return TheBurglar.buildScreen(from: result)
-    }
-
-    /// Parse and retain only disposable live action machinery. The returned
-    /// visible screen may be used by exploration or diagnostics, but this
-    /// method never updates settled world truth.
-    @discardableResult
-    func refreshLiveCapture() -> Screen? {
-        guard let screen = parse() else { return nil }
-        storeLiveCapture(from: screen)
+        let screen = TheBurglar.buildScreen(from: result)
+        storeObservedAccessibilityEvidence(from: screen)
         return screen
     }
 
+    /// Parse and refresh latest observed/live evidence. The returned visible
+    /// screen may be used by exploration or diagnostics, but this method never
+    /// updates settled semantic truth.
+    @discardableResult
+    func refreshLiveCapture() -> Screen? {
+        parse()
+    }
+
     /// Produce one visible observation for the settle loop without committing
-    /// it yet. The observation stream stores and publishes the proven final
-    /// screen through its settled-observation commit path.
+    /// it yet. Successful parses refresh latest observed/live evidence; the
+    /// observation stream alone promotes a proven final screen to settled truth.
     func semanticObservationForSettle() -> Screen? {
         parse()
     }
 
     /// Produce one page observation for scroll exploration. Exploration owns a
-    /// local semantic union until it finishes and commits the explored screen.
+    /// local semantic union until it finishes; the observation stream commits
+    /// only the final explored screen as settled discovery truth.
     func semanticPageForExploration() -> Screen? {
         parse()
     }
@@ -267,27 +276,51 @@ final class TheStash {
     }
 
     func recordSettleDiagnosticEvidence(_ screen: Screen?) {
+        if let screen {
+            storeObservedAccessibilityEvidence(from: screen)
+        }
         diagnosticEvidence = screen
         semanticObservationStream.markDirtyFromTripwire()
     }
 
-    func recordLivePageObservation(_ screen: Screen) {
-        storeLiveCapture(from: screen)
-    }
-
-    func commitExploredSettledScreen(_ screen: Screen) {
-        commitSettledWorld(screen)
+    func recordObservedAccessibilityEvidence(_ screen: Screen) {
+        storeObservedAccessibilityEvidence(from: screen)
     }
 
     func installScreenForTesting(_ screen: Screen) {
         _ = semanticObservationStream.commitSettledObservation(screen)
     }
 
-    /// Starting value for page-by-page exploration. Exploration is the one
-    /// runtime path that intentionally carries a local Screen union before
-    /// committing it back through `commitExploredSettledScreen`.
+    /// Starting value for page-by-page exploration. Exploration carries a local
+    /// Screen union and hands the final observation back to the stream.
     func explorationBaseline() -> Screen {
         settledScreen
+    }
+
+    /// Apply visible settled refresh semantics without retaining settled live
+    /// handles. The previous settled visible ids are metadata, not actionability
+    /// state; they let a visible commit drop entries that vanished from the
+    /// settled viewport while preserving discovery-only memory.
+    func screenByRefreshingSettledSemanticWorld(with visibleRefresh: Screen) -> Screen {
+        guard !visibleRefresh.visibleIds.isEmpty else {
+            return visibleRefresh
+        }
+        let knownOnlyIds = settledSemanticWorld.heistIds.subtracting(settledVisibleIds)
+        let refreshesKnownViewport = visibleRefresh.visibleIds.isSubset(of: settledSemanticWorld.heistIds)
+            || !settledVisibleIds.isDisjoint(with: visibleRefresh.visibleIds)
+            || (!knownOnlyIds.isEmpty && settledVisibleIds.isEmpty)
+        guard refreshesKnownViewport else { return visibleRefresh }
+
+        let disappearedVisibleIds = settledVisibleIds.subtracting(visibleRefresh.visibleIds)
+        let mergedElements = settledSemanticWorld.elements
+            .merging(visibleRefresh.semantic.elements) { _, new in new }
+            .filter { !disappearedVisibleIds.contains($0.key) }
+        let mergedContainers = settledSemanticWorld.containers
+            .merging(visibleRefresh.semantic.containers) { _, new in new }
+        return Screen(
+            semantic: SemanticScreen(elements: mergedElements, containers: mergedContainers),
+            liveCapture: visibleRefresh.liveCapture
+        )
     }
 
     func knownContentOriginIndex() -> [AccessibilityElement: CGPoint?] {
@@ -359,19 +392,23 @@ final class TheStash {
     }
 
     private func clearCommittedScreen() {
-        settledWorld = .empty
+        latestObservedSemanticWorld = .empty
         liveCapture = .empty
+        settledSemanticWorld = .empty
+        settledVisibleIds = []
         diagnosticEvidence = nil
         semanticObservationStream.clearLatestObservation()
     }
 
-    private func storeLiveCapture(from screen: Screen) {
+    private func storeObservedAccessibilityEvidence(from screen: Screen) {
+        latestObservedSemanticWorld = screen.semantic
         liveCapture = screen.liveCapture
     }
 
     private func commitSettledWorld(_ screen: Screen) {
-        settledWorld = screen
-        liveCapture = screen.liveCapture
+        settledSemanticWorld = screen.semantic
+        settledVisibleIds = screen.visibleIds
+        storeObservedAccessibilityEvidence(from: screen)
         diagnosticEvidence = nil
     }
 

@@ -33,7 +33,9 @@ struct VisibleSemanticObservationEvidence {
 
 @MainActor
 final class SemanticObservationStream {
-    typealias DiscoveryObservation = @MainActor () async -> Void
+    /// An active stream is an observation lease. Baseline cycles observe the
+    /// visible world; subscribers can widen demand to discovery.
+    typealias DiscoveryObservation = @MainActor () async -> Screen?
 
     struct SettledSemanticWaiter {
         let scope: SemanticObservationScope
@@ -350,7 +352,7 @@ final class SemanticObservationStream {
     ) -> Screen {
         switch scope {
         case .visible:
-            return stash.settledScreen.refreshingVisibleState(with: screen)
+            return stash.screenByRefreshingSettledSemanticWorld(with: screen)
         case .discovery:
             return screen
         }
@@ -472,8 +474,12 @@ final class SemanticObservationStream {
                 await Task.yield()
                 return true
             }
-            await discoveryObservation()
-            _ = publishCurrentSettledObservation(scope: .discovery, stash: stash)
+            guard let exploredScreen = await discoveryObservation() else {
+                markDirtyFromTripwire()
+                await Task.yield()
+                return true
+            }
+            _ = commitSettledObservation(exploredScreen, scope: .discovery)
             await Task.yield()
             return true
         }

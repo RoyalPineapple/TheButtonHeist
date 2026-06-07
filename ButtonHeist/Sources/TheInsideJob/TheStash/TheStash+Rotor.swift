@@ -116,14 +116,10 @@ private extension TheStash {
     /// a UIKit accessibility object. Used by live custom rotor steps so the
     /// returned rotor target flows through the same parser as `get_interface`.
     func parseLiveObject(_ object: NSObject) -> ScreenElement? {
-        guard let result = burglar.parse() else { return nil }
-        guard let parsedElement = result.objects.first(where: { pair in
-            pair.value === object
-        })?.key else {
-            return nil
-        }
-        let screen = TheBurglar.buildScreen(from: result)
-        guard let heistId = screen.findLiveHeistId(for: parsedElement) else { return nil }
+        guard let screen = parse() else { return nil }
+        guard let heistId = screen.liveCapture.elementRefs.first(where: { _, ref in
+            ref.object === object
+        })?.key else { return nil }
         return screen.findElement(heistId: heistId)
     }
 

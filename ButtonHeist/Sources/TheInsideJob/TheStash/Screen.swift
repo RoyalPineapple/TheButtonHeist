@@ -8,7 +8,9 @@ import AccessibilitySnapshotParser
 
 // MARK: - Screen Value Type
 
-/// Immutable interface snapshot used by resolution and projection code.
+/// Immutable parser observation used by settle, discovery, trace, and tests.
+/// Stash stores its semantic and live parts separately; this is not the
+/// long-lived world model.
 ///
 /// `name` and `id` are derived from the live interface on demand — never
 /// stored — so they cannot drift from the underlying tree.

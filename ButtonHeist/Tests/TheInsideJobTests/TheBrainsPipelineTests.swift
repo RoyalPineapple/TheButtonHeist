@@ -550,9 +550,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Semantic Discovery Observation
 
     func testSemanticDiscoveryObservationCommitsUnion() async {
-        // Exploration seeds the local union from settled world,
-        // merges each parse into it, then commits the union back. There is no
-        // pruning — the union is the canonical "all elements seen this cycle".
+        // Exploration seeds the local union from settled world and merges each
+        // parse into it. The observation stream commits the completed union as
+        // settled discovery truth. There is no pruning — the union is the
+        // canonical "all elements seen this cycle".
         // With no scrollable containers in the host hierarchy, semantic discovery
         // reduces to refresh-and-commit, and the seeded entry merges into the
         // live parse rather than being pruned.
