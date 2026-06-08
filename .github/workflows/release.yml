@@ -105,9 +105,12 @@ jobs:
 
       - name: Build heist-plan compiler artifacts (arm64)
         run: |
-          swift build --package-path ButtonHeist -c release --arch arm64 --product heist-plan
+          swift build --package-path ButtonHeist -c release --arch arm64 --product heist-plan \
+            -Xswiftc -enable-library-evolution \
+            -Xswiftc -emit-module-interface
           test -x ButtonHeist/.build/arm64-apple-macosx/release/heist-plan
           test -f ButtonHeist/.build/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule
+          test -f ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build/ThePlans.swiftinterface
           test -f ButtonHeist/.build/arm64-apple-macosx/release/description.json
           find ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build -name '*.swift.o' -print -quit | grep -q .
 
@@ -194,11 +197,14 @@ jobs:
           # CLI + frameworks
           cp ButtonHeistCLI/.build/buttonheist dist/
           cp ButtonHeist/.build/arm64-apple-macosx/release/heist-plan dist/
-          mkdir -p dist/ThePlans/arm64-apple-macosx/release
+          mkdir -p dist/ThePlans/arm64-apple-macosx/release/Modules
           cp -R \
-            ButtonHeist/.build/arm64-apple-macosx/release/Modules \
             ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build \
             dist/ThePlans/arm64-apple-macosx/release/
+          cp \
+            ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build/ThePlans.swiftinterface \
+            ButtonHeist/.build/arm64-apple-macosx/release/ThePlans.build/ThePlans.private.swiftinterface \
+            dist/ThePlans/arm64-apple-macosx/release/Modules/
           cp ButtonHeist/.build/arm64-apple-macosx/release/description.json \
             dist/ThePlans/arm64-apple-macosx/release/
           tar -czf "dist/${CLI_ARCHIVE}" -C dist buttonheist heist-plan ButtonHeistFrameworks ThePlans

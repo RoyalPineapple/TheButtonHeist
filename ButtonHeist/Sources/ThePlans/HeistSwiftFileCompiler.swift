@@ -210,7 +210,7 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
             could not locate built ThePlans artifacts or a local ButtonHeist package root containing Sources/ThePlans. \
             Install Button Heist with its heist-plan compiler artifacts, run the compiler from inside \
             a ButtonHeist checkout, or set HEIST_THEPLANS_BUILD_DIR to a directory holding built ThePlans artifacts \
-            (Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o).
+            (Modules/ThePlans.swiftmodule or Modules/ThePlans.swiftinterface, plus ThePlans.build/*.swift.o).
             """
         case .buildArtifactsNotFound(let searched, let hint):
             let searchedList = searched.map { "  - \($0)" }.joined(separator: "\n")
@@ -347,7 +347,7 @@ private struct ThePlansBuildArtifacts {
                 searched: [buildDirectory.path],
                 hint: """
                 \(environmentOverrideKey)=\(override) does not contain built ThePlans artifacts \
-                (expected Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o, or \
+                (expected Modules/ThePlans.swiftmodule or Modules/ThePlans.swiftinterface and ThePlans.build/*.swift.o, or \
                 ThePlans.framework in an Xcode products directory). \
                 Build them with `swift build --package-path ButtonHeist --product heist-plan` \
                 and point \(environmentOverrideKey) at ButtonHeist/.build/debug.
@@ -407,7 +407,7 @@ private struct ThePlansBuildArtifacts {
             Install Button Heist with heist-plan compiler artifacts, build them with \
             `swift build --package-path ButtonHeist --product heist-plan`, or set \
             \(environmentOverrideKey) to a directory containing \
-            Modules/ThePlans.swiftmodule and ThePlans.build/*.swift.o. \
+            Modules/ThePlans.swiftmodule or Modules/ThePlans.swiftinterface and ThePlans.build/*.swift.o. \
             Xcode test runs can also provide a products directory containing ThePlans.framework.
             """
         )
@@ -500,9 +500,11 @@ private struct ThePlansBuildArtifacts {
 
     private static func resolveSwiftPMBuildDirectory(_ buildDirectory: URL) throws -> ThePlansBuildArtifacts? {
         let modulesDirectory = buildDirectory.appendingPathComponent("Modules", isDirectory: true)
-        let module = modulesDirectory.appendingPathComponent("ThePlans.swiftmodule")
+        let binaryModule = modulesDirectory.appendingPathComponent("ThePlans.swiftmodule")
+        let textualModuleInterface = modulesDirectory.appendingPathComponent("ThePlans.swiftinterface")
         let objectsDirectory = buildDirectory.appendingPathComponent("ThePlans.build", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: module.path) else {
+        guard FileManager.default.fileExists(atPath: binaryModule.path)
+                || FileManager.default.fileExists(atPath: textualModuleInterface.path) else {
             return nil
         }
         let objectFiles = try activeSwiftObjectFiles(

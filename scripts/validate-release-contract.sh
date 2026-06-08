@@ -98,8 +98,10 @@ grep -Fq 'bin.install "heist-plan"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE must install the heist-plan compiler"
 grep -Fq 'lib.install "ThePlans"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE must install ThePlans compiler artifacts under lib"
-grep -Fq 'ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule' "$BUTTONHEIST_FORMULA_TEMPLATE" \
+grep -Fq 'ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftinterface' "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE test must assert installed arm64 ThePlans artifacts"
+grep -Fq 'refute_predicate lib/"ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
+    || fail "$BUTTONHEIST_FORMULA_TEMPLATE test must reject installed binary ThePlans.swiftmodule"
 grep -Fq 'ThePlans/arm64-apple-macosx/release/description.json' "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE test must assert installed ThePlans description.json"
 

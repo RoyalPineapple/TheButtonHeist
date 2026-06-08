@@ -66,14 +66,27 @@ echo "Compiling Swift fixture through installed-prefix artifacts"
 INSTALLED_PREFIX="$TMP_DIR/installed-prefix"
 INSTALLED_TOOL="$INSTALLED_PREFIX/bin/heist-plan"
 INSTALLED_OUTPUT="$TMP_DIR/installed.heist"
+INTERFACE_BUILD_DIR="$TMP_DIR/interface-build"
+INTERFACE_ARTIFACT_DIR="$INTERFACE_BUILD_DIR/arm64-apple-macosx/release"
+swift build --package-path ButtonHeist -c release --arch arm64 --target ThePlans \
+    -Xswiftc -enable-library-evolution \
+    -Xswiftc -emit-module-interface \
+    --scratch-path "$INTERFACE_BUILD_DIR"
 mkdir -p "$INSTALLED_PREFIX/bin" "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release"
 cp "$HEIST_PLAN_TOOL" "$INSTALLED_TOOL"
-cp -R \
-    "$HEIST_THEPLANS_BUILD_DIR/Modules" \
-    "$HEIST_THEPLANS_BUILD_DIR/ThePlans.build" \
+mkdir -p "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release/Modules"
+cp -R "$INTERFACE_ARTIFACT_DIR/ThePlans.build" \
     "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release/"
-cp "$HEIST_THEPLANS_BUILD_DIR/description.json" \
+cp \
+    "$INTERFACE_ARTIFACT_DIR/ThePlans.build/ThePlans.swiftinterface" \
+    "$INTERFACE_ARTIFACT_DIR/ThePlans.build/ThePlans.private.swiftinterface" \
+    "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release/Modules/"
+cp "$INTERFACE_ARTIFACT_DIR/description.json" \
     "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release/"
+if [[ -f "$INSTALLED_PREFIX/lib/ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule" ]]; then
+    echo "Error: installed-prefix smoke test must not rely on binary ThePlans.swiftmodule" >&2
+    exit 1
+fi
 (
     unset HEIST_THEPLANS_BUILD_DIR
     HEIST_SOURCE_COMPILER_TRACE=1 "$INSTALLED_TOOL" compile "$SOURCE" --entry makeHeist --output "$INSTALLED_OUTPUT"

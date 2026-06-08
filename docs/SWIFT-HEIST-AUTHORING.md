@@ -238,10 +238,10 @@ Compiling Swift source links the user file against a **built** `ThePlans`
 module. Resolution runs in this order:
 
 1. **`HEIST_THEPLANS_BUILD_DIR`** — the deterministic override. Set it to a
-   SwiftPM build directory containing `Modules/ThePlans.swiftmodule` and
-   `ThePlans.build/*.swift.o`, or an Xcode products directory containing
-   `ThePlans.framework`. This is what CI uses for SwiftPM command-line
-   compilation:
+   SwiftPM build directory containing `Modules/ThePlans.swiftmodule` or
+   `Modules/ThePlans.swiftinterface`, plus `ThePlans.build/*.swift.o`; or set it
+   to an Xcode products directory containing `ThePlans.framework`. This is what
+   CI uses for SwiftPM command-line compilation:
 
    ```bash
    swift build --package-path ButtonHeist --product heist-plan
@@ -251,10 +251,12 @@ module. Resolution runs in this order:
 
 2. **Installed compiler artifacts** — Homebrew installs `heist-plan` next to
    `buttonheist` and installs the arm64 `ThePlans` build artifacts under
-   `lib/ThePlans`. That artifact includes `description.json` so the compiler can
-   link the active ThePlans object list after installation. From that install
-   shape, `.swift` heists compile without a ButtonHeist checkout or environment
-   variable:
+   `lib/ThePlans`. The installed artifact uses `ThePlans.swiftinterface`, not a
+   binary `ThePlans.swiftmodule`, so the user's active Swift compiler rebuilds
+   the importable module for its own toolchain. The artifact also includes
+   `description.json` so the compiler can link the active ThePlans object list
+   after installation. From that install shape, `.swift` heists compile without a
+   ButtonHeist checkout or environment variable:
 
    ```bash
    buttonheist run_heist --path Flow.swift --entry makeHeist

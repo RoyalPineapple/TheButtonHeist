@@ -22,7 +22,7 @@ private enum MenuScreen {
     }
 
     static let checkout = HeistDef<Void>("MenuScreen.checkout") {
-        Activate(.label("Place Order"))
+        Activate(.label("Checkout"))
             .expect(.changed(.screen(where: .present(.label("Checkout")))), timeout: .seconds(8))
 
         Activate(.label(DemoOrder.confirmPaymentLabel))

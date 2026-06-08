@@ -51,7 +51,8 @@ class Buttonheist < Formula
   test do
     assert_match version.to_s, shell_output("#{bin}/buttonheist --version")
     assert_predicate bin/"heist-plan", :exist?
-    assert_predicate lib/"ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule", :exist?
+    assert_predicate lib/"ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftinterface", :exist?
+    refute_predicate lib/"ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule", :exist?
     assert_predicate lib/"ThePlans/arm64-apple-macosx/release/description.json", :exist?
   end
 end
