@@ -2773,6 +2773,11 @@ final class TheBrainsActionTests: XCTestCase {
                 with: "last settled: sequence <sequence>",
                 options: .regularExpression
             )
+            .replacingOccurrences(
+                of: #"last delta: (none|no_change)"#,
+                with: "last delta: <settled>",
+                options: .regularExpression
+            )
     }
 
     private func withNoTraversableWindows<T>(

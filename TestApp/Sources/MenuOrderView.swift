@@ -127,6 +127,17 @@ struct MenuOrderView: View {
             }
         }
         .navigationTitle(checkoutTitle)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if shouldShowCheckoutShortcut {
+                    Button {
+                        checkoutPhase = .reviewing
+                    } label: {
+                        Label("Checkout", systemImage: "cart.fill")
+                    }
+                }
+            }
+        }
         .onDisappear {
             pendingTask?.cancel()
             pendingTask = nil
@@ -137,6 +148,11 @@ struct MenuOrderView: View {
                 checkoutPhase = .reviewing
             }
         }
+    }
+
+    private var shouldShowCheckoutShortcut: Bool {
+        guard case .browsing = checkoutPhase else { return false }
+        return totalQuantity > 0
     }
 
     private var checkoutTitle: String {

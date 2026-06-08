@@ -9,6 +9,8 @@ import TheScore
 /// payloads, resolve element inflation, choose durable selectors, or format reports.
 @MainActor
 final class InteractionObservation {
+    private static let defaultVisibleStateTimeout = Double(SettleSession.defaultTimeoutMs) / 1_000
+
     private let stash: TheStash
     private let postActionObservation: PostActionObservation
     private let predicateWait: PredicateWait
@@ -39,11 +41,11 @@ final class InteractionObservation {
         )
     }
 
-    func prepareBeforeState(timeout: Double? = 1.0) async -> PostActionObservation.BeforeState? {
+    func prepareBeforeState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {
         await observeVisibleState(timeout: timeout)
     }
 
-    func observeVisibleState(timeout: Double? = 1.0) async -> PostActionObservation.BeforeState? {
+    func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {
         guard let evidence = await stash.observeVisibleSemanticEvidence(timeout: timeout) else { return nil }
         return postActionObservation.captureSemanticState(from: evidence)
     }

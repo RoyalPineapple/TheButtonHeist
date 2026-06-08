@@ -330,9 +330,10 @@ final class TheStash {
             return visibleRefresh
         }
         let knownOnlyIds = settledSemanticWorld.heistIds.subtracting(settledVisibleIds)
-        let refreshesKnownViewport = visibleRefresh.visibleIds.isSubset(of: settledSemanticWorld.heistIds)
-            || !settledVisibleIds.isDisjoint(with: visibleRefresh.visibleIds)
-            || (!knownOnlyIds.isEmpty && settledVisibleIds.isEmpty)
+        let refreshesKnownViewport = visibleRefreshBelongsToSettledViewport(
+            visibleRefresh,
+            knownOnlyIds: knownOnlyIds
+        )
         guard refreshesKnownViewport else { return visibleRefresh }
 
         let disappearedVisibleIds = settledVisibleIds.subtracting(visibleRefresh.visibleIds)
@@ -345,6 +346,37 @@ final class TheStash {
             semantic: SemanticScreen(elements: mergedElements, containers: mergedContainers),
             liveCapture: visibleRefresh.liveCapture
         )
+    }
+
+    private func visibleRefreshBelongsToSettledViewport(
+        _ visibleRefresh: Screen,
+        knownOnlyIds: Set<HeistId>
+    ) -> Bool {
+        if visibleRefresh.visibleIds.isSubset(of: settledSemanticWorld.heistIds) {
+            return true
+        }
+        if !settledVisibleIds.isDisjoint(with: visibleRefresh.visibleIds) {
+            return true
+        }
+        if !knownOnlyIds.isEmpty && settledVisibleIds.isEmpty {
+            return true
+        }
+        return visibleRefreshPairsWithSettledVisibleElements(visibleRefresh)
+    }
+
+    private func visibleRefreshPairsWithSettledVisibleElements(_ visibleRefresh: Screen) -> Bool {
+        let previous = settledVisibleIds
+            .compactMap { settledSemanticWorld.elements[$0]?.element }
+            .map(WireConversion.convert)
+        let current = visibleRefresh.visibleIds
+            .compactMap { visibleRefresh.semantic.elements[$0]?.element }
+            .map(WireConversion.convert)
+        guard !previous.isEmpty, !current.isEmpty else { return false }
+
+        let edits = ElementEdits.between(beforeElements: previous, afterElements: current)
+        return !edits.updated.isEmpty
+            || edits.removed.count < previous.count
+            || edits.added.count < current.count
     }
 
     func knownContentOriginIndex() -> [AccessibilityElement: CGPoint?] {
