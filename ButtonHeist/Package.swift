@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "TheScore", targets: ["TheScore"]),
         .library(name: "ButtonHeistDSL", targets: ["ButtonHeistDSL"]),
         .executable(name: "heist-plan", targets: ["HeistPlanTool"]),
+        .executable(name: "heist-doctor", targets: ["HeistDoctorTool"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
@@ -49,6 +50,25 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             path: "Sources/HeistPlanTool",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .target(
+            name: "HeistDoctorCore",
+            dependencies: [
+                "ThePlans",
+                "TheScore",
+            ],
+            path: "Sources/HeistDoctorCore",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .executableTarget(
+            name: "HeistDoctorTool",
+            dependencies: [
+                "HeistDoctorCore",
+                "TheScore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Sources/HeistDoctorTool",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         // Swift implementation of TheInsideJob
@@ -91,6 +111,16 @@ let package = Package(
             name: "ThePlansTests",
             dependencies: ["ThePlans"],
             path: "Tests/ThePlansTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .testTarget(
+            name: "HeistDoctorCoreTests",
+            dependencies: [
+                "HeistDoctorCore",
+                "TheScore",
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
+            ],
+            path: "Tests/HeistDoctorCoreTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(
