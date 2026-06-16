@@ -5,11 +5,7 @@ import Foundation
 import TheScore
 
 struct PredicateCaseSelection {
-    typealias ObservationSource = @MainActor (
-        SemanticObservationScope,
-        UInt64?,
-        Double?
-    ) async -> HeistSemanticObservation?
+    typealias ObservationSource = PredicatePollingEngine<PredicateCaseSelection>.ObservationSource
 
     let cases: [HeistCaseMatchResult]
     let selectedCaseIndex: Int?
@@ -48,68 +44,50 @@ struct PredicateCaseSelection {
         )
     }
 
-    static func waitFor(
+    @MainActor static func waitFor(
         _ cases: [ResolvedPredicateCase],
         timeout rawTimeout: Double,
-        observeSemanticState: ObservationSource
+        observeSemanticState: @escaping ObservationSource
     ) async -> HeistCaseSelectionResult {
         let start = CFAbsoluteTimeGetCurrent()
-        let timeout = PredicateWait.clampedWaitTimeout(rawTimeout)
         let scope = cases.observationScope
         let requiresChangeBaseline = cases.contains { $0.predicate.requiresFutureSettledBaseline }
-        var observedSequence: UInt64?
-        var changeBaselineSequence: UInt64?
-        var lastSelection = PredicateCaseSelection.unevaluated(cases)
-        var lastSummary: String?
-
-        repeat {
-            let remaining = max(0, start + timeout - CFAbsoluteTimeGetCurrent())
-            guard let observation = await observeSemanticState(
-                scope,
-                observedSequence,
-                min(remaining, SemanticObservationTiming.defaultTimeout)
-            ) else {
-                if timeout == 0 { break }
-                continue
-            }
-
-            observedSequence = observation.event.sequence
-            lastSummary = observation.summary
-            if requiresChangeBaseline, changeBaselineSequence == nil {
-                changeBaselineSequence = observation.event.sequence
-            }
-
-            lastSelection = PredicateCaseSelection.evaluate(
-                cases,
-                observation: observation,
-                changeBaselineSequence: changeBaselineSequence
-            )
-
-            if lastSelection.selectedCaseIndex != nil {
-                return HeistCaseSelectionResult(
-                    cases: lastSelection.cases,
-                    selectedCaseIndex: lastSelection.selectedCaseIndex,
-                    elapsedMs: elapsedMilliseconds(since: start),
-                    timeout: rawTimeout,
-                    lastObservedSummary: observation.summary
+        let pollResult = await PredicatePollingEngine<PredicateCaseSelection>(
+            observeSemanticState: observeSemanticState
+        ).poll(
+            scope: scope,
+            timeout: rawTimeout,
+            start: start,
+            requiresChangeBaseline: requiresChangeBaseline,
+            evaluate: { observation, changeBaselineSequence in
+                PredicateCaseSelection.evaluate(
+                    cases,
+                    observation: observation,
+                    changeBaselineSequence: changeBaselineSequence
                 )
-            }
+            },
+            isMatched: { $0.selectedCaseIndex != nil }
+        )
 
-            if timeout == 0 { break }
-        } while CFAbsoluteTimeGetCurrent() < start + timeout
+        let lastSelection = pollResult.lastEvaluation ?? PredicateCaseSelection.unevaluated(cases)
+        if let selectedCaseIndex = lastSelection.selectedCaseIndex {
+            return HeistCaseSelectionResult(
+                cases: lastSelection.cases,
+                selectedCaseIndex: selectedCaseIndex,
+                elapsedMs: pollResult.elapsedMs,
+                timeout: rawTimeout,
+                lastObservedSummary: pollResult.lastObservation?.summary
+            )
+        }
 
         return HeistCaseSelectionResult(
             cases: lastSelection.cases,
             selectedCaseIndex: nil,
-            elapsedMs: elapsedMilliseconds(since: start),
+            elapsedMs: pollResult.elapsedMs,
             timeout: rawTimeout,
             timedOut: true,
-            lastObservedSummary: lastSummary
+            lastObservedSummary: pollResult.lastObservation?.summary
         )
-    }
-
-    private static func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
-        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
     }
 }
 

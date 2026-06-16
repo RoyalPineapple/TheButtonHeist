@@ -121,20 +121,30 @@ import TheScore
             )
         }
 
-        let deadline = start + timeout
-        while CFAbsoluteTimeGetCurrent() < deadline {
-            let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
-            guard let observation = await nextWaitEvaluation(
-                for: step,
-                after: state.observedSequence,
-                timeout: min(remaining, SemanticObservationTiming.defaultTimeout),
-                changeBaselineSequence: state.changeBaseline?.sequence
-            ) else {
-                continue
-            }
+        let pollResult = await PredicatePollingEngine<ExpectationResult>(
+            observeSemanticState: observeSemanticState
+        ).poll(
+            scope: step.predicate.observationScope,
+            timeout: step.timeout,
+            start: start,
+            after: state.observedSequence,
+            changeBaselineSequence: state.changeBaseline?.sequence,
+            requiresChangeBaseline: step.predicate.requiresFutureSettledBaseline,
+            pollWhenTimeoutZero: false,
+            evaluate: { observation, changeBaselineSequence in
+                PredicateEvaluation.evaluate(
+                    step.predicate,
+                    in: observation,
+                    changeBaselineSequence: changeBaselineSequence
+                )
+            },
+            isMatched: { $0.met }
+        )
 
-            state.record(observation)
-            if state.lastEvaluation.met {
+        if let observation = pollResult.lastObservation,
+           let expectation = pollResult.lastEvaluation {
+            state.record((observation, expectation))
+            if expectation.met {
                 return waitReceipt(for: step, state: state, start: start, success: true)
             }
         }
@@ -441,6 +451,90 @@ import TheScore
 }
 
 private typealias WaitEvaluation = (observation: HeistSemanticObservation, expectation: ExpectationResult)
+
+struct PredicatePollingResult<Evaluation> {
+    let lastObservation: HeistSemanticObservation?
+    let lastEvaluation: Evaluation?
+    let elapsedMs: Int
+}
+
+struct PredicatePollingEngine<Evaluation> {
+    typealias ObservationSource = @MainActor (
+        SemanticObservationScope,
+        UInt64?,
+        Double?
+    ) async -> HeistSemanticObservation?
+
+    let observeSemanticState: ObservationSource
+
+    @MainActor
+    func poll(
+        scope: SemanticObservationScope,
+        timeout rawTimeout: Double,
+        start: CFAbsoluteTime = CFAbsoluteTimeGetCurrent(),
+        after initialObservedSequence: UInt64? = nil,
+        changeBaselineSequence initialChangeBaselineSequence: UInt64? = nil,
+        requiresChangeBaseline: Bool,
+        pollWhenTimeoutZero: Bool = true,
+        evaluate: (HeistSemanticObservation, UInt64?) -> Evaluation,
+        isMatched: (Evaluation) -> Bool
+    ) async -> PredicatePollingResult<Evaluation> {
+        let timeout = PredicateWait.clampedWaitTimeout(rawTimeout)
+        guard timeout > 0 || pollWhenTimeoutZero else {
+            return PredicatePollingResult(
+                lastObservation: nil,
+                lastEvaluation: nil,
+                elapsedMs: Self.elapsedMilliseconds(since: start)
+            )
+        }
+
+        let deadline = start + timeout
+        var observedSequence = initialObservedSequence
+        var changeBaselineSequence = initialChangeBaselineSequence
+        var lastObservation: HeistSemanticObservation?
+        var lastEvaluation: Evaluation?
+
+        repeat {
+            let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
+            guard let observation = await observeSemanticState(
+                scope,
+                observedSequence,
+                min(remaining, SemanticObservationTiming.defaultTimeout)
+            ) else {
+                if timeout == 0 { break }
+                continue
+            }
+
+            observedSequence = observation.event.sequence
+            lastObservation = observation
+            if requiresChangeBaseline, changeBaselineSequence == nil {
+                changeBaselineSequence = observation.event.sequence
+            }
+
+            let evaluation = evaluate(observation, changeBaselineSequence)
+            lastEvaluation = evaluation
+            if isMatched(evaluation) {
+                return PredicatePollingResult(
+                    lastObservation: lastObservation,
+                    lastEvaluation: lastEvaluation,
+                    elapsedMs: Self.elapsedMilliseconds(since: start)
+                )
+            }
+
+            if timeout == 0 { break }
+        } while CFAbsoluteTimeGetCurrent() < deadline
+
+        return PredicatePollingResult(
+            lastObservation: lastObservation,
+            lastEvaluation: lastEvaluation,
+            elapsedMs: Self.elapsedMilliseconds(since: start)
+        )
+    }
+
+    private static func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
+        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+    }
+}
 
 private struct WaitPredicateState {
     var lastTrace: AccessibilityTrace?

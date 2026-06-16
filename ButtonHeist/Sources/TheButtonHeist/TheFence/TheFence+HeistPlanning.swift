@@ -69,7 +69,7 @@ extension TheFence {
     }
 
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {
-        let plan = try decodeRuntimeValidatedHeistPlanSource(
+        let plan = try admitRuntimeSafeHeistPlanSource(
             from: arguments,
             commandName: Command.runHeist.rawValue,
             droppingPlanKeys: ["argument"],
@@ -114,7 +114,7 @@ extension TheFence {
     func decodeListHeistsRequest(_ arguments: CommandArgumentEnvelope) throws -> ListHeistsRequest {
         let detail = try arguments.schemaEnum("detail", as: HeistCatalogDetail.self) ?? .summary
         do {
-            let plan = try decodeRuntimeValidatedHeistPlanSource(
+            let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
                 commandName: Command.listHeists.rawValue,
                 droppingPlanKeys: ["detail"],
@@ -129,7 +129,7 @@ extension TheFence {
     func decodeDescribeHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> DescribeHeistRequest {
         let requestedName = try arguments.requiredSchemaString("heist")
         do {
-            let plan = try decodeRuntimeValidatedHeistPlanSource(
+            let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
                 commandName: Command.describeHeist.rawValue,
                 droppingPlanKeys: ["heist"],
@@ -169,7 +169,7 @@ extension TheFence {
         }
 
         if request.command.payloadCheckedHeistPrimitiveCommand != nil {
-            try validatePayloadCheckedHeistPrimitive(message, commandName: request.command.rawValue)
+            try validateDurableHeistPrimitivePolicy(message, commandName: request.command.rawValue)
         }
 
         return .action(try ActionStep(
@@ -194,12 +194,14 @@ private extension HeistActionCommand {
 
 private extension TheFence {
 
-    func decodeRuntimeValidatedHeistPlanSource(
+    func admitRuntimeSafeHeistPlanSource(
         from arguments: CommandArgumentEnvelope,
         commandName: String,
         droppingPlanKeys: Set<String> = [],
         acceptsInlinePlanSource: Bool
     ) throws -> HeistPlan {
+        // Admission: accept exactly one public source shape for a plan. ThePlans
+        // then returns a RuntimeSafety-validated executable `HeistPlan`.
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
         do {
             return try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
@@ -264,12 +266,14 @@ private extension TheFence {
         )
     }
 
-    func validatePayloadCheckedHeistPrimitive(_ message: RuntimeActionMessage, commandName: String) throws {
+    func validateDurableHeistPrimitivePolicy(_ message: RuntimeActionMessage, commandName: String) throws {
+        // Durability: primitive tool calls that can be persisted as durable
+        // heist source/artifacts pass here. RuntimeSafety alone is not enough.
         let command = try HeistActionCommand(runtimeActionMessage: message)
         if let failure = command.durableHeistActionFailure {
             throw HeistStepPlanBuildError(
                 message: """
-                command "\(commandName)" is not accepted by the heist primitive payload gate: \(failure)
+                command "\(commandName)" is not accepted by the heist primitive durability policy: \(failure)
                 """
             )
         }

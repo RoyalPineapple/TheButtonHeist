@@ -12,11 +12,11 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .heistRuntime,
                 requestDecoder: TheFence.decodePerformCommandRequest,
-                cliExposure: .notExposed,
                 parameters: [
                     param(.step, .string, required: true, minLength: 1),
                 ],
-                description: """
+                projection: .mcpOnly(
+                    """
                     Run one ButtonHeist DSL instruction from `step`: one action or one simple wait.
 
                     Examples:
@@ -39,13 +39,15 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     multiple instructions, reusable heists, `RunHeist`, `If`/`Else`,
                     `WaitFor { ... }`, `ForEach`, `Warn`, or `Fail`.
                     """
+                )
             )
         case .runHeist:
             return TheFence.Command.commandDescriptor(
                 command, family: .heistRuntime,
                 requestDecoder: TheFence.decodeRunHeistCommandRequest,
                 parameters: [Self.rootArgumentParameter] + Self.planSourceParameters,
-                description: """
+                projection: .cliAndMCP(
+                    """
                     Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`.
 
                     Author plans as ButtonHeist source, not raw JSON IR:
@@ -63,6 +65,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     heist takes a string or element target. Runtime source is restricted
                     ButtonHeist DSL, not arbitrary Swift.
                     """
+                )
             )
         case .listHeists:
             return TheFence.Command.commandDescriptor(
@@ -77,9 +80,11 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                         defaultValue: .string(HeistCatalogDetail.summary.rawValue)
                     ),
                 ] + Self.planSourceParameters,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` " +
-                    "when composing against available capabilities."
+                projection: .cliAndMCP(
+                    "List the root entry and reusable heists in a plan. Use `detail: \"detailed\"` " +
+                        "when composing against available capabilities.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
             )
         case .describeHeist:
             return TheFence.Command.commandDescriptor(
@@ -89,8 +94,10 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 parameters: [
                     param(.heist, .string, required: true),
                 ] + Self.planSourceParameters,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Describe one root entry or reusable heist from a plan so an agent can call it safely."
+                projection: .cliAndMCP(
+                    "Describe one root entry or reusable heist from a plan so an agent can call it safely.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
             )
         }
     }

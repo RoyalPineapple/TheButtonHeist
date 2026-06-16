@@ -4,6 +4,27 @@ import TheScore
 
 final class ElementActionRequestContractTests: XCTestCase {
 
+    func testElementTargetFenceSchemaFollowsCanonicalMetadata() throws {
+        let targetSpec = try XCTUnwrap(TheFence.Command.activate.descriptor.parameter(named: .target))
+        let schemaFields = ElementTarget.inlineSchemaFields
+
+        XCTAssertEqual(targetSpec.objectProperties.map(\.key), schemaFields.map(\.name))
+
+        let specsByKey = Dictionary(uniqueKeysWithValues: targetSpec.objectProperties.map { ($0.key, $0) })
+        for field in schemaFields {
+            let spec = try XCTUnwrap(specsByKey[field.name])
+            switch field.kind {
+            case .string:
+                XCTAssertEqual(spec.type, .string)
+            case .stringArray:
+                XCTAssertEqual(spec.type, .stringArray)
+            case .nonNegativeInteger:
+                XCTAssertEqual(spec.type, .integer)
+                XCTAssertEqual(jsonSchemaProperty("minimum", in: spec), .int(0))
+            }
+        }
+    }
+
     @ButtonHeistActor
     func testActivateMissingTargetKeepsContractDiagnostics() async throws {
         let (fence, _) = makeConnectedFence()
@@ -80,4 +101,9 @@ final class ElementActionRequestContractTests: XCTestCase {
 
 private func targetValue(identifier: String) -> HeistValue {
     .object(["identifier": .string(identifier)])
+}
+
+private func jsonSchemaProperty(_ key: String, in spec: FenceParameterSpec) -> HeistValue? {
+    guard case .object(let schema) = spec.jsonSchemaProperty else { return nil }
+    return schema[key]
 }

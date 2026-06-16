@@ -1,6 +1,6 @@
 import Foundation
 
-extension HeistPlanRuntimeValidator {
+extension HeistPlanRuntimeSafetyValidator {
     mutating func validateCommandExpressions(
         _ command: HeistActionCommand,
         path: String,

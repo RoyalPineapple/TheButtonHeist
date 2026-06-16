@@ -12,7 +12,7 @@ public enum FenceCommandReference {
         descriptors: [FenceCommandDescriptor] = TheFence.Command.descriptors
     ) -> String {
         let sortedDescriptors = descriptors
-            .filter(\.isPublicRequestContract)
+            .filter { $0.projection.isPublicRequestContract }
             .sorted { $0.command.rawValue < $1.command.rawValue }
         var lines: [String] = [
             "# ButtonHeist Command Reference",
@@ -30,8 +30,8 @@ public enum FenceCommandReference {
                 "`\(descriptor.command.rawValue)`",
                 "`\(descriptor.family.rawValue)`",
                 cliExposureSummary(descriptor),
-                mcpExposureSummary(descriptor.mcpExposure),
-                markdownCell(firstLine(of: descriptor.description)),
+                mcpExposureSummary(descriptor.projection.mcpExposure),
+                markdownCell(firstLine(of: descriptor.projection.description)),
             ]
             lines.append("| \(columns.joined(separator: " | ")) |")
         }
@@ -49,7 +49,7 @@ public enum FenceCommandReference {
         descriptors: [FenceCommandDescriptor] = TheFence.Command.descriptors
     ) -> String {
         let sortedDescriptors = descriptors
-            .filter { $0.mcpExposure == .directTool }
+            .filter { $0.projection.mcpExposure == .directTool }
             .sorted { $0.command.rawValue < $1.command.rawValue }
         var lines: [String] = [
             "# ButtonHeist MCP Tool Reference",
@@ -65,7 +65,7 @@ public enum FenceCommandReference {
         for descriptor in sortedDescriptors {
             let command = descriptor.command.rawValue
             let family = descriptor.family.rawValue
-            let description = markdownCell(firstLine(of: descriptor.description))
+            let description = markdownCell(firstLine(of: descriptor.projection.description))
             lines.append(
                 "| `\(command)` | `\(family)` | \(description) |"
             )
@@ -84,11 +84,11 @@ public enum FenceCommandReference {
         var lines: [String] = [
             "### `\(descriptor.command.rawValue)`",
             "",
-            descriptor.description,
+            descriptor.projection.description,
             "",
             "- Family: `\(descriptor.family.rawValue)`",
             "- CLI: \(cliExposureDetail(descriptor))",
-            "- MCP: \(mcpExposureDetail(descriptor.mcpExposure))",
+            "- MCP: \(mcpExposureDetail(descriptor.projection.mcpExposure))",
             "- Connection before dispatch: \(yesNo(descriptor.requiresConnectionBeforeDispatch))",
         ]
 
@@ -102,7 +102,7 @@ public enum FenceCommandReference {
         var lines: [String] = [
             "### `\(descriptor.command.rawValue)`",
             "",
-            descriptor.description,
+            descriptor.projection.description,
             "",
             "- Family: `\(descriptor.family.rawValue)`",
         ]
@@ -133,7 +133,7 @@ public enum FenceCommandReference {
     }
 
     private static func cliExposureSummary(_ descriptor: FenceCommandDescriptor) -> String {
-        switch descriptor.cliExposure {
+        switch descriptor.projection.cliExposure {
         case .directCommand:
             return "`\(descriptor.command.rawValue)`"
         case .notExposed:
@@ -142,7 +142,7 @@ public enum FenceCommandReference {
     }
 
     private static func cliExposureDetail(_ descriptor: FenceCommandDescriptor) -> String {
-        switch descriptor.cliExposure {
+        switch descriptor.projection.cliExposure {
         case .directCommand:
             return "direct command `\(descriptor.command.rawValue)`"
         case .notExposed:

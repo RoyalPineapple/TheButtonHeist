@@ -9,12 +9,12 @@ import AccessibilitySnapshotParser
 
 // MARK: - Semantic Screen
 
-/// Durable semantic UI state retained across exploration.
+/// Durable settled-world UI state retained across exploration.
 ///
 /// `SemanticScreen` contains targetable accessibility identity and value-only
-/// reveal evidence. It must not hold UIKit objects, frames as live authority,
-/// activation points, or weak refs. Live action geometry is acquired from
-/// `LiveCapture` for each operation.
+/// reveal evidence. It must not hold UIKit objects, viewport geometry as live
+/// authority, activation points, or weak refs. Live action geometry is acquired
+/// from `LiveCapture` for each operation.
 struct SemanticScreen: Equatable {
     let elements: [HeistId: Element]
     let containers: [TreePath: Container]
@@ -57,8 +57,8 @@ struct SemanticScreen: Equatable {
 
     // MARK: - Element Entry
 
-    /// Semantic content-space location derived while walking the hierarchy.
-    /// This is durable semantic evidence: the element's content origin and the
+    /// Content-space location derived while walking the hierarchy. This is
+    /// durable settled-world evidence: the element's content origin and the
     /// scroll container that owns that coordinate space. It deliberately does
     /// not carry a UIKit object, frame, or activation point.
     struct ScrollContentLocation: Sendable, Equatable {
@@ -72,8 +72,8 @@ struct SemanticScreen: Equatable {
     struct Element: @unchecked Sendable, Equatable {
         let heistId: HeistId
         let scrollContentLocation: ScrollContentLocation?
-        /// Parsed accessibility identity/value. Do not treat its frame or
-        /// activation point as live action geometry.
+        /// Parsed accessibility identity/value retained in the settled world.
+        /// Do not treat its frame or activation point as live action geometry.
         let element: AccessibilityElement
 
         var contentSpaceOrigin: CGPoint? {
@@ -115,7 +115,7 @@ struct SemanticScreen: Equatable {
 
     // MARK: - Container Entry
 
-    /// Durable semantic container identity and content-space evidence.
+    /// Durable settled-world container identity and content-space evidence.
     ///
     /// The path and content frame are capture-local semantic evidence used to
     /// derive a reveal plan. UIKit object refs and live activation geometry

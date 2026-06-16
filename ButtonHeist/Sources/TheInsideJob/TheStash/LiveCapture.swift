@@ -8,15 +8,15 @@ import AccessibilitySnapshotParser
 
 // MARK: - Live Capture
 
-/// Latest parsed interface and disposable UIKit evidence.
+/// Visible live view from the latest observed capture.
 ///
-/// **Ownership.** Owned by `TheStash` as latest observed live evidence; carried
-/// by `Screen` only as an observation value. Ephemeral index, not source of
+/// **Ownership.** Owned by `TheStash` as viewport-tied live state; carried by
+/// `Screen` only as part of an observed capture. Ephemeral index, not source of
 /// truth: keyed by `TreePath` / `AccessibilityElement` / `HeistId`, rebuilt
 /// wholesale on every parse, and invalidated by the next parse (last-read-wins).
-/// It carries weak UIKit refs and per-path lookups but is **never** unioned
-/// across exploration pages and must never be treated as stable identity. See
-/// `docs/DATA-OWNERSHIP.md`.
+/// It carries weak UIKit refs, live geometry, and per-path lookups but is
+/// **never** unioned across exploration pages and must never be treated as
+/// stable identity. See `docs/DATA-OWNERSHIP.md`.
 struct LiveCapture: Equatable {
     let hierarchy: [AccessibilityHierarchy]
     let containerNames: [AccessibilityContainer: ContainerName]
@@ -115,8 +115,8 @@ struct LiveCapture: Equatable {
             ?? element.scrollContentLocation.map { $0.scrollContainer }.flatMap(scrollView(forContainer:))
     }
 
-    /// Value-only copy for settled interface projection. It preserves the
-    /// parsed hierarchy and id maps but drops UIKit refs and dispatch views.
+    /// Value-only copy for settled semantic projection. It preserves the parsed
+    /// hierarchy and id maps but drops UIKit refs and dispatch views.
     func strippingDispatchReferences() -> LiveCapture {
         LiveCapture(
             hierarchy: hierarchy,

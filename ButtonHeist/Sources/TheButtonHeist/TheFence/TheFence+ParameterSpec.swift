@@ -232,16 +232,13 @@ public enum CLIExposure: Sendable, Equatable {
 }
 
 enum FenceParameterBlocks: Sendable {
-    private static let matcherFields = ElementTarget.predicateFieldNames.map(matcherFieldSpec)
+    private static let matcherFields = ElementTarget.predicateSchemaFields.map(elementTargetFieldSpec)
+    private static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
 
     static let elementTarget: [FenceParameterSpec] = [
-        param(.target, .object, objectProperties: matcherFields + [
-            param(.ordinal, .integer, minimum: 0),
-        ]),
+        param(.target, .object, objectProperties: inlineElementTargetFields),
     ]
-    static let gestureElement = param(.element, .object, objectProperties: matcherFields + [
-        param(.ordinal, .integer, minimum: 0),
-    ])
+    static let gestureElement = param(.element, .object, objectProperties: inlineElementTargetFields)
     static let gesturePoint = param(.point, .object, objectProperties: screenPoint)
 
     static let gesturePointSelection: [FenceParameterSpec] = [
@@ -426,17 +423,17 @@ enum FenceParameterBlocks: Sendable {
         .duration, .number,
         maximum: GestureDuration.maximumSeconds
     )
-    private static func matcherFieldSpec(_ name: String) -> FenceParameterSpec {
-        guard let key = FenceParameterKey(rawValue: name) else {
-            preconditionFailure("ElementTarget matcher field '\(name)' is not a Fence parameter key")
+    private static func elementTargetFieldSpec(_ field: ElementTarget.SchemaField) -> FenceParameterSpec {
+        guard let key = FenceParameterKey(rawValue: field.name) else {
+            preconditionFailure("ElementTarget field '\(field.name)' is not a Fence parameter key")
         }
-        switch key {
-        case .label, .identifier, .value:
+        switch field.kind {
+        case .string:
             return param(key, .string)
-        case .traits, .excludeTraits:
+        case .stringArray:
             return param(key, .stringArray)
-        default:
-            preconditionFailure("ElementTarget matcher field '\(name)' is not mapped in Fence parameter specs")
+        case .nonNegativeInteger:
+            return param(key, .integer, minimum: 0)
         }
     }
 }

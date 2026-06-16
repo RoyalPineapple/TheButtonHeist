@@ -8,9 +8,10 @@ import AccessibilitySnapshotParser
 
 // MARK: - Screen Value Type
 
-/// Immutable parser observation used by settle, discovery, trace, and tests.
-/// Stash stores its semantic and live parts separately; this is not the
-/// long-lived world model.
+/// Immutable observed capture used by settle, discovery, trace, and tests.
+/// It bundles one parser result's semantic projection with the visible live
+/// view needed to interpret that result. The stash stores those halves
+/// separately; `Screen` itself is not the long-lived world model.
 ///
 /// `name` and `id` are derived from the live interface on demand — never
 /// stored — so they cannot drift from the underlying tree.
@@ -155,7 +156,7 @@ struct Screen: Equatable {
         liveCapture.heistIds
     }
 
-    /// Hash of the known semantic accessibility state. Deliberately excludes
+    /// Hash of the settled semantic accessibility state. Deliberately excludes
     /// viewport-only facts like frame, activation point, visible ids, and
     /// scroll offset so a user can scroll a stable screen without producing
     /// history events.
@@ -181,7 +182,7 @@ struct Screen: Equatable {
             .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
     }
 
-    /// A pure view of this screen restricted to ids present in the latest live
+    /// A pure projection restricted to ids present in the latest visible live
     /// hierarchy. This keeps the same live capture and drops known-only
     /// semantic entries retained from exploration.
     var visibleOnly: Screen {
@@ -227,11 +228,10 @@ struct Screen: Equatable {
     /// to preserve a previously-recorded `contentSpaceOrigin`. The most recent
     /// observation is the source of truth.
     ///
-    /// `liveCapture` takes `other`'s. It is the latest live parse, not
-    /// a unionable tree — accumulating it across scrolled pages would keep
-    /// stale UIKit refs and geometry alive. Code that needs the "all elements
-    /// ever seen on this screen" view reads `knownInterface`, not the live
-    /// interface.
+    /// `liveCapture` takes `other`'s. It is the latest visible live view, not a
+    /// unionable tree — accumulating it across scrolled pages would keep stale
+    /// UIKit refs and geometry alive. Code that needs the "all elements ever
+    /// seen on this screen" view reads `knownInterface`, not the live interface.
     func merging(_ other: Screen) -> Screen {
         let mergedElements = semantic.elements.merging(other.semantic.elements) { _, new in new }
         let mergedContainers = semantic.containers.merging(other.semantic.containers) { _, new in new }
@@ -245,7 +245,8 @@ struct Screen: Equatable {
     }
 
     /// Apply a fresh visible parse. If it refreshes known visible state, keep
-    /// previously explored offscreen memory and replace only the live interface.
+    /// previously explored offscreen memory and replace only the visible live
+    /// view.
     /// Elements that were visible in the prior parse and disappear in the fresh
     /// parse are dropped; scroll position alone is not semantic retention.
     func refreshingVisibleState(with visibleRefresh: Screen) -> Screen {

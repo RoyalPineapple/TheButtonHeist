@@ -15,8 +15,8 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                     FenceParameterBlocks.interfaceSubtree,
                     param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
                 ],
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: """
+                projection: .cliAndMCP(
+                    """
                     Read the app accessibility hierarchy, optionally scoped to a subtree.
 
                     Build DSL targets from returned accessibility language: `.label("Pay")`,
@@ -24,22 +24,28 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                     traits: [.button])`, or `.target(..., ordinal: n)` for duplicates.
                     `containerName` is for inspection and viewport/debug commands only; it is
                     not a semantic target or durable heist selector.
-                    """
+                    """,
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
             )
         case .getScreen:
             return TheFence.Command.commandDescriptor(
                 command, family: .observation,
                 requestDecoder: TheFence.decodeGetScreenRequest,
                 parameters: [param(.output, .string), param(.inlineData, .boolean), param(.includeInterface, .boolean)],
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Capture a PNG screenshot with optional inline data and interface state."
+                projection: .cliAndMCP(
+                    "Capture a PNG screenshot with optional inline data and interface state.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
             )
         case .getPasteboard:
             return TheFence.Command.commandDescriptor(
                 command, family: .observation,
                 requestDecoder: TheFence.decodeGetPasteboardRequest,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
-                description: "Read text from the general pasteboard."
+                projection: .cliAndMCP(
+                    "Read text from the general pasteboard.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
+                )
             )
         }
     }
@@ -52,11 +58,12 @@ enum AssertionCommand: String, CaseIterable, FenceCommand, HeistPrimitiveCommand
         TheFence.Command.commandDescriptor(
             command, family: .assertion,
             requestDecoder: TheFence.decodeWaitRequest,
-            mcpExposure: .notExposed,
             parameters: FenceParameterBlocks.wait,
-            mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
-            description: "Assert that an accessibility predicate is satisfied within timeout "
-                + "by evaluating settled accessibility state."
+            projection: .cliOnly(
+                "Assert that an accessibility predicate is satisfied within timeout "
+                    + "by evaluating settled accessibility state.",
+                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true)
+            )
         )
     }
 }

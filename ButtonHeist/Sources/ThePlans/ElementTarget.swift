@@ -20,8 +20,31 @@ public enum ElementTarget: Sendable, Equatable, Hashable {
 }
 
 public extension ElementTarget {
+    enum SchemaFieldKind: Sendable, Equatable {
+        case string
+        case stringArray
+        case nonNegativeInteger
+    }
+
+    struct SchemaField: Sendable, Equatable {
+        public let name: String
+        public let kind: SchemaFieldKind
+    }
+
+    static var predicateSchemaFields: [SchemaField] {
+        CodingKeys.predicateKeys.map { schemaField(for: $0) }
+    }
+
+    static var disambiguatorSchemaFields: [SchemaField] {
+        [schemaField(for: .ordinal)]
+    }
+
+    static var inlineSchemaFields: [SchemaField] {
+        predicateSchemaFields + disambiguatorSchemaFields
+    }
+
     static var predicateFieldNames: [String] {
-        CodingKeys.predicateKeys.map(\.stringValue)
+        predicateSchemaFields.map(\.name)
     }
 
     static var selectorFieldNames: [String] {
@@ -29,11 +52,22 @@ public extension ElementTarget {
     }
 
     static var disambiguatorFieldNames: [String] {
-        [CodingKeys.ordinal.stringValue]
+        disambiguatorSchemaFields.map(\.name)
     }
 
     static var inlineFieldNames: [String] {
-        CodingKeys.allInlineKeys.map(\.stringValue)
+        inlineSchemaFields.map(\.name)
+    }
+
+    private static func schemaField(for key: CodingKeys) -> SchemaField {
+        switch key {
+        case .label, .identifier, .value:
+            return SchemaField(name: key.stringValue, kind: .string)
+        case .traits, .excludeTraits:
+            return SchemaField(name: key.stringValue, kind: .stringArray)
+        case .ordinal:
+            return SchemaField(name: key.stringValue, kind: .nonNegativeInteger)
+        }
     }
 }
 
