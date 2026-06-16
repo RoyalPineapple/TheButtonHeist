@@ -114,7 +114,6 @@ extension TheBurglar {
         let contentSpaceOrigin: CGPoint?
         let scrollContainerPath: TreePath?
         weak var scrollView: UIScrollView?
-        weak var object: NSObject?
     }
 
     private struct ScrollContext {
@@ -122,30 +121,18 @@ extension TheBurglar {
         let containerPath: TreePath
     }
 
-    private struct ElementObjectIndex {
-        let byElement: [AccessibilityElement: NSObject]
-        let byPath: [TreePath: NSObject]
-
-        func object(for element: AccessibilityElement, path: TreePath) -> NSObject? {
-            byPath[path] ?? byElement[element]
-        }
-    }
-
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
-    /// scroll view refs, and live element objects.
+    /// and scroll view refs. Live element objects are read directly from the
+    /// parser result while building the current live capture.
     static func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView],
-        scrollableContainerViewsByPath: [TreePath: UIView] = [:],
-        elementObjects: [AccessibilityElement: NSObject],
-        elementObjectsByPath: [TreePath: NSObject] = [:]
+        scrollableContainerViewsByPath: [TreePath: UIView] = [:]
     ) -> [AccessibilityElement: ElementContext] {
         let byPath = buildElementContextsByPath(
             hierarchy: hierarchy,
             scrollableContainerViews: scrollableContainerViews,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath,
-            elementObjects: elementObjects,
-            elementObjectsByPath: elementObjectsByPath
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
         return Dictionary(
             byPath.compactMap { path, context in
@@ -159,13 +146,10 @@ extension TheBurglar {
     static func buildElementContextsByPath(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView],
-        scrollableContainerViewsByPath: [TreePath: UIView] = [:],
-        elementObjects: [AccessibilityElement: NSObject],
-        elementObjectsByPath: [TreePath: NSObject] = [:]
+        scrollableContainerViewsByPath: [TreePath: UIView] = [:]
     ) -> [TreePath: ElementContext] {
         var contexts: [AccessibilityElement: ElementContext] = [:]
         var contextsByPath: [TreePath: ElementContext] = [:]
-        let objectIndex = ElementObjectIndex(byElement: elementObjects, byPath: elementObjectsByPath)
         for (index, node) in hierarchy.enumerated() {
             collectElementContexts(
                 node: node,
@@ -173,7 +157,6 @@ extension TheBurglar {
                 parentScrollContext: nil,
                 scrollableContainerViews: scrollableContainerViews,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath,
-                objectIndex: objectIndex,
                 into: &contexts,
                 byPath: &contextsByPath
             )
@@ -187,7 +170,6 @@ extension TheBurglar {
         parentScrollContext: ScrollContext?,
         scrollableContainerViews: [AccessibilityContainer: UIView],
         scrollableContainerViewsByPath: [TreePath: UIView],
-        objectIndex: ElementObjectIndex,
         into contexts: inout [AccessibilityElement: ElementContext],
         byPath contextsByPath: inout [TreePath: ElementContext]
     ) {
@@ -202,8 +184,7 @@ extension TheBurglar {
             let context = ElementContext(
                 contentSpaceOrigin: origin,
                 scrollContainerPath: parentScrollContext?.containerPath,
-                scrollView: parentScrollContext?.view,
-                object: objectIndex.object(for: element, path: path)
+                scrollView: parentScrollContext?.view
             )
             contexts[element] = context
             contextsByPath[path] = context
@@ -224,7 +205,6 @@ extension TheBurglar {
                     parentScrollContext: childScrollContext,
                     scrollableContainerViews: scrollableContainerViews,
                     scrollableContainerViewsByPath: scrollableContainerViewsByPath,
-                    objectIndex: objectIndex,
                     into: &contexts,
                     byPath: &contextsByPath
                 )

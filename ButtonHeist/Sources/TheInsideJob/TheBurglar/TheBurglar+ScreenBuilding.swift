@@ -25,9 +25,7 @@ extension TheBurglar {
         let contextsByPath = buildElementContextsByPath(
             hierarchy: hierarchy,
             scrollableContainerViews: scrollViews,
-            scrollableContainerViewsByPath: result.scrollViewsByPath,
-            elementObjects: result.objects,
-            elementObjectsByPath: result.objectsByPath
+            scrollableContainerViewsByPath: result.scrollViewsByPath
         )
         let identityContext = buildContainerIdentityContext(
             hierarchy: hierarchy,
@@ -66,13 +64,14 @@ extension TheBurglar {
             screenElements[heistId] = entry
             heistIdByElement[parsedElement] = heistId
             elementRefs[heistId] = Screen.ElementRef(
-                object: context?.object,
+                object: result.objectsByPath[path] ?? result.objects[parsedElement],
                 scrollView: context?.scrollView
             )
         }
 
         let firstResponders = zip(indexedElements, resolvedHeistIds).filter { item, _ in
-            (contextsByPath[item.path]?.object as? UIView)?.isFirstResponder == true
+            let object = result.objectsByPath[item.path] ?? result.objects[item.element]
+            return (object as? UIView)?.isFirstResponder == true
         }
         if firstResponders.count > 1 {
             insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")

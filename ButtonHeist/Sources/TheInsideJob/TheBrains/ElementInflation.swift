@@ -334,16 +334,15 @@ final class ElementInflation {
         }
 
         if case .objectUnavailable = liveResolution {
+            stash.refreshCurrentVisibleTree()
             switch stash.resolveVisibleTarget(target) {
-            case .resolved(let visibleElement) where visibleElement.heistId != screenElement.heistId:
+            case .resolved(let visibleElement):
                 return resolveVisibleReboundElementTarget(
                     target: target,
                     screenElement: visibleElement,
                     method: method,
                     deallocatedBoundary: deallocatedBoundary
                 )
-            case .resolved:
-                break
             case .notFound(let facts):
                 return .failure(.staleRefresh(
                     "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))"

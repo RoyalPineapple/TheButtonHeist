@@ -54,11 +54,14 @@ private enum ControlsDemoScreen {
 }
 
 private enum TextInputScreen {
+    private static let nameField = ElementTarget.value("Name")
+    private static let emailField = ElementTarget.value("Email")
+
     static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
-        TypeText(name, into: .identifier("text-input-name"))
+        TypeText(name, into: nameField)
             .expect(.present(.value(name)), timeout: .seconds(2))
 
-        TypeText("dogfood@example.com", into: .identifier("text-input-email"))
+        TypeText("dogfood@example.com", into: emailField)
             .expect(.present(.value("dogfood@example.com")), timeout: .seconds(2))
 
         DismissKeyboard()
@@ -66,7 +69,7 @@ private enum TextInputScreen {
     }
 
     static let pasteName = HeistDef<Void>("TextInputScreen.pasteName") {
-        Activate(.identifier("text-input-name"))
+        Activate(nameField)
             .withoutExpectation("Focuses the name field for the edit action")
 
         SetPasteboard("Dogfood clipboard name")
@@ -272,7 +275,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Text Input")
 
-            TypeText(name, into: .identifier("text-input-name"))
+            TypeText(name, into: .value("Name"))
                 .expect(.present(.value(name)), timeout: .seconds(2))
 
             DismissKeyboard()

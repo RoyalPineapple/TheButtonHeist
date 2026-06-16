@@ -552,10 +552,10 @@ final class TheStash {
         let expectedContentSize = contentSize.cgSize
         let expectedFrame = container.container.frame.cgRect
         let candidates = tripwire.getAccessibleWindows()
-            .flatMap { Self.descendantScrollViews(in: $0.rootView) }
+            .flatMap { ScrollViewHierarchySearch.descendantScrollViews(in: $0.rootView) }
             .filter(\.isScrollEnabled)
         let contentMatches = candidates.filter {
-            Self.scrollContentSize($0.contentSize, matches: expectedContentSize)
+            ScrollViewHierarchySearch.contentSize($0.contentSize, matches: expectedContentSize)
         }
         let frameAndContentMatches = contentMatches.filter {
             Self.screenFrame(of: $0).approximatelyEquals(expectedFrame)
@@ -566,19 +566,8 @@ final class TheStash {
         return contentMatches.count == 1 ? contentMatches[0] : nil
     }
 
-    private static func descendantScrollViews(in view: UIView) -> [UIScrollView] {
-        view.subviews.flatMap { subview -> [UIScrollView] in
-            let current = (subview as? UIScrollView).map { [$0] } ?? []
-            return current + descendantScrollViews(in: subview)
-        }
-    }
-
     private static func screenFrame(of view: UIView) -> CGRect {
         view.convert(view.bounds, to: nil)
-    }
-
-    private static func scrollContentSize(_ lhs: CGSize, matches rhs: CGSize) -> Bool {
-        abs(lhs.width - rhs.width) <= 1 && abs(lhs.height - rhs.height) <= 1
     }
 
     private func clearWorldForLifecycleReset() {

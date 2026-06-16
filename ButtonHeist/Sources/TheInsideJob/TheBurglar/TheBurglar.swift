@@ -236,26 +236,15 @@ final class TheBurglar {
         }
 
         let expectedContentSize = contentSize.cgSize
-        let candidates = descendantScrollViews(in: sourceView)
+        let candidates = ScrollViewHierarchySearch.descendantScrollViews(in: sourceView)
             .filter(\.isScrollEnabled)
         let contentSizeMatches = candidates.filter {
-            scrollContentSize($0.contentSize, matches: expectedContentSize)
+            ScrollViewHierarchySearch.contentSize($0.contentSize, matches: expectedContentSize)
         }
         if contentSizeMatches.count == 1 {
             return contentSizeMatches[0]
         }
         return candidates.count == 1 ? candidates[0] : nil
-    }
-
-    private static func descendantScrollViews(in view: UIView) -> [UIScrollView] {
-        view.subviews.flatMap { subview -> [UIScrollView] in
-            let current = (subview as? UIScrollView).map { [$0] } ?? []
-            return current + descendantScrollViews(in: subview)
-        }
-    }
-
-    private static func scrollContentSize(_ lhs: CGSize, matches rhs: CGSize) -> Bool {
-        abs(lhs.width - rhs.width) <= 1 && abs(lhs.height - rhs.height) <= 1
     }
 
     static func scrollViewsByContainerForCurrentCapture(
