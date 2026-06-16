@@ -100,9 +100,14 @@ extension TheBrains {
         path: String = "$.body"
     ) async -> [HeistExecutionStepResult] {
         var stepResults: [HeistExecutionStepResult] = []
+        var aborting = false
 
         for (index, step) in steps.enumerated() {
             let stepPath = "\(path)[\(index)]"
+            guard !aborting else {
+                stepResults.append(skippedHeistStep(step, path: stepPath, scope: scope))
+                continue
+            }
             let stepResult = await executeHeistStep(
                 step,
                 index: index,
@@ -114,11 +119,71 @@ extension TheBrains {
             stepResults.append(stepResult)
 
             if stepResult.isFailure {
-                break
+                aborting = true
             }
         }
 
         return stepResults
+    }
+
+    private func skippedHeistStep(
+        _ step: HeistStep,
+        path: String,
+        scope: HeistExecutionScope
+    ) -> HeistExecutionStepResult {
+        let kind: HeistExecutionStepKind
+        let children: [HeistExecutionStepResult]
+
+        switch step {
+        case .action:
+            kind = .action
+            children = []
+        case .wait:
+            kind = .wait
+            children = []
+        case .conditional:
+            kind = .conditional
+            children = []
+        case .waitForCases:
+            kind = .waitForCases
+            children = []
+        case .forEachElement:
+            kind = .forEachElement
+            children = []
+        case .forEachString:
+            kind = .forEachString
+            children = []
+        case .warn:
+            kind = .warn
+            children = []
+        case .fail:
+            kind = .fail
+            children = []
+        case .heist(let plan):
+            kind = .heist
+            children = skippedHeistSteps(plan.body, path: "\(path).heist.body", scope: scope)
+        case .invoke:
+            kind = .invoke
+            children = []
+        }
+
+        return HeistExecutionStepResult(
+            path: path,
+            kind: kind,
+            status: .skipped,
+            durationMs: 0,
+            children: children
+        )
+    }
+
+    private func skippedHeistSteps(
+        _ steps: [HeistStep],
+        path: String,
+        scope: HeistExecutionScope
+    ) -> [HeistExecutionStepResult] {
+        steps.enumerated().map { index, step in
+            skippedHeistStep(step, path: "\(path)[\(index)]", scope: scope)
+        }
     }
 
     private func executeHeistStep(

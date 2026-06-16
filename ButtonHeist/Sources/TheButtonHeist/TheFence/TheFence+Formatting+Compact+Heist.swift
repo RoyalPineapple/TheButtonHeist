@@ -19,10 +19,12 @@ extension FenceResponse {
         if let lastScreenId = Self.finalScreenId(result) {
             text = "\(lastScreenId) | \(text)"
         }
-        for (index, step) in result.reportRows.enumerated() {
+        for (index, step) in result.outputReceiptNodes.enumerated() {
             var line = "  [\(index)] \(step.reportDisplayName)"
             if let failureMessage = step.reportFailureMessage {
                 line += " -> error: \(failureMessage)"
+            } else if step.status == .skipped {
+                line += " -> skipped"
             } else if let delta = step.traceEvidenceResult?.accessibilityTrace?.endpointDelta {
                 line += " -> \(Self.compactDeltaKind(delta))"
             }

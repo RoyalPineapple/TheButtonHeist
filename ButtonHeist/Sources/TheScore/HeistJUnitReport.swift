@@ -5,15 +5,15 @@ import Foundation
 
 /// JUnit-compatible summary derived from a `HeistExecutionResult`.
 ///
-/// The rows are an adapter projection from the structured heist execution tree,
+/// The XML steps are an adapter traversal of the structured heist execution tree,
 /// not the product model for heist results.
 public struct HeistJUnitReport: Sendable, Equatable {
     /// Name derived from the input file (e.g. "navigation-flow" from "navigation-flow.heist").
     public let heistName: String
     /// Bundle identifier of the app the heist targets.
     public let app: String
-    /// Total number of report rows for the executed heist.
-    public let reportRowCount: Int
+    /// Total number of receipt nodes surfaced in the JUnit adapter.
+    public let receiptNodeCount: Int
     /// Total wall-clock time for the entire heist, in seconds.
     public let totalTimeSeconds: Double
     /// Step outcomes in execution order for the JUnit adapter.
@@ -22,22 +22,22 @@ public struct HeistJUnitReport: Sendable, Equatable {
     public init(
         heistName: String,
         app: String,
-        reportRowCount: Int,
+        receiptNodeCount: Int,
         totalTimeSeconds: Double,
         steps: [StepResult]
     ) {
         self.heistName = heistName
         self.app = app
-        self.reportRowCount = reportRowCount
+        self.receiptNodeCount = receiptNodeCount
         self.totalTimeSeconds = totalTimeSeconds
         self.steps = steps
     }
 
     // MARK: - Derived Properties
 
-    public var passedReportRowCount: Int { steps.count(where: { $0.passed }) }
-    public var failedReportRowCount: Int { steps.count(where: { !$0.passed }) }
-    public var allPassed: Bool { steps.allSatisfy(\.passed) }
+    public var passedReceiptNodeCount: Int { steps.count(where: { $0.passed }) }
+    public var failedReceiptNodeCount: Int { steps.count(where: { $0.failed }) }
+    public var allPassed: Bool { !steps.contains(where: \.failed) }
 }
 
 // MARK: - Step Result
@@ -72,6 +72,11 @@ extension HeistJUnitReport {
 
         public var passed: Bool {
             if case .passed = outcome { return true }
+            return false
+        }
+
+        public var failed: Bool {
+            if case .failed = outcome { return true }
             return false
         }
 
@@ -123,6 +128,7 @@ extension HeistJUnitReport {
     /// Whether a step passed or failed, with failure diagnostics.
     public enum Outcome: Sendable, Equatable {
         case passed
+        case skipped
         case failed(message: String, errorKind: ReportErrorKind?)
 
         public var failureMessage: String? {
@@ -167,7 +173,7 @@ extension HeistJUnitReport {
 
         if allPassed {
             xml += "/>\n"
-        } else if let failedStep = steps.first(where: { !$0.passed }) {
+        } else if let failedStep = steps.first(where: \.failed) {
             xml += ">\n"
             let message = failedStep.outcome.failureMessage ?? "heist failed"
             let failureType = failedStep.outcome.failureType?.typeName ?? "heistFailure"
@@ -186,7 +192,7 @@ extension HeistJUnitReport {
     // MARK: - Private Helpers
 
     private func failureBody(failedStep: StepResult) -> String {
-        var body = "Completed \(passedReportRowCount)/\(reportRowCount) report row(s) before failure.\n"
+        var body = "Completed \(passedReceiptNodeCount)/\(receiptNodeCount) receipt node(s) before failure.\n"
         body += "step: [\(failedStep.index)] \(failedStep.command)\n"
         if let target = failedStep.target {
             var parts: [String] = []

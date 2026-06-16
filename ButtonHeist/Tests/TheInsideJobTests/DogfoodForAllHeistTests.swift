@@ -463,11 +463,15 @@ final class DogfoodForAllHeistTests: XCTestCase {
             XCTAssertEqual(failure.failedStepKind, .fail)
             XCTAssertEqual(failure.message, "intentional dogfood failure")
             XCTAssertEqual(failure.result.abortedAtPath, "$.body[2]")
-            XCTAssertEqual(failure.result.steps.map(\.kind), [.wait, .warn, .fail])
+            XCTAssertEqual(failure.result.steps.map(\.kind), [.wait, .warn, .fail, .warn])
+            XCTAssertEqual(failure.result.steps.map(\.status), [.passed, .passed, .failed, .skipped])
             XCTAssertEqual(failure.result.executedTopLevelStepCount, 3)
             XCTAssertEqual(failure.result.executedNodeCount, 3)
-            XCTAssertEqual(failure.result.reportRows.map(\.kind), [.wait, .warn, .fail])
-            XCTAssertEqual(failure.result.reportRows.map(\.path), ["$.body[0]", "$.body[1]", "$.body[2]"])
+            XCTAssertEqual(failure.result.outputReceiptNodes.map(\.kind), [.wait, .warn, .fail, .warn])
+            XCTAssertEqual(
+                failure.result.outputReceiptNodes.map(\.path),
+                ["$.body[0]", "$.body[1]", "$.body[2]", "$.body[3]"]
+            )
             XCTAssertEqual(failure.result.expectationsChecked, 1)
             XCTAssertEqual(failure.result.expectationsMet, 1)
             XCTAssertEqual(failure.result.warnings, [
