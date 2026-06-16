@@ -5,11 +5,7 @@ import Foundation
 import TheScore
 
 struct PredicateCaseSelection {
-    typealias ObservationSource = @MainActor (
-        SemanticObservationScope,
-        UInt64?,
-        Double?
-    ) async -> HeistSemanticObservation?
+    typealias ObservationSource = PredicatePollingEngine<PredicateCaseSelection>.ObservationSource
 
     let cases: [HeistCaseMatchResult]
     let selectedCaseIndex: Int?

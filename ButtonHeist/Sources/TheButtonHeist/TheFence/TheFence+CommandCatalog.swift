@@ -254,6 +254,7 @@ public struct FenceCommandProjection: Sendable, Equatable {
         _ description: String,
         mcpAnnotations: MCPToolAnnotationSpec? = nil
     ) -> Self {
+        // CLI-only commands may still keep MCP annotations as reference metadata for generated docs.
         Self(mcpExposure: .notExposed, mcpAnnotations: mcpAnnotations, description: description)
     }
 
