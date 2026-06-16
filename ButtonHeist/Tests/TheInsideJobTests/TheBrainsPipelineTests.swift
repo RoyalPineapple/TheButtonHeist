@@ -345,7 +345,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .changed(.appeared(ElementPredicate(label: "Loaded"))),
+                predicate: .present(ElementPredicate(label: "Loaded")),
                 timeout: 1
             ))
         }
@@ -375,7 +375,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .changed(.appeared(ElementPredicate(label: "Missing"))),
+                predicate: .present(ElementPredicate(label: "Missing")),
                 timeout: 0.05
             ))
         }

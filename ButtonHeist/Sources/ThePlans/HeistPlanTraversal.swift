@@ -20,7 +20,6 @@ protocol HeistPlanTraversalVisitor {
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext)
     mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext)
     mutating func visitConditional(_ conditional: ConditionalStep, context: HeistTraversalContext)
-    mutating func visitWaitForCases(_ waitForCases: WaitForCasesStep, context: HeistTraversalContext)
     mutating func visitPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext)
     mutating func visitElseBody(_ body: [HeistStep], context: HeistTraversalContext)
     mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext)
@@ -39,7 +38,6 @@ extension HeistPlanTraversalVisitor {
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {}
     mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {}
     mutating func visitConditional(_ conditional: ConditionalStep, context: HeistTraversalContext) {}
-    mutating func visitWaitForCases(_ waitForCases: WaitForCasesStep, context: HeistTraversalContext) {}
     mutating func visitPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext) {}
     mutating func visitElseBody(_ body: [HeistStep], context: HeistTraversalContext) {}
     mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {}
@@ -134,11 +132,9 @@ struct HeistPlanTraversal {
                 )
             }
         case .wait(let wait):
-            visitor.visitWait(wait, context: context.child(path: "\(context.path).wait"))
+            walk(wait, context: context, visitor: &visitor)
         case .conditional(let conditional):
             walk(conditional, context: context, visitor: &visitor)
-        case .waitForCases(let waitForCases):
-            walk(waitForCases, context: context, visitor: &visitor)
         case .forEachElement(let forEach):
             walk(forEach, context: context, visitor: &visitor)
         case .forEachString(let forEach):
@@ -165,13 +161,26 @@ struct HeistPlanTraversal {
     }
 
     private func walk<V: HeistPlanTraversalVisitor>(
-        _ waitForCases: WaitForCasesStep,
+        _ wait: WaitStep,
         context: HeistTraversalContext,
         visitor: inout V
     ) {
-        let waitForContext = context.child(path: "\(context.path).wait_for_cases")
-        visitor.visitWaitForCases(waitForCases, context: waitForContext)
-        walk(cases: waitForCases.cases, elseBody: waitForCases.elseBody, branchContext: waitForContext, visitor: &visitor)
+        let waitContext = context.child(path: "\(context.path).wait")
+        visitor.visitWait(wait, context: waitContext)
+        guard let elseBody = wait.elseBody else { return }
+        let elseContext = waitContext.child(path: "\(waitContext.path).else_body")
+        visitor.visitElseBody(elseBody, context: elseContext)
+        walk(
+            steps: elseBody,
+            path: elseContext.path,
+            depth: context.depth + 1,
+            allowsCollectionLoops: false,
+            scope: context.scope,
+            environment: context.environment,
+            definitionScope: context.definitionScope,
+            invocationStack: context.invocationStack,
+            visitor: &visitor
+        )
     }
 
     private func walk<V: HeistPlanTraversalVisitor>(

@@ -81,14 +81,21 @@ extension TheFence {
     }
 
     func loadInlinePerformStepSource(_ source: String) throws -> HeistPlan {
-        try loadInlineButtonHeistSource(
-            """
-            HeistPlan {
-            \(source)
+        do {
+            return try loadInlineButtonHeistSource(
+                """
+                HeistPlan {
+                \(source)
+                }
+                """,
+                commandName: Command.perform.rawValue
+            )
+        } catch {
+            guard String(describing: error).contains("WaitFor is a gate") else {
+                throw error
             }
-            """,
-            commandName: Command.perform.rawValue
-        )
+            throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
+        }
     }
 
     func performableStep(in plan: HeistPlan) throws -> PerformableHeistStep {
@@ -106,7 +113,7 @@ extension TheFence {
             return .action(action)
         case .wait(let wait):
             return .wait(wait)
-        case .conditional, .waitForCases, .forEachElement, .forEachString, .warn, .fail, .heist, .invoke:
+        case .conditional, .forEachElement, .forEachString, .warn, .fail, .heist, .invoke:
             throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
         }
     }

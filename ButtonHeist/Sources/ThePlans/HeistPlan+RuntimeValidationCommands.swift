@@ -161,6 +161,22 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
+    mutating func validateString(
+        _ match: StringMatch<StringExpr>,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        validateString(match.value, path: path, scope: scope)
+        if match.hasInvalidEmptyBroadLiteral {
+            fail(
+                path: path,
+                contract: "\(match.mode.rawValue) string match value must not be empty",
+                observed: "empty \(match.mode.rawValue) match",
+                correction: "Use a non-empty string, or an exact match when the empty string is intentional."
+            )
+        }
+    }
+
     mutating func validateElementTarget(_ target: ElementTarget, path: String) {
         switch target {
         case .predicate(let predicate, _):
@@ -252,6 +268,11 @@ extension HeistPlanRuntimeSafetyValidator {
                 correction: "Use \(limits.maxTotalStringBytes) total UTF-8 string bytes or fewer."
             )
         }
+    }
+
+    mutating func addString(_ match: StringMatch<String>?, path: String, role: String) {
+        guard let match else { return }
+        addString(match.value, path: path, role: role)
     }
 
 }

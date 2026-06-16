@@ -32,8 +32,6 @@ extension HeistPlanRuntimeSafetyValidator {
                 if let state {
                     validateStatePredicate(state, path: "\(path).where", depth: depth + 1)
                 }
-            case .appeared(let predicate), .disappeared(let predicate):
-                validateElementPredicate(predicate, path: "\(path).element")
             case .updated(let update):
                 if let element = update.element {
                     validateElementPredicate(element, path: "\(path).element")
@@ -97,8 +95,6 @@ extension HeistPlanRuntimeSafetyValidator {
             if let state {
                 validateStatePredicate(state, path: "\(path).where", depth: depth + 1, scope: scope)
             }
-        case .appeared(let predicate), .disappeared(let predicate):
-            validateElementPredicate(predicate, path: "\(path).element", scope: scope)
         case .updated(let update):
             if let element = update.element {
                 validateElementPredicate(element, path: "\(path).element", scope: scope)

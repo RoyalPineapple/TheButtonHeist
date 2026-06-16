@@ -81,13 +81,12 @@ struct CanonicalHeistSourceRoundTripTests {
                 ],
                 elseBody: [.fail(FailStep(message: "Pay button missing"))]
             )),
-            .waitForCases(try WaitForCasesStep(
+            .wait(WaitStep(
+                predicate: .changed(.screen()),
                 timeout: 3,
-                cases: [
-                    PredicateCase(predicate: .changed(.screen()), body: [.warn(WarnStep(message: "screen changed"))]),
-                ],
                 elseBody: [.fail(FailStep(message: "screen did not change"))]
             )),
+            .warn(WarnStep(message: "screen changed")),
             .forEachString(try ForEachStringStep(
                 values: ["Milk", "Eggs"],
                 parameter: "item",

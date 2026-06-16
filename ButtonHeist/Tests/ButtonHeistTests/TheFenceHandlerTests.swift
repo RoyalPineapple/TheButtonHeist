@@ -638,7 +638,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
+            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item")))))))]
         )
         let plan = try HeistPlan(definitions: [definition], body: [
             .invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk")))),
@@ -796,7 +796,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let definition = try HeistPlan(
             name: "addToCart",
             parameter: .string(name: "item"),
-            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
+            body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item")))))))]
         )
         let plan = try HeistPlan(
             name: "shop",
@@ -2434,8 +2434,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(command: .wait, values: [
             "predicate": .object([
-                "type": .string("element_disappeared"),
-                "element": .object(["label": .string("Loading")]),
+                "type": .string("elements_changed"),
             ]),
         ])
 
@@ -2443,7 +2442,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected single-step action response, got \(response)")
         }
         XCTAssertEqual(leaf.expectation?.met, false)
-        XCTAssertEqual(leaf.expectation?.actual, "no elements removed")
+        XCTAssertEqual(leaf.expectation?.actual, "noChange")
     }
 
     @ButtonHeistActor
@@ -2464,8 +2463,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(command: .wait, values: [
             "predicate": .object([
-                "type": .string("element_disappeared"),
-                "element": .object(["label": .string("Loading")]),
+                "type": .string("elements_changed"),
             ]),
             "timeout": .double(0.2),
         ])
@@ -2497,7 +2495,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testActionExpectationExecutesAsServerSideExpectationStep() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "Home")))
+        let predicate = AccessibilityPredicate.present(ElementPredicate(label: "Home"))
         let interface = makeReceiptTestInterface([
             testElement(label: "Home", traits: [.staticText]),
         ])
@@ -2529,7 +2527,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(command: .activate, values: [
             "target": targetValue(identifier: "myElement"),
             "expect": .object([
-                "type": .string("element_appeared"),
+                "type": .string("present"),
                 "element": .object(["label": .string("Home")]),
             ]),
         ])
@@ -2678,7 +2676,7 @@ final class TheFenceHandlerTests: XCTestCase {
             element: ElementPredicate(identifier: "counter"), property: .value, to: "5"
         )))
         let sourceStep = HeistStep.action(try ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(identifier: .literal("counter")))),
+            command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact(.literal("counter"))))),
             expectation: WaitStep(predicate: expectation, timeout: 10)
         ))
         let plan = try HeistPlan(body: [sourceStep])
@@ -2736,21 +2734,21 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationDiscriminatorElementAppearedWithElement() async throws {
+    func testParseExpectationDiscriminatorPresentWithElement() async throws {
         let result = try parseTypedExpectation(.object([
-            "type": .string("element_appeared"),
+            "type": .string("present"),
             "element": .object(["label": .string("Cart"), "identifier": .string("cart.button")]),
         ]))
         XCTAssertEqual(
             result,
-            .changed(.appeared(ElementPredicate(label: "Cart", identifier: "cart.button")))
+            .present(ElementPredicate(label: "Cart", identifier: "cart.button"))
         )
     }
 
     @ButtonHeistActor
     func testParseExpectationTypedPayloadPreservesElementTraits() async throws {
         let result = try parseTypedExpectation(.object([
-            "type": .string("element_disappeared"),
+            "type": .string("absent"),
             "element": .object([
                 "label": .string("Spinner"),
                 "traits": .array([.string("button")]),
@@ -2760,16 +2758,14 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(
             result,
-            .changed(.disappeared(
-                ElementPredicate(label: "Spinner", traits: [.button], excludeTraits: [.selected])
-            ))
+            .absent(ElementPredicate(label: "Spinner", traits: [.button], excludeTraits: [.selected]))
         )
     }
 
     @ButtonHeistActor
     func testParseExpectationTypedPayloadBadElementFieldNamesField() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
-            "type": .string("element_appeared"),
+            "type": .string("present"),
             "element": .object([
                 "traits": .array([.int(7)]),
             ]),
@@ -2798,7 +2794,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testParseExpectationRejectsExtraElementKeys() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
-            "type": .string("element_appeared"),
+            "type": .string("present"),
             "element": .object([
                 "label": .string("Done"),
                 "unknown": .string("ignored before"),
@@ -2814,7 +2810,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testParseExpectationElementRejectsHeistId() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
-            "type": .string("element_appeared"),
+            "type": .string("present"),
             "element": .object([
                 "heistId": .string("button_save"),
             ]),
@@ -2841,15 +2837,13 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationDiscriminatorElementAppearedWithoutElementThrows() async {
+    func testParseExpectationRejectsRemovedElementTransitionType() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object(["type": .string("element_appeared")]))) { error in
-            guard let error = error as? SchemaValidationError else {
-                XCTFail("Expected SchemaValidationError, got \(error)")
+            guard case FenceError.invalidRequest(let message) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertEqual(error.field, "element")
-            XCTAssertEqual(error.observed, "missing")
-            XCTAssertEqual(error.expected, "present")
+            XCTAssertTrue(message.contains(#"Unknown predicate type: "element_appeared""#), message)
         }
     }
 

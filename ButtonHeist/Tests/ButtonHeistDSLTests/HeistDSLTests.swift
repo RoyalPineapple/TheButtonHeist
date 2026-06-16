@@ -342,22 +342,17 @@ func invalidForEachInsideIfCaseFailsPlanBuild() {
 }
 
 @Test
-func invalidForEachInsideWaitForCaseFailsPlanBuild() {
+func invalidForEachInsideWaitForElseFailsPlanBuild() {
     expectBuildFailure(contains: "ForEach element loop is invalid") {
         _ = try HeistPlan {
-            WaitFor(timeout: .seconds(1)) {
-                Case(.present(.label("Ready"))) {
+            WaitFor(.present(.label("Ready")), timeout: .seconds(1))
+                .else {
                     ForEach(.matching(.label("Row")), parameter: "bad name") { target in
                         Activate(target)
                     }
 
                     Warn("valid sibling")
                 }
-
-                Else {
-                    Warn("fallback")
-                }
-            }
         }
     }
 }
@@ -442,30 +437,18 @@ func multiCaseIfBuildsConditionalStep() throws {
 }
 
 @Test
-func multiCaseWaitForBuildsWaitForCasesStep() throws {
+func waitForElseBuildsWaitStepWithElseBody() throws {
     let heist = try HeistPlan {
-        WaitFor(timeout: .seconds(8)) {
-            Case(.present(.label("Home"))) {
-                Warn("logged in")
-            }
-
-            Case(.present(.label("Invalid password"))) {
-                Fail("invalid password")
-            }
-
-            Else {
+        WaitFor(.present(.label("Home")), timeout: .seconds(8))
+            .else {
                 Fail("no known result")
             }
-        }
     }
 
     #expect(try heist == HeistPlan(body: [
-        .waitForCases(try WaitForCasesStep(
+        .wait(WaitStep(
+            predicate: .present(.label("Home")),
             timeout: 8,
-            cases: [
-                PredicateCase(predicate: .present(.label("Home")), body: [.warn(WarnStep(message: "logged in"))]),
-                PredicateCase(predicate: .present(.label("Invalid password")), body: [.fail(FailStep(message: "invalid password"))]),
-            ],
             elseBody: [.fail(FailStep(message: "no known result"))]
         )),
     ]))
@@ -480,19 +463,10 @@ func canonicalProductDemoCompilesAsAccessibilityContractProgram() throws {
         Activate(.label("Search"))
             .expect(.changed(.screen()), timeout: .seconds(5))
 
-        WaitFor(timeout: .seconds(5)) {
-            Case(.present(.label("Results"))) {
-                Warn("Search results loaded")
-            }
-
-            Case(.present(.label("No Results"))) {
-                Fail("Expected search results")
-            }
-
-            Else {
+        WaitFor(.present(.label("Results")), timeout: .seconds(5))
+            .else {
                 Fail("Search did not settle")
             }
-        }
     }
 
     #expect(heist.name == "searchFlow")

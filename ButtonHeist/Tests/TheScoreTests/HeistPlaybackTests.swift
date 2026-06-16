@@ -136,7 +136,7 @@ final class HeistPlanTests: XCTestCase {
         XCTAssertEqual(decoded, plan)
     }
 
-    func testConditionalAndWaitForCasesRoundTrip() throws {
+    func testConditionalAndWaitRoundTrip() throws {
         let conditionCase = PredicateCase(
             predicate: .state(.present(ElementPredicate(label: "Home"))),
             body: [.warn(WarnStep(message: "home"))]
@@ -146,9 +146,9 @@ final class HeistPlanTests: XCTestCase {
                 cases: [conditionCase],
                 elseBody: [.warn(WarnStep(message: "not home"))]
             )),
-            .waitForCases(try WaitForCasesStep(
+            .wait(WaitStep(
+                predicate: .state(.present(ElementPredicate(label: "Done"))),
                 timeout: 2,
-                cases: [conditionCase],
                 elseBody: [.fail(FailStep(message: "no known state"))]
             )),
         ])
@@ -178,7 +178,7 @@ final class HeistPlanTests: XCTestCase {
         }
     }
 
-    func testWaitForCasesRejectsCamelCaseElseSteps() {
+    func testWaitForCasesStepTypeIsRejected() {
         let json = """
         {
           "type": "wait_for_cases",
@@ -194,7 +194,7 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("elseSteps"), "\(error)")
+            XCTAssertTrue("\(error)".contains("wait_for_cases"), "\(error)")
         }
     }
 
@@ -228,16 +228,13 @@ final class HeistPlanTests: XCTestCase {
         }
     }
 
-    func testWaitForCasesRejectsNegativeTimeout() {
+    func testWaitRejectsNegativeTimeout() {
         let json = """
         {
-          "type": "wait_for_cases",
-          "wait_for_cases": {
-            "timeout": -1,
-            "cases": [{
-              "predicate": {"type": "present", "element": {"label": "Home"}},
-              "body": [{"type": "warn", "warn": {"message": "home"}}]
-            }]
+          "type": "wait",
+          "wait": {
+            "predicate": {"type": "present", "element": {"label": "Home"}},
+            "timeout": -1
           }
         }
         """
@@ -247,16 +244,13 @@ final class HeistPlanTests: XCTestCase {
         }
     }
 
-    func testWaitForCasesRejectsCamelCaseBodyKey() {
+    func testWaitRejectsCamelCaseBodyKey() {
         let json = """
         {
-          "type": "wait_for_cases",
+          "type": "wait",
           "waitForCases": {
-            "timeout": 1,
-            "cases": [{
-              "predicate": {"type": "present", "element": {"label": "Home"}},
-              "body": [{"type": "warn", "warn": {"message": "home"}}]
-            }]
+            "predicate": {"type": "present", "element": {"label": "Home"}},
+            "timeout": 1
           }
         }
         """
@@ -265,7 +259,7 @@ final class HeistPlanTests: XCTestCase {
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertEqual(context.debugDescription, "Unknown wait_for_cases heist step field \"waitForCases\"")
+            XCTAssertEqual(context.debugDescription, "Unknown wait heist step field \"waitForCases\"")
         }
     }
 
@@ -314,7 +308,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = try ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Save"), traits: [.button]))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")), traits: [.button]))),
             expectation: WaitStep(predicate: .changed(.screen()), timeout: 2)
         )
 
@@ -326,7 +320,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testElementTargetExprHashMatchesCrossCaseEquality() {
         let target = ElementTargetExpr.target(.predicate(ElementPredicate(label: "Save"), ordinal: 1))
-        let template = ElementTargetExpr.predicate(ElementPredicateTemplate(label: .literal("Save")), ordinal: 1)
+        let template = ElementTargetExpr.predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))), ordinal: 1)
 
         XCTAssertEqual(target, template)
         XCTAssertEqual(Set([target, template]).count, 1)
@@ -579,6 +573,6 @@ private func activateStep(
     traits: [HeistTrait] = []
 ) throws -> HeistStep {
     .action(try ActionStep(
-        command: .activate(.predicate(ElementPredicateTemplate(label: .literal(label), traits: traits)))
+        command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal(label)), traits: traits)))
     ))
 }

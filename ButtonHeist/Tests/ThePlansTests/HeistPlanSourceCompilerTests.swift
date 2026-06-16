@@ -97,13 +97,13 @@ import ThePlans
             Activate(.label(item))
         }
 
-        Activate(.label("Pay")).expect(.changed(.screen()))
+        Activate(.label("Pay")).expect()
 
-        WaitFor(.present(.label("Receipt")), timeout: .seconds(5)) {
-            Warn("Receipt appeared")
-        }.else {
+        WaitFor(.label("Receipt"), timeout: .seconds(5)).else {
             Fail("Receipt did not appear")
         }
+
+        Warn("Receipt appeared")
 
         ForEach(["Milk", "Bread"]) { item in
             RunHeist("Cart.addItem", item)
@@ -119,18 +119,14 @@ import ThePlans
     #expect(plan.body == [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+            expectation: WaitStep(predicate: .changed(.elements), timeout: 0)
         )),
-        .waitForCases(try WaitForCasesStep(
+        .wait(WaitStep(
+            predicate: .present(.label("Receipt")),
             timeout: 5,
-            cases: [
-                PredicateCase(
-                    predicate: .present(.label("Receipt")),
-                    body: [.warn(WarnStep(message: "Receipt appeared"))]
-                ),
-            ],
             elseBody: [.fail(FailStep(message: "Receipt did not appear"))]
         )),
+        .warn(WarnStep(message: "Receipt appeared")),
         .forEachString(try ForEachStringStep(
             values: ["Milk", "Bread"],
             parameter: "item",
@@ -160,13 +156,13 @@ import ThePlans
 
         Activate(rootTarget)
         Activate(.label("Pay"))
-            .expect(.changed(.screen()))
+            .expect()
 
-        WaitFor(.present(.label("Receipt")), timeout: .seconds(5)) {
-            Warn("Receipt appeared")
-        }.else {
+        WaitFor(.label("Receipt"), timeout: .seconds(5)).else {
             Fail("Receipt did not appear")
         }
+
+        Warn("Receipt appeared")
 
         If {
             Case(.present(.label("Cart"))) {
@@ -200,7 +196,8 @@ import ThePlans
     #expect(plan.body.map(\.testKind) == [
         .action,
         .action,
-        .waitForCases,
+        .wait,
+        .warn,
         .conditional,
         .conditional,
         .forEachString,
@@ -417,13 +414,12 @@ import ThePlans
             ],
             elseBody: [.fail(FailStep(message: "Pay button missing"))]
         )),
-        .waitForCases(try WaitForCasesStep(
+        .wait(WaitStep(
+            predicate: .changed(.screen()),
             timeout: 3,
-            cases: [
-                PredicateCase(predicate: .changed(.screen()), body: [.warn(WarnStep(message: "screen changed"))]),
-            ],
             elseBody: [.fail(FailStep(message: "screen did not change"))]
         )),
+        .warn(WarnStep(message: "screen changed")),
         .forEachString(try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "itemName",
@@ -741,7 +737,6 @@ private enum ParsedHeistStepKind: Equatable {
     case action
     case wait
     case conditional
-    case waitForCases
     case forEachElement
     case forEachString
     case warn
@@ -756,7 +751,6 @@ private extension HeistStep {
         case .action: return .action
         case .wait: return .wait
         case .conditional: return .conditional
-        case .waitForCases: return .waitForCases
         case .forEachElement: return .forEachElement
         case .forEachString: return .forEachString
         case .warn: return .warn

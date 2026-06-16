@@ -114,9 +114,9 @@ func semanticTarget(
 ) -> ElementTarget {
     .predicate(
         ElementPredicate(
-            label: label,
-            identifier: identifier,
-            value: value,
+            label: label.map(StringMatch.exact),
+            identifier: identifier.map(StringMatch.exact),
+            value: value.map(StringMatch.exact),
             traits: traits ?? [],
             excludeTraits: excludeTraits ?? []
         ),
@@ -463,7 +463,7 @@ private extension HeistStep {
             return action.command.fenceCommandForInspection
         case .wait:
             return .wait
-        case .conditional, .waitForCases, .forEachElement, .forEachString, .heist, .invoke, .warn, .fail:
+        case .conditional, .forEachElement, .forEachString, .heist, .invoke, .warn, .fail:
             return .runHeist
         }
     }

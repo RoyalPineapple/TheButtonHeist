@@ -15,7 +15,6 @@ extension HeistStep: CustomStringConvertible {
         case .action(let step): return step.description
         case .wait(let step): return step.description
         case .conditional(let step): return step.description
-        case .waitForCases(let step): return step.description
         case .forEachElement(let step): return step.description
         case .forEachString(let step): return step.description
         case .warn(let step): return step.description
@@ -40,23 +39,14 @@ extension WaitStep: CustomStringConvertible {
         ScoreDescription.call("wait", [
             predicate.description,
             "timeout=\(ScoreDescription.decimal(timeout))",
-        ])
+            elseBody.map { "else=\($0.count)" },
+        ].compactMap { $0 })
     }
 }
 
 extension ConditionalStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("if", [
-            "cases=\(cases.count)",
-            elseBody.map { "else=\($0.count)" },
-        ].compactMap { $0 })
-    }
-}
-
-extension WaitForCasesStep: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("waitForCases", [
-            "timeout=\(ScoreDescription.decimal(timeout))",
             "cases=\(cases.count)",
             elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })

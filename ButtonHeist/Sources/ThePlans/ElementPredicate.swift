@@ -1,31 +1,206 @@
 import Foundation
 
+// MARK: - String Matching
+
+public protocol StringMatchPayload: Sendable, Equatable, Hashable {
+    /// Literal emptiness when it is knowable without resolving runtime refs.
+    var stringMatchLiteralIsEmpty: Bool? { get }
+}
+
+extension String: StringMatchPayload {
+    public var stringMatchLiteralIsEmpty: Bool? { isEmpty }
+}
+
+/// Shared representation for predicate string comparison.
+///
+/// Exact matching is the default and retains the legacy flat JSON form:
+/// `"label": "Pay"` decodes as `.exact("Pay")`. Broader modes use object
+/// form: `"label": {"mode":"contains","value":"Send"}`.
+public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashable {
+    public enum Mode: String, Codable, CaseIterable, Sendable {
+        case exact
+        case contains
+        case prefix
+        case suffix
+    }
+
+    case exact(Value)
+    case contains(Value)
+    case prefix(Value)
+    case suffix(Value)
+
+    public init(mode: Mode, value: Value) {
+        switch mode {
+        case .exact:
+            self = .exact(value)
+        case .contains:
+            self = .contains(value)
+        case .prefix:
+            self = .prefix(value)
+        case .suffix:
+            self = .suffix(value)
+        }
+    }
+
+    public var mode: Mode {
+        switch self {
+        case .exact:
+            return .exact
+        case .contains:
+            return .contains
+        case .prefix:
+            return .prefix
+        case .suffix:
+            return .suffix
+        }
+    }
+
+    public var value: Value {
+        switch self {
+        case .exact(let value), .contains(let value), .prefix(let value), .suffix(let value):
+            return value
+        }
+    }
+
+    public var isExact: Bool {
+        mode == .exact
+    }
+
+    public var hasInvalidEmptyBroadLiteral: Bool {
+        mode != .exact && value.stringMatchLiteralIsEmpty == true
+    }
+
+    public var hasPredicateLiteral: Bool {
+        value.stringMatchLiteralIsEmpty != true
+    }
+
+    public func map<NewValue: StringMatchPayload>(
+        _ transform: (Value) throws -> NewValue
+    ) rethrows -> StringMatch<NewValue> {
+        try StringMatch<NewValue>(
+            mode: StringMatch<NewValue>.Mode(rawValue: self.mode.rawValue) ?? .exact,
+            value: transform(value)
+        )
+    }
+}
+
+extension StringMatch: ExpressibleByUnicodeScalarLiteral
+where Value: ExpressibleByStringLiteral, Value.StringLiteralType == String {
+    public init(unicodeScalarLiteral value: String) {
+        self = .exact(Value(stringLiteral: value))
+    }
+}
+
+extension StringMatch: ExpressibleByExtendedGraphemeClusterLiteral
+where Value: ExpressibleByStringLiteral, Value.StringLiteralType == String {
+    public init(extendedGraphemeClusterLiteral value: String) {
+        self = .exact(Value(stringLiteral: value))
+    }
+}
+
+extension StringMatch: ExpressibleByStringLiteral where Value: ExpressibleByStringLiteral, Value.StringLiteralType == String {
+    public init(stringLiteral value: String) {
+        self = .exact(Value(stringLiteral: value))
+    }
+}
+
+extension StringMatch: Codable where Value: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case mode, value
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let exactValue = try? decoder.singleValueContainer().decode(Value.self) {
+            self = .exact(exactValue)
+            return
+        }
+
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "string match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let mode = try container.decode(Mode.self, forKey: .mode)
+        let value = try container.decode(Value.self, forKey: .value)
+        self = StringMatch(mode: mode, value: value)
+        if hasInvalidEmptyBroadLiteral {
+            throw DecodingError.dataCorruptedError(
+                forKey: .value,
+                in: container,
+                debugDescription: "\(mode.rawValue) string match value must not be empty"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        if case .exact(let value) = self {
+            var container = encoder.singleValueContainer()
+            try container.encode(value)
+            return
+        }
+
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(mode, forKey: .mode)
+        try container.encode(value, forKey: .value)
+    }
+}
+
+extension StringMatch: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .exact(let value):
+            return String(describing: value)
+        case .contains(let value):
+            return "contains(\(value))"
+        case .prefix(let value):
+            return "prefix(\(value))"
+        case .suffix(let value):
+            return "suffix(\(value))"
+        }
+    }
+}
+
+public extension StringMatch where Value == String {
+    func matches(_ candidate: String) -> Bool {
+        guard !value.isEmpty else { return false }
+        switch self {
+        case .exact(let pattern):
+            return ElementPredicate.stringEquals(candidate, pattern)
+        case .contains(let pattern):
+            return ElementPredicate.stringContains(candidate, pattern)
+        case .prefix(let pattern):
+            return ElementPredicate.stringHasPrefix(candidate, pattern)
+        case .suffix(let pattern):
+            return ElementPredicate.stringHasSuffix(candidate, pattern)
+        }
+    }
+
+    var containsFallback: StringMatch<String> {
+        .contains(value)
+    }
+}
+
 // MARK: - Element Predicate
 
 /// The canonical predicate for matching a single accessibility element.
 ///
-/// Matching is exact-or-miss: string fields (`label`, `identifier`, `value`)
-/// must equal the predicate value after case-insensitive typography folding.
-/// Substring comparison is reserved for diagnostic suggestions, never
-/// resolution. Trait fields use exact bitmask comparison. Specificity is
-/// expressed entirely by which fields are set — there is no separate scope or
-/// query system.
+/// String fields (`label`, `identifier`, `value`) use `StringMatch`; exact
+/// matching is the default for legacy `.label("Pay")`-style construction.
+/// Trait fields use exact bitmask comparison. Specificity is expressed entirely
+/// by which fields are set — there is no separate scope or query system.
 public struct ElementPredicate: Sendable, Equatable, Hashable {
-    /// Case-insensitive equality match against element label.
-    public var label: String?
-    /// Case-insensitive equality match against accessibility identifier.
-    public var identifier: String?
-    /// Case-insensitive equality match against element value.
-    public var value: String?
+    /// Match against element label.
+    public var label: StringMatch<String>?
+    /// Match against accessibility identifier.
+    public var identifier: StringMatch<String>?
+    /// Match against element value.
+    public var value: StringMatch<String>?
     /// All listed traits must be present on the element.
     public var traits: [HeistTrait]
     /// None of the listed traits may be present on the element.
     public var excludeTraits: [HeistTrait]
 
     public init(
-        label: String? = nil,
-        identifier: String? = nil,
-        value: String? = nil,
+        label: StringMatch<String>? = nil,
+        identifier: StringMatch<String>? = nil,
+        value: StringMatch<String>? = nil,
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) {
@@ -43,8 +218,8 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
     /// Whether any property predicate is set. Empty strings are treated as
     /// unset: they match nothing rather than everything.
     public var hasPredicates: Bool {
-        label?.isEmpty == false || identifier?.isEmpty == false ||
-            value?.isEmpty == false || hasTraitPredicates
+        label?.hasPredicateLiteral == true || identifier?.hasPredicateLiteral == true ||
+            value?.hasPredicateLiteral == true || hasTraitPredicates
     }
 
     /// Returns `self` when at least one predicate field is set, else `nil`.
@@ -55,25 +230,61 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
 
 public extension ElementPredicate {
     /// Match by label alone.
-    static func label(_ label: String) -> ElementPredicate {
+    static func label(_ label: StringMatch<String>) -> ElementPredicate {
         ElementPredicate(label: label)
     }
 
+    static func label(contains label: String) -> ElementPredicate {
+        ElementPredicate(label: .contains(label))
+    }
+
+    static func label(prefix label: String) -> ElementPredicate {
+        ElementPredicate(label: .prefix(label))
+    }
+
+    static func label(suffix label: String) -> ElementPredicate {
+        ElementPredicate(label: .suffix(label))
+    }
+
     /// Match by accessibility identifier alone.
-    static func identifier(_ identifier: String) -> ElementPredicate {
+    static func identifier(_ identifier: StringMatch<String>) -> ElementPredicate {
         ElementPredicate(identifier: identifier)
     }
 
+    static func identifier(contains identifier: String) -> ElementPredicate {
+        ElementPredicate(identifier: .contains(identifier))
+    }
+
+    static func identifier(prefix identifier: String) -> ElementPredicate {
+        ElementPredicate(identifier: .prefix(identifier))
+    }
+
+    static func identifier(suffix identifier: String) -> ElementPredicate {
+        ElementPredicate(identifier: .suffix(identifier))
+    }
+
     /// Match by value alone.
-    static func value(_ value: String) -> ElementPredicate {
+    static func value(_ value: StringMatch<String>) -> ElementPredicate {
         ElementPredicate(value: value)
+    }
+
+    static func value(contains value: String) -> ElementPredicate {
+        ElementPredicate(value: .contains(value))
+    }
+
+    static func value(prefix value: String) -> ElementPredicate {
+        ElementPredicate(value: .prefix(value))
+    }
+
+    static func value(suffix value: String) -> ElementPredicate {
+        ElementPredicate(value: .suffix(value))
     }
 
     /// Match by any combination of fields — the canonical multi-field form.
     static func element(
-        label: String? = nil,
-        identifier: String? = nil,
-        value: String? = nil,
+        label: StringMatch<String>? = nil,
+        identifier: StringMatch<String>? = nil,
+        value: StringMatch<String>? = nil,
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) -> ElementPredicate {
@@ -94,7 +305,7 @@ public extension ElementPredicate {
     /// Trait predicates ignore this — they always compare exactly.
     enum StringMatchMode: Sendable {
         /// Case-insensitive equality with typography folding. The single
-        /// resolution semantics.
+        /// resolution semantics for each predicate's own match mode.
         case exact
         /// Case-insensitive substring with typography folding. Suggestion-only —
         /// used by diagnostics to surface near misses, never by resolution.
@@ -124,15 +335,12 @@ public extension ElementPredicate {
     func matches(_ subject: some ElementPredicateSubject, mode: StringMatchMode = .exact) -> Bool {
         guard hasPredicates else { return false }
         if let label {
-            if label.isEmpty { return false }
             guard let candidate = subject.predicateLabel, Self.stringMatches(candidate, label, mode: mode) else { return false }
         }
         if let identifier {
-            if identifier.isEmpty { return false }
             guard let candidate = subject.predicateIdentifier, Self.stringMatches(candidate, identifier, mode: mode) else { return false }
         }
         if let value {
-            if value.isEmpty { return false }
             guard let candidate = subject.predicateValue, Self.stringMatches(candidate, value, mode: mode) else { return false }
         }
         if !traits.isEmpty, !subject.satisfiesRequiredTraits(traits) { return false }
@@ -153,9 +361,9 @@ extension ElementPredicate: Codable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            label: try container.decodeIfPresent(String.self, forKey: .label),
-            identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
-            value: try container.decodeIfPresent(String.self, forKey: .value),
+            label: try container.decodeIfPresent(StringMatch<String>.self, forKey: .label),
+            identifier: try container.decodeIfPresent(StringMatch<String>.self, forKey: .identifier),
+            value: try container.decodeIfPresent(StringMatch<String>.self, forKey: .value),
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits) ?? [],
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
         )
@@ -174,9 +382,9 @@ extension ElementPredicate: Codable {
 extension ElementPredicate: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("predicate", [
-            ScoreDescription.stringField("label", label),
-            ScoreDescription.stringField("identifier", identifier),
-            ScoreDescription.stringField("value", value),
+            ScoreDescription.stringMatchField("label", label),
+            ScoreDescription.stringMatchField("identifier", identifier),
+            ScoreDescription.stringMatchField("value", value),
             ScoreDescription.listField("traits", traits.isEmpty ? nil : traits),
             ScoreDescription.listField("excludeTraits", excludeTraits.isEmpty ? nil : excludeTraits),
         ].compactMap { $0 })
@@ -200,6 +408,16 @@ public extension ElementPredicate {
             .localizedCaseInsensitiveContains(normalizeTypography(pattern))
     }
 
+    static func stringHasPrefix(_ candidate: String, _ pattern: String) -> Bool {
+        normalizeTypography(candidate)
+            .range(of: normalizeTypography(pattern), options: [.anchored, .caseInsensitive]) != nil
+    }
+
+    static func stringHasSuffix(_ candidate: String, _ pattern: String) -> Bool {
+        normalizeTypography(candidate)
+            .range(of: normalizeTypography(pattern), options: [.anchored, .backwards, .caseInsensitive]) != nil
+    }
+
     /// Fold typographic punctuation that has an ASCII equivalent.
     static func normalizeTypography(_ string: String) -> String {
         guard string.unicodeScalars.contains(where: { typographicAsciiFold[$0] != nil }) else {
@@ -217,10 +435,10 @@ public extension ElementPredicate {
         return result
     }
 
-    internal static func stringMatches(_ candidate: String, _ pattern: String, mode: StringMatchMode) -> Bool {
+    internal static func stringMatches(_ candidate: String, _ match: StringMatch<String>, mode: StringMatchMode) -> Bool {
         switch mode {
-        case .exact: return stringEquals(candidate, pattern)
-        case .substring: return stringContains(candidate, pattern)
+        case .exact: return match.matches(candidate)
+        case .substring: return match.containsFallback.matches(candidate)
         }
     }
 

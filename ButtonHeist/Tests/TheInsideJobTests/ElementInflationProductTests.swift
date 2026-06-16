@@ -217,7 +217,7 @@ final class ElementInflationProductTests: XCTestCase {
 
         if heist {
             let plan = try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(identifier: .literal(identifier), traits: [.button]))))),
+                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact(.literal(identifier)), traits: [.button]))))),
             ])
             let result = await localBrains.executeHeistPlan(plan)
             return (result, fixture.target.activationCount)

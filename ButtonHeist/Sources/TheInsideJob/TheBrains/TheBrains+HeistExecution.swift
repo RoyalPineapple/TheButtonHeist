@@ -15,7 +15,7 @@ extension TheBrains {
     struct HeistExecutionRuntime {
         let execute: @MainActor (RuntimeActionMessage) async -> ActionResult
         let wait: @MainActor (ResolvedWaitStep, AccessibilityTrace?) async -> HeistWaitReceipt
-        let waitForCases: @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult
+        let selectPredicateCase: @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult
         let observeSemanticState: @MainActor (SemanticObservationScope, UInt64?, Double?) async -> HeistSemanticObservation?
 
         @MainActor
@@ -27,7 +27,7 @@ extension TheBrains {
                 wait: { waitStep, initialTrace in
                     await brains.interactionObservation.waitForPredicate(waitStep, initialTrace: initialTrace)
                 },
-                waitForCases: { cases, timeout in
+                selectPredicateCase: { cases, timeout in
                     await brains.interactionObservation.waitForPredicateCases(cases, timeout: timeout)
                 },
                 observeSemanticState: { scope, sequence, timeout in
@@ -147,9 +147,6 @@ extension TheBrains {
         case .conditional:
             kind = .conditional
             children = []
-        case .waitForCases:
-            kind = .waitForCases
-            children = []
         case .forEachElement:
             kind = .forEachElement
             children = []
@@ -215,21 +212,12 @@ extension TheBrains {
                 path: path,
                 start: start,
                 runtime: runtime,
-                environment: environment
+                environment: environment,
+                scope: scope
             )
         case .conditional(let conditional):
             return await executeConditionalStep(
                 conditional,
-                index: index,
-                path: path,
-                start: start,
-                runtime: runtime,
-                environment: environment,
-                scope: scope
-            )
-        case .waitForCases(let waitForCases):
-            return await executeWaitForCasesStep(
-                waitForCases,
                 index: index,
                 path: path,
                 start: start,

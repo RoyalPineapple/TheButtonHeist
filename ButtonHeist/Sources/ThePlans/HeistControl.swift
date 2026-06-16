@@ -17,9 +17,7 @@ public struct WaitFor: HeistContent {
         _ predicate: AccessibilityPredicateExpr,
         timeout: Double = 0
     ) {
-        heistSteps = [.wait(WaitStep(predicate: predicate, timeout: timeout))]
-        heistDefinitions = []
-        heistBuildDiagnostics = []
+        self.init(predicate: predicate, timeout: timeout, elseBody: nil, definitions: [], diagnostics: [])
     }
 
     @_disfavoredOverload
@@ -31,57 +29,53 @@ public struct WaitFor: HeistContent {
     }
 
     public init(
+        _ predicate: ElementPredicateTemplate,
+        timeout: Double = 0
+    ) {
+        self.init(.present(predicate), timeout: timeout)
+    }
+
+    @available(*, unavailable, message: "WaitFor is a gate: use WaitFor(predicate, timeout:) with optional .else { ... }, and use If for branching.")
+    public init(
         _ predicate: AccessibilityPredicateExpr,
         timeout: Double = 0,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
-        let content = content()
-        self.init(
-            timeout: timeout,
-            cases: [PredicateCase(predicate: predicate, body: content.heistSteps)],
-            elseBody: nil,
-            definitions: content.heistDefinitions,
-            diagnostics: content.heistBuildDiagnostics
-        )
+        preconditionFailure("WaitFor(predicate) { ... } was removed; use If(predicate) { ... } for branching.")
     }
 
     @_disfavoredOverload
+    @available(*, unavailable, message: "WaitFor is a gate: use WaitFor(predicate, timeout:) with optional .else { ... }, and use If for branching.")
     public init(
         _ predicate: AccessibilityPredicate,
         timeout: Double = 0,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
-        self.init(.predicate(predicate), timeout: timeout, content)
+        preconditionFailure("WaitFor(predicate) { ... } was removed; use If(predicate) { ... } for branching.")
     }
 
+    @available(*, unavailable, message: "WaitFor(timeout:) { ... } was removed; use If for branching or WaitFor(...).else { ... }.")
     public init(
         timeout: Double,
         @PredicateBranchBuilder _ branches: () -> PredicateBranches
     ) {
-        let branchSet = branches()
-        self.init(
-            timeout: timeout,
-            cases: branchSet.cases,
-            elseBody: branchSet.elseBody,
-            definitions: branchSet.definitions,
-            diagnostics: branchSet.diagnostics
-        )
+        preconditionFailure("WaitFor(timeout:) { Case ... } was removed; use If for branching.")
     }
 
     public func `else`(
         @HeistBuilder _ content: () -> some HeistContent
     ) -> WaitFor {
         guard heistSteps.count == 1,
-              case .waitForCases(let step) = heistSteps[0] else {
-            preconditionFailure("ButtonHeistDSL WaitFor else requires a WaitFor(predicate) case body")
+              case .wait(let step) = heistSteps[0] else {
+            preconditionFailure("ButtonHeistDSL WaitFor else requires a WaitFor(predicate, timeout:) gate")
         }
         guard step.elseBody == nil else {
             preconditionFailure("ButtonHeistDSL WaitFor accepts at most one else body")
         }
         let content = content()
         return WaitFor(
+            predicate: step.predicate,
             timeout: step.timeout,
-            cases: step.cases,
             elseBody: content.heistSteps,
             definitions: heistDefinitions + content.heistDefinitions,
             diagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
@@ -89,17 +83,13 @@ public struct WaitFor: HeistContent {
     }
 
     private init(
+        predicate: AccessibilityPredicateExpr,
         timeout: Double,
-        cases: [PredicateCase],
         elseBody: [HeistStep]?,
         definitions: [HeistPlan],
         diagnostics: [String]
     ) {
-        heistSteps = [.waitForCases(makeWaitForCasesStep(
-            timeout: timeout,
-            cases: cases,
-            elseBody: elseBody
-        ))]
+        heistSteps = [.wait(WaitStep(predicate: predicate, timeout: timeout, elseBody: elseBody))]
         heistDefinitions = definitions
         heistBuildDiagnostics = diagnostics
     }
@@ -291,19 +281,5 @@ private func makeConditionalStep(
         return try ConditionalStep(cases: cases, elseBody: elseBody)
     } catch {
         preconditionFailure("ButtonHeistDSL requires at least one If Case")
-    }
-}
-
-private func makeWaitForCasesStep(
-    timeout: Double,
-    cases: [PredicateCase],
-    elseBody: [HeistStep]? = nil
-) -> WaitForCasesStep {
-    do {
-        return try WaitForCasesStep(timeout: timeout, cases: cases, elseBody: elseBody)
-    } catch HeistPlanError.negativeTimeout {
-        preconditionFailure("ButtonHeistDSL WaitFor timeout must be non-negative")
-    } catch {
-        preconditionFailure("ButtonHeistDSL WaitFor case block requires at least one Case")
     }
 }

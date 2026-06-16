@@ -340,14 +340,12 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 }
             }
 
-            WaitFor(timeout: .seconds(2)) {
-                Case(.present(.label("Controls Demo"))) {
-                    Warn("wait case matched Controls Demo")
-                }
-                Else {
+            WaitFor(.label("Controls Demo"), timeout: .seconds(2))
+                .else {
                     Fail("wait case missed Controls Demo")
                 }
-            }
+
+            Warn("wait case matched Controls Demo")
 
             ForEach(
                 ElementMatches.matching(ElementPredicate(label: "Text Input", traits: [.button])),
@@ -362,14 +360,15 @@ final class DogfoodForAllHeistTests: XCTestCase {
         XCTAssertEqual(heist.result.steps.map(\.kind), [
             .invoke,
             .conditional,
-            .waitForCases,
+            .wait,
+            .warn,
             .forEachElement,
             .invoke,
         ])
         XCTAssertEqual(heist.result.steps[1].caseSelectionEvidence?.selection.selectedCaseIndex, 0)
-        XCTAssertEqual(heist.result.steps[2].caseSelectionEvidence?.selection.selectedCaseIndex, 0)
-        XCTAssertEqual(heist.result.steps[3].forEachElementEvidence?.matchedCount, 1)
-        XCTAssertEqual(heist.result.steps[3].forEachElementEvidence?.iterationCount, 1)
+        XCTAssertEqual(heist.result.steps[2].waitEvidence?.expectation.met, true)
+        XCTAssertEqual(heist.result.steps[4].forEachElementEvidence?.matchedCount, 1)
+        XCTAssertEqual(heist.result.steps[4].forEachElementEvidence?.iterationCount, 1)
         XCTAssertEqual(heist.result.warnings.map(\.message), [
             "conditional matched Controls Demo",
             "wait case matched Controls Demo",

@@ -6,7 +6,7 @@ import Foundation
 ///
 /// An element is described by a predicate (label, identifier, value, traits,
 /// excludeTraits); `ordinal` disambiguates among matches. Predicate fields use
-/// case-insensitive equality with typography folding — exact-or-miss.
+/// `StringMatch` semantics; exact matching is the default.
 /// On miss, the resolver returns structured suggestions; there is no
 /// substring matching path.
 public enum ElementTarget: Sendable, Equatable, Hashable {
@@ -22,6 +22,7 @@ public enum ElementTarget: Sendable, Equatable, Hashable {
 public extension ElementTarget {
     enum SchemaFieldKind: Sendable, Equatable {
         case string
+        case stringMatch
         case stringArray
         case nonNegativeInteger
     }
@@ -62,7 +63,7 @@ public extension ElementTarget {
     private static func schemaField(for key: CodingKeys) -> SchemaField {
         switch key {
         case .label, .identifier, .value:
-            return SchemaField(name: key.stringValue, kind: .string)
+            return SchemaField(name: key.stringValue, kind: .stringMatch)
         case .traits, .excludeTraits:
             return SchemaField(name: key.stringValue, kind: .stringArray)
         case .ordinal:
@@ -148,9 +149,9 @@ extension ElementTarget: Codable {
             )
         }
         let predicate = ElementPredicate(
-            label: try container.decodeIfPresent(String.self, forKey: .label),
-            identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
-            value: try container.decodeIfPresent(String.self, forKey: .value),
+            label: try container.decodeIfPresent(StringMatch<String>.self, forKey: .label),
+            identifier: try container.decodeIfPresent(StringMatch<String>.self, forKey: .identifier),
+            value: try container.decodeIfPresent(StringMatch<String>.self, forKey: .value),
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits) ?? [],
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
         )

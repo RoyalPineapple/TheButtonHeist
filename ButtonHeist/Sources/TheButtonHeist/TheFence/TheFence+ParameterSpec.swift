@@ -428,7 +428,7 @@ enum FenceParameterBlocks: Sendable {
             preconditionFailure("ElementTarget field '\(field.name)' is not a Fence parameter key")
         }
         switch field.kind {
-        case .string:
+        case .string, .stringMatch:
             return param(key, .string)
         case .stringArray:
             return param(key, .stringArray)

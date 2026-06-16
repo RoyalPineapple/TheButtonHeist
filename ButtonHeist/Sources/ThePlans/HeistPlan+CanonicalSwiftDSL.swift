@@ -76,11 +76,9 @@ private struct HeistCanonicalSwiftDSLRenderer {
         case .action(let action):
             return try render(action: action, indent: indent, environment: environment)
         case .wait(let wait):
-            return line("WaitFor(\(try render(predicate: wait.predicate, environment: environment))\(renderTimeout(wait.timeout)))", indent)
+            return try render(wait: wait, indent: indent, environment: environment)
         case .conditional(let conditional):
             return try renderConditional(conditional, indent: indent, environment: environment)
-        case .waitForCases(let waitForCases):
-            return try renderWaitForCases(waitForCases, indent: indent, environment: environment)
         case .forEachElement(let forEach):
             return try renderForEachElement(forEach, indent: indent, environment: environment)
         case .forEachString(let forEach):
@@ -334,33 +332,24 @@ private struct HeistCanonicalSwiftDSLRenderer {
         """
     }
 
-    private func renderWaitForCases(
-        _ waitForCases: WaitForCasesStep,
+    private func render(
+        wait: WaitStep,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
-        if waitForCases.cases.count == 1 {
-            return try renderSingleCaseBranches(
-                callee: "WaitFor",
-                predicate: waitForCases.cases[0].predicate,
-                timeout: waitForCases.timeout,
-                body: waitForCases.cases[0].body,
-                elseBody: waitForCases.elseBody,
-                indent: indent,
-                environment: environment
-            )
-        }
-        let cases = try renderCases(
-            waitForCases.cases,
-            elseBody: waitForCases.elseBody,
-            indent: indent + 1,
-            environment: environment
+        var source = line(
+            "WaitFor(\(try render(predicate: wait.predicate, environment: environment))\(renderTimeout(wait.timeout)))",
+            indent
         )
-        return """
-        \(line("WaitFor(timeout: .seconds(\(decimal(waitForCases.timeout)))) {", indent))
-        \(cases)
-        \(line("}", indent))
-        """
+        if let elseBody = wait.elseBody {
+            source += "\n"
+            source += line(".else {", indent)
+            source += "\n"
+            source += try render(steps: elseBody, indent: indent + 1, environment: environment)
+            source += "\n"
+            source += line("}", indent)
+        }
+        return source
     }
 
     private func renderSingleCaseBranches(
@@ -514,10 +503,6 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return ".screen()"
         case .elements:
             return ".elements"
-        case .appeared(let predicate):
-            return ".appeared(\(render(predicate: predicate)))"
-        case .disappeared(let predicate):
-            return ".disappeared(\(render(predicate: predicate)))"
         case .updated(let update):
             return ".updated(\(render(update: update)))"
         }
@@ -532,10 +517,6 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return ".screen()"
         case .elements:
             return ".elements"
-        case .appeared(let predicate):
-            return try ".appeared(\(render(predicate: predicate, environment: environment)))"
-        case .disappeared(let predicate):
-            return try ".disappeared(\(render(predicate: predicate, environment: environment)))"
         case .updated(let update):
             return try ".updated(\(render(update: update, environment: environment)))"
         }
@@ -589,11 +570,11 @@ private struct HeistCanonicalSwiftDSLRenderer {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
             switch (predicate.label, predicate.identifier, predicate.value) {
             case (.some(let label), nil, nil):
-                return ".label(\(quote(label)))"
+                return ".label(\(renderCallArgument(label)))"
             case (nil, .some(let identifier), nil):
-                return ".identifier(\(quote(identifier)))"
+                return ".identifier(\(renderCallArgument(identifier)))"
             case (nil, nil, .some(let value)):
-                return ".value(\(quote(value)))"
+                return ".value(\(renderCallArgument(value)))"
             default:
                 break
             }
@@ -605,11 +586,11 @@ private struct HeistCanonicalSwiftDSLRenderer {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
             switch (predicate.label, predicate.identifier, predicate.value) {
             case (.some(let label), nil, nil):
-                return ".label(\(quote(label)))"
+                return ".label(\(renderCallArgument(label)))"
             case (nil, .some(let identifier), nil):
-                return ".identifier(\(quote(identifier)))"
+                return ".identifier(\(renderCallArgument(identifier)))"
             case (nil, nil, .some(let value)):
-                return ".value(\(quote(value)))"
+                return ".value(\(renderCallArgument(value)))"
             default:
                 break
             }
@@ -621,11 +602,11 @@ private struct HeistCanonicalSwiftDSLRenderer {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
             switch (predicate.label, predicate.identifier, predicate.value) {
             case (.some(let label), nil, nil):
-                return ".label(\(try render(string: label, environment: environment)))"
+                return ".label(\(try renderCallArgument(label, environment: environment)))"
             case (nil, .some(let identifier), nil):
-                return ".identifier(\(try render(string: identifier, environment: environment)))"
+                return ".identifier(\(try renderCallArgument(identifier, environment: environment)))"
             case (nil, nil, .some(let value)):
-                return ".value(\(try render(string: value, environment: environment)))"
+                return ".value(\(try renderCallArgument(value, environment: environment)))"
             default:
                 break
             }
@@ -635,9 +616,9 @@ private struct HeistCanonicalSwiftDSLRenderer {
 
     private func renderElementPredicateFields(_ predicate: ElementPredicate) -> String {
         [
-            predicate.label.map { "label: \(quote($0))" },
-            predicate.identifier.map { "identifier: \(quote($0))" },
-            predicate.value.map { "value: \(quote($0))" },
+            predicate.label.map { "label: \(renderFieldArgument($0))" },
+            predicate.identifier.map { "identifier: \(renderFieldArgument($0))" },
+            predicate.value.map { "value: \(renderFieldArgument($0))" },
             renderTraits("traits", predicate.traits),
             renderTraits("excludeTraits", predicate.excludeTraits),
         ].compactMap { $0 }.joined(separator: ", ")
@@ -648,12 +629,70 @@ private struct HeistCanonicalSwiftDSLRenderer {
         environment: RenderEnvironment
     ) throws -> String {
         try [
-            predicate.label.map { "label: \(try render(string: $0, environment: environment))" },
-            predicate.identifier.map { "identifier: \(try render(string: $0, environment: environment))" },
-            predicate.value.map { "value: \(try render(string: $0, environment: environment))" },
+            predicate.label.map { "label: \(try renderFieldArgument($0, environment: environment))" },
+            predicate.identifier.map { "identifier: \(try renderFieldArgument($0, environment: environment))" },
+            predicate.value.map { "value: \(try renderFieldArgument($0, environment: environment))" },
             renderTraits("traits", predicate.traits),
             renderTraits("excludeTraits", predicate.excludeTraits),
         ].compactMap { $0 }.joined(separator: ", ")
+    }
+
+    private func renderCallArgument(_ match: StringMatch<String>) -> String {
+        switch match {
+        case .exact(let value):
+            return quote(value)
+        case .contains(let value):
+            return "contains: \(quote(value))"
+        case .prefix(let value):
+            return "prefix: \(quote(value))"
+        case .suffix(let value):
+            return "suffix: \(quote(value))"
+        }
+    }
+
+    private func renderFieldArgument(_ match: StringMatch<String>) -> String {
+        switch match {
+        case .exact(let value):
+            return quote(value)
+        case .contains(let value):
+            return ".contains(\(quote(value)))"
+        case .prefix(let value):
+            return ".prefix(\(quote(value)))"
+        case .suffix(let value):
+            return ".suffix(\(quote(value)))"
+        }
+    }
+
+    private func renderCallArgument(
+        _ match: StringMatch<StringExpr>,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch match {
+        case .exact(let value):
+            return try render(string: value, environment: environment)
+        case .contains(let value):
+            return "contains: \(try render(string: value, environment: environment))"
+        case .prefix(let value):
+            return "prefix: \(try render(string: value, environment: environment))"
+        case .suffix(let value):
+            return "suffix: \(try render(string: value, environment: environment))"
+        }
+    }
+
+    private func renderFieldArgument(
+        _ match: StringMatch<StringExpr>,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch match {
+        case .exact(let value):
+            return try render(string: value, environment: environment)
+        case .contains(let value):
+            return ".contains(\(try render(string: value, environment: environment)))"
+        case .prefix(let value):
+            return ".prefix(\(try render(string: value, environment: environment)))"
+        case .suffix(let value):
+            return ".suffix(\(try render(string: value, environment: environment)))"
+        }
     }
 
     private func render(string: StringExpr, environment: RenderEnvironment) throws -> String {

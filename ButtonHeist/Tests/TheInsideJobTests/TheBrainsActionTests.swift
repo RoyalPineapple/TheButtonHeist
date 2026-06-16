@@ -681,19 +681,14 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(heist.steps.first?.caseSelectionEvidence?.selection.selectedCaseIndex, nil)
     }
 
-    func testHeistWaitForCasesTimeoutWithoutElseFails() async throws {
+    func testHeistWaitForTimeoutWithoutElseFails() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Settings"]),
         ])
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 0,
-                cases: [
-                    PredicateCase(
-                        predicate: .state(.present(ElementPredicate(label: "Home"))),
-                        body: [.warn(WarnStep(message: "home flow"))]
-                    ),
-                ]
+            .wait(WaitStep(
+                predicate: .state(.present(ElementPredicate(label: "Home"))),
+                timeout: 0
             )),
         ])
 
@@ -702,24 +697,19 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(step.kind, .waitForCases)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.timedOut, true)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.elseRan, false)
+        XCTAssertEqual(step.kind, .wait)
+        XCTAssertEqual(step.waitEvidence?.expectation.met, false)
+        XCTAssertEqual(step.children.map(\.kind), [])
     }
 
-    func testHeistWaitForCasesTimeoutWithElseRunsElse() async throws {
+    func testHeistWaitForTimeoutWithElseRunsElse() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Settings"]),
         ])
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
+            .wait(WaitStep(
+                predicate: .state(.present(ElementPredicate(label: "Home"))),
                 timeout: 0,
-                cases: [
-                    PredicateCase(
-                        predicate: .state(.present(ElementPredicate(label: "Home"))),
-                        body: [.fail(FailStep(message: "should not run"))]
-                    ),
-                ],
                 elseBody: [.warn(WarnStep(message: "no known state appeared"))]
             )),
         ])
@@ -729,26 +719,26 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.timedOut, true)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.elseRan, true)
+        XCTAssertEqual(step.kind, .wait)
+        XCTAssertEqual(step.waitEvidence?.expectation.met, false)
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
-    func testHeistWaitForCasesPollsUntilCaseMatches() async throws {
+    func testHeistIfSelectsMatchingCaseImmediately() async throws {
         let runtime = heistRuntime(observations: [
-            observedState(labels: ["Loading"]),
             observedState(labels: ["Home"]),
         ])
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 1,
-                cases: [
-                    PredicateCase(
-                        predicate: .state(.present(ElementPredicate(label: "Home"))),
-                        body: [.warn(WarnStep(message: "home flow"))]
-                    ),
-                ]
-            )),
+            .conditional(try ConditionalStep(cases: [
+                PredicateCase(
+                    predicate: .state(.present(ElementPredicate(label: "Home"))),
+                    body: [.warn(WarnStep(message: "home flow"))]
+                ),
+                PredicateCase(
+                    predicate: .state(.present(ElementPredicate(label: "Settings"))),
+                    body: [.fail(FailStep(message: "should not run"))]
+                ),
+            ])),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -756,20 +746,20 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
+        XCTAssertEqual(step.kind, .conditional)
         XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
-    func testHeistWaitForCasesChangedPredicateUsesFirstObservationAsBaseline() async throws {
+    func testHeistIfChangedPredicateUsesFirstObservationAsBaseline() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Home"]),
         ])
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 0,
+            .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .changed(.appeared(ElementPredicate(label: "Home"))),
+                        predicate: .present(ElementPredicate(label: "Home")),
                         body: [.fail(FailStep(message: "baseline should not match"))]
                     ),
                 ],
@@ -780,6 +770,7 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
+
         let selection = try XCTUnwrap(step.caseSelectionEvidence?.selection)
 
         XCTAssertTrue(result.success)
@@ -791,42 +782,13 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
-    func testHeistWaitForCasesChangedPredicateMatchesFutureObservation() async throws {
-        let runtime = heistRuntime(observations: [
-            observedState(labels: ["Loading"]),
-            observedState(labels: ["Loading", "Home"]),
-        ])
-        let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 1,
-                cases: [
-                    PredicateCase(
-                        predicate: .changed(.appeared(ElementPredicate(label: "Home"))),
-                        body: [.warn(WarnStep(message: "home appeared"))]
-                    ),
-                ],
-                elseBody: [.fail(FailStep(message: "future change should match"))]
-            )),
-        ])
-
-        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
-        let step = try XCTUnwrap(heist.steps.first)
-        let selection = try XCTUnwrap(step.caseSelectionEvidence?.selection)
-
-        XCTAssertTrue(result.success)
-        XCTAssertEqual(selection.selectedCaseIndex, 0)
-        XCTAssertEqual(step.children.map(\.kind), [.warn])
-    }
-
-    func testHeistWaitForCasesContinuesAfterUnavailableObservation() async throws {
+    func testHeistIfContinuesAfterUnavailableObservation() async throws {
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
             unavailableObservationCount: 1
         )
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 1,
+            .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
@@ -845,15 +807,14 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
-    func testHeistWaitForCasesZeroTimeoutPassesImmediateObservationBudget() async throws {
+    func testHeistIfPassesImmediateObservationBudget() async throws {
         var observedTimeouts: [Double?] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Settings"])],
             observedTimeouts: { observedTimeouts.append($0) }
         )
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 0,
+            .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
@@ -956,7 +917,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .changed(.appeared(ElementPredicate(label: "Loaded"))),
+                predicate: .present(ElementPredicate(label: "Loaded")),
                 timeout: 1
             ))
         }
@@ -985,7 +946,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .changed(.appeared(ElementPredicate(label: "Missing"))),
+                predicate: .present(ElementPredicate(label: "Missing")),
                 timeout: 0.05
             ))
         }
@@ -1017,7 +978,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))),
+                command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
                 expectation: expectation
             )),
         ])
@@ -1094,12 +1055,12 @@ final class TheBrainsActionTests: XCTestCase {
                 definitions: [
                     HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
                         .action(try ActionStep(
-                            command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Add to Cart"))))
+                            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Add to Cart")))))
                         )),
                     ]),
                 ],
                 body: [
-                    .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item")))))),
+                    .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item"))))))),
                     .invoke(HeistInvocationStep(path: ["tapAddButton"])),
                 ]
             ),
@@ -1283,7 +1244,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Controls Demo")))),
+                command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Controls Demo"))))),
                 expectation: expectation
             )),
         ])
@@ -1302,7 +1263,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistActionExpectationUsesWaitFailureDiagnostic() async throws {
         let expectation = WaitStep(
-            predicate: .changed(.disappeared(ElementPredicate(label: "Loading"))),
+            predicate: .absent(ElementPredicate(label: "Loading")),
             timeout: 0.2
         )
         let runtime = heistRuntime(
@@ -1322,7 +1283,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))),
+                command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
                 expectation: expectation
             )),
         ])
@@ -1368,11 +1329,10 @@ final class TheBrainsActionTests: XCTestCase {
             observedScopes: { observedScopes.append($0) }
         )
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 0,
+            .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .changed(.appeared(ElementPredicate(label: "Toast"))),
+                        predicate: .present(ElementPredicate(label: "Toast")),
                         body: [.warn(WarnStep(message: "toast"))]
                     ),
                 ],
@@ -1392,15 +1352,14 @@ final class TheBrainsActionTests: XCTestCase {
             observedScopes: { observedScopes.append($0) }
         )
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 0,
+            .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
                         body: [.warn(WarnStep(message: "home"))]
                     ),
                     PredicateCase(
-                        predicate: .changed(.appeared(ElementPredicate(label: "Toast"))),
+                        predicate: .present(ElementPredicate(label: "Toast")),
                         body: [.warn(WarnStep(message: "toast"))]
                     ),
                 ],
@@ -1427,7 +1386,7 @@ final class TheBrainsActionTests: XCTestCase {
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))))),
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Ready"))),
@@ -1453,9 +1412,9 @@ final class TheBrainsActionTests: XCTestCase {
             }
         )
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("1")))))),
-            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("2")))))),
-            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("3")))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("1"))))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("2"))))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("3"))))))),
         ])
 
         _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -1464,17 +1423,16 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(brains.stash.semanticObservationStream.hasActiveObservationDemand)
     }
 
-    func testWaitForCasesChangedPredicateConsumesStreamEventDelta() async throws {
+    func testIfChangedPredicateConsumesStreamEventDelta() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Loading"]),
             observedState(labels: ["Loading", "Toast"]),
         ])
         let plan = try HeistPlan(body: [
-            .waitForCases(try WaitForCasesStep(
-                timeout: 1,
+            .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .changed(.appeared(ElementPredicate(label: "Toast"))),
+                        predicate: .present(ElementPredicate(label: "Toast")),
                         body: [.warn(WarnStep(message: "toast"))]
                     ),
                 ]
@@ -2834,7 +2792,7 @@ final class TheBrainsActionTests: XCTestCase {
                 )
                 return HeistWaitReceipt(actionResult: result, expectation: met)
             },
-            waitForCases: { cases, timeout in
+            selectPredicateCase: { cases, timeout in
                 await PredicateCaseSelection.waitFor(
                     cases,
                     timeout: timeout,

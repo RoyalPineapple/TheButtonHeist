@@ -372,7 +372,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .changed(.appeared(ElementPredicate(label: "WaitForChange-AlreadyPresent"))),
+            expectation: .present(ElementPredicate(label: "WaitForChange-AlreadyPresent")),
             timeout: 0.2
         )
 
@@ -380,13 +380,13 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(
-            result.message?.contains("expected: changed(element_appeared(predicate(label=\"WaitForChange-AlreadyPresent\")))") == true
+            result.message?.contains("expected: present(predicate(label=\"WaitForChange-AlreadyPresent\"))") == true
         )
     }
 
     func testWaitForChangeElementDisappearedAlreadyAbsentStillRequiresObservedChange() async throws {
         let result = await changedWait(
-            expectation: .changed(.disappeared(ElementPredicate(label: "WaitForChange-NeverExisted"))),
+            expectation: .absent(ElementPredicate(label: "WaitForChange-NeverExisted")),
             timeout: 0.2
         )
 
@@ -394,7 +394,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(
-            result.message?.contains("expected: changed(element_disappeared(predicate(label=\"WaitForChange-NeverExisted\")))") == true
+            result.message?.contains("expected: absent(predicate(label=\"WaitForChange-NeverExisted\"))") == true
         )
     }
 
@@ -414,7 +414,7 @@ final class WaitForIntegrationTests: XCTestCase {
         }
 
         let result = await changedWait(
-            expectation: .changed(.appeared(ElementPredicate(label: "WaitForChange-Delayed"))),
+            expectation: .present(ElementPredicate(label: "WaitForChange-Delayed")),
             timeout: 5.0
         )
         delayedLabel = await addTask.value
@@ -439,7 +439,7 @@ final class WaitForIntegrationTests: XCTestCase {
         }
 
         let result = await changedWait(
-            expectation: .changed(.disappeared(ElementPredicate(label: "WaitForChange-Removed"))),
+            expectation: .absent(ElementPredicate(label: "WaitForChange-Removed")),
             timeout: 5.0
         )
         await removeTask.value
@@ -477,7 +477,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let start = CFAbsoluteTimeGetCurrent()
         let result = await changedWait(
-            expectation: .changed(.appeared(ElementPredicate(label: "WaitForChange-TimeoutZeroMissing"))),
+            expectation: .present(ElementPredicate(label: "WaitForChange-TimeoutZeroMissing")),
             timeout: 0
         )
         let elapsed = CFAbsoluteTimeGetCurrent() - start
@@ -488,7 +488,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertLessThan(elapsed, 1.0)
         XCTAssertTrue(
-            message.contains("expected: changed(element_appeared(predicate(label=\"WaitForChange-TimeoutZeroMissing\")))"),
+            message.contains("expected: present(predicate(label=\"WaitForChange-TimeoutZeroMissing\"))"),
             "Unexpected message: \(message)"
         )
         XCTAssertTrue(message.contains("baseline: sequence "), "Unexpected message: \(message)")
@@ -551,7 +551,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .changed(.disappeared(ElementPredicate(label: "WaitForChange-StillPresent"))),
+            expectation: .absent(ElementPredicate(label: "WaitForChange-StillPresent")),
             timeout: 0.2
         )
 
@@ -559,7 +559,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(
-            result.message?.contains("expected: changed(element_disappeared(predicate(label=\"WaitForChange-StillPresent\")))") == true
+            result.message?.contains("expected: absent(predicate(label=\"WaitForChange-StillPresent\"))") == true
         )
         XCTAssertTrue(result.message?.contains("last observed:") == true)
     }

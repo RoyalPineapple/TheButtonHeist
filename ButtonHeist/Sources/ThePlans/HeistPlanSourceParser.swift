@@ -361,13 +361,7 @@ struct HeistPlanSourceParser {
     private func renderConcreteTargetCorrection(_ target: ElementTarget) -> String {
         switch target {
         case .predicate(let predicate, _):
-            return renderPredicateCorrection(ElementPredicateTemplate(
-                label: predicate.label.map(StringExpr.literal),
-                identifier: predicate.identifier.map(StringExpr.literal),
-                value: predicate.value.map(StringExpr.literal),
-                traits: predicate.traits,
-                excludeTraits: predicate.excludeTraits
-            ))
+            return renderPredicateCorrection(ElementPredicateTemplate(predicate))
         }
     }
 
@@ -375,19 +369,19 @@ struct HeistPlanSourceParser {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
             switch (predicate.label, predicate.identifier, predicate.value) {
             case (.some(let label), nil, nil):
-                return ".label(\(renderStringCorrection(label)))"
+                return ".label(\(renderStringMatchCallArgument(label)))"
             case (nil, .some(let identifier), nil):
-                return ".identifier(\(renderStringCorrection(identifier)))"
+                return ".identifier(\(renderStringMatchCallArgument(identifier)))"
             case (nil, nil, .some(let value)):
-                return ".value(\(renderStringCorrection(value)))"
+                return ".value(\(renderStringMatchCallArgument(value)))"
             default:
                 break
             }
         }
         var fields: [String] = []
-        if let label = predicate.label { fields.append("label: \(renderStringCorrection(label))") }
-        if let identifier = predicate.identifier { fields.append("identifier: \(renderStringCorrection(identifier))") }
-        if let value = predicate.value { fields.append("value: \(renderStringCorrection(value))") }
+        if let label = predicate.label { fields.append("label: \(renderStringMatchFieldArgument(label))") }
+        if let identifier = predicate.identifier { fields.append("identifier: \(renderStringMatchFieldArgument(identifier))") }
+        if let value = predicate.value { fields.append("value: \(renderStringMatchFieldArgument(value))") }
         if !predicate.traits.isEmpty {
             fields.append("traits: [\(predicate.traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
         }
@@ -395,6 +389,32 @@ struct HeistPlanSourceParser {
             fields.append("excludeTraits: [\(predicate.excludeTraits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
         }
         return ".element(\(fields.joined(separator: ", ")))"
+    }
+
+    private func renderStringMatchCallArgument(_ match: StringMatch<StringExpr>) -> String {
+        switch match {
+        case .exact(let string):
+            return renderStringCorrection(string)
+        case .contains(let string):
+            return "contains: \(renderStringCorrection(string))"
+        case .prefix(let string):
+            return "prefix: \(renderStringCorrection(string))"
+        case .suffix(let string):
+            return "suffix: \(renderStringCorrection(string))"
+        }
+    }
+
+    private func renderStringMatchFieldArgument(_ match: StringMatch<StringExpr>) -> String {
+        switch match {
+        case .exact(let string):
+            return renderStringCorrection(string)
+        case .contains(let string):
+            return ".contains(\(renderStringCorrection(string)))"
+        case .prefix(let string):
+            return ".prefix(\(renderStringCorrection(string)))"
+        case .suffix(let string):
+            return ".suffix(\(renderStringCorrection(string)))"
+        }
     }
 
     private func renderStringCorrection(_ string: StringExpr) -> String {
@@ -615,8 +635,15 @@ struct HeistPlanSourceParser {
             switch chain {
             case "expect":
                 try expectSymbol("(")
-                let predicate = try parseAccessibilityPredicateExpr()
-                let timeout = try parseTrailingTimeout(defaultValue: nil)
+                let predicate: AccessibilityPredicateExpr
+                let timeout: Double?
+                if currentToken.isSymbol(")") {
+                    predicate = .changed(.elements)
+                    timeout = nil
+                } else {
+                    predicate = try parseAccessibilityPredicateExpr()
+                    timeout = try parseTrailingTimeout(defaultValue: nil)
+                }
                 try expectSymbol(")")
                 content = content.expect(predicate, timeout: timeout)
             case "withoutExpectation":
@@ -637,30 +664,23 @@ struct HeistPlanSourceParser {
     private mutating func parseWaitFor() throws -> HeistStep {
         try expectSymbol("(")
         if lookaheadLabel("timeout") {
-            try expectIdentifier("timeout")
-            try expectSymbol(":")
-            let timeout = try parseDuration()
-            try expectSymbol(")")
-            let branches = try parsePredicateBranches()
-            return .waitForCases(try WaitForCasesStep(
-                timeout: timeout,
-                cases: branches.cases,
-                elseBody: branches.elseBody
-            ))
+            throw error(currentToken, "WaitFor requires a predicate. Use If { Case(...) { ... } Else { ... } } for branching.")
         }
 
         let predicate = try parseAccessibilityPredicateExpr()
         let timeout = try parseTrailingTimeout(defaultValue: 0) ?? 0
         try expectSymbol(")")
         if currentToken.isSymbol("{") {
-            let branches = try parseSinglePredicateBranches(predicate: predicate, chainContext: "WaitFor")
-            return .waitForCases(try WaitForCasesStep(
-                timeout: timeout,
-                cases: branches.cases,
-                elseBody: branches.elseBody
-            ))
+            throw error(
+                currentToken,
+                "WaitFor is a gate and does not accept a body. Use WaitFor(...).else { ... } or If(predicate) { ... }."
+            )
         }
-        return .wait(WaitStep(predicate: predicate, timeout: timeout))
+        return .wait(WaitStep(
+            predicate: predicate,
+            timeout: timeout,
+            elseBody: try parseLowercaseElseChainIfPresent(chainContext: "WaitFor")
+        ))
     }
 
     private mutating func parseIf() throws -> HeistStep {
@@ -859,6 +879,8 @@ struct HeistPlanSourceParser {
             return .state(try parsePresentAbsentState(name: name))
         case "all":
             return .state(try parseAllState())
+        case "label", "identifier", "value", "element":
+            return .present(try parseElementPredicateTemplate(named: name))
         default:
             throw error(previous, "unsupported accessibility predicate '.\(name)'")
         }
@@ -882,16 +904,6 @@ struct HeistPlanSourceParser {
                 try expectSymbol(")")
             }
             return .elements
-        case "appeared":
-            try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplate()
-            try expectSymbol(")")
-            return .appeared(predicate)
-        case "disappeared":
-            try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplate()
-            try expectSymbol(")")
-            return .disappeared(predicate)
         case "updated":
             try expectSymbol("(")
             let update = try parseElementUpdatePredicate()
@@ -985,19 +997,19 @@ struct HeistPlanSourceParser {
         switch name {
         case "label":
             try expectSymbol("(")
-            let label = try parseStringExpr()
+            let label = try parseStringMatchCallArgument(field: "label")
             try expectSymbol(")")
-            return .predicate(.label(label))
+            return .predicate(ElementPredicateTemplate(label: label))
         case "identifier":
             try expectSymbol("(")
-            let identifier = try parseStringExpr()
+            let identifier = try parseStringMatchCallArgument(field: "identifier")
             try expectSymbol(")")
-            return .predicate(.identifier(identifier))
+            return .predicate(ElementPredicateTemplate(identifier: identifier))
         case "value":
             try expectSymbol("(")
-            let value = try parseStringExpr()
+            let value = try parseStringMatchCallArgument(field: "value")
             try expectSymbol(")")
-            return .predicate(.value(value))
+            return .predicate(ElementPredicateTemplate(value: value))
         case "element":
             try expectSymbol("(")
             let predicate = try parseElementPredicateTemplateFields()
@@ -1024,22 +1036,26 @@ struct HeistPlanSourceParser {
             "ElementTarget",
             "ElementTargetExpr",
         ])
+        return try parseElementPredicateTemplate(named: name)
+    }
+
+    private mutating func parseElementPredicateTemplate(named name: String) throws -> ElementPredicateTemplate {
         switch name {
         case "label":
             try expectSymbol("(")
-            let label = try parseStringExpr()
+            let label = try parseStringMatchCallArgument(field: "label")
             try expectSymbol(")")
-            return .label(label)
+            return ElementPredicateTemplate(label: label)
         case "identifier":
             try expectSymbol("(")
-            let identifier = try parseStringExpr()
+            let identifier = try parseStringMatchCallArgument(field: "identifier")
             try expectSymbol(")")
-            return .identifier(identifier)
+            return ElementPredicateTemplate(identifier: identifier)
         case "value":
             try expectSymbol("(")
-            let value = try parseStringExpr()
+            let value = try parseStringMatchCallArgument(field: "value")
             try expectSymbol(")")
-            return .value(value)
+            return ElementPredicateTemplate(value: value)
         case "element":
             try expectSymbol("(")
             let predicate = try parseElementPredicateTemplateFields()
@@ -1056,9 +1072,9 @@ struct HeistPlanSourceParser {
     }
 
     private mutating func parseElementPredicateTemplateFields() throws -> ElementPredicateTemplate {
-        var label: StringExpr?
-        var identifier: StringExpr?
-        var value: StringExpr?
+        var label: StringMatch<StringExpr>?
+        var identifier: StringMatch<StringExpr>?
+        var value: StringMatch<StringExpr>?
         var traits: [HeistTrait] = []
         var excludeTraits: [HeistTrait] = []
         if currentToken.isSymbol(")") {
@@ -1067,13 +1083,13 @@ struct HeistPlanSourceParser {
         while true {
             if consumeIdentifier("label") != nil {
                 try expectSymbol(":")
-                label = try parseStringExpr()
+                label = try parseStringMatchFieldValue(field: "label")
             } else if consumeIdentifier("identifier") != nil {
                 try expectSymbol(":")
-                identifier = try parseStringExpr()
+                identifier = try parseStringMatchFieldValue(field: "identifier")
             } else if consumeIdentifier("value") != nil {
                 try expectSymbol(":")
-                value = try parseStringExpr()
+                value = try parseStringMatchFieldValue(field: "value")
             } else if consumeIdentifier("traits") != nil {
                 try expectSymbol(":")
                 traits = try parseTraitArray(role: "traits")
@@ -1110,9 +1126,9 @@ struct HeistPlanSourceParser {
     }
 
     private mutating func concretePredicate(from template: ElementPredicateTemplate) throws -> ElementPredicate {
-        let label = try concreteString(template.label, role: "label")
-        let identifier = try concreteString(template.identifier, role: "identifier")
-        let value = try concreteString(template.value, role: "value")
+        let label = try concreteStringMatch(template.label, role: "label")
+        let identifier = try concreteStringMatch(template.identifier, role: "identifier")
+        let value = try concreteStringMatch(template.value, role: "value")
         return ElementPredicate(
             label: label,
             identifier: identifier,
@@ -1122,8 +1138,18 @@ struct HeistPlanSourceParser {
         )
     }
 
-    private func concreteString(_ string: StringExpr?, role: String) throws -> String? {
-        guard let string else { return nil }
+    private mutating func concreteStringMatch(
+        _ match: StringMatch<StringExpr>?,
+        role: String
+    ) throws -> StringMatch<String>? {
+        guard let match else { return nil }
+        return StringMatch<String>(
+            mode: StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact,
+            value: try concreteString(match.value, role: role)
+        )
+    }
+
+    private func concreteString(_ string: StringExpr, role: String) throws -> String {
         switch string {
         case .literal(let value):
             return value
@@ -1136,6 +1162,67 @@ struct HeistPlanSourceParser {
                 column: currentToken.marker.column
             )
         }
+    }
+
+    private mutating func parseStringMatchCallArgument(field: String) throws -> StringMatch<StringExpr> {
+        if let mode = try parseStringMatchModeLabelIfPresent() {
+            let value = try parseStringExpr()
+            return try validatedStringMatch(mode.mode, value: value, field: field, token: mode.token)
+        }
+        return .exact(try parseStringExpr())
+    }
+
+    private mutating func parseStringMatchFieldValue(field: String) throws -> StringMatch<StringExpr> {
+        if startsStringMatchDotCall {
+            let token = currentToken
+            let name = try parseDotCallName(allowedPrefixes: ["StringMatch"])
+            guard let mode = stringMatchMode(named: name) else {
+                throw error(token, "unsupported string match '.\(name)'")
+            }
+            try expectSymbol("(")
+            let value = try parseStringExpr()
+            try expectSymbol(")")
+            return try validatedStringMatch(mode, value: value, field: field, token: token)
+        }
+        return .exact(try parseStringExpr())
+    }
+
+    private mutating func parseStringMatchModeLabelIfPresent() throws -> (mode: StringMatch<StringExpr>.Mode, token: HeistPlanSourceToken)? {
+        for name in ["exact", "contains", "prefix", "suffix"] where lookaheadLabel(name) {
+            let token = currentToken
+            try expectIdentifier(name)
+            try expectSymbol(":")
+            guard let mode = stringMatchMode(named: name) else { return nil }
+            return (mode, token)
+        }
+        return nil
+    }
+
+    private var startsStringMatchDotCall: Bool {
+        if currentToken.isSymbol(".") {
+            return lookaheadIdentifier(in: ["exact", "contains", "prefix", "suffix"])
+        }
+        if case .identifier(let name) = currentToken.kind {
+            return name == "StringMatch"
+        }
+        return false
+    }
+
+    private func stringMatchMode(named name: String) -> StringMatch<StringExpr>.Mode? {
+        StringMatch<StringExpr>.Mode(rawValue: name)
+    }
+
+    private func validatedStringMatch(
+        _ mode: StringMatch<StringExpr>.Mode,
+        value: StringExpr,
+        field: String,
+        token: HeistPlanSourceToken
+    ) throws -> StringMatch<StringExpr> {
+        let match = StringMatch(mode: mode, value: value)
+        if match.hasInvalidEmptyBroadLiteral {
+            throw error(token, "\(field) \(mode.rawValue) match value must not be empty")
+        }
+        return match
     }
 
     private mutating func parseStringExpr() throws -> StringExpr {

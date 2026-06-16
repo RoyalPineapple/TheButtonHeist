@@ -96,7 +96,7 @@ final class ClientMessageTests: XCTestCase {
             .requestScreen,
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(try ActionStep(
-                    command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Save"))))
+                    command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")))))
                 )),
             ]))),
         ]
@@ -141,11 +141,11 @@ final class ClientMessageTests: XCTestCase {
                     expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
                 )),
                 .wait(WaitStep(
-                    predicate: .state(.present(ElementPredicate(label: "Save", traits: [.button]))),
+                    predicate: .present(ElementPredicate(label: "Save", traits: [.button])),
                     timeout: 2.5
                 )),
                 .wait(WaitStep(
-                    predicate: .changed(.appeared(ElementPredicate(label: "Done"))),
+                    predicate: .present(ElementPredicate(label: "Done")),
                     timeout: 1.0
                 )),
             ]
@@ -200,7 +200,7 @@ final class ClientMessageTests: XCTestCase {
             .action(try ActionStep(
                 command: .typeText(
                     text: .literal("hello"),
-                    target: .predicate(ElementPredicateTemplate(identifier: .literal("nameField")))
+                    target: .predicate(ElementPredicateTemplate(identifier: .exact(.literal("nameField"))))
                 )
             )),
         ])
@@ -221,12 +221,12 @@ final class ClientMessageTests: XCTestCase {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(text, StringExpr.literal("hello"))
-        XCTAssertEqual(target, ElementTargetExpr.predicate(ElementPredicateTemplate(identifier: .literal("nameField"))))
+        XCTAssertEqual(target, ElementTargetExpr.predicate(ElementPredicateTemplate(identifier: .exact(.literal("nameField")))))
     }
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
         let step = try ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Save")))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))))),
             expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
         )
 
@@ -268,7 +268,7 @@ final class ClientMessageTests: XCTestCase {
     func testSingleActivateWireShapeIsHeistPlan() throws {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Log In"))))
+                command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Log In")))))
             )),
         ])
         let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
@@ -390,12 +390,15 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - Wait Tests
 
     func testWaitAbsentRoundTrip() throws {
-        let target = WaitTarget(predicate: .state(.absent(ElementPredicate(label: "Loading", traits: [.staticText]))), timeout: 5.0)
+        let target = WaitTarget(
+            predicate: .state(.absent(ElementPredicate(label: "Loading", traits: [.staticText]))),
+            timeout: 5.0
+        )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
         if case .state(.absent(let predicate)) = decoded.predicate {
-            XCTAssertEqual(predicate.label, "Loading")
+            XCTAssertEqual(predicate.label, .exact("Loading"))
             XCTAssertEqual(predicate.traits, [.staticText])
             XCTAssertEqual(decoded.timeout, 5.0)
         } else {
@@ -409,7 +412,7 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
         if case .state(.present(let predicate)) = decoded.predicate {
-            XCTAssertEqual(predicate.identifier, "spinner")
+            XCTAssertEqual(predicate.identifier, .exact("spinner"))
             XCTAssertNil(decoded.timeout)
             XCTAssertEqual(decoded.resolvedTimeout, 10.0)
         } else {
@@ -431,12 +434,12 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decoded.timeout, 15.0)
     }
 
-    func testWaitChangedDisappearedRoundTrip() throws {
-        let target = WaitTarget(predicate: .changed(.disappeared(ElementPredicate(label: "Loading"))), timeout: 5.0)
+    func testWaitAbsentConvenienceRoundTrip() throws {
+        let target = WaitTarget(predicate: .absent(ElementPredicate(label: "Loading")), timeout: 5.0)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
-        XCTAssertEqual(decoded.predicate, .changed(.disappeared(ElementPredicate(label: "Loading"))))
+        XCTAssertEqual(decoded.predicate, .absent(ElementPredicate(label: "Loading")))
         XCTAssertEqual(decoded.timeout, 5.0)
     }
 

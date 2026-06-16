@@ -24,7 +24,6 @@ public enum HeistExecutionStepKind: String, Codable, Sendable, Equatable {
     case action
     case wait
     case conditional
-    case waitForCases
     case forEachElement = "for_each_element"
     case forEachString = "for_each_string"
     case forEachIteration = "for_each_iteration"
@@ -81,7 +80,6 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
     case action(command: String, target: String?)
     case wait(predicate: String, timeout: Double)
     case conditional
-    case waitForCases(timeout: Double)
     case forEachString(parameter: String, count: Int)
     case forEachElement(parameter: String, matching: String, limit: Int)
     case invoke(path: String, argument: String?)

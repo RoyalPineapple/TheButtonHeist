@@ -456,6 +456,14 @@ private struct HeistSemanticSurfaceBuilder {
 
         case .wait(let wait):
             collectWait(wait.predicate)
+            if let elseBody = wait.elseBody {
+                collect(
+                    steps: elseBody,
+                    definitionScope: definitionScope,
+                    environment: environment,
+                    invocationStack: invocationStack
+                )
+            }
 
         case .conditional(let conditional):
             for predicateCase in conditional.cases {
@@ -467,25 +475,6 @@ private struct HeistSemanticSurfaceBuilder {
                 )
             }
             if let elseBody = conditional.elseBody {
-                collect(
-                    steps: elseBody,
-                    definitionScope: definitionScope,
-                    environment: environment,
-                    invocationStack: invocationStack
-                )
-            }
-
-        case .waitForCases(let waitForCases):
-            for predicateCase in waitForCases.cases {
-                collectWait(predicateCase.predicate)
-                collect(
-                    steps: predicateCase.body,
-                    definitionScope: definitionScope,
-                    environment: environment,
-                    invocationStack: invocationStack
-                )
-            }
-            if let elseBody = waitForCases.elseBody {
                 collect(
                     steps: elseBody,
                     definitionScope: definitionScope,
@@ -639,10 +628,10 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicate) {
-        if let label = predicate.label, !label.isEmpty {
+        if let label = predicate.label, label.hasPredicateLiteral {
             appendUnique("label=\(label)", to: &semanticSurfaces)
         }
-        if let identifier = predicate.identifier, !identifier.isEmpty {
+        if let identifier = predicate.identifier, identifier.hasPredicateLiteral {
             appendUnique("identifier=\(identifier)", to: &semanticSurfaces)
         }
         if !predicate.traits.isEmpty {
@@ -681,6 +670,12 @@ private struct HeistSemanticSurfaceBuilder {
         case .ref(let reference):
             return "\(reference)_ref"
         }
+    }
+
+    func semanticString(_ match: StringMatch<StringExpr>) -> String {
+        let value = semanticString(match.value)
+        guard !match.isExact else { return value }
+        return "\(match.mode.rawValue)(\(value))"
     }
 
     mutating func appendPredicateTargets(_ predicate: AccessibilityPredicateExpr) {
@@ -736,8 +731,6 @@ private struct HeistSemanticSurfaceBuilder {
             if let state { appendPredicateTargets(state) }
         case .elements:
             break
-        case .appeared(let predicate), .disappeared(let predicate):
-            appendTargetPredicate(predicate)
         case .updated(let update):
             if let element = update.element {
                 appendTargetPredicate(element)
@@ -751,9 +744,6 @@ private struct HeistSemanticSurfaceBuilder {
             if let state { appendPredicateTargets(state) }
         case .elements:
             break
-        case .appeared(let predicate), .disappeared(let predicate):
-            appendUnique(predicate.description, to: &targetPredicates)
-            appendSemanticSurfaces(predicate)
         case .updated(let update):
             if let element = update.element {
                 appendUnique(element.description, to: &targetPredicates)

@@ -239,8 +239,6 @@ final class MockConnection: TransportReachabilityConnecting {
             return heistWaitStepResult(for: wait, index: index, path: path, handler: handler)
         case .conditional(let conditional):
             return heistConditionalStepResult(for: conditional, index: index, path: path)
-        case .waitForCases(let waitForCases):
-            return heistWaitForCasesStepResult(for: waitForCases, index: index, path: path)
         case .forEachElement(let forEach):
             return heistForEachElementStepResult(for: forEach, index: index, path: path)
         case .forEachString(let forEach):
@@ -406,34 +404,6 @@ final class MockConnection: TransportReachabilityConnecting {
                 selectedCaseIndex: nil,
                 elapsedMs: heistStepDurationMs
             )))
-        )
-    }
-
-    private func heistWaitForCasesStepResult(
-        for waitForCases: WaitForCasesStep,
-        index: Int,
-        path: String
-    ) -> HeistExecutionStepResult {
-        let selection = HeistCaseSelectionResult(
-            cases: mockCaseResults(for: waitForCases.cases),
-            selectedCaseIndex: nil,
-            elapsedMs: heistStepDurationMs,
-            timeout: waitForCases.timeout,
-            timedOut: true
-        )
-        return HeistExecutionStepResult(
-            path: path,
-            kind: .waitForCases,
-            status: .failed,
-            durationMs: heistStepDurationMs,
-            intent: .waitForCases(timeout: waitForCases.timeout),
-            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
-            failure: HeistFailureDetail(
-                category: .wait,
-                contract: "wait_for_cases selects a case before timeout or runs else",
-                observed: "mock wait_for_cases timed out",
-                expected: waitForCases.cases.map(\.predicate.description).joined(separator: "; ")
-            )
         )
     }
 
