@@ -80,12 +80,21 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: method)
         }
+        let demand = stash.beginSemanticObservationDemand(scope: .visible)
+        defer { demand.cancel() }
+
+        let actionStart = CFAbsoluteTimeGetCurrent()
+        let beforeStart = CFAbsoluteTimeGetCurrent()
         guard let before = await interactionObservation.prepareBeforeState() else {
             return treeUnavailableResult(method: method)
         }
-        let result = await interaction()
+        let beforeObservationMs = elapsedMilliseconds(since: beforeStart)
 
-        return await interactionObservation.finishAfterAction(
+        let interactionStart = CFAbsoluteTimeGetCurrent()
+        let result = await interaction()
+        let interactionMs = elapsedMilliseconds(since: interactionStart)
+
+        let actionResult = await interactionObservation.finishAfterAction(
             success: result.success,
             method: result.method,
             message: result.message,
@@ -95,6 +104,13 @@ extension TheBrains {
             subjectEvidence: result.subjectEvidence,
             before: before
         )
+        return actionResult.withTiming(ActionPerformanceTiming(
+            beforeObservationMs: beforeObservationMs,
+            targetResolutionMs: result.timing?.targetResolutionMs,
+            actionDispatchMs: result.timing?.actionDispatchMs,
+            interactionMs: interactionMs,
+            totalMs: elapsedMilliseconds(since: actionStart)
+        ))
     }
 
     func performRotor(_ target: RotorTarget) async -> ActionResult {
@@ -105,6 +121,9 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .wait)
         }
+        let demand = stash.beginSemanticObservationDemand(scope: target.predicate.observationScope)
+        defer { demand.cancel() }
+
         let receipt = await interactionObservation.waitForPredicate(
             WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)
         )

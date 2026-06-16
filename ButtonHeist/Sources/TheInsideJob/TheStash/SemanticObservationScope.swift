@@ -30,5 +30,33 @@ final class SemanticObservationSubscription {
     }
 }
 
+@MainActor
+final class SemanticObservationDemand {
+    let id: UInt64
+    let scope: SemanticObservationScope
+    private weak var stream: SemanticObservationStream?
+    private var isCancelled = false
+
+    init(id: UInt64, scope: SemanticObservationScope, stream: SemanticObservationStream) {
+        self.id = id
+        self.scope = scope
+        self.stream = stream
+    }
+
+    func cancel() {
+        guard !isCancelled else { return }
+        isCancelled = true
+        stream?.removeActiveObservationDemand(id)
+        stream = nil
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            guard !isCancelled else { return }
+            stream?.removeActiveObservationDemand(id)
+        }
+    }
+}
+
 #endif // DEBUG
 #endif // canImport(UIKit)

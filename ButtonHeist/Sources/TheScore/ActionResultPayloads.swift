@@ -164,6 +164,52 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
     }
 }
 
+/// Optional local timing breakdown for one observed action pipeline.
+public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
+    public let beforeObservationMs: Int?
+    public let targetResolutionMs: Int?
+    public let actionDispatchMs: Int?
+    public let interactionMs: Int?
+    public let settleMs: Int?
+    public let finalSemanticEvidenceMs: Int?
+    public let receiptGenerationMs: Int?
+    public let totalMs: Int?
+
+    public init(
+        beforeObservationMs: Int? = nil,
+        targetResolutionMs: Int? = nil,
+        actionDispatchMs: Int? = nil,
+        interactionMs: Int? = nil,
+        settleMs: Int? = nil,
+        finalSemanticEvidenceMs: Int? = nil,
+        receiptGenerationMs: Int? = nil,
+        totalMs: Int? = nil
+    ) {
+        self.beforeObservationMs = beforeObservationMs
+        self.targetResolutionMs = targetResolutionMs
+        self.actionDispatchMs = actionDispatchMs
+        self.interactionMs = interactionMs
+        self.settleMs = settleMs
+        self.finalSemanticEvidenceMs = finalSemanticEvidenceMs
+        self.receiptGenerationMs = receiptGenerationMs
+        self.totalMs = totalMs
+    }
+
+    public func merging(_ other: ActionPerformanceTiming?) -> ActionPerformanceTiming {
+        guard let other else { return self }
+        return ActionPerformanceTiming(
+            beforeObservationMs: other.beforeObservationMs ?? beforeObservationMs,
+            targetResolutionMs: other.targetResolutionMs ?? targetResolutionMs,
+            actionDispatchMs: other.actionDispatchMs ?? actionDispatchMs,
+            interactionMs: other.interactionMs ?? interactionMs,
+            settleMs: other.settleMs ?? settleMs,
+            finalSemanticEvidenceMs: other.finalSemanticEvidenceMs ?? finalSemanticEvidenceMs,
+            receiptGenerationMs: other.receiptGenerationMs ?? receiptGenerationMs,
+            totalMs: other.totalMs ?? totalMs
+        )
+    }
+}
+
 /// The outcome of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
     /// Whether the action was delivered and completed normally. `false` means
@@ -193,6 +239,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public let settleTimeMs: Int?
     /// Semantic subject the runtime resolved before dispatching the action.
     public let subjectEvidence: ActionSubjectEvidence?
+    /// Optional measured durations for the local observed action pipeline.
+    public let timing: ActionPerformanceTiming?
 
     public init(
         success: Bool,
@@ -203,7 +251,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
-        subjectEvidence: ActionSubjectEvidence? = nil
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        timing: ActionPerformanceTiming? = nil
     ) {
         self.success = success
         self.method = method
@@ -214,6 +263,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         self.settled = settled
         self.settleTimeMs = settleTimeMs
         self.subjectEvidence = subjectEvidence
+        self.timing = timing
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -226,6 +276,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case settled
         case settleTimeMs
         case subjectEvidence
+        case timing
     }
 
     public init(from decoder: Decoder) throws {
@@ -240,7 +291,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs),
-            subjectEvidence: try container.decodeIfPresent(ActionSubjectEvidence.self, forKey: .subjectEvidence)
+            subjectEvidence: try container.decodeIfPresent(ActionSubjectEvidence.self, forKey: .subjectEvidence),
+            timing: try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
         )
     }
 
@@ -255,5 +307,22 @@ public struct ActionResult: Codable, Sendable, Equatable {
         try container.encodeIfPresent(settled, forKey: .settled)
         try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
         try container.encodeIfPresent(subjectEvidence, forKey: .subjectEvidence)
+        try container.encodeIfPresent(timing, forKey: .timing)
+    }
+
+    public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
+        guard let timing else { return self }
+        return ActionResult(
+            success: success,
+            method: method,
+            message: message,
+            errorKind: errorKind,
+            payload: payload,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            timing: self.timing?.merging(timing) ?? timing
+        )
     }
 }

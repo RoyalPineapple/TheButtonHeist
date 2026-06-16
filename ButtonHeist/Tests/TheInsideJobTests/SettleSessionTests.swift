@@ -102,7 +102,115 @@ final class SettleSessionTests: XCTestCase {
         }
     }
 
+    @MainActor
+    private final class ManualClock {
+        private(set) var now: CFAbsoluteTime = 0
+
+        func currentTime() -> CFAbsoluteTime {
+            now
+        }
+
+        func advance(milliseconds: Int) {
+            now += Double(milliseconds) / 1_000
+        }
+    }
+
+    private func makeQuietSession(
+        script: [Screen?],
+        clock: ManualClock,
+        frameMs: Int = 10,
+        quietWindowMs: Int = 30,
+        timeoutMs: Int = 500,
+        topVCSequence: [ObjectIdentifier?]? = nil,
+        yieldCount: Counter? = nil
+    ) -> SemanticQuietSettleSession {
+        let scriptBox = ScriptBox(script: script)
+        let topVCBox = ScriptBox(script: topVCSequence ?? [nil])
+        return SemanticQuietSettleSession(
+            parseProvider: { scriptBox.next() },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: topVCBox.next()) },
+            observationYield: {
+                _ = yieldCount?.next()
+                clock.advance(milliseconds: frameMs)
+            },
+            clock: { clock.currentTime() },
+            quietWindowMs: quietWindowMs,
+            timeoutMs: timeoutMs
+        )
+    }
+
     // MARK: - Stable Settle
+
+    func testSemanticQuietSettleUsesQuietWindowInsteadOfFixedCycles() async {
+        let element = makeElement(label: "Hello", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30))
+        let stable = makeParseResult([element])
+        let clock = ManualClock()
+        let yieldCount = Counter()
+        let session = makeQuietSession(
+            script: [stable],
+            clock: clock,
+            quietWindowMs: 30,
+            yieldCount: yieldCount
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 30))
+        XCTAssertEqual(yieldCount.next(), 3)
+    }
+
+    func testSemanticQuietSettleResetsQuietWindowWhenFingerprintChanges() async {
+        let first = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let second = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let clock = ManualClock()
+        let session = makeQuietSession(
+            script: [first, first, second, second, second, second],
+            clock: clock,
+            quietWindowMs: 30
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testSemanticQuietSettleTripwireChangeResetsBaseline() async {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let clock = ManualClock()
+        let changedVC = ObjectIdentifier(UIViewController())
+        let session = makeQuietSession(
+            script: [stable],
+            clock: clock,
+            quietWindowMs: 30,
+            topVCSequence: [changedVC, changedVC, changedVC, changedVC]
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 40))
+        XCTAssertEqual(outcome.events, [
+            .tripwireSignalChanged(
+                from: Self.tripwireSignal(topmostVC: nil),
+                to: Self.tripwireSignal(topmostVC: changedVC)
+            ),
+        ])
+    }
 
     func testSettlesAfterCyclesRequiredStableCycles() async {
         let element = makeElement(label: "Hello", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30))

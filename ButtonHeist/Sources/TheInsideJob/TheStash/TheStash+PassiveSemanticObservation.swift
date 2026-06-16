@@ -21,6 +21,10 @@ extension TheStash {
         semanticObservationStream.removeSubscription(id)
     }
 
+    func beginSemanticObservationDemand(scope: SemanticObservationScope) -> SemanticObservationDemand {
+        semanticObservationStream.beginActiveObservationDemand(scope: scope)
+    }
+
     func subscribedObservationScope() -> SemanticObservationScope {
         semanticObservationStream.subscribedObservationScope()
     }

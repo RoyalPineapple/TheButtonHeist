@@ -12,6 +12,7 @@ extension TheSafecracker {
         let message: String?
         let payload: ResultPayload?
         let subjectEvidence: ActionSubjectEvidence?
+        let timing: ActionPerformanceTiming?
         /// Structural reason for failure when `success == false`. Lets dispatch code
         /// distinguish tree-unavailable from timeout without parsing `message`
         /// (which is user-facing copy, not a control-flow contract).
@@ -23,6 +24,7 @@ extension TheSafecracker {
             message: String?,
             payload: ResultPayload?,
             subjectEvidence: ActionSubjectEvidence?,
+            timing: ActionPerformanceTiming? = nil,
             failureKind: FailureKind? = nil
         ) {
             self.success = success
@@ -30,6 +32,7 @@ extension TheSafecracker {
             self.message = message
             self.payload = payload
             self.subjectEvidence = subjectEvidence
+            self.timing = timing
             self.failureKind = failureKind
         }
 
@@ -73,6 +76,20 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: evidence,
+                timing: timing,
+                failureKind: failureKind
+            )
+        }
+
+        func withTiming(_ timing: ActionPerformanceTiming?) -> InteractionResult {
+            guard let timing else { return self }
+            return InteractionResult(
+                success: success,
+                method: method,
+                message: message,
+                payload: payload,
+                subjectEvidence: subjectEvidence,
+                timing: self.timing?.merging(timing) ?? timing,
                 failureKind: failureKind
             )
         }

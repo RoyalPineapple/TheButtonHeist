@@ -108,6 +108,31 @@ final class TheStashResolutionTests: XCTestCase {
         _ = visible
     }
 
+    func testActiveObservationDemandCoalescesWithSubscribersAndDropsWhenCancelled() {
+        XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
+        XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
+
+        let demand = bagman.beginSemanticObservationDemand(scope: .visible)
+        XCTAssertTrue(bagman.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 1)
+        XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
+
+        do {
+            let discovery = bagman.subscribeSemanticObservation(scope: .discovery)
+            XCTAssertEqual(bagman.subscribedObservationScope(), .discovery)
+            _ = discovery
+        }
+
+        XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
+
+        demand.cancel()
+
+        XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
+        XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
+    }
+
     func testLatestSettledSemanticObservationAdvancesMonotonically() {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitSettledVisibleObservation(first)

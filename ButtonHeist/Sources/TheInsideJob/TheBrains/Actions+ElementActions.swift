@@ -21,29 +21,44 @@ extension Actions {
         preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.InteractionResult?)? = nil,
         action: @MainActor (ElementInflation.InflatedElementTarget) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
-        switch await navigation.elementInflation.inflate(
+        func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
+            Int((CFAbsoluteTimeGetCurrent() - start) * 1_000)
+        }
+
+        let resolutionStart = CFAbsoluteTimeGetCurrent()
+        let inflation = await navigation.elementInflation.inflate(
             for: target,
             method: method,
             deallocatedBoundary: deallocatedBoundary,
             activationPointPolicy: activationPointPolicy
-        ) {
+        )
+        let targetResolutionMs = elapsedMilliseconds(since: resolutionStart)
+
+        let dispatchStart = CFAbsoluteTimeGetCurrent()
+        let result: TheSafecracker.InteractionResult
+        switch inflation {
         case .failed(let failure):
-            return failure.interactionResult(commandMethod: method)
+            result = failure.interactionResult(commandMethod: method)
         case .inflated(let context):
             if let failure = preflight?(context.screenElement) {
-                return failure
-            }
-            if let failure = interactivityFailure(
+                result = failure
+            } else if let failure = interactivityFailure(
                 context,
                 method: method,
                 requireInteractive: requireInteractive
             ) {
-                return failure
+                result = failure
+            } else {
+                result = await action(context).withSubjectEvidence(
+                    context.subjectEvidence(source: .resolvedSemanticTarget)
+                )
             }
-            return await action(context).withSubjectEvidence(
-                context.subjectEvidence(source: .resolvedSemanticTarget)
-            )
         }
+
+        return result.withTiming(ActionPerformanceTiming(
+            targetResolutionMs: targetResolutionMs,
+            actionDispatchMs: elapsedMilliseconds(since: dispatchStart)
+        ))
     }
 
     private func interactivityFailure(

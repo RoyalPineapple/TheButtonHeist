@@ -1413,6 +1413,57 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.discovery])
     }
 
+    func testHeistKeepsActiveObservationDemandThroughStateDependentStep() async throws {
+        var demandDuringAction = false
+        var demandDuringObservation = false
+        let runtime = heistRuntime(
+            observations: [observedState(labels: ["Ready"])],
+            execute: { _ in
+                demandDuringAction = self.brains.stash.semanticObservationStream.hasActiveObservationDemand
+                return ActionResult(success: true, method: .activate)
+            },
+            observedScopes: { _ in
+                demandDuringObservation = self.brains.stash.semanticObservationStream.hasActiveObservationDemand
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))))),
+            .conditional(try ConditionalStep(cases: [
+                PredicateCase(
+                    predicate: .state(.present(ElementPredicate(label: "Ready"))),
+                    body: [.warn(WarnStep(message: "ready"))]
+                ),
+            ])),
+        ])
+
+        _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(demandDuringAction)
+        XCTAssertTrue(demandDuringObservation)
+        XCTAssertFalse(brains.stash.semanticObservationStream.hasActiveObservationDemand)
+    }
+
+    func testHeistKeepsActiveObservationDemandAcrossConsecutiveBareActions() async throws {
+        var demandDuringActions: [Bool] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { _ in
+                demandDuringActions.append(self.brains.stash.semanticObservationStream.hasActiveObservationDemand)
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("1")))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("2")))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("3")))))),
+        ])
+
+        _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertEqual(demandDuringActions, [true, true, true])
+        XCTAssertFalse(brains.stash.semanticObservationStream.hasActiveObservationDemand)
+    }
+
     func testWaitForCasesChangedPredicateConsumesStreamEventDelta() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Loading"]),

@@ -93,9 +93,10 @@ final class Navigation {
     ///    Answers "did the swipe move us, and has the visible set stopped
     ///    accepting new heistIds?" — the only signal that distinguishes
     ///    spring-bounce-then-settle from edge-rejected gestures.
-    /// 2. `SettleSession` (`SettleSession.swift`) — AX-tree fingerprint
-    ///    stability across polled cycles, plus VC-change preemption and
-    ///    transient-element accumulation. The post-action correctness path.
+    /// 2. `SettleSession` / `SemanticQuietSettleSession` (`SettleSession.swift`)
+    ///    — AX-tree fingerprint stability, plus VC-change preemption and
+    ///    transient-element accumulation. Active heists use the semantic
+    ///    quiet-window variant at frame cadence.
     /// 3. `TheTripwire.waitForAllClear(timeout:)` — CADisplayLink-driven
     ///    layer-level quiet detection (no AX tree). Used when we only care
     ///    that animations and layout have flushed.

@@ -86,15 +86,15 @@ enum SettleOutcome: Equatable {
 /// changing, regardless of ongoing visual motion (analog clocks, animated
 /// gradients, Lottie loops).
 ///
-/// **Settle signal boundary.** SettleSession is the post-action correctness
-/// path — it watches the AX tree because that is the user-visible truth for
-/// a screen-reader user. `TheTripwire.waitForAllClear` watches CALayers and
-/// is deliberately blind to the AX tree; the two cannot be unified because
-/// "no layer motion" and "AX tree stable" disagree on every spinner-driven
-/// loading state. `SettleSwipeLoopState` (Navigation.swift) is also AX-tree
-/// driven but interleaves parse with frame yields and exposes a `moved`
-/// latch — its termination is per-swipe, not per-action. See the comment on
-/// `SettleSwipeLoopState` for the full four-implementation boundary.
+/// **Settle signal boundary.** SettleSession is the legacy fixed-cadence AX
+/// quiet loop for passive observation. Active heists/actions use
+/// `SemanticQuietSettleSession` below, which watches the same AX semantics
+/// through the Stash parser at frame cadence. `TheTripwire.waitForAllClear`
+/// watches CALayers and is deliberately blind to the AX tree; "no layer
+/// motion" and "AX tree stable" disagree on every spinner-driven loading
+/// state. `SettleSwipeLoopState` (Navigation.swift) is also AX-tree driven
+/// but interleaves parse with frame yields and exposes a `moved` latch — its
+/// termination is per-swipe, not per-action.
 ///
 /// The loop seeds `previousFingerprint` from a synchronous parse *before*
 /// the first sleep, so a static screen settles after exactly
@@ -317,6 +317,151 @@ enum SettleOutcome: Equatable {
         final: [AccessibilityElement]
     ) -> [AccessibilityElement] {
         SettleTimeline.transientElements(seenByKey: seenByKey, baseline: baseline, final: final)
+    }
+}
+
+/// Accessibility-tree settle loop driven by the semantic observation stream.
+///
+/// This uses the same parser/Stash path as normal observations, but samples at
+/// the caller-provided frame cadence and declares settle once the semantic
+/// fingerprint has remained unchanged for a quiet wall-clock window.
+@MainActor struct SemanticQuietSettleSession { // swiftlint:disable:this agent_main_actor_value_type
+    static let defaultQuietWindowMs: Int = 60
+
+    typealias ParseProvider = @MainActor () -> Screen?
+    typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
+    typealias ObservationYield = @MainActor () async throws -> Void
+    typealias Clock = @MainActor () -> CFAbsoluteTime
+
+    let parseProvider: ParseProvider
+    let tripwireSignalProvider: TripwireSignalProvider
+    let observationYield: ObservationYield
+    let clock: Clock
+    let quietWindowMs: Int
+    let timeoutMs: Int
+
+    init(
+        parseProvider: @escaping ParseProvider,
+        tripwireSignalProvider: @escaping TripwireSignalProvider,
+        observationYield: @escaping ObservationYield,
+        clock: @escaping Clock = { CFAbsoluteTimeGetCurrent() },
+        quietWindowMs: Int = SemanticQuietSettleSession.defaultQuietWindowMs,
+        timeoutMs: Int = SettleSession.defaultTimeoutMs
+    ) {
+        self.parseProvider = parseProvider
+        self.tripwireSignalProvider = tripwireSignalProvider
+        self.observationYield = observationYield
+        self.clock = clock
+        self.quietWindowMs = quietWindowMs
+        self.timeoutMs = timeoutMs
+    }
+
+    static func live(
+        stash: TheStash,
+        tripwire: TheTripwire,
+        quietWindowMs: Int = SemanticQuietSettleSession.defaultQuietWindowMs,
+        timeoutMs: Int = SettleSession.defaultTimeoutMs
+    ) -> SemanticQuietSettleSession {
+        SemanticQuietSettleSession(
+            parseProvider: { stash.semanticObservationForSettle() },
+            tripwireSignalProvider: { tripwire.tripwireSignal() },
+            observationYield: { await tripwire.yieldFrames(1) },
+            quietWindowMs: quietWindowMs,
+            timeoutMs: timeoutMs
+        )
+    }
+
+    func run(
+        start: CFAbsoluteTime,
+        baselineTripwireSignal: TheTripwire.TripwireSignal
+    ) async -> SettleSession.Outcome {
+        let deadline = start + Double(timeoutMs) / 1_000
+        let quietWindowSeconds = Double(quietWindowMs) / 1_000
+
+        var observations = SettleObservationLedger()
+        var tripwireBaseline = baselineTripwireSignal
+        var events: [SettleEvent] = []
+        var lastScreen: Screen?
+        var previousFingerprint: Int?
+        var quietStartedAt: CFAbsoluteTime?
+
+        func elapsedMs() -> Int {
+            max(0, Int((clock() - start) * 1_000))
+        }
+
+        func record(_ screen: Screen) -> Bool {
+            lastScreen = screen
+            let fingerprint = observations.record(screen)
+            let now = clock()
+            if fingerprint == previousFingerprint {
+                let stableSince = quietStartedAt ?? now
+                quietStartedAt = stableSince
+                return now - stableSince >= quietWindowSeconds
+            }
+            previousFingerprint = fingerprint
+            quietStartedAt = now
+            return false
+        }
+
+        if let initial = parseProvider(), record(initial) {
+            return SettleSession.Outcome(
+                outcome: .settled(timeMs: elapsedMs()),
+                events: events,
+                finalScreen: initial,
+                elementsByKey: observations.elementsByKey
+            )
+        }
+
+        while clock() < deadline {
+            do {
+                try await observationYield()
+            } catch is CancellationError {
+                return SettleSession.Outcome(
+                    outcome: .cancelled(timeMs: elapsedMs()),
+                    events: events,
+                    finalScreen: lastScreen,
+                    elementsByKey: observations.elementsByKey,
+                    instabilityDescription: observations.latestChangeDescription
+                )
+            } catch {
+                return SettleSession.Outcome(
+                    outcome: .timedOut(timeMs: elapsedMs()),
+                    events: events,
+                    finalScreen: lastScreen,
+                    elementsByKey: observations.elementsByKey,
+                    instabilityDescription: observations.latestChangeDescription
+                )
+            }
+
+            let nowTripwireSignal = tripwireSignalProvider()
+            if nowTripwireSignal != tripwireBaseline {
+                events.append(.tripwireSignalChanged(
+                    from: tripwireBaseline,
+                    to: nowTripwireSignal
+                ))
+                tripwireBaseline = nowTripwireSignal
+                previousFingerprint = nil
+                quietStartedAt = nil
+            }
+
+            guard let parse = parseProvider() else { continue }
+            if record(parse) {
+                return SettleSession.Outcome(
+                    outcome: .settled(timeMs: elapsedMs()),
+                    events: events,
+                    finalScreen: parse,
+                    elementsByKey: observations.elementsByKey
+                )
+            }
+        }
+
+        return SettleSession.Outcome(
+            outcome: .timedOut(timeMs: elapsedMs()),
+            events: events,
+            finalScreen: lastScreen,
+            elementsByKey: observations.elementsByKey,
+            instabilityDescription: observations.latestChangeDescription
+        )
     }
 }
 
