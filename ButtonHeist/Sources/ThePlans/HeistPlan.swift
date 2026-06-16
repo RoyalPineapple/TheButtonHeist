@@ -3,7 +3,7 @@ import Foundation
 // ThePlans ownership map:
 // - HeistPlan.swift owns the runtime-validated plan IR and Codable wire shape.
 // - HeistPlanExpressions.swift owns scoped expression/reference types.
-// - HeistPlan+RuntimeValidation*.swift owns the single runtime validation boundary.
+// - Runtime safety extensions own the bounded executable-plan boundary.
 // - HeistPlan+Validation.swift owns linting and composition-quality checks only.
 // - HeistPlanSourceCompiler/Lexer/Parser.swift owns canonical ButtonHeist source compilation.
 // - HeistSwiftFileCompiler.swift owns authored Swift-file compilation.
@@ -36,13 +36,13 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         definitions: [HeistPlan] = [],
         body: [HeistStep]
     ) throws {
-        self = try UnvalidatedHeistPlan(
+        self = try HeistPlanAdmissionCandidate(
             version: version,
             name: name,
             parameter: parameter,
-            definitions: definitions.map(UnvalidatedHeistPlan.init),
+            definitions: definitions.map(HeistPlanAdmissionCandidate.init),
             body: body
-        ).validatedForRuntime()
+        ).validatedForRuntimeSafety()
     }
 
     init(
@@ -60,11 +60,11 @@ public struct HeistPlan: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
-        self = try UnvalidatedHeistPlan(from: decoder).validatedForRuntime()
+        self = try HeistPlanAdmissionCandidate(from: decoder).validatedForRuntimeSafety()
     }
 
     public func encode(to encoder: Encoder) throws {
-        try UnvalidatedHeistPlan(self).encode(to: encoder)
+        try HeistPlanAdmissionCandidate(self).encode(to: encoder)
     }
 }
 

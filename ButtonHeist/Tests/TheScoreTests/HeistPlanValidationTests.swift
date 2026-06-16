@@ -3,23 +3,23 @@ import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 @testable import TheScore
 
-private func runtimeValidationFailures(
-    for raw: UnvalidatedHeistPlan,
-    limits: HeistPlanRuntimeValidationLimits = .standard
-) -> [HeistPlanValidationFailure] {
+private func runtimeSafetyFailures(
+    for raw: HeistPlanAdmissionCandidate,
+    limits: HeistPlanRuntimeSafetyLimits = .standard
+) -> [HeistPlanRuntimeSafetyFailure] {
     do {
-        _ = try raw.validatedForRuntime(limits: limits)
+        _ = try raw.validatedForRuntimeSafety(limits: limits)
         return []
-    } catch let error as HeistPlanValidationError {
+    } catch let error as HeistPlanRuntimeSafetyError {
         return error.failures
     } catch {
-        Issue.record("Expected runtime validation error, got \(error)")
+        Issue.record("Expected runtime safety error, got \(error)")
         return []
     }
 }
 
-private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
-    try raw.validatedForRuntime()
+private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPlan {
+    try raw.validatedForRuntimeSafety()
 }
 
 @Test
@@ -144,7 +144,7 @@ func lintReportsEmptyBranches() throws {
 }
 
 @Test
-func runtimeValidationRejectsInvalidLoopParameters() throws {
+func runtimeSafetyRejectsInvalidLoopParameters() throws {
     let invalidParameters = [
         "",
         " ",
@@ -157,7 +157,7 @@ func runtimeValidationRejectsInvalidLoopParameters() throws {
     ]
 
     for parameter in invalidParameters {
-        let raw = UnvalidatedHeistPlan(body: [
+        let raw = HeistPlanAdmissionCandidate(body: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
                 limit: 1,
@@ -166,7 +166,7 @@ func runtimeValidationRejectsInvalidLoopParameters() throws {
             )),
         ])
 
-        let failures = runtimeValidationFailures(for: raw)
+        let failures = runtimeSafetyFailures(for: raw)
 
         #expect(failures.contains { $0.path == "$.body[0].for_each_element.parameter" })
         #expect(failures.contains { $0.contract.contains("Swift-style identifier") })
@@ -174,27 +174,27 @@ func runtimeValidationRejectsInvalidLoopParameters() throws {
 }
 
 @Test
-func runtimeValidationRejectsInvalidRefs() throws {
-    let tooLong = String(repeating: "a", count: HeistPlanRuntimeValidationLimits.standard.maxParameterBytes + 1)
-    let cases: [(String, UnvalidatedHeistPlan, String)] = [
+func runtimeSafetyRejectsInvalidRefs() throws {
+    let tooLong = String(repeating: "a", count: HeistPlanRuntimeSafetyLimits.standard.maxParameterBytes + 1)
+    let cases: [(String, HeistPlanAdmissionCandidate, String)] = [
         (
             "empty target ref",
-            UnvalidatedHeistPlan(body: [.action(try ActionStep(command: .activate(.ref(""))))]),
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(""))))]),
             "target_ref"
         ),
         (
             "whitespace target ref",
-            UnvalidatedHeistPlan(body: [.action(try ActionStep(command: .activate(.ref(" "))))]),
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(" "))))]),
             "target_ref"
         ),
         (
             "unknown target ref",
-            UnvalidatedHeistPlan(body: [.action(try ActionStep(command: .activate(.ref("target"))))]),
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref("target"))))]),
             "target_ref must resolve"
         ),
         (
             "empty text ref",
-            UnvalidatedHeistPlan(body: [.action(try ActionStep(command: .typeText(
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
                 text: .ref(""),
                 target: .target(.predicate(.label("Search")))
             )))]),
@@ -202,7 +202,7 @@ func runtimeValidationRejectsInvalidRefs() throws {
         ),
         (
             "whitespace text ref",
-            UnvalidatedHeistPlan(body: [.action(try ActionStep(command: .typeText(
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
                 text: .ref(" "),
                 target: .target(.predicate(.label("Search")))
             )))]),
@@ -210,7 +210,7 @@ func runtimeValidationRejectsInvalidRefs() throws {
         ),
         (
             "unknown text ref",
-            UnvalidatedHeistPlan(body: [.action(try ActionStep(command: .typeText(
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .typeText(
                 text: .ref("item"),
                 target: .target(.predicate(.label("Search")))
             )))]),
@@ -218,20 +218,20 @@ func runtimeValidationRejectsInvalidRefs() throws {
         ),
         (
             "long target ref",
-            UnvalidatedHeistPlan(body: [.action(try ActionStep(command: .activate(.ref(tooLong))))]),
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(tooLong))))]),
             "max parameter/ref length"
         ),
     ]
 
     for (label, raw, expected) in cases {
-        let failures = runtimeValidationFailures(for: raw)
+        let failures = runtimeSafetyFailures(for: raw)
         #expect(failures.contains { $0.contract.contains(expected) }, "\(label): \(failures)")
     }
 }
 
 @Test
-func runtimeValidationRejectsRefsOutsideTheirLoopScope() throws {
-    let raw = UnvalidatedHeistPlan(body: [
+func runtimeSafetyRejectsRefsOutsideTheirLoopScope() throws {
+    let raw = HeistPlanAdmissionCandidate(body: [
         .forEachString(try ForEachStringStep(
             values: ["Milk"],
             parameter: "item",
@@ -250,7 +250,7 @@ func runtimeValidationRejectsRefsOutsideTheirLoopScope() throws {
         .action(try ActionStep(command: .activate(.ref("target")))),
     ])
 
-    let failures = runtimeValidationFailures(for: raw)
+    let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains {
         $0.path == "$.body[1].action.command.payload.text"
@@ -263,8 +263,8 @@ func runtimeValidationRejectsRefsOutsideTheirLoopScope() throws {
 }
 
 @Test
-func runtimeValidationRejectsStringRefThatLowersToInvalidCommandPayload() throws {
-    let raw = UnvalidatedHeistPlan(body: [
+func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
+    let raw = HeistPlanAdmissionCandidate(body: [
         .forEachString(try ForEachStringStep(
             values: [""],
             parameter: "item",
@@ -277,19 +277,19 @@ func runtimeValidationRejectsStringRefThatLowersToInvalidCommandPayload() throws
         )),
     ])
 
-    let failures = runtimeValidationFailures(for: raw)
+    let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains { $0.contract.contains("heist action payload contract") })
     #expect(failures.contains { $0.observed.contains("text must be non-empty") })
 }
 
 @Test
-func runtimeValidationRejectsEmptySetPasteboardPayload() throws {
-    let raw = UnvalidatedHeistPlan(body: [
+func runtimeSafetyRejectsEmptySetPasteboardPayload() throws {
+    let raw = HeistPlanAdmissionCandidate(body: [
         .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "")))),
     ])
 
-    let failures = runtimeValidationFailures(for: raw)
+    let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains {
         $0.path == "$.body[0].action.command.payload.text"
@@ -298,8 +298,8 @@ func runtimeValidationRejectsEmptySetPasteboardPayload() throws {
 }
 
 @Test
-func runtimeValidationEnforcesBounds() throws {
-    let limits = HeistPlanRuntimeValidationLimits(
+func runtimeSafetyEnforcesBounds() throws {
+    let limits = HeistPlanRuntimeSafetyLimits(
         maxTotalSteps: 2,
         maxNestedStepDepth: 2,
         maxPredicateDepth: 2,
@@ -316,7 +316,7 @@ func runtimeValidationEnforcesBounds() throws {
         ]),
         .present(ElementPredicateTemplate(label: .literal("Sibling"))),
     ]))
-    let raw = UnvalidatedHeistPlan(body: [
+    let raw = HeistPlanAdmissionCandidate(body: [
         .wait(WaitStep(predicate: deepPredicate, timeout: 0)),
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
@@ -331,7 +331,7 @@ func runtimeValidationEnforcesBounds() throws {
         )),
     ])
 
-    let contracts = runtimeValidationFailures(for: raw, limits: limits).map(\.contract)
+    let contracts = runtimeSafetyFailures(for: raw, limits: limits).map(\.contract)
 
     #expect(contracts.contains("max total heist steps"))
     #expect(contracts.contains("max predicate depth"))
@@ -344,25 +344,25 @@ func runtimeValidationEnforcesBounds() throws {
 }
 
 @Test
-func runtimeValidationRejectsNestedCollectionLoops() throws {
+func runtimeSafetyRejectsNestedCollectionLoops() throws {
     let nested = try ForEachStringStep(
         values: ["Milk"],
         parameter: "item",
         body: [.warn(WarnStep(message: "nested"))]
     )
-    let cases: [(UnvalidatedHeistPlan, String)] = [
-        (UnvalidatedHeistPlan(body: [
+    let cases: [(HeistPlanAdmissionCandidate, String)] = [
+        (HeistPlanAdmissionCandidate(body: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(predicate: .state(.present(.label("Home"))), body: [.forEachString(nested)]),
             ])),
         ]), "$.body[0].conditional.cases[0].body[0].for_each_string"),
-        (UnvalidatedHeistPlan(body: [
+        (HeistPlanAdmissionCandidate(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 1,
                 cases: [PredicateCase(predicate: .state(.present(.label("Home"))), body: [.forEachString(nested)])]
             )),
         ]), "$.body[0].wait_for_cases.cases[0].body[0].for_each_string"),
-        (UnvalidatedHeistPlan(body: [
+        (HeistPlanAdmissionCandidate(body: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
                 limit: 1,
@@ -373,7 +373,7 @@ func runtimeValidationRejectsNestedCollectionLoops() throws {
     ]
 
     for (raw, path) in cases {
-        let failures = runtimeValidationFailures(for: raw)
+        let failures = runtimeSafetyFailures(for: raw)
         #expect(failures.contains {
             $0.path == path && $0.contract == "collection ForEach steps are top-level only"
         }, "\(path): \(failures)")
@@ -381,30 +381,30 @@ func runtimeValidationRejectsNestedCollectionLoops() throws {
 }
 
 @Test
-func runtimeValidationRejectsInvalidHeistDefinitionsAndInvocations() throws {
-    let definition = UnvalidatedHeistPlan(
+func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
+    let definition = HeistPlanAdmissionCandidate(
         name: "addToCart",
         parameter: .string(name: "item"),
         body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
     )
-    let cases: [(UnvalidatedHeistPlan, String)] = [
+    let cases: [(HeistPlanAdmissionCandidate, String)] = [
         (
-            UnvalidatedHeistPlan(definitions: [
-                UnvalidatedHeistPlan(name: nil, body: [.warn(WarnStep(message: "x"))]),
+            HeistPlanAdmissionCandidate(definitions: [
+                HeistPlanAdmissionCandidate(name: nil, body: [.warn(WarnStep(message: "x"))]),
             ], body: [
                 .warn(WarnStep(message: "body")),
             ]),
             "heist definitions must have a non-empty name"
         ),
         (
-            UnvalidatedHeistPlan(definitions: [
-                UnvalidatedHeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "a"))]),
-                UnvalidatedHeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "b"))]),
+            HeistPlanAdmissionCandidate(definitions: [
+                HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "a"))]),
+                HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "b"))]),
             ], body: [.warn(WarnStep(message: "body"))]),
             "duplicate heist definition names are not allowed"
         ),
         (
-            UnvalidatedHeistPlan(definitions: [definition], body: [
+            HeistPlanAdmissionCandidate(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(
                     path: ["missing"],
                     argument: .string(.literal("Milk"))
@@ -413,13 +413,13 @@ func runtimeValidationRejectsInvalidHeistDefinitionsAndInvocations() throws {
             "heist run path must resolve"
         ),
         (
-            UnvalidatedHeistPlan(definitions: [definition], body: [
+            HeistPlanAdmissionCandidate(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(path: ["addToCart"], argument: .none)),
             ]),
             "heist run argument type must match"
         ),
         (
-            UnvalidatedHeistPlan(definitions: [definition], body: [
+            HeistPlanAdmissionCandidate(definitions: [definition], body: [
                 .invoke(HeistInvocationStep(path: [], argument: .none)),
             ]),
             "heist run path must not be empty"
@@ -427,7 +427,7 @@ func runtimeValidationRejectsInvalidHeistDefinitionsAndInvocations() throws {
     ]
 
     for (raw, expectedContract) in cases {
-        let failures = runtimeValidationFailures(for: raw)
+        let failures = runtimeSafetyFailures(for: raw)
         #expect(failures.contains {
             $0.contract.contains(expectedContract)
         }, "\(expectedContract): \(failures)")
@@ -450,17 +450,17 @@ func decodedHeistArgumentsRejectStringArrayShape() throws {
 }
 
 @Test
-func runtimeValidationRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
+func runtimeSafetyRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
     let recursiveName = "repeatHeist"
-    let raw = UnvalidatedHeistPlan(definitions: [
-        UnvalidatedHeistPlan(name: recursiveName, body: [
+    let raw = HeistPlanAdmissionCandidate(definitions: [
+        HeistPlanAdmissionCandidate(name: recursiveName, body: [
             .invoke(HeistInvocationStep(path: [recursiveName])),
         ]),
     ], body: [
         .invoke(HeistInvocationStep(path: [recursiveName])),
     ])
 
-    let failures = runtimeValidationFailures(for: raw)
+    let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains {
         $0.contract == "heist run path must resolve to a local capability"
@@ -468,16 +468,16 @@ func runtimeValidationRejectsDefinitionSelfInvocationOutsideLocalScope() throws 
 }
 
 @Test
-func runtimeValidationAcceptsSingularElementTargetCapability() throws {
+func runtimeSafetyAcceptsSingularElementTargetCapability() throws {
     // `elementTarget` is singular by type — a predicate for exactly one element.
     // Multiple targets are unrepresentable; a capability run with one target is
     // runtime-valid.
-    let definition = UnvalidatedHeistPlan(
+    let definition = HeistPlanAdmissionCandidate(
         name: "deleteItem",
         parameter: .elementTarget(name: "target"),
         body: [.action(try ActionStep(command: .activate(.ref("target"))))]
     )
-    let raw = UnvalidatedHeistPlan(definitions: [definition], body: [
+    let raw = HeistPlanAdmissionCandidate(definitions: [definition], body: [
         .invoke(HeistInvocationStep(
             path: ["deleteItem"],
             argument: .elementTarget(.target(.label("Row 1")))
@@ -487,8 +487,8 @@ func runtimeValidationAcceptsSingularElementTargetCapability() throws {
 }
 
 @Test
-func runtimeValidationAcceptsParameterizedRootAndScratchRootCaller() throws {
-    let parameterizedRoot = UnvalidatedHeistPlan(
+func runtimeSafetyAcceptsParameterizedRootAndScratchRootCaller() throws {
+    let parameterizedRoot = HeistPlanAdmissionCandidate(
         name: "search",
         parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
@@ -498,9 +498,9 @@ func runtimeValidationAcceptsParameterizedRootAndScratchRootCaller() throws {
     )
     _ = try validatedPlan(parameterizedRoot)
 
-    let scratchRoot = UnvalidatedHeistPlan(
+    let scratchRoot = HeistPlanAdmissionCandidate(
         definitions: [
-            UnvalidatedHeistPlan(name: "search", parameter: .string(name: "query"), body: [
+            HeistPlanAdmissionCandidate(name: "search", parameter: .string(name: "query"), body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("query"),
                     target: .target(.predicate(.label("Search")))
@@ -513,13 +513,13 @@ func runtimeValidationAcceptsParameterizedRootAndScratchRootCaller() throws {
 }
 
 @Test
-func runtimeValidationUsesInvokedDefinitionScopeForHelperDependencies() throws {
-    let raw = UnvalidatedHeistPlan(definitions: [
-        UnvalidatedHeistPlan(
+func runtimeSafetyUsesInvokedDefinitionScopeForHelperDependencies() throws {
+    let raw = HeistPlanAdmissionCandidate(definitions: [
+        HeistPlanAdmissionCandidate(
             name: "addToCart",
             parameter: .string(name: "item"),
             definitions: [
-                UnvalidatedHeistPlan(name: "tapAddButton", body: [
+                HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
                     .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Add to Cart")))))),
                 ]),
             ],
@@ -539,12 +539,12 @@ func runtimeValidationUsesInvokedDefinitionScopeForHelperDependencies() throws {
 }
 
 @Test
-func runtimeValidationAllowsSameLeafDefinitionNamesInDifferentScopes() throws {
-    let raw = UnvalidatedHeistPlan(definitions: [
-        UnvalidatedHeistPlan(
+func runtimeSafetyAllowsSameLeafDefinitionNamesInDifferentScopes() throws {
+    let raw = HeistPlanAdmissionCandidate(definitions: [
+        HeistPlanAdmissionCandidate(
             name: "setup",
             definitions: [
-                UnvalidatedHeistPlan(name: "setup", body: [
+                HeistPlanAdmissionCandidate(name: "setup", body: [
                     .warn(WarnStep(message: "Nested setup")),
                 ]),
             ],
@@ -560,9 +560,9 @@ func runtimeValidationAllowsSameLeafDefinitionNamesInDifferentScopes() throws {
 }
 
 @Test
-func runtimeValidationValidatesInvokedBodiesWithBoundArguments() throws {
-    let raw = UnvalidatedHeistPlan(definitions: [
-        UnvalidatedHeistPlan(
+func runtimeSafetyValidatesInvokedBodiesWithBoundArguments() throws {
+    let raw = HeistPlanAdmissionCandidate(definitions: [
+        HeistPlanAdmissionCandidate(
             name: "typeSearch",
             parameter: .string(name: "query"),
             body: [
@@ -579,14 +579,14 @@ func runtimeValidationValidatesInvokedBodiesWithBoundArguments() throws {
         )),
     ])
 
-    let failures = runtimeValidationFailures(for: raw)
+    let failures = runtimeSafetyFailures(for: raw)
 
     #expect(failures.contains { $0.contract.contains("heist action payload contract") })
     #expect(failures.contains { $0.observed.contains("text must be non-empty") })
 }
 
 @Test
-func runtimeValidationAcceptsRepresentativeCanonicalPlan() throws {
+func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
     let plan = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.target(.predicate(.label("Sign In")))),

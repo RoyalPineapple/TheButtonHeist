@@ -11,18 +11,18 @@ enum HeistPlanJSONCodec {
         _ data: Data,
         sourceURL: URL = URL(fileURLWithPath: "inline-heist-plan.json")
     ) throws -> HeistPlan {
-        let raw = try decodeUnvalidatedPlan(data, sourceURL: sourceURL)
-        return try raw.validatedForRuntime()
+        let raw = try decodeAdmissionCandidate(data, sourceURL: sourceURL)
+        return try raw.validatedForRuntimeSafety()
     }
 
-    static func decodeUnvalidatedPlan(
+    static func decodeAdmissionCandidate(
         _ data: Data,
         sourceURL: URL
-    ) throws -> UnvalidatedHeistPlan {
+    ) throws -> HeistPlanAdmissionCandidate {
         let version = try decodePlanVersion(from: data, sourceURL: sourceURL)
         try requireSupportedPlanVersion(version, sourceURL: sourceURL)
         do {
-            return try JSONDecoder().decode(UnvalidatedHeistPlan.self, from: data)
+            return try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
         } catch {
             throw HeistPlanJSONCodecError.invalidPlan(
                 source: sourceURL.path,

@@ -1033,19 +1033,19 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.reportExpectation?.actual, "no observed accessibility trace")
     }
 
-    func testHeistRuntimeValidationRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
-        let raw = UnvalidatedHeistPlan(body: [
+    func testHeistRuntimeSafetyRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
+        let raw = HeistPlanAdmissionCandidate(body: [
             .action(try ActionStep(command: .activate(.ref("missing")))),
         ])
 
-        XCTAssertThrowsError(try raw.validatedForRuntime()) { error in
+        XCTAssertThrowsError(try raw.validatedForRuntimeSafety()) { error in
             XCTAssertTrue(String(describing: error).contains("$.body[0].action.command.payload.target"))
             XCTAssertTrue(String(describing: error).contains("target_ref must resolve"))
         }
     }
 
-    func testHeistRuntimeValidationRejectsInvalidStringLoopBeforeDispatch() async throws {
-        let raw = UnvalidatedHeistPlan(body: [
+    func testHeistRuntimeSafetyRejectsInvalidStringLoopBeforeDispatch() async throws {
+        let raw = HeistPlanAdmissionCandidate(body: [
             .forEachString(try ForEachStringStep(
                 values: [""],
                 parameter: "item",
@@ -1058,22 +1058,22 @@ final class TheBrainsActionTests: XCTestCase {
             )),
         ])
 
-        XCTAssertThrowsError(try raw.validatedForRuntime()) { error in
+        XCTAssertThrowsError(try raw.validatedForRuntimeSafety()) { error in
             XCTAssertTrue(String(describing: error).contains("text must be non-empty"))
         }
     }
 
-    func testHeistRuntimeValidationRejectsOversizedForEachBeforeObservation() async throws {
-        let raw = UnvalidatedHeistPlan(body: [
+    func testHeistRuntimeSafetyRejectsOversizedForEachBeforeObservation() async throws {
+        let raw = HeistPlanAdmissionCandidate(body: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
-                limit: HeistPlanRuntimeValidationLimits.standard.maxForEachElementLimit + 1,
+                limit: HeistPlanRuntimeSafetyLimits.standard.maxForEachElementLimit + 1,
                 parameter: "target",
                 body: [.action(try ActionStep(command: .activate(.ref("target"))))]
             )),
         ])
 
-        XCTAssertThrowsError(try raw.validatedForRuntime()) { error in
+        XCTAssertThrowsError(try raw.validatedForRuntimeSafety()) { error in
             XCTAssertTrue(String(describing: error).contains("max for_each_element limit"))
         }
     }
@@ -1087,12 +1087,12 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(success: true, method: .activate)
             }
         )
-        let plan = try UnvalidatedHeistPlan(definitions: [
-            UnvalidatedHeistPlan(
+        let plan = try HeistPlanAdmissionCandidate(definitions: [
+            HeistPlanAdmissionCandidate(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 definitions: [
-                    UnvalidatedHeistPlan(name: "tapAddButton", body: [
+                    HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
                         .action(try ActionStep(
                             command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Add to Cart"))))
                         )),
@@ -1108,7 +1108,7 @@ final class TheBrainsActionTests: XCTestCase {
                 path: ["addToCart"],
                 argument: .string(.literal("Milk"))
             )),
-        ]).validatedForRuntime()
+        ]).validatedForRuntimeSafety()
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
@@ -1239,11 +1239,11 @@ final class TheBrainsActionTests: XCTestCase {
     func testHeistExecutionRuntimeRejectsSelfInvocationOutsideLocalScopeWhenValidationIsBypassed() async throws {
         let runtime = heistRuntime(observations: [])
         let recursiveName = "repeatHeist"
-        let plan = UnvalidatedHeistPlan(definitions: [
-            UnvalidatedHeistPlan(name: recursiveName, body: [
+        let plan = HeistPlanAdmissionCandidate(definitions: [
+            HeistPlanAdmissionCandidate(name: recursiveName, body: [
                 .invoke(HeistInvocationStep(path: [recursiveName])),
             ]),
-        ], body: []).uncheckedPlanForRuntimeValidation()
+        ], body: []).uncheckedPlanForRuntimeSafetyValidation()
 
         let results = await brains.executeHeistSteps(
             [.invoke(HeistInvocationStep(path: [recursiveName]))],

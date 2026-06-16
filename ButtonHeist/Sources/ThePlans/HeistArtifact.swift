@@ -193,12 +193,12 @@ public enum HeistArtifactCodec {
         }
     }
 
-    @_spi(ButtonHeistInternals) public static func decodeUnvalidatedPlanJSON(
+    @_spi(ButtonHeistInternals) public static func decodeAdmissionCandidateJSON(
         _ data: Data,
         at url: URL
-    ) throws -> UnvalidatedHeistPlan {
+    ) throws -> HeistPlanAdmissionCandidate {
         do {
-            return try HeistPlanJSONCodec.decodeUnvalidatedPlan(data, sourceURL: url)
+            return try HeistPlanJSONCodec.decodeAdmissionCandidate(data, sourceURL: url)
         } catch let error as HeistPlanJSONCodecError {
             throw artifactPlanError(error)
         } catch {

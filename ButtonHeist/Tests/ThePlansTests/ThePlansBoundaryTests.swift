@@ -332,7 +332,7 @@ func `heist artifact validates required entry against root plan name`() throws {
 @Test
 func `heist artifact accepts parameterized root entry through validation contract`() throws {
     let temp = try PlansTemporaryDirectory()
-    let raw = UnvalidatedHeistPlan(
+    let raw = HeistPlanAdmissionCandidate(
         name: "search",
         parameter: .string(name: "query"),
         body: [.action(try ActionStep(command: .typeText(
