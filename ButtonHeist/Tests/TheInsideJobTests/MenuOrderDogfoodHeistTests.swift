@@ -12,6 +12,11 @@ private enum DemoHome {
 
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
+        try rawAction(
+            .viewportScrollToVisible(.label(item)),
+            waiver: "scroll_to_visible is the viewport precondition for the row custom action"
+        )
+
         CustomAction("Add to Cart", on: .label(item))
             .expect(.changed(.elements), timeout: .seconds(2))
     }
@@ -87,6 +92,14 @@ private extension Decimal {
     var dogfoodUSDFormatted: String {
         formatted(.currency(code: "USD"))
     }
+}
+
+private func rawAction(
+    _ command: HeistActionCommand,
+    expectation: WaitStep? = nil,
+    waiver: String? = nil
+) throws -> HeistStep {
+    .action(try ActionStep(command: command, expectation: expectation, expectationWaiver: waiver))
 }
 
 #endif // canImport(UIKit)
