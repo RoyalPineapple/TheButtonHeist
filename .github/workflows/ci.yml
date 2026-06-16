@@ -122,7 +122,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 25
     env:
-      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/.buttonheist-receipts/macos-tests
+      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/macos-tests
       BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
 
     steps:
@@ -217,7 +217,7 @@ jobs:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-tests
       BUTTONHEIST_RECEIPTS_DIR: process-temporary-directory
       BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
-      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/.buttonheist-receipts/ios-tests
+      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-tests
 
     steps:
       - name: Checkout repository
@@ -355,7 +355,7 @@ jobs:
     timeout-minutes: 25
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-demo
-      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/.buttonheist-receipts/ios-demo-gates
+      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-demo-gates
       BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
 
     steps:
