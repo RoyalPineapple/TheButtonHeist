@@ -193,7 +193,6 @@
 		5579466D90EA049E32DAFA53 /* ServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4221380A912B191A3EA490D /* ServerTransport.swift */; };
 		57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */; };
 		5913C08A5A8A03629E89DEA2 /* TheFence+FailureTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED6FC56D4BA84A1AD8C68757 /* TheFence+FailureTypes.swift */; };
-		595403EE668F17EC3E9FA856 /* TheStash+AccessibilityActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09696C328969BE17BA4BC22D /* TheStash+AccessibilityActions.swift */; };
 		5D236CA5C067752F42A849D6 /* DeviceDiscoveryAdvertisement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56600C259AFE2D1A2B876784 /* DeviceDiscoveryAdvertisement.swift */; };
 		5D4CE556246DE2196E626C24 /* TheFence+FailureTaxonomy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762A9678A59A16CFF629FB3E /* TheFence+FailureTaxonomy.swift */; };
 		5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */; };
@@ -447,7 +446,8 @@
 		E01E46CF260DB52E1C094704 /* FenceJSON+Response.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6536DB1847A58980945D1D48 /* FenceJSON+Response.swift */; };
 		E04A409AF6997E327F9D1828 /* ConnectionResultWaitersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30350583523C830C2C298AE7 /* ConnectionResultWaitersTests.swift */; };
 		E053E068CA957250B66351E4 /* TheFenceHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D087B067D089CF13A7BBC /* TheFenceHandlerTests.swift */; };
-		E126BFE5774090B119852960 /* TheStash+SemanticReveal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9547F6ED0B5765052A643D48 /* TheStash+SemanticReveal.swift */; };
+		E126BFE5774090B119852960 /* ElementInflation+SemanticReveal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9547F6ED0B5765052A643D48 /* ElementInflation+SemanticReveal.swift */; };
+		F00100000000000000000001 /* AccessibilityActionDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00100000000000000000002 /* AccessibilityActionDispatcher.swift */; };
 		E1C21596B113413BBFE23F51 /* TheFence+CommandArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = B52DC7DFD3B9768E788237C8 /* TheFence+CommandArguments.swift */; };
 		E234C7529B103C6AEF8F8C02 /* ActionResultTraceTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA832429E87DDC774F3BE39C /* ActionResultTraceTestHelpers.swift */; };
 		E327E060E6709EE93A5BBEBB /* TheFence+ParameterSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */; };
@@ -709,7 +709,6 @@
 		08AA74658401F9D7BB0A49C1 /* DogfoodForAllHeistTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DogfoodForAllHeistTests.swift; sourceTree = "<group>"; };
 		08BC111636AB943F237A0EEA /* TextAndWaitCommandPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextAndWaitCommandPayloads.swift; sourceTree = "<group>"; };
 		0915BD901562368F66DFF6AF /* ContainerMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContainerMatcher.swift; sourceTree = "<group>"; };
-		09696C328969BE17BA4BC22D /* TheStash+AccessibilityActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+AccessibilityActions.swift"; sourceTree = "<group>"; };
 		09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThePlantAutoStart.h; sourceTree = "<group>"; };
 		0A04C66378B024C28703A0CE /* DiscoveryRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryRegistry.swift; sourceTree = "<group>"; };
 		0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheInsideJob.swift; sourceTree = "<group>"; };
@@ -979,7 +978,7 @@
 		9433DDF2A1AA0533161A52E2 /* HandoffReconnectController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffReconnectController.swift; sourceTree = "<group>"; };
 		94B40014AC7D3C30EF77A414 /* HeistValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistValue.swift; sourceTree = "<group>"; };
 		951C56AB163FAFB179DFDA9B /* TheStash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStash.swift; sourceTree = "<group>"; };
-		9547F6ED0B5765052A643D48 /* TheStash+SemanticReveal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+SemanticReveal.swift"; sourceTree = "<group>"; };
+		9547F6ED0B5765052A643D48 /* ElementInflation+SemanticReveal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ElementInflation+SemanticReveal.swift"; sourceTree = "<group>"; };
 		95C2F70FDC2CC8724AF3DF6F /* TheBurglar+ScreenBuilding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBurglar+ScreenBuilding.swift"; sourceTree = "<group>"; };
 		9688AC554CE877191678C97E /* TheFence+RequestPayload+ScrollActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+ScrollActions.swift"; sourceTree = "<group>"; };
 		96D1DF8ADC7876970B2B284F /* ThePlans.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ThePlans.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1020,6 +1019,7 @@
 		A6E66628C74C420C04912FC4 /* TheStashCustomRotorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStashCustomRotorTests.swift; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
 		A801D1D2ACBD93CC07936809 /* ElementInflation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementInflation.swift; sourceTree = "<group>"; };
+		F00100000000000000000002 /* AccessibilityActionDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityActionDispatcher.swift; sourceTree = "<group>"; };
 		A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistTraitTests.swift; sourceTree = "<group>"; };
 		A819517EB325518F2558C809 /* LiveCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCapture.swift; sourceTree = "<group>"; };
 		A840E6A3538DA4AE2D7B0786 /* HeistActionCommand+Durability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistActionCommand+Durability.swift"; sourceTree = "<group>"; };
@@ -1541,14 +1541,12 @@
 				9702B3A3EEB5C9ABA60E89E2 /* SemanticObservationStream.swift */,
 				2483323F7EA275CB4598FFC8 /* SemanticScreen.swift */,
 				951C56AB163FAFB179DFDA9B /* TheStash.swift */,
-				09696C328969BE17BA4BC22D /* TheStash+AccessibilityActions.swift */,
 				CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */,
 				E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */,
 				0108809EB5567BB0C5665090 /* TheStash+Matching.swift */,
 				892B79007B28B3F58E54CCBE /* TheStash+MinimumPredicateSelection.swift */,
 				B26A26BB87455CD07CE8FCE8 /* TheStash+PassiveSemanticObservation.swift */,
 				356B994EEDC692551581FA9B /* TheStash+Rotor.swift */,
-				9547F6ED0B5765052A643D48 /* TheStash+SemanticReveal.swift */,
 				81CF9628DD207248D46BFE20 /* TheStash+TargetResolution.swift */,
 				EF164A126EC58CE89FA45203 /* TheStash+TargetResolutionDiagnostics.swift */,
 				85F00EF7237962DD4F94F135 /* WireConversion.swift */,
@@ -1709,8 +1707,10 @@
 				CD4F22F146ACA56DDDE8BC5B /* Actions+RotorActions.swift */,
 				46F4FB6742D2C07DF3CAE0F6 /* Actions+TextInputActions.swift */,
 				4831BAF2630B422BC3BF544E /* ActivationPolicy.swift */,
+				F00100000000000000000002 /* AccessibilityActionDispatcher.swift */,
 				A801D1D2ACBD93CC07936809 /* ElementInflation.swift */,
 				9DCFA91D183634D2FA28D6A1 /* ElementInflation+Diagnostics.swift */,
+				9547F6ED0B5765052A643D48 /* ElementInflation+SemanticReveal.swift */,
 				641841F7DF4A876D3CB48A34 /* InteractionObservation.swift */,
 				BEC9469301CCEFAA5EA43116 /* InterfaceSelection.swift */,
 				15073ADC2F0E9EB5DBE3AED6 /* Navigation.swift */,
@@ -2575,8 +2575,10 @@
 				08FEAFD618D0D7176ACA6DE7 /* Actions+RotorActions.swift in Sources */,
 				9AED4A1302115B45A12C695B /* Actions+TextInputActions.swift in Sources */,
 				B315615DC3E1B70B46B4BDC5 /* Actions.swift in Sources */,
+				F00100000000000000000001 /* AccessibilityActionDispatcher.swift in Sources */,
 				264BB930E10263AA3FE6938A /* ActivationPolicy.swift in Sources */,
 				3E645DADD2CBA292CB317AA2 /* ElementInflation+Diagnostics.swift in Sources */,
+				E126BFE5774090B119852960 /* ElementInflation+SemanticReveal.swift in Sources */,
 				911B14FDB90603F24B9D374B /* ElementInflation.swift in Sources */,
 				3409AEB564501EE71F998F8B /* InteractionObservation.swift in Sources */,
 				C74FED6893CD13E4826F1CC3 /* InterfaceSelection.swift in Sources */,
@@ -2638,14 +2640,12 @@
 				C246709E355BA909D656B4B1 /* SemanticObservationScope.swift in Sources */,
 				A4BECAF1FBF0C96EA9F03E9D /* SemanticObservationStream.swift in Sources */,
 				0D253E79093D393E37C9C241 /* SemanticScreen.swift in Sources */,
-				595403EE668F17EC3E9FA856 /* TheStash+AccessibilityActions.swift in Sources */,
 				475C23DE0FA87D9D78D1DB5A /* TheStash+Capture.swift in Sources */,
 				D73AF669F2F4C132C0391CAF /* TheStash+LiveGeometry.swift in Sources */,
 				871194C060FF486DFB34A4C6 /* TheStash+Matching.swift in Sources */,
 				83D2F8296DB3C41B5D554CEA /* TheStash+MinimumPredicateSelection.swift in Sources */,
 				1F2DC6AF16086A9AE811017B /* TheStash+PassiveSemanticObservation.swift in Sources */,
 				4D3C5AF5044915A018C59689 /* TheStash+Rotor.swift in Sources */,
-				E126BFE5774090B119852960 /* TheStash+SemanticReveal.swift in Sources */,
 				C0DD9775AF7798263DFA5CFD /* TheStash+TargetResolution.swift in Sources */,
 				53C4CF52E7214AE01E87C371 /* TheStash+TargetResolutionDiagnostics.swift in Sources */,
 				97376AD47CD2A760A727ABE8 /* TheStash.swift in Sources */,

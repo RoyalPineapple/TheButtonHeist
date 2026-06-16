@@ -93,7 +93,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentInset = .zero
 
         let origin = CGPoint(x: 100, y: 2500)
-        let offset = TheStash.semanticRevealTargetOffset(for: origin, in: scrollView)
+        let offset = ElementInflation.semanticRevealTargetOffset(for: origin, in: scrollView)
 
         XCTAssertEqual(offset.x, max(origin.x - 375.0 / 2, 0), accuracy: 0.01,
                        "X offset should center on origin horizontally")
@@ -106,7 +106,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 375, height: 5000)
 
         let origin = CGPoint(x: 100, y: 100)
-        let offset = TheStash.semanticRevealTargetOffset(for: origin, in: scrollView)
+        let offset = ElementInflation.semanticRevealTargetOffset(for: origin, in: scrollView)
 
         XCTAssertGreaterThanOrEqual(offset.y, 0,
                                     "Offset should not go above content start")
@@ -117,7 +117,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 375, height: 5000)
 
         let origin = CGPoint(x: 100, y: 4900)
-        let offset = TheStash.semanticRevealTargetOffset(for: origin, in: scrollView)
+        let offset = ElementInflation.semanticRevealTargetOffset(for: origin, in: scrollView)
 
         let maxY = scrollView.contentSize.height - scrollView.bounds.height
         XCTAssertLessThanOrEqual(offset.y, maxY + 0.01,
@@ -130,7 +130,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentInset = UIEdgeInsets(top: 100, left: 0, bottom: 50, right: 0)
 
         let origin = CGPoint(x: 100, y: 10)
-        let offset = TheStash.semanticRevealTargetOffset(for: origin, in: scrollView)
+        let offset = ElementInflation.semanticRevealTargetOffset(for: origin, in: scrollView)
 
         let minY = -scrollView.adjustedContentInset.top
         XCTAssertGreaterThanOrEqual(offset.y, minY,
@@ -143,7 +143,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentInset = UIEdgeInsets(top: 100, left: 20, bottom: 50, right: 60)
 
         let origin = CGPoint(x: 1000, y: 1800)
-        let offset = TheStash.semanticRevealTargetOffset(for: origin, in: scrollView)
+        let offset = ElementInflation.semanticRevealTargetOffset(for: origin, in: scrollView)
 
         let insets = scrollView.adjustedContentInset
         let visibleWidth = scrollView.bounds.width - insets.left - insets.right
@@ -157,11 +157,11 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 2000, height: 667)
 
         let originNearStart = CGPoint(x: 50, y: 300)
-        let offsetStart = TheStash.semanticRevealTargetOffset(for: originNearStart, in: scrollView)
+        let offsetStart = ElementInflation.semanticRevealTargetOffset(for: originNearStart, in: scrollView)
         XCTAssertGreaterThanOrEqual(offsetStart.x, 0, "Should clamp to left edge")
 
         let originNearEnd = CGPoint(x: 1950, y: 300)
-        let offsetEnd = TheStash.semanticRevealTargetOffset(for: originNearEnd, in: scrollView)
+        let offsetEnd = ElementInflation.semanticRevealTargetOffset(for: originNearEnd, in: scrollView)
         let maxX = scrollView.contentSize.width - scrollView.bounds.width
         XCTAssertLessThanOrEqual(offsetEnd.x, maxX + 0.01, "Should clamp to right edge")
     }
@@ -343,7 +343,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installLiveScrollTarget(visibleEntry, scrollView: scrollView, containerName: "visible_scroll")
 
-        let result = brains.stash.revealSemanticTarget(visibleEntry)
+        let result = brains.navigation.elementInflation.revealSemanticTarget(visibleEntry)
 
         guard case .alreadyVisible = result else {
             return XCTFail("Expected already-visible no-op, got \(result)")
@@ -366,14 +366,14 @@ final class TheBrainsScrollTests: XCTestCase {
         let entry = try XCTUnwrap(
             brains.stash.settledSemanticScreen.findElement(heistId: "settings_button")
         )
-        let result = brains.stash.revealSemanticTarget(entry)
+        let result = brains.navigation.elementInflation.revealSemanticTarget(entry)
 
         guard case .revealed(let resolvedScrollView) = result else {
             return XCTFail("Expected semantic reveal to resolve, got \(result)")
         }
         XCTAssertTrue(resolvedScrollView === scrollView)
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
-        let expectedOffset = TheStash.semanticRevealTargetOffset(for: contentOrigin, in: scrollView)
+        let expectedOffset = ElementInflation.semanticRevealTargetOffset(for: contentOrigin, in: scrollView)
         XCTAssertEqual(scrollView.contentOffset.x, expectedOffset.x, accuracy: 0.01)
         XCTAssertEqual(scrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
     }
@@ -392,7 +392,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let entry = try XCTUnwrap(
             brains.stash.settledSemanticScreen.findElement(heistId: "settings_button")
         )
-        let result = brains.stash.revealSemanticTarget(entry)
+        let result = brains.navigation.elementInflation.revealSemanticTarget(entry)
 
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected missing live scroll ancestor failure, got \(result)")

@@ -1,10 +1,7 @@
-#if canImport(UIKit)
-#if DEBUG
+#if canImport(UIKit) && DEBUG
 import UIKit
 
-// MARK: - Semantic Reveal
-
-extension TheStash {
+extension ElementInflation {
 
     enum SemanticRevealFailure: Equatable {
         case missingContentOrigin
@@ -27,15 +24,15 @@ extension TheStash {
     /// elements carry no executable scroll authority unless the parser
     /// retained a live scroll ancestor.
     @discardableResult
-    func revealSemanticTarget(_ screenElement: ScreenElement) -> SemanticRevealResult {
-        if visibleIds.contains(screenElement.heistId) {
+    func revealSemanticTarget(_ screenElement: TheStash.ScreenElement) -> SemanticRevealResult {
+        if stash.visibleIds.contains(screenElement.heistId) {
             return .alreadyVisible
         }
 
         guard let origin = screenElement.contentSpaceOrigin else {
             return .failed(.missingContentOrigin)
         }
-        guard let scrollView = liveScrollView(for: screenElement) else {
+        guard let scrollView = stash.liveScrollView(for: screenElement) else {
             return .failed(.noLiveScrollableAncestor)
         }
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
@@ -59,8 +56,6 @@ extension TheStash {
         let targetY = min(max(contentOrigin.y - insets.top - visibleSize.height / 2, -insets.top), maxY)
         return CGPoint(x: targetX, y: targetY)
     }
-
 }
 
-#endif // DEBUG
-#endif // canImport(UIKit)
+#endif // canImport(UIKit) && DEBUG

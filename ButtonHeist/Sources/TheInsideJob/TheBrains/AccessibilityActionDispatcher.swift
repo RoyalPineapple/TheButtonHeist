@@ -2,11 +2,13 @@
 #if DEBUG
 import UIKit
 
-// MARK: - Accessibility Actions
+/// Runtime dispatcher for UIKit accessibility actions.
+///
+/// The stash resolves live semantic targets; this type performs user intent on
+/// the resolved live object.
+@MainActor
+struct AccessibilityActionDispatcher {
 
-extension TheStash {
-
-    /// Outcome of `activate(_:)`.
     enum ActivateOutcome {
         case success
         case objectDeallocated
@@ -20,30 +22,27 @@ extension TheStash {
         case noSuchAction
     }
 
-    func activate(_ liveTarget: LiveActionTarget) -> ActivateOutcome {
+    func activate(_ liveTarget: TheStash.LiveActionTarget) -> ActivateOutcome {
         liveTarget.object.accessibilityActivate() ? .success : .refused
     }
 
     @discardableResult
-    func increment(_ liveTarget: LiveActionTarget) -> Bool {
+    func increment(_ liveTarget: TheStash.LiveActionTarget) -> Bool {
         liveTarget.object.accessibilityIncrement()
         return true
     }
 
     @discardableResult
-    func decrement(_ liveTarget: LiveActionTarget) -> Bool {
+    func decrement(_ liveTarget: TheStash.LiveActionTarget) -> Bool {
         liveTarget.object.accessibilityDecrement()
         return true
     }
 
-    func performCustomAction(named name: String, on liveTarget: LiveActionTarget) -> CustomActionOutcome {
+    func performCustomAction(named name: String, on liveTarget: TheStash.LiveActionTarget) -> CustomActionOutcome {
         performCustomAction(named: name, on: liveTarget.object)
     }
-}
 
-private extension TheStash {
-
-    func performCustomAction(named name: String, on object: NSObject) -> CustomActionOutcome {
+    private func performCustomAction(named name: String, on object: NSObject) -> CustomActionOutcome {
         guard let action = object.accessibilityCustomActions?
             .first(where: { $0.name == name }) else {
             return .noSuchAction

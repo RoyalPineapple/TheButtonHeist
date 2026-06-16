@@ -83,7 +83,7 @@ extension Actions {
             method: .activate
         ) { context in
             await ActivationPolicy(
-                accessibilityActivate: stash.activate,
+                accessibilityActivate: accessibilityActions.activate,
                 refreshAndResolve: {
                     switch await self.navigation.elementInflation.inflateAfterActivationRetryRefresh(
                         for: context.target
@@ -121,7 +121,7 @@ extension Actions {
             },
             action: { context in
                 let liveTarget = context.liveTarget
-                _ = self.stash.increment(liveTarget)
+                _ = self.accessibilityActions.increment(liveTarget)
                 return .success(method: .increment)
             }
         )
@@ -146,7 +146,7 @@ extension Actions {
             },
             action: { context in
                 let liveTarget = context.liveTarget
-                _ = self.stash.decrement(liveTarget)
+                _ = self.accessibilityActions.decrement(liveTarget)
                 return .success(method: .decrement)
             }
         )
@@ -162,7 +162,7 @@ extension Actions {
         ) { context in
             let screenElement = context.screenElement
             let liveTarget = context.liveTarget
-            switch self.stash.performCustomAction(named: target.actionName, on: liveTarget) {
+            switch self.accessibilityActions.performCustomAction(named: target.actionName, on: liveTarget) {
             case .deallocated:
                 return .failure(.customAction, message: "custom action failed")
             case .noSuchAction:

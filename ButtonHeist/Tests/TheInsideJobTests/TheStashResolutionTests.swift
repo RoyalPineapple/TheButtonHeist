@@ -1295,7 +1295,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected refreshed visible target to have live action geometry")
             return
         }
-        XCTAssertTrue(bagman.increment(liveTarget))
+        XCTAssertTrue(AccessibilityActionDispatcher().increment(liveTarget))
     }
 
     func testLiveGeometryRejectsUnusableAccessibilityCaptureFrame() {

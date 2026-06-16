@@ -23,7 +23,7 @@ struct ActivationPolicy {
         case failure(TheSafecracker.InteractionResult)
     }
 
-    var accessibilityActivate: @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome
+    var accessibilityActivate: @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome
     var refreshAndResolve: @MainActor () async -> RefreshResult
     var activationPointDispatch: @MainActor (CGPoint) async -> Bool
 
@@ -63,7 +63,7 @@ struct ActivationPolicy {
     @MainActor
     private func activationFailureMessage(
         screenElement: TheStash.ScreenElement,
-        activateOutcome: TheStash.ActivateOutcome
+        activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
     ) -> String {
         let observed: String
         switch activateOutcome {

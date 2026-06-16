@@ -14,6 +14,7 @@ final class Actions {
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
     let navigation: Navigation
+    let accessibilityActions = AccessibilityActionDispatcher()
 
     // MARK: - Init
 
