@@ -113,12 +113,17 @@ final class ElementInflation {
     ) async -> ElementInflationResult {
         // Source screens derive only semantic identity. Reveal and geometry
         // authority always come from the current live graph.
-        let screenElement: TheStash.ScreenElement
+        var screenElement: TheStash.ScreenElement
         var didRevealTarget = false
         switch await resolveSemanticTarget(target) {
         case .success(let resolvedElement):
             screenElement = resolvedElement
-            let reveal = revealSemanticTarget(screenElement)
+            var reveal = revealSemanticTarget(screenElement)
+            if case .failed = reveal,
+               let rediscoveredElement = await rediscoverSemanticTarget(target) {
+                screenElement = rediscoveredElement
+                reveal = revealSemanticTarget(screenElement)
+            }
             if case .failed(let failure) = reveal {
                 return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: screenElement)))
             }
@@ -137,6 +142,26 @@ final class ElementInflation {
             method: method,
             deallocatedBoundary: deallocatedBoundary
         )
+        if case .failure(let failure) = freshTarget,
+           failure.failedStep == .staleRefresh,
+           let rediscoveredElement = await rediscoverSemanticTarget(target) {
+            screenElement = rediscoveredElement
+            let reveal = revealSemanticTarget(screenElement)
+            if case .failed(let failure) = reveal {
+                return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: screenElement)))
+            }
+            if reveal.didReveal {
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                stash.refreshLiveCapture()
+                didRevealTarget = true
+            }
+            freshTarget = resolveFreshElementTarget(
+                target: target,
+                screenElement: screenElement,
+                method: method,
+                deallocatedBoundary: deallocatedBoundary
+            )
+        }
         if case .failure(let failure) = freshTarget,
            failure.failedStep == .staleRefresh,
            !didRevealTarget {
@@ -184,23 +209,84 @@ final class ElementInflation {
     private func resolveSemanticTarget(
         _ target: ElementTarget
     ) async -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+        if let visible = uniquelyResolvedVisibleTarget(target) {
+            return .success(visible)
+        }
+        if let screen = await discoverTarget?(target) {
+            stash.semanticObservationStream.commitSettledDiscoveryObservation(screen)
+            if let visible = uniquelyResolvedVisibleTarget(target, in: screen) {
+                return .success(visible)
+            }
+            if let revealable = uniquelyResolvedRevealableTarget(target, in: screen) {
+                return .success(revealable)
+            }
+        }
+        return knownSemanticTarget(target)
+    }
+
+    private func rediscoverSemanticTarget(_ target: ElementTarget) async -> TheStash.ScreenElement? {
+        guard let screen = await discoverTarget?(target) else { return nil }
+        stash.semanticObservationStream.commitSettledDiscoveryObservation(screen)
+        guard case .success(let screenElement) = preferredSemanticTarget(target) else { return nil }
+        return screenElement
+    }
+
+    private func knownSemanticTarget(
+        _ target: ElementTarget
+    ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+        if let revealable = uniquelyResolvedRevealableTarget(target) {
+            return .success(revealable)
+        }
         switch stash.resolveTarget(target) {
         case .resolved(let screenElement):
             return .success(screenElement)
         case .ambiguous(let facts):
             return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
-        case .notFound:
-            if let screen = await discoverTarget?(target) {
-                stash.semanticObservationStream.commitSettledDiscoveryObservation(screen)
-            }
-            switch stash.resolveTarget(target) {
-            case .resolved(let screenElement):
-                return .success(screenElement)
-            case .notFound(let facts):
-                return .failure(.notFound(TargetResolutionDiagnostics.message(for: .notFound(facts))))
-            case .ambiguous(let facts):
-                return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
-            }
+        case .notFound(let facts):
+            return .failure(.notFound(TargetResolutionDiagnostics.message(for: .notFound(facts))))
+        }
+    }
+
+    private func preferredSemanticTarget(
+        _ target: ElementTarget
+    ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+        if let visible = uniquelyResolvedVisibleTarget(target) {
+            return .success(visible)
+        }
+        return knownSemanticTarget(target)
+    }
+
+    private func uniquelyResolvedVisibleTarget(_ target: ElementTarget) -> TheStash.ScreenElement? {
+        uniquelyResolvedVisibleTarget(target, in: stash.liveVisibleScreen)
+    }
+
+    private func uniquelyResolvedVisibleTarget(
+        _ target: ElementTarget,
+        in screen: Screen
+    ) -> TheStash.ScreenElement? {
+        switch stash.resolveTarget(target, in: screen.visibleOnly) {
+        case .resolved(let screenElement):
+            return screenElement
+        case .notFound, .ambiguous:
+            return nil
+        }
+    }
+
+    private func uniquelyResolvedRevealableTarget(_ target: ElementTarget) -> TheStash.ScreenElement? {
+        uniquelyResolvedRevealableTarget(target, in: stash.settledSemanticScreen)
+    }
+
+    private func uniquelyResolvedRevealableTarget(
+        _ target: ElementTarget,
+        in screen: Screen
+    ) -> TheStash.ScreenElement? {
+        switch target {
+        case .predicate(let predicate, ordinal: nil):
+            let revealableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
+                .filter { $0.contentSpaceOrigin != nil && stash.liveScrollView(for: $0) != nil }
+            return revealableMatches.count == 1 ? revealableMatches[0] : nil
+        case .predicate:
+            return nil
         }
     }
 

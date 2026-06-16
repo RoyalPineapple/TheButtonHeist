@@ -90,7 +90,14 @@ final class PostActionObservation {
     }
 
     func semanticObservation(from event: SettledSemanticObservationEvent) -> HeistSemanticObservation {
-        let current = captureSemanticState(from: event.observation)
+        let screen = event.scope == .visible
+            ? event.observation.screen.visibleOnly
+            : event.observation.screen
+        let current = captureSemanticState(
+            from: screen,
+            tripwireSignal: event.observation.tripwireSignal,
+            settledObservationSequence: event.sequence
+        )
         return HeistSemanticObservation(
             event: event,
             state: current,
