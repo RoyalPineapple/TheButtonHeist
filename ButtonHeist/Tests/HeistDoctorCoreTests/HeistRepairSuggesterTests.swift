@@ -221,6 +221,44 @@ import TheScore
         #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
     }
 
+    @Test("Missing target prefers contained label rename over broad screen context")
+    func missingTargetPrefersContainedLabelRenameOverBroadScreenContext() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Checkout"))
+        let last = evidence(
+            target: target,
+            before: broadMenuInterface(primaryAction: "Checkout"),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: broadMenuInterface(primaryAction: "Go to Checkout"),
+            succeeded: false
+        )
+
+        let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
+
+        #expect(suggestion.newTarget == .predicate(ElementPredicate(label: "Go to Checkout")))
+        #expect(suggestion.newResolvedElement.label == "Go to Checkout")
+        #expect(suggestion.reasons.contains("Label is a close semantic rename."))
+    }
+
+    @Test("Missing target rejects broad screen context without semantic successor")
+    func missingTargetRejectsBroadScreenContextWithoutSemanticSuccessor() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Checkout"))
+        let last = evidence(
+            target: target,
+            before: broadMenuInterface(primaryAction: "Checkout"),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: broadMenuInterface(primaryAction: nil),
+            succeeded: false
+        )
+
+        #expect(HeistRepairSuggester.suggestions(for: request(last, current)).isEmpty)
+    }
+
     @Test("Ambiguous duplicate labels produce minimum disambiguating matcher")
     func ambiguousDuplicateLabelsProduceMinimumDisambiguatingMatcher() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
@@ -635,6 +673,31 @@ import TheScore
                 testElement(element(label: action, traits: [.button], actions: [.activate])),
             ])
         })
+    }
+
+    private func broadMenuInterface(primaryAction: String?) -> Interface {
+        let itemLabels = [
+            "Greek Salad",
+            "Margherita Pizza",
+            "Garlic Bread",
+            "Hummus & Pita",
+            "Rice Pilaf",
+            "Roasted Vegetables",
+            "Tiramisu",
+            "Items, 2",
+            "Subtotal, US$23.50",
+            "Tax (8%), US$1.88",
+            "Total, US$25.38",
+        ]
+        let elements = [
+            element(label: "Menu", traits: [.header]),
+        ] + itemLabels.map { label in
+            element(label: label, traits: [.button], actions: [.activate])
+        } + [
+            primaryAction.map { element(label: $0, traits: [.button], actions: [.activate]) },
+        ].compactMap { $0 }
+
+        return makeTestInterface(elements: elements)
     }
 
     private func resolvedCount(_ target: ElementTarget, in interface: Interface) -> Int {

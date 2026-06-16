@@ -417,6 +417,10 @@ public enum HeistRepairSuggester {
             score.add(exactPoints, reason: exactReason, signal: .text)
             return
         }
+        if containsNormalizedTokenPhrase(value, oldValue) || containsNormalizedTokenPhrase(oldValue, value) {
+            score.add(renamePoints, reason: renameReason, signal: .text)
+            return
+        }
         let similarity = stringSimilarity(value, oldValue)
         guard similarity >= 0.62 else { return }
         score.add(Int((similarity * Double(renamePoints)).rounded()), reason: renameReason, signal: .text)
@@ -448,8 +452,10 @@ public enum HeistRepairSuggester {
         context: CandidateScoringContext,
         into score: inout CandidateScore
     ) {
-        let siblingOverlap = context.oldSiblingText.intersection(normalizedSet(candidate.siblingText))
-        if !siblingOverlap.isEmpty {
+        let candidateSiblingText = normalizedSet(candidate.siblingText)
+        let siblingOverlap = context.oldSiblingText.intersection(candidateSiblingText)
+        if !siblingOverlap.isEmpty,
+           siblingContextIsLocal(oldCount: context.oldSiblingText.count, candidateCount: candidateSiblingText.count) {
             score.add(
                 min(45, siblingOverlap.count * 35),
                 reason: "Sibling row context is preserved.",
@@ -459,10 +465,11 @@ public enum HeistRepairSuggester {
 
         let headerOverlap = context.oldHeaderText.intersection(normalizedSet(candidate.headerText))
         if !headerOverlap.isEmpty {
+            let isDiscriminatingHeader = context.compatibleCandidateCount <= 3
             score.add(
                 min(20, headerOverlap.count * 10),
                 reason: "Header context is preserved.",
-                signal: .neighborContext
+                signal: isDiscriminatingHeader ? .neighborContext : nil
             )
         }
     }
@@ -675,7 +682,7 @@ public enum HeistRepairSuggester {
             return .low
         }
         if failureKind == .wrongCapability {
-            return score >= 75 ? .medium : .low
+            return .low
         }
         if score >= 120 {
             return .high
@@ -1003,6 +1010,36 @@ private func normalizedIdentityText(_ element: HeistElement) -> Set<String> {
 
 private func normalizedSet(_ values: [String]) -> Set<String> {
     Set(values.compactMap(normalizedNonEmpty))
+}
+
+private func containsNormalizedTokenPhrase(_ value: String, _ possiblePhrase: String) -> Bool {
+    guard let normalizedValue = normalizedNonEmpty(value),
+          let normalizedPhrase = normalizedNonEmpty(possiblePhrase)
+    else { return false }
+
+    let valueTokens = semanticTokens(normalizedValue)
+    let phraseTokens = semanticTokens(normalizedPhrase)
+    guard !valueTokens.isEmpty, !phraseTokens.isEmpty, phraseTokens.count <= valueTokens.count else {
+        return false
+    }
+
+    for start in 0...(valueTokens.count - phraseTokens.count) {
+        let end = start + phraseTokens.count
+        if Array(valueTokens[start..<end]) == phraseTokens {
+            return true
+        }
+    }
+    return false
+}
+
+private func semanticTokens(_ value: String) -> [String] {
+    value
+        .split { !$0.isLetter && !$0.isNumber }
+        .map(String.init)
+}
+
+private func siblingContextIsLocal(oldCount: Int, candidateCount: Int) -> Bool {
+    oldCount <= 8 && candidateCount <= 8
 }
 
 private func stableIdentifier(_ identifier: String?) -> String? {
