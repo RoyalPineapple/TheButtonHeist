@@ -7,6 +7,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RECEIPTS_DIR="${BUTTONHEIST_RECEIPTS_DIR:-}"
 RECEIPTS_MODE="${BUTTONHEIST_RECEIPTS_MODE:-failures}"
 SUITE_NAME=""
+IOS_SANDBOX=false
 
 usage() {
     cat <<'EOF'
@@ -19,7 +20,11 @@ Options:
   --suite NAME   Derive the default directory from .rp1/work/heist-receipts/NAME.
   -h, --help     Show this help.
 
-The wrapper only sets BUTTONHEIST_RECEIPTS_DIR and BUTTONHEIST_RECEIPTS_MODE.
+The wrapper sets BUTTONHEIST_RECEIPTS_DIR and BUTTONHEIST_RECEIPTS_MODE.
+With --ios-sandbox, it also sets SIMCTL_CHILD_* variables so simulator-hosted
+test processes receive the same recording configuration. When SIM_UDID is
+available, it also sets the simulator launchd environment used by xcodebuild
+test runners.
 The command's normal exit status is preserved.
 EOF
 }
@@ -36,6 +41,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --ios-sandbox)
             RECEIPTS_DIR="process-temporary-directory"
+            IOS_SANDBOX=true
             shift
             ;;
         --mode)
@@ -90,4 +96,28 @@ fi
 export BUTTONHEIST_RECEIPTS_DIR="$RECEIPTS_DIR"
 export BUTTONHEIST_RECEIPTS_MODE="$RECEIPTS_MODE"
 
-exec "$@"
+SIMCTL_LAUNCHD_ENV_APPLIED=false
+
+cleanup() {
+    local status=$?
+    if [[ "$SIMCTL_LAUNCHD_ENV_APPLIED" == true ]]; then
+        xcrun simctl spawn "$SIM_UDID" launchctl unsetenv BUTTONHEIST_RECEIPTS_DIR >/dev/null 2>&1 || true
+        xcrun simctl spawn "$SIM_UDID" launchctl unsetenv BUTTONHEIST_RECEIPTS_MODE >/dev/null 2>&1 || true
+    fi
+    return "$status"
+}
+trap cleanup EXIT
+
+if [[ "$IOS_SANDBOX" == true ]]; then
+    export SIMCTL_CHILD_BUTTONHEIST_RECEIPTS_DIR="$RECEIPTS_DIR"
+    export SIMCTL_CHILD_BUTTONHEIST_RECEIPTS_MODE="$RECEIPTS_MODE"
+    if [[ -n "${SIM_UDID:-}" ]]; then
+        xcrun simctl spawn "$SIM_UDID" launchctl setenv BUTTONHEIST_RECEIPTS_DIR "$RECEIPTS_DIR"
+        xcrun simctl spawn "$SIM_UDID" launchctl setenv BUTTONHEIST_RECEIPTS_MODE "$RECEIPTS_MODE"
+        SIMCTL_LAUNCHD_ENV_APPLIED=true
+    else
+        echo "Warning: --ios-sandbox set without SIM_UDID; relying on SIMCTL_CHILD_* env only" >&2
+    fi
+fi
+
+"$@"

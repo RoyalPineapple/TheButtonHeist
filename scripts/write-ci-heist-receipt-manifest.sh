@@ -71,6 +71,12 @@ fi
     echo "receiptFileCount=$receipt_count"
     echo "receiptBytes=$receipt_bytes"
     echo "receiptList=receipt-files.txt"
+    if [[ -f "$DEST_DIR/collection-diagnostics.txt" ]]; then
+        echo "collectionDiagnostics=collection-diagnostics.txt"
+    fi
+    if [[ "$receipt_count" -eq 0 ]]; then
+        echo "diagnosis=no receipt JSON files were found; the artifact is not doctor-ready"
+    fi
     echo "createdAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 } > "$MANIFEST"
 

@@ -60,6 +60,10 @@ extension Navigation {
                 return .failure(.scrollToEdge, message: "scroll_to_edge failed: selected container has no live UIScrollView")
             }
             let moved = safecracker.scrollToEdge(scrollView, edge: edge)
+            if moved {
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                stash.refreshTreeAfterViewportMove()
+            }
 
             return moved
                 ? .success(method: .scrollToEdge)
@@ -91,7 +95,7 @@ extension Navigation {
             } else {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             }
-            stash.refreshLiveCapture()
+            stash.refreshTreeAfterViewportMove()
             return ScrollSettleProof(result: .moved, previousVisibleIds: before)
         case .swipeable(let frame, let contentSize):
             let targetKey = swipeTargetKey(frame: frame, contentSize: contentSize)

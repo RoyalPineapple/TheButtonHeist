@@ -40,6 +40,10 @@ extension TheBurglar {
         )
         let containerNames = containerNameIndex.byContainer
         let containerNamesByPath = containerNameIndex.byPath
+        let containerScrollContentLocationsByPath = containerScrollContentLocations(
+            identityContext: identityContext,
+            containerNamesByPath: containerNamesByPath
+        )
 
         let baseHeistIds = TheStash.IdAssignment.assign(elements)
         let resolvedHeistIds = baseHeistIds
@@ -90,6 +94,7 @@ extension TheBurglar {
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: identityContext.contentFramesByPath,
+            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
             firstResponderHeistId: firstResponders.first?.1,
             scrollableContainerViews: scrollableViewRefs,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
@@ -152,6 +157,26 @@ extension TheBurglar {
         return Screen.ScrollContentLocation(
             origin: origin,
             scrollContainer: scrollContainer
+        )
+    }
+
+    private static func containerScrollContentLocations(
+        identityContext: ContainerIdentityContext,
+        containerNamesByPath: [TreePath: ContainerName]
+    ) -> [TreePath: Screen.ScrollContentLocation] {
+        Dictionary(
+            uniqueKeysWithValues: identityContext.scrollContentOriginsByPath.compactMap { path, origin in
+                guard let scrollContainerPath = identityContext.scrollContainerPathsByPath[path],
+                      let scrollContainer = containerNamesByPath[scrollContainerPath]
+                else { return nil }
+                return (
+                    path,
+                    Screen.ScrollContentLocation(
+                        origin: origin,
+                        scrollContainer: scrollContainer
+                    )
+                )
+            }
         )
     }
 

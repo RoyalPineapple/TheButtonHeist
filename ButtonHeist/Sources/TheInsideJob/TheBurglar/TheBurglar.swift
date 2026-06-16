@@ -208,8 +208,8 @@ final class TheBurglar {
 
         case let .container(container, children, source):
             containerObjectsByPath[path] = source
-            if case .scrollable = container.type, let view = source as? UIView {
-                scrollViewsByPath[path] = view
+            if let scrollView = scrollDispatchView(for: container, source: source) {
+                scrollViewsByPath[path] = scrollView
             }
             for (index, child) in children.enumerated() {
                 collect(
@@ -222,6 +222,40 @@ final class TheBurglar {
                 )
             }
         }
+    }
+
+    private static func scrollDispatchView(
+        for container: AccessibilityContainer,
+        source: NSObject
+    ) -> UIScrollView? {
+        guard case .scrollable(let contentSize) = container.type,
+              let sourceView = source as? UIView
+        else { return nil }
+        if let scrollView = sourceView as? UIScrollView {
+            return scrollView
+        }
+
+        let expectedContentSize = contentSize.cgSize
+        let candidates = descendantScrollViews(in: sourceView)
+            .filter(\.isScrollEnabled)
+        let contentSizeMatches = candidates.filter {
+            scrollContentSize($0.contentSize, matches: expectedContentSize)
+        }
+        if contentSizeMatches.count == 1 {
+            return contentSizeMatches[0]
+        }
+        return candidates.count == 1 ? candidates[0] : nil
+    }
+
+    private static func descendantScrollViews(in view: UIView) -> [UIScrollView] {
+        view.subviews.flatMap { subview -> [UIScrollView] in
+            let current = (subview as? UIScrollView).map { [$0] } ?? []
+            return current + descendantScrollViews(in: subview)
+        }
+    }
+
+    private static func scrollContentSize(_ lhs: CGSize, matches rhs: CGSize) -> Bool {
+        abs(lhs.width - rhs.width) <= 1 && abs(lhs.height - rhs.height) <= 1
     }
 
     static func scrollViewsByContainerForCurrentCapture(

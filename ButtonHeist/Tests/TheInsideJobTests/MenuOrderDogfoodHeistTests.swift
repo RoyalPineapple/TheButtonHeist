@@ -66,7 +66,7 @@ private struct DemoMenuItem {
 final class MenuOrderDogfoodHeistTests: XCTestCase {
 
     func testMenuOrderFlowUsesReusablePublicHeists() async throws {
-        let heist = try await Heist {
+        let heist = try await RunHeist("MenuOrderDogfood_orderTwoItems") {
             try DemoHome.openMenu()
 
             ForEach(DemoOrder.itemLabels) { item in

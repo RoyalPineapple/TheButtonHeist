@@ -3,6 +3,8 @@ import UIKit
 
 extension ElementInflation {
 
+    private static let maxNestedRevealDepth = 8
+
     enum SemanticRevealFailure: Equatable {
         case missingContentOrigin
         case noLiveScrollableAncestor
@@ -24,22 +26,70 @@ extension ElementInflation {
     /// elements carry no executable scroll authority unless the parser
     /// retained a live scroll ancestor.
     @discardableResult
-    func revealSemanticTarget(_ screenElement: TheStash.ScreenElement) -> SemanticRevealResult {
+    func revealSemanticTarget(_ screenElement: TheStash.ScreenElement) async -> SemanticRevealResult {
         if stash.visibleIds.contains(screenElement.heistId) {
             return .alreadyVisible
         }
 
-        guard let origin = screenElement.contentSpaceOrigin else {
+        guard let location = screenElement.scrollContentLocation else {
             return .failed(.missingContentOrigin)
         }
-        guard let scrollView = stash.liveScrollView(for: screenElement) else {
+        return await revealSemanticLocation(location, depth: 0)
+    }
+
+    private func revealSemanticContainer(
+        _ container: SemanticScreen.Container,
+        depth: Int
+    ) async -> SemanticRevealResult {
+        if let containerName = container.containerName,
+           stash.capturedLiveScrollView(forContainerName: containerName) != nil {
+            return .alreadyVisible
+        }
+        guard let location = container.scrollContentLocation else {
             return .failed(.noLiveScrollableAncestor)
         }
+        return await revealSemanticLocation(location, depth: depth)
+    }
+
+    private func revealSemanticLocation(
+        _ location: SemanticScreen.ScrollContentLocation,
+        depth: Int
+    ) async -> SemanticRevealResult {
+        guard depth < Self.maxNestedRevealDepth else {
+            return .failed(.noLiveScrollableAncestor)
+        }
+
+        if let scrollView = stash.capturedLiveScrollView(forContainerName: location.scrollContainer) {
+            return await revealContentOrigin(location.origin, in: scrollView)
+        }
+
+        guard let scrollContainer = stash.uniqueSemanticContainer(named: location.scrollContainer) else {
+            return .failed(.noLiveScrollableAncestor)
+        }
+        if scrollContainer.scrollContentLocation != nil {
+            let containerReveal = await revealSemanticContainer(scrollContainer, depth: depth + 1)
+            if case .failed = containerReveal {
+                return containerReveal
+            }
+        }
+
+        guard let scrollView = stash.liveScrollView(forContainerName: location.scrollContainer) else {
+            return .failed(.noLiveScrollableAncestor)
+        }
+        return await revealContentOrigin(location.origin, in: scrollView)
+    }
+
+    private func revealContentOrigin(
+        _ origin: CGPoint,
+        in scrollView: UIScrollView
+    ) async -> SemanticRevealResult {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
             return .failed(.unsafeProgrammaticScroll)
         }
 
         scrollView.setContentOffset(Self.semanticRevealTargetOffset(for: origin, in: scrollView), animated: false)
+        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+        stash.refreshTreeAfterViewportMove()
         return .revealed(scrollView)
     }
 
