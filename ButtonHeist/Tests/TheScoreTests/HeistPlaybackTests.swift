@@ -6,7 +6,7 @@ final class HeistPlanTests: XCTestCase {
     func testHeistPlanRoundTrip() throws {
         let heist = try HeistPlan(body: [
             try activateStep(label: "Login", traits: [.button]),
-            .action(try ActionStep(command: .typeText(TypeTextTarget(text: "user@example.com")))),
+            .action(try ActionStep(command: .typeText(text: .literal("user@example.com"), target: nil))),
             try activateStep(label: "Submit", traits: [.button]),
         ])
 
@@ -314,7 +314,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = try ActionStep(
-            command: .activate(.predicate(ElementPredicate(label: "Save", traits: [.button]))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Save"), traits: [.button]))),
             expectation: WaitStep(predicate: .changed(.screen()), timeout: 2)
         )
 
@@ -579,6 +579,6 @@ private func activateStep(
     traits: [HeistTrait] = []
 ) throws -> HeistStep {
     .action(try ActionStep(
-        command: .activate(.predicate(ElementPredicate(label: label, traits: traits)))
+        command: .activate(.predicate(ElementPredicateTemplate(label: .literal(label), traits: traits)))
     ))
 }

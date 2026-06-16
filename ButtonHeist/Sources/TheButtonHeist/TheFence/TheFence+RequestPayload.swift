@@ -1,6 +1,6 @@
 import Foundation
 
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheFence {
 
@@ -18,14 +18,14 @@ extension TheFence {
     typealias ParsedRequestHandler = @ButtonHeistActor (TheFence, ParsedRequest) async throws -> FenceResponse
 
     struct DecodedRequestDispatch {
-        let executableMessages: [ClientMessage]?
+        let runtimeActionMessages: [RuntimeActionMessage]?
         let handler: ParsedRequestHandler
 
         init(
-            executableMessages: [ClientMessage]? = nil,
+            runtimeActionMessages: [RuntimeActionMessage]? = nil,
             handler: @escaping ParsedRequestHandler
         ) {
-            self.executableMessages = executableMessages
+            self.runtimeActionMessages = runtimeActionMessages
             self.handler = handler
         }
     }
@@ -34,7 +34,7 @@ extension TheFence {
         let command: Command
         let requestId: String
         let arguments: CommandArgumentEnvelope
-        let executableMessages: [ClientMessage]?
+        let runtimeActionMessages: [RuntimeActionMessage]?
         let handler: ParsedRequestHandler
         let expectationPayload: ExpectationPayload
 
@@ -48,23 +48,23 @@ extension TheFence {
             self.command = command
             self.requestId = requestId
             self.arguments = arguments
-            self.executableMessages = dispatch.executableMessages
+            self.runtimeActionMessages = dispatch.runtimeActionMessages
             self.handler = dispatch.handler
             self.expectationPayload = expectationPayload
         }
     }
 
-    static func clientActionDispatch(_ messages: [ClientMessage]) -> DecodedRequestDispatch {
-        DecodedRequestDispatch(executableMessages: messages) { fence, request in
+    static func runtimeActionDispatch(_ messages: [RuntimeActionMessage]) -> DecodedRequestDispatch {
+        DecodedRequestDispatch(runtimeActionMessages: messages) { fence, request in
             try await fence.handleClientActionRequest(request)
         }
     }
 
     static func appInteractionDispatch<C: AppInteractionCommand>(
         _: C,
-        _ messages: [ClientMessage]
+        _ messages: [RuntimeActionMessage]
     ) -> DecodedRequestDispatch {
-        clientActionDispatch(messages)
+        runtimeActionDispatch(messages)
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {

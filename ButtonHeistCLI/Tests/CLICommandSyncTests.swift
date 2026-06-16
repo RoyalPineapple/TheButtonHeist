@@ -100,62 +100,41 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try TheFence.parseExpectationArgument("layout_changed"))
     }
 
-    func testRunHeistSerializesPlanFieldsBeforeSending() throws {
+    func testRunHeistForwardsInlineButtonHeistSource() throws {
+        let source = #"HeistPlan("smoke") { Warn("Check login state") }"#
         let arguments = try RunHeistCommand.planArguments(
-            inline: #"{"version":1,"body":[{"type":"warn","warn":{"message":"Check login state"}}]}"#,
-            fromFile: nil
+            inline: source
         )
 
-        XCTAssertEqual(arguments[.version], .int(1))
-        guard case .array(let body)? = arguments[.body] else {
-            return XCTFail("expected serialized heist plan body")
-        }
-        XCTAssertEqual(body, [
-            .object([
-                "type": .string("warn"),
-                "warn": .object(["message": .string("Check login state")]),
-            ]),
-        ])
+        XCTAssertEqual(arguments[.plan], .string(source))
+        XCTAssertNil(arguments[.version])
+        XCTAssertNil(arguments[.body])
     }
 
-    func testRunHeistInlinePlanPreservesAllCanonicalFields() throws {
-        // An inline plan with name, nested definitions (carrying a parameter),
-        // and an invoke body must survive serialization without dropping fields.
-        let definition = try HeistPlan(
-            name: "addToCart",
-            parameter: .string(name: "item"),
-            body: [.warn(WarnStep(message: "x"))]
-        )
-        let plan = try HeistPlan(
-            name: "flow",
-            definitions: [definition],
-            body: [.invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk"))))]
-        )
-        let inline = try XCTUnwrap(String(data: try JSONEncoder().encode(plan), encoding: .utf8))
-
-        let arguments = try RunHeistCommand.planArguments(inline: inline, fromFile: nil)
-
-        XCTAssertEqual(arguments[.version], .int(1))
-        XCTAssertEqual(arguments[.name], .string("flow"))
-        guard case .array(let definitions)? = arguments[.definitions],
-              case .object(let firstDefinition)? = definitions.first,
-              case .object(let parameter)? = firstDefinition["parameter"] else {
-            return XCTFail("expected serialized definition carrying its parameter")
+    func testRunHeistRejectsEmptyInlineButtonHeistSource() {
+        XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: "   ")) { error in
+            XCTAssertTrue(String(describing: error).contains("--plan must be ButtonHeist DSL source"))
         }
-        // The nested parameter rides along inside the definition.
-        XCTAssertEqual(parameter["name"], .string("item"))
-        guard case .array(let body)? = arguments[.body],
-              case .object(let firstStep)? = body.first else {
-            return XCTFail("expected serialized invoke body")
-        }
-        XCTAssertEqual(firstStep["type"], .string("invoke"))
+    }
+
+    func testRunHeistDoesNotExpandRawJSONIRInlinePlan() throws {
+        let rawJSON = #"{"version":1,"body":[{"type":"warn","warn":{"message":"x"}}]}"#
+        let arguments = try RunHeistCommand.planArguments(inline: rawJSON)
+
+        XCTAssertEqual(arguments[.plan], .string(rawJSON))
+        XCTAssertNil(arguments[.version])
+        XCTAssertNil(arguments[.body])
     }
 
     func testRunHeistRequiresExactlyOnePlanSource() {
-        XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: nil, fromFile: nil)) { error in
-            XCTAssertTrue(String(describing: error).contains("Must supply --path, --plan, or --plan-from-file"))
+        XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: nil)) { error in
+            XCTAssertTrue(String(describing: error).contains("Must supply --path or --plan"))
         }
-        XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: "{}", fromFile: "plan.json")) { error in
+        XCTAssertThrowsError(try RunHeistCommand.planArguments(
+            inline: #"HeistPlan { Warn("x") }"#,
+            path: "Flow.heist",
+            entry: nil
+        )) { error in
             XCTAssertTrue(String(describing: error).contains("mutually exclusive"))
         }
     }
@@ -165,7 +144,6 @@ final class CLICommandSyncTests: XCTestCase {
         // the fence reads it into a HeistPlan. No version/body fields are sent.
         let arguments = try RunHeistCommand.planArguments(
             inline: nil,
-            fromFile: nil,
             path: "Flow.heist",
             entry: nil
         )
@@ -178,7 +156,6 @@ final class CLICommandSyncTests: XCTestCase {
     func testRunHeistForwardsRootArgumentWithPathSource() throws {
         let arguments = try RunHeistCommand.planArguments(
             inline: nil,
-            fromFile: nil,
             path: "Search.heist",
             entry: nil,
             argument: #"{"type":"string","value":"milk"}"#
@@ -192,15 +169,19 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testRunHeistForwardsRootArgumentWithInlineSource() throws {
+        let source = """
+        HeistPlan("search", parameter: .string("query")) {
+            Warn("Check")
+        }
+        """
         let arguments = try RunHeistCommand.planArguments(
-            inline: #"{"version":1,"name":"search","parameter":{"type":"string","name":"query"},"body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
-            fromFile: nil,
+            inline: source,
             path: nil,
             entry: nil,
             argument: #"{"type":"string","value":"milk"}"#
         )
 
-        XCTAssertEqual(arguments[.name], .string("search"))
+        XCTAssertEqual(arguments[.plan], .string(source))
         XCTAssertEqual(arguments[.argument], .object([
             "type": .string("string"),
             "value": .string("milk"),
@@ -230,7 +211,6 @@ final class CLICommandSyncTests: XCTestCase {
         // And it dispatches as a .heist path, not inline version/body params.
         let arguments = try RunHeistCommand.planArguments(
             inline: nil,
-            fromFile: nil,
             path: prepared.path,
             entry: prepared.entry
         )
@@ -248,23 +228,23 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testListHeistsUsesRunHeistPlanSourceShape() throws {
+        let source = #"HeistPlan("flow") { Warn("Check") }"#
         let arguments = try RunHeistCommand.planArguments(
-            inline: #"{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
-            fromFile: nil,
+            inline: source,
             path: nil,
             entry: nil,
             commandName: "list_heists"
         )
 
-        XCTAssertEqual(arguments[.version], .int(1))
-        XCTAssertEqual(arguments[.name], .string("flow"))
+        XCTAssertEqual(arguments[.plan], .string(source))
+        XCTAssertNil(arguments[.version])
         XCTAssertNil(arguments[.path])
     }
 
     func testListHeistsDetailFlagDefaultsToSummary() throws {
         let command = try ListHeistsCommand.parse([
             "--plan",
-            #"{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
+            #"HeistPlan("flow") { Warn("Check") }"#,
         ])
 
         XCTAssertFalse(command.detail)
@@ -274,16 +254,16 @@ final class CLICommandSyncTests: XCTestCase {
         let command = try ListHeistsCommand.parse([
             "--detail",
             "--plan",
-            #"{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
+            #"HeistPlan("flow") { Warn("Check") }"#,
         ])
 
         XCTAssertTrue(command.detail)
     }
 
     func testDescribeHeistAddsSelectorWithoutDroppingInlinePlanName() throws {
+        let source = #"HeistPlan("flow") { Warn("Check") }"#
         var arguments = try RunHeistCommand.planArguments(
-            inline: #"{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}"#,
-            fromFile: nil,
+            inline: source,
             path: nil,
             entry: nil,
             commandName: "describe_heist"
@@ -291,14 +271,13 @@ final class CLICommandSyncTests: XCTestCase {
         arguments.set(.heist, "flow")
 
         XCTAssertEqual(arguments[.heist], .string("flow"))
-        XCTAssertEqual(arguments[.name], .string("flow"))
-        XCTAssertEqual(arguments[.version], .int(1))
+        XCTAssertEqual(arguments[.plan], .string(source))
+        XCTAssertNil(arguments[.version])
     }
 
     func testRunHeistRejectsEntryWithoutPath() {
         XCTAssertThrowsError(try RunHeistCommand.planArguments(
-            inline: #"{"version":1,"body":[{"type":"warn","warn":{"message":"x"}}]}"#,
-            fromFile: nil,
+            inline: #"HeistPlan { Warn("x") }"#,
             path: nil,
             entry: "makeHeist"
         )) { error in

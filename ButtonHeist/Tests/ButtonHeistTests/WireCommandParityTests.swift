@@ -1,6 +1,6 @@
 import XCTest
 @testable import ButtonHeist
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 final class WireCommandParityTests: XCTestCase {
 
@@ -186,17 +186,17 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryHeistPrimitiveCommandLowersToTheSameClientMessageAsSingleCommand() async throws {
+    func testEveryHeistPrimitiveCommandLowersToTheSameRuntimeActionAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
         for command in TheFence.Command.heistPrimitiveCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
-            let singleMessages = try fence.executableActionMessages(for: singleRequest)
+            let singleMessages = try fence.executableRuntimeActions(for: singleRequest)
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
             let heistStep = try fence.heistStep(for: singleRequest)
-            let heistMessages = clientMessages(for: heistStep)
+            let heistMessages = runtimeActions(for: heistStep)
 
             XCTAssertEqual(
                 String(reflecting: heistMessages),
@@ -207,17 +207,17 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryHeistStepLowersToTheSameClientMessageAsSingleCommand() async throws {
+    func testEveryHeistStepLowersToTheSameRuntimeActionAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
         for command in TheFence.Command.heistPrimitiveCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
-            let singleMessages = try fence.executableActionMessages(for: singleRequest)
+            let singleMessages = try fence.executableRuntimeActions(for: singleRequest)
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
             let sourceStep = try fence.heistStep(for: singleRequest)
-            let heistMessages = [sourceStep].flatMap(clientMessages(for:))
+            let heistMessages = [sourceStep].flatMap(runtimeActions(for:))
 
             XCTAssertEqual(
                 String(reflecting: heistMessages),
@@ -242,7 +242,7 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertNil(command.payloadCheckedHeistPrimitiveCommand, command.rawValue)
 
             let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
-            XCTAssertFalse(try fence.executableActionMessages(for: request).isEmpty, command.rawValue)
+            XCTAssertFalse(try fence.executableRuntimeActions(for: request).isEmpty, command.rawValue)
             XCTAssertThrowsError(try fence.heistStep(for: request), command.rawValue) { error in
                 XCTAssertTrue("\(error)".contains("not a heist primitive"), "\(error)")
             }
@@ -330,7 +330,6 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     private func sampleClientMessages() throws -> [ClientMessage] {
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         return [
             .clientHello,
             .authenticate(AuthenticatePayload(token: "token")),
@@ -340,7 +339,7 @@ final class WireCommandParityTests: XCTestCase {
             .getPasteboard,
             .requestScreen,
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(target))),
+                .action(try ActionStep(command: .activate(.identifier(.literal("target"))))),
             ]))),
         ]
     }
@@ -368,20 +367,20 @@ final class WireCommandParityTests: XCTestCase {
         ])
     }
 
-    private func clientMessages(for step: HeistStep) -> [ClientMessage] {
+    private func runtimeActions(for step: HeistStep) -> [RuntimeActionMessage] {
         switch step {
         case .action(let action):
-            guard let command = try? action.command.resolveForInternalDispatch(in: .empty) else { return [] }
+            guard let command = try? action.command.resolveForRuntimeDispatch(in: .empty) else { return [] }
             return [command]
         case .wait(let wait):
             guard let resolved = try? wait.resolve(in: .empty) else { return [] }
             return [.wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))]
         case .conditional(let conditional):
-            return conditional.cases.flatMap { $0.body.flatMap(clientMessages) }
-                + (conditional.elseBody ?? []).flatMap(clientMessages)
+            return conditional.cases.flatMap { $0.body.flatMap(runtimeActions) }
+                + (conditional.elseBody ?? []).flatMap(runtimeActions)
         case .waitForCases(let waitForCases):
-            return waitForCases.cases.flatMap { $0.body.flatMap(clientMessages) }
-                + (waitForCases.elseBody ?? []).flatMap(clientMessages)
+            return waitForCases.cases.flatMap { $0.body.flatMap(runtimeActions) }
+                + (waitForCases.elseBody ?? []).flatMap(runtimeActions)
         case .forEachElement, .forEachString, .heist, .invoke:
             return []
         case .warn, .fail:

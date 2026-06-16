@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheBrains {
 
@@ -10,7 +10,7 @@ extension TheBrains {
     /// Execute a command through the full interaction pipeline:
     /// refresh → snapshot → execute → settle → semantic observation → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
-    func executeCommand(_ message: ClientMessage) async -> ActionResult {
+    func executeRuntimeAction(_ message: RuntimeActionMessage) async -> ActionResult {
         // Rotor mode holds a single cursor only while consecutive rotor steps
         // run on the same host. Any other interaction exits rotor mode and drops
         // the held cursor.
@@ -56,11 +56,6 @@ extension TheBrains {
             return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
         case .wait(let target):
             return await performWait(target: target)
-        case .heistPlan(let run):
-            return await executeHeistPlan(run.plan, argument: run.argument)
-        case .clientHello, .authenticate, .requestInterface,
-             .ping, .status, .requestScreen, .getPasteboard:
-            preconditionFailure("Non-executable client message reached action execution: \(message.wireType.rawValue)")
         }
     }
 

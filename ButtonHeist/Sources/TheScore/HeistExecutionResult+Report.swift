@@ -10,7 +10,7 @@ import Foundation
 public extension HeistExecutionStepResult {
     /// Number of executed receipt nodes in this subtree, including this node.
     var executedNodeCount: Int {
-        1 + children.reduce(0) { $0 + $1.executedNodeCount }
+        (status == .skipped ? 0 : 1) + children.reduce(0) { $0 + $1.executedNodeCount }
     }
 
     var isFailure: Bool {
@@ -108,7 +108,7 @@ public extension HeistExecutionStepResult {
     var reportClientWireType: ClientWireMessageType? {
         guard kind == .action else { return nil }
         if let command = actionEvidence?.command {
-            return command.internalDispatchWireType
+            return command.runtimeActionType
         }
         return actionEvidence?.actionResult?.method.heistReportWireType
             ?? actionEvidence?.expectationActionResult?.method.heistReportWireType
@@ -218,13 +218,13 @@ public extension HeistExecutionStepResult {
 
     /// Number of expectations evaluated in this subtree.
     var expectationsChecked: Int {
-        (reportExpectation == nil ? 0 : 1)
+        (status == .skipped || reportExpectation == nil ? 0 : 1)
             + children.reduce(0) { $0 + $1.expectationsChecked }
     }
 
     /// Number of evaluated expectations that were met in this subtree.
     var expectationsMet: Int {
-        ((reportExpectation?.met == true) ? 1 : 0)
+        (status == .skipped ? 0 : ((reportExpectation?.met == true) ? 1 : 0))
             + children.reduce(0) { $0 + $1.expectationsMet }
     }
 
@@ -285,7 +285,7 @@ public extension Array where Element == HeistExecutionStepResult {
 public extension HeistExecutionResult {
     /// Top-level heist body steps that actually began execution/evaluation.
     var executedTopLevelStepCount: Int {
-        steps.count
+        steps.count { $0.status != .skipped }
     }
 
     /// All executed receipt nodes in the tree, including nested structural
@@ -341,10 +341,10 @@ public extension HeistExecutionResult {
         steps.flatMap(\.traceResultsInExecutionOrder)
     }
 
-    /// Steps flattened into report rows in execution order. The flattened
-    /// position is an output concern and must not drive runtime failure logic.
-    var reportRows: [HeistExecutionStepResult] {
-        Self.reportRows(steps)
+    /// Receipt nodes surfaced by linear output adapters in execution order.
+    /// Skipped nodes remain visible because they are first-class receipt facts.
+    var outputReceiptNodes: [HeistExecutionStepResult] {
+        Self.outputReceiptNodes(steps)
     }
 
     /// Warnings emitted by executed `Warn(...)` steps, in execution order.
@@ -352,15 +352,9 @@ public extension HeistExecutionResult {
         Self.warnings(in: steps)
     }
 
-    private static func reportRows(_ steps: [HeistExecutionStepResult]) -> [HeistExecutionStepResult] {
+    private static func outputReceiptNodes(_ steps: [HeistExecutionStepResult]) -> [HeistExecutionStepResult] {
         steps.flatMap { step -> [HeistExecutionStepResult] in
-            switch step.kind {
-            case .forEachElement, .forEachString:
-                return [step]
-            case .action, .wait, .conditional, .waitForCases, .forEachIteration,
-                 .warn, .fail, .heist, .invoke:
-                return [step] + reportRows(step.children)
-            }
+            [step] + outputReceiptNodes(step.children)
         }
     }
 

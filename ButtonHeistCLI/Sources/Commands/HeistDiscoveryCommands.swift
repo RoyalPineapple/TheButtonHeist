@@ -4,7 +4,7 @@ import ButtonHeist
 struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "List reusable heists in a .heist artifact or inline plan",
+        abstract: "List reusable heists in a .heist artifact or inline ButtonHeist source",
         discussion: """
             Lists the root entry and all named reusable heists derived from one
             decoded, runtime-validated plan.
@@ -12,7 +12,7 @@ struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
             Examples:
               buttonheist list_heists --path Flow.heist
               buttonheist list_heists --detail --path Flow.heist
-              buttonheist list_heists --plan '{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}'
+              buttonheist list_heists --plan 'HeistPlan("flow") { Warn("Check") }'
             """
     )
 
@@ -21,20 +21,16 @@ struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .long, help: "Inline canonical heist plan JSON object")
+    @Option(name: .long, help: "Inline canonical ButtonHeist DSL source.")
     var plan: String?
 
     @Flag(name: .long, help: "Include derived command names, nested heist calls, counts, and safe semantic surface summaries.")
     var detail = false
 
-    @Option(name: .long, help: "Path to a JSON file containing a canonical heist plan object")
-    var planFromFile: String?
-
     @ButtonHeistActor
     mutating func run() async throws {
         var request = try RunHeistCommand.planArguments(
             inline: plan,
-            fromFile: planFromFile,
             path: path,
             entry: nil,
             commandName: Self.cliCommandName
@@ -53,14 +49,14 @@ struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
 struct DescribeHeistCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Describe one reusable heist in a .heist artifact or inline plan",
+        abstract: "Describe one reusable heist in a .heist artifact or inline ButtonHeist source",
         discussion: """
             Describes the selected root entry or named reusable heist from one
             decoded, runtime-validated plan.
 
             Examples:
               buttonheist describe_heist checkout --path Flow.heist
-              buttonheist describe_heist Cart.checkout --plan '{"version":1,"name":"flow","body":[{"type":"warn","warn":{"message":"Check"}}]}'
+              buttonheist describe_heist Cart.checkout --plan 'HeistPlan("flow") { Warn("Check") }'
             """
     )
 
@@ -72,17 +68,13 @@ struct DescribeHeistCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .long, help: "Inline canonical heist plan JSON object")
+    @Option(name: .long, help: "Inline canonical ButtonHeist DSL source.")
     var plan: String?
-
-    @Option(name: .long, help: "Path to a JSON file containing a canonical heist plan object")
-    var planFromFile: String?
 
     @ButtonHeistActor
     mutating func run() async throws {
         var request = try RunHeistCommand.planArguments(
             inline: plan,
-            fromFile: planFromFile,
             path: path,
             entry: nil,
             commandName: Self.cliCommandName

@@ -61,26 +61,9 @@ extension ClientMessage {
         case .requestInterface(let payload): return (.requestInterface, payload)
         case .ping: return (.ping, nil)
         case .status: return (.status, nil)
-        case .resignFirstResponder: return (.resignFirstResponder, nil)
         case .getPasteboard: return (.getPasteboard, nil)
         case .requestScreen: return (.requestScreen, nil)
         case .authenticate(let payload): return (.authenticate, payload)
-        case .activate(let payload): return (.activate, payload)
-        case .increment(let payload): return (.increment, payload)
-        case .decrement(let payload): return (.decrement, payload)
-        case .performCustomAction(let payload): return (.performCustomAction, payload)
-        case .rotor(let payload): return (.rotor, payload)
-        case .editAction(let payload): return (.editAction, payload)
-        case .setPasteboard(let payload): return (.setPasteboard, payload)
-        case .oneFingerTap(let payload): return (.oneFingerTap, payload)
-        case .longPress(let payload): return (.longPress, payload)
-        case .swipe(let payload): return (.swipe, payload)
-        case .drag(let payload): return (.drag, payload)
-        case .typeText(let payload): return (.typeText, payload)
-        case .scroll(let payload): return (.scroll, payload)
-        case .scrollToVisible(let payload): return (.scrollToVisible, payload)
-        case .scrollToEdge(let payload): return (.scrollToEdge, payload)
-        case .wait(let payload): return (.wait, payload)
         case .heistPlan(let payload): return (.heistPlan, payload)
         }
     }
@@ -111,9 +94,6 @@ extension ClientMessage {
         case .status:
             try noPayload()
             return .status
-        case .resignFirstResponder:
-            try noPayload()
-            return .resignFirstResponder
         case .getPasteboard:
             try noPayload()
             return .getPasteboard
@@ -121,23 +101,13 @@ extension ClientMessage {
             try noPayload()
             return .requestScreen
         case .authenticate: return .authenticate(try AuthenticatePayload(from: try payload()))
-        case .activate: return .activate(try ElementTarget(from: try payload()))
-        case .increment: return .increment(try ElementTarget(from: try payload()))
-        case .decrement: return .decrement(try ElementTarget(from: try payload()))
-        case .performCustomAction: return .performCustomAction(try CustomActionTarget(from: try payload()))
-        case .rotor: return .rotor(try RotorTarget(from: try payload()))
-        case .editAction: return .editAction(try EditActionTarget(from: try payload()))
-        case .setPasteboard: return .setPasteboard(try SetPasteboardTarget(from: try payload()))
-        case .oneFingerTap: return .oneFingerTap(try TapTarget(from: try payload()))
-        case .longPress: return .longPress(try LongPressTarget(from: try payload()))
-        case .swipe: return .swipe(try SwipeTarget(from: try payload()))
-        case .drag: return .drag(try DragTarget(from: try payload()))
-        case .typeText: return .typeText(try TypeTextTarget(from: try payload()))
-        case .scroll: return .scroll(try ScrollTarget(from: try payload()))
-        case .scrollToVisible: return .scrollToVisible(try ScrollToVisibleTarget(from: try payload()))
-        case .scrollToEdge: return .scrollToEdge(try ScrollToEdgeTarget(from: try payload()))
-        case .wait: return .wait(try WaitTarget(from: try payload()))
         case .heistPlan: return .heistPlan(try HeistPlanRun(from: try payload()))
+        case .activate, .increment, .decrement, .performCustomAction, .rotor,
+             .editAction, .setPasteboard, .resignFirstResponder,
+             .oneFingerTap, .longPress, .swipe, .drag,
+             .typeText, .scroll, .scrollToVisible, .scrollToEdge,
+             .wait:
+            throw internalMutatingClientMessage(type, codingPath: payloadDecoder?.codingPath ?? [])
         }
     }
 
@@ -156,7 +126,6 @@ extension ClientMessage {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: ClientMessageCodingKeys.self)
         let wire = wireRepresentation
-        try rejectInternalMutatingClientMessage(wire.type, codingPath: encoder.codingPath)
         try container.encode(wire.type, forKey: .type)
         if let payload = wire.payload {
             try payload.encode(to: container.superEncoder(forKey: .payload))

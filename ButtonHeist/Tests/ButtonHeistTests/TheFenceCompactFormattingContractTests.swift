@@ -136,7 +136,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
         let childAction = try HeistStep.action(ActionStep(
-            command: .activate(.predicate(ElementPredicate(label: "Submit"))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))),
             expectation: WaitStep(predicate: expected, timeout: 1)
         ))
         let casePredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
@@ -207,10 +207,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 2)
         XCTAssertEqual(json["executedNodeCount"] as? Int, 2)
-        XCTAssertEqual(json["reportRowCount"] as? Int, 2)
+        XCTAssertEqual(json["outputReceiptNodeCount"] as? Int, 2)
         XCTAssertEqual(summary?["executedTopLevelStepCount"] as? Int, 2)
         XCTAssertEqual(summary?["executedNodeCount"] as? Int, 2)
-        XCTAssertEqual(summary?["reportRowCount"] as? Int, 2)
+        XCTAssertEqual(summary?["outputReceiptNodeCount"] as? Int, 2)
         XCTAssertEqual(expectations?["checked"] as? Int, 1)
         XCTAssertEqual(expectations?["met"] as? Int, 1)
         XCTAssertEqual(reportExpectations?["checked"] as? Int, 1)
@@ -280,6 +280,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         observed: "stop"
                     )
                 ),
+                HeistExecutionStepResult(
+                    path: "$.body[2]",
+                    kind: .warn,
+                    status: .skipped,
+                    durationMs: 0
+                ),
             ],
             durationMs: 2,
             abortedAtPath: "$.body[1]"
@@ -294,13 +300,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 2)
         XCTAssertEqual(json["executedNodeCount"] as? Int, 2)
-        XCTAssertEqual(json["reportRowCount"] as? Int, 2)
+        XCTAssertEqual(json["outputReceiptNodeCount"] as? Int, 3)
         XCTAssertEqual(summary["executedTopLevelStepCount"] as? Int, 2)
         XCTAssertEqual(summary["executedNodeCount"] as? Int, 2)
-        XCTAssertEqual(summary["reportRowCount"] as? Int, 2)
-        XCTAssertEqual(nodes.count, 2)
-        XCTAssertEqual(nodes.map { $0["path"] as? String }, ["$.body[0]", "$.body[1]"])
+        XCTAssertEqual(summary["outputReceiptNodeCount"] as? Int, 3)
+        XCTAssertEqual(nodes.count, 3)
+        XCTAssertEqual(nodes.map { $0["path"] as? String }, ["$.body[0]", "$.body[1]", "$.body[2]"])
+        XCTAssertEqual(nodes.map { $0["status"] as? String }, ["passed", "failed", "skipped"])
         XCTAssertTrue(compact.contains("heist: 2 top-level steps"), compact)
+        XCTAssertTrue(compact.contains("[2] warn -> skipped"), compact)
         XCTAssertFalse(compact.contains("after"), compact)
         XCTAssertTrue(
             response.humanFormatted().contains("Heist: 2 top-level step(s) executed"),
@@ -523,10 +531,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 1)
         XCTAssertEqual(json["executedNodeCount"] as? Int, 5)
-        XCTAssertEqual(json["reportRowCount"] as? Int, 1)
+        XCTAssertEqual(json["outputReceiptNodeCount"] as? Int, 5)
         XCTAssertEqual(summary["executedTopLevelStepCount"] as? Int, 1)
         XCTAssertEqual(summary["executedNodeCount"] as? Int, 5)
-        XCTAssertEqual(summary["reportRowCount"] as? Int, 1)
+        XCTAssertEqual(summary["outputReceiptNodeCount"] as? Int, 5)
         XCTAssertEqual(root["kind"] as? String, "for_each_string")
         XCTAssertNotNil(evidence["forEachString"])
         XCTAssertEqual(root["abortedAtChildPath"] as? String, failedActionPath)

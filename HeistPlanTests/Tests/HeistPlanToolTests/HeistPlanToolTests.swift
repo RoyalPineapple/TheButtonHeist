@@ -17,15 +17,16 @@ struct HeistPlanToolTests {
     }
 
     @Test
-    func `validate fails for malformed JSON`() throws {
+    func `validate rejects standalone JSON plan input`() throws {
         let temp = try TemporaryDirectory()
-        let planURL = temp.url.appendingPathComponent("malformed.json")
-        try "{".write(to: planURL, atomically: true, encoding: .utf8)
+        let planURL = temp.url.appendingPathComponent("standalone.json")
+        try writeCanonicalJSON(representativePlan(), to: planURL)
 
         let result = try runHeistPlan(["validate", planURL.path])
 
         #expect(result.exitCode != 0)
-        #expect(result.stderr.contains("Invalid heist plan"))
+        #expect(result.stderr.contains("raw `.json` HeistPlan IR"))
+        #expect(result.stderr.contains("not public run input"))
     }
 
     @Test
@@ -76,10 +77,10 @@ struct HeistPlanToolTests {
     @Test
     func `canonicalize writes sorted stable JSON`() throws {
         let temp = try TemporaryDirectory()
-        let inputURL = temp.url.appendingPathComponent("input.json")
+        let inputURL = temp.url.appendingPathComponent("input.heist")
         let outputURL = temp.url.appendingPathComponent("output.heist")
         let plan = try representativePlan()
-        try writeCanonicalJSON(plan, to: inputURL)
+        try HeistArtifactCodec.writePlan(plan, to: inputURL)
 
         let result = try runHeistPlan([
             "canonicalize",

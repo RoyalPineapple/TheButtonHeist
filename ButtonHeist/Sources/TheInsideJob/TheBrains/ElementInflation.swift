@@ -115,7 +115,7 @@ final class ElementInflation {
         var didRevealTarget = false
         switch stash.resolveTarget(target) {
         case .resolved(let screenElement):
-            let reveal = stash.revealSemanticTarget(screenElement)
+            let reveal = revealSemanticTarget(screenElement)
             if case .failed(let failure) = reveal {
                 return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: screenElement)))
             }

@@ -95,7 +95,9 @@ final class ClientMessageTests: XCTestCase {
             .getPasteboard,
             .requestScreen,
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Save"))))),
+                .action(try ActionStep(
+                    command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Save"))))
+                )),
             ]))),
         ]
 
@@ -135,7 +137,7 @@ final class ClientMessageTests: XCTestCase {
         let saveTarget = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]))
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
-                    command: .activate(saveTarget),
+                    command: .activate(.target(saveTarget)),
                     expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
                 )),
                 .wait(WaitStep(
@@ -157,14 +159,14 @@ final class ClientMessageTests: XCTestCase {
             return XCTFail("Expected heistPlan, got \(decoded)")
         }
         let decodedPlan = decodedRun.plan
-        XCTAssertEqual(decodedRun.argument, .none)
+        XCTAssertEqual(decodedRun.argument, HeistArgument.none)
         XCTAssertEqual(decodedPlan.body.count, 3)
         guard case .action(let decodedAction) = decodedPlan.body[0],
               case .activate(let decodedTarget) = decodedAction.command,
-              decodedAction.expectation?.predicate == .predicate(.changed(.screen())) else {
+              decodedAction.expectation?.predicate == AccessibilityPredicateExpr.predicate(.changed(.screen())) else {
             return XCTFail("Expected activate command with screen change predicate")
         }
-        XCTAssertEqual(decodedTarget, .target(saveTarget))
+        XCTAssertEqual(decodedTarget, ElementTargetExpr.target(saveTarget))
     }
 
     func testHeistPlanClientMessageRoundTripPreservesRootArgument() throws {
@@ -196,10 +198,10 @@ final class ClientMessageTests: XCTestCase {
     func testHeistPlanEnvelopeRoundTrip() throws {
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .typeText(TypeTextTarget(
-                    text: "hello",
-                    elementTarget: .predicate(ElementPredicate(identifier: "nameField"))
-                ))
+                command: .typeText(
+                    text: .literal("hello"),
+                    target: .predicate(ElementPredicateTemplate(identifier: .literal("nameField")))
+                )
             )),
         ])
         let envelope = RequestEnvelope(
@@ -218,13 +220,13 @@ final class ClientMessageTests: XCTestCase {
               action.expectation == nil else {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
-        XCTAssertEqual(text, .literal("hello"))
-        XCTAssertEqual(target, .target(.predicate(ElementPredicate(identifier: "nameField"))))
+        XCTAssertEqual(text, StringExpr.literal("hello"))
+        XCTAssertEqual(target, ElementTargetExpr.predicate(ElementPredicateTemplate(identifier: .literal("nameField"))))
     }
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
         let step = try ActionStep(
-            command: .activate(.predicate(ElementPredicate(label: "Save"))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Save")))),
             expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
         )
 
@@ -232,21 +234,6 @@ final class ClientMessageTests: XCTestCase {
             step.description,
             #"action(command=activate expect=wait(changed(screen_changed) timeout=10))"#
         )
-    }
-
-    func testPrimitiveMutatingClientMessagesAreNotPublicWireEncodable() throws {
-        let messages: [ClientMessage] = [
-            .activate(.predicate(ElementPredicate(label: "Save"))),
-            .typeText(TypeTextTarget(text: "hello")),
-            .setPasteboard(SetPasteboardTarget(text: "clipboard")),
-            .wait(WaitTarget(predicate: .changed(.elements), timeout: 1)),
-        ]
-
-        for message in messages {
-            XCTAssertThrowsError(try JSONEncoder().encode(message), "\(message)") { error in
-                XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
-            }
-        }
     }
 
     func testPrimitiveMutatingRequestEnvelopeJSONIsRejected() throws {
@@ -263,9 +250,26 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    func testPrimitiveMutatingClientMessageJSONIsRejected() throws {
+        let primitiveMessages = [
+            #"{"type":"activate","payload":{"label":"Save"}}"#,
+            #"{"type":"typeText","payload":{"text":"hello"}}"#,
+            #"{"type":"setPasteboard","payload":{"text":"clipboard"}}"#,
+            #"{"type":"wait","payload":{"predicate":{"type":"elements_changed"},"timeout":1}}"#,
+        ]
+
+        for json in primitiveMessages {
+            XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)), json) { error in
+                XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
+            }
+        }
+    }
+
     func testSingleActivateWireShapeIsHeistPlan() throws {
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Log In"))))),
+            .action(try ActionStep(
+                command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Log In"))))
+            )),
         ])
         let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
         let data = try JSONEncoder().encode(message)
@@ -275,7 +279,7 @@ final class ClientMessageTests: XCTestCase {
         let payload = try XCTUnwrap(object["payload"] as? [String: Any])
         let planObject = try XCTUnwrap(payload["plan"] as? [String: Any])
         let body = try XCTUnwrap(planObject["body"] as? [[String: Any]])
-        let firstStep = try XCTUnwrap(body.first)
+        let firstStep: [String: Any] = try XCTUnwrap(body.first)
         XCTAssertEqual(firstStep["type"] as? String, "action")
     }
 

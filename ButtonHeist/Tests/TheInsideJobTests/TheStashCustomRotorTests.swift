@@ -3,7 +3,7 @@ import UIKit
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 private final class RotorActivationAccessibilityElement: UIAccessibilityElement {
     private(set) var activationCount = 0
@@ -221,7 +221,7 @@ final class TheStashRotorTests: XCTestCase {
             brains.stopSemanticObservation()
             brains.tripwire.stopPulse()
         }
-        let searchResult = await brains.executeCommand(.rotor(
+        let searchResult = await brains.executeRuntimeAction(.rotor(
             RotorTarget(
                 elementTarget: .predicate(ElementPredicate(identifier: "virtual_activation_rotor_host")),
                 selection: .named("Primary Action")

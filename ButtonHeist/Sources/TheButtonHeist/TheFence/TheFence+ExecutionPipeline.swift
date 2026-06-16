@@ -1,6 +1,6 @@
 import Foundation
 
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheFence {
     struct DispatchResult {
@@ -8,8 +8,8 @@ extension TheFence {
         let durationMs: Int
     }
 
-    func executableActionMessages(for request: ParsedRequest) throws -> [ClientMessage] {
-        guard let messages = request.executableMessages else {
+    func executableRuntimeActions(for request: ParsedRequest) throws -> [RuntimeActionMessage] {
+        guard let messages = request.runtimeActionMessages else {
             throw FenceError.invalidRequest(
                 "command \"\(request.command.rawValue)\" is not an executable action command"
             )

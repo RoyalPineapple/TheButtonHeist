@@ -217,8 +217,8 @@ func mechanicalNamespaceBuildsExplicitEscapeHatches() throws {
     }
 
     #expect(heist.body == [
-        .action(try ActionStep(command: .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))))),
-        .action(try ActionStep(command: .drag(DragTarget(
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))))),
+        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
             start: .coordinate(ScreenPoint(x: 1, y: 2)),
             end: ScreenPoint(x: 3, y: 4)
         )))),
@@ -236,18 +236,11 @@ func customActionAndRotorBuildSemanticActionSteps() throws {
 
     #expect(heist.body == [
         .action(try ActionStep(
-            command: .performCustomAction(CustomActionTarget(
-                elementTarget: .label("Message"),
-                actionName: "Archive"
-            )),
+            command: .customAction(name: "Archive", target: .label("Message")),
             expectation: WaitStep(predicate: .changed(.elements), timeout: 1)
         )),
         .action(try ActionStep(
-            command: .rotor(RotorTarget(
-                elementTarget: .label("Article"),
-                selection: .named("Headings"),
-                direction: .next
-            )),
+            command: .rotor(selection: .named("Headings"), target: .label("Article"), direction: .next),
             expectationWaiver: "Navigation cursor only"
         )),
     ])
@@ -502,8 +495,8 @@ func helperFunctionsFlattenIntoParentPlan() throws {
     }
 
     #expect(heist.body == [
-        .action(try ActionStep(command: .typeText(TypeTextTarget(text: "alex@example.com", elementTarget: .identifier("email"))))),
-        .action(try ActionStep(command: .typeText(TypeTextTarget(text: "secret", elementTarget: .identifier("password"))))),
+        .action(try ActionStep(command: .typeText(text: "alex@example.com", target: .identifier("email")))),
+        .action(try ActionStep(command: .typeText(text: "secret", target: .identifier("password")))),
         .action(try ActionStep(
             command: .activate(.label("Sign In")),
             expectation: WaitStep(predicate: .present(.label("Home")), timeout: 5)

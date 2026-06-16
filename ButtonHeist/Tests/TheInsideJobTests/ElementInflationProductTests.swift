@@ -3,7 +3,7 @@ import XCTest
 
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 private extension AccessibilityTrace.Delta {
     var testCaptureEdge: AccessibilityTrace.CaptureEdge? {
@@ -47,7 +47,7 @@ final class ElementInflationProductTests: XCTestCase {
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
 
-        let result = await brains.executeCommand(.activate(
+        let result = await brains.executeRuntimeAction(.activate(
             .predicate(ElementPredicate(identifier: "semantic_checkout_submit", traits: [.button]))
         ))
 
@@ -67,7 +67,7 @@ final class ElementInflationProductTests: XCTestCase {
         defer { fixture.cleanup() }
         try seedKnownOffscreenTarget(fixture)
 
-        let result = await brains.executeCommand(.activate(
+        let result = await brains.executeRuntimeAction(.activate(
             .predicate(ElementPredicate(identifier: "nested_semantic_checkout_submit", traits: [.button]))
         ))
 
@@ -82,7 +82,7 @@ final class ElementInflationProductTests: XCTestCase {
         let fixture = try installAmbiguousActivationFixture()
         defer { fixture.cleanup() }
 
-        let result = await brains.executeCommand(.activate(
+        let result = await brains.executeRuntimeAction(.activate(
             .predicate(ElementPredicate(label: "Duplicate", traits: [.button]))
         ))
 
@@ -108,7 +108,7 @@ final class ElementInflationProductTests: XCTestCase {
             scrollContainerOverride: "missing_scroll"
         )
 
-        let result = await brains.executeCommand(.activate(
+        let result = await brains.executeRuntimeAction(.activate(
             .predicate(ElementPredicate(identifier: "unrevealable_submit", traits: [.button]))
         ))
 
@@ -161,7 +161,7 @@ final class ElementInflationProductTests: XCTestCase {
         )
         defer { fixture.cleanup() }
 
-        let result = await brains.executeCommand(.scroll(ScrollTarget(
+        let result = await brains.executeRuntimeAction(.scroll(ScrollTarget(
             direction: .down
         )))
 
@@ -194,13 +194,13 @@ final class ElementInflationProductTests: XCTestCase {
 
         if heist {
             let plan = try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(.predicate(ElementPredicate(identifier: identifier, traits: [.button]))))),
+                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(identifier: .literal(identifier), traits: [.button]))))),
             ])
             let result = await localBrains.executeHeistPlan(plan)
             return (result, fixture.target.activationCount)
         }
 
-        let result = await localBrains.executeCommand(.activate(
+        let result = await localBrains.executeRuntimeAction(.activate(
             .predicate(ElementPredicate(identifier: identifier, traits: [.button]))
         ))
         return (result, fixture.target.activationCount)

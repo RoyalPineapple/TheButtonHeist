@@ -2,7 +2,7 @@
 #if DEBUG
 import Foundation
 
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheBrains {
     func executeActionStep(
@@ -42,9 +42,9 @@ extension TheBrains {
 
         var actionResult: ActionResult?
         if let command {
-            let resolvedCommand: ClientMessage
+            let resolvedCommand: RuntimeActionMessage
             do {
-                resolvedCommand = try command.resolveForInternalDispatch(in: environment)
+                resolvedCommand = try command.resolveForRuntimeDispatch(in: environment)
             } catch {
                 let observed = "could not resolve heist action command: \(error)"
                 return HeistExecutionStepResult(

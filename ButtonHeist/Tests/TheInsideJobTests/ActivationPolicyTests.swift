@@ -180,7 +180,7 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     private func makePolicy(
-        accessibilityActivate: @escaping @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome,
+        accessibilityActivate: @escaping @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
         activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool
     ) -> ActivationPolicy {

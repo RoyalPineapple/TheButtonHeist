@@ -10,7 +10,7 @@ extension ElementInflation {
     }
 
     func semanticRevealFailureMessage(
-        _ failure: TheStash.SemanticRevealFailure,
+        _ failure: SemanticRevealFailure,
         entry: Screen.ScreenElement
     ) -> String {
         let description = Navigation.ScrollTargetDescription(entry).description

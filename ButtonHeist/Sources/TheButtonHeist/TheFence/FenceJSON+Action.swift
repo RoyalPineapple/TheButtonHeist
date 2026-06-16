@@ -207,7 +207,7 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let report: PublicHeistReport
     let executedTopLevelStepCount: Int
     let executedNodeCount: Int
-    let reportRowCount: Int
+    let outputReceiptNodeCount: Int
     let durationMs: Int
     let abortedAtPath: String?
     let expectations: PublicHeistExpectations?
@@ -218,7 +218,7 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
         self.report = PublicHeistReport(result: result)
         self.executedTopLevelStepCount = result.executedTopLevelStepCount
         self.executedNodeCount = result.executedNodeCount
-        self.reportRowCount = result.reportRows.count
+        self.outputReceiptNodeCount = result.outputReceiptNodes.count
         self.durationMs = result.durationMs
         self.abortedAtPath = result.abortedAtPath
         let checked = result.expectationsChecked
@@ -242,7 +242,7 @@ struct PublicHeistReport: Encodable {
 struct PublicHeistReportSummary: Encodable {
     let executedTopLevelStepCount: Int
     let executedNodeCount: Int
-    let reportRowCount: Int
+    let outputReceiptNodeCount: Int
     let abortedAtPath: String?
     let durationMs: Int
     let expectations: PublicHeistExpectations?
@@ -250,7 +250,7 @@ struct PublicHeistReportSummary: Encodable {
     init(result: HeistExecutionResult) {
         self.executedTopLevelStepCount = result.executedTopLevelStepCount
         self.executedNodeCount = result.executedNodeCount
-        self.reportRowCount = result.reportRows.count
+        self.outputReceiptNodeCount = result.outputReceiptNodes.count
         self.abortedAtPath = result.abortedAtPath
         self.durationMs = result.durationMs
         let checked = result.expectationsChecked

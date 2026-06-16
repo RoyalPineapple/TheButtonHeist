@@ -28,7 +28,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.reportedActionResults.map(\.method), [.activate])
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 1)
-        XCTAssertEqual(result.reportRows.count, 1)
+        XCTAssertEqual(result.outputReceiptNodes.map(\.path), ["$.body[0]"])
     }
 
     func testReportFactsUseExecutionTreeInsteadOfPlanSiblingRematch() {
@@ -74,8 +74,8 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 1)
         XCTAssertEqual(result.abortedAtPath, "$.body[0]")
-        XCTAssertEqual(result.reportRows.count, 1)
-        XCTAssertEqual(result.reportRows.map(\.path), ["$.body[0]"])
+        XCTAssertEqual(result.outputReceiptNodes.count, 1)
+        XCTAssertEqual(result.outputReceiptNodes.map(\.path), ["$.body[0]"])
         XCTAssertEqual(result.steps.map(\.reportStatus), [.failed])
         XCTAssertEqual(result.expectationsChecked, 0)
         XCTAssertEqual(result.expectationsMet, 0)
@@ -170,7 +170,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.first?.abortedAtChildPath, "$.body[0].heist.body[0]")
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 2)
-        XCTAssertEqual(result.reportRows.count, 2)
+        XCTAssertEqual(result.outputReceiptNodes.count, 2)
     }
 
     func testConditionalSelectedCaseKeepsOnlySelectedChildren() {
@@ -271,10 +271,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.forEachStringEvidence?.failureReason, "iteration 1 failed for value \"Eggs\"")
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 5)
-        XCTAssertEqual(result.reportRows.count, 1)
+        XCTAssertEqual(result.outputReceiptNodes.count, 5)
     }
 
-    func testForEachMultipleIterationsSeparatesExecutedNodesFromReportRows() {
+    func testForEachMultipleIterationsSurfacesReceiptTreeInOutputOrder() {
         let result = forEachStringSuccessResult()
         let node = result.steps[0]
 
@@ -282,7 +282,13 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.children.map(\.reportStatus), [.passed, .passed])
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 5)
-        XCTAssertEqual(result.reportRows.map(\.path), ["$.body[0]"])
+        XCTAssertEqual(result.outputReceiptNodes.map(\.path), [
+            "$.body[0]",
+            "$.body[0].for_each_string.iterations[0]",
+            "$.body[0].for_each_string.iterations[0].body[0]",
+            "$.body[0].for_each_string.iterations[1]",
+            "$.body[0].for_each_string.iterations[1].body[0]",
+        ])
     }
 
     func testWarnAndFailAreExecutedNodes() {
@@ -311,7 +317,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.warnings.map(\.message), ["Heads up"])
         XCTAssertEqual(result.executedTopLevelStepCount, 2)
         XCTAssertEqual(result.executedNodeCount, 2)
-        XCTAssertEqual(result.reportRows.count, 2)
+        XCTAssertEqual(result.outputReceiptNodes.count, 2)
     }
 
     func testInvokeNodeCarriesCapabilityFrameAndArgument() {
@@ -370,16 +376,62 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.failedStepKind, .action)
     }
 
-    func testJUnitRowsUseFlattenedReportRows() async {
+    func testJUnitUsesOutputReceiptNodes() async {
         let result = forEachStringSuccessResult()
         let rows = await Task { @ButtonHeistActor in
-            TheFence(configuration: .init()).reportStepRows(result: result)
+            TheFence(configuration: .init()).junitSteps(result: result)
         }.value
 
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 5)
-        XCTAssertEqual(rows.count, result.reportRows.count)
-        XCTAssertEqual(rows.map(\.command), ["for_each_string"])
+        XCTAssertEqual(rows.count, result.outputReceiptNodes.count)
+        XCTAssertEqual(rows.map(\.command), [
+            "for_each_string",
+            "for_each_iteration",
+            "typeText",
+            "for_each_iteration",
+            "typeText",
+        ])
+    }
+
+    func testSkippedReceiptNodesDoNotContributeRuntimeEvidence() {
+        let result = HeistExecutionResult(
+            steps: [
+                warnStep(message: "before"),
+                HeistExecutionStepResult(
+                    path: "$.body[1]",
+                    kind: .fail,
+                    status: .failed,
+                    durationMs: 1,
+                    intent: .fail(message: "stop"),
+                    failure: HeistFailureDetail(
+                        category: .explicitFailure,
+                        contract: "explicit heist failure",
+                        observed: "stop"
+                    )
+                ),
+                HeistExecutionStepResult(
+                    path: "$.body[2]",
+                    kind: .action,
+                    status: .skipped,
+                    durationMs: 0
+                ),
+            ],
+            durationMs: 2,
+            abortedAtPath: "$.body[1]"
+        )
+
+        let skipped = result.steps[2]
+        XCTAssertEqual(result.failedStepPath, "$.body[1]")
+        XCTAssertEqual(result.failedStepKind, .fail)
+        XCTAssertEqual(result.executedTopLevelStepCount, 2)
+        XCTAssertEqual(result.executedNodeCount, 2)
+        XCTAssertEqual(result.outputReceiptNodes.map(\.status), [.passed, .failed, .skipped])
+        XCTAssertNil(skipped.intent)
+        XCTAssertNil(skipped.evidence)
+        XCTAssertNil(skipped.failure)
+        XCTAssertNil(skipped.reportActionResult)
+        XCTAssertNil(skipped.reportExpectation)
     }
 
     // MARK: - Fixtures

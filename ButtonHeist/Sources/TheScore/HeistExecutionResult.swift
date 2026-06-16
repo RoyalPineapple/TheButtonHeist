@@ -37,6 +37,7 @@ public enum HeistExecutionStepKind: String, Codable, Sendable, Equatable {
 public enum HeistExecutionStepStatus: String, Codable, Sendable, Equatable {
     case passed
     case failed
+    case skipped
 }
 
 /// One node in a heist execution receipt tree.

@@ -1,8 +1,8 @@
 import TheScore
 
 // The JUnit report is an external linear format derived from the heist execution
-// tree. The execution tree stays the product model; these rows are output-only
-// and never drive runtime failure logic.
+// tree. The execution tree stays the product model; these XML entries are
+// output-only and never drive runtime failure logic.
 
 extension TheFence {
 
@@ -16,21 +16,21 @@ extension TheFence {
         heistName: String,
         totalTimeSeconds: Double
     ) -> HeistJUnitReport {
-        let stepRows = reportStepRows(result: result)
+        let steps = junitSteps(result: result)
         return HeistJUnitReport(
             heistName: heistName,
             app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
-            reportRowCount: stepRows.count,
+            receiptNodeCount: steps.count,
             totalTimeSeconds: totalTimeSeconds,
-            steps: stepRows
+            steps: steps
         )
     }
 
-    // MARK: - Report Rows
+    // MARK: - JUnit Steps
 
-    /// Output-only step rows for the JUnit report, flattened from the execution
-    /// tree in execution order.
-    func reportStepRows(result: HeistExecutionResult) -> [HeistJUnitReport.StepResult] {
+    /// Output-only step entries for the JUnit report, walked from the execution
+    /// receipt tree in execution order.
+    func junitSteps(result: HeistExecutionResult) -> [HeistJUnitReport.StepResult] {
         reportOutcomes(result: result).map(\.row)
     }
 
@@ -39,11 +39,11 @@ extension TheFence {
     private func reportOutcomes(
         result: HeistExecutionResult
     ) -> [(row: HeistJUnitReport.StepResult, failure: ReportFailure?)] {
-        result.reportRows.enumerated().map { index, step in
+        result.outputReceiptNodes.enumerated().map { index, step in
             let failure = reportFailure(for: step)
             let outcome: HeistJUnitReport.Outcome = failure.map {
                 .failed(message: $0.errorMessage, errorKind: Self.reportErrorKind($0))
-            } ?? .passed
+            } ?? (step.status == .skipped ? .skipped : .passed)
             let row = HeistJUnitReport.StepResult(
                 index: index,
                 command: step.reportCommandName ?? step.reportStepName,

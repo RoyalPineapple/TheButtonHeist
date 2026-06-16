@@ -7,8 +7,8 @@ final class HeistJUnitReportTests: XCTestCase {
 
     func testAllPassedReport() {
         let report = makeReport(outcomes: [.passed, .passed, .passed])
-        XCTAssertEqual(report.passedReportRowCount, 3)
-        XCTAssertEqual(report.failedReportRowCount, 0)
+        XCTAssertEqual(report.passedReceiptNodeCount, 3)
+        XCTAssertEqual(report.failedReceiptNodeCount, 0)
         XCTAssertTrue(report.allPassed)
     }
 
@@ -16,22 +16,31 @@ final class HeistJUnitReportTests: XCTestCase {
         let report = makeReport(outcomes: [
             .passed,
             .failed(message: "element not found", errorKind: .action(.elementNotFound)),
+            .skipped,
         ])
-        XCTAssertEqual(report.passedReportRowCount, 1)
-        XCTAssertEqual(report.failedReportRowCount, 1)
+        XCTAssertEqual(report.passedReceiptNodeCount, 1)
+        XCTAssertEqual(report.failedReceiptNodeCount, 1)
         XCTAssertFalse(report.allPassed)
+    }
+
+    func testSkippedNodesAreNotFailures() {
+        let report = makeReport(outcomes: [.passed, .skipped])
+
+        XCTAssertEqual(report.passedReceiptNodeCount, 1)
+        XCTAssertEqual(report.failedReceiptNodeCount, 0)
+        XCTAssertTrue(report.allPassed)
     }
 
     func testEmptyReport() {
         let report = HeistJUnitReport(
             heistName: "empty",
             app: "com.test.app",
-            reportRowCount: 0,
+            receiptNodeCount: 0,
             totalTimeSeconds: 0,
             steps: []
         )
-        XCTAssertEqual(report.passedReportRowCount, 0)
-        XCTAssertEqual(report.failedReportRowCount, 0)
+        XCTAssertEqual(report.passedReceiptNodeCount, 0)
+        XCTAssertEqual(report.failedReceiptNodeCount, 0)
         XCTAssertTrue(report.allPassed)
     }
 
@@ -130,7 +139,7 @@ final class HeistJUnitReportTests: XCTestCase {
                 .passed,
                 .failed(message: "element not found", errorKind: .action(.elementNotFound)),
             ],
-            reportRowCount: 10
+            receiptNodeCount: 10
         )
         let xml = report.junitXML()
 
@@ -138,7 +147,7 @@ final class HeistJUnitReportTests: XCTestCase {
         assertContains(xml, "failures=\"1\"")
         assertContains(xml, "<failure message=\"element not found\"")
         assertContains(xml, "type=\"elementNotFound\"")
-        assertContains(xml, "Completed 1/10 report row(s) before failure.")
+        assertContains(xml, "Completed 1/10 receipt node(s) before failure.")
         assertContains(xml, "step: [1] activate")
     }
 
@@ -155,7 +164,7 @@ final class HeistJUnitReportTests: XCTestCase {
         let report = HeistJUnitReport(
             heistName: "empty",
             app: "com.test.app",
-            reportRowCount: 0,
+            receiptNodeCount: 0,
             totalTimeSeconds: 0,
             steps: []
         )
@@ -182,7 +191,7 @@ final class HeistJUnitReportTests: XCTestCase {
         let report = HeistJUnitReport(
             heistName: "escape-test",
             app: "com.test.app",
-            reportRowCount: 5,
+            receiptNodeCount: 5,
             totalTimeSeconds: 0.1,
             steps: [step]
         )
@@ -200,7 +209,7 @@ final class HeistJUnitReportTests: XCTestCase {
         let report = HeistJUnitReport(
             heistName: "timing",
             app: "com.test.app",
-            reportRowCount: 1,
+            receiptNodeCount: 1,
             totalTimeSeconds: 1.234,
             steps: [
                 HeistJUnitReport.StepResult(
@@ -227,13 +236,13 @@ final class HeistJUnitReportTests: XCTestCase {
         let report = HeistJUnitReport(
             heistName: "target-test",
             app: "com.test.app",
-            reportRowCount: 10,
+            receiptNodeCount: 10,
             totalTimeSeconds: 0.5,
             steps: [step]
         )
         let xml = report.junitXML()
 
-        assertContains(xml, "Completed 0/10 report row(s) before failure.")
+        assertContains(xml, "Completed 0/10 receipt node(s) before failure.")
         assertContains(xml, "step: [0] swipe")
         assertContains(xml, "label=&quot;List&quot;")
         assertContains(xml, "identifier=&quot;main-list&quot;")
@@ -261,7 +270,7 @@ final class HeistJUnitReportTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeReport(
-        outcomes: [HeistJUnitReport.Outcome], reportRowCount: Int? = nil
+        outcomes: [HeistJUnitReport.Outcome], receiptNodeCount: Int? = nil
     ) -> HeistJUnitReport {
         let steps = outcomes.enumerated().map { index, outcome in
             HeistJUnitReport.StepResult(
@@ -275,7 +284,7 @@ final class HeistJUnitReportTests: XCTestCase {
         return HeistJUnitReport(
             heistName: "test-heist",
             app: "com.test.app",
-            reportRowCount: reportRowCount ?? outcomes.count,
+            receiptNodeCount: receiptNodeCount ?? outcomes.count,
             totalTimeSeconds: steps.reduce(0) { $0 + $1.timeSeconds },
             steps: steps
         )

@@ -19,10 +19,10 @@ struct HeistPlanTool: AsyncParsableCommand {
 struct Validate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "validate",
-        abstract: "Validate a .heist package artifact or .json HeistPlan IR."
+        abstract: "Validate a generated .heist package artifact."
     )
 
-    @Argument(help: "Path to a .heist package artifact or .json HeistPlan IR.")
+    @Argument(help: "Path to a generated .heist package artifact.")
     var plan: String
 
     func run() throws {
@@ -36,7 +36,7 @@ struct RenderSwift: ParsableCommand {
         abstract: "Render a heist plan as canonical Swift DSL."
     )
 
-    @Argument(help: "Path to a .heist package artifact or .json HeistPlan IR.")
+    @Argument(help: "Path to a generated .heist package artifact.")
     var plan: String
 
     func run() throws {
@@ -48,13 +48,16 @@ struct RenderSwift: ParsableCommand {
 struct Canonicalize: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "canonicalize",
-        abstract: "Re-encode a heist plan as stable canonical JSON or a .heist package."
+        abstract: "Re-encode a .heist package artifact."
     )
 
-    @Argument(help: "Path to a .heist package artifact or .json HeistPlan IR.")
+    @Argument(help: "Path to a generated .heist package artifact.")
     var plan: String
 
-    @Option(name: .long, help: "Path to write .heist package or .json IR. Defaults to JSON stdout.")
+    @Option(
+        name: .long,
+        help: "Path to write a generated .heist package. Without --output, prints internal plan.json to stdout for debugging."
+    )
     var output: String?
 
     func run() throws {
@@ -66,7 +69,7 @@ struct Canonicalize: ParsableCommand {
 struct Compile: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "compile",
-        abstract: "Compile Swift DSL source into a .heist package or .json HeistPlan IR."
+        abstract: "Compile Swift DSL source into a generated .heist package."
     )
 
     @Argument(help: "Path to a Swift source file that imports ThePlans.")
@@ -75,7 +78,7 @@ struct Compile: AsyncParsableCommand {
     @Option(name: .long, help: "Entry symbol returning or containing a HeistPlan.")
     var entry: String = "heist"
 
-    @Option(name: .long, help: "Path to write .heist package or .json HeistPlan IR.")
+    @Option(name: .long, help: "Path to write a generated .heist package.")
     var output: String
 
     func validate() throws {
@@ -123,6 +126,11 @@ enum HeistPlanIO {
     static func writeCanonicalJSON(for plan: HeistPlan, to path: String?) throws {
         if let path {
             let url = URL(fileURLWithPath: path)
+            guard url.pathExtension.lowercased() == "heist" else {
+                throw ValidationError(
+                    "heist-plan output must be a generated .heist package; raw .json HeistPlan IR is internal artifact content."
+                )
+            }
             do {
                 try HeistArtifactCodec.writePlan(plan, to: url)
             } catch let error as HeistArtifactCodecError {

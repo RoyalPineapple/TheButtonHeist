@@ -236,16 +236,13 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
 @Test
 func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .performCustomAction(CustomActionTarget(
-            elementTarget: .predicate(.label("Message")),
-            actionName: "Archive"
-        )))),
-        .action(try ActionStep(command: .rotor(RotorTarget(
-            elementTarget: .predicate(.label("Article")),
+        .action(try ActionStep(command: .customAction(name: "Archive", target: .predicate(.label("Message"))))),
+        .action(try ActionStep(command: .rotor(
             selection: .named("Headings"),
+            target: .predicate(.label("Article")),
             direction: .next
-        )))),
-        .action(try ActionStep(command: .oneFingerTap(TapTarget(
+        ))),
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(
             selection: .coordinate(ScreenPoint(x: 12, y: 34))
         )))),
     ])

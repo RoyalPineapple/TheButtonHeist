@@ -2,7 +2,7 @@
 import XCTest
 
 @testable import TheInsideJob
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
 final class RuntimeLeaseObservationTests: XCTestCase {
@@ -61,7 +61,7 @@ final class RuntimeLeaseObservationTests: XCTestCase {
     }
 
     func testInactiveCommandFailsWithoutStartingObservation() async {
-        let result = await job.brains.executeCommand(.activate(.predicate(ElementPredicate(label: "Save"))))
+        let result = await job.brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(label: "Save"))))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.errorKind, .actionFailed)

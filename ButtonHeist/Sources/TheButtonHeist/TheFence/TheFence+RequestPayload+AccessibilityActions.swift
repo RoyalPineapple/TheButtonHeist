@@ -1,4 +1,4 @@
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheFence {
 
@@ -12,14 +12,14 @@ extension TheFence {
         let actionName = try input.optionalNonEmptyString("action")
         return appInteractionDispatch(
             SemanticActionCommand.activate,
-            Self.accessibilityClientMessages(target: target, actionName: actionName)
+            Self.accessibilityRuntimeActions(target: target, actionName: actionName)
         )
     }
 
-    static func accessibilityClientMessages(
+    static func accessibilityRuntimeActions(
         target: ElementTarget,
         actionName: String?
-    ) -> [ClientMessage] {
+    ) -> [RuntimeActionMessage] {
         guard let actionName else {
             return [.activate(target)]
         }

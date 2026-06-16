@@ -1,7 +1,7 @@
 import Foundation
 
 import ThePlans
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheFence {
 
@@ -57,7 +57,7 @@ extension TheFence {
     /// action steps carrying the request's `expect` predicate on the final
     /// step. Any non-heist-valid message falls back to the direct path.
     func singleStepHeistPlan(for parsed: ParsedRequest) throws -> HeistPlan? {
-        guard let messages = parsed.executableMessages, !messages.isEmpty else { return nil }
+        guard let messages = parsed.runtimeActionMessages, !messages.isEmpty else { return nil }
 
         if messages.count == 1, case .wait(let target) = messages[0] {
             return try HeistPlan(body: [.wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))])
@@ -69,14 +69,7 @@ extension TheFence {
 
         var steps: [HeistStep] = []
         for (index, message) in messages.enumerated() {
-            let actionCommand: HeistActionCommand
-            do {
-                actionCommand = try HeistActionCommand(internalDispatchMessage: message)
-            } catch {
-                // Not representable as a heist action (e.g. a pure read) —
-                // use the direct path.
-                return nil
-            }
+            let actionCommand = try HeistActionCommand(runtimeActionMessage: message)
             // Any executable command runs through the one pipeline, including
             // viewport commands. Heist execution no longer enforces durability
             // (that is an authoring/DSL concern), so a single command and a
@@ -92,7 +85,7 @@ extension TheFence {
     }
 
     private func singleStepTimeout(for parsed: ParsedRequest) -> TimeInterval {
-        let messages = parsed.executableMessages ?? []
+        let messages = parsed.runtimeActionMessages ?? []
         let actionBudget: TimeInterval
         switch messages.first {
         case .wait(let target):

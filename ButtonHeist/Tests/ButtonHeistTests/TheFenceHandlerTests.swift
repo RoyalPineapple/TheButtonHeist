@@ -2,7 +2,7 @@ import XCTest
 import Network
 @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import ThePlans
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 private extension AccessibilityTrace.Delta {
     var testKind: String {
@@ -392,7 +392,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 ])
             ), "path + \(field) must fail") { error in
                 XCTAssertTrue(
-                    String(describing: error).contains("run_heist accepts exactly one plan source"),
+                    String(describing: error).contains("raw JSON HeistPlan IR field"),
                     "path + \(field): \(error)"
                 )
             }
@@ -411,13 +411,12 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertTrue(String(describing: error).contains("run_heist accepts exactly one plan source"), "\(error)")
         }
 
-        let plan = try HeistPlan(body: [.warn(WarnStep(message: "x"))])
-        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        var arguments = try Self.inlineArguments(for: try HeistPlan(body: [.warn(WarnStep(message: "x"))])).argumentValues
         arguments["plan"] = .string("HeistPlan { Activate(.label(\"Pay\")) }")
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: arguments)
         )) { error in
-            XCTAssertTrue(String(describing: error).contains("run_heist accepts exactly one plan source"), "\(error)")
+            XCTAssertTrue(String(describing: error).contains("raw JSON HeistPlan IR field"), "\(error)")
         }
     }
 
@@ -565,7 +564,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertThrowsError(try fence.decodeRunHeistRequest(
                 TheFence.CommandArgumentEnvelope(values: ["path": .string(path)])
             )) { error in
-                XCTAssertTrue(String(describing: error).contains(".heist package artifact"), "\(path): \(error)")
+                XCTAssertTrue(String(describing: error).contains("generated `.heist` package artifact"), "\(path): \(error)")
             }
         }
         // Empty path fails.
@@ -589,7 +588,7 @@ final class TheFenceHandlerTests: XCTestCase {
             .invoke(HeistInvocationStep(path: ["addToCart"], argument: .string(.literal("Milk")))),
         ])
 
-        let request = try fence.decodeRunHeistRequest(try Self.inlineArguments(for: plan))
+        let request = try fence.decodeRunHeistRequest(try Self.planSourceArguments(for: plan))
         XCTAssertEqual(request.plan, plan)
     }
 
@@ -606,7 +605,7 @@ final class TheFenceHandlerTests: XCTestCase {
             body: [.warn(WarnStep(message: "namespace"))]
         )
 
-        let request = try fence.decodeRunHeistRequest(try Self.inlineArguments(for: plan))
+        let request = try fence.decodeRunHeistRequest(try Self.planSourceArguments(for: plan))
         XCTAssertEqual(request.plan, plan)
     }
 
@@ -621,7 +620,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 target: .target(.predicate(.label("Search")))
             )))]
         )
-        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).argumentValues
         arguments["argument"] = .object([
             "type": .string("string"),
             "value": .string("milk"),
@@ -644,7 +643,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 target: .target(.predicate(.label("Search")))
             )))]
         )
-        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).argumentValues
         arguments["argument"] = .object([
             "type": .string("string"),
             "values": .array([.string("milk"), .string("eggs")]),
@@ -663,7 +662,7 @@ final class TheFenceHandlerTests: XCTestCase {
             parameter: .elementTarget(name: "row"),
             body: [.action(try ActionStep(command: .activate(.ref("row"))))]
         )
-        var arguments = try Self.inlineArguments(for: plan).argumentValues
+        var arguments = try Self.planSourceArguments(for: plan).argumentValues
         arguments["argument"] = .object([
             "type": .string("element_target"),
             "target": .object(["label": .string("Row 1")]),
@@ -687,25 +686,29 @@ final class TheFenceHandlerTests: XCTestCase {
             )))]
         )
 
-        XCTAssertThrowsError(try fence.decodeRunHeistRequest(try Self.inlineArguments(for: plan))) { error in
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(try Self.planSourceArguments(for: plan))) { error in
             XCTAssertTrue(String(describing: error).contains("run_heist argument does not match root heist parameter"))
         }
     }
 
     @ButtonHeistActor
-    func testRunHeistRejectsUnsupportedInlineVersionAndEmptyPlan() async throws {
+    func testRunHeistRejectsRawJSONIRFieldsInsteadOfDecodingThem() async throws {
         let fence = TheFence(configuration: .init())
-        // Unsupported plan version fails.
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: [
                 "version": .int(999),
                 "body": .array([.object(["type": .string("warn"), "warn": .object(["message": .string("x")])])]),
             ])
-        ))
-        // Empty inline plan (no body, no definitions) fails.
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("raw JSON HeistPlan IR field"), "\(error)")
+            XCTAssertTrue(String(describing: error).contains("ButtonHeist DSL"), "\(error)")
+            XCTAssertTrue(String(describing: error).contains(".heist"), "\(error)")
+        }
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: ["version": .int(1), "body": .array([])])
-        ))
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("raw JSON HeistPlan IR field"), "\(error)")
+        }
     }
 
     @ButtonHeistActor
@@ -2361,7 +2364,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testWaitChangedRequiresTraceDerivedExpectationMatch() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { message in
+        mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2390,7 +2393,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testWaitChangedTimeoutDoesNotClaimExpectationMet() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { message in
+        mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2447,7 +2450,7 @@ final class TheFenceHandlerTests: XCTestCase {
             newInterface: interface
         )))
 
-        mockConn.autoResponse = { message in
+        mockConn.runtimeActionResponse = { message in
             switch message {
             case .activate:
                 return .actionResult(ActionResult(
@@ -2619,7 +2622,7 @@ final class TheFenceHandlerTests: XCTestCase {
             element: ElementPredicate(identifier: "counter"), property: .value, to: "5"
         )))
         let sourceStep = HeistStep.action(try ActionStep(
-            command: .activate(.predicate(ElementPredicate(identifier: "counter"))),
+            command: .activate(.predicate(ElementPredicateTemplate(identifier: .literal("counter")))),
             expectation: WaitStep(predicate: expectation, timeout: 10)
         ))
         let plan = try HeistPlan(body: [sourceStep])

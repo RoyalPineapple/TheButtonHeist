@@ -1,4 +1,4 @@
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheFence {
 

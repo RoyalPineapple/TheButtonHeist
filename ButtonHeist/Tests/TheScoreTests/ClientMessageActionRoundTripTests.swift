@@ -1,6 +1,6 @@
 import XCTest
 import CoreGraphics
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 /// Message-level coverage for mutating behavior now proves those actions are
 /// carried by `ClientMessage.heistPlan`. Individual target payloads keep their
@@ -10,7 +10,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testHeistPlanCarriesSemanticActionCommands() throws {
         let target = ElementTarget.predicate(ElementPredicate(identifier: "btn"))
         let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .activate(target))),
+            .action(try ActionStep(command: .activate(.target(target)))),
             .action(try ActionStep(command: .rotor(
                 selection: .named("Errors"),
                 target: .target(target),
@@ -27,7 +27,8 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
 
         XCTAssertEqual(commands.count, 4)
-        XCTAssertEqual(commands.map(\.wireType), [.activate, .rotor, .editAction, .resignFirstResponder])
+        let expectedTypes: [ClientWireMessageType] = [.activate, .rotor, .editAction, .resignFirstResponder]
+        XCTAssertEqual(commands.map(\.runtimeActionType), expectedTypes)
     }
 
     func testHeistPlanCarriesGestureCommands() throws {
@@ -52,7 +53,8 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             return action.command
         }
 
-        XCTAssertEqual(commands.map(\.wireType), [.oneFingerTap, .longPress, .swipe, .drag])
+        let expectedTypes: [ClientWireMessageType] = [.oneFingerTap, .longPress, .swipe, .drag]
+        XCTAssertEqual(commands.map(\.runtimeActionType), expectedTypes)
     }
 
     func testHeistPlanCarriesWaitStep() throws {
@@ -69,18 +71,17 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         XCTAssertEqual(wait.timeout, 2)
     }
 
-    func testPrimitiveActionClientMessageEncodingIsRejected() throws {
-        let target = ElementTarget.predicate(ElementPredicate(identifier: "btn"))
-        let primitiveMessages: [ClientMessage] = [
-            .activate(target),
-            .rotor(RotorTarget(elementTarget: target, selection: .named("Errors"), direction: .previous)),
-            .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 100, y: 200)))),
-            .editAction(EditActionTarget(action: .paste)),
-            .resignFirstResponder,
+    func testPrimitiveActionClientMessageJSONIsRejected() throws {
+        let primitiveMessages = [
+            #"{"type":"activate","payload":{"identifier":"btn"}}"#,
+            #"{"type":"rotor","payload":{"elementTarget":{"identifier":"btn"},"selection":{"type":"named","name":"Errors"},"direction":"previous"}}"#,
+            #"{"type":"oneFingerTap","payload":{"point":{"x":100,"y":200}}}"#,
+            #"{"type":"editAction","payload":{"action":"paste"}}"#,
+            #"{"type":"resignFirstResponder"}"#,
         ]
 
-        for message in primitiveMessages {
-            XCTAssertThrowsError(try JSONEncoder().encode(message), "\(message)") { error in
+        for json in primitiveMessages {
+            XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)), json) { error in
                 XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
             }
         }

@@ -1,4 +1,4 @@
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheFence {
 
@@ -8,7 +8,9 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        clientActionDispatch([.getPasteboard])
+        DecodedRequestDispatch { fence, _ in
+            try await fence.handleGetPasteboard()
+        }
     }
 
     static func decodeDismissKeyboardRequest(
