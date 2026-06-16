@@ -2,7 +2,7 @@ import XCTest
 import Network
 @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import ThePlans
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 private extension AccessibilityTrace.Delta {
     var testKind: String {

@@ -1,7 +1,7 @@
 import Foundation
 
 import ThePlans
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheFence {
 

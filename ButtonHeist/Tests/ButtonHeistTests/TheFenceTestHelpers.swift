@@ -2,7 +2,7 @@ import XCTest
 import Network
 import AccessibilitySnapshotModel
 @testable import ButtonHeist
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 // Shared fixtures and helpers for TheFence test classes. Keeps tests focused
 // on behavior rather than repeating the connected-fence construction dance.

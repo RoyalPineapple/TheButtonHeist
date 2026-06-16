@@ -6,7 +6,7 @@ import ThePlans
 /// Public mutation requests cross the device wire as `ClientMessage.heistPlan`.
 /// Once a plan is inside the runtime, action steps resolve to
 /// `RuntimeActionMessage` for primitive dispatch.
-public extension HeistActionCommand {
+@_spi(ButtonHeistInternals) public extension HeistActionCommand {
     init(runtimeActionMessage: RuntimeActionMessage) throws {
         switch runtimeActionMessage {
         case .activate(let target):

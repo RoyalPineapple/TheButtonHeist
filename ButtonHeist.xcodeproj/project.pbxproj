@@ -341,6 +341,7 @@
 		B235A4ED23DC82DAE1D0FE3C /* PredicateWait.swift in Sources */ = {isa = PBXBuildFile; fileRef = B047179ED19A24CACC65455E /* PredicateWait.swift */; };
 		B258DBBB2638C48F3851B482 /* DiscoveredDevice+Reachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AD6EBC60C26693773B6C9E /* DiscoveredDevice+Reachability.swift */; };
 		B259D7CF0E8D1620C5E8746B /* TargetConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D658B41B7C2302B143935342 /* TargetConfig.swift */; };
+		B264DFEF58E1CDA1709D2D53 /* RuntimeActionMessageSPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B31D15C76F763BBDD4D6A1 /* RuntimeActionMessageSPITests.swift */; };
 		B315615DC3E1B70B46B4BDC5 /* Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B14C4160E5DFB62BCCF0A84 /* Actions.swift */; };
 		B3A7E0DD9341201CC97ED43F /* TheFence+PendingRequestTrackers.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA752E01A8136738F8789715 /* TheFence+PendingRequestTrackers.swift */; };
 		B3CE3A23E2692549AA000FCB /* SynthesisDeterminismTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78915572C3F6D6F56146906D /* SynthesisDeterminismTests.swift */; };
@@ -1091,6 +1092,7 @@
 		D224918A5B322499545A93F8 /* AccessibilityTrace+Diff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityTrace+Diff.swift"; sourceTree = "<group>"; };
 		D355B25F35519BEF35AD6E72 /* HandoffConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffConnectionState.swift; sourceTree = "<group>"; };
 		D3634255747D1400EBC0ED4D /* ClientAuthenticationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientAuthenticationState.swift; sourceTree = "<group>"; };
+		D3B31D15C76F763BBDD4D6A1 /* RuntimeActionMessageSPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeActionMessageSPITests.swift; sourceTree = "<group>"; };
 		D3D80C6C54DFCB333D425D68 /* ServerSendOutcome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSendOutcome.swift; sourceTree = "<group>"; };
 		D43D24A6682C61D9E2826547 /* DeviceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceProtocols.swift; sourceTree = "<group>"; };
 		D49CBF2F9D6B021BBD2C282F /* IdAssignmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdAssignmentTests.swift; sourceTree = "<group>"; };
@@ -2029,6 +2031,7 @@
 				58E7E75DF4223ED8E9EB7ABB /* InterfaceComputedTests.swift */,
 				DBFD1ED73E1E76F4C0DFCE1F /* InterfaceTestHelpers.swift */,
 				D7889EB069C9C15C2F731923 /* MinimumPredicateSelectorTests.swift */,
+				D3B31D15C76F763BBDD4D6A1 /* RuntimeActionMessageSPITests.swift */,
 				A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */,
 				9BE246859FDEDCD3B4C5F5E9 /* ScrollToVisibleTests.swift */,
 				1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */,
@@ -2482,6 +2485,7 @@
 				9C492C7482821091B1DA8D81 /* InterfaceComputedTests.swift in Sources */,
 				D4DD25AEB8F75449440CABCB /* InterfaceTestHelpers.swift in Sources */,
 				D282F98B2101F1E5BE2A3677 /* MinimumPredicateSelectorTests.swift in Sources */,
+				B264DFEF58E1CDA1709D2D53 /* RuntimeActionMessageSPITests.swift in Sources */,
 				1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */,
 				00AD4580D4093B2C32B02A43 /* ScrollToVisibleTests.swift in Sources */,
 				FC2DD3D03C11B65E2333F63F /* ServerInfoTests.swift in Sources */,

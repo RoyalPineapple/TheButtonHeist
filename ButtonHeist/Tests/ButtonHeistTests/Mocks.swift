@@ -1,7 +1,7 @@
 import Network
 import XCTest
 @testable import ButtonHeist
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 // MARK: - Test Helpers
 

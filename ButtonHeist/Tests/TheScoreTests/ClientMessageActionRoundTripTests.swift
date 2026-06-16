@@ -1,6 +1,6 @@
 import XCTest
 import CoreGraphics
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 /// Message-level coverage for mutating behavior now proves those actions are
 /// carried by `ClientMessage.heistPlan`. Individual target payloads keep their

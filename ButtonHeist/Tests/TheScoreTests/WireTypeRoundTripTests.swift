@@ -1,6 +1,6 @@
 import XCTest
 import AccessibilitySnapshotModel
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 // MARK: - Wire Type Codable Round-Trip Tests
 

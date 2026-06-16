@@ -2,7 +2,7 @@
 #if DEBUG
 import Foundation
 
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheBrains {
     func executeActionStep(

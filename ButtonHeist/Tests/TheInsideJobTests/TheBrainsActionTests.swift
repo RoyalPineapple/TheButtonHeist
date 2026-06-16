@@ -3,7 +3,7 @@ import XCTest
 @testable import AccessibilitySnapshotParser
 @_spi(ButtonHeistInternals) @testable import ThePlans
 @testable import TheInsideJob
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 private final class ActionActivationOverrideView: UIView {
     private(set) var activationCount = 0
