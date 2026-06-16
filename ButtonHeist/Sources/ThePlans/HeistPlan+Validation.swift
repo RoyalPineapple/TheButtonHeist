@@ -1,5 +1,8 @@
 import Foundation
 
+// AuthoringLint owns quality guidance for durable authored tests. Findings do
+// not decide whether a plan can execute; RuntimeSafety is enforced separately
+// when `HeistPlan` values are created.
 public enum HeistPlanLintMode: Sendable, Equatable {
     case compositionQuality
     case strictTest
@@ -50,7 +53,7 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
     }
 
     mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
-        switch action.command.validationKind {
+        switch action.command.authoringLintKind {
         case .semantic:
             if action.expectation == nil, action.expectationWaiver == nil, mode.requiresExpectationFinding {
                 findings.append(missingExpectationFinding(path: context.path))
@@ -151,12 +154,12 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
 
     private func isViewportSetup(_ step: HeistStep) -> Bool {
         guard case .action(let action) = step else { return false }
-        return action.command.validationKind == .viewport
+        return action.command.authoringLintKind == .viewport
     }
 
 }
 
-private enum HeistCommandValidationKind: Equatable {
+private enum HeistCommandAuthoringLintKind: Equatable {
     case semantic
     case typeTextWithoutTarget
     case mechanical
@@ -165,7 +168,7 @@ private enum HeistCommandValidationKind: Equatable {
 }
 
 private extension HeistActionCommand {
-    var validationKind: HeistCommandValidationKind {
+    var authoringLintKind: HeistCommandAuthoringLintKind {
         switch self {
         case .activate, .increment, .decrement, .customAction, .rotor:
             return .semantic
@@ -184,7 +187,7 @@ private extension HeistActionCommand {
 private extension HeistStep {
     var isSemanticActionStep: Bool {
         guard case .action(let action) = self else { return false }
-        return action.command.validationKind == .semantic
+        return action.command.authoringLintKind == .semantic
     }
 }
 

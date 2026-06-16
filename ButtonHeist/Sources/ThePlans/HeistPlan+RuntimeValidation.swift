@@ -1,11 +1,16 @@
 import Foundation
 
-@_spi(ButtonHeistInternals) public struct UnvalidatedHeistPlan: Codable, Sendable, Equatable {
+// Admission owns the externally submitted plan shape. Decoding this type proves
+// only that source/artifact JSON can be loaded as plan IR; RuntimeSafety below
+// is the separate executable-plan boundary.
+@_spi(ButtonHeistInternals) public typealias UnvalidatedHeistPlan = HeistPlanAdmissionCandidate
+
+@_spi(ButtonHeistInternals) public struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
     public let version: Int
     public let name: String?
     public let parameter: HeistParameter
-    public let definitions: [UnvalidatedHeistPlan]
-    public let body: [UnvalidatedHeistStep]
+    public let definitions: [HeistPlanAdmissionCandidate]
+    public let body: [HeistStepAdmissionCandidate]
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case version, name, parameter, definitions, body
@@ -15,22 +20,22 @@ import Foundation
         version: Int = HeistPlan.currentVersion,
         name: String? = nil,
         parameter: HeistParameter = .none,
-        definitions: [UnvalidatedHeistPlan] = [],
+        definitions: [HeistPlanAdmissionCandidate] = [],
         body: [HeistStep]
     ) {
         self.version = version
         self.name = name
         self.parameter = parameter
         self.definitions = definitions
-        self.body = body.map(UnvalidatedHeistStep.init)
+        self.body = body.map(HeistStepAdmissionCandidate.init)
     }
 
     init(_ plan: HeistPlan) {
         version = plan.version
         name = plan.name
         parameter = plan.parameter
-        definitions = plan.definitions.map(UnvalidatedHeistPlan.init)
-        body = plan.body.map(UnvalidatedHeistStep.init)
+        definitions = plan.definitions.map(HeistPlanAdmissionCandidate.init)
+        body = plan.body.map(HeistStepAdmissionCandidate.init)
     }
 
     public init(from decoder: Decoder) throws {
@@ -48,8 +53,8 @@ import Foundation
         version = decodedVersion
         name = try container.decodeIfPresent(String.self, forKey: .name)
         parameter = try container.decodeIfPresent(HeistParameter.self, forKey: .parameter) ?? .none
-        definitions = try container.decodeIfPresent([UnvalidatedHeistPlan].self, forKey: .definitions) ?? []
-        body = try container.decode([UnvalidatedHeistStep].self, forKey: .body)
+        definitions = try container.decodeIfPresent([HeistPlanAdmissionCandidate].self, forKey: .definitions) ?? []
+        body = try container.decode([HeistStepAdmissionCandidate].self, forKey: .body)
         guard !body.isEmpty || !definitions.isEmpty else {
             throw DecodingError.dataCorruptedError(
                 forKey: .body,
@@ -75,22 +80,34 @@ import Foundation
     public func validatedForRuntime(
         limits: HeistPlanRuntimeValidationLimits = .standard
     ) throws -> HeistPlan {
-        var validator = HeistPlanRuntimeValidator(limits: limits)
+        try validatedForRuntimeSafety(limits: limits)
+    }
+
+    public func validatedForRuntimeSafety(
+        limits: HeistPlanRuntimeSafetyLimits = .standard
+    ) throws -> HeistPlan {
+        var validator = HeistPlanRuntimeSafetyValidator(limits: limits)
         return try validator.validate(self)
     }
 
     func uncheckedPlanForRuntimeValidation() -> HeistPlan {
+        uncheckedPlanForRuntimeSafetyValidation()
+    }
+
+    func uncheckedPlanForRuntimeSafetyValidation() -> HeistPlan {
         HeistPlan(
             runtimeValidatedVersion: version,
             name: name,
             parameter: parameter,
-            definitions: definitions.map { $0.uncheckedPlanForRuntimeValidation() },
-            body: body.map(\.uncheckedStepForRuntimeValidation)
+            definitions: definitions.map { $0.uncheckedPlanForRuntimeSafetyValidation() },
+            body: body.map(\.uncheckedStepForRuntimeSafetyValidation)
         )
     }
 }
 
-@_spi(ButtonHeistInternals) public enum UnvalidatedHeistStep: Codable, Sendable, Equatable {
+@_spi(ButtonHeistInternals) public typealias UnvalidatedHeistStep = HeistStepAdmissionCandidate
+
+@_spi(ButtonHeistInternals) public enum HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
     case action(ActionStep)
     case wait(WaitStep)
     case conditional(ConditionalStep)
@@ -99,7 +116,7 @@ import Foundation
     case forEachString(ForEachStringStep)
     case warn(WarnStep)
     case fail(FailStep)
-    indirect case heist(UnvalidatedHeistPlan)
+    indirect case heist(HeistPlanAdmissionCandidate)
     case invoke(HeistInvocationStep)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -148,6 +165,10 @@ import Foundation
     }
 
     var uncheckedStepForRuntimeValidation: HeistStep {
+        uncheckedStepForRuntimeSafetyValidation
+    }
+
+    var uncheckedStepForRuntimeSafetyValidation: HeistStep {
         switch self {
         case .action(let step):
             return .action(step)
@@ -166,7 +187,7 @@ import Foundation
         case .fail(let step):
             return .fail(step)
         case .heist(let plan):
-            return .heist(plan.uncheckedPlanForRuntimeValidation())
+            return .heist(plan.uncheckedPlanForRuntimeSafetyValidation())
         case .invoke(let step):
             return .invoke(step)
         }
@@ -211,7 +232,7 @@ import Foundation
             self = .fail(try container.decode(FailStep.self, forKey: .fail))
         case .heist:
             try decoder.rejectUnknownKeys(allowed: ["type", "heist"], typeName: "heist group step")
-            self = .heist(try container.decode(UnvalidatedHeistPlan.self, forKey: .heist))
+            self = .heist(try container.decode(HeistPlanAdmissionCandidate.self, forKey: .heist))
         case .invoke:
             try decoder.rejectUnknownKeys(allowed: ["type", "invoke"], typeName: "invoke heist step")
             self = .invoke(try container.decode(HeistInvocationStep.self, forKey: .invoke))
@@ -255,8 +276,10 @@ import Foundation
     }
 }
 
-@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeValidationLimits: Sendable, Equatable {
-    public static let standard = HeistPlanRuntimeValidationLimits()
+@_spi(ButtonHeistInternals) public typealias HeistPlanRuntimeValidationLimits = HeistPlanRuntimeSafetyLimits
+
+@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
+    public static let standard = HeistPlanRuntimeSafetyLimits()
 
     public let maxTotalSteps: Int
     public let maxNestedStepDepth: Int
@@ -291,7 +314,9 @@ import Foundation
     }
 }
 
-@_spi(ButtonHeistInternals) public struct HeistPlanValidationFailure: Sendable, Equatable, CustomStringConvertible {
+@_spi(ButtonHeistInternals) public typealias HeistPlanValidationFailure = HeistPlanRuntimeSafetyFailure
+
+@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyFailure: Sendable, Equatable, CustomStringConvertible {
     public let path: String
     public let contract: String
     public let observed: String
@@ -314,24 +339,29 @@ import Foundation
     }
 }
 
-@_spi(ButtonHeistInternals) public struct HeistPlanValidationError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let failures: [HeistPlanValidationFailure]
+@_spi(ButtonHeistInternals) public typealias HeistPlanValidationError = HeistPlanRuntimeSafetyError
 
-    public init(failures: [HeistPlanValidationFailure]) {
+@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyError: Error, Sendable, Equatable, CustomStringConvertible {
+    public let failures: [HeistPlanRuntimeSafetyFailure]
+
+    public init(failures: [HeistPlanRuntimeSafetyFailure]) {
         self.failures = failures
     }
 
     public var description: String {
-        guard let first = failures.first else { return "heist plan validation failed" }
+        guard let first = failures.first else { return "heist plan runtime safety validation failed" }
         let suffix = failures.count > 1 ? " (+\(failures.count - 1) more)" : ""
-        return "heist plan validation failed: \(first)\(suffix)"
+        return "heist plan runtime safety validation failed: \(first)\(suffix)"
     }
 }
 
-struct HeistPlanRuntimeValidator: HeistPlanTraversalVisitor {
-    let limits: HeistPlanRuntimeValidationLimits
+// RuntimeSafety owns the bounded executable-plan boundary: finite traversal,
+// non-recursive local heist references, scoped refs, safe control flow, and
+// payloads that lower to runtime command contracts.
+struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
+    let limits: HeistPlanRuntimeSafetyLimits
 
-    var failures: [HeistPlanValidationFailure] = []
+    var failures: [HeistPlanRuntimeSafetyFailure] = []
     var stepCount = 0
     var totalStringBytes = 0
     var reportedStepLimit = false
@@ -340,18 +370,18 @@ struct HeistPlanRuntimeValidator: HeistPlanTraversalVisitor {
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
 
-    init(limits: HeistPlanRuntimeValidationLimits) {
+    init(limits: HeistPlanRuntimeSafetyLimits) {
         self.limits = limits
     }
 
-    mutating func validate(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
-        let plan = raw.uncheckedPlanForRuntimeValidation()
+    mutating func validate(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPlan {
+        let plan = raw.uncheckedPlanForRuntimeSafetyValidation()
         let failures = failures(in: plan)
-        guard failures.isEmpty else { throw HeistPlanValidationError(failures: failures) }
+        guard failures.isEmpty else { throw HeistPlanRuntimeSafetyError(failures: failures) }
         return plan
     }
 
-    mutating func failures(in plan: HeistPlan) -> [HeistPlanValidationFailure] {
+    mutating func failures(in plan: HeistPlan) -> [HeistPlanRuntimeSafetyFailure] {
         let traversal = HeistPlanTraversal()
         traversal.walk(plan, visitor: &self)
         return failures
@@ -790,7 +820,7 @@ struct HeistPlanRuntimeValidator: HeistPlanTraversalVisitor {
         observed: String,
         correction: String
     ) {
-        failures.append(HeistPlanValidationFailure(
+        failures.append(HeistPlanRuntimeSafetyFailure(
             path: path,
             contract: contract,
             observed: observed,
@@ -816,7 +846,7 @@ struct HeistPlanRuntimeValidator: HeistPlanTraversalVisitor {
 private struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
     let valuePath: String
 
-    var failures: [HeistPlanValidationFailure] = []
+    var failures: [HeistPlanRuntimeSafetyFailure] = []
 
     let encoder = JSONEncoder()
     let decoder = JSONDecoder()
@@ -862,7 +892,7 @@ private struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
         observed: String,
         correction: String
     ) {
-        failures.append(HeistPlanValidationFailure(
+        failures.append(HeistPlanRuntimeSafetyFailure(
             path: path,
             contract: contract,
             observed: observed,
