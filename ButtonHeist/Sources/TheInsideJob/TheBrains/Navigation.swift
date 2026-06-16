@@ -40,6 +40,10 @@ final class Navigation {
             safecracker: safecracker,
             tripwire: tripwire
         )
+        self.elementInflation.discoverTarget = { [weak self] target in
+            guard let self else { return nil }
+            return await self.exploreScreen(target: target).screen
+        }
     }
 
     // MARK: - Nested Types

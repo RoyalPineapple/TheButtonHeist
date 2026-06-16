@@ -19,13 +19,21 @@ extension TheBrains {
         }
         switch message {
         case .activate(let target):
-            return await performInteraction(method: .activate) { await self.actions.executeActivate(target) }
+            return await performInteraction(method: .activate, observationScope: .discovery) {
+                await self.actions.executeActivate(target)
+            }
         case .increment(let target):
-            return await performInteraction(method: .increment) { await self.actions.executeIncrement(target) }
+            return await performInteraction(method: .increment, observationScope: .discovery) {
+                await self.actions.executeIncrement(target)
+            }
         case .decrement(let target):
-            return await performInteraction(method: .decrement) { await self.actions.executeDecrement(target) }
+            return await performInteraction(method: .decrement, observationScope: .discovery) {
+                await self.actions.executeDecrement(target)
+            }
         case .performCustomAction(let target):
-            return await performInteraction(method: .customAction) { await self.actions.executeCustomAction(target) }
+            return await performInteraction(method: .customAction, observationScope: .discovery) {
+                await self.actions.executeCustomAction(target)
+            }
         case .rotor(let target):
             return await performRotor(target)
         case .editAction(let target):
@@ -35,23 +43,34 @@ extension TheBrains {
         case .resignFirstResponder:
             return await performInteraction(method: .resignFirstResponder) { await self.actions.executeResignFirstResponder() }
         case .oneFingerTap(let target):
-            return await performInteraction(method: .syntheticTap) { await self.actions.executeTap(target) }
+            return await performInteraction(method: .syntheticTap, observationScope: observationScope(for: target)) {
+                await self.actions.executeTap(target)
+            }
         case .longPress(let target):
-            return await performInteraction(method: .syntheticLongPress) { await self.actions.executeLongPress(target) }
+            return await performInteraction(method: .syntheticLongPress, observationScope: observationScope(for: target)) {
+                await self.actions.executeLongPress(target)
+            }
         case .swipe(let target):
-            return await performInteraction(method: .syntheticSwipe) { await self.actions.executeSwipe(target) }
+            return await performInteraction(method: .syntheticSwipe, observationScope: observationScope(for: target)) {
+                await self.actions.executeSwipe(target)
+            }
         case .drag(let target):
-            return await performInteraction(method: .syntheticDrag) { await self.actions.executeDrag(target) }
+            return await performInteraction(method: .syntheticDrag, observationScope: observationScope(for: target)) {
+                await self.actions.executeDrag(target)
+            }
         case .typeText(let target):
             return await performInteraction(
                 method: .typeText,
+                observationScope: .discovery,
                 afterStatePayload: { self.actions.typeTextPayload(for: target, in: $0) },
                 interaction: { await self.actions.executeTypeText(target) }
             )
         case .scroll(let target):
             return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
-            return await performInteraction(method: .scrollToVisible) { await self.navigation.executeScrollToVisible(target) }
+            return await performInteraction(method: .scrollToVisible, observationScope: .discovery) {
+                await self.navigation.executeScrollToVisible(target)
+            }
         case .scrollToEdge(let target):
             return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
         case .wait(let target):
@@ -74,18 +93,20 @@ extension TheBrains {
 
     func performInteraction(
         method: ActionMethod,
+        observationScope: SemanticObservationScope = .visible,
+        beforeStateScope: SemanticObservationScope = .visible,
         afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: method)
         }
-        let demand = stash.beginSemanticObservationDemand(scope: .visible)
+        let demand = stash.beginSemanticObservationDemand(scope: observationScope)
         defer { demand.cancel() }
 
         let actionStart = CFAbsoluteTimeGetCurrent()
         let beforeStart = actionStart
-        guard let before = await interactionObservation.prepareBeforeState() else {
+        guard let before = await interactionObservation.prepareBeforeState(scope: beforeStateScope) else {
             return treeUnavailableResult(method: method)
         }
         let beforeObservationMs = elapsedMilliseconds(since: beforeStart)
@@ -114,7 +135,9 @@ extension TheBrains {
     }
 
     func performRotor(_ target: RotorTarget) async -> ActionResult {
-        return await performInteraction(method: .rotor) { await self.actions.executeRotor(target) }
+        return await performInteraction(method: .rotor, observationScope: .discovery) {
+            await self.actions.executeRotor(target)
+        }
     }
 
     func performWait(target: WaitTarget) async -> ActionResult {
@@ -143,6 +166,36 @@ extension TheBrains {
             return .elementNotFound
         case .none:
             return .actionFailed
+        }
+    }
+
+    private func observationScope(for target: TapTarget) -> SemanticObservationScope {
+        observationScope(for: target.selection)
+    }
+
+    private func observationScope(for target: LongPressTarget) -> SemanticObservationScope {
+        observationScope(for: target.selection)
+    }
+
+    private func observationScope(for target: SwipeTarget) -> SemanticObservationScope {
+        switch target.selection {
+        case .unitElement, .elementDirection:
+            return .discovery
+        case .point(let start, _):
+            return observationScope(for: start)
+        }
+    }
+
+    private func observationScope(for target: DragTarget) -> SemanticObservationScope {
+        observationScope(for: target.start)
+    }
+
+    private func observationScope(for selection: GesturePointSelection) -> SemanticObservationScope {
+        switch selection {
+        case .element:
+            return .discovery
+        case .coordinate:
+            return .visible
         }
     }
 

@@ -15,6 +15,7 @@ final class ElementInflation {
     let stash: TheStash
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
+    var discoverTarget: (@MainActor (ElementTarget) async -> Screen?)?
 
     static let comfortMarginFraction: CGFloat = 1.0 / 6.0
     static let postScrollLayoutFrames = Navigation.postScrollLayoutFrames
@@ -112,9 +113,11 @@ final class ElementInflation {
     ) async -> ElementInflationResult {
         // Source screens derive only semantic identity. Reveal and geometry
         // authority always come from the current live graph.
+        let screenElement: TheStash.ScreenElement
         var didRevealTarget = false
-        switch stash.resolveTarget(target) {
-        case .resolved(let screenElement):
+        switch await resolveSemanticTarget(target) {
+        case .success(let resolvedElement):
+            screenElement = resolvedElement
             let reveal = revealSemanticTarget(screenElement)
             if case .failed(let failure) = reveal {
                 return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: screenElement)))
@@ -124,14 +127,13 @@ final class ElementInflation {
                 stash.refreshLiveCapture()
                 didRevealTarget = true
             }
-        case .notFound(let facts):
-            return .failed(.notFound(TargetResolutionDiagnostics.message(for: .notFound(facts))))
-        case .ambiguous(let facts):
-            return .failed(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
+        case .failure(let failure):
+            return .failed(failure)
         }
 
         var freshTarget = resolveFreshElementTarget(
             target: target,
+            screenElement: screenElement,
             method: method,
             deallocatedBoundary: deallocatedBoundary
         )
@@ -144,6 +146,7 @@ final class ElementInflation {
             stash.refreshLiveCapture()
             freshTarget = resolveFreshElementTarget(
                 target: target,
+                screenElement: screenElement,
                 method: method,
                 deallocatedBoundary: deallocatedBoundary
             )
@@ -178,19 +181,39 @@ final class ElementInflation {
         stash.refreshLiveCapture()
     }
 
+    private func resolveSemanticTarget(
+        _ target: ElementTarget
+    ) async -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+        switch stash.resolveTarget(target) {
+        case .resolved(let screenElement):
+            return .success(screenElement)
+        case .ambiguous(let facts):
+            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
+        case .notFound:
+            if let screen = await discoverTarget?(target) {
+                stash.semanticObservationStream.commitSettledDiscoveryObservation(screen)
+            }
+            switch stash.resolveTarget(target) {
+            case .resolved(let screenElement):
+                return .success(screenElement)
+            case .notFound(let facts):
+                return .failure(.notFound(TargetResolutionDiagnostics.message(for: .notFound(facts))))
+            case .ambiguous(let facts):
+                return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
+            }
+        }
+    }
+
     private func placeElementActivationPoint(
         _ inflatedTarget: InflatedElementTarget,
         method: ActionMethod,
         didRevealTarget: Bool
     ) async -> ElementInflationResult {
         let liveTarget = inflatedTarget.liveTarget
-        guard !Self.interactionComfortZone.contains(liveTarget.activationPoint) else {
+        guard !ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) else {
             return .inflated(inflatedTarget)
         }
         guard !didRevealTarget else {
-            if ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) {
-                return .inflated(inflatedTarget)
-            }
             return .failed(.geometryNotActionable(
                 "target \(Navigation.ScrollTargetDescription(liveTarget.screenElement).description) "
                     + "did not become actionable after semantic reveal; "
@@ -223,6 +246,7 @@ final class ElementInflation {
 
         switch resolveFreshElementTarget(
             target: inflatedTarget.target,
+            screenElement: inflatedTarget.screenElement,
             method: method,
             deallocatedBoundary: "activation point placement"
         ) {
@@ -242,21 +266,72 @@ final class ElementInflation {
 
     private func resolveFreshElementTarget(
         target: ElementTarget,
+        screenElement: TheStash.ScreenElement,
         method: ActionMethod,
         deallocatedBoundary: String
     ) -> Result<InflatedElementTarget, ElementInflationFailure> {
-        let screenElement: TheStash.ScreenElement
-        switch stash.resolveVisibleTarget(target) {
-        case .resolved(let target):
-            screenElement = target
-        case .notFound(let facts):
-            return .failure(.staleRefresh(
-                "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))"
+        let liveResolution = stash.resolveLiveActionTarget(for: screenElement)
+        if case .resolved(let liveTarget) = liveResolution {
+            return .success(InflatedElementTarget(
+                target: target,
+                screenElement: screenElement,
+                liveTarget: liveTarget
             ))
-        case .ambiguous(let facts):
-            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         }
 
+        if case .objectUnavailable = liveResolution {
+            switch stash.resolveVisibleTarget(target) {
+            case .resolved(let visibleElement) where visibleElement.heistId != screenElement.heistId:
+                return resolveVisibleReboundElementTarget(
+                    target: target,
+                    screenElement: visibleElement,
+                    method: method,
+                    deallocatedBoundary: deallocatedBoundary
+                )
+            case .resolved:
+                break
+            case .notFound(let facts):
+                return .failure(.staleRefresh(
+                    "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))"
+                ))
+            case .ambiguous(let facts):
+                return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
+            }
+        }
+
+        switch liveResolution {
+        case .resolved(let liveTarget):
+            return .success(InflatedElementTarget(
+                target: target,
+                screenElement: screenElement,
+                liveTarget: liveTarget
+            ))
+        case .objectUnavailable:
+            return .failure(.staleRefresh(
+                ActionCapabilityDiagnostic.elementDeallocated(
+                    boundary: deallocatedBoundary,
+                    element: screenElement,
+                    isInflated: stash.visibleIds.contains(screenElement.heistId)
+                ),
+                failureKind: .targetUnavailable
+            ))
+        case .geometryUnavailable:
+            return .failure(.geometryNotActionable(
+                ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                    method: method,
+                    element: screenElement,
+                    isVisible: stash.visibleIds.contains(screenElement.heistId)
+                )
+            ))
+        }
+    }
+
+    private func resolveVisibleReboundElementTarget(
+        target: ElementTarget,
+        screenElement: TheStash.ScreenElement,
+        method: ActionMethod,
+        deallocatedBoundary: String
+    ) -> Result<InflatedElementTarget, ElementInflationFailure> {
         switch stash.resolveLiveActionTarget(for: screenElement) {
         case .resolved(let liveTarget):
             return .success(InflatedElementTarget(

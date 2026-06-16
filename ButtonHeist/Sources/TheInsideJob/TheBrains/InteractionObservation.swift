@@ -41,8 +41,16 @@ final class InteractionObservation {
         )
     }
 
-    func prepareBeforeState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {
-        await observeVisibleState(timeout: timeout)
+    func prepareBeforeState(
+        scope: SemanticObservationScope = .visible,
+        timeout: Double? = InteractionObservation.defaultVisibleStateTimeout
+    ) async -> PostActionObservation.BeforeState? {
+        switch scope {
+        case .visible:
+            return await observeVisibleState(timeout: timeout)
+        case .discovery:
+            return await observeSemanticState(scope: .discovery, after: nil, timeout: timeout)?.state
+        }
     }
 
     func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {

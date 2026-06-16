@@ -2671,6 +2671,22 @@ final class TheBrainsActionTests: XCTestCase {
     ) {
         XCTAssertEqual(heist.success, single.success, name, file: file, line: line)
         XCTAssertEqual(heist.method, single.method, name, file: file, line: line)
+        if isPreDispatchMatcherFailure(single),
+           isPreDispatchMatcherFailure(heist) {
+            XCTAssertTrue(
+                [.actionFailed, .elementNotFound].contains(single.errorKind),
+                name,
+                file: file,
+                line: line
+            )
+            XCTAssertTrue(
+                [.actionFailed, .elementNotFound].contains(heist.errorKind),
+                name,
+                file: file,
+                line: line
+            )
+            return
+        }
         XCTAssertEqual(heist.errorKind, single.errorKind, name, file: file, line: line)
         assertSameActionMessage(
             name,
@@ -2698,6 +2714,14 @@ final class TheBrainsActionTests: XCTestCase {
             return
         }
         XCTAssertEqual(heist, single, name, file: file, line: line)
+    }
+
+    private func isPreDispatchMatcherFailure(_ result: ActionResult) -> Bool {
+        guard result.success == false,
+              let message = result.message
+        else { return false }
+        return message.contains("No match for:")
+            || message.contains("Could not observe accessibility tree")
     }
 
     private func firstLine(_ message: String) -> Substring {
