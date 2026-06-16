@@ -760,6 +760,65 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
+    func testHeistWaitForCasesChangedPredicateUsesFirstObservationAsBaseline() async throws {
+        let runtime = heistRuntime(observations: [
+            observedState(labels: ["Home"]),
+        ])
+        let plan = try HeistPlan(body: [
+            .waitForCases(try WaitForCasesStep(
+                timeout: 0,
+                cases: [
+                    PredicateCase(
+                        predicate: .changed(.appeared(ElementPredicate(label: "Home"))),
+                        body: [.fail(FailStep(message: "baseline should not match"))]
+                    ),
+                ],
+                elseBody: [.warn(WarnStep(message: "no future change observed"))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        let selection = try XCTUnwrap(step.caseSelectionEvidence?.selection)
+
+        XCTAssertTrue(result.success)
+        XCTAssertNil(selection.selectedCaseIndex)
+        XCTAssertEqual(
+            selection.cases.first?.result.actual,
+            "change predicate requires future settled observation after baseline"
+        )
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
+    }
+
+    func testHeistWaitForCasesChangedPredicateMatchesFutureObservation() async throws {
+        let runtime = heistRuntime(observations: [
+            observedState(labels: ["Loading"]),
+            observedState(labels: ["Loading", "Home"]),
+        ])
+        let plan = try HeistPlan(body: [
+            .waitForCases(try WaitForCasesStep(
+                timeout: 1,
+                cases: [
+                    PredicateCase(
+                        predicate: .changed(.appeared(ElementPredicate(label: "Home"))),
+                        body: [.warn(WarnStep(message: "home appeared"))]
+                    ),
+                ],
+                elseBody: [.fail(FailStep(message: "future change should match"))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        let selection = try XCTUnwrap(step.caseSelectionEvidence?.selection)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(selection.selectedCaseIndex, 0)
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
+    }
+
     func testHeistWaitForCasesContinuesAfterUnavailableObservation() async throws {
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
@@ -2701,40 +2760,12 @@ final class TheBrainsActionTests: XCTestCase {
                 return HeistWaitReceipt(actionResult: result, expectation: met)
             },
             waitForCases: { cases, timeout in
-                let start = CFAbsoluteTimeGetCurrent()
-                let scope = cases.observationScope
-                var selected = PredicateCaseSelection.unevaluated(cases)
-                var changeBaselineSequence: UInt64?
-                var lastSummary: String?
-                let deadline = start + timeout
-                repeat {
-                    let observation = observationSource.next(
-                        scope: scope,
-                        timeout: min(max(0, deadline - CFAbsoluteTimeGetCurrent()), 1.0)
-                    )
-                    guard let observation else {
-                        if timeout == 0 { break }
-                        continue
-                    }
-                    lastSummary = observation.summary
-                    if changeBaselineSequence == nil {
-                        changeBaselineSequence = observation.event.sequence
-                    }
-                    selected = PredicateCaseSelection.evaluate(
-                        cases,
-                        observation: observation,
-                        changeBaselineSequence: changeBaselineSequence
-                    )
-                    if selected.selectedCaseIndex != nil || timeout == 0 { break }
-                } while CFAbsoluteTimeGetCurrent() < deadline
-
-                return HeistCaseSelectionResult(
-                    cases: selected.cases,
-                    selectedCaseIndex: selected.selectedCaseIndex,
-                    elapsedMs: Int((CFAbsoluteTimeGetCurrent() - start) * 1000),
+                await PredicateCaseSelection.waitFor(
+                    cases,
                     timeout: timeout,
-                    timedOut: selected.selectedCaseIndex == nil,
-                    lastObservedSummary: lastSummary
+                    observeSemanticState: { scope, _, timeout in
+                        observationSource.next(scope: scope, timeout: timeout)
+                    }
                 )
             },
             observeSemanticState: { scope, _, timeout in
