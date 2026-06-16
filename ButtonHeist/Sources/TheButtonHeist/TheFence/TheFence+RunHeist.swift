@@ -39,6 +39,7 @@ extension TheFence {
             durationMs: totalMs,
             abortedAtPath: executionResult.abortedAtPath
         )
+        HeistReceiptRecorder.recordIfEnabled(result, plan: plan)
         let accessibilityTrace = Self.heistAccessibilityTrace(plan: plan, result: result)
         return .heistExecution(
             plan: plan,

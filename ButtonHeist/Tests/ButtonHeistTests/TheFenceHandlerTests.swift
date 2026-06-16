@@ -556,6 +556,34 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRunHeistRecordsReceiptArtifactWhenEnvironmentConfigured() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let previousDirectory = EnvironmentKey.buttonheistReceiptsDir.value
+        let previousMode = EnvironmentKey.buttonheistReceiptsMode.value
+        setEnvironment(EnvironmentKey.buttonheistReceiptsDir.rawValue, directory.path)
+        setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, HeistReceiptRecordingMode.failingAndPassing.rawValue)
+        defer {
+            setEnvironment(EnvironmentKey.buttonheistReceiptsDir.rawValue, previousDirectory)
+            setEnvironment(EnvironmentKey.buttonheistReceiptsMode.rawValue, previousMode)
+        }
+
+        let (fence, _) = makeConnectedFence()
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+
+        let response = try await fence.execute(command: .runHeist, values: [
+            "plan": .string(Self.pureRuntimeHeistSource),
+        ])
+
+        guard case .heistExecution(_, let result, _) = response else {
+            return XCTFail("Expected heistExecution response, got \(response)")
+        }
+        let receiptURLs = receiptURLs(in: directory)
+        XCTAssertEqual(receiptURLs.count, 1)
+        XCTAssertEqual(try HeistReceiptCodec.decode(contentsOf: try XCTUnwrap(receiptURLs.first)), result)
+    }
+
+    @ButtonHeistActor
     func testRunHeistRejectsNonHeistAndEmptyInput() async {
         let fence = TheFence(configuration: .init())
         // Standalone .json is internal to the package, and plan source is an
@@ -572,6 +600,34 @@ final class TheFenceHandlerTests: XCTestCase {
             TheFence.CommandArgumentEnvelope(values: ["path": .string("   ")])
         )) { error in
             XCTAssertTrue(String(describing: error).contains("path must not be empty"), "\(error)")
+        }
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("buttonheist-receipts-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private func receiptURLs(in directory: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ) else {
+            return []
+        }
+        return enumerator.compactMap { item -> URL? in
+            guard let url = item as? URL else { return nil }
+            return url.lastPathComponent.hasSuffix(".json.gz") ? url : nil
+        }
+    }
+
+    private func setEnvironment(_ key: String, _ value: String?) {
+        if let value {
+            setenv(key, value, 1)
+        } else {
+            unsetenv(key)
         }
     }
 

@@ -7,26 +7,28 @@ import TheScore
 struct HeistDoctorCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "heist-doctor",
-        abstract: "Beta: suggest offline heist target repairs from two execution receipts",
+        abstract: "Alpha: suggest offline heist target repairs from two execution receipts",
         discussion: """
-            heist-doctor is a beta, suggestion-only offline tool.
+            heist-doctor is an alpha, suggestion-only offline tool.
 
             heist-doctor reads durable HeistExecutionResult JSON receipts. It
             compares a last passing run with a new failing run and prints repair
             candidates for the failed action step. It never connects to an app,
             reruns a heist, edits a plan, or changes playback behavior.
+            Receipt inputs may be plain JSON or gzip-compressed JSON.
 
             Examples:
               heist-doctor --last-pass last-pass.json --new-fail new-fail.json
+              heist-doctor --last-pass last-pass.json.gz --new-fail new-fail.json.gz
               heist-doctor --last-pass last-pass.json --new-fail new-fail.json --format json
               heist-doctor --last-pass last-pass.json --new-fail new-fail.json --step-path '$.body[2]'
             """
     )
 
-    @Option(name: .long, help: "Path to the last passing HeistExecutionResult JSON receipt.")
+    @Option(name: .long, help: "Path to the last passing HeistExecutionResult JSON or JSON.gz receipt.")
     var lastPass: String
 
-    @Option(name: .long, help: "Path to the new failing HeistExecutionResult JSON receipt.")
+    @Option(name: .long, help: "Path to the new failing HeistExecutionResult JSON or JSON.gz receipt.")
     var newFail: String
 
     @Option(name: .long, help: "Optional action step path to compare instead of the first failed step.")
@@ -62,10 +64,11 @@ struct HeistDoctorCommand: ParsableCommand {
     private static func decodeReceipt(at path: String) throws -> HeistExecutionResult {
         let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
         do {
-            let data = try Data(contentsOf: url)
-            return try JSONDecoder().decode(HeistExecutionResult.self, from: data)
+            return try HeistReceiptCodec.decode(contentsOf: url)
         } catch let error as DecodingError {
             throw ValidationError("failed to decode HeistExecutionResult at \(path): \(error)")
+        } catch let error as HeistReceiptCodecError {
+            throw ValidationError("failed to decompress HeistExecutionResult at \(path): \(error)")
         } catch {
             throw ValidationError("failed to read receipt at \(path): \(error)")
         }
@@ -76,7 +79,7 @@ struct HeistDoctorCommand: ParsableCommand {
             return "No repair suggestions."
         }
 
-        var lines = ["Repair suggestions (beta, \(suggestions.count))"]
+        var lines = ["Repair suggestions (alpha, \(suggestions.count))"]
         for (index, suggestion) in suggestions.enumerated() {
             lines.append("")
             lines.append("[\(index + 1)] \(suggestion.failureKind.rawValue) confidence=\(suggestion.confidence.rawValue)")
@@ -118,6 +121,6 @@ enum HeistDoctorOutputFormat: String, ExpressibleByArgument {
 }
 
 private struct HeistDoctorJSONReport: Encodable {
-    let featureStatus = "beta"
+    let featureStatus = "alpha"
     let suggestions: [HeistRepairSuggestion]
 }
