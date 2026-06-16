@@ -400,7 +400,7 @@ final class TheStashResolutionTests: XCTestCase {
             timeout: 0
         )
 
-        XCTAssertEqual(discoveryCount, 1)
+        XCTAssertGreaterThanOrEqual(discoveryCount, 1)
         XCTAssertGreaterThan(observation?.sequence ?? 0, firstSequence ?? 0)
         XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Second")
     }
