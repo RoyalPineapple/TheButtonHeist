@@ -2,7 +2,7 @@
 import XCTest
 
 @testable import TheInsideJob
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
 final class RuntimeLeaseObservationTests: XCTestCase {

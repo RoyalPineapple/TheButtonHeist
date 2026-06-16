@@ -54,7 +54,10 @@ struct Canonicalize: ParsableCommand {
     @Argument(help: "Path to a generated .heist package artifact.")
     var plan: String
 
-    @Option(name: .long, help: "Path to write a generated .heist package. Defaults to internal plan.json stdout.")
+    @Option(
+        name: .long,
+        help: "Path to write a generated .heist package. Without --output, prints internal plan.json to stdout for debugging."
+    )
     var output: String?
 
     func run() throws {

@@ -3,7 +3,7 @@ import XCTest
 
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 private extension AccessibilityTrace.Delta {
     var testCaptureEdge: AccessibilityTrace.CaptureEdge? {

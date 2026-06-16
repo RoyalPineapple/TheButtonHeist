@@ -3,7 +3,7 @@ import XCTest
 import UIKit
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
 final class TheBrainsScrollTests: XCTestCase {

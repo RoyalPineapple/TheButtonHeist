@@ -3,7 +3,7 @@ import UIKit
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 private final class RotorActivationAccessibilityElement: UIAccessibilityElement {
     private(set) var activationCount = 0

@@ -28,6 +28,8 @@ extension TheFence {
     // MARK: - Handler: Executable Commands
 
     func handleClientActionRequest(_ request: ParsedRequest) async throws -> FenceResponse {
+        // Defensive fallback: the execution pipeline wraps every runtime action
+        // command as a one-step heist before this handler can run.
         .error("command \"\(request.command.rawValue)\" must execute as a heistPlan")
     }
 
