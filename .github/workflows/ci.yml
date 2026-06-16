@@ -121,6 +121,9 @@ jobs:
   macos-tests:
     runs-on: macos-15
     timeout-minutes: 25
+    env:
+      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/macos-tests
+      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
 
     steps:
       - name: Checkout repository
@@ -158,13 +161,20 @@ jobs:
 
       - name: Run TheScoreTests
         timeout-minutes: 5
-        run: tuist test TheScoreTests --no-selective-testing
+        run: |
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- tuist test TheScoreTests --no-selective-testing
 
       - name: Run ButtonHeistTests
         timeout-minutes: 5
         run: |
           set -eo pipefail
-          xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
             -destination 'platform=macOS'
 
       - name: Build & test CLI (SwiftPM)
@@ -172,20 +182,46 @@ jobs:
         run: |
           swift package --package-path ButtonHeistCLI resolve
           swift build --package-path ButtonHeistCLI
-          scripts/swift-test-gate.sh ButtonHeistCLI
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/swift-test-gate.sh ButtonHeistCLI
 
       - name: Build & test MCP (SwiftPM)
         timeout-minutes: 12
         run: |
           swift package --package-path ButtonHeistMCP resolve
           swift build --package-path ButtonHeistMCP
-          scripts/swift-test-gate.sh ButtonHeistMCP
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/swift-test-gate.sh ButtonHeistMCP
+
+      - name: Run heist doctor receipt demo
+        timeout-minutes: 8
+        run: scripts/heist-doctor-demo.sh --work-dir "$RUNNER_TEMP/heist-doctor-demo" --format json
+
+      - name: Write heist receipt manifest
+        if: always()
+        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" macos-tests
+
+      - name: Upload heist receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-receipts-macos-tests-${{ github.run_attempt }}
+          path: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
+          if-no-files-found: error
+          retention-days: 14
 
   ios-tests:
     runs-on: macos-15
     timeout-minutes: 30
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-tests
+      BUTTONHEIST_RECEIPTS_DIR: process-temporary-directory
+      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
+      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-tests
 
     steps:
       - name: Checkout repository
@@ -265,7 +301,10 @@ jobs:
           trap 'echo "IOS_TEST_RUN_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
           echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
-          xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
+          scripts/run-with-heist-receipts.sh \
+            --ios-sandbox \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
             -destination "$DEST" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
             -skip-testing TheInsideJobTests/SimpleSocketServerIntegrationTests \
@@ -273,6 +312,28 @@ jobs:
             -skip-testing TheInsideJobTests/SocketClientLifecycleTests \
             -skip-testing TheInsideJobTests/TLSIntegrationTests \
             -skip-testing TheInsideJobTests/TheSafecrackerIntegrationTests
+
+      - name: Collect iOS heist receipts
+        if: always()
+        run: |
+          if [[ -n "${SIM_UDID:-}" ]]; then
+            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
+          else
+            echo "SIM_UDID is unavailable; skipping iOS heist receipt collection"
+          fi
+
+      - name: Write heist receipt manifest
+        if: always()
+        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_CI_RECEIPTS_DIR" ios-tests
+
+      - name: Upload heist receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-receipts-ios-tests-${{ github.run_attempt }}
+          path: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Report iOS test timings
         if: always()
@@ -283,23 +344,27 @@ jobs:
             local end="$3"
             if [[ -n "$start" && -n "$end" && "$end" -ge "$start" ]]; then
               local duration=$((end - start))
-              printf '| %s | %dm %02ds |\n' "$label" $((duration / 60)) $((duration % 60)) >> "$GITHUB_STEP_SUMMARY"
+              printf '| %s | %dm %02ds |\n' "$label" $((duration / 60)) $((duration % 60))
             else
-              printf '| %s | unavailable |\n' "$label" >> "$GITHUB_STEP_SUMMARY"
+              printf '| %s | unavailable |\n' "$label"
             fi
           }
 
-          echo "## iOS Test Timings" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Phase | Duration |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|----------|" >> "$GITHUB_STEP_SUMMARY"
-          append_duration "Build TheInsideJobTests" "${IOS_TEST_BUILD_START:-}" "${IOS_TEST_BUILD_END:-}"
-          append_duration "Run TheInsideJobTests" "${IOS_TEST_RUN_START:-}" "${IOS_TEST_RUN_END:-}"
+          {
+            echo "## iOS Test Timings"
+            echo "| Phase | Duration |"
+            echo "|-------|----------|"
+            append_duration "Build TheInsideJobTests" "${IOS_TEST_BUILD_START:-}" "${IOS_TEST_BUILD_END:-}"
+            append_duration "Run TheInsideJobTests" "${IOS_TEST_RUN_START:-}" "${IOS_TEST_RUN_END:-}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   ios-demo-gates:
     runs-on: macos-15
     timeout-minutes: 25
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-demo
+      BUTTONHEIST_RECEIPTS_DIR: ${{ github.workspace }}/ci-artifacts/buttonheist-receipts/ios-demo-gates
+      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
 
     steps:
       - name: Checkout repository
@@ -372,19 +437,21 @@ jobs:
       - name: Measure framework sizes
         run: |
           DERIVED="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator"
-          echo "## Framework Sizes" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Framework | Size |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-----------|------|" >> "$GITHUB_STEP_SUMMARY"
-          for fw in TheInsideJob TheScore ThePlant; do
-            if [ -d "$DERIVED/${fw}.framework" ]; then
-              SIZE=$(du -sh "$DERIVED/${fw}.framework" | cut -f1)
-              echo "| ${fw} | ${SIZE} |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Framework Sizes"
+            echo "| Framework | Size |"
+            echo "|-----------|------|"
+            for fw in TheInsideJob TheScore ThePlant; do
+              if [ -d "$DERIVED/${fw}.framework" ]; then
+                SIZE=$(du -sh "$DERIVED/${fw}.framework" | cut -f1)
+                echo "| ${fw} | ${SIZE} |"
+              fi
+            done
+            if [ -d "$DERIVED/BHDemo.app" ]; then
+              APP_SIZE=$(du -sh "$DERIVED/BHDemo.app" | cut -f1)
+              echo "| BHDemo.app (total) | ${APP_SIZE} |"
             fi
-          done
-          if [ -d "$DERIVED/BHDemo.app" ]; then
-            APP_SIZE=$(du -sh "$DERIVED/BHDemo.app" | cut -f1)
-            echo "| BHDemo.app (total) | ${APP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build ButtonHeist CLI
         timeout-minutes: 8
@@ -399,7 +466,10 @@ jobs:
           echo "IOS_DEMO_SMOKE_START=$(date +%s)" >> "$GITHUB_ENV"
           trap 'echo "IOS_DEMO_SMOKE_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/e2e-demo-smoke.sh \
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/e2e-demo-smoke.sh \
             --skip-generate \
             --skip-cli-build \
             --sim-udid "$SIM_UDID" \
@@ -413,11 +483,27 @@ jobs:
           echo "IOS_DEMO_LIFECYCLE_START=$(date +%s)" >> "$GITHUB_ENV"
           trap 'echo "IOS_DEMO_LIFECYCLE_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/e2e-lifecycle-gate.py \
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/e2e-lifecycle-gate.py \
             --sim-udid "$SIM_UDID" \
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
+
+      - name: Write heist receipt manifest
+        if: always()
+        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" ios-demo-gates
+
+      - name: Upload heist receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-receipts-ios-demo-gates-${{ github.run_attempt }}
+          path: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Report iOS demo timings
         if: always()
@@ -428,15 +514,17 @@ jobs:
             local end="$3"
             if [[ -n "$start" && -n "$end" && "$end" -ge "$start" ]]; then
               local duration=$((end - start))
-              printf '| %s | %dm %02ds |\n' "$label" $((duration / 60)) $((duration % 60)) >> "$GITHUB_STEP_SUMMARY"
+              printf '| %s | %dm %02ds |\n' "$label" $((duration / 60)) $((duration % 60))
             else
-              printf '| %s | unavailable |\n' "$label" >> "$GITHUB_STEP_SUMMARY"
+              printf '| %s | unavailable |\n' "$label"
             fi
           }
 
-          echo "## iOS Demo Timings" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Phase | Duration |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|-------|----------|" >> "$GITHUB_STEP_SUMMARY"
-          append_duration "Build iOS app targets" "${IOS_DEMO_BUILD_START:-}" "${IOS_DEMO_BUILD_END:-}"
-          append_duration "Run demo CLI smoke" "${IOS_DEMO_SMOKE_START:-}" "${IOS_DEMO_SMOKE_END:-}"
-          append_duration "Run demo lifecycle gate" "${IOS_DEMO_LIFECYCLE_START:-}" "${IOS_DEMO_LIFECYCLE_END:-}"
+          {
+            echo "## iOS Demo Timings"
+            echo "| Phase | Duration |"
+            echo "|-------|----------|"
+            append_duration "Build iOS app targets" "${IOS_DEMO_BUILD_START:-}" "${IOS_DEMO_BUILD_END:-}"
+            append_duration "Run demo CLI smoke" "${IOS_DEMO_SMOKE_START:-}" "${IOS_DEMO_SMOKE_END:-}"
+            append_duration "Run demo lifecycle gate" "${IOS_DEMO_LIFECYCLE_START:-}" "${IOS_DEMO_LIFECYCLE_END:-}"
+          } >> "$GITHUB_STEP_SUMMARY"

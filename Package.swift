@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "TheScore", targets: ["TheScore"]),
         .library(name: "ButtonHeistDSL", targets: ["ButtonHeistDSL"]),
         .executable(name: "heist-plan", targets: ["HeistPlanTool"]),
+        .executable(name: "heist-doctor", targets: ["HeistDoctorTool"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
@@ -54,6 +55,25 @@ let package = Package(
             path: "ButtonHeist/Sources/HeistPlanTool",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
+        .target(
+            name: "HeistDoctorCore",
+            dependencies: [
+                "ThePlans",
+                "TheScore",
+            ],
+            path: "ButtonHeist/Sources/HeistDoctorCore",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .executableTarget(
+            name: "HeistDoctorTool",
+            dependencies: [
+                "HeistDoctorCore",
+                "TheScore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "ButtonHeist/Sources/HeistDoctorTool",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
         // Swift implementation of TheInsideJob
         .target(
             name: "TheInsideJob",
@@ -88,6 +108,16 @@ let package = Package(
             name: "ThePlansTests",
             dependencies: ["ThePlans"],
             path: "ButtonHeist/Tests/ThePlansTests",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .testTarget(
+            name: "HeistDoctorCoreTests",
+            dependencies: [
+                "HeistDoctorCore",
+                "TheScore",
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
+            ],
+            path: "ButtonHeist/Tests/HeistDoctorCoreTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]

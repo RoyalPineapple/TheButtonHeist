@@ -25,6 +25,8 @@ CLI_CONFIGURATION="debug"
 HEIST_PATH=""
 SKIP_HEIST_PLAYBACK=false
 BENCHMARK_REPORT=""
+RECEIPTS_DIR=""
+RECEIPTS_MODE=""
 
 usage() {
     cat <<'EOF'
@@ -45,6 +47,8 @@ Options:
   --heist PATH           Heist fixture to replay. Defaults to tests/fixtures/bh-demo-smoke.heist.
   --skip-heist-playback  Skip replaying the heist fixture.
   --benchmark-report P   Write per-command timing measurements to PATH.
+  --receipts-dir DIR     Enable heist execution receipt artifacts in DIR.
+  --receipts-mode MODE   Receipt mode: failures, failing-and-passing, all, or off.
   -h, --help             Show this help.
 
 This harness is intentionally CLI-only: it does not require an MCP server or a
@@ -255,6 +259,16 @@ while [[ $# -gt 0 ]]; do
             [[ -n "$BENCHMARK_REPORT" ]] || fail "--benchmark-report requires a value"
             shift 2
             ;;
+        --receipts-dir)
+            RECEIPTS_DIR="${2:-}"
+            [[ -n "$RECEIPTS_DIR" ]] || fail "--receipts-dir requires a value"
+            shift 2
+            ;;
+        --receipts-mode)
+            RECEIPTS_MODE="${2:-}"
+            [[ -n "$RECEIPTS_MODE" ]] || fail "--receipts-mode requires a value"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -295,6 +309,12 @@ case "$CLI_CONFIGURATION" in
     debug|release) ;;
     *) fail "--cli-configuration must be debug or release" ;;
 esac
+if [[ -n "$RECEIPTS_DIR" ]]; then
+    export BUTTONHEIST_RECEIPTS_DIR="$RECEIPTS_DIR"
+fi
+if [[ -n "$RECEIPTS_MODE" ]]; then
+    export BUTTONHEIST_RECEIPTS_MODE="$RECEIPTS_MODE"
+fi
 
 DEVICE_ENDPOINT="127.0.0.1:$PORT"
 DERIVED_DATA="${TMPDIR:-/tmp}/buttonheist-e2e-${WORKTREE_ID}-derived-data"
@@ -418,6 +438,11 @@ printf '    simulator: %s\n' "$SIM_NAME"
 printf '    endpoint: %s\n' "$DEVICE_ENDPOINT"
 printf '    token/id: %s\n' "$TOKEN"
 printf '    cli config: %s\n' "$CLI_CONFIGURATION"
+if [[ -n "${BUTTONHEIST_RECEIPTS_DIR:-}" ]]; then
+    printf '    receipts: %s (%s)\n' \
+        "$BUTTONHEIST_RECEIPTS_DIR" \
+        "${BUTTONHEIST_RECEIPTS_MODE:-failures}"
+fi
 if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '    heist: %s\n' "$HEIST_PATH"
     [[ -e "$HEIST_PATH" ]] || fail "heist fixture not found at $HEIST_PATH"

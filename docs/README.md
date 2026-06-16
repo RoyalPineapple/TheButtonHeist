@@ -9,6 +9,7 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 | [Accessibility Contract](ACCESSIBILITY-CONTRACT.md) | Canonical product contract, boundary map, pipeline, and conformance cases |
 | [Architecture](ARCHITECTURE.md) | Load-bearing product contracts and the compact component map |
 | [API](API.md) | Product API invariants and integration contracts; generated references own commands and parameters |
+| [Heist Doctor](HEIST-DOCTOR.md) | Alpha offline repair-suggestion experiment for raw heist execution receipts |
 | [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md) | Source boundary between Swift DSL, HeistPlan JSON IR, and `.heist` artifacts |
 | [Element Inflation](ELEMENT-INFLATION.md) | Runtime boundary from semantic targets to inflated live targets |
 | [Command Reference](reference/commands.md) | Generated command names, CLI exposure, heist execution eligibility, and parameters |

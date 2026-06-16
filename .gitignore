@@ -32,6 +32,7 @@ session/
 reports/
 research/
 demos/
+ci-artifacts/
 WebDriverAgent/
 AccessibilitySnapshotBH
 heist-test/

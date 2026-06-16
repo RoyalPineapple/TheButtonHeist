@@ -122,6 +122,8 @@ public enum EnvironmentKey: String, Sendable {
     case buttonheistDevice = "BUTTONHEIST_DEVICE"
     case buttonheistToken = "BUTTONHEIST_TOKEN"
     case buttonheistDriverId = "BUTTONHEIST_DRIVER_ID"
+    case buttonheistReceiptsDir = "BUTTONHEIST_RECEIPTS_DIR"
+    case buttonheistReceiptsMode = "BUTTONHEIST_RECEIPTS_MODE"
     case buttonheistSessionTimeout = "BUTTONHEIST_SESSION_TIMEOUT"
     case buttonheistConnectionTimeout = "BUTTONHEIST_CONNECTION_TIMEOUT"
     // Server
