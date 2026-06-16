@@ -51,7 +51,6 @@ extension Navigation {
         let hasHOverflow = contentSize.width > container.frame.width + 1
         let hasVOverflow = contentSize.height > container.frame.height + 1
         guard hasHOverflow || hasVOverflow else { return nil }
-        guard Self.hasContentBeyondFrame(of: container, in: stash.latestObservedLiveHierarchy) else { return nil }
         guard let scrollTarget = scrollableTarget(for: container, contentSize: contentSize) else { return nil }
         return ContainerExploration(
             container: container,
@@ -68,6 +67,10 @@ extension Navigation {
     ) async -> Bool {
         let savedVisualOrigin = containerExploration.savedVisualOrigin
         await moveToLeadingEdge(containerExploration, exploration: &exploration)
+        if let target, hasVisibleTerminalExplorationResolution(target) {
+            exploration.markExplored(containerExploration.container)
+            return true
+        }
 
         var scan = preparePageScan(in: containerExploration)
         let foundTarget = await scanForwardPages(
@@ -77,6 +80,11 @@ extension Navigation {
             exploration: &exploration
         )
 
+        if foundTarget {
+            exploration.markExplored(containerExploration.container)
+            return true
+        }
+
         await restoreContainerPosition(
             containerExploration,
             savedVisualOrigin: savedVisualOrigin,
@@ -84,7 +92,6 @@ extension Navigation {
         )
         exploration.markExplored(containerExploration.container)
 
-        guard !foundTarget else { return true }
         exploration.addDiscoveredContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
         return false
     }
@@ -116,12 +123,12 @@ extension Navigation {
             guard absorbVisiblePage(in: &exploration) else { return false }
             scan.originByElement = buildOriginIndex()
 
-            let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
-            guard !result.inserted.isEmpty else { return false }
-
-            if let target, hasTerminalExplorationResolution(target, in: exploration.screen) {
+            if let target, hasVisibleTerminalExplorationResolution(target) {
                 return true
             }
+
+            let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
+            guard !result.inserted.isEmpty else { return false }
         }
         return false
     }

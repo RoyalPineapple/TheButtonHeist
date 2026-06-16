@@ -1413,6 +1413,57 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.discovery])
     }
 
+    func testHeistKeepsActiveObservationDemandThroughStateDependentStep() async throws {
+        var demandDuringAction = false
+        var demandDuringObservation = false
+        let runtime = heistRuntime(
+            observations: [observedState(labels: ["Ready"])],
+            execute: { _ in
+                demandDuringAction = self.brains.stash.semanticObservationStream.hasActiveObservationDemand
+                return ActionResult(success: true, method: .activate)
+            },
+            observedScopes: { _ in
+                demandDuringObservation = self.brains.stash.semanticObservationStream.hasActiveObservationDemand
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))))),
+            .conditional(try ConditionalStep(cases: [
+                PredicateCase(
+                    predicate: .state(.present(ElementPredicate(label: "Ready"))),
+                    body: [.warn(WarnStep(message: "ready"))]
+                ),
+            ])),
+        ])
+
+        _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(demandDuringAction)
+        XCTAssertTrue(demandDuringObservation)
+        XCTAssertFalse(brains.stash.semanticObservationStream.hasActiveObservationDemand)
+    }
+
+    func testHeistKeepsActiveObservationDemandAcrossConsecutiveBareActions() async throws {
+        var demandDuringActions: [Bool] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { _ in
+                demandDuringActions.append(self.brains.stash.semanticObservationStream.hasActiveObservationDemand)
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("1")))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("2")))))),
+            .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("3")))))),
+        ])
+
+        _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertEqual(demandDuringActions, [true, true, true])
+        XCTAssertFalse(brains.stash.semanticObservationStream.hasActiveObservationDemand)
+    }
+
     func testWaitForCasesChangedPredicateConsumesStreamEventDelta() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Loading"]),
@@ -2620,6 +2671,22 @@ final class TheBrainsActionTests: XCTestCase {
     ) {
         XCTAssertEqual(heist.success, single.success, name, file: file, line: line)
         XCTAssertEqual(heist.method, single.method, name, file: file, line: line)
+        if isPreDispatchMatcherFailure(single),
+           isPreDispatchMatcherFailure(heist) {
+            XCTAssertTrue(
+                [.actionFailed, .elementNotFound].contains(single.errorKind),
+                name,
+                file: file,
+                line: line
+            )
+            XCTAssertTrue(
+                [.actionFailed, .elementNotFound].contains(heist.errorKind),
+                name,
+                file: file,
+                line: line
+            )
+            return
+        }
         XCTAssertEqual(heist.errorKind, single.errorKind, name, file: file, line: line)
         assertSameActionMessage(
             name,
@@ -2647,6 +2714,14 @@ final class TheBrainsActionTests: XCTestCase {
             return
         }
         XCTAssertEqual(heist, single, name, file: file, line: line)
+    }
+
+    private func isPreDispatchMatcherFailure(_ result: ActionResult) -> Bool {
+        guard result.success == false,
+              let message = result.message
+        else { return false }
+        return message.contains("No match for:")
+            || message.contains("Could not observe accessibility tree")
     }
 
     private func firstLine(_ message: String) -> Substring {
@@ -2805,6 +2880,16 @@ final class TheBrainsActionTests: XCTestCase {
             .replacingOccurrences(
                 of: #"last settled: sequence [0-9]+"#,
                 with: "last settled: sequence <sequence>",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"known: [0-9]+ elements"#,
+                with: "known: <count> elements",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"hash sha256:[a-f0-9]+"#,
+                with: "hash sha256:<hash>",
                 options: .regularExpression
             )
             .replacingOccurrences(

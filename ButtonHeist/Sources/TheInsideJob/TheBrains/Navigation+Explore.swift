@@ -21,7 +21,7 @@ extension Navigation {
 
         exploration.absorb(stash.refreshLiveCapture())
 
-        if let target, hasTerminalExplorationResolution(target, in: exploration.screen) {
+        if let target, hasVisibleTerminalExplorationResolution(target) {
             return exploration.finish(startTime: startTime)
         }
 
@@ -40,6 +40,10 @@ extension Navigation {
         case .notFound:
             return false
         }
+    }
+
+    func hasVisibleTerminalExplorationResolution(_ target: ElementTarget) -> Bool {
+        hasTerminalExplorationResolution(target, in: stash.liveVisibleScreen.visibleOnly)
     }
 }
 

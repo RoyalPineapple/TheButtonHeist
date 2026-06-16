@@ -18,10 +18,11 @@ extension TheTripwire {
         // Derived settle state
         let quietFrames: Int
 
-        /// The UI is settled when no layout is pending, no animations
-        /// are running, and the fingerprint has been stable for 2+ frames.
+        /// The UI is settled when no layout is pending and the presentation
+        /// fingerprint has been stable for 2+ frames. Animation keys remain
+        /// diagnostic; platform-owned stable animations must not block settle.
         var isSettled: Bool {
-            !layoutPending && !hasRelevantAnimations && quietFrames >= 2
+            !layoutPending && quietFrames >= 2
         }
     }
 

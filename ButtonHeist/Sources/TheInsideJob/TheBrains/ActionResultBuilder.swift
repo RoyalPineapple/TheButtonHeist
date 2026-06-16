@@ -23,6 +23,7 @@ import TheScore
     var settled: Bool?
     var settleTimeMs: Int?
     var subjectEvidence: ActionSubjectEvidence?
+    var timing: ActionPerformanceTiming?
 
     init(method: ActionMethod) {
         self.method = method
@@ -43,7 +44,8 @@ import TheScore
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence
+            subjectEvidence: subjectEvidence,
+            timing: timing
         )
     }
 
@@ -57,7 +59,8 @@ import TheScore
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
-            subjectEvidence: subjectEvidence
+            subjectEvidence: subjectEvidence,
+            timing: timing
         )
     }
 }

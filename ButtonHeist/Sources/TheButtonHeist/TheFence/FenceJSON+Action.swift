@@ -18,6 +18,7 @@ struct PublicActionResponse: FencePublicJSONResponse {
     let retryable: Bool?
     let hint: String?
     let expectation: PublicExpectationResult?
+    let timing: ActionPerformanceTiming?
 
     init(method: String, result: ActionResult, expectation: ExpectationResult?) {
         let surfacedExpectation = result.success ? expectation : nil
@@ -45,6 +46,7 @@ struct PublicActionResponse: FencePublicJSONResponse {
         self.retryable = details?.retryable
         self.hint = details?.hint
         self.expectation = surfacedExpectation.map(PublicExpectationResult.init(result:))
+        self.timing = result.timing
     }
 
 }

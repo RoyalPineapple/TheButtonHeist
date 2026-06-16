@@ -41,13 +41,28 @@ final class InteractionObservation {
         )
     }
 
-    func prepareBeforeState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {
-        await observeVisibleState(timeout: timeout)
+    func prepareBeforeState(
+        scope: SemanticObservationScope = .visible,
+        timeout: Double? = InteractionObservation.defaultVisibleStateTimeout
+    ) async -> PostActionObservation.BeforeState? {
+        switch scope {
+        case .visible:
+            return await observeVisibleState(timeout: timeout)
+        case .discovery:
+            return await observeSemanticState(scope: .discovery, after: nil, timeout: timeout)?.state
+        }
     }
 
     func observeVisibleState(timeout: Double? = InteractionObservation.defaultVisibleStateTimeout) async -> PostActionObservation.BeforeState? {
-        guard let evidence = await stash.observeVisibleSemanticEvidence(timeout: timeout) else { return nil }
-        return postActionObservation.captureSemanticState(from: evidence)
+        if let evidence = await stash.observeVisibleSemanticEvidence(timeout: timeout) {
+            return postActionObservation.captureSemanticState(from: evidence)
+        }
+        guard let diagnosticScreen = stash.latestFailedSettleDiagnosticEvidence else { return nil }
+        return postActionObservation.captureSemanticState(
+            from: diagnosticScreen,
+            tripwireSignal: stash.tripwire.tripwireSignal(),
+            settledObservationSequence: nil
+        )
     }
 
     func observeSemanticState(
@@ -80,11 +95,15 @@ final class InteractionObservation {
             before: before,
             outcome: settleOutcome
         )
+        let finalEvidenceStart = CFAbsoluteTimeGetCurrent()
         let finalEvidence = await postActionObservation.finalSemanticEvidence(
             before: before,
             settleEvidence: settleEvidence
         )
-        return PostActionObservation.result(
+        let finalSemanticEvidenceMs = elapsedMilliseconds(since: finalEvidenceStart)
+
+        let receiptStart = CFAbsoluteTimeGetCurrent()
+        let result = PostActionObservation.result(
             PostActionObservation.ResultInput(
                 success: success,
                 method: method,
@@ -98,6 +117,15 @@ final class InteractionObservation {
                 finalEvidence: finalEvidence
             )
         )
+        return result.withTiming(ActionPerformanceTiming(
+            settleMs: settleEvidence.timeMs,
+            finalSemanticEvidenceMs: finalSemanticEvidenceMs,
+            receiptGenerationMs: elapsedMilliseconds(since: receiptStart)
+        ))
+    }
+
+    private func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
+        Int((CFAbsoluteTimeGetCurrent() - start) * 1_000)
     }
 
     func waitForPredicate(

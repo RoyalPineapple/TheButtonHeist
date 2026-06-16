@@ -102,7 +102,195 @@ final class SettleSessionTests: XCTestCase {
         }
     }
 
+    @MainActor
+    private final class ManualClock {
+        private(set) var now: CFAbsoluteTime = 0
+
+        func currentTime() -> CFAbsoluteTime {
+            now
+        }
+
+        func advance(milliseconds: Int) {
+            now += Double(milliseconds) / 1_000
+        }
+    }
+
+    private func makeQuietSession(
+        script: [Screen?],
+        clock: ManualClock,
+        frameMs: Int = 10,
+        quietWindowMs: Int = 30,
+        timeoutMs: Int = 500,
+        topVCSequence: [ObjectIdentifier?]? = nil,
+        yieldCount: Counter? = nil
+    ) -> SemanticQuietSettleSession {
+        let scriptBox = ScriptBox(script: script)
+        let topVCBox = ScriptBox(script: topVCSequence ?? [nil])
+        return SemanticQuietSettleSession(
+            parseProvider: { scriptBox.next() },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: topVCBox.next()) },
+            observationYield: {
+                _ = yieldCount?.next()
+                clock.advance(milliseconds: frameMs)
+            },
+            clock: { clock.currentTime() },
+            quietWindowMs: quietWindowMs,
+            timeoutMs: timeoutMs
+        )
+    }
+
     // MARK: - Stable Settle
+
+    func testSemanticQuietSettleUsesQuietWindowInsteadOfFixedCycles() async {
+        let element = makeElement(label: "Hello", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30))
+        let stable = makeParseResult([element])
+        let clock = ManualClock()
+        let yieldCount = Counter()
+        let session = makeQuietSession(
+            script: [stable],
+            clock: clock,
+            quietWindowMs: 30,
+            yieldCount: yieldCount
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 30))
+        XCTAssertEqual(yieldCount.next(), 3)
+    }
+
+    func testSemanticQuietSettleResetsQuietWindowWhenFingerprintChanges() async {
+        let first = makeParseResult([
+            makeElement(label: "Loading", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let second = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let clock = ManualClock()
+        let session = makeQuietSession(
+            script: [first, first, second, second, second, second],
+            clock: clock,
+            quietWindowMs: 30
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testSemanticQuietSettleTripwireChangeResetsBaseline() async {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let clock = ManualClock()
+        let changedVC = ObjectIdentifier(UIViewController())
+        let session = makeQuietSession(
+            script: [stable],
+            clock: clock,
+            quietWindowMs: 30,
+            topVCSequence: [changedVC, changedVC, changedVC, changedVC]
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 40))
+        XCTAssertEqual(outcome.events, [
+            .tripwireSignalChanged(
+                from: Self.tripwireSignal(topmostVC: nil),
+                to: Self.tripwireSignal(topmostVC: changedVC)
+            ),
+        ])
+    }
+
+    func testSemanticQuietSettleTimesOutWhenFingerprintNeverStabilizes() async {
+        let clock = ManualClock()
+        let counter = Counter()
+        let session = SemanticQuietSettleSession(
+            parseProvider: {
+                let index = counter.next()
+                return self.makeParseResult([
+                    self.makeElement(
+                        label: "Tick \(index)",
+                        traits: .staticText,
+                        frame: CGRect(x: 0, y: 0, width: 100, height: 30)
+                    ),
+                ])
+            },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
+            observationYield: {
+                clock.advance(milliseconds: 10)
+            },
+            clock: { clock.currentTime() },
+            quietWindowMs: 30,
+            timeoutMs: 50
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .timedOut(timeMs: 50))
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Tick 5")
+        XCTAssertNotNil(outcome.instabilityDescription)
+    }
+
+    func testSemanticQuietSettleReturnsCancelledWhenObservationYieldCancels() async {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let clock = ManualClock()
+        let session = SemanticQuietSettleSession(
+            parseProvider: { stable },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
+            observationYield: {
+                clock.advance(milliseconds: 10)
+                throw CancellationError()
+            },
+            clock: { clock.currentTime() },
+            quietWindowMs: 30,
+            timeoutMs: 100
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .cancelled(timeMs: 10))
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
+
+    func testSemanticQuietSettleIgnoresNilParsesUntilAStableScreenArrives() async {
+        let stable = makeParseResult([
+            makeElement(label: "Ready", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30)),
+        ])
+        let clock = ManualClock()
+        let session = makeQuietSession(
+            script: [nil, nil, stable, stable, stable, stable],
+            clock: clock,
+            quietWindowMs: 30,
+            timeoutMs: 100
+        )
+
+        let outcome = await session.run(
+            start: clock.currentTime(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
+
+        XCTAssertEqual(outcome.outcome, .settled(timeMs: 50))
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Ready")
+    }
 
     func testSettlesAfterCyclesRequiredStableCycles() async {
         let element = makeElement(label: "Hello", traits: .staticText, frame: CGRect(x: 0, y: 0, width: 100, height: 30))

@@ -27,6 +27,7 @@ private final class RotorCustomActionHandler: NSObject {
 final class TheStashRotorTests: XCTestCase {
 
     private var stash: TheStash!
+    private var hostedWindows: [UIWindow] = []
 
     override func setUp() async throws {
         try await super.setUp()
@@ -34,6 +35,7 @@ final class TheStashRotorTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        cleanupHostedWindows()
         stash = nil
         try await super.tearDown()
     }
@@ -49,8 +51,8 @@ final class TheStashRotorTests: XCTestCase {
 
     func testRotorNextReturnsParsedLiveResultElement() throws {
         let windowScene = try requireForegroundWindowScene()
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .white
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
 
         let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
         rotorHost.isAccessibilityElement = true
@@ -69,17 +71,14 @@ final class TheStashRotorTests: XCTestCase {
             }
         ]
 
-        viewController.view.addSubview(rotorHost)
-        viewController.view.addSubview(resultLabel)
+        rootView.addSubview(rotorHost)
+        rootView.addSubview(resultLabel)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 30
-        window.rootViewController = viewController
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
-        defer {
-            window.isHidden = true
-        }
+        _ = hostWindow(
+            in: windowScene,
+            level: .alert + 30,
+            rootView: rootView
+        )
 
         guard let screen = stash.parse() else {
             XCTFail("Expected live parse result")
@@ -112,8 +111,8 @@ final class TheStashRotorTests: XCTestCase {
 
     func testSystemRotorCanBeInvokedByDisplayedName() throws {
         let windowScene = try requireForegroundWindowScene()
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .white
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
 
         let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
         rotorHost.isAccessibilityElement = true
@@ -132,17 +131,14 @@ final class TheStashRotorTests: XCTestCase {
             }
         ]
 
-        viewController.view.addSubview(rotorHost)
-        viewController.view.addSubview(resultLabel)
+        rootView.addSubview(rotorHost)
+        rootView.addSubview(resultLabel)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 31
-        window.rootViewController = viewController
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
-        defer {
-            window.isHidden = true
-        }
+        _ = hostWindow(
+            in: windowScene,
+            level: .alert + 31,
+            rootView: rootView
+        )
 
         guard let screen = stash.parse() else {
             XCTFail("Expected live parse result")
@@ -176,15 +172,15 @@ final class TheStashRotorTests: XCTestCase {
 
     func testOutOfTreeRotorResultFailsInsteadOfCreatingHiddenContinuationState() async throws {
         let windowScene = try requireForegroundWindowScene()
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .white
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
 
         let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
         rotorHost.isAccessibilityElement = true
         rotorHost.accessibilityLabel = "Virtual Activation Results"
         rotorHost.accessibilityIdentifier = "virtual_activation_rotor_host"
 
-        let virtualResult = RotorActivationAccessibilityElement(accessibilityContainer: viewController.view as Any)
+        let virtualResult = RotorActivationAccessibilityElement(accessibilityContainer: rootView as Any)
         virtualResult.accessibilityLabel = "Open virtual result"
         virtualResult.accessibilityTraits = .button
         virtualResult.accessibilityFrameInContainerSpace = CGRect(x: 20, y: 120, width: 280, height: 44)
@@ -203,16 +199,13 @@ final class TheStashRotorTests: XCTestCase {
             }
         ]
 
-        viewController.view.addSubview(rotorHost)
+        rootView.addSubview(rotorHost)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 33
-        window.rootViewController = viewController
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
-        defer {
-            window.isHidden = true
-        }
+        _ = hostWindow(
+            in: windowScene,
+            level: .alert + 33,
+            rootView: rootView
+        )
 
         let brains = TheBrains(tripwire: TheTripwire())
         brains.tripwire.startPulse()
@@ -241,15 +234,15 @@ final class TheStashRotorTests: XCTestCase {
 
     func testRotorResultDoesNotResolveCachedSemanticElementOutsideParsedHierarchy() async throws {
         let windowScene = try requireForegroundWindowScene()
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .white
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
 
         let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
         rotorHost.isAccessibilityElement = true
         rotorHost.accessibilityLabel = "Cached Results"
         rotorHost.accessibilityIdentifier = "cached_rotor_host"
 
-        let cachedResult = RotorActivationAccessibilityElement(accessibilityContainer: viewController.view as Any)
+        let cachedResult = RotorActivationAccessibilityElement(accessibilityContainer: rootView as Any)
         cachedResult.accessibilityLabel = "Cached virtual result"
         cachedResult.accessibilityTraits = .button
         cachedResult.accessibilityFrameInContainerSpace = CGRect(x: 20, y: 120, width: 280, height: 44)
@@ -260,16 +253,13 @@ final class TheStashRotorTests: XCTestCase {
             }
         ]
 
-        viewController.view.addSubview(rotorHost)
+        rootView.addSubview(rotorHost)
 
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 36
-        window.rootViewController = viewController
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
-        defer {
-            window.isHidden = true
-        }
+        _ = hostWindow(
+            in: windowScene,
+            level: .alert + 36,
+            rootView: rootView
+        )
 
         let brains = TheBrains(tripwire: TheTripwire())
         guard let screen = brains.stash.refreshLiveCapture() else {
@@ -361,6 +351,40 @@ final class TheStashRotorTests: XCTestCase {
             throw XCTSkip("No foreground-active UIWindowScene available in test host")
         }
         return scene
+    }
+
+    private func hostWindow(
+        in scene: UIWindowScene,
+        level: UIWindow.Level,
+        rootView: UIView
+    ) -> UIWindow {
+        let window = UIWindow(windowScene: scene)
+        window.windowLevel = level
+        window.frame = UIScreen.main.bounds
+        rootView.frame = window.bounds
+        rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        window.addSubview(rootView)
+        window.isHidden = false
+        hostedWindows.append(window)
+        drainUIKitPresentationWork()
+        return window
+    }
+
+    private func cleanupHostedWindows() {
+        for window in hostedWindows.reversed() {
+            window.layer.removeAllAnimations()
+            window.subviews.forEach { $0.removeFromSuperview() }
+            window.isHidden = true
+        }
+        hostedWindows.removeAll()
+        drainUIKitPresentationWork()
+    }
+
+    private func drainUIKitPresentationWork() {
+        for _ in 0..<3 {
+            CATransaction.flush()
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        }
     }
 }
 

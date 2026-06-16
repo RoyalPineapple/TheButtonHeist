@@ -86,6 +86,59 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    // MARK: - ActionResult Timing
+
+    func testActionPerformanceTimingRoundTrip() throws {
+        let timing = ActionPerformanceTiming(
+            beforeObservationMs: 5,
+            targetResolutionMs: 0,
+            actionDispatchMs: 2,
+            interactionMs: 12,
+            settleMs: 74,
+            finalSemanticEvidenceMs: 23,
+            receiptGenerationMs: 0,
+            totalMs: 116
+        )
+
+        let data = try encoder.encode(timing)
+        let decoded = try decoder.decode(ActionPerformanceTiming.self, from: data)
+
+        XCTAssertEqual(decoded, timing)
+    }
+
+    func testActionPerformanceTimingDecodesPartialPayload() throws {
+        let json = #"{"settleMs":74}"#
+
+        let decoded = try decoder.decode(ActionPerformanceTiming.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded, ActionPerformanceTiming(settleMs: 74))
+    }
+
+    func testActionResultRoundTripPreservesTiming() throws {
+        let timing = ActionPerformanceTiming(
+            beforeObservationMs: 5,
+            targetResolutionMs: 0,
+            actionDispatchMs: 2,
+            interactionMs: 12,
+            settleMs: 74,
+            finalSemanticEvidenceMs: 23,
+            receiptGenerationMs: 0,
+            totalMs: 116
+        )
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            message: "activated",
+            timing: timing
+        )
+
+        let data = try encoder.encode(result)
+        let decoded = try decoder.decode(ActionResult.self, from: data)
+
+        XCTAssertEqual(decoded, result)
+        XCTAssertEqual(decoded.timing, timing)
+    }
+
     // MARK: - CustomActionTarget
 
     func testCustomActionTargetRoundTrip() throws {

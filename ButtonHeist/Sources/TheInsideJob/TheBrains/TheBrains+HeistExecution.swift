@@ -57,6 +57,9 @@ extension TheBrains {
         argument: HeistArgument,
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
+        let demand = stash.beginSemanticObservationDemand(scope: .visible)
+        defer { demand.cancel() }
+
         let heistStart = CFAbsoluteTimeGetCurrent()
         let environment: HeistExecutionEnvironment
         do {

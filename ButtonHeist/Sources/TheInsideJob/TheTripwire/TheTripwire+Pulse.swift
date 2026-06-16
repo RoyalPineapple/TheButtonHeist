@@ -65,8 +65,8 @@ extension TheTripwire {
 
     // MARK: - Settle Waiting
 
-    /// Wait for the UI to settle — no animations, no pending layout,
-    /// stable fingerprint for `requiredQuietFrames` consecutive ticks.
+    /// Wait for the UI to settle — no pending layout, stable presentation
+    /// fingerprint for `requiredQuietFrames` consecutive ticks.
     ///
     /// Each waiter tracks its own quiet-frame count from the moment of
     /// registration, so post-action animations are captured even if the
@@ -159,7 +159,6 @@ extension TheTripwire {
         let fingerprint = scan.fingerprint
 
         let isQuiet = !scan.hasPendingLayout
-            && !scan.hasRelevantAnimations
             && (prev?.fingerprint.matches(fingerprint) ?? true)
 
         let tripwireSignal = tripwireSignal()
@@ -204,16 +203,15 @@ extension TheTripwire {
 
     /// Is the interface all clear? When the pulse is running, returns the
     /// latest reading's settle state (requires 2 consecutive quiet frames).
-    /// Otherwise falls back to a synchronous scan checking both pending layout
-    /// and active animations — stricter than the pre-pulse check which only
-    /// looked at animations.
+    /// Otherwise falls back to a synchronous pending-layout check. Animation
+    /// keys are diagnostic; movement is represented by fingerprint changes.
     func allClear() -> Bool {
         switch pulsePhase {
         case .running(let context):
             return context.latestReading?.isSettled ?? false
         case .idle:
             let scan = scanLayers()
-            return !scan.hasPendingLayout && !scan.hasRelevantAnimations
+            return !scan.hasPendingLayout
         }
     }
 }

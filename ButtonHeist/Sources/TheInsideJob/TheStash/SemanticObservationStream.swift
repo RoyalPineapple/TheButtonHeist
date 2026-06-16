@@ -36,6 +36,8 @@ final class SemanticObservationStream {
     /// An active stream is an observation lease. Baseline cycles observe the
     /// visible world; subscribers can widen demand to discovery.
     typealias DiscoveryObservation = @MainActor () async -> Screen?
+    private static let activeSettleQuietWindowMs = SemanticQuietSettleSession.defaultQuietWindowMs
+    private static let activePassiveSettleTimeoutMs = 1_000
 
     struct SettledSemanticWaiter {
         let scope: SemanticObservationScope
@@ -57,6 +59,11 @@ final class SemanticObservationStream {
 
     private var nextSubscriptionID: UInt64 = 0
     private var subscriptions: [UInt64: SemanticObservationScope] = [:]
+
+    // MARK: - Active Demand State
+
+    private var nextActiveDemandID: UInt64 = 0
+    private var activeObservationDemands: [UInt64: SemanticObservationScope] = [:]
 
     // MARK: - Waiter State
 
@@ -98,6 +105,14 @@ final class SemanticObservationStream {
         settledWaitersByID.count
     }
 
+    var activeObservationDemandCount: Int {
+        activeObservationDemands.count
+    }
+
+    var hasActiveObservationDemand: Bool {
+        !activeObservationDemands.isEmpty
+    }
+
     init(stash: TheStash, tripwire: TheTripwire) {
         self.stash = stash
         self.tripwire = tripwire
@@ -135,8 +150,21 @@ final class SemanticObservationStream {
         subscriptions[id] = nil
     }
 
+    func beginActiveObservationDemand(scope: SemanticObservationScope) -> SemanticObservationDemand {
+        let id = nextActiveDemandID
+        nextActiveDemandID += 1
+        activeObservationDemands[id] = scope
+        return SemanticObservationDemand(id: id, scope: scope, stream: self)
+    }
+
+    func removeActiveObservationDemand(_ id: UInt64) {
+        activeObservationDemands[id] = nil
+    }
+
     func subscribedObservationScope() -> SemanticObservationScope {
-        subscriptions.values.max() ?? .visible
+        [subscriptions.values.max(), activeObservationDemands.values.max()]
+            .compactMap { $0 }
+            .max() ?? .visible
     }
 
     func settledEvent(
@@ -187,14 +215,10 @@ final class SemanticObservationStream {
 
         guard let stash else { return nil }
 
-        let settleSession = SettleSession.live(
+        let outcome = await settleVisibleObservationForCurrentDemand(
             stash: stash,
-            tripwire: tripwire,
+            baselineTripwireSignal: latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal(),
             timeoutMs: Self.timeoutMilliseconds(from: timeout)
-        )
-        let outcome = await settleSession.run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal()
         )
 
         if case .cancelled = outcome.outcome {
@@ -271,10 +295,10 @@ final class SemanticObservationStream {
         if let providedOutcome {
             outcome = providedOutcome
         } else {
-            let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
-            outcome = await settleSession.run(
-                start: CFAbsoluteTimeGetCurrent(),
-                baselineTripwireSignal: baselineTripwireSignal
+            outcome = await settleVisibleObservationForCurrentDemand(
+                stash: stash,
+                baselineTripwireSignal: baselineTripwireSignal,
+                timeoutMs: SettleSession.defaultTimeoutMs
             )
         }
 
@@ -500,6 +524,10 @@ final class SemanticObservationStream {
     }
 
     private func observeVisibleSemanticState(stash: TheStash) async -> Bool {
+        if hasActiveObservationDemand {
+            return await observeVisibleSemanticStateAtActiveCadence(stash: stash)
+        }
+
         if let reading = tripwire.latestReading,
            !latestSettledObservationInvalidated,
            passiveObservationSettledReading?.tick == reading.tick {
@@ -532,6 +560,78 @@ final class SemanticObservationStream {
         _ = commitSettledVisibleObservation(screen)
         await Task.yield()
         return true
+    }
+
+    private func observeVisibleSemanticStateAtActiveCadence(stash: TheStash) async -> Bool {
+        let baselineSignal = latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal()
+        let settle = await settleVisibleObservationAtActiveCadence(
+            stash: stash,
+            baselineTripwireSignal: baselineSignal,
+            timeoutMs: Self.activePassiveSettleTimeoutMs
+        )
+
+        guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
+            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: settle)
+            stash.recordFailedSettleDiagnosticEvidence(settle.finalScreen)
+            await Task.yield()
+            return true
+        }
+
+        _ = commitSettledVisibleObservation(screen)
+        await Task.yield()
+        return true
+    }
+
+    private func settleVisibleObservationForCurrentDemand(
+        stash: TheStash,
+        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        timeoutMs: Int
+    ) async -> SettleSession.Outcome {
+        if hasActiveObservationDemand {
+            return await settleVisibleObservationAtActiveCadence(
+                stash: stash,
+                baselineTripwireSignal: baselineTripwireSignal,
+                timeoutMs: timeoutMs
+            )
+        }
+        return await settleVisibleObservationAtIdleCadence(
+            stash: stash,
+            baselineTripwireSignal: baselineTripwireSignal,
+            timeoutMs: timeoutMs
+        )
+    }
+
+    private func settleVisibleObservationAtIdleCadence(
+        stash: TheStash,
+        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        timeoutMs: Int
+    ) async -> SettleSession.Outcome {
+        let settleSession = SettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            timeoutMs: timeoutMs
+        )
+        return await settleSession.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: baselineTripwireSignal
+        )
+    }
+
+    private func settleVisibleObservationAtActiveCadence(
+        stash: TheStash,
+        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        timeoutMs: Int
+    ) async -> SettleSession.Outcome {
+        let settleSession = SemanticQuietSettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            quietWindowMs: Self.activeSettleQuietWindowMs,
+            timeoutMs: timeoutMs
+        )
+        return await settleSession.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: baselineTripwireSignal
+        )
     }
 
     private static func failureDiagnostic(
