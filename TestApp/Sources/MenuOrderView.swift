@@ -467,6 +467,17 @@ private struct MenuItemRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to configure")
             .accessibilityAddTraits(isExpanded ? .isSelected : [])
+            .accessibilityAction(named: item.quantity == 0 ? "Add to Cart" : "Remove from Cart") {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if item.quantity == 0 {
+                        item.quantity = 1
+                    } else {
+                        item.quantity = 0
+                        item.activeOptions = []
+                        item.selectedSize = .regular
+                    }
+                }
+            }
 
             // Expanded configuration section
             if isExpanded {

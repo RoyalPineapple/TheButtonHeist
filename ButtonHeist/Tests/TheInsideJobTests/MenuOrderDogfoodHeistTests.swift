@@ -12,13 +12,8 @@ private enum DemoHome {
 
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
-        Activate(.label(item))
-            .expect(.present(.label("Add to Cart")), timeout: .seconds(2))
-
-        Activate(.label("Add to Cart"))
+        CustomAction("Add to Cart", on: .label(item))
             .expect(.changed(.elements), timeout: .seconds(2))
-
-        WaitFor(.absent(.label("Add to Cart")), timeout: .seconds(2))
     }
 
     static let checkout = HeistDef<Void>("MenuScreen.checkout") {

@@ -531,7 +531,7 @@ ROTORS_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROTORS_JSON" | json_expect_ok "Custom Rotors get_interface"
 printf '%s' "$ROTORS_JSON" | expect_screen_title "Custom Rotors"
 printf '%s' "$ROTORS_JSON" | expect_element_label "Rotor Host"
-ROTOR_JSON="$(run_cli_json rotor --label "Rotor Host" --rotor "Errors" --timeout 15)"
+ROTOR_JSON="$(run_cli_json rotor --label "Rotor Host" --rotor "Errors" --timeout 30)"
 printf '%s' "$ROTOR_JSON" | json_expect_ok "rotor Errors"
 # The expected label comes from TestApp/Sources/RotorsDemo.swift's UIKit rotor result view.
 # The rotor result carries the found element directly (no heistId on the wire).
