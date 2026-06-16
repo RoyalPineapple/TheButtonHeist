@@ -231,6 +231,38 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertTrue(predicate.validate(against: action).met)
     }
 
+    func testElementUpdatedPassReportsObservedPropertyProof() {
+        let delta = makeUpdateDelta(label: "Quantity", property: .value, old: "2", new: "3")
+        let action = makeResult(success: true, delta: delta)
+        let predicate = AccessibilityPredicate.changed(.updated(ElementUpdatePredicate(
+            element: .label("Quantity"),
+            property: .value,
+            from: "2",
+            to: "3"
+        )))
+        let result = predicate.validate(against: action)
+
+        XCTAssertTrue(result.met)
+        XCTAssertEqual(result.actual, "Quantity: value: 2 → 3")
+    }
+
+    func testElementUpdatedDoesNotPassWhenCurrentValueAlreadyMatchedWithoutDeltaEvidence() {
+        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 1))
+        let predicate = AccessibilityPredicate.changed(.updated(ElementUpdatePredicate(
+            element: .label("Quantity"),
+            property: .value,
+            from: "3",
+            to: "3"
+        )))
+        let result = predicate.evaluate(
+            currentElements: [makeElement(label: "Quantity", value: "3")],
+            delta: delta
+        )
+
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(result.actual, "no element updates")
+    }
+
     func testElementUpdatedNotMetWhenNoMatch() {
         let delta = makeUpdateDelta(label: "counter", property: .value, old: "3", new: "4")
         let action = makeResult(success: true, delta: delta)

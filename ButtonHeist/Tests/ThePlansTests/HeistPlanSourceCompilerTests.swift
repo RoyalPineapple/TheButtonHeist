@@ -26,6 +26,59 @@ import ThePlans
     #expect(plan == expected)
 }
 
+@Test func `inline plan source property update expectations compile`() throws {
+    let scoped = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("Bruschetta", into: .identifier("Search"))
+        .expect(.changed(.updated(.identifier("Search"), property: .value, to: "Bruschetta")))
+    """#))
+    let unscoped = try HeistPlanSourceCompiler().compile(root(#"""
+    Increment(.identifier("Quantity"))
+        .expect(.changed(.updated(property: .value, to: "3")))
+    """#))
+    let fromTo = try HeistPlanSourceCompiler().compile(root(#"""
+    Increment(.identifier("Quantity"))
+        .expect(.changed(.updated(.identifier("Quantity"), property: .value, from: "2", to: "3")))
+    """#))
+
+    let expectedScoped = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(
+                text: .literal("Bruschetta"),
+                target: .predicate(.identifier("Search"))
+            ),
+            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+                element: .identifier("Search"),
+                property: .value,
+                to: "Bruschetta"
+            ))))
+        )),
+    ])
+    let expectedUnscoped = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .increment(.predicate(.identifier("Quantity"))),
+            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+                property: .value,
+                to: "3"
+            ))))
+        )),
+    ])
+    let expectedFromTo = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .increment(.predicate(.identifier("Quantity"))),
+            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+                element: .identifier("Quantity"),
+                property: .value,
+                from: "2",
+                to: "3"
+            ))))
+        )),
+    ])
+
+    #expect(scoped == expectedScoped)
+    #expect(unscoped == expectedUnscoped)
+    #expect(fromTo == expectedFromTo)
+}
+
 @Test func `inline plan source unicode string escapes preserve following characters`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root(#"""
     Warn("A\u0062C")

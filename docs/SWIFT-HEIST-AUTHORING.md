@@ -153,9 +153,29 @@ reveal, element inflation, and live geometry through the runtime pipeline.
 CustomAction("Archive", on: .label("Message"))
     .expect(.changed(.elements))
 
+TypeText("Bruschetta", into: .identifier("Search"))
+    .expect(.changed(.updated(.identifier("Search"), property: .value, to: "Bruschetta")))
+
+Increment(.label("Quantity"))
+    .expect(.changed(.updated(property: .value, from: "2", to: "3")))
+
 Rotor("Headings", on: .label("Article"), direction: .next)
     .withoutExpectation("Navigation cursor only")
 ```
+
+Use `.changed(.updated(...))` for explicit property-delta assertions. The
+optional first argument scopes the update to an element predicate; omitting it
+matches any updated element in the observed delta. `from` and `to` are optional
+string filters. This remains an observed-change predicate and does not infer the
+action's target from hidden context.
+
+Do not write `.expect(.updated(...))` today. A future target-relative shorthand
+would need to derive a durable anchor at DSL-build time and lower immediately to
+the explicit `.changed(.updated(target, ...))` predicate.
+
+Do not assert label or identifier changes as property updates. The current diff
+model uses those fields for element identity, so a label or identifier change is
+not a safe `.updated(property:)` contract.
 
 `ForEach` has two durable authoring forms:
 

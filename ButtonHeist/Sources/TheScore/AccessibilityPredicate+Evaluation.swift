@@ -205,35 +205,44 @@ public extension AccessibilityPredicate.Change {
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, predicate: nil, actual: "no element updates")
         }
-        let match = updates.contains { edit in
+        for edit in updates {
             if let elementPredicate = update.element {
-                guard elementPredicate.matches(edit.element) else { return false }
+                guard elementPredicate.matches(edit.element) else { continue }
             }
             let targetChanges: [PropertyChange]
             if let property = update.property {
                 targetChanges = edit.changes.filter { $0.property == property }
-                if targetChanges.isEmpty { return false }
+                if targetChanges.isEmpty { continue }
             } else {
                 targetChanges = edit.changes
             }
+            let matchingChanges: [PropertyChange]
             if update.from != nil || update.to != nil {
-                guard targetChanges.contains(where: { change in
+                matchingChanges = targetChanges.filter { change in
                     if let from = update.from, change.old != from { return false }
                     if let to = update.to, change.new != to { return false }
                     return true
-                }) else { return false }
+                }
+                guard !matchingChanges.isEmpty else { continue }
+            } else {
+                matchingChanges = targetChanges
             }
-            return true
-        }
-        if match {
-            return ExpectationResult(met: true, predicate: nil)
+            return ExpectationResult(
+                met: true,
+                predicate: nil,
+                actual: Self.describeUpdate(edit, changes: matchingChanges)
+            )
         }
         let observed = updates.map { edit in
-            let properties = edit.changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
-            let name = edit.element.label ?? edit.element.description
-            return "\(name): \(properties.joined(separator: ", "))"
+            Self.describeUpdate(edit, changes: edit.changes)
         }.joined(separator: "; ")
         return ExpectationResult(met: false, predicate: nil, actual: observed)
+    }
+
+    private static func describeUpdate(_ edit: ElementUpdate, changes: [PropertyChange]) -> String {
+        let properties = changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
+        let name = edit.element.label ?? edit.element.description
+        return "\(name): \(properties.joined(separator: ", "))"
     }
 }
 
