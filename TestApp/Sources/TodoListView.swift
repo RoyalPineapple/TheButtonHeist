@@ -100,6 +100,7 @@ struct TodoListView: View {
         }
         .scrollDismissesKeyboard(.immediately)
         .navigationTitle("Todo List")
+        .onAppear(perform: resetState)
         .sheet(item: $editingItem) { item in
             TodoEditSheet(item: item) { updatedItem in
                 applyEdit(updatedItem)
@@ -186,6 +187,15 @@ struct TodoListView: View {
 
     private func clearCompleted() {
         items.removeAll { $0.isCompleted }
+    }
+
+    private func resetState() {
+        items = Self.sampleItems
+        newItemText = ""
+        newItemCategory = .work
+        filter = .all
+        editingItem = nil
+        isNewItemFieldFocused = false
     }
 
     // Sample data: deliberate duplicates across categories.
