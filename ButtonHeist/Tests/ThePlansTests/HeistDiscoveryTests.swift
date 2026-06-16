@@ -1,8 +1,8 @@
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
-private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
-    try raw.validatedForRuntime()
+private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPlan {
+    try raw.validatedForRuntimeSafety()
 }
 
 @Test func `list heists includes root only entry`() throws {
@@ -46,10 +46,10 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
 }
 
 @Test func `list heists includes string definition`() throws {
-    let catalog = try validatedPlan(UnvalidatedHeistPlan(
+    let catalog = try validatedPlan(HeistPlanAdmissionCandidate(
         name: "root",
         definitions: [
-            UnvalidatedHeistPlan(
+            HeistPlanAdmissionCandidate(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
@@ -70,10 +70,10 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
 }
 
 @Test func `list heists includes element target definition`() throws {
-    let catalog = try validatedPlan(UnvalidatedHeistPlan(
+    let catalog = try validatedPlan(HeistPlanAdmissionCandidate(
         name: "root",
         definitions: [
-            UnvalidatedHeistPlan(
+            HeistPlanAdmissionCandidate(
                 name: "tapRow",
                 parameter: .elementTarget(name: "row"),
                 body: [
@@ -131,10 +131,10 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
 }
 
 @Test func `list heists detailed mode includes parameter name for parameterized capability`() throws {
-    let catalog = try validatedPlan(UnvalidatedHeistPlan(
+    let catalog = try validatedPlan(HeistPlanAdmissionCandidate(
         name: "root",
         definitions: [
-            UnvalidatedHeistPlan(
+            HeistPlanAdmissionCandidate(
                 name: "tapRow",
                 parameter: .elementTarget(name: "row"),
                 body: [
@@ -153,22 +153,22 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
 }
 
 @Test func `list heists cannot be reached for invalid raw plan`() throws {
-    let raw = UnvalidatedHeistPlan(
+    let raw = HeistPlanAdmissionCandidate(
         name: "root",
         definitions: [
-            UnvalidatedHeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "one"))]),
-            UnvalidatedHeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "two"))]),
+            HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "one"))]),
+            HeistPlanAdmissionCandidate(name: "duplicate", body: [.warn(WarnStep(message: "two"))]),
         ],
         body: [.warn(WarnStep(message: "ready"))]
     )
 
-    #expect(throws: HeistPlanValidationError.self) {
-        _ = try raw.validatedForRuntime()
+    #expect(throws: HeistPlanRuntimeSafetyError.self) {
+        _ = try raw.validatedForRuntimeSafety()
     }
 }
 
 @Test func `list heists includes parameterized root entry`() throws {
-    let catalog = try validatedPlan(UnvalidatedHeistPlan(
+    let catalog = try validatedPlan(HeistPlanAdmissionCandidate(
         name: "root",
         parameter: .string(name: "item"),
         body: [
@@ -203,10 +203,10 @@ private func validatedPlan(_ raw: UnvalidatedHeistPlan) throws -> HeistPlan {
 }
 
 @Test func `describe parameterized capability`() throws {
-    let description = try validatedPlan(UnvalidatedHeistPlan(
+    let description = try validatedPlan(HeistPlanAdmissionCandidate(
         name: "root",
         definitions: [
-            UnvalidatedHeistPlan(
+            HeistPlanAdmissionCandidate(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [

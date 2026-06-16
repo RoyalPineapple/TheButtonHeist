@@ -116,8 +116,8 @@ struct HeistSwiftFileCompiler: Sendable {
             return try HeistPlanJSONCodec.decodeValidatedPlan(result.stdout, sourceURL: source)
         } catch let error as HeistPlanJSONCodecError {
             throw HeistSwiftFileCompilerError.invalidCompilerOutput(error.description)
-        } catch let error as HeistPlanValidationError {
-            throw HeistSwiftFileCompilerError.runtimeValidationFailed(error.description)
+        } catch let error as HeistPlanRuntimeSafetyError {
+            throw HeistSwiftFileCompilerError.runtimeSafetyFailed(error.description)
         } catch {
             throw HeistSwiftFileCompilerError.invalidCompilerOutput(String(describing: error))
         }
@@ -197,7 +197,7 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
     case compileFailed(String, String)
     case executionFailed(String, String)
     case invalidCompilerOutput(String)
-    case runtimeValidationFailed(String)
+    case runtimeSafetyFailed(String)
 
     var description: String {
         switch self {
@@ -226,8 +226,8 @@ enum HeistSwiftFileCompilerError: Error, Sendable, Equatable, CustomStringConver
             return "compiled Swift heist source \(path) failed while evaluating entry: \(diagnostics)"
         case .invalidCompilerOutput(let diagnostics):
             return "compiled Swift heist did not emit valid HeistPlan JSON: \(diagnostics)"
-        case .runtimeValidationFailed(let diagnostics):
-            return "compiled Swift heist failed runtime validation: \(diagnostics)"
+        case .runtimeSafetyFailed(let diagnostics):
+            return "compiled Swift heist failed runtime safety: \(diagnostics)"
         }
     }
 }

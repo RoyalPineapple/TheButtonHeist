@@ -140,7 +140,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         // Write the plan exactly as compiled. The artifact file name carries the
         // run name for reporting; it must not be stamped into the plan's `name`,
         // which is a Swift-identifier-constrained semantic field and would fail
-        // runtime validation for a non-identifier file name.
+        // runtime safety checks for a non-identifier file name.
         try HeistArtifactCodec.writePlan(plan, to: artifact)
         return PreparedInput(path: artifact.path, entry: nil, cleanup: {
             try? FileManager.default.removeItem(at: directory)

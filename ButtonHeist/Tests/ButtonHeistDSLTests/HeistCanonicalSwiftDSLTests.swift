@@ -190,14 +190,14 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
 
 @Test
 func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
-    let raw = UnvalidatedHeistPlan(body: [
+    let raw = HeistPlanAdmissionCandidate(body: [
         .action(try ActionStep(command: .activate(.ref("target")))),
     ])
 
     do {
-        _ = try raw.validatedForRuntime()
+        _ = try raw.validatedForRuntimeSafety()
         Issue.record("Expected unresolved ref validation failure")
-    } catch let error as HeistPlanValidationError {
+    } catch let error as HeistPlanRuntimeSafetyError {
         #expect(error.failures.contains { $0.contract == "target_ref must resolve in the current heist scope" })
     }
 }
@@ -205,11 +205,11 @@ func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
 @Test
 func decodedRuntimeLoopsRejectNonCanonicalSwiftParameters() throws {
     for json in [invalidElementLoopParameterJSON, invalidStringLoopParameterJSON] {
-        let raw = try JSONDecoder().decode(UnvalidatedHeistPlan.self, from: Data(json.utf8))
+        let raw = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: Data(json.utf8))
         do {
-            _ = try raw.validatedForRuntime()
+            _ = try raw.validatedForRuntimeSafety()
             Issue.record("Expected invalid loop parameter validation failure")
-        } catch let error as HeistPlanValidationError {
+        } catch let error as HeistPlanRuntimeSafetyError {
             #expect(error.failures.contains { $0.contract.contains("Swift-style identifier") })
         }
     }
@@ -313,7 +313,7 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
 
         #expect(reason.contains("viewport debug command"))
 
-        // Durability is a canonical DSL concern, not runtime validation:
+        // Durability is a canonical DSL concern, not runtime safety:
         // viewport commands construct as runtime-valid plans but cannot render
         // to canonical Swift DSL.
 

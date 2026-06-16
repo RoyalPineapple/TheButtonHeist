@@ -56,7 +56,7 @@ struct HeistPlanTraversal {
         visitor: inout V
     ) {
         let rootScope = HeistReferenceScope.empty.binding(parameter: plan.parameter)
-        let rootEnvironment = HeistExecutionEnvironment.runtimeValidationPlaceholder(for: plan.parameter)
+        let rootEnvironment = HeistExecutionEnvironment.runtimeSafetyPlaceholder(for: plan.parameter)
         let context = HeistTraversalContext(
             path: "$",
             depth: 0,
@@ -470,7 +470,7 @@ struct HeistDefinitionScope {
 }
 
 extension HeistExecutionEnvironment {
-    static func runtimeValidationPlaceholder(for parameter: HeistParameter) -> HeistExecutionEnvironment {
+    static func runtimeSafetyPlaceholder(for parameter: HeistParameter) -> HeistExecutionEnvironment {
         guard let parameterName = parameter.name else { return .empty }
         switch parameter {
         case .none:

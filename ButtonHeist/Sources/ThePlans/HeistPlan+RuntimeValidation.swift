@@ -3,8 +3,6 @@ import Foundation
 // Admission owns the externally submitted plan shape. Decoding this type proves
 // only that source/artifact JSON can be loaded as plan IR; RuntimeSafety below
 // is the separate executable-plan boundary.
-@_spi(ButtonHeistInternals) public typealias UnvalidatedHeistPlan = HeistPlanAdmissionCandidate
-
 @_spi(ButtonHeistInternals) public struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
     public let version: Int
     public let name: String?
@@ -77,21 +75,11 @@ import Foundation
         try container.encode(body, forKey: .body)
     }
 
-    public func validatedForRuntime(
-        limits: HeistPlanRuntimeValidationLimits = .standard
-    ) throws -> HeistPlan {
-        try validatedForRuntimeSafety(limits: limits)
-    }
-
     public func validatedForRuntimeSafety(
         limits: HeistPlanRuntimeSafetyLimits = .standard
     ) throws -> HeistPlan {
         var validator = HeistPlanRuntimeSafetyValidator(limits: limits)
         return try validator.validate(self)
-    }
-
-    func uncheckedPlanForRuntimeValidation() -> HeistPlan {
-        uncheckedPlanForRuntimeSafetyValidation()
     }
 
     func uncheckedPlanForRuntimeSafetyValidation() -> HeistPlan {
@@ -104,8 +92,6 @@ import Foundation
         )
     }
 }
-
-@_spi(ButtonHeistInternals) public typealias UnvalidatedHeistStep = HeistStepAdmissionCandidate
 
 @_spi(ButtonHeistInternals) public enum HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
     case action(ActionStep)
@@ -158,14 +144,10 @@ import Foundation
         case .fail(let step):
             self = .fail(step)
         case .heist(let plan):
-            self = .heist(UnvalidatedHeistPlan(plan))
+            self = .heist(HeistPlanAdmissionCandidate(plan))
         case .invoke(let step):
             self = .invoke(step)
         }
-    }
-
-    var uncheckedStepForRuntimeValidation: HeistStep {
-        uncheckedStepForRuntimeSafetyValidation
     }
 
     var uncheckedStepForRuntimeSafetyValidation: HeistStep {
@@ -276,8 +258,6 @@ import Foundation
     }
 }
 
-@_spi(ButtonHeistInternals) public typealias HeistPlanRuntimeValidationLimits = HeistPlanRuntimeSafetyLimits
-
 @_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
     public static let standard = HeistPlanRuntimeSafetyLimits()
 
@@ -314,8 +294,6 @@ import Foundation
     }
 }
 
-@_spi(ButtonHeistInternals) public typealias HeistPlanValidationFailure = HeistPlanRuntimeSafetyFailure
-
 @_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyFailure: Sendable, Equatable, CustomStringConvertible {
     public let path: String
     public let contract: String
@@ -338,8 +316,6 @@ import Foundation
         "\(path): \(contract); observed \(observed); \(correction)"
     }
 }
-
-@_spi(ButtonHeistInternals) public typealias HeistPlanValidationError = HeistPlanRuntimeSafetyError
 
 @_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyError: Error, Sendable, Equatable, CustomStringConvertible {
     public let failures: [HeistPlanRuntimeSafetyFailure]

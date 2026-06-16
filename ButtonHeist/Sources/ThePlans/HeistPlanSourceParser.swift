@@ -12,12 +12,12 @@ struct HeistPlanSourceParser {
         self.sourceName = sourceName
     }
 
-    mutating func parseProgram() throws -> UnvalidatedHeistPlan {
+    mutating func parseProgram() throws -> HeistPlanAdmissionCandidate {
         if startsRootHeistPlan {
             let root = try parseRootHeistPlan()
-            let uncheckedRoot = root.uncheckedPlanForRuntimeValidation()
+            let uncheckedRoot = root.uncheckedPlanForRuntimeSafetyValidation()
             try expect(.eof)
-            return UnvalidatedHeistPlan(
+            return HeistPlanAdmissionCandidate(
                 version: HeistPlan.currentVersion,
                 name: root.name,
                 parameter: root.parameter,
@@ -30,7 +30,7 @@ struct HeistPlanSourceParser {
         throw error(currentToken, "ButtonHeist source must be a canonical root plan: `HeistPlan { ... }`")
     }
 
-    private mutating func parseRootHeistPlan() throws -> UnvalidatedHeistPlan {
+    private mutating func parseRootHeistPlan() throws -> HeistPlanAdmissionCandidate {
         let name = try parseCalleeName()
         guard name == ["HeistPlan"] else {
             throw error(previous, "expected `HeistPlan { ... }`")
@@ -42,7 +42,7 @@ struct HeistPlanSourceParser {
         untilRightBrace: Bool,
         allowDefinitions: Bool
     ) throws -> ParsedHeistBody {
-        var definitions: [UnvalidatedHeistPlan] = []
+        var definitions: [HeistPlanAdmissionCandidate] = []
         var steps: [HeistStep] = []
         var seenStep = false
         while true {
@@ -71,7 +71,7 @@ struct HeistPlanSourceParser {
         return ParsedHeistBody(definitions: definitions, steps: steps)
     }
 
-    private mutating func parseDefinition() throws -> UnvalidatedHeistPlan {
+    private mutating func parseDefinition() throws -> HeistPlanAdmissionCandidate {
         let callee = try parseCalleeName()
         guard callee == ["HeistDef"] else {
             throw error(previous, "heist definitions must use `HeistDef<...>(\"Name\") { ... }`")
@@ -140,16 +140,16 @@ struct HeistPlanSourceParser {
     private func makeDefinition(
         path: [String],
         parameter: HeistParameter,
-        definitions: [UnvalidatedHeistPlan],
+        definitions: [HeistPlanAdmissionCandidate],
         body: [HeistStep]
-    ) -> UnvalidatedHeistPlan {
+    ) -> HeistPlanAdmissionCandidate {
         guard let first = path.first else {
-            return UnvalidatedHeistPlan(parameter: parameter, definitions: definitions, body: body)
+            return HeistPlanAdmissionCandidate(parameter: parameter, definitions: definitions, body: body)
         }
         guard path.count > 1 else {
-            return UnvalidatedHeistPlan(name: first, parameter: parameter, definitions: definitions, body: body)
+            return HeistPlanAdmissionCandidate(name: first, parameter: parameter, definitions: definitions, body: body)
         }
-        return UnvalidatedHeistPlan(
+        return HeistPlanAdmissionCandidate(
             name: first,
             definitions: [
                 makeDefinition(
@@ -163,8 +163,8 @@ struct HeistPlanSourceParser {
         )
     }
 
-    private func mergeDefinitions(_ definitions: [UnvalidatedHeistPlan]) -> [UnvalidatedHeistPlan] {
-        var merged: [UnvalidatedHeistPlan] = []
+    private func mergeDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) -> [HeistPlanAdmissionCandidate] {
+        var merged: [HeistPlanAdmissionCandidate] = []
         for definition in definitions {
             guard let name = definition.name,
                   let existingIndex = merged.firstIndex(where: { $0.name == name }) else {
@@ -173,7 +173,7 @@ struct HeistPlanSourceParser {
             }
             let existing = merged[existingIndex]
             if isNamespace(existing), isNamespace(definition) {
-                merged[existingIndex] = UnvalidatedHeistPlan(
+                merged[existingIndex] = HeistPlanAdmissionCandidate(
                     name: name,
                     definitions: mergeDefinitions(existing.definitions + definition.definitions),
                     body: []
@@ -185,7 +185,7 @@ struct HeistPlanSourceParser {
         return merged
     }
 
-    private func isNamespace(_ definition: UnvalidatedHeistPlan) -> Bool {
+    private func isNamespace(_ definition: HeistPlanAdmissionCandidate) -> Bool {
         definition.parameter == .none && definition.body.isEmpty && !definition.definitions.isEmpty
     }
 
@@ -238,7 +238,7 @@ struct HeistPlanSourceParser {
             return [try parseForEach()]
         case ["HeistPlan"]:
             let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
-            return [.heist(plan.uncheckedPlanForRuntimeValidation())]
+            return [.heist(plan.uncheckedPlanForRuntimeSafetyValidation())]
         case ["RunHeist"]:
             return [try parseRunHeist()]
         case ["Warn"]:
@@ -250,10 +250,10 @@ struct HeistPlanSourceParser {
         }
     }
 
-    private mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> UnvalidatedHeistPlan {
+    private mutating func parseHeistPlanAfterCallee(allowDefinitions: Bool) throws -> HeistPlanAdmissionCandidate {
         let header = try parseHeistPlanHeader()
         let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: allowDefinitions)
-        return UnvalidatedHeistPlan(
+        return HeistPlanAdmissionCandidate(
             version: HeistPlan.currentVersion,
             name: header.name,
             parameter: header.parameter,
@@ -1533,7 +1533,7 @@ struct HeistPlanSourceParser {
 }
 
 private struct ParsedHeistBody {
-    let definitions: [UnvalidatedHeistPlan]
+    let definitions: [HeistPlanAdmissionCandidate]
     let steps: [HeistStep]
 }
 

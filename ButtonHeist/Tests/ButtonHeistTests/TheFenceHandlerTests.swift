@@ -355,7 +355,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         // A hyphenated file name is NOT a valid Swift-style identifier. The fence
         // must run the plan exactly as authored — stamping the file name into the
-        // plan's `name` would fail runtime validation and silently reduce the run
+        // plan's `name` would fail runtime safety and silently reduce the run
         // to zero steps (the run_heist replay no-op regression).
         let heistURL = temp.appendingPathComponent("bh-demo-smoke.heist")
         let plan = try HeistPlan(name: "demoSmoke", body: [.warn(WarnStep(message: "from artifact"))])
@@ -1116,7 +1116,7 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
     }
 
-    private static func inlineArguments(for plan: UnvalidatedHeistPlan) throws -> TheFence.CommandArgumentEnvelope {
+    private static func inlineArguments(for plan: HeistPlanAdmissionCandidate) throws -> TheFence.CommandArgumentEnvelope {
         let data = try JSONEncoder().encode(plan)
         guard case .object(let fields) = try JSONDecoder().decode(HeistValue.self, from: data) else {
             throw XCTSkip("plan did not encode to a JSON object")

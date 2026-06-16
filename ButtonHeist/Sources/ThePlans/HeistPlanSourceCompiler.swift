@@ -12,12 +12,12 @@ public struct HeistPlanSourceCompiler: Sendable {
             let tokens = try lexer.lex()
             var parser = HeistPlanSourceParser(tokens: tokens, sourceName: sourceName)
             let plan = try parser.parseProgram()
-            return try plan.validatedForRuntime()
+            return try plan.validatedForRuntimeSafety()
         } catch let error as HeistPlanSourceCompilerError {
             throw error
         } catch {
             throw HeistPlanSourceCompilerError(
-                message: "ButtonHeist source failed runtime validation: \(String(describing: error))",
+                message: "ButtonHeist source failed runtime safety: \(String(describing: error))",
                 sourceName: sourceName,
                 offset: 0,
                 line: 1,

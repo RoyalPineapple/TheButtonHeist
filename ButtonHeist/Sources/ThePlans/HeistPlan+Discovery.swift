@@ -266,7 +266,7 @@ private extension HeistPlan {
     }
 
     static func discoveryEnvironment(for parameter: HeistParameter) -> HeistExecutionEnvironment {
-        HeistExecutionEnvironment.runtimeValidationPlaceholder(for: parameter)
+        HeistExecutionEnvironment.runtimeSafetyPlaceholder(for: parameter)
     }
 
     func catalogEntry(

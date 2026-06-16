@@ -4,12 +4,12 @@ import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 import TheScore
 
-private func validatedDefinitions(_ definitions: [UnvalidatedHeistPlan]) throws -> [HeistPlan] {
-    try UnvalidatedHeistPlan(
+private func validatedDefinitions(_ definitions: [HeistPlanAdmissionCandidate]) throws -> [HeistPlan] {
+    try HeistPlanAdmissionCandidate(
         definitions: definitions,
         body: [.warn(WarnStep(message: "root"))]
     )
-    .validatedForRuntime()
+    .validatedForRuntimeSafety()
     .definitions
 }
 
@@ -114,7 +114,7 @@ func `chained state expectation joins existing screen where clause`() throws {
 
 @Test
 func `different explicit chained expectation timeouts fail validation`() throws {
-    #expect(throws: HeistPlanValidationError.self) {
+    #expect(throws: HeistPlanRuntimeSafetyError.self) {
         try HeistPlan {
             Activate(.label("Save"))
                 .expect(.present(.label("A")), timeout: .seconds(1))
@@ -130,7 +130,7 @@ func `unsupported chained change expectations fail validation without replacemen
         expectation: WaitStep(predicate: .changed(.elements)),
         expectationValidationFailure: "unsupported expectation composition: changed(elements_changed) + changed(screen_changed)"
     )
-    #expect(throws: HeistPlanValidationError.self) {
+    #expect(throws: HeistPlanRuntimeSafetyError.self) {
         try HeistPlan {
             Activate(.label("Save"))
                 .expect(.changed(.elements))
@@ -532,8 +532,8 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
         )),
     ])
     #expect(try heist.definitions == validatedDefinitions([
-        UnvalidatedHeistPlan(name: "LibraryScreen", definitions: [
-            UnvalidatedHeistPlan(
+        HeistPlanAdmissionCandidate(name: "LibraryScreen", definitions: [
+            HeistPlanAdmissionCandidate(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 body: [
@@ -559,8 +559,8 @@ func `string heist definitions default parameter to input`() throws {
     }
 
     #expect(try heist.definitions == validatedDefinitions([
-        UnvalidatedHeistPlan(name: "SearchScreen", definitions: [
-            UnvalidatedHeistPlan(
+        HeistPlanAdmissionCandidate(name: "SearchScreen", definitions: [
+            HeistPlanAdmissionCandidate(
                 name: "search",
                 parameter: .string(name: "input"),
                 body: [
@@ -585,8 +585,8 @@ func `element target heist definitions default parameter to input`() throws {
     }
 
     #expect(try heist.definitions == validatedDefinitions([
-        UnvalidatedHeistPlan(name: "Rows", definitions: [
-            UnvalidatedHeistPlan(
+        HeistPlanAdmissionCandidate(name: "Rows", definitions: [
+            HeistPlanAdmissionCandidate(
                 name: "delete",
                 parameter: .elementTarget(name: "input"),
                 body: [
@@ -609,7 +609,7 @@ func heistDefinitionsRejectConflictingDuplicatesDuringValidation() throws {
         Activate(.label("Add to Cart"))
     }
 
-    #expect(throws: HeistPlanValidationError.self) {
+    #expect(throws: HeistPlanRuntimeSafetyError.self) {
         try HeistPlan {
             try first("Milk")
             try second("Bread")
@@ -634,13 +634,13 @@ func heistDefinitionsCarryLocalDependenciesInDefinitionScope() throws {
         try LibraryScreen.addToCart("Milk")
     }
     #expect(try heist.definitions == validatedDefinitions([
-        UnvalidatedHeistPlan(name: "LibraryScreen", definitions: [
-            UnvalidatedHeistPlan(
+        HeistPlanAdmissionCandidate(name: "LibraryScreen", definitions: [
+            HeistPlanAdmissionCandidate(
                 name: "addToCart",
                 parameter: .string(name: "item"),
                 definitions: [
-                    UnvalidatedHeistPlan(name: "AddButton", definitions: [
-                        UnvalidatedHeistPlan(
+                    HeistPlanAdmissionCandidate(name: "AddButton", definitions: [
+                        HeistPlanAdmissionCandidate(
                             name: "tap",
                             body: [
                                 .action(try ActionStep(command: .activate(.target(.label("Add to Cart"))))),

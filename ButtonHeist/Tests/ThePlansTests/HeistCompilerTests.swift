@@ -384,14 +384,14 @@ struct HeistCompilerTests {
         let files = try productionSwiftFilesOutsideThePlans(in: root)
         let forbiddenSnippets = [
             "@_spi(ButtonHeistInternals) import ThePlans",
-            "UnvalidatedHeistPlan",
-            ".validatedForRuntime(",
-            "HeistPlanValidationError",
+            "HeistPlanAdmissionCandidate",
+            ".validatedForRuntimeSafety(",
+            "HeistPlanRuntimeSafetyError",
             "HeistPlanJSONCodec",
             "HeistArtifactCodec.read",
             "HeistArtifactCodec.decodePlanJSON",
             "JSONDecoder().decode(HeistPlan.self",
-            "JSONDecoder().decode(UnvalidatedHeistPlan.self",
+            "JSONDecoder().decode(HeistPlanAdmissionCandidate.self",
         ]
 
         for file in files {

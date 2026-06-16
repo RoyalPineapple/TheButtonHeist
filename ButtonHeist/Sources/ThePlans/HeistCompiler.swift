@@ -284,9 +284,9 @@ private extension HeistCompiler {
                 "Compiled Swift heist source\(entrySuffix) did not emit valid HeistPlan JSON: \(bounded(output))",
                 source: source
             )]
-        case .runtimeValidationFailed(let output):
+        case .runtimeSafetyFailed(let output):
             return [diagnostic(
-                "Compiled Swift heist source\(entrySuffix) failed runtime validation: \(bounded(output))",
+                "Compiled Swift heist source\(entrySuffix) failed runtime safety: \(bounded(output))",
                 source: source
             )]
         }
