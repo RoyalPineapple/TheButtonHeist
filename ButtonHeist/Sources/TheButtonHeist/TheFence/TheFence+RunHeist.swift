@@ -96,9 +96,15 @@ extension TheFence {
         default:
             actionBudget = Timeouts.actionSeconds
         }
-        guard parsed.expectationPayload.expectation != nil else { return actionBudget }
+        guard parsed.expectationPayload.expectation != nil else {
+            return max(actionBudget, explicitSingleActionTimeout(for: parsed) ?? actionBudget)
+        }
         let expectationTimeout = min(parsed.expectationPayload.timeout ?? 10, 30)
         return actionBudget + expectationTimeout + config.postActionExpectationTimeoutBuffer
+    }
+
+    private func explicitSingleActionTimeout(for parsed: ParsedRequest) -> TimeInterval? {
+        parsed.expectationPayload.timeout.map { min($0, 30) }
     }
 
     private func performTimeout(for step: PerformableHeistStep) -> TimeInterval {

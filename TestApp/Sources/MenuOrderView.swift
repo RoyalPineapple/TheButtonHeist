@@ -88,6 +88,7 @@ struct MenuOrderView: View {
     @State private var expandedItemId: String?
     @State private var checkoutPhase: CheckoutPhase = .browsing
     @State private var pendingTask: Task<Void, Never>?
+    @State private var menuListIdentity = UUID()
 
     private var allItems: [MenuItem] {
         categories.flatMap(\.items)
@@ -138,6 +139,7 @@ struct MenuOrderView: View {
                 }
             }
         }
+        .onAppear(perform: resetForEntry)
         .onDisappear {
             pendingTask?.cancel()
             pendingTask = nil
@@ -194,6 +196,7 @@ struct MenuOrderView: View {
 
             orderActions
         }
+        .id(menuListIdentity)
         .listStyle(.insetGrouped)
     }
 
@@ -410,6 +413,15 @@ struct MenuOrderView: View {
         }
         expandedItemId = nil
         checkoutPhase = .browsing
+    }
+
+    private func resetForEntry() {
+        pendingTask?.cancel()
+        pendingTask = nil
+        categories = MenuCategory.defaultMenu
+        expandedItemId = nil
+        checkoutPhase = .browsing
+        menuListIdentity = UUID()
     }
 
 }
