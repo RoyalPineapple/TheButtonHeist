@@ -201,13 +201,17 @@ jobs:
         timeout-minutes: 8
         run: scripts/heist-doctor-demo.sh --work-dir "$RUNNER_TEMP/heist-doctor-demo" --format json
 
+      - name: Write heist receipt manifest
+        if: always()
+        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" macos-tests
+
       - name: Upload heist receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: buttonheist-receipts-macos-tests-${{ github.run_attempt }}
           path: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 14
 
   ios-tests:
@@ -318,13 +322,17 @@ jobs:
             echo "SIM_UDID is unavailable; skipping iOS heist receipt collection"
           fi
 
+      - name: Write heist receipt manifest
+        if: always()
+        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_CI_RECEIPTS_DIR" ios-tests
+
       - name: Upload heist receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: buttonheist-receipts-ios-tests-${{ github.run_attempt }}
           path: ${{ env.BUTTONHEIST_CI_RECEIPTS_DIR }}
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 14
 
       - name: Report iOS test timings
@@ -484,13 +492,17 @@ jobs:
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
 
+      - name: Write heist receipt manifest
+        if: always()
+        run: scripts/write-ci-heist-receipt-manifest.sh "$BUTTONHEIST_RECEIPTS_DIR" ios-demo-gates
+
       - name: Upload heist receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: buttonheist-receipts-ios-demo-gates-${{ github.run_attempt }}
           path: ${{ env.BUTTONHEIST_RECEIPTS_DIR }}
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 14
 
       - name: Report iOS demo timings
