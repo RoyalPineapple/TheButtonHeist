@@ -2859,6 +2859,16 @@ final class TheBrainsActionTests: XCTestCase {
                 options: .regularExpression
             )
             .replacingOccurrences(
+                of: #"known: [0-9]+ elements"#,
+                with: "known: <count> elements",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"hash sha256:[a-f0-9]+"#,
+                with: "hash sha256:<hash>",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
                 of: #"last delta: (none|no_change)"#,
                 with: "last delta: <settled>",
                 options: .regularExpression
