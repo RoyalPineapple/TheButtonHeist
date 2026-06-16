@@ -6,9 +6,19 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
-/// The stash stores values: latest observed accessibility evidence, settled
-/// semantic truth, and failed-settle diagnostic evidence. Observation lifecycle
-/// and promotion to settled truth are owned by `SemanticObservationStream`.
+/// Main-actor state cache for Button Heist's current view of the app.
+///
+/// The stash separates four kinds of state:
+/// - latest observed capture: raw parser output from the most recent
+///   accessibility read;
+/// - settled world: durable semantic state promoted by observation;
+/// - visible live view: UIKit refs, live geometry, and viewport-tied lookup
+///   state used only for dispatch/actionability;
+/// - semantic projection: wire/report-facing values derived from the settled
+///   world, never stored as live handles.
+///
+/// It does not own the observation lifecycle or decide when an observation is
+/// settled; `SemanticObservationStream` owns promotion into settled world.
 @MainActor
 final class TheStash {
 
@@ -17,19 +27,30 @@ final class TheStash {
         self.burglar = TheBurglar(tripwire: tripwire)
     }
 
-    // MARK: - Observed Live Evidence
+    // MARK: - Latest Observed Capture
+
+    /// Semantic half of the latest raw parser output. This is evidence only:
+    /// it can seed visible reads and diagnostics, but target resolution should
+    /// use the settled world unless a call site explicitly asks for live state.
 
     private var latestObservedSemanticWorld: SemanticScreen = .empty
 
-    // MARK: - Dispatch-Only Live Capture
+    // MARK: - Visible Live View
+
+    /// Latest live parse, including UIKit refs and viewport-tied geometry.
+    /// Rebuilt on each parse; never unioned or treated as durable identity.
 
     private var liveCapture: LiveCapture = .empty
 
-    // MARK: - Settled Semantic Truth
+    // MARK: - Settled World
 
+    /// Durable semantic world Button Heist can reason against.
     private var settledSemanticWorld: SemanticScreen = .empty
-    /// Last clean visible hierarchy, with dispatch refs stripped.
+    /// Last clean visible hierarchy used for report projection, with dispatch
+    /// refs stripped so the settled screen cannot retain UIKit objects.
     private var settledVisibleCapture: LiveCapture = .empty
+    /// Visible ids from the last settled capture. This is viewport metadata for
+    /// refresh semantics, not live actionability state.
     private var settledVisibleIds: Set<HeistId> = []
 
     // MARK: - Failed-Settle Diagnostic Evidence
@@ -79,14 +100,15 @@ final class TheStash {
         rotorCursor = nil
     }
 
-    /// Last settled accessibility world Button Heist believes. Semantic
-    /// resolution and normal interface reads use this as truth.
+    /// Last settled world Button Heist believes. Semantic resolution and normal
+    /// interface reads use this as durable truth. Its live-capture half is a
+    /// value-only projection scaffold with dispatch refs stripped.
     var settledSemanticScreen: Screen {
         Screen(semantic: settledSemanticWorld, liveCapture: settledVisibleCapture)
     }
 
-    /// Current observed live viewport. Use this only for visible/debug reads
-    /// and actionability, never as settled semantic truth.
+    /// Current visible live view. Use this only for visible/debug reads and
+    /// actionability, never as settled semantic truth.
     var liveVisibleScreen: Screen {
         let visibleElements = Dictionary(
             uniqueKeysWithValues: liveCapture.heistIdByElement.map { element, heistId in
@@ -125,16 +147,16 @@ final class TheStash {
 
     // MARK: - Computed Accessors
 
-    /// Hierarchy from the most recent parse. Proxy for call-site clarity —
-    /// reads, matchers, scroll dispatch, and tab-bar geometry all need it
-    /// without spelling out live-capture internals
-    /// every time.
+    /// Hierarchy from the most recent observed capture. Proxy for call-site
+    /// clarity: reads, matchers, scroll dispatch, and tab-bar geometry all need
+    /// it without spelling out live-capture internals every time.
     var latestObservedLiveHierarchy: [AccessibilityHierarchy] {
         liveCapture.hierarchy
     }
 
-    /// Scrollable containers paired with their backing UIView.
-    /// Unwraps the weak ref wrapper for call sites that need a live UIView.
+    /// Scrollable containers paired with their backing UIView from the visible
+    /// live view. Unwraps the weak ref wrapper for call sites that need a live
+    /// UIView.
     var scrollableContainerViews: [AccessibilityContainer: UIView] {
         var result: [AccessibilityContainer: UIView] = [:]
         for (container, ref) in liveCapture.scrollableContainerViews {
@@ -181,7 +203,7 @@ final class TheStash {
         settledSemanticWorld.findElement(heistId: heistId)
     }
 
-    /// Latest observed live element payload for a visible heistId.
+    /// Latest observed capture payload for a visible heistId.
     ///
     /// The parsed accessibility element and live handles are observational
     /// evidence only. If the id is also settled, reveal metadata is borrowed
@@ -209,8 +231,8 @@ final class TheStash {
         settledSemanticScreen.orderedElements
     }
 
-    /// Hash of committed semantic memory. Deliberately excludes live viewport
-    /// geometry so scroll position alone does not produce semantic history.
+    /// Hash of the settled world. Deliberately excludes live viewport geometry
+    /// so scroll position alone does not produce semantic history.
     var semanticHash: String {
         settledSemanticWorld.semanticHash
     }
@@ -252,9 +274,9 @@ final class TheStash {
 
     // MARK: - Parse Pipeline
 
-    /// Read the live accessibility tree and produce one observation value.
-    /// Every successful parse refreshes latest observed/live evidence, but it
-    /// never promotes settled semantic truth.
+    /// Read the live accessibility tree and produce one observed capture value.
+    /// Every successful parse refreshes latest observed capture and visible
+    /// live view, but it never promotes settled world.
     /// Returns nil if no accessible windows exist (loading screen,
     /// app backgrounded, etc.).
     func parse() -> Screen? {
@@ -264,24 +286,25 @@ final class TheStash {
         return screen
     }
 
-    /// Parse and refresh latest observed/live evidence. The returned visible
-    /// screen may be used by exploration or diagnostics, but this method never
-    /// updates settled semantic truth.
+    /// Parse and refresh latest observed capture and visible live view. The
+    /// returned visible screen may be used by exploration or diagnostics, but
+    /// this method never updates settled world.
     @discardableResult
     func refreshLiveCapture() -> Screen? {
         parse()
     }
 
     /// Produce one visible observation for the settle loop without committing
-    /// it yet. Successful parses refresh latest observed/live evidence; the
-    /// observation stream alone promotes a proven final screen to settled truth.
+    /// it yet. Successful parses refresh latest observed capture and visible
+    /// live view; the observation stream alone promotes a proven final screen
+    /// to settled world.
     func semanticObservationForSettle() -> Screen? {
         parse()
     }
 
     /// Produce one page observation for scroll exploration. Exploration owns a
     /// local semantic union until it finishes; the observation stream commits
-    /// only the final explored screen as settled discovery truth.
+    /// only the final explored screen as settled discovery world.
     func semanticPageForExploration() -> Screen? {
         parse()
     }
@@ -321,10 +344,10 @@ final class TheStash {
         settledSemanticScreen
     }
 
-    /// Apply visible settled refresh semantics without retaining settled live
-    /// handles. The previous settled visible ids are metadata, not actionability
-    /// state; they let a visible commit drop entries that vanished from the
-    /// settled viewport while preserving discovery-only memory.
+    /// Apply visible settled refresh semantics without retaining UIKit handles.
+    /// The previous settled visible ids are viewport metadata, not
+    /// actionability state; they let a visible commit drop entries that vanished
+    /// from the settled viewport while preserving discovery-only memory.
     func screenByRefreshingSettledSemanticWorld(with visibleRefresh: Screen) -> Screen {
         guard !visibleRefresh.visibleIds.isEmpty else {
             return visibleRefresh
@@ -476,7 +499,8 @@ final class TheStash {
 
     // MARK: - Interface Read Helpers
 
-    /// Settled parser hierarchy plus Button Heist annotations.
+    /// Semantic projection of the settled parser hierarchy plus Button Heist
+    /// annotations.
     ///
     /// Thin reader over `WireConversion.toInterface` — exists because callers
     /// need the interface of the settled screen, not an arbitrary one.
@@ -484,7 +508,7 @@ final class TheStash {
         WireConversion.toInterface(from: settledSemanticScreen, timestamp: timestamp)
     }
 
-    /// Current semantic screen projection used for traces and deltas.
+    /// Semantic projection used for traces and deltas.
     ///
     /// Unlike `interface()`, this reads the committed semantic state produced
     /// by exploration, so off-viewport targetable elements participate in
