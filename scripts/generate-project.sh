@@ -10,10 +10,18 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-tuist install
+run_tuist() {
+    if command -v mise >/dev/null 2>&1 && [[ -f mise.toml ]]; then
+        mise exec -- tuist "$@"
+    else
+        tuist "$@"
+    fi
+}
+
+run_tuist install
 
 set +e
-BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-open
+BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 run_tuist generate --no-open
 generate_status=$?
 set -e
 

@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+tuist_available() {
+    command -v mise >/dev/null 2>&1 || command -v tuist >/dev/null 2>&1
+}
+
+run_tuist() {
+    if command -v mise >/dev/null 2>&1 && [[ -f mise.toml ]]; then
+        mise exec -- tuist "$@"
+    else
+        tuist "$@"
+    fi
+}
+
 # --- Submodule freshness check ---
 # Warn if AccessibilitySnapshotBH doesn't track the tip of main.
 # .gitmodules declares branch = main; this fetches to check, but does NOT
@@ -14,10 +26,10 @@ if git submodule update --remote --quiet -- submodules/AccessibilitySnapshotBH 2
 fi
 
 # --- Tuist project freshness check ---
-if command -v tuist >/dev/null 2>&1; then
+if tuist_available; then
     # Ensure external dependencies are fetched before generating
-    tuist install >/dev/null 2>&1 || true
-    if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
+    run_tuist install >/dev/null 2>&1 || true
+    if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 run_tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
         # Auto-clean pbxproj noise that tuist (and Xcode UI edits) leak in:
         # hardcoded SRCROOT, duplicated header search paths, etc.
         #
@@ -63,8 +75,8 @@ swiftlint lint --strict --quiet
 tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift' '*/Project.swift' 'Workspace.swift' 'Tuist.swift' 'Tuist/Package.swift' 'Tuist/ProjectDescriptionHelpers/*.swift')
 if [[ -n "$tuist_files" ]]; then
     echo "Tuist config changed — regenerating to check for drift..."
-    tuist install >/dev/null 2>&1 || true
-    if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
+    run_tuist install >/dev/null 2>&1 || true
+    if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 run_tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
         # PR #328 M3: cleaner failures propagate via `set -e`.
         scripts/clean-generated-projects.sh >/dev/null
 
