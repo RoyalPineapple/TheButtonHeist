@@ -40,6 +40,32 @@ func actionExpectationAttachesWaitStep() throws {
 }
 
 @Test
+func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
+    let heist = try HeistPlan {
+        TypeText("Bruschetta", into: .identifier("Search"))
+            .expect(.changed(.updated(
+                .identifier("Search"),
+                property: .value,
+                to: "Bruschetta"
+            )))
+    }
+
+    #expect(try heist == HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(
+                text: .literal("Bruschetta"),
+                target: .predicate(.identifier("Search"))
+            ),
+            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+                element: .identifier("Search"),
+                property: .value,
+                to: "Bruschetta"
+            ))))
+        )),
+    ]))
+}
+
+@Test
 func `chained screen and state expectations compose into one action expectation`() throws {
     let forward = try HeistPlan {
         Activate(.label("Search"))

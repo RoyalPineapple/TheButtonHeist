@@ -14,6 +14,15 @@ struct CanonicalHeistSourceRoundTripTests {
                 command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
                 expectation: WaitStep(predicate: .present(.element(label: "Search", value: "milk")), timeout: 2)
             )),
+            .action(try ActionStep(
+                command: .typeText(text: .literal("Bruschetta"), target: .predicate(.identifier("Search"))),
+                expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+                    element: .identifier("Search"),
+                    property: .value,
+                    from: "",
+                    to: "Bruschetta"
+                ))))
+            )),
             .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
             .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"), ordinal: 0)))),
             .action(try ActionStep(command: .customAction(

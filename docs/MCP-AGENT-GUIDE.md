@@ -20,7 +20,8 @@ Allowed `perform(step:)` statements are one action or one simple wait:
 
 ```swift
 Activate(.label("Pay")).expect(.changed(.screen()))
-TypeText("milk", into: .label("Search")).expect(.changed(.elements))
+TypeText("milk", into: .label("Search"))
+    .expect(.changed(.updated(.label("Search"), property: .value, to: "milk")))
 Increment(.label("Quantity"))
 Decrement(.label("Quantity"))
 CustomAction("Archive", on: .label("Message"))
@@ -71,6 +72,25 @@ WaitFor(.absent(.label("Loading")), timeout: 10)
 
 For `.absent(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
 
+Use explicit property-delta expectations when the action should update a known
+element value:
+
+```swift
+TypeText("Bruschetta", into: .identifier("Search"))
+    .expect(.changed(.updated(.identifier("Search"), property: .value, to: "Bruschetta")))
+
+Increment(.label("Quantity"))
+    .expect(.changed(.updated(property: .value, from: "2", to: "3")))
+```
+
+The element argument is optional. Omit it to match any updated element in the
+observed delta. Property updates support `value`, `traits`, `hint`, `actions`,
+`frame`, `activationPoint`, `customContent`, and `rotors`; they do not promise
+label or identifier changes because those fields are used for diff identity.
+Do not shorten this to `.expect(.updated(...))`: expectations do not infer the
+action target. If target-relative sugar is added later, it must lower to an
+explicit `.changed(.updated(target, ...))` predicate before runtime evaluation.
+
 **Composing**: `run_heist` for typed multi-step plans in a single call. Prefer the `plan` field with canonical ButtonHeist source when authoring compact heists as an agent:
 
 ```swift
@@ -79,7 +99,7 @@ HeistPlan {
         .expect(.changed(.screen()))
 
     TypeText("milk", into: .label("Search"))
-        .expect(.present(.element(label: "Search", value: "milk")))
+        .expect(.changed(.updated(.label("Search"), property: .value, to: "milk")))
 }
 ```
 
@@ -89,7 +109,7 @@ Use `run_heist(plan:)` for definitions, composition, branching, waits with bodie
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search"))
-            .expect(.changed(.elements))
+            .expect(.changed(.updated(.label("Search"), property: .value, to: item)))
         Activate(.label("Add"))
             .expect(.present(.label("Added")))
     }
