@@ -592,6 +592,7 @@ final class TheBrainsScrollTests: XCTestCase {
             window.isHidden = true
         }
         await brains.tripwire.yieldFrames(3)
+        brains.stash.clearInstalledVisibleRefreshScreenForTesting()
 
         let result = await brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(label: "Old Offscreen"))))
 

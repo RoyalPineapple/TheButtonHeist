@@ -52,6 +52,10 @@ final class TheStash {
     /// Visible ids from the last settled capture. This is viewport metadata for
     /// refresh semantics, not live actionability state.
     private var settledVisibleIds: Set<HeistId> = []
+    /// Unit-test fixture for the next explicit visible refresh. Production
+    /// refreshes always parse UIKit; synthetic tests can install one screen as
+    /// the current tree without retaining any live object strongly.
+    private var nextVisibleRefreshScreenForTesting: Screen?
 
     // MARK: - Failed-Settle Diagnostic Evidence
 
@@ -299,6 +303,13 @@ final class TheStash {
     /// stale offscreen entries should not be blindly preserved.
     @discardableResult
     func refreshCurrentVisibleTree() -> Screen? {
+        if let visibleTree = nextVisibleRefreshScreenForTesting {
+            nextVisibleRefreshScreenForTesting = nil
+            return semanticObservationStream
+                .commitSettledVisibleObservation(visibleTree)
+                .observation
+                .screen
+        }
         guard let visibleTree = parse() else { return nil }
         return semanticObservationStream
             .commitSettledVisibleObservation(visibleTree)
@@ -360,7 +371,12 @@ final class TheStash {
     }
 
     func installScreenForTesting(_ screen: Screen) {
+        nextVisibleRefreshScreenForTesting = screen
         _ = semanticObservationStream.commitSettledVisibleObservation(screen)
+    }
+
+    func clearInstalledVisibleRefreshScreenForTesting() {
+        nextVisibleRefreshScreenForTesting = nil
     }
 
     /// Starting value for page-by-page exploration. Exploration carries a local
@@ -576,6 +592,7 @@ final class TheStash {
         settledSemanticWorld = .empty
         settledVisibleCapture = .empty
         settledVisibleIds = []
+        nextVisibleRefreshScreenForTesting = nil
         failedSettleDiagnosticEvidence = nil
         semanticObservationStream.clearSettledObservationHistory()
     }
