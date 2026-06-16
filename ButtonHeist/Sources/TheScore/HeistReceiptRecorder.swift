@@ -1,6 +1,9 @@
 import CryptoKit
 import Foundation
+import OSLog
 import ThePlans
+
+private let heistReceiptLogger = Logger(subsystem: "com.buttonheist.thescore", category: "receipts")
 
 public enum HeistReceiptRecordingMode: String, Sendable, Equatable {
     case off
@@ -94,7 +97,12 @@ public enum HeistReceiptRecorder {
         guard let configuration = HeistReceiptRecordingConfiguration.environment else {
             return nil
         }
-        return try? write(result, plan: plan, configuration: configuration)
+        do {
+            return try write(result, plan: plan, configuration: configuration)
+        } catch {
+            heistReceiptLogger.warning("Failed to record heist receipt: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     @discardableResult
