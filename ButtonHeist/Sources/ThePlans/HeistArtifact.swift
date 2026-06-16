@@ -406,7 +406,7 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
         case .rawJSONHeist(let path):
             return """
             Invalid .heist artifact at \(path): raw JSON is not a .heist package. \
-            Use .json for raw HeistPlan IR or re-export as .heist.
+            Use Swift DSL source or re-export the generated artifact as .heist.
             """
         case .missingMember(let path, let member):
             return """
@@ -448,7 +448,7 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
         case .invalidPlan(let path, let reason):
             return "Invalid heist plan at \(path): \(reason)"
         case .unsupportedInputExtension(let path):
-            return "Unsupported heist input extension for \(path). Use .heist or .json."
+            return "Unsupported heist input extension for \(path). Use a generated .heist package artifact."
         case .unsupportedOutputExtension(let path):
             return "Unsupported heist output extension for \(path). Use .heist or .json."
         }

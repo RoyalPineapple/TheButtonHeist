@@ -68,13 +68,6 @@ extension TheFence {
         return PerformRequest(plan: plan, step: step)
     }
 
-    /// Canonical `HeistPlan` root fields that constitute a structured inline plan.
-    /// `path`, `plan`, and these fields are mutually exclusive plan sources. These
-    /// keys are intentionally not present in public descriptors; they remain here
-    /// only so generated/internal callers can be rejected or decoded by explicit
-    /// lower-level tests without making raw JSON IR an advertised authoring surface.
-    static let inlinePlanFieldKeys: Set<String> = ["version", "name", "parameter", "definitions", "body"]
-
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {
         let plan = try decodeRuntimeValidatedHeistPlanSource(
             from: arguments,
@@ -88,10 +81,7 @@ extension TheFence {
     }
 
     func loadInlinePerformStepSource(_ source: String) throws -> HeistPlan {
-        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw FenceError.invalidRequest("perform step must not be empty")
-        }
-        return try loadInlinePlanSource(
+        try loadInlineButtonHeistSource(
             """
             HeistPlan {
             \(source)
@@ -211,101 +201,38 @@ private extension TheFence {
         acceptsInlinePlanSource: Bool
     ) throws -> HeistPlan {
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
-
-        let path = try arguments.schemaString("path")
-        let plan = try arguments.schemaString("plan")
-        guard acceptsInlinePlanSource || plan == nil else {
-            throw FenceError.invalidRequest(
-                "\(commandName) does not accept inline ButtonHeist source; use path"
-            )
-        }
-        let hasInlinePlan = arguments.argumentValues.keys.contains { Self.inlinePlanFieldKeys.contains($0) }
-        let sourceCount = [path != nil, plan != nil, hasInlinePlan].filter { $0 }.count
-        guard sourceCount == 1 else {
-            throw FenceError.invalidRequest(
-                "\(commandName) accepts exactly one plan source: path or plan. " +
-                "Raw JSON IR fields are internal and cannot be combined with public sources."
-            )
-        }
-
-        if let path {
-            return try loadHeistPlan(fromArtifactPath: path, commandName: commandName)
-        }
-        if let plan {
-            return try loadInlinePlanSource(plan, commandName: commandName)
-        }
-        return try loadInlineHeistPlan(from: arguments, commandName: commandName, dropping: droppingPlanKeys)
-    }
-
-    /// Read a heist plan from a `.heist` package artifact the operator handed us.
-    ///
-    /// `.heist` is the enforced run artifact: TheFence selects the source, then
-    /// asks ThePlans' heist planning boundary for a validated `HeistPlan`. The plan
-    /// reaches the runtime as Swift objects rather than surviving a
-    /// JSON→parameter→JSON round-trip. The package's `plan.json` is internal to
-    /// the artifact and is not itself a run input. Local Swift source is compiled
-    /// by the CLI authoring path, not here.
-    ///
-    /// The plan is run exactly as authored — the fence does not stamp the file
-    /// name into the plan's `name`. `name` is a Swift-identifier-constrained
-    /// semantic field (it resolves heist definitions and invocations); a file
-    /// name such as `bh-demo-smoke` is not a valid identifier and would fail
-    /// runtime validation, silently reducing the run to zero steps. Run naming
-    /// for reports is derived from the path at the report layer, not here.
-    func loadHeistPlan(fromArtifactPath path: String, commandName: String) throws -> HeistPlan {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw FenceError.invalidRequest("\(commandName) path must not be empty")
-        }
-        let url = URL(fileURLWithPath: (trimmed as NSString).expandingTildeInPath)
-        guard url.pathExtension.lowercased() == "heist" else {
-            throw FenceError.invalidRequest(
-                "\(commandName) path must be a .heist package artifact for \(path); " +
-                "raw .json plan IR is internal to the package, not a run input."
-            )
-        }
         do {
-            return try HeistPlanning.readPlan(from: url)
-        } catch let error as HeistArtifactCodecError {
+            return try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
+                commandName: commandName,
+                path: try arguments.schemaString("path"),
+                inlineButtonHeistSource: try arguments.schemaString("plan"),
+                rawStructuredJSONIRFields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys),
+                acceptsInlineButtonHeistSource: acceptsInlinePlanSource
+            ))
+        } catch let error as HeistPlanningError {
             throw FenceError.invalidRequest(error.description)
         }
     }
 
-    func loadInlineHeistPlan(
-        from arguments: CommandArgumentEnvelope,
-        commandName: String,
-        dropping keys: Set<String> = []
-    ) throws -> HeistPlan {
-        var values = arguments.argumentValues
-        values.removeValue(forKey: "requestId")
-        for key in keys {
-            values.removeValue(forKey: key)
-        }
-        let data = try JSONEncoder().encode(HeistValue.object(values))
+    func loadInlineButtonHeistSource(_ source: String, commandName: String) throws -> HeistPlan {
         do {
-            return try HeistPlanning.decodePlanJSON(
-                data,
-                sourceURL: URL(fileURLWithPath: "\(commandName)-inline-plan.json")
-            )
-        } catch {
-            throw FenceError.invalidRequest(String(describing: error))
+            return try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
+                commandName: commandName,
+                inlineButtonHeistSource: source
+            ))
+        } catch let error as HeistPlanningError {
+            throw FenceError.invalidRequest(error.description)
         }
     }
 
-    func loadInlinePlanSource(_ source: String, commandName: String) throws -> HeistPlan {
-        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw FenceError.invalidRequest("\(commandName) plan must not be empty")
-        }
-        do {
-            return try HeistPlanning.compileHeistPlanSource(
-                source,
-                sourceName: "\(commandName)-inline.plan"
-            )
-        } catch let error as HeistPlanSourceCompilerError {
-            throw FenceError.invalidRequest(error.description)
-        } catch {
-            throw FenceError.invalidRequest(String(describing: error))
-        }
+    func rawStructuredJSONIRFields(
+        in arguments: CommandArgumentEnvelope,
+        dropping keys: Set<String>
+    ) -> Set<String> {
+        var fieldNames = Set(arguments.argumentValues.keys)
+        fieldNames.remove("requestId")
+        fieldNames.subtract(keys)
+        return fieldNames.intersection(HeistPlanning.rawStructuredJSONIRFieldNames)
     }
 
     func decodeRootHeistArgument(from arguments: CommandArgumentEnvelope) throws -> HeistArgument {

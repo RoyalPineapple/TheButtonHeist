@@ -13,15 +13,15 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         discussion: """
             Forwards a .heist package artifact `--path` to the fence, which reads
             the package into a HeistPlan and runs it. Swift DSL source is compiled
-            locally to a .heist before sending. Inline --plan / --plan-from-file
-            JSON remain available.
+            locally to a .heist before sending. Inline `--plan` accepts canonical
+            ButtonHeist DSL source, not raw JSON IR.
 
             Examples:
               buttonheist run_heist --path Flow.heist
               buttonheist run_heist --path Search.heist --argument '{"type":"string","value":"milk"}'
               buttonheist run_heist --path Flow.swift --entry makeHeist
               buttonheist run_heist --path Flow.heist --junit report.xml
-              buttonheist run_heist --plan '{"version":1,"body":[{"type":"warn","warn":{"message":"Check"}}]}'
+              buttonheist run_heist --plan 'HeistPlan("smoke") { Warn("Check") }'
             """
     )
 
@@ -31,11 +31,8 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .long, help: "Inline canonical heist plan JSON object")
+    @Option(name: .long, help: "Inline canonical ButtonHeist DSL source.")
     var plan: String?
-
-    @Option(name: .long, help: "Path to a JSON file containing a canonical heist plan object")
-    var planFromFile: String?
 
     @Option(name: .long, help: "Root heist argument as canonical HeistArgument JSON object.")
     var argument: String?
@@ -56,7 +53,6 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
 
         let request = try Self.planArguments(
             inline: plan,
-            fromFile: planFromFile,
             path: prepared.path,
             entry: prepared.entry,
             argument: argument
@@ -151,31 +147,29 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         })
     }
 
-    static func planArguments(inline: String?, fromFile: String?) throws -> CLIRequestParameters {
-        try planArguments(inline: inline, fromFile: fromFile, path: nil, entry: nil)
+    static func planArguments(inline: String?) throws -> CLIRequestParameters {
+        try planArguments(inline: inline, path: nil, entry: nil)
     }
 
     /// Build the run_heist request parameters.
     ///
     /// A `.heist` package artifact path is forwarded to the fence as a `path`
-    /// parameter; the fence reads the package into a `HeistPlan` directly. Inline
-    /// `--plan` / `--plan-from-file` JSON is the only input expanded into plan
-    /// fields here. `.swift` source is resolved to a `.heist` by `prepareInput`
-    /// before reaching this point.
+    /// parameter; the fence asks ThePlans to read the package into a `HeistPlan`
+    /// directly. Inline `--plan` is ButtonHeist DSL source. `.swift` source is
+    /// resolved to a `.heist` by `prepareInput` before reaching this point.
     static func planArguments(
         inline: String?,
-        fromFile: String?,
         path: String?,
         entry: String?,
         argument: String? = nil,
         commandName: String = Self.cliCommandName
     ) throws -> CLIRequestParameters {
-        let suppliedSources = [inline != nil, fromFile != nil, path != nil].filter { $0 }.count
+        let suppliedSources = [inline != nil, path != nil].filter { $0 }.count
         guard suppliedSources == 1 else {
             if suppliedSources == 0 {
-                throw ValidationError("Must supply --path, --plan, or --plan-from-file")
+                throw ValidationError("Must supply --path or --plan")
             }
-            throw ValidationError("--path, --plan, and --plan-from-file are mutually exclusive")
+            throw ValidationError("--path and --plan are mutually exclusive")
         }
 
         if let path {
@@ -201,25 +195,15 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("--entry is only valid with Swift source input")
         }
 
-        let fields = try loadJSONObject(
-            inline: inline,
-            fromFile: fromFile,
-            optionName: "plan"
-        )
-        var request = try requestParameters(from: fields)
+        guard let inline else {
+            throw ValidationError("Must supply --path or --plan")
+        }
+        guard !inline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ValidationError("--plan must be ButtonHeist DSL source")
+        }
+        var request: CLIRequestParameters = [.plan: .string(inline)]
         if let argument {
             request.set(.argument, try parseRootArgument(argument))
-        }
-        return request
-    }
-
-    private static func requestParameters(from fields: [String: HeistValue]) throws -> CLIRequestParameters {
-        var request: CLIRequestParameters = [:]
-        for (field, value) in fields {
-            guard let key = FenceParameterKey(rawValue: field) else {
-                throw ValidationError("plan contains an invalid empty field name")
-            }
-            request.set(key, value)
         }
         return request
     }

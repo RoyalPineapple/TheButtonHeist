@@ -84,7 +84,7 @@ func `heist artifact entry uses root plan name not output path`() throws {
 }
 
 @Test
-func `json heist plan IR reads as raw plan`() throws {
+func `artifact codec can read internal raw plan json`() throws {
     let temp = try PlansTemporaryDirectory()
     let jsonURL = temp.url.appendingPathComponent("SearchFlow.json")
     let plan = try HeistPlan(body: [.warn(WarnStep(message: "raw unnamed IR"))])
@@ -92,6 +92,69 @@ func `json heist plan IR reads as raw plan`() throws {
     try HeistArtifactCodec.writePlan(plan, to: jsonURL)
 
     #expect(try HeistArtifactCodec.readPlan(from: jsonURL) == plan)
+}
+
+@Test
+func `heist planning loads generated heist artifact source`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let artifactURL = temp.url.appendingPathComponent("SearchFlow.heist")
+    let plan = try representativeArtifactPlan()
+    try HeistArtifactCodec.writePlan(plan, to: artifactURL)
+
+    let loaded = try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
+        commandName: "run_heist",
+        path: artifactURL.path
+    ))
+
+    #expect(loaded == plan)
+}
+
+@Test
+func `heist planning compiles inline ButtonHeist DSL source`() throws {
+    let loaded = try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
+        commandName: "run_heist",
+        inlineButtonHeistSource: """
+        HeistPlan("sourceFlow") {
+            Warn("from source")
+        }
+        """
+    ))
+
+    #expect(loaded.name == "sourceFlow")
+    #expect(loaded.body == [.warn(WarnStep(message: "from source"))])
+}
+
+@Test
+func `heist planning rejects standalone raw json path as public source`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let jsonURL = temp.url.appendingPathComponent("SearchFlow.json")
+    try representativeArtifactPlan().canonicalHeistJSONData().write(to: jsonURL)
+
+    do {
+        _ = try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
+            commandName: "run_heist",
+            path: jsonURL.path
+        ))
+        Issue.record("Expected standalone raw JSON path to fail")
+    } catch {
+        #expect(String(describing: error).contains("raw `.json` HeistPlan IR"))
+        #expect(String(describing: error).contains("not public run input"))
+    }
+}
+
+@Test
+func `heist planning rejects raw structured JSON IR fields as public source`() throws {
+    do {
+        _ = try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
+            commandName: "run_heist",
+            rawStructuredJSONIRFields: ["version", "body"]
+        ))
+        Issue.record("Expected raw structured JSON fields to fail")
+    } catch {
+        #expect(String(describing: error).contains("raw JSON HeistPlan IR field"))
+        #expect(String(describing: error).contains("ButtonHeist DSL"))
+        #expect(String(describing: error).contains(".heist"))
+    }
 }
 
 @Test
