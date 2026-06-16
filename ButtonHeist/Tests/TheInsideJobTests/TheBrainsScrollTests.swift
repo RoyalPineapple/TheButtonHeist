@@ -929,6 +929,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ]
         )
         brains.stash.installScreenForTesting(knownScreen)
+        brains.navigation.elementInflation.discoverTarget = nil
 
         let result = await brains.navigation.elementInflation.inflate(
             for: .predicate(ElementPredicate(label: "Jump Target")),

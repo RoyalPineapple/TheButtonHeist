@@ -48,7 +48,7 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertFalse(reading.isSettled)
     }
 
-    func testPulseReadingNotSettledWhenAnimating() {
+    func testPulseReadingSettledWithStablePlatformAnimationKey() {
         let reading = TheTripwire.PulseReading(
             tick: 10,
             timestamp: CFAbsoluteTimeGetCurrent(),
@@ -60,7 +60,7 @@ final class TheTripwireTests: XCTestCase {
             windowCount: 1,
             quietFrames: 5
         )
-        XCTAssertFalse(reading.isSettled)
+        XCTAssertTrue(reading.isSettled)
     }
 
     func testPulseReadingNotSettledWhenQuietFramesInsufficient() {

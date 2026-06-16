@@ -123,12 +123,12 @@ extension Navigation {
             guard absorbVisiblePage(in: &exploration) else { return false }
             scan.originByElement = buildOriginIndex()
 
-            let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
-            guard !result.inserted.isEmpty else { return false }
-
             if let target, hasVisibleTerminalExplorationResolution(target) {
                 return true
             }
+
+            let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
+            guard !result.inserted.isEmpty else { return false }
         }
         return false
     }

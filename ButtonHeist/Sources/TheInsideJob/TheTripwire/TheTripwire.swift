@@ -10,7 +10,7 @@ import UIKit
 /// identity, public navigation state, and ordered visible windows.
 ///
 /// The pulse answers three questions:
-/// 1. **Is the UI settled?** (no animations, no pending layout, stable fingerprint)
+/// 1. **Is the UI settled?** (no pending layout, stable presentation fingerprint)
 /// 2. **Should the accessibility tree be checked again?** (Tripwire triggered)
 ///
 /// The accessibility tree is TheStash's domain; TheTripwire never reads it.
