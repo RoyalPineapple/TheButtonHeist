@@ -67,6 +67,22 @@ tuist test TheInsideJobTests --platform ios \          # iOS-hosted tests
   --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
 ```
 
+To demonstrate doctor-ready receipt artifacts without manufacturing a red CI
+build:
+
+```bash
+scripts/heist-doctor-demo.sh
+```
+
+To run a real suite while preserving receipts for doctor analysis:
+
+```bash
+scripts/run-with-heist-receipts.sh \
+  --suite review \
+  --mode failing-and-passing \
+  -- tuist test ButtonHeistTests --no-selective-testing
+```
+
 ## Heist-Themed Names
 
 The names (TheFence, TheSafecracker, TheHandoff, etc.) are the project's identity. Each maps to a clear architectural role — see the README's "Meet the Crew" section for the full cast. The metaphor is consistent: TheFence dispatches commands, TheHandoff manages the connection, TheSafecracker cracks the UI, TheInsideJob runs inside the target app.

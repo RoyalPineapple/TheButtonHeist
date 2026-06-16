@@ -41,8 +41,14 @@ TAG_CURRENT=false
 BUMP_TYPE=""
 
 run_tuist_test() {
+    local receipts_dir="${BUTTONHEIST_RECEIPTS_DIR:-$REPO_ROOT/.rp1/work/heist-receipts/release}"
+    local receipts_mode="${BUTTONHEIST_RECEIPTS_MODE:-failing-and-passing}"
     set +e
-    BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist test "$@"
+    BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 \
+        scripts/run-with-heist-receipts.sh \
+        --dir "$receipts_dir" \
+        --mode "$receipts_mode" \
+        -- tuist test "$@"
     local test_status=$?
     set -e
 

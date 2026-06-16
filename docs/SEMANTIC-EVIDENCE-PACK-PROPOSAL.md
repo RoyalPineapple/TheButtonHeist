@@ -173,8 +173,10 @@ Until then, compressed `HeistExecutionResult` is the right artifact.
    desired.
 3. CI now uploads receipt artifacts from the main test lanes. PR runs keep
    failing receipts; `main` runs keep failing and passing receipts.
-4. Keep the existing doctor repair output unchanged.
-5. Measure artifact sizes in real CI before doing anything smarter.
+4. Use `scripts/heist-doctor-from-receipts.sh` to match downloaded artifacts by
+   heist fingerprint and run the doctor.
+5. Keep the existing doctor repair output unchanged.
+6. Measure artifact sizes in real CI before doing anything smarter.
 
 ## Recommendation
 

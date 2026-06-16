@@ -65,6 +65,15 @@ By default, only failed heist runs are recorded. To also record passing runs:
 BUTTONHEIST_RECEIPTS_MODE="failing-and-passing"
 ```
 
+For local test runs, prefer the wrapper so the convention is the same as CI:
+
+```bash
+scripts/run-with-heist-receipts.sh \
+  --suite local-tuist \
+  --mode failing-and-passing \
+  -- tuist test ButtonHeistTests --no-selective-testing
+```
+
 The runtime writes files under a heist-name and plan-fingerprint directory:
 
 ```text
@@ -95,6 +104,30 @@ The GitHub Actions CI currently enables this for the macOS unit-test lane, the
 iOS-hosted unit-test lane, and the iOS demo smoke gates. PR runs keep failing
 receipts by default. `main` runs keep failing and passing receipts so successful
 main builds can act as the last-pass baseline.
+
+To run the doctor against downloaded or local receipt artifacts, point the
+pairing helper at the last-passing and new-failing artifact roots:
+
+```bash
+scripts/heist-doctor-from-receipts.sh \
+  --last-pass-dir path/to/main/buttonheist-receipts \
+  --new-fail-dir path/to/pr/buttonheist-receipts
+```
+
+The helper matches receipts by the parent heist-name/fingerprint directory,
+chooses the newest failed receipt with a matching passed receipt, and invokes
+`heist-doctor`.
+
+For a deterministic demo that does not require manufacturing a red CI build:
+
+```bash
+scripts/heist-doctor-demo.sh
+```
+
+That demo generates two raw receipts through `HeistReceiptRecorder`: a last pass
+where the target was `Checkout`, and a current failure where the same semantic
+control is now `Go to Checkout`. CI runs this demo in the macOS test lane as a
+workflow smoke test.
 
 XCTest and Swift Testing adapters may later add nicer test attachments or names,
 but artifact collection should not depend on per-test wrappers.

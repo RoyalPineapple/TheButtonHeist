@@ -161,13 +161,20 @@ jobs:
 
       - name: Run TheScoreTests
         timeout-minutes: 5
-        run: tuist test TheScoreTests --no-selective-testing
+        run: |
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- tuist test TheScoreTests --no-selective-testing
 
       - name: Run ButtonHeistTests
         timeout-minutes: 5
         run: |
           set -eo pipefail
-          xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
             -destination 'platform=macOS'
 
       - name: Build & test CLI (SwiftPM)
@@ -175,14 +182,24 @@ jobs:
         run: |
           swift package --package-path ButtonHeistCLI resolve
           swift build --package-path ButtonHeistCLI
-          scripts/swift-test-gate.sh ButtonHeistCLI
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/swift-test-gate.sh ButtonHeistCLI
 
       - name: Build & test MCP (SwiftPM)
         timeout-minutes: 12
         run: |
           swift package --package-path ButtonHeistMCP resolve
           swift build --package-path ButtonHeistMCP
-          scripts/swift-test-gate.sh ButtonHeistMCP
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/swift-test-gate.sh ButtonHeistMCP
+
+      - name: Run heist doctor receipt demo
+        timeout-minutes: 8
+        run: scripts/heist-doctor-demo.sh --work-dir "$RUNNER_TEMP/heist-doctor-demo" --format json
 
       - name: Upload heist receipts
         if: always()
@@ -280,7 +297,10 @@ jobs:
           trap 'echo "IOS_TEST_RUN_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
           echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
-          xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
+          scripts/run-with-heist-receipts.sh \
+            --ios-sandbox \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- xcodebuild test-without-building -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
             -destination "$DEST" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
             -skip-testing TheInsideJobTests/SimpleSocketServerIntegrationTests \
@@ -434,7 +454,10 @@ jobs:
           echo "IOS_DEMO_SMOKE_START=$(date +%s)" >> "$GITHUB_ENV"
           trap 'echo "IOS_DEMO_SMOKE_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/e2e-demo-smoke.sh \
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/e2e-demo-smoke.sh \
             --skip-generate \
             --skip-cli-build \
             --sim-udid "$SIM_UDID" \
@@ -448,7 +471,10 @@ jobs:
           echo "IOS_DEMO_LIFECYCLE_START=$(date +%s)" >> "$GITHUB_ENV"
           trap 'echo "IOS_DEMO_LIFECYCLE_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
-          scripts/e2e-lifecycle-gate.py \
+          scripts/run-with-heist-receipts.sh \
+            --dir "$BUTTONHEIST_RECEIPTS_DIR" \
+            --mode "$BUTTONHEIST_RECEIPTS_MODE" \
+            -- scripts/e2e-lifecycle-gate.py \
             --sim-udid "$SIM_UDID" \
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
