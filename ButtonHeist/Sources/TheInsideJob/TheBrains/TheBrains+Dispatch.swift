@@ -84,7 +84,7 @@ extension TheBrains {
         defer { demand.cancel() }
 
         let actionStart = CFAbsoluteTimeGetCurrent()
-        let beforeStart = CFAbsoluteTimeGetCurrent()
+        let beforeStart = actionStart
         guard let before = await interactionObservation.prepareBeforeState() else {
             return treeUnavailableResult(method: method)
         }
