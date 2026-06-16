@@ -28,13 +28,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.reportedActionResults.map(\.method), [.activate])
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 1)
-        XCTAssertEqual(result.outputReceiptNodes.map(\.path), [
-            "$.body[0]",
-            "$.body[0].for_each_string.iterations[0]",
-            "$.body[0].for_each_string.iterations[0].body[0]",
-            "$.body[0].for_each_string.iterations[1]",
-            "$.body[0].for_each_string.iterations[1].body[0]",
-        ])
+        XCTAssertEqual(result.outputReceiptNodes.map(\.path), ["$.body[0]"])
     }
 
     func testReportFactsUseExecutionTreeInsteadOfPlanSiblingRematch() {
@@ -277,7 +271,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(node.forEachStringEvidence?.failureReason, "iteration 1 failed for value \"Eggs\"")
         XCTAssertEqual(result.executedTopLevelStepCount, 1)
         XCTAssertEqual(result.executedNodeCount, 5)
-        XCTAssertEqual(result.outputReceiptNodes.count, 1)
+        XCTAssertEqual(result.outputReceiptNodes.count, 5)
     }
 
     func testForEachMultipleIterationsSurfacesReceiptTreeInOutputOrder() {
@@ -394,9 +388,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(rows.map(\.command), [
             "for_each_string",
             "for_each_iteration",
-            "type_text",
+            "typeText",
             "for_each_iteration",
-            "type_text",
+            "typeText",
         ])
     }
 

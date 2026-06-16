@@ -108,7 +108,7 @@ public extension HeistExecutionStepResult {
     var reportClientWireType: ClientWireMessageType? {
         guard kind == .action else { return nil }
         if let command = actionEvidence?.command {
-            return command.internalDispatchWireType
+            return command.runtimeActionType
         }
         return actionEvidence?.actionResult?.method.heistReportWireType
             ?? actionEvidence?.expectationActionResult?.method.heistReportWireType

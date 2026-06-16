@@ -185,7 +185,7 @@ final class MockConnection: TransportReachabilityConnecting {
             }
         }
         if let handler = autoResponse {
-            let response = heistExecutionResponse(for: message, handler: handler) ?? handler(message)
+            let response = heistExecutionResponse(for: message) ?? handler(message)
             Task { @ButtonHeistActor [self] in
                 self.onEvent?(.message(response, requestId: requestId))
             }
@@ -194,11 +194,9 @@ final class MockConnection: TransportReachabilityConnecting {
     }
 
     var autoResponse: ((ClientMessage) -> ServerMessage)?
+    var runtimeActionResponse: ((RuntimeActionMessage) -> ServerMessage)?
 
-    private func heistExecutionResponse(
-        for message: ClientMessage,
-        handler: (ClientMessage) -> ServerMessage
-    ) -> ServerMessage? {
+    private func heistExecutionResponse(for message: ClientMessage) -> ServerMessage? {
         guard case .heistPlan(let run) = message else { return nil }
         let plan = run.plan
 
@@ -208,7 +206,7 @@ final class MockConnection: TransportReachabilityConnecting {
                 for: step,
                 index: index,
                 path: "$.body[\(index)]",
-                handler: handler
+                handler: runtimeActionResponse
             )
             stepResults.append(stepResult)
             if stepResult.isFailure { break }
@@ -232,7 +230,7 @@ final class MockConnection: TransportReachabilityConnecting {
         for step: HeistStep,
         index: Int,
         path: String,
-        handler: (ClientMessage) -> ServerMessage
+        handler: ((RuntimeActionMessage) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
         switch step {
         case .action(let action):
@@ -309,9 +307,9 @@ final class MockConnection: TransportReachabilityConnecting {
         for action: ActionStep,
         index: Int,
         path: String,
-        handler: (ClientMessage) -> ServerMessage
+        handler: ((RuntimeActionMessage) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
-        guard let command = try? action.command.resolveForInternalDispatch(in: .empty) else {
+        guard let command = try? action.command.resolveForRuntimeDispatch(in: .empty) else {
             return HeistExecutionStepResult(
                 path: path,
                 kind: .action,
@@ -351,7 +349,7 @@ final class MockConnection: TransportReachabilityConnecting {
         for wait: WaitStep,
         index: Int,
         path: String,
-        handler: (ClientMessage) -> ServerMessage
+        handler: ((RuntimeActionMessage) -> ServerMessage)?
     ) -> HeistExecutionStepResult {
         guard let resolved = try? wait.resolve(in: .empty) else {
             return HeistExecutionStepResult(
@@ -496,7 +494,7 @@ final class MockConnection: TransportReachabilityConnecting {
 
     private func heistExpectation(
         for expectation: WaitStep?,
-        handler: (ClientMessage) -> ServerMessage
+        handler: ((RuntimeActionMessage) -> ServerMessage)?
     ) -> (actionResult: ActionResult, result: ExpectationResult)? {
         guard let expectation else { return nil }
         guard let resolved = try? expectation.resolve(in: .empty) else {
@@ -563,10 +561,10 @@ final class MockConnection: TransportReachabilityConnecting {
     }
 
     private func actionResult(
-        for command: ClientMessage,
-        handler: (ClientMessage) -> ServerMessage
+        for command: RuntimeActionMessage,
+        handler: ((RuntimeActionMessage) -> ServerMessage)?
     ) -> ActionResult {
-        switch handler(command) {
+        switch handler?(command) {
         case .actionResult(let result):
             return result
         case .error(let error):
@@ -577,11 +575,11 @@ final class MockConnection: TransportReachabilityConnecting {
                 errorKind: .general
             )
         default:
-            return ActionResult(success: true, method: .activate)
+            return ActionResult(success: true, method: actionMethod(for: command))
         }
     }
 
-    private func actionMethod(for command: ClientMessage) -> ActionMethod {
+    private func actionMethod(for command: RuntimeActionMessage) -> ActionMethod {
         switch command {
         case .activate: return .activate
         case .increment: return .increment
@@ -590,7 +588,6 @@ final class MockConnection: TransportReachabilityConnecting {
         case .rotor: return .rotor
         case .editAction: return .editAction
         case .setPasteboard: return .setPasteboard
-        case .getPasteboard: return .getPasteboard
         case .resignFirstResponder: return .resignFirstResponder
         case .oneFingerTap: return .syntheticTap
         case .longPress: return .syntheticLongPress
@@ -601,10 +598,6 @@ final class MockConnection: TransportReachabilityConnecting {
         case .scrollToVisible: return .scrollToVisible
         case .scrollToEdge: return .scrollToEdge
         case .wait: return .wait
-        case .heistPlan: return .heistPlan
-        case .clientHello, .authenticate, .requestInterface,
-             .ping, .status, .requestScreen:
-            return .heistPlan
         }
     }
 }

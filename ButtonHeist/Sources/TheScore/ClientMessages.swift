@@ -35,10 +35,9 @@ public struct RequestEnvelope: Codable, Sendable {
 /// Messages sent from a connected client to the Inside Job server.
 ///
 /// Public wire requests are limited to transport/session messages, pure
-/// observation reads, and `heistPlan`. The primitive interaction cases below
-/// are retained only as an internal dispatch carrier after a `HeistActionCommand`
-/// has already been resolved inside the heist runtime; JSON encoding and
-/// decoding reject them.
+/// observation reads, and `heistPlan`. Primitive UI mutation does not have a
+/// `ClientMessage` shape; it is compiled into `HeistPlan` at the public boundary
+/// and dispatched inside the runtime as `RuntimeActionMessage`.
 public enum ClientMessage: Codable, Sendable, Equatable {
     // MARK: - Transport / Session
 
@@ -69,68 +68,6 @@ public enum ClientMessage: Codable, Sendable, Equatable {
 
     /// Execute a typed heist plan with the root argument required by its parameter.
     case heistPlan(HeistPlanRun)
-
-    // MARK: - Internal Heist Action Dispatch
-    //
-    // These cases are not a public instruction language and must not be sent as
-    // JSON client requests. Public commands lower to a one-step or composed
-    // HeistPlan and cross the wire as `.heistPlan`.
-
-    /// Activate an element
-    case activate(ElementTarget)
-
-    /// Increment an adjustable element (e.g., slider)
-    case increment(ElementTarget)
-
-    /// Decrement an adjustable element
-    case decrement(ElementTarget)
-
-    /// Perform a custom action on an element
-    case performCustomAction(CustomActionTarget)
-
-    /// Move through a custom accessibility rotor.
-    case rotor(RotorTarget)
-
-    // MARK: - Gesture Commands
-
-    /// Tap at a point or element
-    case oneFingerTap(TapTarget)
-
-    /// Long press at a point or element
-    case longPress(LongPressTarget)
-
-    /// Swipe from one point to another
-    case swipe(SwipeTarget)
-
-    /// Drag from one point to another
-    case drag(DragTarget)
-
-    /// Type text character-by-character by tapping keyboard keys
-    case typeText(TypeTextTarget)
-
-    /// Perform a standard edit action (copy, paste, cut, select, selectAll, delete) on the first responder
-    case editAction(EditActionTarget)
-
-    /// Scroll via accessibility scroll action (bubbles up to nearest scroll view)
-    case scroll(ScrollTarget)
-
-    /// One-shot scroll: jump to a known element's position in its scroll view.
-    /// Fails if the element has no observed content-space position.
-    case scrollToVisible(ScrollToVisibleTarget)
-
-    /// Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right)
-    case scrollToEdge(ScrollToEdgeTarget)
-
-    /// Resign first responder (dismiss keyboard)
-    case resignFirstResponder
-
-    /// Write text to the general pasteboard (in-app, avoids paste dialog for subsequent reads)
-    case setPasteboard(SetPasteboardTarget)
-
-    /// Wait until an accessibility predicate is satisfied.
-    /// `present`/`absent` poll the current interface; `changed` rides through
-    /// intermediate states until the change predicate is met.
-    case wait(WaitTarget)
 }
 
 public struct HeistPlanRun: Codable, Sendable, Equatable {

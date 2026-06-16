@@ -85,15 +85,15 @@ extension Array where Element == (ClientMessage, String?) {
         }
     }
 
-    /// The sent heist plan's body resolved back to `ClientMessage`s (action and
-    /// wait steps) — what a command now puts on the wire, since a single command
-    /// executes as a one-step plan rather than a bare message.
-    var sentPlanMessages: [ClientMessage] {
+    /// The sent heist plan's body resolved back to runtime actions (action and
+    /// wait steps) — what the in-app runtime dispatches after the public wire
+    /// receives a one-step plan.
+    var sentPlanMessages: [RuntimeActionMessage] {
         guard let plan = sentHeistPlan else { return [] }
         return plan.body.compactMap { step in
             switch step {
             case .action(let action):
-                return try? action.command.resolveForInternalDispatch(in: .empty)
+                return try? action.command.resolveForRuntimeDispatch(in: .empty)
             case .wait(let wait):
                 guard let resolved = try? wait.resolve(in: .empty) else { return nil }
                 return .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))
@@ -472,33 +472,6 @@ private extension HeistStep {
 private extension HeistActionCommand {
     var fenceCommandForInspection: TheFence.Command {
         switch clientWireType {
-        case .activate: return .activate
-        case .increment: return .activate
-        case .decrement: return .activate
-        case .performCustomAction: return .activate
-        case .rotor: return .rotor
-        case .oneFingerTap: return .oneFingerTap
-        case .longPress: return .longPress
-        case .swipe: return .swipe
-        case .drag: return .drag
-        case .typeText: return .typeText
-        case .editAction: return .editAction
-        case .setPasteboard: return .setPasteboard
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .scrollToEdge: return .scrollToEdge
-        case .resignFirstResponder: return .dismissKeyboard
-        case .getPasteboard: return .getPasteboard
-        case .wait: return .wait
-        case .clientHello, .authenticate, .requestInterface, .ping, .status, .heistPlan, .requestScreen:
-            return .runHeist
-        }
-    }
-}
-
-private extension ClientMessage {
-    var fenceCommandForInspection: TheFence.Command {
-        switch self {
         case .activate: return .activate
         case .increment: return .activate
         case .decrement: return .activate

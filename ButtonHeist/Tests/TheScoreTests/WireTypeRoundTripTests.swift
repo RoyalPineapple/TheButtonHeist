@@ -591,7 +591,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testHeistPlanRoundTripPreservesCommandStepWireShape() throws {
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
-                    command: .activate(.predicate(ElementPredicate(label: "Settings", traits: [.button]), ordinal: 1)),
+                    command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Settings"), traits: [.button]), ordinal: 1)),
                     expectation: WaitStep(predicate: .changed(.screen()), timeout: 2.5)
                 )),
                 .action(try ActionStep(

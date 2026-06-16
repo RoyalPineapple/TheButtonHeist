@@ -424,11 +424,11 @@ final class TheBrainsActionTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
 
-        let success = await brains.executeCommand(.activate(.predicate(ElementPredicate(identifier: "trace_success"))))
+        let success = await brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(identifier: "trace_success"))))
         XCTAssertTrue(success.success, success.message ?? "activate failed")
         XCTAssertNotNil(success.accessibilityTrace?.captures.last)
 
-        let failure = await brains.executeCommand(.activate(.predicate(ElementPredicate(identifier: "trace_failure"))))
+        let failure = await brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(identifier: "trace_failure"))))
         XCTAssertFalse(failure.success)
         XCTAssertEqual(failure.method, .activate)
         let afterCapture = try XCTUnwrap(failure.accessibilityTrace?.captures.last)
@@ -566,7 +566,7 @@ final class TheBrainsActionTests: XCTestCase {
     func testHeistCommandsMatchSingleCommandMatcherFailures() async throws {
         let matcher = ElementPredicate(identifier: "missing_target")
         let target = ElementTarget.predicate(matcher)
-        let commands: [(String, ClientMessage, Bool)] = [
+        let commands: [(String, RuntimeActionMessage, Bool)] = [
             ("activate", .activate(target), false),
             ("custom action", .performCustomAction(CustomActionTarget(
                 elementTarget: target,
@@ -581,7 +581,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         for (label, command, normalizingTimeoutDuration) in commands {
             brains.clearCache()
-            let single = await brains.executeCommand(command)
+            let single = await brains.executeRuntimeAction(command)
             brains.clearCache()
             let heist = try await heistStepResult(for: command)
             assertSameActionResult(
@@ -616,15 +616,15 @@ final class TheBrainsActionTests: XCTestCase {
         ]
         var dispatchedTypes: [ClientWireMessageType] = []
         let runtime = heistRuntime(observations: []) { command in
-            dispatchedTypes.append(command.wireType)
-            return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+            dispatchedTypes.append(command.runtimeType)
+            return ActionResult(success: true, method: .heistPlan, message: command.runtimeType.rawValue)
         }
         let plan = try HeistPlan(body: commands.map { .action(try ActionStep(command: $0)) })
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.success, result.message ?? "heist failed")
-        XCTAssertEqual(dispatchedTypes, commands.map(\.internalDispatchWireType))
+        XCTAssertEqual(dispatchedTypes, commands.map(\.runtimeActionType))
         guard case .heistExecution(let heist) = result.payload else {
             return XCTFail("Expected heist execution payload")
         }
@@ -873,7 +873,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertNil(inactiveBrains.stash.latestSettledSemanticObservation)
         XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
-        let result = await inactiveBrains.executeCommand(.wait(WaitTarget(
+        let result = await inactiveBrains.executeRuntimeAction(.wait(WaitTarget(
             predicate: .state(.present(ElementPredicate(label: "Home"))),
             timeout: 0
         )))
@@ -958,7 +958,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.predicate(ElementPredicate(label: "Submit"))),
+                command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))),
                 expectation: expectation
             )),
         ])
@@ -1020,7 +1020,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistInvocationExecutesHelperDependenciesInInvokedDefinitionScope() async throws {
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { command in
@@ -1034,7 +1034,9 @@ final class TheBrainsActionTests: XCTestCase {
                 parameter: .string(name: "item"),
                 definitions: [
                     UnvalidatedHeistPlan(name: "tapAddButton", body: [
-                        .action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Add to Cart"))))),
+                        .action(try ActionStep(
+                            command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Add to Cart"))))
+                        )),
                     ]),
                 ],
                 body: [
@@ -1059,7 +1061,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistExecutionBindsRootStringArgument() async throws {
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { command in
@@ -1094,7 +1096,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistExecutionBindsRootElementTargetArgument() async throws {
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { command in
@@ -1143,7 +1145,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testHeistInvocationAllowsSameLeafDefinitionNamesInDifferentScopes() async throws {
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { command in
@@ -1222,7 +1224,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.predicate(ElementPredicate(label: "Controls Demo"))),
+                command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Controls Demo")))),
                 expectation: expectation
             )),
         ])
@@ -1261,7 +1263,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .activate(.predicate(ElementPredicate(label: "Submit"))),
+                command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))),
                 expectation: expectation
             )),
         ])
@@ -1413,7 +1415,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistForEachFailsBeforeMutationWhenMatchCountExceedsLimit() async throws {
         let matching = ElementPredicate(label: "Delete")
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(
             observations: [
                 observedState(elements: [
@@ -1451,7 +1453,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
         let matching = ElementPredicate(label: "Delete")
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let initialState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
@@ -1494,7 +1496,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistForEachPreservesCallerPredicateInsteadOfMinimumMatchers() async throws {
         let matching = ElementPredicate(label: "Delete", traits: [.button])
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let initialState = observedState(elements: [
             (
                 makeElement(label: "Delete", value: "First", identifier: "delete_first", traits: [.button]),
@@ -1534,7 +1536,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistForEachResetsOrdinalWhenMatchedCollectionIdentityChanges() async throws {
         let matching = ElementPredicate(label: "Delete")
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let initialState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
@@ -1575,7 +1577,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistForEachAdditionResetsOrdinalWithoutExtendingInitialIterationBudget() async throws {
         let matching = ElementPredicate(label: "Delete")
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let initialState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
@@ -1615,7 +1617,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistForEachDoesNotResetOrdinalForStateOnlyMatchMutation() async throws {
         let matching = ElementPredicate(label: "Delete")
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         let initialState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first", traits: [.button]), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second", traits: [.button]), "delete_second"),
@@ -1687,7 +1689,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(heist.abortedAtPath, failedActionPath)
-        XCTAssertEqual(heist.steps.map(\.kind), [.forEachElement])
+        XCTAssertEqual(heist.steps.map(\.kind), [.forEachElement, .warn])
+        XCTAssertEqual(heist.steps.map(\.status), [.failed, .skipped])
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 1)
         XCTAssertEqual(forEachResult.failureReason, "iteration 0 failed at \(failedActionPath)")
@@ -1698,7 +1701,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testHeistForEachExpectationUsesCurrentSemanticTarget() async throws {
         let matching = ElementPredicate(label: "Delete")
-        var executedCommands: [ClientMessage] = []
+        var executedCommands: [RuntimeActionMessage] = []
         var waitedSteps: [ResolvedWaitStep] = []
         let initialState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
@@ -1908,7 +1911,7 @@ final class TheBrainsActionTests: XCTestCase {
         brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
         await brains.tripwire.yieldFrames(3)
 
-        let result = await brains.executeCommand(.typeText(TypeTextTarget(
+        let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
             text: "hello",
             elementTarget: .predicate(ElementPredicate(identifier: "message_field"))
         )))
@@ -2409,7 +2412,7 @@ final class TheBrainsActionTests: XCTestCase {
             timeout: 0
         )
         let result = await withNoTraversableWindows {
-            await brains.executeCommand(.wait(target))
+            await brains.executeRuntimeAction(.wait(target))
         }
 
         XCTAssertFalse(result.success)
@@ -2591,15 +2594,15 @@ final class TheBrainsActionTests: XCTestCase {
         message.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
     }
 
-    private func heistStepResult(for command: ClientMessage) async throws -> ActionResult {
+    private func heistStepResult(for command: RuntimeActionMessage) async throws -> ActionResult {
         let step: HeistStep
         if case .wait(let target) = command {
             step = .wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))
         } else {
             do {
-                step = .action(try ActionStep(command: command))
+                step = .action(try ActionStep(command: HeistActionCommand(runtimeActionMessage: command)))
             } catch {
-                XCTFail("Expected heist primitive command for \(command.wireType.rawValue): \(error)")
+                XCTFail("Expected heist primitive command for \(command.runtimeType.rawValue): \(error)")
                 return ActionResultBuilder(method: .heistPlan).failure(errorKind: .validationError)
             }
         }
@@ -2608,7 +2611,7 @@ final class TheBrainsActionTests: XCTestCase {
         guard case .heistExecution(let heist) = result.payload,
               let stepResult = heist.steps.first,
               let actionResult = stepResult.reportActionResult else {
-            XCTFail("Expected heist execution step result for \(command.wireType.rawValue)")
+            XCTFail("Expected heist execution step result for \(command.runtimeType.rawValue)")
             return result
         }
         return actionResult
@@ -2640,7 +2643,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func heistRuntime(
         observations: [PostActionObservation.BeforeState],
-        execute: (@MainActor (ClientMessage) async -> ActionResult)? = nil,
+        execute: (@MainActor (RuntimeActionMessage) async -> ActionResult)? = nil,
         wait: (@MainActor (ResolvedWaitStep, AccessibilityTrace?) async -> ActionResult)? = nil,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
@@ -2662,7 +2665,7 @@ final class TheBrainsActionTests: XCTestCase {
                 if let execute {
                     return await execute(command)
                 }
-                return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+                return ActionResult(success: true, method: .heistPlan, message: command.runtimeType.rawValue)
             },
             wait: { waitStep, initialTrace in
                 if let wait {

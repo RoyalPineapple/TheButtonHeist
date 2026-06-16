@@ -96,8 +96,8 @@ func `composition quality allows explicit expectation waiver`() throws {
 @Test
 func lintFlagsMechanicalCommandsAndViewportSetup() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
-        .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
+        .action(try ActionStep(command: .viewportScroll(ScrollTarget(direction: .down)))),
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
             expectation: WaitStep(predicate: .state(.present(.label("Done"))), timeout: 1)
@@ -114,7 +114,7 @@ func lintFlagsMechanicalCommandsAndViewportSetup() throws {
 @Test
 func lintReportsTypeTextWithoutTarget() throws {
     let plan = try HeistPlan(body: [
-        .action(try ActionStep(command: .typeText(TypeTextTarget(text: "milk")))),
+        .action(try ActionStep(command: .typeText(text: .literal("milk"), target: nil))),
     ])
 
     let findings = plan.lint(.compositionQuality)

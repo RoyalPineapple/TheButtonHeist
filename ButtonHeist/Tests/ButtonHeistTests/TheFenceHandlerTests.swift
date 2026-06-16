@@ -564,7 +564,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertThrowsError(try fence.decodeRunHeistRequest(
                 TheFence.CommandArgumentEnvelope(values: ["path": .string(path)])
             )) { error in
-                XCTAssertTrue(String(describing: error).contains(".heist package artifact"), "\(path): \(error)")
+                XCTAssertTrue(String(describing: error).contains("generated `.heist` package artifact"), "\(path): \(error)")
             }
         }
         // Empty path fails.
@@ -2364,7 +2364,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testWaitChangedRequiresTraceDerivedExpectationMatch() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { message in
+        mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2393,7 +2393,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testWaitChangedTimeoutDoesNotClaimExpectationMet() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { message in
+        mockConn.runtimeActionResponse = { message in
             guard case .wait = message else {
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2450,7 +2450,7 @@ final class TheFenceHandlerTests: XCTestCase {
             newInterface: interface
         )))
 
-        mockConn.autoResponse = { message in
+        mockConn.runtimeActionResponse = { message in
             switch message {
             case .activate:
                 return .actionResult(ActionResult(
@@ -2622,7 +2622,7 @@ final class TheFenceHandlerTests: XCTestCase {
             element: ElementPredicate(identifier: "counter"), property: .value, to: "5"
         )))
         let sourceStep = HeistStep.action(try ActionStep(
-            command: .activate(.predicate(ElementPredicate(identifier: "counter"))),
+            command: .activate(.predicate(ElementPredicateTemplate(identifier: .literal("counter")))),
             expectation: WaitStep(predicate: expectation, timeout: 10)
         ))
         let plan = try HeistPlan(body: [sourceStep])

@@ -20,37 +20,15 @@ extension TheFence {
         return .interface(interface, detail: request.detail)
     }
 
+    func handleGetPasteboard() async throws -> FenceResponse {
+        let result = try await sendAndAwaitAction(.getPasteboard, timeout: Timeouts.healthSeconds)
+        return .action(command: .getPasteboard, result: result)
+    }
+
     // MARK: - Handler: Executable Commands
 
     func handleClientActionRequest(_ request: ParsedRequest) async throws -> FenceResponse {
-        let messages = try executableActionMessages(for: request)
-        let timeout = actionTimeout(for: messages)
-        var finalResult: ActionResult?
-        for message in messages {
-            let result = try await sendAndAwaitAction(message, timeout: timeout)
-            finalResult = result
-            if !result.success {
-                return .action(command: request.command, result: result)
-            }
-        }
-        guard let finalResult else {
-            return .error("command \"\(request.command.rawValue)\" did not produce an executable action")
-        }
-        return .action(command: request.command, result: finalResult)
-    }
-
-    private func actionTimeout(for messages: [ClientMessage]) -> TimeInterval {
-        guard let message = messages.first else { return Timeouts.actionSeconds }
-        switch message {
-        case .getPasteboard:
-            return Timeouts.healthSeconds
-        case .typeText:
-            return Timeouts.longActionSeconds
-        case .wait(let target):
-            return target.resolvedTimeout + 5
-        default:
-            return Timeouts.actionSeconds
-        }
+        .error("command \"\(request.command.rawValue)\" must execute as a heistPlan")
     }
 
     func missingElementTargetResponse(command: String) -> FenceResponse {

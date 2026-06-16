@@ -2,8 +2,8 @@ import TheScore
 
 extension TheFence {
 
-    static func decodedExecutablePayload(_ message: ClientMessage) -> DecodedRequestDispatch {
-        Self.clientActionDispatch([message])
+    static func decodedExecutablePayload(_ message: RuntimeActionMessage) -> DecodedRequestDispatch {
+        Self.runtimeActionDispatch([message])
     }
 
 }

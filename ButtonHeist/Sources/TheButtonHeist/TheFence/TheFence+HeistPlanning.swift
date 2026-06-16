@@ -150,7 +150,7 @@ extension TheFence {
             )
         }
 
-        let messages = try executableActionMessages(for: request)
+        let messages = try executableRuntimeActions(for: request)
         guard let message = messages.first, messages.count == 1 else {
             let commandName = request.command.rawValue
             throw HeistStepPlanBuildError(
@@ -173,7 +173,7 @@ extension TheFence {
         }
 
         return .action(try ActionStep(
-            command: message,
+            command: HeistActionCommand(runtimeActionMessage: message),
             expectation: actionExpectationStep(for: request)
         ))
     }
@@ -264,8 +264,8 @@ private extension TheFence {
         )
     }
 
-    func validatePayloadCheckedHeistPrimitive(_ message: ClientMessage, commandName: String) throws {
-        let command = try HeistActionCommand(internalDispatchMessage: message)
+    func validatePayloadCheckedHeistPrimitive(_ message: RuntimeActionMessage, commandName: String) throws {
+        let command = try HeistActionCommand(runtimeActionMessage: message)
         if let failure = command.durableHeistActionFailure {
             throw HeistStepPlanBuildError(
                 message: """

@@ -593,7 +593,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
 
-        let result = await brains.executeCommand(.activate(.predicate(ElementPredicate(label: "Old Offscreen"))))
+        let result = await brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(label: "Old Offscreen"))))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
