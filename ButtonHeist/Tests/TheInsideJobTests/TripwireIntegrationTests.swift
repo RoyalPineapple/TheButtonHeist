@@ -22,8 +22,7 @@ final class TripwireIntegrationTests: XCTestCase {
     // MARK: - waitForAllClear (delegates to waitForSettle)
 
     func testWaitForAllClearSettlesWhenIdle() async {
-        let settled = await tripwire.waitForAllClear(timeout: 2.0)
-        XCTAssertTrue(settled)
+        await assertAllClear("Idle UI should settle")
     }
 
     func testWaitForAllClearTimesOutDuringAnimation() async {
@@ -67,8 +66,7 @@ final class TripwireIntegrationTests: XCTestCase {
         animation.isRemovedOnCompletion = true
         testLayer.add(animation, forKey: "briefFade")
 
-        let settled = await tripwire.waitForAllClear(timeout: 2.0)
-        XCTAssertTrue(settled, "Should settle after short animation completes")
+        await assertAllClear("Should settle after short animation completes")
 
         testLayer.removeAllAnimations()
         testLayer.removeFromSuperlayer()
@@ -85,8 +83,7 @@ final class TripwireIntegrationTests: XCTestCase {
         window.addSubview(testView)
         testView.setNeedsLayout()
 
-        let settled = await tripwire.waitForAllClear(timeout: 2.0)
-        XCTAssertTrue(settled, "Should settle after pending layout flushes")
+        await assertAllClear("Should settle after pending layout flushes")
 
         testView.removeFromSuperview()
     }
@@ -94,8 +91,7 @@ final class TripwireIntegrationTests: XCTestCase {
     // MARK: - waitForSettle
 
     func testWaitForSettleResolvesWhenIdle() async {
-        let settled = await tripwire.waitForSettle(timeout: 2.0)
-        XCTAssertTrue(settled)
+        await assertSettles("Idle UI should settle")
     }
 
     func testWaitForSettleTimesOutDuringAnimation() async {
@@ -124,8 +120,7 @@ final class TripwireIntegrationTests: XCTestCase {
 
     func testWaitForSettleCustomQuietFrames() async {
         // Requesting more quiet frames should still settle when idle
-        let settled = await tripwire.waitForSettle(timeout: 2.0, requiredQuietFrames: 4)
-        XCTAssertTrue(settled)
+        await assertSettles("Idle UI should settle with custom quiet frames", requiredQuietFrames: 4)
     }
 
     func testMultipleConcurrentSettleWaiters() async {
@@ -135,8 +130,8 @@ final class TripwireIntegrationTests: XCTestCase {
         async let settle2 = tripwire.waitForSettle(timeout: 2.0)
 
         let (result1, result2) = await (settle1, settle2)
-        XCTAssertTrue(result1)
-        XCTAssertTrue(result2)
+        XCTAssertTrue(result1, "First waiter should settle; \(latestPulseDiagnostic())")
+        XCTAssertTrue(result2, "Second waiter should settle; \(latestPulseDiagnostic())")
     }
 
     // MARK: - Pulse produces readings
@@ -147,21 +142,21 @@ final class TripwireIntegrationTests: XCTestCase {
         // requiredQuietFrames: 1 asks for the first produced reading and keeps
         // the test resilient to host noise.
         let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
-        XCTAssertTrue(settled, "Pulse should settle within timeout")
+        XCTAssertTrue(settled, "Pulse should settle within timeout; \(latestPulseDiagnostic())")
         let reading = try XCTUnwrap(tripwire.latestReading)
         XCTAssertGreaterThan(reading.tick, 0)
     }
 
     func testPulseReadingHasValidWindowCount() async throws {
         let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
-        XCTAssertTrue(settled, "Pulse should settle within timeout")
+        XCTAssertTrue(settled, "Pulse should settle within timeout; \(latestPulseDiagnostic())")
         let reading = try XCTUnwrap(tripwire.latestReading, "No reading produced")
         XCTAssertGreaterThan(reading.windowCount, 0)
     }
 
     func testPulseReadingTracksVCIdentity() async throws {
         let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
-        XCTAssertTrue(settled, "Pulse should settle within timeout")
+        XCTAssertTrue(settled, "Pulse should settle within timeout; \(latestPulseDiagnostic())")
         let reading = try XCTUnwrap(tripwire.latestReading, "No reading produced")
         // Test host should have a VC
         XCTAssertNotNil(reading.topmostVC)
@@ -199,6 +194,53 @@ final class TripwireIntegrationTests: XCTestCase {
 
         testLayer.removeAllAnimations()
         testLayer.removeFromSuperlayer()
+    }
+
+    private func assertAllClear(
+        _ message: String,
+        timeout: TimeInterval = 2.0,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let settled = await tripwire.waitForAllClear(timeout: timeout)
+        XCTAssertTrue(settled, "\(message); \(latestPulseDiagnostic())", file: file, line: line)
+    }
+
+    private func assertSettles(
+        _ message: String,
+        timeout: TimeInterval = 2.0,
+        requiredQuietFrames: Int = 2,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let settled = await tripwire.waitForSettle(
+            timeout: timeout,
+            requiredQuietFrames: requiredQuietFrames
+        )
+        XCTAssertTrue(settled, "\(message); \(latestPulseDiagnostic())", file: file, line: line)
+    }
+
+    private func latestPulseDiagnostic() -> String {
+        guard let reading = tripwire.latestReading else {
+            return "pulseRunning=\(tripwire.isPulseRunning) latestReading=nil"
+        }
+        return [
+            "pulseRunning=\(tripwire.isPulseRunning)",
+            "tick=\(reading.tick)",
+            "layoutPending=\(reading.layoutPending)",
+            "hasRelevantAnimations=\(reading.hasRelevantAnimations)",
+            "quietFrames=\(reading.quietFrames)",
+            "windowCount=\(reading.windowCount)",
+            "topmostVC=\(String(describing: reading.topmostVC))",
+            "fingerprint=\(fingerprintDescription(reading.fingerprint))",
+        ].joined(separator: " ")
+    }
+
+    private func fingerprintDescription(
+        _ fingerprint: TheTripwire.PresentationFingerprint
+    ) -> String {
+        "layers=\(fingerprint.layerCount) x=\(fingerprint.positionXSum) "
+            + "y=\(fingerprint.positionYSum) opacity=\(fingerprint.opacitySum)"
     }
 
 }
