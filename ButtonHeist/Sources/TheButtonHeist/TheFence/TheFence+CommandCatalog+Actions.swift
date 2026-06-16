@@ -12,40 +12,44 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeOneFingerTapRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
-                description: "Explicit mechanical/spatial tap. An element target supplies live geometry; "
-                    + "ordinary accessible controls should use the semantic command path."
+                projection: .cliOnly(
+                    "Explicit mechanical/spatial tap. An element target supplies live geometry; "
+                        + "ordinary accessible controls should use the semantic command path."
+                )
             )
         case .longPress:
             return TheFence.Command.commandDescriptor(
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeLongPressRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Explicit mechanical/spatial long press on a point "
-                    + "or element-relative point for a resolved duration."
+                projection: .cliOnly(
+                    "Explicit mechanical/spatial long press on a point "
+                        + "or element-relative point for a resolved duration."
+                )
             )
         case .swipe:
             return TheFence.Command.commandDescriptor(
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeSwipeRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Explicit mechanical/spatial swipe using exactly one typed intent: "
-                    + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
+                projection: .cliOnly(
+                    "Explicit mechanical/spatial swipe using exactly one typed intent: "
+                        + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
+                )
             )
         case .drag:
             return TheFence.Command.commandDescriptor(
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeDragRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.dragIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Explicit mechanical/spatial drag using exactly one typed intent: "
-                    + "elementToPoint or pointToPoint."
+                projection: .cliOnly(
+                    "Explicit mechanical/spatial drag using exactly one typed intent: "
+                        + "elementToPoint or pointToPoint."
+                )
             )
         }
     }
@@ -62,36 +66,39 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCom
             return TheFence.Command.commandDescriptor(
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.container, .string),
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Explicit viewport/debug operation: scroll one page in the visible viewport, "
-                    + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
-                    + "within a current containerName."
+                projection: .cliOnly(
+                    "Explicit viewport/debug operation: scroll one page in the visible viewport, "
+                        + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
+                        + "within a current containerName."
+                )
             )
         case .scrollToVisible:
             return TheFence.Command.commandDescriptor(
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToVisibleRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
-                description: "Explicit viewport/debug operation: move the viewport until a "
-                    + "semantic target is visible and report its fresh geometry."
+                projection: .cliOnly(
+                    "Explicit viewport/debug operation: move the viewport until a "
+                        + "semantic target is visible and report its fresh geometry."
+                )
             )
         case .scrollToEdge:
             return TheFence.Command.commandDescriptor(
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToEdgeRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.container, .string),
                     param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Explicit viewport/debug operation: scroll the visible viewport, "
-                    + "a semantic target's owning scroll ancestor, or for direct debug requests, "
-                    + "a current containerName, to a requested edge."
+                projection: .cliOnly(
+                    "Explicit viewport/debug operation: scroll the visible viewport, "
+                        + "a semantic target's owning scroll ancestor, or for direct debug requests, "
+                        + "a current containerName, to a requested edge."
+                )
             )
         }
     }
@@ -111,17 +118,17 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeActivateRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.action, .string)] + FenceParameterBlocks.expectation,
-                description: "Perform primary accessibility activation on a semantic UI element, "
-                    + "or one of its named accessibility actions."
+                projection: .cliOnly(
+                    "Perform primary accessibility activation on a semantic UI element, "
+                        + "or one of its named accessibility actions."
+                )
             )
         case .rotor:
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeRotorRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.rotor, .string),
                     param(.rotorIndex, .integer, minimum: 0),
@@ -131,41 +138,39 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                         defaultValue: .string(RotorDirection.next.rawValue)
                     ),
                 ] + FenceParameterBlocks.expectation,
-                description: "Move through an element rotor by direction. The server holds the rotor cursor "
-                    + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
-                    + "and drops the cursor."
+                projection: .cliOnly(
+                    "Move through an element rotor by direction. The server holds the rotor cursor "
+                        + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
+                        + "and drops the cursor."
+                )
             )
         case .typeText:
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeTypeTextRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.elementTarget + [param(.text, .string, required: true, minLength: 1)] + FenceParameterBlocks.expectation,
-                description: "Type non-empty text, optionally after inflating a semantic target."
+                projection: .cliOnly("Type non-empty text, optionally after inflating a semantic target.")
             )
         case .editAction:
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeEditActionRequest,
-                mcpExposure: .notExposed,
                 parameters: [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + FenceParameterBlocks.expectation,
-                description: "Perform an edit action on the current first responder."
+                projection: .cliOnly("Perform an edit action on the current first responder.")
             )
         case .setPasteboard:
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeSetPasteboardRequest,
-                mcpExposure: .notExposed,
                 parameters: [param(.text, .string, required: true)] + FenceParameterBlocks.expectation,
-                description: "Write text to the general pasteboard from within the app."
+                projection: .cliOnly("Write text to the general pasteboard from within the app.")
             )
         case .dismissKeyboard:
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeDismissKeyboardRequest,
-                mcpExposure: .notExposed,
                 parameters: FenceParameterBlocks.expectation,
-                description: "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
+                projection: .cliOnly("Dismiss the on-screen keyboard through the current first responder or keyboard action path.")
             )
         }
     }

@@ -141,16 +141,18 @@ extension TheFence {
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public let family: FenceCommandFamily
-    public let cliExposure: CLIExposure
-    public let mcpExposure: MCPExposure
     public let requiresConnectionBeforeDispatch: Bool
     public let parameters: [FenceParameterSpec]
-    public let mcpAnnotations: MCPToolAnnotationSpec?
-    public let description: String
+    public let projection: FenceCommandProjection
     let requestDecoder: TheFence.RequestDecoder
 
+    public var cliExposure: CLIExposure { projection.cliExposure }
+    public var mcpExposure: MCPExposure { projection.mcpExposure }
+    public var mcpAnnotations: MCPToolAnnotationSpec? { projection.mcpAnnotations }
+    public var description: String { projection.description }
+
     public var isPublicRequestContract: Bool {
-        cliExposure != .notExposed || mcpExposure != .notExposed
+        projection.isPublicRequestContract
     }
 
     public var elementTargetParameterKeys: [String] {
@@ -197,34 +199,69 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         command: TheFence.Command,
         family: FenceCommandFamily,
         requestDecoder: @escaping TheFence.RequestDecoder,
-        cliExposure: CLIExposure,
-        mcpExposure: MCPExposure,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec],
-        mcpAnnotations: MCPToolAnnotationSpec? = nil,
-        description: String
+        projection: FenceCommandProjection
     ) {
         self.command = command
         self.family = family
         self.requestDecoder = requestDecoder
-        self.cliExposure = cliExposure
-        self.mcpExposure = mcpExposure
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.parameters = parameters
-        self.mcpAnnotations = mcpAnnotations
-        self.description = description
+        self.projection = projection
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
         // Decoder closures are intentionally excluded: command identity owns the routing entrypoint.
         lhs.command == rhs.command &&
             lhs.family == rhs.family &&
-            lhs.cliExposure == rhs.cliExposure &&
-            lhs.mcpExposure == rhs.mcpExposure &&
             lhs.requiresConnectionBeforeDispatch == rhs.requiresConnectionBeforeDispatch &&
             lhs.parameters == rhs.parameters &&
-            lhs.mcpAnnotations == rhs.mcpAnnotations &&
-            lhs.description == rhs.description
+            lhs.projection == rhs.projection
+    }
+}
+
+public struct FenceCommandProjection: Sendable, Equatable {
+    public let cliExposure: CLIExposure
+    public let mcpExposure: MCPExposure
+    public let mcpAnnotations: MCPToolAnnotationSpec?
+    public let description: String
+
+    public var isPublicRequestContract: Bool {
+        cliExposure != .notExposed || mcpExposure != .notExposed
+    }
+
+    init(
+        cliExposure: CLIExposure = .directCommand,
+        mcpExposure: MCPExposure = .directTool,
+        mcpAnnotations: MCPToolAnnotationSpec? = nil,
+        description: String
+    ) {
+        self.cliExposure = cliExposure
+        self.mcpExposure = mcpExposure
+        self.mcpAnnotations = mcpAnnotations
+        self.description = description
+    }
+
+    static func cliAndMCP(
+        _ description: String,
+        mcpAnnotations: MCPToolAnnotationSpec? = nil
+    ) -> Self {
+        Self(mcpAnnotations: mcpAnnotations, description: description)
+    }
+
+    static func cliOnly(
+        _ description: String,
+        mcpAnnotations: MCPToolAnnotationSpec? = nil
+    ) -> Self {
+        Self(mcpExposure: .notExposed, mcpAnnotations: mcpAnnotations, description: description)
+    }
+
+    static func mcpOnly(
+        _ description: String,
+        mcpAnnotations: MCPToolAnnotationSpec? = nil
+    ) -> Self {
+        Self(cliExposure: .notExposed, mcpAnnotations: mcpAnnotations, description: description)
     }
 }
 
@@ -236,7 +273,7 @@ public extension TheFence.Command {
     static var descriptors: [FenceCommandDescriptor] { FenceCommandRegistry.descriptors }
 
     static var cliDirectCommandDescriptors: [FenceCommandDescriptor] {
-        descriptors.filter { $0.cliExposure == .directCommand }
+        descriptors.filter { $0.projection.cliExposure == .directCommand }
     }
 }
 
@@ -274,23 +311,17 @@ extension TheFence.Command {
         _ command: Self,
         family: FenceCommandFamily,
         requestDecoder: @escaping TheFence.RequestDecoder,
-        cliExposure: CLIExposure = .directCommand,
-        mcpExposure: MCPExposure = .directTool,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec] = [],
-        mcpAnnotations: MCPToolAnnotationSpec? = nil,
-        description: String
+        projection: FenceCommandProjection
     ) -> FenceCommandDescriptor {
         FenceCommandDescriptor(
             command: command,
             family: family,
             requestDecoder: requestDecoder,
-            cliExposure: cliExposure,
-            mcpExposure: mcpExposure,
             requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
-            mcpAnnotations: mcpAnnotations,
-            description: description
+            projection: projection
         )
     }
 }

@@ -11,27 +11,31 @@ enum SessionCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .session,
                 requestDecoder: TheFence.decodePingRequest,
-                mcpExposure: .notExposed,
                 requiresConnectionBeforeDispatch: false,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Check connection health without reading accessibility state."
+                projection: .cliOnly(
+                    "Check connection health without reading accessibility state.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
             )
         case .listDevices:
             return TheFence.Command.commandDescriptor(
                 command, family: .session,
                 requestDecoder: TheFence.decodeListDevicesRequest,
-                mcpExposure: .notExposed,
                 requiresConnectionBeforeDispatch: false,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "List discovered iOS devices and configured connection targets."
+                projection: .cliOnly(
+                    "List discovered iOS devices and configured connection targets.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
             )
         case .getSessionState:
             return TheFence.Command.commandDescriptor(
                 command, family: .session,
                 requestDecoder: TheFence.decodeGetSessionStateRequest,
                 requiresConnectionBeforeDispatch: false,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Inspect connection, device, and last-action session state."
+                projection: .cliAndMCP(
+                    "Inspect connection, device, and last-action session state.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
             )
         case .connect:
             return TheFence.Command.commandDescriptor(
@@ -39,16 +43,17 @@ enum SessionCommand: String, CaseIterable, FenceCommand {
                 requestDecoder: TheFence.decodeConnectCommandRequest,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [param(.target, .string), param(.device, .string), param(.token, .string)],
-                description: "Establish or switch the active connection to a Button Heist app."
+                projection: .cliAndMCP("Establish or switch the active connection to a Button Heist app.")
             )
         case .listTargets:
             return TheFence.Command.commandDescriptor(
                 command, family: .session,
                 requestDecoder: TheFence.decodeListTargetsRequest,
-                mcpExposure: .notExposed,
                 requiresConnectionBeforeDispatch: false,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "List configured connection targets and the default target."
+                projection: .cliOnly(
+                    "List configured connection targets and the default target.",
+                    mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+                )
             )
         }
     }

@@ -4,16 +4,17 @@ import MCP
 enum ToolDefinitions {
     static var all: [Tool] {
         TheFence.Command.descriptors
-            .filter { $0.mcpExposure == .directTool }
+            .filter { $0.projection.mcpExposure == .directTool }
             .map(tool(for:))
     }
 
     private static func tool(for descriptor: FenceCommandDescriptor) -> Tool {
         let schema = value(from: descriptor.inputJSONSchema)
-        if let annotations = descriptor.mcpAnnotations {
+        let projection = descriptor.projection
+        if let annotations = projection.mcpAnnotations {
             return Tool(
                 name: descriptor.command.rawValue,
-                description: descriptor.description,
+                description: projection.description,
                 inputSchema: schema,
                 annotations: .init(
                     readOnlyHint: annotations.readOnlyHint,
@@ -24,7 +25,7 @@ enum ToolDefinitions {
 
         return Tool(
             name: descriptor.command.rawValue,
-            description: descriptor.description,
+            description: projection.description,
             inputSchema: schema
         )
     }
