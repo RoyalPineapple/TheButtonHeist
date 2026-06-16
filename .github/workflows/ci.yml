@@ -121,6 +121,9 @@ jobs:
   macos-tests:
     runs-on: macos-15
     timeout-minutes: 25
+    env:
+      BUTTONHEIST_RECEIPTS_DIR: ${{ runner.temp }}/buttonheist-receipts
+      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
 
     steps:
       - name: Checkout repository
@@ -181,11 +184,23 @@ jobs:
           swift build --package-path ButtonHeistMCP
           scripts/swift-test-gate.sh ButtonHeistMCP
 
+      - name: Upload heist receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-receipts-macos-tests-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/buttonheist-receipts
+          if-no-files-found: ignore
+          retention-days: 14
+
   ios-tests:
     runs-on: macos-15
     timeout-minutes: 30
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-tests
+      BUTTONHEIST_RECEIPTS_DIR: process-temporary-directory
+      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
+      BUTTONHEIST_CI_RECEIPTS_DIR: ${{ runner.temp }}/buttonheist-receipts
 
     steps:
       - name: Checkout repository
@@ -274,6 +289,24 @@ jobs:
             -skip-testing TheInsideJobTests/TLSIntegrationTests \
             -skip-testing TheInsideJobTests/TheSafecrackerIntegrationTests
 
+      - name: Collect iOS heist receipts
+        if: always()
+        run: |
+          if [[ -n "${SIM_UDID:-}" ]]; then
+            scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$BUTTONHEIST_CI_RECEIPTS_DIR"
+          else
+            echo "SIM_UDID is unavailable; skipping iOS heist receipt collection"
+          fi
+
+      - name: Upload heist receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-receipts-ios-tests-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/buttonheist-receipts
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Report iOS test timings
         if: always()
         run: |
@@ -300,6 +333,8 @@ jobs:
     timeout-minutes: 25
     env:
       DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData-demo
+      BUTTONHEIST_RECEIPTS_DIR: ${{ runner.temp }}/buttonheist-receipts
+      BUTTONHEIST_RECEIPTS_MODE: ${{ github.ref == 'refs/heads/main' && 'failing-and-passing' || 'failures' }}
 
     steps:
       - name: Checkout repository
@@ -418,6 +453,15 @@ jobs:
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
+
+      - name: Upload heist receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-receipts-ios-demo-gates-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/buttonheist-receipts
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Report iOS demo timings
         if: always()

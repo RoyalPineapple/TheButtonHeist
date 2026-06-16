@@ -171,7 +171,8 @@ Until then, compressed `HeistExecutionResult` is the right artifact.
    The low-boilerplate shape is `BUTTONHEIST_RECEIPTS_DIR`, with
    `BUTTONHEIST_RECEIPTS_MODE=failing-and-passing` when pass receipts are
    desired.
-3. Update CI to upload failing receipts and latest passing main receipts.
+3. CI now uploads receipt artifacts from the main test lanes. PR runs keep
+   failing receipts; `main` runs keep failing and passing receipts.
 4. Keep the existing doctor repair output unchanged.
 5. Measure artifact sizes in real CI before doing anything smarter.
 

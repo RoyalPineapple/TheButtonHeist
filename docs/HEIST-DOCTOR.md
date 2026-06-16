@@ -18,7 +18,8 @@ Treat this as alpha.
 The repair guardrails are deliberately conservative, but the workflow around
 the tool is still young:
 
-- CI receipt upload and latest-passing lookup are not turnkey yet
+- CI now uploads receipt artifacts from the main test lanes, but latest-passing
+  lookup is still manual
 - the validation set is small and intentionally experimental
 - confidence calibration has not been proven across broad real failures
 - public `run_heist` JSON is not the same shape as the raw receipt input
@@ -77,6 +78,24 @@ Testing. That keeps test boilerplate at zero: in-process `Heist(...)` tests and
 external `run_heist` execution can both emit the same raw receipt artifact when
 the environment is configured.
 
+For simulator-hosted tests, use the portable temp-directory sentinel so the app
+process writes inside its sandbox:
+
+```bash
+BUTTONHEIST_RECEIPTS_DIR="process-temporary-directory"
+```
+
+CI can then copy the sandboxed files out with:
+
+```bash
+scripts/collect-ios-heist-receipts.sh "$SIM_UDID" "$RUNNER_TEMP/buttonheist-receipts"
+```
+
+The GitHub Actions CI currently enables this for the macOS unit-test lane, the
+iOS-hosted unit-test lane, and the iOS demo smoke gates. PR runs keep failing
+receipts by default. `main` runs keep failing and passing receipts so successful
+main builds can act as the last-pass baseline.
+
 XCTest and Swift Testing adapters may later add nicer test attachments or names,
 but artifact collection should not depend on per-test wrappers.
 
@@ -131,8 +150,7 @@ Do not market or wire this as production self-healing yet.
 
 Before calling it beta, the project needs at least:
 
-- CI glue that uploads `BUTTONHEIST_RECEIPTS_DIR` and finds latest passing
-  receipts by heist fingerprint
+- latest passing receipt lookup by heist fingerprint
 - enough real failure examples to tune confidence and abstention behavior
 - bounded, reviewer-friendly summaries for broad hierarchy context
 - a documented retention convention for latest passing and current failing

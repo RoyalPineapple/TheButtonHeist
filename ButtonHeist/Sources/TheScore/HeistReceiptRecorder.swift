@@ -38,6 +38,8 @@ public enum HeistReceiptRecordingMode: String, Sendable, Equatable {
 }
 
 public struct HeistReceiptRecordingConfiguration: Sendable, Equatable {
+    public static let processTemporaryDirectoryValue = "process-temporary-directory"
+
     public let rootDirectory: URL
     public let mode: HeistReceiptRecordingMode
 
@@ -53,11 +55,21 @@ public struct HeistReceiptRecordingConfiguration: Sendable, Equatable {
         guard let directory = EnvironmentKey.buttonheistReceiptsDir.value?.nilIfBlank else {
             return nil
         }
-        let expandedDirectory = (directory as NSString).expandingTildeInPath
         return HeistReceiptRecordingConfiguration(
-            rootDirectory: URL(fileURLWithPath: expandedDirectory, isDirectory: true),
+            rootDirectory: rootDirectory(for: directory),
             mode: HeistReceiptRecordingMode(environmentValue: EnvironmentKey.buttonheistReceiptsMode.value)
         )
+    }
+
+    private static func rootDirectory(for value: String) -> URL {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case processTemporaryDirectoryValue, "temporary-directory", "__tmp__":
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("buttonheist-receipts", isDirectory: true)
+        default:
+            let expandedDirectory = (value as NSString).expandingTildeInPath
+            return URL(fileURLWithPath: expandedDirectory, isDirectory: true)
+        }
     }
 }
 

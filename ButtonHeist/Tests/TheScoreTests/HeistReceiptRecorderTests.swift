@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import TheScore
 
-@Suite struct HeistReceiptRecorderTests {
+@Suite(.serialized) struct HeistReceiptRecorderTests {
 
     @Test func `record failing receipt as gzip artifact`() throws {
         let directory = try temporaryDirectory()
@@ -44,6 +44,22 @@ import Testing
         #expect(skipped == nil)
         #expect(recording.status == .passed)
         #expect(try HeistReceiptCodec.decode(contentsOf: recording.url) == result)
+    }
+
+    @Test func `environment process temporary directory resolves under process temp`() throws {
+        let previousDirectory = EnvironmentKey.buttonheistReceiptsDir.value
+        setEnvironment(
+            EnvironmentKey.buttonheistReceiptsDir.rawValue,
+            HeistReceiptRecordingConfiguration.processTemporaryDirectoryValue
+        )
+        defer { setEnvironment(EnvironmentKey.buttonheistReceiptsDir.rawValue, previousDirectory) }
+
+        let configuration = try #require(HeistReceiptRecordingConfiguration.environment)
+        let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL.path
+        let rootDirectory = configuration.rootDirectory.standardizedFileURL.path
+
+        #expect(rootDirectory.hasPrefix(temporaryDirectory))
+        #expect(configuration.rootDirectory.lastPathComponent == "buttonheist-receipts")
     }
 
     private func samplePlan() throws -> HeistPlan {
@@ -95,5 +111,13 @@ import Testing
             .appendingPathComponent("heist-receipt-recorder-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+
+    private func setEnvironment(_ key: String, _ value: String?) {
+        if let value {
+            setenv(key, value, 1)
+        } else {
+            unsetenv(key)
+        }
     }
 }
