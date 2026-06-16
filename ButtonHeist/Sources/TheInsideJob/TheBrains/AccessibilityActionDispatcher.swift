@@ -7,7 +7,7 @@ import UIKit
 /// The stash resolves live semantic targets; this type performs user intent on
 /// the resolved live object.
 @MainActor
-struct AccessibilityActionDispatcher {
+final class AccessibilityActionDispatcher {
 
     enum ActivateOutcome {
         case success
