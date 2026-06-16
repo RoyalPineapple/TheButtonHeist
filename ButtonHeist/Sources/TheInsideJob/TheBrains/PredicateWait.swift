@@ -452,14 +452,12 @@ import TheScore
 
 private typealias WaitEvaluation = (observation: HeistSemanticObservation, expectation: ExpectationResult)
 
-@MainActor
 struct PredicatePollingResult<Evaluation> {
     let lastObservation: HeistSemanticObservation?
     let lastEvaluation: Evaluation?
     let elapsedMs: Int
 }
 
-@MainActor
 struct PredicatePollingEngine<Evaluation> {
     typealias ObservationSource = @MainActor (
         SemanticObservationScope,
@@ -469,6 +467,7 @@ struct PredicatePollingEngine<Evaluation> {
 
     let observeSemanticState: ObservationSource
 
+    @MainActor
     func poll(
         scope: SemanticObservationScope,
         timeout rawTimeout: Double,
