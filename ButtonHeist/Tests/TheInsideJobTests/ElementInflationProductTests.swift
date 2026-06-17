@@ -164,7 +164,7 @@ final class ElementInflationProductTests: XCTestCase {
         let stepResult = try XCTUnwrap(actionEvidence.actionResult)
 
         XCTAssertTrue(single.result.success, single.result.message ?? "single activate failed")
-        XCTAssertTrue(heist.result.success, heist.result.message ?? "heist activate failed")
+        XCTAssertTrue(heist.result.success, heistFailureDescription(heist.result))
         guard single.result.success, heist.result.success else { return }
         XCTAssertEqual(single.activationCount, 1)
         XCTAssertEqual(heist.activationCount, 1)
@@ -227,6 +227,25 @@ final class ElementInflationProductTests: XCTestCase {
             .predicate(ElementPredicate(identifier: identifier, traits: [.button]))
         ))
         return (result, fixture.target.activationCount)
+    }
+
+    private func heistFailureDescription(_ result: ActionResult) -> String {
+        guard let payload = result.heistExecutionPayload else {
+            return result.message ?? "heist activate failed"
+        }
+        guard let failedStep = payload.firstFailedStep else {
+            return result.message ?? "heist activate failed without a failed receipt step"
+        }
+        let actionMessage = failedStep.reportActionResult?.message
+        return [
+            result.message,
+            "failedStep=\(failedStep.path)",
+            "kind=\(failedStep.kind.rawValue)",
+            failedStep.reportMessage.map { "message=\($0)" },
+            actionMessage.map { "actionMessage=\($0)" },
+        ]
+        .compactMap(\.self)
+        .joined(separator: "; ")
     }
 
     private func installOffscreenActivationFixture(
@@ -640,6 +659,7 @@ private final class RevealingScrollView: UIScrollView {
             container.accessibilityElementsHidden = !isRevealed
         }
         for element in revealedElements {
+            element.isHidden = !isRevealed
             element.isAccessibilityElement = isRevealed
             element.accessibilityElementsHidden = !isRevealed
         }

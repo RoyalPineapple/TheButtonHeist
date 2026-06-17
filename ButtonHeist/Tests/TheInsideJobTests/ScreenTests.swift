@@ -484,6 +484,29 @@ final class ScreenTests: XCTestCase {
         XCTAssertEqual(updated.knownIds, ["below_fold_button", "total_staticText"])
     }
 
+    func testRefreshingVisibleStateDoesNotPreserveKnownOnlyMemoryForDisjointKnownViewport() {
+        let oldVisible = makeElement(label: "Old Visible", traits: .button)
+        let staleKnownOnly = makeElement(label: "Stale Below Fold", traits: .button)
+        let freshVisible = makeElement(label: "Fresh Visible", traits: .button)
+        let screen = Screen.makeForTests(
+            elements: [(oldVisible, "old_visible")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    staleKnownOnly,
+                    heistId: "stale_below_fold",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                ),
+            ]
+        )
+        let refresh = Screen.makeForTests(elements: [(freshVisible, "stale_below_fold")])
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.visibleIds, ["stale_below_fold"])
+        XCTAssertEqual(updated.knownIds, ["stale_below_fold"])
+        XCTAssertEqual(updated.findElement(heistId: "stale_below_fold")?.element.label, "Fresh Visible")
+    }
+
     func testRefreshingVisibleStatePreservesKnownOnlyMemoryFromKnownOnlyBaseline() {
         let knownOnly = makeElement(label: "Below Fold", traits: .button)
         let visible = makeElement(label: "Visible", traits: .button)

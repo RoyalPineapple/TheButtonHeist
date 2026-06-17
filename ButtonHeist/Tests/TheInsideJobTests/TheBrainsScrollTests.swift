@@ -627,6 +627,61 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
+    func testStaleKnownRevealReentersCurrentDiscoveryBeforeFailing() async {
+        let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible")
+        let staleTarget = makeElement(label: "Target")
+        installScreenWithKnownOffscreen(
+            visible: (visible, "visible_element"),
+            offscreen: (staleTarget, "target_button", CGPoint(x: 0, y: 1_200), staleScrollView)
+        )
+
+        let recoveredFrame = CGRect(x: 40, y: 160, width: 240, height: 44)
+        let recoveredTarget = AccessibilityElement.make(
+            label: "Target",
+            traits: .button,
+            frame: recoveredFrame
+        )
+        let recoveredObject = NSObject()
+        let recoveredEntry = TheStash.ScreenElement(
+            heistId: "target_button",
+            contentSpaceOrigin: nil,
+            element: recoveredTarget
+        )
+        let recoveredScreen = Screen(
+            elements: [recoveredEntry.heistId: recoveredEntry],
+            hierarchy: [.element(recoveredTarget, traversalIndex: 0)],
+            containerNames: [:],
+            heistIdByElement: [recoveredTarget: recoveredEntry.heistId],
+            elementRefs: [
+                recoveredEntry.heistId: .init(object: recoveredObject, scrollView: nil)
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        var discoveryAttempts = 0
+        brains.navigation.elementInflation.discoverTarget = { _ in
+            discoveryAttempts += 1
+            return discoveryAttempts == 1 ? nil : recoveredScreen
+        }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Target")),
+            method: .scrollToVisible,
+            deallocatedBoundary: "scroll_to_visible dispatch"
+        )
+
+        guard case .inflated(let inflatedTarget) = result else {
+            return XCTFail("Expected current discovery to recover stale reveal, got \(result)")
+        }
+        XCTAssertEqual(discoveryAttempts, 2)
+        XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [false])
+        XCTAssertEqual(inflatedTarget.screenElement.heistId, recoveredEntry.heistId)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.x, recoveredFrame.midX, accuracy: 0.01)
+        XCTAssertEqual(inflatedTarget.liveTarget.activationPoint.y, recoveredFrame.midY, accuracy: 0.01)
+    }
+
     func testScrollReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {
         // Contract: Scroll either reveals the requested target or returns a reason it cannot.
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
