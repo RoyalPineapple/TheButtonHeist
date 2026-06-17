@@ -76,7 +76,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         )
         defer { fence.stop() }
 
-        if case .heistExecution(_, let result, _) = response {
+        if case .heistExecution(_, let result, _, _) = response {
             let name = prepared.path
                 .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
             let report = fence.junitReport(

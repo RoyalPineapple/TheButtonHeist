@@ -93,6 +93,16 @@ enum FenceRequestErrorCode {
     static let missingTarget = "request.missing_target"
 }
 
+/// Where a heist execution response came from at the client boundary.
+///
+/// The runtime receipt is always `HeistExecutionResult`; this origin only
+/// preserves the public response shape for legacy direct commands that now run
+/// through the heist executor internally.
+public enum HeistExecutionResponseOrigin: Sendable, Equatable {
+    case heistRequest
+    case directCommand(TheFence.Command)
+}
+
 /// Typed response from TheFence command execution.
 ///
 /// Cases marked `…Data` carry the raw payload in memory (base64-encoded).
@@ -115,7 +125,8 @@ public enum FenceResponse {
     case heistExecution(
         plan: HeistPlan,
         result: HeistExecutionResult,
-        accessibilityTrace: AccessibilityTrace? = nil
+        accessibilityTrace: AccessibilityTrace? = nil,
+        origin: HeistExecutionResponseOrigin = .heistRequest
     )
     case heistCatalog(HeistDiscoveryCatalog)
     case heistDescription(HeistDescription)
@@ -126,26 +137,6 @@ public enum FenceResponse {
     var actionResult: ActionResult? {
         if case .action(_, let result, _) = self { return result }
         return nil
-    }
-
-    /// A `.heistExecution` whose plan executed exactly one leaf step (action or
-    /// wait) renders as a single action — a single command and a one-step heist
-    /// read as one action line, not a heist report. `nil` for multi-step or
-    /// control-flow heists, which keep the full report shape.
-    var singleLeafActionRendering: (command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?)? {
-        guard case .heistExecution(_, let result, _) = self,
-              result.executedTopLevelStepCount == 1,
-              let step = result.steps.first,
-              let actionResult = step.reportActionResult else { return nil }
-        switch step.kind {
-        case .action:
-            guard let command = step.reportClientWireType.flatMap(TheFence.Command.init(clientWireType:)) else { return nil }
-            return (command, actionResult, step.reportExpectation)
-        case .wait:
-            return (.wait, actionResult, step.reportExpectation)
-        default:
-            return nil
-        }
     }
 
     /// Builds an error response with typed metadata when the error belongs to TheFence.
@@ -169,7 +160,7 @@ public enum FenceResponse {
             if !result.success { return true }
             if let expectation, !expectation.met { return true }
             return false
-        case .heistExecution(_, let result, _):
+        case .heistExecution(_, let result, _, _):
             return result.isFailure
         }
     }

@@ -31,70 +31,35 @@ extension TheFence {
     /// Output-only step entries for the JUnit report, walked from the execution
     /// receipt tree in execution order.
     func junitSteps(result: HeistExecutionResult) -> [HeistJUnitReport.StepResult] {
-        reportOutcomes(result: result).map(\.row)
-    }
-
-    // MARK: - Private Helpers
-
-    private func reportOutcomes(
-        result: HeistExecutionResult
-    ) -> [(row: HeistJUnitReport.StepResult, failure: ReportFailure?)] {
         result.outputReceiptNodes.enumerated().map { index, step in
-            let failure = reportFailure(for: step)
-            let outcome: HeistJUnitReport.Outcome = failure.map {
-                .failed(message: $0.errorMessage, errorKind: Self.reportErrorKind($0))
-            } ?? (step.status == .skipped ? .skipped : .passed)
-            let row = HeistJUnitReport.StepResult(
+            HeistJUnitReport.StepResult(
                 index: index,
                 command: step.reportCommandName ?? step.reportStepName,
                 target: step.reportTarget,
                 timeSeconds: Double(step.durationMs) / 1000,
-                outcome: outcome
+                outcome: Self.junitOutcome(for: step)
             )
-            return (row, failure)
         }
     }
 
-    private func reportFailure(for step: HeistExecutionStepResult) -> ReportFailure? {
-        let failedStep: ReportFailure.FailedStep
-        if let command = step.reportClientWireType.flatMap(TheFence.Command.init(clientWireType:)) {
-            failedStep = ReportFailure.FailedStep(command: command, target: step.reportTarget)
-        } else {
-            failedStep = ReportFailure.FailedStep(
-                commandName: step.reportCommandName ?? step.reportStepName,
-                target: step.reportTarget
-            )
-        }
+    // MARK: - Private Helpers
 
-        let expectationFailed = step.reportExpectation.map { !$0.met } ?? false
-        if let result = step.reportActionResult, !result.success || expectationFailed {
-            return .actionFailed(
-                step: failedStep,
-                result: result,
-                expectation: expectationFailed ? step.reportExpectation : nil,
-                interface: nil,
-                diagnosticCaptureFailure: nil
-            )
+    private static func junitOutcome(for step: HeistExecutionStepResult) -> HeistJUnitReport.Outcome {
+        if let message = step.reportFailureMessage {
+            return .failed(message: message, errorKind: junitErrorKind(for: step))
         }
-
-        guard let failureMessage = step.reportFailureMessage else { return nil }
-        return .fenceError(
-            step: failedStep,
-            message: failureMessage,
-            interface: nil,
-            diagnosticCaptureFailure: nil
-        )
+        return step.status == .skipped ? .skipped : .passed
     }
 
-    private static func reportErrorKind(_ failure: ReportFailure) -> HeistJUnitReport.ReportErrorKind? {
-        switch failure {
-        case .fenceError:
+    private static func junitErrorKind(for step: HeistExecutionStepResult) -> HeistJUnitReport.ReportErrorKind? {
+        if let result = step.reportActionResult, !result.success {
+            return result.errorKind.map(HeistJUnitReport.ReportErrorKind.action)
+        }
+        switch step.failure?.category {
+        case .validation, .runtimeUnavailable, .targetResolution, .invocation, .loop, .explicitFailure:
             return .commandError
-        case .actionFailed(_, let result, _, _, _):
-            guard let errorKind = result.errorKind else { return nil }
-            return .action(errorKind)
-        case .thrown:
-            return .thrown
+        case .action, .expectation, .wait, .none:
+            return nil
         }
     }
 }

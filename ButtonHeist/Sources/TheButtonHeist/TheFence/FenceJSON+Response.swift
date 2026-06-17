@@ -76,8 +76,8 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 includePNGData: true,
                 includeInterface: options.includeInterface
             ).encode(to: encoder)
-        case .heistExecution(_, let result, let accessibilityTrace):
-            if let single = response.singleLeafActionRendering {
+        case .heistExecution(_, let result, let accessibilityTrace, _):
+            if let single = response.directCommandActionOutputProjection {
                 try PublicActionResponse(
                     method: single.command.rawValue,
                     result: single.result,

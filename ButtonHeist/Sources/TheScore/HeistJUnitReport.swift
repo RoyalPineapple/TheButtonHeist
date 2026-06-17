@@ -100,14 +100,11 @@ extension HeistJUnitReport {
 extension HeistJUnitReport {
     /// Classification of why a step failed.
     ///
-    /// Adapter-only failures (`fenceError`, `thrown`) live here; action-level
-    /// failures wrap `ErrorKind` directly so there's no mirrored case list to
-    /// keep in sync.
+    /// Command-level failures collapse to `commandError`; action-level failures
+    /// wrap `ErrorKind` directly so there's no mirrored case list to keep in sync.
     public enum ReportErrorKind: Sendable, Equatable {
         /// Command-level error (invalid command, missing connection, etc.).
         case commandError
-        /// An unexpected exception was thrown during step execution.
-        case thrown
         /// An action-level error reported by the server.
         case action(ErrorKind)
 
@@ -115,7 +112,6 @@ extension HeistJUnitReport {
         public var typeName: String {
             switch self {
             case .commandError: return "commandError"
-            case .thrown: return "thrown"
             case .action(let kind): return kind.rawValue
             }
         }

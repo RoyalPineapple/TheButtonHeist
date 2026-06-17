@@ -389,6 +389,73 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         ])
     }
 
+    func testJUnitActionFailureDerivesFromReceiptFacts() async {
+        let result = HeistExecutionResult(
+            steps: [
+                actionStep(
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Delete")))),
+                    actionResult: ActionResult(
+                        success: false,
+                        method: .activate,
+                        message: "Delete not found",
+                        errorKind: .elementNotFound
+                    ),
+                    failure: HeistFailureDetail(
+                        category: .targetResolution,
+                        contract: "activate command succeeds",
+                        observed: "Delete not found"
+                    )
+                ),
+            ],
+            durationMs: 2,
+            abortedAtPath: "$.body[0]"
+        )
+        let rows = await Task { @ButtonHeistActor in
+            TheFence(configuration: .init()).junitSteps(result: result)
+        }.value
+
+        guard case .failed(let message, let errorKind) = rows.first?.outcome else {
+            return XCTFail("Expected failed JUnit row, got \(String(describing: rows.first?.outcome))")
+        }
+        XCTAssertEqual(message, "Delete not found")
+        XCTAssertEqual(errorKind, .action(.elementNotFound))
+    }
+
+    func testJUnitExpectationFailureUsesExpectationReceiptFact() async {
+        let predicate = AccessibilityPredicate.changed(.screen())
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    path: "$.body[0]",
+                    kind: .action,
+                    status: .failed,
+                    durationMs: 5,
+                    intent: .action(command: "activate", target: "label=Pay"),
+                    evidence: .action(HeistActionEvidence(
+                        command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
+                        actionResult: ActionResult(success: true, method: .activate),
+                        expectation: ExpectationResult(
+                            met: false,
+                            predicate: predicate,
+                            actual: "elementsChanged"
+                        )
+                    ))
+                ),
+            ],
+            durationMs: 5,
+            abortedAtPath: "$.body[0]"
+        )
+        let rows = await Task { @ButtonHeistActor in
+            TheFence(configuration: .init()).junitSteps(result: result)
+        }.value
+
+        guard case .failed(let message, let errorKind) = rows.first?.outcome else {
+            return XCTFail("Expected failed JUnit row, got \(String(describing: rows.first?.outcome))")
+        }
+        XCTAssertEqual(message, "elementsChanged")
+        XCTAssertNil(errorKind)
+    }
+
     func testSkippedReceiptNodesDoNotContributeRuntimeEvidence() {
         let result = HeistExecutionResult(
             steps: [
