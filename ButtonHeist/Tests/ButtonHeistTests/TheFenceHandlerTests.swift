@@ -736,7 +736,7 @@ final class TheFenceHandlerTests: XCTestCase {
         var arguments = try Self.planSourceArguments(for: plan).argumentValues
         arguments["argument"] = .object([
             "type": .string("element_target"),
-            "target": .object(["label": .string("Row 1")]),
+            "target": targetValue(label: "Row 1"),
         ])
 
         let request = try fence.decodeRunHeistRequest(TheFence.CommandArgumentEnvelope(values: arguments))
@@ -1436,7 +1436,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertThrowsError(
             try decodedElementTarget(
                 target: elementTargetValue([
-                    "label": .string("Save"),
+                    "label": stringMatchValue(mode: "exact", value: "Save"),
                     "unexpectedTargetField": .string("button_save"),
                 ])
             )
@@ -1573,7 +1573,7 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: [
                 "element": elementTargetValue([
                     "heistId": .string("button_save"),
-                    "label": .string("Save"),
+                    "label": stringMatchValue(mode: "exact", value: "Save"),
                 ]),
             ],
             contains: "Unknown element target field \"heistId\""
@@ -2387,7 +2387,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .wait,
             arguments: ["predicate": .object([
                 "type": .string("present"),
-                "element": .object(["label": .string("Loading")]),
+                "element": targetValue(label: "Loading"),
             ])]
         )
     }
@@ -2398,7 +2398,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .wait,
             arguments: ["predicate": .object([
                 "type": .string("absent"),
-                "element": .object(["label": .string("Loading")]),
+                "element": targetValue(label: "Loading"),
             ]), "timeout": .double(5.0)]
         )
     }
@@ -2426,8 +2426,8 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: ["predicate": .object([
                 "type": .string("all"),
                 "states": .array([
-                    .object(["type": .string("present"), "element": .object(["label": .string("Done")])]),
-                    .object(["type": .string("absent"), "element": .object(["label": .string("Loading")])]),
+                    .object(["type": .string("present"), "element": targetValue(label: "Done")]),
+                    .object(["type": .string("absent"), "element": targetValue(label: "Loading")]),
                 ]),
             ])]
         )
@@ -2439,7 +2439,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .wait,
             arguments: ["predicate": .object([
                 "type": .string("screen_changed"),
-                "where": .object(["type": .string("present"), "element": .object(["label": .string("Home")])]),
+                "where": .object(["type": .string("present"), "element": targetValue(label: "Home")]),
             ])]
         )
     }
@@ -2594,7 +2594,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "target": targetValue(identifier: "myElement"),
             "expect": .object([
                 "type": .string("present"),
-                "element": .object(["label": .string("Home")]),
+                "element": targetValue(label: "Home"),
             ]),
         ])
 
@@ -2765,7 +2765,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testParseExpectationDiscriminatorElementUpdatedFull() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("element_updated"),
-            "element": .object(["identifier": .string("slider")]),
+            "element": targetValue(identifier: "slider"),
             "property": .string("value"),
             "from": .string("0"),
             "to": .string("50"),
@@ -2803,7 +2803,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testParseExpectationDiscriminatorPresentWithElement() async throws {
         let result = try parseTypedExpectation(.object([
             "type": .string("present"),
-            "element": .object(["label": .string("Cart"), "identifier": .string("cart.button")]),
+            "element": targetValue(label: "Cart", identifier: "cart.button"),
         ]))
         XCTAssertEqual(
             result,
@@ -2816,7 +2816,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let result = try parseTypedExpectation(.object([
             "type": .string("absent"),
             "element": .object([
-                "label": .string("Spinner"),
+                "label": stringMatchValue(mode: "exact", value: "Spinner"),
                 "traits": .array([.string("button")]),
                 "excludeTraits": .array([.string("selected")]),
             ]),
@@ -2862,7 +2862,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("present"),
             "element": .object([
-                "label": .string("Done"),
+                "label": stringMatchValue(mode: "exact", value: "Done"),
                 "unknown": .string("ignored before"),
             ]),
         ]))) { error in
@@ -3091,7 +3091,7 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: [
                 "subtree": .object([
                     "element": .object([
-                        "label": .string("Save"),
+                        "label": stringMatchValue(mode: "exact", value: "Save"),
                         "unexpectedTargetField": .string("button_save"),
                     ]),
                 ]),
@@ -3132,7 +3132,10 @@ final class TheFenceHandlerTests: XCTestCase {
             }
         }
 
-        let response = try await fence.execute(command: .getInterface, values: ["label": .string("Submit")])
+        let response = try await fence.execute(
+            command: .getInterface,
+            values: ["label": stringMatchValue(mode: "exact", value: "Submit")]
+        )
 
         guard let (message, _) = mockConn.sent.last,
               case .requestInterface(let query) = message else {
@@ -3185,13 +3188,20 @@ private func targetValue(
     ordinal: Int? = nil
 ) -> HeistValue {
     var target: [String: HeistValue] = [:]
-    if let label { target["label"] = .string(label) }
-    if let identifier { target["identifier"] = .string(identifier) }
-    if let value { target["value"] = .string(value) }
+    if let label { target["label"] = stringMatchValue(mode: "exact", value: label) }
+    if let identifier { target["identifier"] = stringMatchValue(mode: "exact", value: identifier) }
+    if let value { target["value"] = stringMatchValue(mode: "exact", value: value) }
     if let traits { target["traits"] = .array(traits.map { .string($0) }) }
     if let excludeTraits { target["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
     if let ordinal { target["ordinal"] = .int(ordinal) }
     return elementTargetValue(target)
+}
+
+private func stringMatchValue(mode: String, value: String) -> HeistValue {
+    .object([
+        "mode": .string(mode),
+        "value": .string(value),
+    ])
 }
 
 private func elementTargetValue(_ fields: [String: HeistValue]) -> HeistValue {

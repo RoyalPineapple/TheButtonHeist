@@ -57,11 +57,41 @@ extension TheFence {
                         "Got type: \(type.schemaObservedDescription)"
                 )
             }
+            try validatePredicateStringMatchObjects(value, path: [])
             do {
                 let data = try JSONEncoder().encode(value)
                 return try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
             } catch let error as DecodingError {
                 throw Self.expectationDecodingFailure(error, value: value)
+            }
+        }
+
+        private static func validatePredicateStringMatchObjects(_ value: HeistValue, path: [String]) throws {
+            guard case .object(let object) = value else { return }
+            if let element = object["element"] {
+                try validateElementPredicateStringMatchObjects(element, path: path + ["element"])
+            }
+            if let states = object["states"], case .array(let values) = states {
+                for (index, child) in values.enumerated() {
+                    try validatePredicateStringMatchObjects(child, path: path + ["states[\(index)]"])
+                }
+            }
+            if let whereValue = object["where"] {
+                try validatePredicateStringMatchObjects(whereValue, path: path + ["where"])
+            }
+        }
+
+        private static func validateElementPredicateStringMatchObjects(_ value: HeistValue, path: [String]) throws {
+            guard case .object(let object) = value else { return }
+            for key in ["label", "identifier", "value"] {
+                guard let match = object[key] else { continue }
+                guard case .object = match else {
+                    throw SchemaValidationError(
+                        field: (path + [key]).joined(separator: "."),
+                        observed: match.schemaObservedDescription,
+                        expected: "StringMatch object with mode and value"
+                    )
+                }
             }
         }
 

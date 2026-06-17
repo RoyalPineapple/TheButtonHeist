@@ -39,7 +39,10 @@ extension GestureCLICommandContract {
     static func stringMatchValue(_ match: StringMatch<String>) -> HeistValue {
         switch match {
         case .exact(let value):
-            return .string(value)
+            return .object([
+                "mode": .string(match.mode.rawValue),
+                "value": .string(value),
+            ])
         case .contains(let value), .prefix(let value), .suffix(let value):
             return .object([
                 "mode": .string(match.mode.rawValue),

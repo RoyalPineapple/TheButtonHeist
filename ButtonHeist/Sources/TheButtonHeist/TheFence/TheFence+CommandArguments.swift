@@ -132,6 +132,26 @@ extension TheFence.CommandArgumentEnvelope {
         return string
     }
 
+    func schemaStringMatch(_ key: String) throws -> StringMatch<String>? {
+        guard let value = argumentValues[key] else { return nil }
+        guard case .object = value else {
+            throw SchemaValidationError(
+                field: field(key),
+                observed: value.schemaObservedDescription,
+                expected: "StringMatch object with mode and value"
+            )
+        }
+
+        do {
+            let data = try JSONEncoder().encode(value)
+            return try JSONDecoder().decode(StringMatch<String>.self, from: data)
+        } catch let error as DecodingError {
+            throw stringMatchPayloadFailure(error, key: key, value: value)
+        } catch {
+            throw FenceError.invalidRequest(String(describing: error))
+        }
+    }
+
     func requiredSchemaString(_ key: String) throws -> String {
         guard let value = try schemaString(key) else {
             throw SchemaValidationError(field: field(key), observed: "missing", expected: "string")
@@ -260,6 +280,82 @@ extension TheFence.CommandArgumentEnvelope {
     func field(_ key: String) -> String {
         guard let argumentFieldPrefix else { return key }
         return "\(argumentFieldPrefix).\(key)"
+    }
+
+    private func stringMatchPayloadFailure(_ error: DecodingError, key: String, value: HeistValue) -> Error {
+        switch error {
+        case .typeMismatch(let type, let context):
+            return SchemaValidationError(
+                field: field(key, codingPath: context.codingPath),
+                observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription
+                    ?? value.schemaObservedDescription,
+                expected: expectedDescription(for: type)
+            )
+        case .valueNotFound(let type, let context):
+            return SchemaValidationError(
+                field: field(key, codingPath: context.codingPath),
+                observed: "missing",
+                expected: expectedDescription(for: type)
+            )
+        case .keyNotFound(let missingKey, let context):
+            return SchemaValidationError(
+                field: field(key, codingPath: context.codingPath + [missingKey]),
+                observed: "missing",
+                expected: "present"
+            )
+        case .dataCorrupted(let context):
+            return SchemaValidationError(
+                field: field(key, codingPath: context.codingPath),
+                observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription ?? "invalid value",
+                expected: context.debugDescription
+            )
+        @unknown default:
+            return FenceError.invalidRequest(String(describing: error))
+        }
+    }
+
+    private func field(_ key: String, codingPath: [CodingKey]) -> String {
+        let suffix = codingPath.reduce(into: "") { path, codingKey in
+            if let index = codingKey.intValue {
+                path += "[\(index)]"
+            } else if path.isEmpty {
+                path = codingKey.stringValue
+            } else {
+                path += ".\(codingKey.stringValue)"
+            }
+        }
+        guard !suffix.isEmpty else { return field(key) }
+        return field("\(key).\(suffix)")
+    }
+
+    private func payloadValue(at codingPath: [CodingKey], in value: HeistValue) -> HeistValue? {
+        codingPath.reduce(Optional(value)) { current, key in
+            guard let current else { return nil }
+            if let index = key.intValue {
+                guard case .array(let values) = current, values.indices.contains(index) else { return nil }
+                return values[index]
+            }
+            guard case .object(let values) = current else { return nil }
+            return values[key.stringValue]
+        }
+    }
+
+    private func expectedDescription(for type: Any.Type) -> String {
+        switch type {
+        case is String.Type:
+            return "string"
+        case is Bool.Type:
+            return "boolean"
+        case is Int.Type:
+            return "integer"
+        case is Double.Type:
+            return "number"
+        default:
+            if String(describing: type).hasPrefix("Array<") {
+                return "array"
+            }
+            return String(describing: type)
+        }
     }
 
 }

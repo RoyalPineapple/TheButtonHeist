@@ -8,6 +8,7 @@ public struct FenceParameterSpec: Sendable, Equatable {
         case number
         case boolean
         case stringArray
+        case stringMatch
         case object
         case array
     }
@@ -177,7 +178,14 @@ public struct MCPToolAnnotationSpec: Sendable, Equatable {
 
 public extension FenceParameterSpec.ParamType {
     var jsonSchemaType: String {
-        self == .stringArray ? "array" : rawValue
+        switch self {
+        case .stringArray:
+            return "array"
+        case .stringMatch:
+            return "object"
+        default:
+            return rawValue
+        }
     }
 }
 
@@ -423,13 +431,48 @@ enum FenceParameterBlocks: Sendable {
         .duration, .number,
         maximum: GestureDuration.maximumSeconds
     )
+
+    private static func stringMatchParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+        let modeValues = StringMatch<String>.Mode.allCases.map(\.rawValue)
+        let schema: [String: HeistValue] = [
+            "type": .string(FenceParameterSpec.ParamType.object.jsonSchemaType),
+            "description": .string(
+                "StringMatch object with mode \(modeValues.joined(separator: "/")) and value. " +
+                    "Use mode exact for exact matching. Broad modes require a non-empty value."
+            ),
+            "properties": .object([
+                "mode": .object([
+                    "type": .string(FenceParameterSpec.ParamType.string.jsonSchemaType),
+                    "enum": .array(modeValues.map { .string($0) }),
+                ]),
+                "value": .object([
+                    "type": .string(FenceParameterSpec.ParamType.string.jsonSchemaType),
+                ]),
+            ]),
+            "required": .array(["mode", "value"].map { .string($0) }),
+            "additionalProperties": .bool(false),
+        ]
+        return FenceParameterSpec(
+            key: key.rawValue,
+            type: .stringMatch,
+            required: false,
+            enumValues: nil,
+            defaultValue: nil,
+            jsonSchemaProperty: .object(schema),
+            objectProperties: [],
+            arrayItemProperties: []
+        )
+    }
+
     private static func elementTargetFieldSpec(_ field: ElementTarget.SchemaField) -> FenceParameterSpec {
         guard let key = FenceParameterKey(rawValue: field.name) else {
             preconditionFailure("ElementTarget field '\(field.name)' is not a Fence parameter key")
         }
         switch field.kind {
-        case .string, .stringMatch:
+        case .string:
             return param(key, .string)
+        case .stringMatch:
+            return stringMatchParam(key)
         case .stringArray:
             return param(key, .stringArray)
         case .nonNegativeInteger:

@@ -228,7 +228,7 @@ such as `label`, `identifier`, `value`, `traits`, `excludeTraits`, and optional
 ### One-Step Semantic Action
 
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"action","action":{"command":{"type":"activate","payload":{"label":"Sign In","traits":["button"]}}}}]},"argument":{"type":"none"}}}
+{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"action","action":{"command":{"type":"activate","payload":{"label":{"mode":"exact","value":"Sign In"},"traits":["button"]}}}}]},"argument":{"type":"none"}}}
 ```
 
 Semantic action steps identify elements semantically. The host resolves the

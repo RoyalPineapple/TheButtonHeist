@@ -22,6 +22,8 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                     Build DSL targets from returned accessibility language: `.label("Pay")`,
                     `.identifier("pay_button")`, `.value("Milk")`, `.element(label: "Pay",
                     traits: [.button])`, or `.target(..., ordinal: n)` for duplicates.
+                    Direct matcher fields `label`, `identifier`, and `value` accept StringMatch
+                    objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`.
                     `containerName` is for inspection and viewport/debug commands only; it is
                     not a semantic target or durable heist selector.
                     """,

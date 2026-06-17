@@ -63,6 +63,7 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func decodeElementTargetPayload() throws -> ElementTarget {
+        try requireObjectStringMatchFields()
         let value = HeistValue.object(argumentValues)
         do {
             let data = try JSONEncoder().encode(value)
@@ -71,6 +72,19 @@ extension TheFence.CommandArgumentEnvelope {
             throw elementTargetPayloadFailure(error, value: value)
         } catch {
             throw FenceError.invalidRequest(String(describing: error))
+        }
+    }
+
+    private func requireObjectStringMatchFields() throws {
+        for field in ElementTarget.inlineSchemaFields where field.kind == .stringMatch {
+            guard let value = argumentValues[field.name] else { continue }
+            guard case .object = value else {
+                throw SchemaValidationError(
+                    field: self.field(field.name),
+                    observed: value.schemaObservedDescription,
+                    expected: "StringMatch object with mode and value"
+                )
+            }
         }
     }
 

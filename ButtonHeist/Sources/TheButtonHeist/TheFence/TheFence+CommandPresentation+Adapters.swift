@@ -25,6 +25,10 @@ public extension TheFence.Command {
 
         Commands:
         \(commandLines.joined(separator: "\n"))
+
+        StringMatch:
+          label, identifier, and value matcher fields accept
+          {"mode":"exact|contains|prefix|suffix","value":"..."}. Broad modes require a non-empty value.
         """
     }
 }

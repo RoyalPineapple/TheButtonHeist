@@ -98,7 +98,7 @@ JSON requests on stdin.
 ```bash
 buttonheist json_lines
 echo '{"command":"get_interface"}' | buttonheist json_lines
-echo '{"command":"run_heist","version":1,"body":[{"type":"action","action":{"command":{"type":"activate","payload":{"label":"Sign In","traits":["button"]}}}}]}' | buttonheist json_lines
+echo '{"command":"perform","step":"Activate(.label(\"Sign In\")).expect(.changed(.screen()))"}' | buttonheist json_lines
 ```
 
 JSON-lines mode auto-reconnects after connection loss, then the next command
