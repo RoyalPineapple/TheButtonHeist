@@ -4,6 +4,114 @@ import ThePlans
 import TheScore
 @testable import HeistDoctorCore
 
+private struct RepairJSONReport: Encodable {
+    let featureStatus = "alpha"
+    let suggestions: [HeistRepairSuggestion]
+}
+
+private let repairJSONReportFixture = RepairJSONReport(suggestions: [
+    HeistRepairSuggestion(
+        stepPath: "$.body[0]",
+        failureKind: .missingTarget,
+        oldTarget: .predicate(ElementPredicate(label: "Delete")),
+        oldResolvedElement: ElementSummary(
+            description: "Delete",
+            label: "Delete",
+            value: nil,
+            identifier: nil,
+            hint: nil,
+            traits: [.button],
+            actions: [.activate],
+            rotors: [],
+            siblingText: ["Milk"],
+            headerText: []
+        ),
+        newTarget: .predicate(ElementPredicate(label: "Remove")),
+        newResolvedElement: ElementSummary(
+            description: "Remove",
+            label: "Remove",
+            value: nil,
+            identifier: nil,
+            hint: nil,
+            traits: [.button],
+            actions: [.activate],
+            rotors: [],
+            siblingText: ["Milk"],
+            headerText: []
+        ),
+        confidence: .medium,
+        reasons: [
+            "Old target resolved to one element in the last successful before snapshot.",
+            "Suggested matcher resolves exactly one element in the new before snapshot.",
+        ],
+        caveats: []
+    ),
+])
+
+private let expectedRepairJSONReportJSON = """
+{
+  "featureStatus" : "alpha",
+  "suggestions" : [
+    {
+      "caveats" : [
+
+      ],
+      "confidence" : "medium",
+      "failureKind" : "missingTarget",
+      "newResolvedElement" : {
+        "actions" : [
+          "activate"
+        ],
+        "description" : "Remove",
+        "headerText" : [
+
+        ],
+        "label" : "Remove",
+        "rotors" : [
+
+        ],
+        "siblingText" : [
+          "Milk"
+        ],
+        "traits" : [
+          "button"
+        ]
+      },
+      "newTarget" : {
+        "label" : "Remove"
+      },
+      "oldResolvedElement" : {
+        "actions" : [
+          "activate"
+        ],
+        "description" : "Delete",
+        "headerText" : [
+
+        ],
+        "label" : "Delete",
+        "rotors" : [
+
+        ],
+        "siblingText" : [
+          "Milk"
+        ],
+        "traits" : [
+          "button"
+        ]
+      },
+      "oldTarget" : {
+        "label" : "Delete"
+      },
+      "reasons" : [
+        "Old target resolved to one element in the last successful before snapshot.",
+        "Suggested matcher resolves exactly one element in the new before snapshot."
+      ],
+      "stepPath" : "$.body[0]"
+    }
+  ]
+}
+"""
+
 @Suite struct HeistRepairSuggesterTests {
 
     @Test("Last success must resolve exactly once")
@@ -394,6 +502,70 @@ import TheScore
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
 
+    @Test("JSON report encode shape stays stable")
+    func jsonReportEncodeShapeStaysStable() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+        let data = try encoder.encode(repairJSONReportFixture)
+        let json = try #require(String(data: data, encoding: .utf8))
+
+        #expect(json == expectedRepairJSONReportJSON)
+    }
+
+    @Test("Candidate scoring rejects compatible-only successors without continuity")
+    func candidateScoringRejectsCompatibleOnlySuccessorsWithoutContinuity() {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = evidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Delete", traits: [.button], actions: [.activate]),
+            ]),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: makeTestInterface(elements: [
+                element(label: "Checkout", traits: [.button], actions: [.activate]),
+            ]),
+            succeeded: false
+        )
+
+        let ranked = rankedCandidates(last: last, current: current, failureKind: .missingTarget)
+
+        #expect(ranked.isEmpty)
+    }
+
+    @Test("Candidate generation preserves tied best score order")
+    func candidateGenerationPreservesTiedBestScoreOrder() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let last = evidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Delete"),
+            ]),
+            succeeded: true
+        )
+        let current = evidence(
+            target: target,
+            before: listInterface(rows: [
+                ("Milk", "Delete item"),
+                ("Milk", "Delete item"),
+                ("Bread", "Archive"),
+            ]),
+            succeeded: false
+        )
+
+        let ranked = rankedCandidates(last: last, current: current, failureKind: .missingTarget)
+        let bestScore = try #require(ranked.first?.score)
+        let tiedBest = ranked.prefix { $0.score == bestScore }
+
+        #expect(tiedBest.count == 2)
+        #expect(tiedBest.map(\.element.traversalIndex) == [1, 3])
+        #expect(tiedBest.allSatisfy { $0.reasons.contains("Label is a close semantic rename.") })
+        #expect(tiedBest.allSatisfy { $0.reasons.contains("Sibling row context is preserved.") })
+    }
+
     @Test("After diff explains value changes without requiring full after snapshot")
     func afterDiffExplainsValueChangesWithoutRequiringFullAfterSnapshot() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
@@ -625,6 +797,32 @@ import TheScore
         _ current: HeistStepRepairEvidence
     ) -> HeistRepairRequest {
         HeistRepairRequest(lastSuccess: last, currentFailure: current)
+    }
+
+    private func rankedCandidates(
+        last: HeistStepRepairEvidence,
+        current: HeistStepRepairEvidence,
+        failureKind: HeistRepairFailureKind
+    ) -> [ScoredCandidate] {
+        let lastScreen = RepairScreen(interface: last.beforeSnapshot)
+        guard case .resolved(let oldResolved, _) = lastScreen.resolve(last.target) else {
+            Issue.record("Expected last target to resolve once")
+            return []
+        }
+        let currentScreen = RepairScreen(interface: current.beforeSnapshot)
+        let actionFamily = RepairActionFamily(
+            actionKind: current.actionKind,
+            method: current.result.method ?? last.result.method
+        )
+        return RepairCandidateGenerator.rankedSuccessorCandidates(
+            oldResolved: oldResolved,
+            currentScreen: currentScreen,
+            preferredCandidates: [],
+            failureKind: failureKind,
+            actionFamily: actionFamily,
+            lastSuccess: last,
+            currentFailure: current
+        )
     }
 
     private func evidence(
