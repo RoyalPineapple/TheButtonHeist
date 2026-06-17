@@ -14,8 +14,11 @@ final class ElementActionRequestContractTests: XCTestCase {
         for field in schemaFields {
             let spec = try XCTUnwrap(specsByKey[field.name])
             switch field.kind {
-            case .string, .stringMatch:
+            case .string:
                 XCTAssertEqual(spec.type, .string)
+            case .stringMatch:
+                XCTAssertEqual(spec.type, .stringMatch)
+                assertStringMatchSchema(spec, file: #filePath, line: #line)
             case .stringArray:
                 XCTAssertEqual(spec.type, .stringArray)
             case .nonNegativeInteger:
@@ -106,4 +109,32 @@ private func targetValue(identifier: String) -> HeistValue {
 private func jsonSchemaProperty(_ key: String, in spec: FenceParameterSpec) -> HeistValue? {
     guard case .object(let schema) = spec.jsonSchemaProperty else { return nil }
     return schema[key]
+}
+
+private func assertStringMatchSchema(
+    _ spec: FenceParameterSpec,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .object(let schema) = spec.jsonSchemaProperty else {
+        return XCTFail("Expected object schema", file: file, line: line)
+    }
+
+    XCTAssertEqual(schema["type"], .string("object"), file: file, line: line)
+    XCTAssertEqual(schema["additionalProperties"], .bool(false), file: file, line: line)
+    XCTAssertEqual(schema["required"], .array([.string("mode"), .string("value")]), file: file, line: line)
+
+    guard case .object(let properties)? = schema["properties"] else {
+        return XCTFail("Expected StringMatch properties", file: file, line: line)
+    }
+    XCTAssertEqual(properties["mode"], .object([
+        "type": .string("string"),
+        "enum": .array([
+            .string("exact"),
+            .string("contains"),
+            .string("prefix"),
+            .string("suffix"),
+        ]),
+    ]), file: file, line: line)
+    XCTAssertEqual(properties["value"], .object(["type": .string("string")]), file: file, line: line)
 }

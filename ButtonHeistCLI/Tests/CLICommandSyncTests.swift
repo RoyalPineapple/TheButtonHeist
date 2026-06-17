@@ -397,14 +397,17 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONLinesMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
-            from: #"{"command":"activate","target":{"identifier":"button_save"}}"#
+            from: #"{"command":"activate","target":{"identifier":{"mode":"exact","value":"button_save"}}}"#
         )
 
         XCTAssertEqual(parsed.command, .activate)
         guard case .object(let target)? = parsed.argument(.target) else {
             return XCTFail("expected typed target object")
         }
-        XCTAssertEqual(target["identifier"], .string("button_save"))
+        XCTAssertEqual(target["identifier"], .object([
+            "mode": .string("exact"),
+            "value": .string("button_save"),
+        ]))
     }
 
     func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {

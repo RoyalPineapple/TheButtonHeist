@@ -76,6 +76,7 @@ extension TheFence {
                 expected: "object"
             )
         }
+        try validateSubtreeElementStringMatchObjects(subtree, field: arguments.field("subtree"))
         do {
             let data = try JSONEncoder().encode(subtree)
             let selector = try JSONDecoder().decode(SubtreeSelector.self, from: data)
@@ -105,6 +106,25 @@ extension TheFence {
         }
     }
 
+    private func validateSubtreeElementStringMatchObjects(_ value: HeistValue, field: String) throws {
+        guard case .object(let subtree) = value,
+              let element = subtree["element"],
+              case .object(let object) = element
+        else {
+            return
+        }
+        for key in ["label", "identifier", "value"] {
+            guard let match = object[key] else { continue }
+            guard case .object = match else {
+                throw SchemaValidationError(
+                    field: "\(field).element.\(key)",
+                    observed: match.schemaObservedDescription,
+                    expected: "StringMatch object with mode and value"
+                )
+            }
+        }
+    }
+
     private func decodingContext(from error: DecodingError) -> DecodingError.Context {
         switch error {
         case .typeMismatch(_, let context),
@@ -125,9 +145,9 @@ extension TheFence {
 
     private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementPredicate {
         ElementPredicate(
-            label: try arguments.schemaString("label").map(StringMatch.exact),
-            identifier: try arguments.schemaString("identifier").map(StringMatch.exact),
-            value: try arguments.schemaString("value").map(StringMatch.exact),
+            label: try arguments.schemaStringMatch("label"),
+            identifier: try arguments.schemaStringMatch("identifier"),
+            value: try arguments.schemaStringMatch("value"),
             traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")) ?? [],
             excludeTraits: try TheFence.parseTraitNames(
                 try arguments.schemaStringArray("excludeTraits"),

@@ -1,6 +1,7 @@
 import Testing
 import MCP
 import Foundation
+import ButtonHeist
 @testable import ButtonHeistMCP
 
 struct ToolSyncTests {
@@ -50,6 +51,34 @@ struct ToolSyncTests {
         ].sorted()
 
         #expect(ToolDefinitions.all.map(\.name).sorted() == expected)
+    }
+
+    @Test("StringMatch command schemas advertise object form without combinators")
+    func stringMatchCommandSchemasAdvertiseObjectFormWithoutCombinators() throws {
+        let fields = ["label", "identifier", "value"]
+        let schemaCases: [(command: TheFence.Command, basePath: [String], label: String)] = [
+            (.activate, ["properties", "target", "properties"], "target"),
+            (.oneFingerTap, ["properties", "element", "properties"], "gesture element"),
+            (.wait, ["properties", "predicate", "properties", "element", "properties"], "wait.predicate.element"),
+            (.activate, ["properties", "expect", "properties", "element", "properties"], "expect.element"),
+            (.getInterface, ["properties"], "get_interface matcher"),
+            (.getInterface, ["properties", "subtree", "properties", "element", "properties"], "subtree.element"),
+        ]
+
+        for schemaCase in schemaCases {
+            let inputSchema = try inputSchemaValue(for: schemaCase.command)
+            for field in fields {
+                let path = schemaCase.basePath + [field]
+                let fieldSchema = try #require(
+                    schemaValue(at: path, in: inputSchema),
+                    "\(schemaCase.command.rawValue) \(schemaCase.label).\(field) missing from input schema"
+                )
+                assertStringMatchSchema(
+                    fieldSchema,
+                    path: "\(schemaCase.command.rawValue).inputSchema.\(path.joined(separator: "."))"
+                )
+            }
+        }
     }
 
     @Test("get_interface subtree container is an object-only matcher")
@@ -186,6 +215,39 @@ private func schemaValue(at path: [String], in root: Value) -> Value? {
     path.reduce(Optional(root)) { value, key in
         value?.objectValue?[key]
     }
+}
+
+private func inputSchemaValue(for command: TheFence.Command) throws -> Value {
+    let data = try JSONEncoder().encode(command.descriptor.inputJSONSchema)
+    return try JSONDecoder().decode(Value.self, from: data)
+}
+
+private func assertStringMatchSchema(_ schema: Value, path: String) {
+    let object = schema.objectValue
+    #expect(object?["type"] == .string("object"), "\(path) must advertise object-form StringMatch")
+    #expect(object?["additionalProperties"] == .bool(false), "\(path) must close object-form StringMatch fields")
+    #expect(object?["required"] == .array([.string("mode"), .string("value")]), "\(path) must require mode and value in object form")
+    #expect(object?["description"]?.stringValue?.contains("mode exact") == true, "\(path) should describe exact matching through object-form StringMatch")
+    #expect(
+        object?["properties"]?.objectValue?["mode"] == .object([
+            "type": .string("string"),
+            "enum": .array([
+                .string("exact"),
+                .string("contains"),
+                .string("prefix"),
+                .string("suffix"),
+            ]),
+        ]),
+        "\(path).properties.mode must enumerate StringMatch modes"
+    )
+    #expect(
+        object?["properties"]?.objectValue?["value"] == .object(["type": .string("string")]),
+        "\(path).properties.value must be a string"
+    )
+    #expect(
+        SchemaCombinatorScanner.combinatorPaths(in: schema, path: path).isEmpty,
+        "\(path) must not use oneOf/anyOf/allOf for StringMatch"
+    )
 }
 
 private extension Value {

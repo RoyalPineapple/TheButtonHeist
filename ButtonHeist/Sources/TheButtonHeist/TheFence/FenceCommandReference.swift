@@ -36,6 +36,7 @@ public enum FenceCommandReference {
             lines.append("| \(columns.joined(separator: " | ")) |")
         }
 
+        lines.append(contentsOf: stringMatchContractLines())
         lines.append(contentsOf: ["", "## Details", ""])
 
         for descriptor in sortedDescriptors {
@@ -71,6 +72,7 @@ public enum FenceCommandReference {
             )
         }
 
+        lines.append(contentsOf: stringMatchContractLines())
         lines.append(contentsOf: ["", "## Details", ""])
 
         for descriptor in sortedDescriptors {
@@ -130,6 +132,17 @@ public enum FenceCommandReference {
             )
         }
         return lines
+    }
+
+    private static func stringMatchContractLines() -> [String] {
+        [
+            "",
+            "## StringMatch",
+            "",
+            "`stringMatch` fields such as `label`, `identifier`, and `value` accept object form " +
+                "`{ \"mode\": \"exact|contains|prefix|suffix\", \"value\": \"...\" }`. " +
+                "Use `exact` for exact matching; broad modes require a non-empty value.",
+        ]
     }
 
     private static func cliExposureSummary(_ descriptor: FenceCommandDescriptor) -> String {

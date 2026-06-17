@@ -137,13 +137,20 @@ func targetArgumentValue(
     ordinal: Int? = nil
 ) -> HeistValue {
     var target: [String: HeistValue] = [:]
-    if let label { target["label"] = .string(label) }
-    if let identifier { target["identifier"] = .string(identifier) }
-    if let value { target["value"] = .string(value) }
+    if let label { target["label"] = stringMatchArgumentValue(label) }
+    if let identifier { target["identifier"] = stringMatchArgumentValue(identifier) }
+    if let value { target["value"] = stringMatchArgumentValue(value) }
     if let traits { target["traits"] = .array(traits.map { .string($0) }) }
     if let excludeTraits { target["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
     if let ordinal { target["ordinal"] = .int(ordinal) }
     return .object(target)
+}
+
+func stringMatchArgumentValue(_ value: String, mode: String = "exact") -> HeistValue {
+    .object([
+        "mode": .string(mode),
+        "value": .string(value),
+    ])
 }
 
 @ButtonHeistActor

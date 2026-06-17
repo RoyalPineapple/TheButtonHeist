@@ -35,6 +35,25 @@ final class ElementTargetOptionsTests: XCTestCase {
         )
     }
 
+    func testGestureElementObjectEncodesExactStringMatchesAsObjects() {
+        let object = TapSubcommand.elementObject(.predicate(
+            ElementPredicate(label: "Save", identifier: "saveButton", value: "1")
+        ))
+
+        XCTAssertEqual(object[.label], .object([
+            "mode": .string("exact"),
+            "value": .string("Save"),
+        ]))
+        XCTAssertEqual(object[.identifier], .object([
+            "mode": .string("exact"),
+            "value": .string("saveButton"),
+        ]))
+        XCTAssertEqual(object[.value], .object([
+            "mode": .string("exact"),
+            "value": .string("1"),
+        ]))
+    }
+
     func testOrdinalOnlyIsRejectedAtTypedTargetBoundary() throws {
         let command = try TapSubcommand.parse(["--ordinal", "0"])
 

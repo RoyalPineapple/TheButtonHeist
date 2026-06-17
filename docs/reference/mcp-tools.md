@@ -16,6 +16,10 @@ _Generated from `TheFence.Command.descriptors`._
 | `perform` | `heistRuntime` | Run one ButtonHeist DSL instruction from `step`: one action or one simple wait. |
 | `run_heist` | `heistRuntime` | Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`. |
 
+## StringMatch
+
+`stringMatch` fields such as `label`, `identifier`, and `value` accept object form `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`. Use `exact` for exact matching; broad modes require a non-empty value.
+
 ## Details
 
 ### `connect`
@@ -53,6 +57,8 @@ Read the app accessibility hierarchy, optionally scoped to a subtree.
 Build DSL targets from returned accessibility language: `.label("Pay")`,
 `.identifier("pay_button")`, `.value("Milk")`, `.element(label: "Pay",
 traits: [.button])`, or `.target(..., ordinal: n)` for duplicates.
+Direct matcher fields `label`, `identifier`, and `value` accept StringMatch
+objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`.
 `containerName` is for inspection and viewport/debug commands only; it is
 not a semantic target or durable heist selector.
 
@@ -62,9 +68,9 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
+| `label` | `stringMatch` | no | - | - |
+| `identifier` | `stringMatch` | no | - | - |
+| `value` | `stringMatch` | no | - | - |
 | `traits` | `stringArray` | no | - | - |
 | `excludeTraits` | `stringArray` | no | - | - |
 | `subtree` | `object` | no | - | - |
