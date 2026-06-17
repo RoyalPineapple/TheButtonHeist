@@ -319,8 +319,6 @@ Change predicates evaluate against settled transition evidence:
 { "type": "screen_changed" }
 { "type": "screen_changed", "where": { "type": "present", "element": { "label": "Home" } } }
 { "type": "elements_changed" }
-{ "type": "element_appeared", "element": { "label": "Toast" } }
-{ "type": "element_disappeared", "element": { "label": "Delete" } }
 { "type": "element_updated", "element": { "label": "Search" }, "property": "value", "to": "milk" }
 ```
 

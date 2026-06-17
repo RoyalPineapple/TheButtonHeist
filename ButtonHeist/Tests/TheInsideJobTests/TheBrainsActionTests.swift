@@ -759,7 +759,7 @@ final class TheBrainsActionTests: XCTestCase {
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
-                        predicate: .present(ElementPredicate(label: "Home")),
+                        predicate: .changed(.elements),
                         body: [.fail(FailStep(message: "baseline should not match"))]
                     ),
                 ],
@@ -782,7 +782,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
-    func testHeistIfContinuesAfterUnavailableObservation() async throws {
+    func testHeistIfNoOpsWhenImmediateObservationIsUnavailable() async throws {
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
             unavailableObservationCount: 1
@@ -803,8 +803,8 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
-        XCTAssertEqual(step.children.map(\.kind), [.warn])
+        XCTAssertNil(step.caseSelectionEvidence?.selection.selectedCaseIndex)
+        XCTAssertEqual(step.children.map(\.kind), [])
     }
 
     func testHeistIfPassesImmediateObservationBudget() async throws {
@@ -957,7 +957,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(receipt.actionResult.success)
         XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
-        XCTAssertTrue(receipt.actionResult.message?.contains("last observed: known: 1 elements") == true)
+        XCTAssertTrue(receipt.actionResult.message?.contains("known: 1 elements") == true)
+        XCTAssertTrue(receipt.actionResult.message?.contains("last result:") == true)
     }
 
     func testHeistActionExpectationRequiresWaitObservationEvidence() async throws {
@@ -1298,7 +1299,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.reportExpectation?.actual, "timed out after 0.2s — expectation not met")
     }
 
-    func testHeistSemanticObservationScopeUsesVisibleForStateCases() async throws {
+    func testHeistSemanticObservationScopeUsesVisibleForPredicateSugarCases() async throws {
         var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
@@ -1322,7 +1323,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.visible])
     }
 
-    func testHeistSemanticObservationScopeUsesDiscoveryForAppearanceCases() async throws {
+    func testHeistSemanticObservationScopeUsesVisibleForStateCases() async throws {
         var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Loading"])],
@@ -1342,10 +1343,10 @@ final class TheBrainsActionTests: XCTestCase {
 
         _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
-        XCTAssertEqual(observedScopes, [.discovery])
+        XCTAssertEqual(observedScopes, [.visible])
     }
 
-    func testHeistSemanticObservationScopeDiscoveryWinsOverVisible() async throws {
+    func testHeistSemanticObservationScopeKeepsStateCasesVisible() async throws {
         var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Loading"])],
@@ -1369,7 +1370,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
-        XCTAssertEqual(observedScopes, [.discovery])
+        XCTAssertEqual(observedScopes, [.visible])
     }
 
     func testHeistKeepsActiveObservationDemandThroughStateDependentStep() async throws {
@@ -1423,7 +1424,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(brains.stash.semanticObservationStream.hasActiveObservationDemand)
     }
 
-    func testIfChangedPredicateConsumesStreamEventDelta() async throws {
+    func testIfStatePredicateDoesNotWaitForFutureObservation() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Loading"]),
             observedState(labels: ["Loading", "Toast"]),
@@ -1444,8 +1445,8 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.cases.first?.result.met, true)
+        XCTAssertNil(step.caseSelectionEvidence?.selection.selectedCaseIndex)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.cases.first?.result.met, false)
     }
 
     func testHeistForEachWithZeroMatchesSucceedsWithoutIterations() async throws {

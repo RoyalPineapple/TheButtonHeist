@@ -22,9 +22,9 @@ extension GestureCLICommandContract {
         switch target {
         case .predicate(let predicate, let ordinal):
             var object: [FenceParameterKey: HeistValue] = [:]
-            if let label = predicate.label { object[.label] = .string(label) }
-            if let identifier = predicate.identifier { object[.identifier] = .string(identifier) }
-            if let value = predicate.value { object[.value] = .string(value) }
+            if let label = predicate.label { object[.label] = stringMatchValue(label) }
+            if let identifier = predicate.identifier { object[.identifier] = stringMatchValue(identifier) }
+            if let value = predicate.value { object[.value] = stringMatchValue(value) }
             if !predicate.traits.isEmpty {
                 object[.traits] = .array(predicate.traits.map { .string($0.rawValue) })
             }
@@ -33,6 +33,18 @@ extension GestureCLICommandContract {
             }
             if let ordinal { object[.ordinal] = .int(ordinal) }
             return object
+        }
+    }
+
+    static func stringMatchValue(_ match: StringMatch<String>) -> HeistValue {
+        switch match {
+        case .exact(let value):
+            return .string(value)
+        case .contains(let value), .prefix(let value), .suffix(let value):
+            return .object([
+                "mode": .string(match.mode.rawValue),
+                "value": .string(value),
+            ])
         }
     }
 

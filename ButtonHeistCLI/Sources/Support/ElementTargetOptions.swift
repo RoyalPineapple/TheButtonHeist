@@ -26,9 +26,9 @@ struct ElementTargetOptions: ParsableArguments {
             || !traits.isEmpty || !excludeTraits.isEmpty
         guard hasFields else { return nil }
         return ElementPredicate(
-            label: label,
-            identifier: identifier,
-            value: value,
+            label: label.map { .exact($0) },
+            identifier: identifier.map { .exact($0) },
+            value: value.map { .exact($0) },
             traits: try parseTraits(traits, label: "trait"),
             excludeTraits: try parseTraits(excludeTraits, label: "excludeTrait")
         )

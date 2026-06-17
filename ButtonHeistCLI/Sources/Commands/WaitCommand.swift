@@ -16,7 +16,7 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
               buttonheist wait --present -l "Welcome"
               buttonheist wait --absent -l "Loading" -t 5
               buttonheist wait --changed screen_changed
-              buttonheist wait --predicate '{"type":"element_appeared","element":{"label":"Done"}}'
+              buttonheist wait --predicate '{"type":"present","element":{"label":"Done"}}'
             """
     )
 
@@ -38,7 +38,7 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
         name: .long,
         help: ArgumentHelp(
             "Wait for a change: a discriminator (screen_changed, elements_changed, "
-                + "element_appeared, element_disappeared, element_updated)"
+                + "element_updated)"
         )
     )
     var changed: String?
@@ -95,10 +95,6 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
             return .changed(.screen())
         case "elements_changed":
             return .changed(.elements)
-        case "element_appeared":
-            return .changed(.appeared(try requiredElementPredicate()))
-        case "element_disappeared":
-            return .changed(.disappeared(try requiredElementPredicate()))
         case "element_updated":
             return .changed(.updated(ElementUpdatePredicate(element: try element.parsedMatcher())))
         default:
@@ -107,13 +103,6 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
                     + AccessibilityPredicate.wireTypeValues.joined(separator: ", ")
             )
         }
-    }
-
-    private func requiredElementPredicate() throws -> ElementPredicate {
-        guard let elementPredicate = try element.parsedMatcher() else {
-            throw ValidationError("--changed element_appeared/element_disappeared require element fields")
-        }
-        return elementPredicate
     }
 
     private static func heistValue(from predicate: AccessibilityPredicate) throws -> HeistValue {

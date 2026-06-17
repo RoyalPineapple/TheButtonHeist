@@ -389,7 +389,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.success)
         XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
-        XCTAssertTrue(receipt.actionResult.message?.contains("last observed: known: 1 elements") == true)
+        XCTAssertTrue(receipt.actionResult.message?.contains("known: 1 elements") == true)
+        XCTAssertTrue(receipt.actionResult.message?.contains("last result:") == true)
     }
 
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
