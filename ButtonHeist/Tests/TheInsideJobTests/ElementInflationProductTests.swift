@@ -55,7 +55,7 @@ final class ElementInflationProductTests: XCTestCase {
         guard result.success else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
-        XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
+        XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
     }
 
     func testSemanticActivateRevealsNestedContainerTarget() async throws {
@@ -75,7 +75,7 @@ final class ElementInflationProductTests: XCTestCase {
         guard result.success else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
-        XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
+        XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
     }
 
     func testSemanticActivateRevealsTargetInsideNestedOffscreenScrollContainer() async throws {
@@ -97,8 +97,8 @@ final class ElementInflationProductTests: XCTestCase {
         guard result.success else { return }
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(fixture.target.activationCount, 1)
-        XCTAssertGreaterThan(fixture.outerScrollView.contentOffset.y, 0)
-        XCTAssertGreaterThan(fixture.innerScrollView.contentOffset.y, 0)
+        XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
+        XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
     }
 
     func testAmbiguousSemanticActivateFailsBeforeGeometryOrAction() async throws {
@@ -644,6 +644,8 @@ private final class SemanticActivationView: UIView {
 private final class RevealingScrollView: UIScrollView {
     var revealedElements: [UIView] = []
     var revealedContainers: [UIView] = []
+    private(set) var revealRequestCount = 0
+    var didReceiveRevealRequest: Bool { revealRequestCount > 0 }
     private let revealThreshold: CGFloat = 500
 
     override var contentOffset: CGPoint {
@@ -653,6 +655,9 @@ private final class RevealingScrollView: UIScrollView {
     }
 
     override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+        if contentOffset.y >= revealThreshold {
+            revealRequestCount += 1
+        }
         super.setContentOffset(contentOffset, animated: animated)
         updateAccessibilityVisibility(for: contentOffset)
     }

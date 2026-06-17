@@ -662,7 +662,7 @@ final class TheMuscleTests: XCTestCase {
 
         try await authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
         await muscle.handleClientDisconnected(1)
-        await yieldScheduler()
+        await muscle.awaitSessionReleaseTimerForTesting()
 
         let driverId = await muscle.activeSessionDriverId
         XCTAssertNil(driverId)
