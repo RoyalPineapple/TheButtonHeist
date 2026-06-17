@@ -630,6 +630,11 @@ private struct AmbiguousActivationFixture {
 private final class SemanticActivationView: UIView {
     private(set) var activationCount = 0
 
+    override var accessibilityTraits: UIAccessibilityTraits {
+        get { super.accessibilityTraits.union(.button) }
+        set { super.accessibilityTraits = newValue.union(.button) }
+    }
+
     override func accessibilityActivate() -> Bool {
         activationCount += 1
         return true
