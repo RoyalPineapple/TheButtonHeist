@@ -53,7 +53,9 @@ extension FenceResponse {
         if case .action(let command, let result, let expectation) = self {
             return (command, result, expectation)
         }
-        return singleLeafActionRendering
+        return directCommandActionOutputProjection.map {
+            (command: $0.command, result: $0.result, expectation: $0.expectation)
+        }
     }
 }
 
@@ -439,7 +441,7 @@ struct HeistInspection {
 }
 
 func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
-    guard case .heistExecution(let plan, let result, let accessibilityTrace) = response else {
+    guard case .heistExecution(let plan, let result, let accessibilityTrace, _) = response else {
         return nil
     }
     let plannedSteps = plan.body

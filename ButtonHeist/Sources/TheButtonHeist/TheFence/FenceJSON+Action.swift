@@ -51,6 +51,38 @@ struct PublicActionResponse: FencePublicJSONResponse {
 
 }
 
+/// Action-shaped public output for legacy direct commands.
+///
+/// The response remains `.heistExecution`; JSON and compact formatters use this
+/// adapter only when the response origin says the user invoked a direct
+/// action/wait command. Explicit one-step `run_heist`/`perform` responses keep
+/// their heist report shape.
+struct DirectCommandActionOutputProjection {
+    let command: TheFence.Command
+    let result: ActionResult
+    let expectation: ExpectationResult?
+}
+
+extension FenceResponse {
+    var directCommandActionOutputProjection: DirectCommandActionOutputProjection? {
+        guard case .heistExecution(_, let result, _, .directCommand(let command)) = self,
+              result.executedTopLevelStepCount == 1,
+              let step = result.steps.first,
+              let actionResult = step.reportActionResult else { return nil }
+
+        if command == .wait {
+            guard step.kind == .wait else { return nil }
+        } else {
+            guard step.kind == .action else { return nil }
+        }
+        return DirectCommandActionOutputProjection(
+            command: command,
+            result: actionResult,
+            expectation: step.reportExpectation
+        )
+    }
+}
+
 /// Status vocabulary for public command responses.
 enum PublicResponseStatus: String {
     case ok

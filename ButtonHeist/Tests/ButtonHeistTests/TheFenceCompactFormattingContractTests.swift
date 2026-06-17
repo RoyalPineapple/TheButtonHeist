@@ -221,6 +221,31 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.humanFormatted().contains("[expectations: 1/1 met]"))
     }
 
+    func testExplicitSingleActionHeistKeepsReportShapeAcrossPublicFormats() throws {
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))))),
+        ])
+        let result = HeistExecutionResult(
+            steps: [
+                actionReceiptStep(
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
+                    result: ActionResult(success: true, method: .activate)
+                ),
+            ],
+            durationMs: 3
+        )
+        let response = FenceResponse.heistExecution(plan: plan, result: result)
+
+        let json = publicJSONObject(response)
+        let compact = response.compactFormatted()
+
+        XCTAssertEqual(json["status"] as? String, "ok")
+        XCTAssertNotNil(json["report"])
+        XCTAssertNil(json["method"])
+        XCTAssertTrue(compact.contains("heist: 1 top-level steps in 3ms"), compact)
+        XCTAssertTrue(compact.contains("[0] activate"), compact)
+    }
+
     func testCompactHeistFormattingReportsFailStepMessage() throws {
         let plan = try HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(

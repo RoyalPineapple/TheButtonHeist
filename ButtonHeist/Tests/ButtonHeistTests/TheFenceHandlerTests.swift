@@ -129,6 +129,21 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    private func assertDirectCommandHeistExecution(
+        _ response: FenceResponse,
+        command: TheFence.Command,
+        stepKind: HeistExecutionStepKind,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case .heistExecution(_, let result, _, let origin) = response else {
+            return XCTFail("Expected .heistExecution response, got \(response)", file: file, line: line)
+        }
+        XCTAssertEqual(origin, .directCommand(command), file: file, line: line)
+        XCTAssertEqual(result.steps.map(\.kind), [stepKind], file: file, line: line)
+    }
+
     /// Assert that executing a typed operation passes validation (returns a non-error response).
     @ButtonHeistActor
     private func assertPassesValidation(
@@ -450,7 +465,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "step": .string(#"Activate(.label("Pay"))"#),
         ])
 
-        guard case .heistExecution(let plan, let result, _) = response else {
+        guard case .heistExecution(let plan, let result, _, _) = response else {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         XCTAssertEqual(plan.body, [
@@ -545,7 +560,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "plan": .string(Self.pureRuntimeHeistSource),
         ])
 
-        guard case .heistExecution(let plan, let result, _) = response else {
+        guard case .heistExecution(let plan, let result, _, _) = response else {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         XCTAssertEqual(plan.name, "agentFlow")
@@ -575,7 +590,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "plan": .string(Self.pureRuntimeHeistSource),
         ])
 
-        guard case .heistExecution(_, let result, _) = response else {
+        guard case .heistExecution(_, let result, _, _) = response else {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         let receiptURLs = receiptURLs(in: directory)
@@ -1540,6 +1555,18 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDirectTapReturnsHeistExecutionBeforeFormatting() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        let response = try await fence.execute(command: .oneFingerTap, values: [
+            "point": .object(["x": .double(12), "y": .double(34)]),
+        ])
+
+        assertDirectCommandHeistExecution(response, command: .oneFingerTap, stepKind: .action)
+        XCTAssertEqual(response.compactFormatted(), "one_finger_tap: ok")
+    }
+
+    @ButtonHeistActor
     func testGestureTargetRejectsHeistIdAndMatcher() async {
         await assertOperationValidationError(
             command: .oneFingerTap,
@@ -2115,6 +2142,21 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDirectActivateReturnsHeistExecutionBeforeFormatting() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        let response = try await fence.execute(command: .activate, values: [
+            "target": targetValue(identifier: "myElement"),
+        ])
+
+        assertDirectCommandHeistExecution(response, command: .activate, stepKind: .action)
+        let json = publicJSONObject(response)
+        XCTAssertEqual(json["method"] as? String, "activate")
+        XCTAssertNil(json["report"])
+        XCTAssertEqual(response.compactFormatted(), "activate: ok")
+    }
+
+    @ButtonHeistActor
     func testActivateRejectsEmptyActionNameAtRequestBoundary() async {
         await assertValidationError(
             command: .activate,
@@ -2415,6 +2457,30 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(target.predicate, .changed(.screen()))
         XCTAssertEqual(target.timeout, 8.0)
+    }
+
+    @ButtonHeistActor
+    func testDirectWaitReturnsHeistExecutionBeforeFormatting() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.runtimeActionResponse = { message in
+            guard case .wait = message else {
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+            return .actionResult(ActionResult(
+                success: true,
+                method: .wait,
+                accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 1, edits: ElementEdits())))
+            ))
+        }
+
+        let response = try await fence.execute(command: .wait, values: [
+            "predicate": .object(["type": .string("elements_changed")]),
+        ])
+
+        assertDirectCommandHeistExecution(response, command: .wait, stepKind: .wait)
+        let json = publicJSONObject(response)
+        XCTAssertEqual(json["method"] as? String, "wait")
+        XCTAssertNil(json["report"])
     }
 
     @ButtonHeistActor
@@ -3083,6 +3149,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(element["label"] as? String, "Submit")
         XCTAssertNil(element["heistId"])
     }
+
     @ButtonHeistActor
     func testGetInterfaceDetailDoesNotChangeObservationDispatch() async {
         let (fullFence, fullMock) = makeConnectedFence()
