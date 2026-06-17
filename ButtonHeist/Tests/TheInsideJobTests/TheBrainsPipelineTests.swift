@@ -580,7 +580,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         let exploration = await brains.navigation.exploreScreen(
-            target: .predicate(ElementPredicate(label: label))
+            target: .predicate(ElementPredicate(label: .exact(label)))
         )
 
         XCTAssertEqual(exploration.manifest.scrollCount, 0)

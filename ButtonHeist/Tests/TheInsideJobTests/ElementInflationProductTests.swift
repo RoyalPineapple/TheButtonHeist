@@ -224,7 +224,7 @@ final class ElementInflationProductTests: XCTestCase {
         }
 
         let result = await localBrains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: identifier, traits: [.button]))
+            .predicate(ElementPredicate(identifier: .exact(identifier), traits: [.button]))
         ))
         return (result, fixture.target.activationCount)
     }

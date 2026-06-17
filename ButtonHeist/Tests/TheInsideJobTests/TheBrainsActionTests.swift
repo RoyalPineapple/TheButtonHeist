@@ -2200,7 +2200,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .rotor)
+        XCTAssertEqual(result.method.rawValue, ActionMethod.rotor.rawValue)
         XCTAssertDiagnostic(result.message, contains: [
             "rotor failed",
             "attempted rotor=\"Errors\" direction=next",
@@ -2229,7 +2229,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
-        XCTAssertEqual(result.method, .rotor)
+        XCTAssertEqual(result.method.rawValue, ActionMethod.rotor.rawValue)
         XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found Rotor host") ?? false,
                       result.message ?? "missing rotor success message")
     }
@@ -2259,7 +2259,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
-        XCTAssertEqual(result.method, .rotor)
+        XCTAssertEqual(result.method.rawValue, ActionMethod.rotor.rawValue)
         XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found Edge Rotor Host") ?? false,
                       result.message ?? "missing rotor success message")
     }
@@ -2295,7 +2295,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
-        XCTAssertEqual(result.method, .rotor)
+        XCTAssertEqual(result.method.rawValue, ActionMethod.rotor.rawValue)
         XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found Offscreen Rotor Host") ?? false,
                       result.message ?? "missing rotor success message")
     }
@@ -2372,13 +2372,13 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.actions.executeRotor(
             RotorTarget(
-                elementTarget: .predicate(ElementPredicate(identifier: hostHeistId)),
+                elementTarget: .predicate(ElementPredicate(identifier: .exact(hostHeistId))),
                 selection: .named("Live Rotor")
             )
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
-        XCTAssertEqual(result.method, .rotor)
+        XCTAssertEqual(result.method.rawValue, ActionMethod.rotor.rawValue)
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
         XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found Rotor Result") ?? false,
                       result.message ?? "missing rotor success message")
@@ -2405,7 +2405,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .rotor)
+        XCTAssertEqual(result.method.rawValue, ActionMethod.rotor.rawValue)
         XCTAssertDiagnostic(result.message, contains: [
             "rotor failed",
             "attempted rotor=\"Errors\" direction=next",

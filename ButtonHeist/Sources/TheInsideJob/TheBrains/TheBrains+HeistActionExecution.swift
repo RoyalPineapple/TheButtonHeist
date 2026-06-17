@@ -21,7 +21,8 @@ extension TheBrains {
             path: path,
             start: start,
             runtime: runtime,
-            environment: environment
+            environment: environment,
+            scope: scope
         )
     }
 
@@ -37,7 +38,8 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope? = nil
     ) async -> HeistExecutionStepResult {
         let kind: HeistExecutionStepKind = command == nil ? .wait : .action
 
