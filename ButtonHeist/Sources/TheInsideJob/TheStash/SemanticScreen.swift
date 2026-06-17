@@ -125,6 +125,25 @@ struct SemanticScreen: Equatable {
         let path: TreePath
         let containerName: ContainerName?
         let contentFrame: CGRect?
+        let scrollContentLocation: ScrollContentLocation?
+
+        var contentSpaceOrigin: CGPoint? {
+            scrollContentLocation?.origin
+        }
+
+        init(
+            container: AccessibilityContainer,
+            path: TreePath,
+            containerName: ContainerName?,
+            contentFrame: CGRect?,
+            scrollContentLocation: ScrollContentLocation? = nil
+        ) {
+            self.container = container
+            self.path = path
+            self.containerName = containerName
+            self.contentFrame = contentFrame
+            self.scrollContentLocation = scrollContentLocation
+        }
     }
 
     // MARK: - Fingerprint

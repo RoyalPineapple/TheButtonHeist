@@ -18,7 +18,15 @@ extension ElementInflation {
         case .missingContentOrigin:
             return "known target \(description) has no content-space position"
         case .noLiveScrollableAncestor:
-            return "known target \(description) has no live scrollable ancestor in the current semantic graph"
+            let scrollContainer: String
+            if let containerName = entry.scrollContentLocation?.scrollContainer {
+                scrollContainer = " expectedScrollContainer=\(containerName)"
+            } else {
+                scrollContainer = ""
+            }
+            return "known target \(description) has no live scrollable ancestor in the current semantic graph;"
+                + scrollContainer
+                + " \(stash.liveScrollContainerDiagnostics())"
         case .unsafeProgrammaticScroll:
             return "known target \(description) is inside a scroll view that is unsafe for programmatic semantic reveal"
         }

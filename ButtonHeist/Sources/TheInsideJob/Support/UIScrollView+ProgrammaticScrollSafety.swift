@@ -2,6 +2,19 @@
 #if DEBUG
 import UIKit
 
+@MainActor enum ScrollViewHierarchySearch { // swiftlint:disable:this agent_main_actor_value_type
+    static func descendantScrollViews(in view: UIView) -> [UIScrollView] {
+        view.subviews.flatMap { subview -> [UIScrollView] in
+            let current = (subview as? UIScrollView).map { [$0] } ?? []
+            return current + descendantScrollViews(in: subview)
+        }
+    }
+
+    static func contentSize(_ lhs: CGSize, matches rhs: CGSize) -> Bool {
+        abs(lhs.width - rhs.width) <= 1 && abs(lhs.height - rhs.height) <= 1
+    }
+}
+
 extension UIScrollView {
 
     /// UIKit-private scroll views that are not safe to drive with arbitrary

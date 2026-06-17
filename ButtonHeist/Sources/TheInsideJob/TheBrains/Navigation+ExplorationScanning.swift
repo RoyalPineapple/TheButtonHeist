@@ -141,7 +141,7 @@ extension Navigation {
         case .uiScrollView(let scrollView):
             if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) {
                 await tripwire.yieldFrames(2)
-                exploration.absorb(stash.refreshLiveCapture())
+                exploration.absorb(stash.refreshTreeAfterViewportMove())
             }
         case .swipeable:
             let toLeading = Self.edgeDirection(for: containerExploration.leadingEdge)
@@ -162,7 +162,7 @@ extension Navigation {
     }
 
     private func absorbVisiblePage(in exploration: inout SemanticExploration) -> Bool {
-        guard let parsed = stash.semanticPageForExploration() else { return false }
+        guard let parsed = stash.refreshTreeAfterViewportMove() else { return false }
         exploration.absorb(parsed)
         return true
     }
@@ -193,7 +193,7 @@ extension Navigation {
            let savedVisualOrigin {
             Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
             await tripwire.yieldFrames(2)
-            exploration.absorb(stash.refreshLiveCapture())
+            exploration.absorb(stash.refreshTreeAfterViewportMove())
         }
     }
 

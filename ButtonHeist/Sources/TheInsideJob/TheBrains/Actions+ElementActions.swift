@@ -11,7 +11,7 @@ extension Actions {
     // MARK: - Element Action Pipeline
 
     /// Unified pipeline for actions that target an element:
-    /// semantic selector → reveal plan → fresh live geometry → inflated target.
+    /// find target in tree → resolve that tree entry to something touchable.
     func performElementAction(
         target: ElementTarget,
         method: ActionMethod,

@@ -6,6 +6,9 @@ import TheScore
 /// Converts a semantic target into a fresh live target that can receive the
 /// requested accessibility action.
 ///
+/// Invariant: the tree is the map; viewport movement updates the map; actions
+/// resolve one map entry to a fresh live object with an on-screen activation point.
+///
 /// It owns reveal, bounded viewport movement, and live geometry acquisition.
 /// It does not choose matchers, dispatch actions, or evaluate post-action
 /// expectations.
@@ -111,47 +114,39 @@ final class ElementInflation {
         deallocatedBoundary: String,
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
-        // Source screens derive only semantic identity. Reveal and geometry
-        // authority always come from the current live graph.
-        var screenElement: TheStash.ScreenElement
-        var didRevealTarget = false
-        switch await resolveSemanticTarget(target) {
-        case .success(let resolvedElement):
-            screenElement = resolvedElement
-            let reveal = revealSemanticTarget(screenElement)
-            if case .failed(let failure) = reveal {
-                return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: screenElement)))
-            }
-            if reveal.didReveal {
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                stash.refreshLiveCapture()
-                didRevealTarget = true
-            }
+        stash.refreshCurrentVisibleTree()
+        switch await findTargetInTree(target) {
+        case .success(let treeElement):
+            return await resolveTargetFromTree(
+                target: target,
+                treeElement: treeElement,
+                method: method,
+                deallocatedBoundary: deallocatedBoundary,
+                activationPointPolicy: activationPointPolicy
+            )
         case .failure(let failure):
             return .failed(failure)
         }
+    }
 
-        var freshTarget = resolveFreshElementTarget(
+    private func resolveTargetFromTree(
+        target: ElementTarget,
+        treeElement: TheStash.ScreenElement,
+        method: ActionMethod,
+        deallocatedBoundary: String,
+        activationPointPolicy: ActivationPointPolicy
+    ) async -> ElementInflationResult {
+        let reveal = await revealSemanticTarget(treeElement)
+        if case .failed(let failure) = reveal {
+            return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: treeElement)))
+        }
+
+        switch resolveFreshElementTarget(
             target: target,
-            screenElement: screenElement,
+            screenElement: treeElement,
             method: method,
             deallocatedBoundary: deallocatedBoundary
-        )
-        if case .failure(let failure) = freshTarget,
-           failure.failedStep == .staleRefresh,
-           !didRevealTarget {
-            // A semantic target can outlive its capture-local UIKit object.
-            // Refresh once before failing; reveal and activation-point placement
-            // own the other bounded refresh points.
-            stash.refreshLiveCapture()
-            freshTarget = resolveFreshElementTarget(
-                target: target,
-                screenElement: screenElement,
-                method: method,
-                deallocatedBoundary: deallocatedBoundary
-            )
-        }
-        switch freshTarget {
+        ) {
         case .success(let inflatedTarget):
             guard activationPointPolicy == .requireOnscreen else {
                 return .inflated(inflatedTarget)
@@ -159,7 +154,7 @@ final class ElementInflation {
             return await placeElementActivationPoint(
                 inflatedTarget,
                 method: method,
-                didRevealTarget: didRevealTarget
+                didRevealTarget: reveal.didReveal
             )
         case .failure(let failure):
             return .failed(failure)
@@ -178,10 +173,10 @@ final class ElementInflation {
     }
 
     private func refreshLiveCaptureForActivationRetry() {
-        stash.refreshLiveCapture()
+        stash.refreshCurrentVisibleTree()
     }
 
-    private func resolveSemanticTarget(
+    private func findTargetInTree(
         _ target: ElementTarget
     ) async -> Result<TheStash.ScreenElement, ElementInflationFailure> {
         switch visibleTargetResolution(target) {
@@ -339,16 +334,15 @@ final class ElementInflation {
         }
 
         if case .objectUnavailable = liveResolution {
+            stash.refreshCurrentVisibleTree()
             switch stash.resolveVisibleTarget(target) {
-            case .resolved(let visibleElement) where visibleElement.heistId != screenElement.heistId:
+            case .resolved(let visibleElement):
                 return resolveVisibleReboundElementTarget(
                     target: target,
                     screenElement: visibleElement,
                     method: method,
                     deallocatedBoundary: deallocatedBoundary
                 )
-            case .resolved:
-                break
             case .notFound(let facts):
                 return .failure(.staleRefresh(
                     "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))"
@@ -471,7 +465,7 @@ final class ElementInflation {
             return .failure(.geometryNotActionable(scrollFailedMessage))
         }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        stash.refreshLiveCapture()
+        stash.refreshTreeAfterViewportMove()
         return .success(true)
     }
 

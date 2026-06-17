@@ -78,6 +78,29 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
     }
 
+    func testSemanticActivateRevealsTargetInsideNestedOffscreenScrollContainer() async throws {
+        let fixture = try installNestedScrollActivationFixture(
+            identifier: "nested_scroll_checkout_submit",
+            label: "Confirm Nested Payment"
+        )
+        defer { fixture.cleanup() }
+        try seedKnownNestedScrollTarget(fixture)
+
+        XCTAssertEqual(fixture.outerScrollView.contentOffset, .zero)
+        XCTAssertEqual(fixture.innerScrollView.contentOffset, .zero)
+
+        let result = await brains.executeRuntimeAction(.activate(
+            .predicate(ElementPredicate(identifier: "nested_scroll_checkout_submit", traits: [.button]))
+        ))
+
+        XCTAssertTrue(result.success, result.message ?? "nested scroll semantic activate failed")
+        guard result.success else { return }
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(fixture.target.activationCount, 1)
+        XCTAssertGreaterThan(fixture.outerScrollView.contentOffset.y, 0)
+        XCTAssertGreaterThan(fixture.innerScrollView.contentOffset.y, 0)
+    }
+
     func testAmbiguousSemanticActivateFailsBeforeGeometryOrAction() async throws {
         let fixture = try installAmbiguousActivationFixture()
         defer { fixture.cleanup() }
@@ -301,6 +324,66 @@ final class ElementInflationProductTests: XCTestCase {
         return AmbiguousActivationFixture(window: window, first: first, second: second)
     }
 
+    private func installNestedScrollActivationFixture(
+        identifier: String,
+        label: String
+    ) throws -> NestedScrollRevealFixture {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .white
+        viewController.view.accessibilityViewIsModal = true
+
+        let outerScrollView = RevealingScrollView(frame: CGRect(x: 24, y: 80, width: 320, height: 280))
+        outerScrollView.contentSize = CGSize(width: 320, height: 1_400)
+        outerScrollView.backgroundColor = .white
+        outerScrollView.isAccessibilityElement = false
+
+        let anchor = UILabel(frame: CGRect(x: 24, y: 24, width: 240, height: 44))
+        anchor.text = "Visible Nested Anchor \(identifier)"
+        anchor.accessibilityLabel = anchor.text
+        anchor.accessibilityIdentifier = "visible_nested_anchor_\(identifier)"
+        anchor.isAccessibilityElement = true
+        outerScrollView.addSubview(anchor)
+
+        let innerScrollView = RevealingScrollView(frame: CGRect(x: 20, y: 820, width: 280, height: 200))
+        innerScrollView.contentSize = CGSize(width: 280, height: 900)
+        innerScrollView.backgroundColor = .white
+        innerScrollView.isAccessibilityElement = false
+
+        let target = SemanticActivationView(frame: CGRect(x: 20, y: 640, width: 220, height: 44))
+        target.accessibilityLabel = label
+        target.accessibilityIdentifier = identifier
+        target.accessibilityTraits = .button
+        innerScrollView.addSubview(target)
+        innerScrollView.revealedElements = [target]
+        innerScrollView.updateAccessibilityVisibility()
+
+        outerScrollView.addSubview(innerScrollView)
+        outerScrollView.revealedContainers = [innerScrollView]
+        outerScrollView.updateAccessibilityVisibility()
+        viewController.view.addSubview(outerScrollView)
+
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.windowLevel = .alert + 80
+        window.rootViewController = viewController
+        window.isHidden = false
+        window.layoutIfNeeded()
+
+        return NestedScrollRevealFixture(
+            window: window,
+            outerScrollView: outerScrollView,
+            innerScrollView: innerScrollView,
+            target: target,
+            identifier: identifier,
+            label: label,
+            knownHeistId: "known_\(identifier)",
+            innerContainerPath: TreePath([9_001]),
+            innerContentOrigin: innerScrollView.frame.origin,
+            targetContentOrigin: target.frame.origin
+        )
+    }
+
     private func seedKnownOffscreenTarget(
         _ fixture: SemanticRevealFixture,
         in targetBrains: TheBrains? = nil,
@@ -308,6 +391,15 @@ final class ElementInflationProductTests: XCTestCase {
     ) throws {
         let targetBrains = targetBrains ?? brains!
         let screen = try XCTUnwrap(targetBrains.stash.refreshLiveCapture())
+        let scrollContainerName: ContainerName
+        if let scrollContainerOverride {
+            scrollContainerName = scrollContainerOverride
+        } else {
+            scrollContainerName = try XCTUnwrap(
+                firstLiveScrollableContainerName(in: screen),
+                "Expected fixture to expose a live scroll container. \(scrollContainerDiagnostics(in: screen))"
+            )
+        }
         let element = makeElement(
             label: fixture.label,
             identifier: fixture.identifier,
@@ -319,7 +411,7 @@ final class ElementInflationProductTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
             contentSpaceOrigin: fixture.contentOrigin,
-            scrollContainerName: scrollContainerOverride ?? firstScrollableContainerName(in: screen),
+            scrollContainerName: scrollContainerName,
             element: element
         )
         var elements = screen.semantic.elements
@@ -332,6 +424,7 @@ final class ElementInflationProductTests: XCTestCase {
             heistIdByElement: screen.liveCapture.heistIdByElement,
             elementRefs: screen.liveCapture.elementRefs,
             containerRefsByPath: screen.liveCapture.containerRefsByPath,
+            containerScrollContentLocationsByPath: screen.liveCapture.containerScrollContentLocationsByPath,
             firstResponderHeistId: screen.liveCapture.firstResponderHeistId,
             scrollableContainerViews: screen.liveCapture.scrollableContainerViews,
             scrollableContainerViewsByPath: screen.liveCapture.scrollableContainerViewsByPath
@@ -342,14 +435,83 @@ final class ElementInflationProductTests: XCTestCase {
         ))
     }
 
-    private func firstScrollableContainerName(in screen: Screen) -> ContainerName? {
+    private func seedKnownNestedScrollTarget(
+        _ fixture: NestedScrollRevealFixture
+    ) throws {
+        let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
+        let outerContainerName = try XCTUnwrap(
+            firstLiveScrollableContainerName(in: screen),
+            "Expected nested fixture to expose a live outer scroll container. \(scrollContainerDiagnostics(in: screen))"
+        )
+        let innerContainer = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(fixture.innerScrollView.contentSize)),
+            frame: AccessibilityRect(fixture.innerScrollView.frame)
+        )
+        let innerContainerName = TheBurglar.containerName(
+            for: innerContainer,
+            contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size)
+        )
+        XCTAssertNil(
+            screen.liveCapture.scrollView(forContainer: innerContainerName),
+            "Nested scroll fixture should start with the inner scroll container absent from the live tree"
+        )
+
+        let element = makeElement(
+            label: fixture.label,
+            identifier: fixture.identifier,
+            frame: CGRect(
+                origin: fixture.targetContentOrigin,
+                size: fixture.target.bounds.size
+            )
+        )
+        let entry = Screen.ScreenElement(
+            heistId: fixture.knownHeistId,
+            contentSpaceOrigin: fixture.targetContentOrigin,
+            scrollContainerName: innerContainerName,
+            element: element
+        )
+        var elements = screen.semantic.elements
+        elements[entry.heistId] = entry
+
+        var containers = screen.semantic.containers
+        containers[fixture.innerContainerPath] = SemanticScreen.Container(
+            container: innerContainer,
+            path: fixture.innerContainerPath,
+            containerName: innerContainerName,
+            contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size),
+            scrollContentLocation: Screen.ScrollContentLocation(
+                origin: fixture.innerContentOrigin,
+                scrollContainer: outerContainerName
+            )
+        )
+
+        brains.stash.installScreenForTesting(Screen(
+            semantic: SemanticScreen(elements: elements, containers: containers),
+            liveCapture: screen.liveCapture
+        ))
+    }
+
+    private func firstLiveScrollableContainerName(in screen: Screen) -> ContainerName? {
         for item in screen.liveCapture.hierarchy.containerPaths where item.container.isScrollable {
-            if let containerName = screen.liveCapture.containerNamesByPath[item.path]
-                ?? screen.liveCapture.containerNames[item.container] {
-                return containerName
-            }
+            guard let containerName = screen.liveCapture.containerNamesByPath[item.path]
+                ?? screen.liveCapture.containerNames[item.container],
+                  screen.liveCapture.scrollView(forContainer: containerName) != nil
+            else { continue }
+            return containerName
         }
         return nil
+    }
+
+    private func scrollContainerDiagnostics(in screen: Screen) -> String {
+        let summaries = screen.liveCapture.hierarchy.containerPaths
+            .filter { $0.container.isScrollable }
+            .map { item -> String in
+                let name = screen.liveCapture.containerNamesByPath[item.path]
+                    ?? screen.liveCapture.containerNames[item.container]
+                let hasLiveScroll = name.flatMap { screen.liveCapture.scrollView(forContainer: $0) } != nil
+                return "path=\(item.path.indices) name=\(name ?? "<nil>") liveScroll=\(hasLiveScroll)"
+            }
+        return "scrollContainers=[\(summaries.joined(separator: "; "))]"
     }
 
     private func makeElement(
@@ -413,6 +575,26 @@ private struct SemanticRevealFixture {
     }
 }
 
+private struct NestedScrollRevealFixture {
+    let window: UIWindow
+    let outerScrollView: RevealingScrollView
+    let innerScrollView: RevealingScrollView
+    let target: SemanticActivationView
+    let identifier: String
+    let label: String
+    let knownHeistId: HeistId
+    let innerContainerPath: TreePath
+    let innerContentOrigin: CGPoint
+    let targetContentOrigin: CGPoint
+
+    @MainActor
+    func cleanup() {
+        window.rootViewController?.view.accessibilityViewIsModal = false
+        window.isHidden = true
+        window.rootViewController = nil
+    }
+}
+
 private struct AmbiguousActivationFixture {
     let window: UIWindow
     let first: SemanticActivationView
@@ -437,6 +619,7 @@ private final class SemanticActivationView: UIView {
 
 private final class RevealingScrollView: UIScrollView {
     var revealedElements: [UIView] = []
+    var revealedContainers: [UIView] = []
     private let revealThreshold: CGFloat = 500
 
     override var contentOffset: CGPoint {
@@ -452,6 +635,10 @@ private final class RevealingScrollView: UIScrollView {
 
     func updateAccessibilityVisibility(for offset: CGPoint? = nil) {
         let isRevealed = (offset ?? contentOffset).y >= revealThreshold
+        for container in revealedContainers {
+            container.isHidden = !isRevealed
+            container.accessibilityElementsHidden = !isRevealed
+        }
         for element in revealedElements {
             element.isAccessibilityElement = isRevealed
             element.accessibilityElementsHidden = !isRevealed

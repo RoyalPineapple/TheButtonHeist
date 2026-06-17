@@ -53,6 +53,7 @@ struct Screen: Equatable {
             elementRefs: elementRefs,
             containerRefsByPath: [:],
             containerContentFramesByPath: [:],
+            containerScrollContentLocationsByPath: [:],
             firstResponderHeistId: firstResponderHeistId,
             scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
@@ -76,6 +77,7 @@ struct Screen: Equatable {
         elementRefs: [HeistId: ElementRef] = [:],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
         containerContentFramesByPath: [TreePath: CGRect] = [:],
+        containerScrollContentLocationsByPath: [TreePath: ScrollContentLocation] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
@@ -88,6 +90,7 @@ struct Screen: Equatable {
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: containerContentFramesByPath,
+            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
             firstResponderHeistId: firstResponderHeistId,
             scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
@@ -283,7 +286,8 @@ struct Screen: Equatable {
                         path: item.path,
                         containerName: liveCapture.containerNamesByPath[item.path]
                             ?? liveCapture.containerNames[item.container],
-                        contentFrame: liveCapture.containerContentFrame(forPath: item.path)
+                        contentFrame: liveCapture.containerContentFrame(forPath: item.path),
+                        scrollContentLocation: liveCapture.containerScrollContentLocation(forPath: item.path)
                     )
                 )
             }

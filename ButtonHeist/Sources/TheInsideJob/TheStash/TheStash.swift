@@ -52,6 +52,10 @@ final class TheStash {
     /// Visible ids from the last settled capture. This is viewport metadata for
     /// refresh semantics, not live actionability state.
     private var settledVisibleIds: Set<HeistId> = []
+    /// Unit-test fixture for the next explicit visible refresh. Production
+    /// refreshes always parse UIKit; synthetic tests can install one screen as
+    /// the current tree without retaining any live object strongly.
+    private var nextVisibleRefreshScreenForTesting: Screen?
 
     // MARK: - Failed-Settle Diagnostic Evidence
 
@@ -294,6 +298,38 @@ final class TheStash {
         parse()
     }
 
+    /// Parse the current viewport and commit it as the current visible tree.
+    /// Use this for ordinary observation, where the app may have navigated and
+    /// stale offscreen entries should not be blindly preserved.
+    @discardableResult
+    func refreshCurrentVisibleTree() -> Screen? {
+        if let visibleTree = nextVisibleRefreshScreenForTesting {
+            nextVisibleRefreshScreenForTesting = nil
+            return semanticObservationStream
+                .commitSettledVisibleObservation(visibleTree)
+                .observation
+                .screen
+        }
+        guard let visibleTree = parse() else { return nil }
+        return semanticObservationStream
+            .commitSettledVisibleObservation(visibleTree)
+            .observation
+            .screen
+    }
+
+    /// Parse after viewport movement and fold the visible page into the
+    /// settled semantic tree. Scrolling changes what is visible, not which
+    /// screen we are on, so the tree should grow from every observed page.
+    @discardableResult
+    func refreshTreeAfterViewportMove() -> Screen? {
+        guard let visiblePage = parse() else { return nil }
+        let updatedTree = settledSemanticScreen.merging(visiblePage)
+        return semanticObservationStream
+            .commitSettledDiscoveryObservation(updatedTree)
+            .observation
+            .screen
+    }
+
     /// Produce one visible observation for the settle loop without committing
     /// it yet. Successful parses refresh latest observed capture and visible
     /// live view; the observation stream alone promotes a proven final screen
@@ -335,7 +371,12 @@ final class TheStash {
     }
 
     func installScreenForTesting(_ screen: Screen) {
+        nextVisibleRefreshScreenForTesting = screen
         _ = semanticObservationStream.commitSettledVisibleObservation(screen)
+    }
+
+    func clearInstalledVisibleRefreshScreenForTesting() {
+        nextVisibleRefreshScreenForTesting = nil
     }
 
     /// Starting value for page-by-page exploration. Exploration carries a local
@@ -442,6 +483,30 @@ final class TheStash {
         liveCapture.scrollView(for: screenElement)
     }
 
+    func capturedLiveScrollView(forContainerName containerName: ContainerName) -> UIScrollView? {
+        liveCapture.scrollView(forContainer: containerName)
+    }
+
+    func liveScrollView(forContainerName containerName: ContainerName) -> UIScrollView? {
+        if let scrollView = liveCapture.scrollView(forContainer: containerName) {
+            return scrollView
+        }
+        guard let container = uniqueSemanticContainer(named: containerName) else {
+            return nil
+        }
+        return resolveLiveScrollViewFromWindowHierarchy(for: container)
+    }
+
+    func liveScrollView(for container: SemanticScreen.Container) -> UIScrollView? {
+        liveCapture.scrollView(for: container)
+            ?? resolveLiveScrollViewFromWindowHierarchy(for: container)
+    }
+
+    func uniqueSemanticContainer(named containerName: ContainerName) -> SemanticScreen.Container? {
+        let matches = semanticContainersInTraversalOrder.filter { $0.containerName == containerName }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
     func liveElementHeistId(matching object: NSObject) -> HeistId? {
         liveCapture.elementRefs.first { _, ref in
             ref.object === object
@@ -474,12 +539,60 @@ final class TheStash {
         liveCapture.scrollableContainerViewsByPath[path]?.view
     }
 
+    func liveScrollContainerDiagnostics() -> String {
+        let summaries = liveCapture.hierarchy.containerPaths
+            .filter { $0.container.isScrollable }
+            .map { item -> String in
+                let containerName = liveCapture.containerNamesByPath[item.path]
+                    ?? liveCapture.containerNames[item.container]
+                let hasLiveScrollView = containerName
+                    .flatMap { liveCapture.scrollView(forContainer: $0) } != nil
+                let pathView = liveCapture.scrollableContainerViewsByPath[item.path]?.view
+                let containerObject = liveCapture.containerRefsByPath[item.path]?.object
+                let objectType = containerObject.map { String(describing: type(of: $0)) } ?? "<nil>"
+                return "path=\(item.path.indices) name=\(containerName ?? "<nil>") "
+                    + "liveScroll=\(hasLiveScrollView) pathView=\(pathView != nil) "
+                    + "object=\(objectType)"
+            }
+        return summaries.isEmpty
+            ? "available live scroll containers: none"
+            : "available live scroll containers: \(summaries.joined(separator: "; "))"
+    }
+
+    private func resolveLiveScrollViewFromWindowHierarchy(
+        for container: SemanticScreen.Container
+    ) -> UIScrollView? {
+        guard case .scrollable(let contentSize) = container.container.type else {
+            return nil
+        }
+        let expectedContentSize = contentSize.cgSize
+        let expectedFrame = container.container.frame.cgRect
+        let candidates = tripwire.getAccessibleWindows()
+            .flatMap { ScrollViewHierarchySearch.descendantScrollViews(in: $0.rootView) }
+            .filter(\.isScrollEnabled)
+        let contentMatches = candidates.filter {
+            ScrollViewHierarchySearch.contentSize($0.contentSize, matches: expectedContentSize)
+        }
+        let frameAndContentMatches = contentMatches.filter {
+            Self.screenFrame(of: $0).approximatelyEquals(expectedFrame)
+        }
+        if frameAndContentMatches.count == 1 {
+            return frameAndContentMatches[0]
+        }
+        return contentMatches.count == 1 ? contentMatches[0] : nil
+    }
+
+    private static func screenFrame(of view: UIView) -> CGRect {
+        view.convert(view.bounds, to: nil)
+    }
+
     private func clearWorldForLifecycleReset() {
         latestObservedSemanticWorld = .empty
         liveCapture = .empty
         settledSemanticWorld = .empty
         settledVisibleCapture = .empty
         settledVisibleIds = []
+        nextVisibleRefreshScreenForTesting = nil
         failedSettleDiagnosticEvidence = nil
         semanticObservationStream.clearSettledObservationHistory()
     }
@@ -529,6 +642,15 @@ final class TheStash {
     ) -> (interface: Interface, hash: String) {
         let interface = WireConversion.toSemanticInterface(from: screen, timestamp: timestamp)
         return (interface, AccessibilityTrace.Capture.hash(interface))
+    }
+}
+
+private extension CGRect {
+    func approximatelyEquals(_ other: CGRect, tolerance: CGFloat = 1) -> Bool {
+        abs(origin.x - other.origin.x) <= tolerance
+            && abs(origin.y - other.origin.y) <= tolerance
+            && abs(size.width - other.size.width) <= tolerance
+            && abs(size.height - other.size.height) <= tolerance
     }
 }
 

@@ -25,6 +25,7 @@ struct LiveCapture: Equatable {
     let elementRefs: [HeistId: ElementRef]
     let containerRefsByPath: [TreePath: ContainerRef]
     let containerContentFramesByPath: [TreePath: CGRect]
+    let containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation]
     let firstResponderHeistId: HeistId?
     let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
     let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
@@ -38,6 +39,7 @@ struct LiveCapture: Equatable {
         elementRefs: [HeistId: ElementRef],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
         containerContentFramesByPath: [TreePath: CGRect] = [:],
+        containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:],
@@ -50,6 +52,7 @@ struct LiveCapture: Equatable {
         self.elementRefs = elementRefs
         self.containerRefsByPath = containerRefsByPath
         self.containerContentFramesByPath = containerContentFramesByPath
+        self.containerScrollContentLocationsByPath = containerScrollContentLocationsByPath
         self.firstResponderHeistId = firstResponderHeistId
         self.scrollableContainerViews = scrollableContainerViews
         self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
@@ -57,6 +60,7 @@ struct LiveCapture: Equatable {
             hierarchy: hierarchy,
             containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
+            containerRefsByPath: containerRefsByPath,
             scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
@@ -69,6 +73,7 @@ struct LiveCapture: Equatable {
         elementRefs: [:],
         containerRefsByPath: [:],
         containerContentFramesByPath: [:],
+        containerScrollContentLocationsByPath: [:],
         firstResponderHeistId: nil,
         scrollableContainerViews: [:]
     )
@@ -101,6 +106,15 @@ struct LiveCapture: Equatable {
         scrollableViewsByContainerName[containerName]?.view as? UIScrollView
     }
 
+    func scrollView(for container: SemanticScreen.Container) -> UIScrollView? {
+        if let containerName = container.containerName,
+           let scrollView = scrollView(forContainer: containerName) {
+            return scrollView
+        }
+        return scrollableContainerViewsByPath[container.path]?.view as? UIScrollView
+            ?? containerRefsByPath[container.path]?.object as? UIScrollView
+    }
+
     func containerObject(forPath path: TreePath) -> NSObject? {
         containerRefsByPath[path]?.object
     }
@@ -109,10 +123,17 @@ struct LiveCapture: Equatable {
         containerContentFramesByPath[path]
     }
 
+    func containerScrollContentLocation(forPath path: TreePath) -> SemanticScreen.ScrollContentLocation? {
+        containerScrollContentLocationsByPath[path]
+    }
+
     func scrollView(for element: SemanticScreen.Element) -> UIScrollView? {
         let visibleScrollView = contains(heistId: element.heistId) ? scrollView(for: element.heistId) : nil
+        let namedScrollView = element.scrollContentLocation
+            .map { $0.scrollContainer }
+            .flatMap(scrollView(forContainer:))
         return visibleScrollView
-            ?? element.scrollContentLocation.map { $0.scrollContainer }.flatMap(scrollView(forContainer:))
+            ?? namedScrollView
     }
 
     /// Value-only copy for settled semantic projection. It preserves the parsed
@@ -126,6 +147,7 @@ struct LiveCapture: Equatable {
             elementRefs: [:],
             containerRefsByPath: [:],
             containerContentFramesByPath: containerContentFramesByPath,
+            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
             firstResponderHeistId: nil,
             scrollableContainerViews: [:],
             scrollableContainerViewsByPath: [:],
@@ -182,6 +204,7 @@ struct LiveCapture: Equatable {
         hierarchy: [AccessibilityHierarchy],
         containerNames: [AccessibilityContainer: ContainerName],
         containerNamesByPath: [TreePath: ContainerName],
+        containerRefsByPath: [TreePath: ContainerRef],
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
     ) -> [ContainerName: ScrollableViewRef] {
@@ -189,7 +212,10 @@ struct LiveCapture: Equatable {
         var ambiguousNames = Set<ContainerName>()
 
         for (container, path) in hierarchy.containerPaths {
-            guard let ref = scrollableContainerViewsByPath[path] ?? scrollableContainerViews[container] else { continue }
+            guard let ref = scrollableContainerViewsByPath[path]
+                ?? scrollableContainerViews[container]
+                ?? scrollableContainerRefFromContainerObject(containerRefsByPath[path])
+            else { continue }
             guard let containerName = containerNamesByPath[path] ?? containerNames[container] else { continue }
             guard !ambiguousNames.contains(containerName) else { continue }
             if result[containerName] != nil {
@@ -200,6 +226,13 @@ struct LiveCapture: Equatable {
             }
         }
         return result
+    }
+
+    private static func scrollableContainerRefFromContainerObject(
+        _ ref: ContainerRef?
+    ) -> ScrollableViewRef? {
+        guard let scrollView = ref?.object as? UIScrollView else { return nil }
+        return ScrollableViewRef(view: scrollView)
     }
 }
 

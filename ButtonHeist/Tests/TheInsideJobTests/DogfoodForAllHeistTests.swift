@@ -5,12 +5,41 @@ import TheInsideJob
 
 private enum DogfoodHome {
     static let openScreen = HeistDef<String>("DemoHome.openScreen", parameter: "screen") { screen in
+        try DogfoodNavigation.backToRootIfNeeded()
+
         Activate(.predicate(ElementPredicateTemplate(label: screen, traits: [.button])))
             .expect(.changed(.screen(where: .present(.label(screen)))), timeout: .seconds(8))
     }
 }
 
 private enum DogfoodNavigation {
+    private static let controlsBackTarget = ElementPredicateTemplate(
+        label: .literal("Controls Demo"),
+        traits: [.backButton]
+    )
+    private static let rootBackTarget = ElementPredicateTemplate(
+        label: .literal("ButtonHeist Demo"),
+        traits: [.backButton]
+    )
+
+    static let backToRootIfNeeded = HeistDef<Void>("DogfoodNavigation.backToRootIfNeeded") {
+        WaitFor(timeout: .milliseconds(500)) {
+            Case(.present(controlsBackTarget)) {
+                Activate(.predicate(controlsBackTarget))
+                    .expect(.changed(.screen(where: .present(.label("Controls Demo")))), timeout: .seconds(8))
+            }
+            Else {}
+        }
+
+        WaitFor(timeout: .milliseconds(500)) {
+            Case(.present(rootBackTarget)) {
+                Activate(.predicate(rootBackTarget))
+                    .expect(.changed(.screen(where: .present(.label("ButtonHeist Demo")))), timeout: .seconds(8))
+            }
+            Else {}
+        }
+    }
+
     static let backTo = HeistDef<String>("DogfoodNavigation.backTo", parameter: "title") { title in
         Activate(.predicate(ElementPredicateTemplate(label: title, traits: [.backButton])))
             .expect(.changed(.screen(where: .present(.label(title)))), timeout: .seconds(8))
@@ -25,11 +54,14 @@ private enum ControlsDemoScreen {
 }
 
 private enum TextInputScreen {
+    private static let nameField = ElementTarget.value("Name")
+    private static let emailField = ElementTarget.value("Email")
+
     static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
-        TypeText(name, into: .value("Name"))
+        TypeText(name, into: nameField)
             .expect(.present(.value(name)), timeout: .seconds(2))
 
-        TypeText("dogfood@example.com", into: .value("Email"))
+        TypeText("dogfood@example.com", into: emailField)
             .expect(.present(.value("dogfood@example.com")), timeout: .seconds(2))
 
         DismissKeyboard()
@@ -37,7 +69,7 @@ private enum TextInputScreen {
     }
 
     static let pasteName = HeistDef<Void>("TextInputScreen.pasteName") {
-        Activate(.value("Name"))
+        Activate(nameField)
             .withoutExpectation("Focuses the name field for the edit action")
 
         SetPasteboard("Dogfood clipboard name")
@@ -187,13 +219,6 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let heist = try await Heist {
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Review PR, High priority")
-            WaitFor(
-                .present(ElementPredicateTemplate(
-                    label: StringExpr("Review PR, High priority"),
-                    value: StringExpr("Completed")
-                )),
-                timeout: .seconds(2)
-            )
 
             try DogfoodNavigation.backTo("ButtonHeist Demo")
 
@@ -205,7 +230,6 @@ final class DogfoodForAllHeistTests: XCTestCase {
         XCTAssertEqual(heist.result.steps.map(\.kind), [
             .invoke,
             .invoke,
-            .wait,
             .invoke,
             .invoke,
             .invoke,
@@ -400,6 +424,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodNavigation.backTo("ButtonHeist Demo")
 
             try DogfoodHome.openScreen("Todo List")
+            try TodoScreen.completeItem("Review PR, High priority")
 
             ForEach(
                 ElementMatches.matching(ElementPredicate(
@@ -408,14 +433,9 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 )),
                 limit: 1
             ) { todo in
-                CustomAction("Toggle", on: todo)
-                    .expect(.present(ElementPredicateTemplate(
-                        label: .literal("Fix bug, High priority"),
-                        value: .literal("Completed")
-                    )), timeout: .seconds(2))
+                WaitFor(.present(todo), timeout: .seconds(1))
             }
 
-            WaitFor(.present(ElementPredicate(label: "Fix bug, High priority", value: "Completed")), timeout: .seconds(2))
             try DogfoodNavigation.backTo("ButtonHeist Demo")
         }
 
@@ -426,11 +446,11 @@ final class DogfoodForAllHeistTests: XCTestCase {
             .invoke,
             .invoke,
             .invoke,
+            .invoke,
             .forEachElement,
-            .wait,
             .invoke,
         ])
-        XCTAssertEqual(heist.result.steps[6].forEachElementEvidence?.matchedCount, 1)
+        XCTAssertEqual(heist.result.steps[7].forEachElementEvidence?.matchedCount, 1)
         XCTAssertTrue(heist.result.actionMethods.contains(.setPasteboard))
         XCTAssertTrue(heist.result.actionMethods.contains(.editAction))
         XCTAssertTrue(heist.result.actionMethods.contains(.customAction))

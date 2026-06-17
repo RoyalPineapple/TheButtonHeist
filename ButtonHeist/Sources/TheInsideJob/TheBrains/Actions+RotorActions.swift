@@ -43,11 +43,7 @@ extension Actions {
         guard let screenElement = hit.screenElement else { return }
 
         if case .objectUnavailable = stash.resolveLiveActionTarget(for: screenElement) {
-            let reveal = navigation.elementInflation.revealSemanticTarget(screenElement)
-            if reveal.didReveal {
-                await tripwire.yieldFrames(ElementInflation.postScrollLayoutFrames)
-                stash.refreshLiveCapture()
-            }
+            _ = await navigation.elementInflation.revealSemanticTarget(screenElement)
         }
 
         guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement) else {

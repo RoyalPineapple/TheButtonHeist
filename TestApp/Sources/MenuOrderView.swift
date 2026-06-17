@@ -88,6 +88,7 @@ struct MenuOrderView: View {
     @State private var expandedItemId: String?
     @State private var checkoutPhase: CheckoutPhase = .browsing
     @State private var pendingTask: Task<Void, Never>?
+    @State private var menuListIdentity = UUID()
 
     private var allItems: [MenuItem] {
         categories.flatMap(\.items)
@@ -138,6 +139,7 @@ struct MenuOrderView: View {
                 }
             }
         }
+        .onAppear(perform: resetForEntry)
         .onDisappear {
             pendingTask?.cancel()
             pendingTask = nil
@@ -194,6 +196,7 @@ struct MenuOrderView: View {
 
             orderActions
         }
+        .id(menuListIdentity)
         .listStyle(.insetGrouped)
     }
 
@@ -412,6 +415,15 @@ struct MenuOrderView: View {
         checkoutPhase = .browsing
     }
 
+    private func resetForEntry() {
+        pendingTask?.cancel()
+        pendingTask = nil
+        categories = MenuCategory.defaultMenu
+        expandedItemId = nil
+        checkoutPhase = .browsing
+        menuListIdentity = UUID()
+    }
+
 }
 
 // MARK: - Menu Item Row
@@ -467,6 +479,17 @@ private struct MenuItemRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to configure")
             .accessibilityAddTraits(isExpanded ? .isSelected : [])
+            .accessibilityAction(named: item.quantity == 0 ? "Add to Cart" : "Remove from Cart") {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if item.quantity == 0 {
+                        item.quantity = 1
+                    } else {
+                        item.quantity = 0
+                        item.activeOptions = []
+                        item.selectedSize = .regular
+                    }
+                }
+            }
 
             // Expanded configuration section
             if isExpanded {

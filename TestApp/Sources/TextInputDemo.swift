@@ -23,6 +23,14 @@ struct TextInputDemo: View {
             }
         }
         .navigationTitle("Text Input")
+        .onAppear(perform: resetFields)
+    }
+
+    private func resetFields() {
+        name = ""
+        email = ""
+        password = ""
+        bio = ""
     }
 }
 

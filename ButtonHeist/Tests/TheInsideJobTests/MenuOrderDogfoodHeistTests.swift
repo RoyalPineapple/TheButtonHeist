@@ -12,13 +12,13 @@ private enum DemoHome {
 
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
-        Activate(.label(item))
-            .expect(.present(.label("Add to Cart")), timeout: .seconds(2))
+        try rawAction(
+            .viewportScrollToVisible(.label(item)),
+            waiver: "scroll_to_visible is the viewport precondition for the row custom action"
+        )
 
-        Activate(.label("Add to Cart"))
+        CustomAction("Add to Cart", on: .label(item))
             .expect(.changed(.elements), timeout: .seconds(2))
-
-        WaitFor(.absent(.label("Add to Cart")), timeout: .seconds(2))
     }
 
     static let checkout = HeistDef<Void>("MenuScreen.checkout") {
@@ -45,10 +45,10 @@ private enum DemoOrder {
             detail: "Tomato, cucumber, olives, and feta"
         ),
         DemoMenuItem(
-            emoji: "\u{1F355}",
-            name: "Margherita Pizza",
-            price: Decimal(1400) / Decimal(100),
-            detail: "San Marzano tomato, mozzarella, basil"
+            emoji: "\u{1F346}",
+            name: "Eggplant Parmesan",
+            price: Decimal(1500) / Decimal(100),
+            detail: "Breaded eggplant with marinara and cheese"
         ),
     ]
 
@@ -71,7 +71,7 @@ private struct DemoMenuItem {
 final class MenuOrderDogfoodHeistTests: XCTestCase {
 
     func testMenuOrderFlowUsesReusablePublicHeists() async throws {
-        let heist = try await Heist {
+        let heist = try await RunHeist("MenuOrderDogfood_orderTwoItems") {
             try DemoHome.openMenu()
 
             ForEach(DemoOrder.itemLabels) { item in
@@ -92,6 +92,14 @@ private extension Decimal {
     var dogfoodUSDFormatted: String {
         formatted(.currency(code: "USD"))
     }
+}
+
+private func rawAction(
+    _ command: HeistActionCommand,
+    expectation: WaitStep? = nil,
+    waiver: String? = nil
+) throws -> HeistStep {
+    .action(try ActionStep(command: command, expectation: expectation, expectationWaiver: waiver))
 }
 
 #endif // canImport(UIKit)
