@@ -45,10 +45,10 @@ private enum DemoOrder {
             detail: "Tomato, cucumber, olives, and feta"
         ),
         DemoMenuItem(
-            emoji: "\u{1F355}",
-            name: "Margherita Pizza",
-            price: Decimal(1400) / Decimal(100),
-            detail: "San Marzano tomato, mozzarella, basil"
+            emoji: "\u{1F346}",
+            name: "Eggplant Parmesan",
+            price: Decimal(1500) / Decimal(100),
+            detail: "Breaded eggplant with marinara and cheese"
         ),
     ]
 
