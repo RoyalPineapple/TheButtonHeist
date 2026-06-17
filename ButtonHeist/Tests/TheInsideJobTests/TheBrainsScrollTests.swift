@@ -1244,6 +1244,36 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertNotEqual(frame, backingViewFrame)
     }
 
+    func testScrollableTargetUsesPathKeyedLiveScrollView() throws {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let contentSize = AccessibilitySize(width: 320, height: 1_600)
+        let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
+        let path = TreePath([0])
+        brains.stash.installScreenForTesting(Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerNames: [:],
+            containerNamesByPath: [path: "main_scroll"],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:],
+            scrollableContainerViewsByPath: [path: .init(view: scrollView)]
+        ))
+
+        let target = try XCTUnwrap(brains.navigation.scrollableTarget(
+            for: container,
+            path: path,
+            contentSize: contentSize
+        ))
+
+        guard case .uiScrollView(let resolvedScrollView) = target else {
+            XCTFail("Expected path-keyed UIScrollView target, got \(target)")
+            return
+        }
+        XCTAssertTrue(resolvedScrollView === scrollView)
+    }
+
     func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() throws {
         // A frame sitting comfortably inside the safe area passes through
         // intersected with itself, which is the frame.

@@ -36,47 +36,15 @@ final class SemanticObservationStream {
     /// An active stream is an observation lease. Baseline cycles observe the
     /// visible world; subscribers can widen demand to discovery.
     typealias DiscoveryObservation = @MainActor () async -> Screen?
-    private static let activeSettleQuietWindowMs = SemanticQuietSettleSession.defaultQuietWindowMs
-    private static let activePassiveSettleTimeoutMs = 1_000
-
-    struct SettledSemanticWaiter {
-        let scope: SemanticObservationScope
-        let afterSequence: UInt64?
-        let continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>
-        let timeoutTask: Task<Void, Never>?
-    }
-
-    private struct SemanticObservationCycleWaiter {
-        let scope: SemanticObservationScope
-        let afterCycle: UInt64
-        let continuation: CheckedContinuation<Void, Never>
-    }
 
     private weak var stash: TheStash?
     private let tripwire: TheTripwire
 
-    // MARK: - Subscription State
+    // MARK: - Observation Bookkeeping
 
-    private var nextSubscriptionID: UInt64 = 0
-    private var subscriptions: [UInt64: SemanticObservationScope] = [:]
-
-    // MARK: - Active Demand State
-
-    private var nextActiveDemandID: UInt64 = 0
-    private var activeObservationDemands: [UInt64: SemanticObservationScope] = [:]
-
-    // MARK: - Waiter State
-
-    private var nextSettledWaiterID: UInt64 = 0
-    private var settledWaitersByID: [UInt64: SettledSemanticWaiter] = [:]
-
-    private var nextCycleWaiterID: UInt64 = 0
-    private var cycleWaiters: [UInt64: SemanticObservationCycleWaiter] = [:]
-
-    // MARK: - Cycle Sequencing State
-
-    private var cycleSequence: UInt64 = 0
-    private var cycleInProgress = false
+    private var scopePressure = SemanticObservationScopePressure()
+    private let settledWaiters = SemanticObservationSettledWaiters()
+    private let cycles = SemanticObservationCycles()
 
     // MARK: - Subscriber-Facing Settled Observation History
 
@@ -102,15 +70,15 @@ final class SemanticObservationStream {
     }
 
     var settledWaiterCount: Int {
-        settledWaitersByID.count
+        settledWaiters.count
     }
 
     var activeObservationDemandCount: Int {
-        activeObservationDemands.count
+        scopePressure.activeDemandCount
     }
 
     var hasActiveObservationDemand: Bool {
-        !activeObservationDemands.isEmpty
+        scopePressure.hasActiveDemand
     }
 
     init(stash: TheStash, tripwire: TheTripwire) {
@@ -135,36 +103,30 @@ final class SemanticObservationStream {
         passiveObservationTask = nil
         discoveryObservation = nil
         passiveObservationSettledReading = nil
-        completeAllWaiters(returning: nil)
-        completeAllCycleWaiters()
+        settledWaiters.completeAll(returning: nil)
+        cycles.completeAllWaiters()
     }
 
     func subscribe(scope: SemanticObservationScope) -> SemanticObservationSubscription {
-        let id = nextSubscriptionID
-        nextSubscriptionID += 1
-        subscriptions[id] = scope
+        let id = scopePressure.addSubscription(scope: scope)
         return SemanticObservationSubscription(id: id, scope: scope, stream: self)
     }
 
     func removeSubscription(_ id: UInt64) {
-        subscriptions[id] = nil
+        scopePressure.removeSubscription(id)
     }
 
     func beginActiveObservationDemand(scope: SemanticObservationScope) -> SemanticObservationDemand {
-        let id = nextActiveDemandID
-        nextActiveDemandID += 1
-        activeObservationDemands[id] = scope
+        let id = scopePressure.addActiveDemand(scope: scope)
         return SemanticObservationDemand(id: id, scope: scope, stream: self)
     }
 
     func removeActiveObservationDemand(_ id: UInt64) {
-        activeObservationDemands[id] = nil
+        scopePressure.removeActiveDemand(id)
     }
 
     func subscribedObservationScope() -> SemanticObservationScope {
-        [subscriptions.values.max(), activeObservationDemands.values.max()]
-            .compactMap { $0 }
-            .max() ?? .visible
+        scopePressure.subscribedObservationScope()
     }
 
     func settledEvent(
@@ -179,13 +141,13 @@ final class SemanticObservationStream {
 
         if timeout == 0 {
             guard isActive else { return nil }
-            await waitForNextCycle(scope: scope, after: baselineCycle())
+            await cycles.waitForNextCycle(scope: scope, after: cycles.baselineCycle())
             return cleanEvent(scope: scope, after: requiredSequence)
         }
 
         if sequence == nil, scope == .visible {
             if isActive {
-                await waitForNextCycle(scope: scope, after: baselineCycle())
+                await cycles.waitForNextCycle(scope: scope, after: cycles.baselineCycle())
             } else {
                 return await waitForNextSettledEvent(
                     scope: scope,
@@ -200,7 +162,7 @@ final class SemanticObservationStream {
         }
 
         if isActive {
-            await waitForNextCycle(scope: scope, after: baselineCycle())
+            await cycles.waitForNextCycle(scope: scope, after: cycles.baselineCycle())
             if let latest = cleanEvent(scope: scope, after: requiredSequence) {
                 return latest
             }
@@ -215,20 +177,22 @@ final class SemanticObservationStream {
 
         guard let stash else { return nil }
 
-        let outcome = await settleVisibleObservationForCurrentDemand(
+        let outcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
+            hasActiveDemand: hasActiveObservationDemand,
             stash: stash,
+            tripwire: tripwire,
             baselineTripwireSignal: latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal(),
             timeoutMs: Self.timeoutMilliseconds(from: timeout)
         )
 
         if case .cancelled = outcome.outcome {
-            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             stash.recordFailedSettleDiagnosticEvidence(outcome.finalScreen)
             return nil
         }
 
         guard let screen = outcome.finalScreen else {
-            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             stash.recordFailedSettleDiagnosticEvidence(nil)
             return nil
         }
@@ -243,7 +207,7 @@ final class SemanticObservationStream {
             )
         }
 
-        latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+        latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
         stash.recordFailedSettleDiagnosticEvidence(screen)
         return nil
     }
@@ -295,21 +259,23 @@ final class SemanticObservationStream {
         if let providedOutcome {
             outcome = providedOutcome
         } else {
-            outcome = await settleVisibleObservationForCurrentDemand(
+            outcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
+                hasActiveDemand: hasActiveObservationDemand,
                 stash: stash,
+                tripwire: tripwire,
                 baselineTripwireSignal: baselineTripwireSignal,
                 timeoutMs: SettleSession.defaultTimeoutMs
             )
         }
 
         if case .cancelled = outcome.outcome {
-            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             stash.recordFailedSettleDiagnosticEvidence(outcome.finalScreen)
             return (outcome, nil, nil)
         }
 
         guard let finalScreen = outcome.finalScreen else {
-            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+            latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             stash.recordFailedSettleDiagnosticEvidence(nil)
             return (outcome, nil, nil)
         }
@@ -317,7 +283,7 @@ final class SemanticObservationStream {
             return (outcome, commitSettledVisibleObservation(finalScreen), nil)
         }
 
-        latestSettleFailureDiagnostic = Self.failureDiagnostic(for: outcome)
+        latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
         stash.recordFailedSettleDiagnosticEvidence(finalScreen)
         return (outcome, nil, stash.latestFailedSettleDiagnosticEvidence)
     }
@@ -344,19 +310,17 @@ final class SemanticObservationStream {
             screen: stash.settledSemanticScreen,
             tripwireSignal: tripwire.tripwireSignal()
         )
-        let event = makeEvent(observation: observation, previous: latestEvent, stash: stash)
+        let event = SemanticObservationEventFactory.makeEvent(
+            observation: observation,
+            previous: latestEvent,
+            stash: stash
+        )
         latestEvent = event
         latestSettledObservationInvalidated = false
         latestSettleFailureDiagnostic = nil
         passiveObservationSettledReading = tripwire.latestReading
-        completeWaiters(with: event)
+        settledWaiters.completeWaiters(with: event)
         return event
-    }
-
-    func completeAllWaiters(returning event: SettledSemanticObservationEvent?) {
-        for id in Array(settledWaitersByID.keys) {
-            completeWaiter(id, returning: event)
-        }
     }
 
     private func waitForNextSettledEvent(
@@ -370,30 +334,11 @@ final class SemanticObservationStream {
             return latest
         }
 
-        let id = nextSettledWaiterID
-        nextSettledWaiterID += 1
-
-        return await withCheckedContinuation { continuation in
-            let timeoutTask: Task<Void, Never>? = observationWaitTimeout(timeout).map { timeout in
-                Task { [weak self] in
-                    let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
-                    guard await Task.cancellableSleep(for: .nanoseconds(nanoseconds)) else { return }
-                    self?.completeWaiter(id, returning: nil)
-                }
-            }
-            settledWaitersByID[id] = SettledSemanticWaiter(
-                scope: scope,
-                afterSequence: requiredSequence,
-                continuation: continuation,
-                timeoutTask: timeoutTask
-            )
-        }
-    }
-
-    private func observationWaitTimeout(_ timeout: Double?) -> Double? {
-        guard let timeout else { return nil }
-        guard timeout > 0 else { return nil }
-        return timeout
+        return await settledWaiters.wait(
+            scope: scope,
+            afterSequence: requiredSequence,
+            timeout: timeout
+        )
     }
 
     private static func timeoutMilliseconds(from timeout: Double?) -> Int {
@@ -417,10 +362,6 @@ final class SemanticObservationStream {
         return sequence
     }
 
-    private func baselineCycle() -> UInt64 {
-        cycleSequence + (cycleInProgress ? 1 : 0)
-    }
-
     private func cleanEvent(
         scope: SemanticObservationScope,
         after sequence: UInt64?
@@ -435,66 +376,12 @@ final class SemanticObservationStream {
         return latest
     }
 
-    private func makeEvent(
-        observation: SettledSemanticObservation,
-        previous: SettledSemanticObservationEvent?,
-        stash: TheStash
-    ) -> SettledSemanticObservationEvent {
-        let previousCapture = previous?.trace.captures.last
-        let currentCapture = semanticTraceCapture(
-            for: observation,
-            sequence: previousCapture == nil ? 1 : 2,
-            parentHash: previousCapture?.hash,
-            stash: stash
-        )
-        let trace = if let previousCapture {
-            AccessibilityTrace(captures: [previousCapture, currentCapture])
-        } else {
-            AccessibilityTrace(capture: currentCapture)
-        }
-        return SettledSemanticObservationEvent(
-            sequence: observation.sequence,
-            scope: observation.scope,
-            observation: observation,
-            previous: previous?.observation,
-            trace: trace,
-            delta: trace.endpointDelta
-        )
-    }
-
-    private func semanticTraceCapture(
-        for observation: SettledSemanticObservation,
-        sequence: Int,
-        parentHash: String?,
-        stash: TheStash
-    ) -> AccessibilityTrace.Capture {
-        let interface = stash.semanticInterfaceWithHash(for: observation.screen).interface
-        let windows = observation.tripwireSignal.windowStack.windows.enumerated().map { index, window in
-            AccessibilityTrace.WindowContext(
-                index: index,
-                level: Double(window.level),
-                isKeyWindow: window.isKeyWindow
-            )
-        }
-        return AccessibilityTrace.Capture(
-            sequence: sequence,
-            interface: interface,
-            parentHash: parentHash,
-            context: AccessibilityTrace.Context(
-                screenId: observation.screen.id,
-                windowStack: windows
-            )
-        )
-    }
-
     private func runPassiveObservationCycle() async {
         let scope = subscribedObservationScope()
-        cycleInProgress = true
+        cycles.beginCycle()
         let didObserve = await performObservationCycle(scope: scope)
-        cycleInProgress = false
+        cycles.finishCycle(didObserve: didObserve, scope: scope)
         guard didObserve else { return }
-        cycleSequence += 1
-        completeCycleWaiters(scope: scope)
         await Task.yield()
     }
 
@@ -548,7 +435,7 @@ final class SemanticObservationStream {
         )
 
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
-            latestSettleFailureDiagnostic = Self.failureDiagnostic(
+            latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(
                 for: settle,
                 layerGateWasClear: layerGateWasClear
             )
@@ -564,14 +451,15 @@ final class SemanticObservationStream {
 
     private func observeVisibleSemanticStateAtActiveCadence(stash: TheStash) async -> Bool {
         let baselineSignal = latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal()
-        let settle = await settleVisibleObservationAtActiveCadence(
+        let settle = await SemanticObservationSettleCadence.settleVisibleObservationAtActiveCadence(
             stash: stash,
+            tripwire: tripwire,
             baselineTripwireSignal: baselineSignal,
-            timeoutMs: Self.activePassiveSettleTimeoutMs
+            timeoutMs: SemanticObservationSettleCadence.activePassiveSettleTimeoutMs
         )
 
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
-            latestSettleFailureDiagnostic = Self.failureDiagnostic(for: settle)
+            latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: settle)
             stash.recordFailedSettleDiagnosticEvidence(settle.finalScreen)
             await Task.yield()
             return true
@@ -582,122 +470,6 @@ final class SemanticObservationStream {
         return true
     }
 
-    private func settleVisibleObservationForCurrentDemand(
-        stash: TheStash,
-        baselineTripwireSignal: TheTripwire.TripwireSignal,
-        timeoutMs: Int
-    ) async -> SettleSession.Outcome {
-        if hasActiveObservationDemand {
-            return await settleVisibleObservationAtActiveCadence(
-                stash: stash,
-                baselineTripwireSignal: baselineTripwireSignal,
-                timeoutMs: timeoutMs
-            )
-        }
-        return await settleVisibleObservationAtIdleCadence(
-            stash: stash,
-            baselineTripwireSignal: baselineTripwireSignal,
-            timeoutMs: timeoutMs
-        )
-    }
-
-    private func settleVisibleObservationAtIdleCadence(
-        stash: TheStash,
-        baselineTripwireSignal: TheTripwire.TripwireSignal,
-        timeoutMs: Int
-    ) async -> SettleSession.Outcome {
-        let settleSession = SettleSession.live(
-            stash: stash,
-            tripwire: tripwire,
-            timeoutMs: timeoutMs
-        )
-        return await settleSession.run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: baselineTripwireSignal
-        )
-    }
-
-    private func settleVisibleObservationAtActiveCadence(
-        stash: TheStash,
-        baselineTripwireSignal: TheTripwire.TripwireSignal,
-        timeoutMs: Int
-    ) async -> SettleSession.Outcome {
-        let settleSession = SemanticQuietSettleSession.live(
-            stash: stash,
-            tripwire: tripwire,
-            quietWindowMs: Self.activeSettleQuietWindowMs,
-            timeoutMs: timeoutMs
-        )
-        return await settleSession.run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: baselineTripwireSignal
-        )
-    }
-
-    private static func failureDiagnostic(
-        for outcome: SettleSession.Outcome,
-        layerGateWasClear: Bool? = nil
-    ) -> String {
-        var parts = ["settle \(outcome.outcome.outcomeDescription)"]
-        if let finalScreen = outcome.finalScreen {
-            parts.append("last parsed: \(finalScreen.liveCapture.hierarchy.sortedElements.count) elements")
-        } else {
-            parts.append("last parsed: no accessibility tree")
-        }
-        if let instability = outcome.instabilityDescription {
-            parts.append(instability)
-        }
-        if layerGateWasClear == false {
-            parts.append("layer motion still active while AX settle ran")
-        }
-        return parts.joined(separator: "; ")
-    }
-
-    private func waitForNextCycle(scope: SemanticObservationScope, after cycle: UInt64) async {
-        let id = nextCycleWaiterID
-        nextCycleWaiterID += 1
-
-        return await withCheckedContinuation { continuation in
-            cycleWaiters[id] = SemanticObservationCycleWaiter(
-                scope: scope,
-                afterCycle: cycle,
-                continuation: continuation
-            )
-        }
-    }
-
-    private func completeCycleWaiters(scope: SemanticObservationScope) {
-        for (id, waiter) in cycleWaiters {
-            guard scope >= waiter.scope else { continue }
-            guard cycleSequence > waiter.afterCycle else { continue }
-            completeCycleWaiter(id)
-        }
-    }
-
-    private func completeAllCycleWaiters() {
-        for id in Array(cycleWaiters.keys) {
-            completeCycleWaiter(id)
-        }
-    }
-
-    private func completeCycleWaiter(_ id: UInt64) {
-        guard let waiter = cycleWaiters.removeValue(forKey: id) else { return }
-        waiter.continuation.resume()
-    }
-
-    private func completeWaiters(with event: SettledSemanticObservationEvent) {
-        for (id, waiter) in settledWaitersByID {
-            guard event.scope >= waiter.scope else { continue }
-            guard event.sequence > (waiter.afterSequence ?? 0) else { continue }
-            completeWaiter(id, returning: event)
-        }
-    }
-
-    private func completeWaiter(_ id: UInt64, returning event: SettledSemanticObservationEvent?) {
-        guard let waiter = settledWaitersByID.removeValue(forKey: id) else { return }
-        waiter.timeoutTask?.cancel()
-        waiter.continuation.resume(returning: event)
-    }
 }
 
 #endif // DEBUG
