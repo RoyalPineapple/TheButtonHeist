@@ -19,6 +19,7 @@ extension Navigation {
         selection: ScrollContainerSelection,
         direction: ScrollDirection
     ) async -> TheSafecracker.InteractionResult {
+        stash.refreshLiveCapture()
         let axis = Self.requiredAxis(for: direction)
         switch resolveContainerScrollTarget(
             selection: selection,
@@ -49,6 +50,7 @@ extension Navigation {
         selection: ScrollContainerSelection,
         edge: ScrollEdge
     ) async -> TheSafecracker.InteractionResult {
+        stash.refreshLiveCapture()
         let axis = Self.requiredAxis(for: edge)
         switch resolveContainerScrollTarget(
             selection: selection,

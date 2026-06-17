@@ -14,6 +14,7 @@ extension Navigation {
     @MainActor struct ScrollPlan { // swiftlint:disable:this agent_main_actor_value_type
         let target: ScrollableTarget
         let container: AccessibilityContainer
+        let path: TreePath
     }
 
     @MainActor enum ContainerScrollResolution { // swiftlint:disable:this agent_main_actor_value_type
@@ -64,7 +65,7 @@ extension Navigation {
             return .resolved(.uiScrollView(scrollView))
         case .container(let containerName):
             let candidates = scrollCandidates(requiredAxis: axis).filter {
-                stash.liveContainerName(for: $0.container) == containerName
+                (stash.liveContainerName(forPath: $0.path) ?? stash.liveContainerName(for: $0.container)) == containerName
             }
             guard !candidates.isEmpty else {
                 return .failed(
@@ -97,22 +98,30 @@ extension Navigation {
     func scrollCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
-        stash.latestObservedLiveHierarchy.scrollableContainers.compactMap { container -> ScrollPlan? in
+        stash.latestObservedLiveHierarchy.containerPaths.compactMap { item -> ScrollPlan? in
+            let container = item.container
+            let path = item.path
             guard case .scrollable(let contentSize) = container.type else { return nil }
 
             if let axis, !Self.scrollableAxis(of: container).contains(axis) {
                 return nil
             }
 
-            if let view = self.stash.scrollableContainerViews[container],
+            let liveView = self.stash.liveScrollableContainerView(forPath: path)
+                ?? self.stash.scrollableContainerViews[container]
+            if let view = liveView,
                view.window != nil,
                Self.isObscuredByPresentation(view: view) {
                 return nil
             }
-            guard let target = self.scrollableTarget(for: container, contentSize: contentSize) else {
+            guard let target = self.scrollableTarget(
+                for: container,
+                path: path,
+                contentSize: contentSize
+            ) else {
                 return nil
             }
-            return ScrollPlan(target: target, container: container)
+            return ScrollPlan(target: target, container: container, path: path)
         }
     }
 
@@ -121,9 +130,15 @@ extension Navigation {
     /// actions, not semantic state authority.
     func scrollableTarget(
         for container: AccessibilityContainer,
+        path: TreePath? = nil,
         contentSize: AccessibilitySize
     ) -> ScrollableTarget? {
         let cgContentSize = contentSize.cgSize
+        if let path,
+           let scrollView = stash.liveScrollableContainerView(forPath: path) as? UIScrollView {
+            guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
+            return .uiScrollView(scrollView)
+        }
         if let scrollView = stash.scrollableContainerViews[container] as? UIScrollView {
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return .uiScrollView(scrollView)

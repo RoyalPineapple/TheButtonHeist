@@ -133,6 +133,67 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
     }
 
+    func testActiveObservationDemandCancelRemovesScopePressureOnEarlyExit() {
+        func beginDemandAndReturnEarly() {
+            let demand = bagman.beginSemanticObservationDemand(scope: .discovery)
+            defer { demand.cancel() }
+
+            XCTAssertTrue(bagman.semanticObservationStream.hasActiveObservationDemand)
+            XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 1)
+            XCTAssertEqual(bagman.subscribedObservationScope(), .discovery)
+            return
+        }
+
+        beginDemandAndReturnEarly()
+
+        XCTAssertFalse(bagman.semanticObservationStream.hasActiveObservationDemand)
+        XCTAssertEqual(bagman.semanticObservationStream.activeObservationDemandCount, 0)
+        XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
+    }
+
+    func testWorldStoreCommitKeepsLiveEvidenceOutOfSettledProjection() {
+        var worldStore = WorldStore()
+        let liveObject = UIAccessibilityElement(accessibilityContainer: NSObject())
+        let screen = Screen.makeForTests(
+            elements: [(element(label: "Save", traits: .button), "save")],
+            objects: ["save": liveObject]
+        )
+
+        let result = worldStore.commitVisible(screen)
+
+        XCTAssertTrue(result.observedEvidence.liveCapture.object(for: "save") === liveObject)
+        XCTAssertNil(result.settledScreen.liveCapture.object(for: "save"))
+        XCTAssertNil(worldStore.screen.liveCapture.object(for: "save"))
+        XCTAssertEqual(worldStore.element(heistId: "save")?.element.label, "Save")
+    }
+
+    func testWorldStoreVisibleCommitDropsDiscoveryMemoryAfterNavigation() {
+        var worldStore = WorldStore()
+        let bottom = element(label: "Bottom Row", traits: .button)
+        let staleOffscreen = element(label: "Stale Row", traits: .button)
+        let discovery = Screen.makeForTests(
+            elements: [(bottom, "bottom_row")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    staleOffscreen,
+                    heistId: "shared_row",
+                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
+                    scrollContainer: "root_scroll"
+                ),
+            ]
+        )
+        worldStore.commitDiscovery(discovery)
+
+        let freshVisible = element(label: "Fresh Row", traits: .button)
+        let refreshedTop = Screen.makeForTests(elements: [(freshVisible, "shared_row")])
+        let result = worldStore.commitVisible(refreshedTop)
+
+        XCTAssertEqual(result.settledScreen.visibleIds, ["shared_row"])
+        XCTAssertEqual(result.settledScreen.knownIds, ["shared_row"])
+        XCTAssertEqual(worldStore.element(heistId: "shared_row")?.element.label, "Fresh Row")
+        XCTAssertNil(worldStore.element(heistId: "bottom_row"))
+    }
+
     func testLatestSettledSemanticObservationAdvancesMonotonically() {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitSettledVisibleObservation(first)
