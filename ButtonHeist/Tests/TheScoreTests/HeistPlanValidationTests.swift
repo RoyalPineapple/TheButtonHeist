@@ -284,6 +284,34 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
 }
 
 @Test
+func runtimeSafetyRejectsEmptyBroadConcreteElementTargets() throws {
+    let targets: [(String, ElementTarget)] = [
+        ("label contains", .label(contains: "")),
+        ("label prefix", .label(prefix: "")),
+        ("label suffix", .label(suffix: "")),
+        ("identifier contains", .identifier(contains: "")),
+        ("identifier prefix", .identifier(prefix: "")),
+        ("identifier suffix", .identifier(suffix: "")),
+        ("value contains", .value(contains: "")),
+        ("value prefix", .value(prefix: "")),
+        ("value suffix", .value(suffix: "")),
+    ]
+
+    for (label, target) in targets {
+        let raw = HeistPlanAdmissionCandidate(body: [
+            .action(try ActionStep(command: .activate(.target(target)))),
+        ])
+
+        let failures = runtimeSafetyFailures(for: raw)
+
+        #expect(
+            failures.contains { $0.contract.contains("string match value must not be empty") },
+            "\(label): \(failures)"
+        )
+    }
+}
+
+@Test
 func runtimeSafetyRejectsEmptySetPasteboardPayload() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
         .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "")))),

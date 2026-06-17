@@ -188,9 +188,9 @@ extension HeistPlanRuntimeSafetyValidator {
         _ predicate: ElementPredicate,
         path: String
     ) {
-        addString(predicate.label, path: "\(path).label", role: "element label")
-        addString(predicate.identifier, path: "\(path).identifier", role: "element identifier")
-        addString(predicate.value, path: "\(path).value", role: "element value")
+        validateString(predicate.label, path: "\(path).label", role: "element label")
+        validateString(predicate.identifier, path: "\(path).identifier", role: "element identifier")
+        validateString(predicate.value, path: "\(path).value", role: "element value")
     }
 
     mutating func validateElementPredicate(
@@ -270,9 +270,17 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func addString(_ match: StringMatch<String>?, path: String, role: String) {
+    mutating func validateString(_ match: StringMatch<String>?, path: String, role: String) {
         guard let match else { return }
         addString(match.value, path: path, role: role)
+        if match.hasInvalidEmptyBroadLiteral {
+            fail(
+                path: path,
+                contract: "\(match.mode.rawValue) string match value must not be empty",
+                observed: "empty \(match.mode.rawValue) match",
+                correction: "Use a non-empty string, or an exact match when the empty string is intentional."
+            )
+        }
     }
 
 }
