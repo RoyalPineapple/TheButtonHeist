@@ -403,133 +403,68 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertFalse(predicate.validate(against: result).met)
     }
 
-    // MARK: - element appeared
+    // MARK: - final state predicates
 
-    func testElementAppearedCodableRoundTrip() throws {
-        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "New Task", traits: [.staticText])))
+    func testPresentCodableRoundTrip() throws {
+        let predicate = AccessibilityPredicate.present(ElementPredicate(label: "New Task", traits: [.staticText]))
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
         XCTAssertEqual(decoded, predicate)
     }
 
-    func testElementAppearedMetWhenMatchFound() {
-        let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
-        let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "New Task", traits: [.staticText])))
-        XCTAssertTrue(predicate.validate(against: action).met)
-    }
-
-    func testElementAppearedNotMetWhenNoMatch() {
-        let added = [makeElement(label: "Other Item", traits: [.staticText])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
-        let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "New Task")))
-        XCTAssertFalse(predicate.validate(against: action).met)
-    }
-
-    func testElementAppearedNotMetWhenNoAdded() {
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
-        let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "New Task")))
-        let outcome = predicate.validate(against: action)
-        XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "no elements added")
-    }
-
-    func testElementAppearedNoMatchInAddedDiagnostic() {
-        let added = [makeElement(label: "Cancel", traits: [.button])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
-        let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "Done")))
-        let outcome = predicate.validate(against: action)
-        XCTAssertFalse(outcome.met)
-        XCTAssertTrue(outcome.actual?.contains("Cancel") == true)
-    }
-
-    func testElementAppearedMetOnScreenChange() {
+    func testPresentMetAgainstFinalInterface() {
         let newElement = makeElement(label: "No receipt", traits: [.button])
         let newInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .wait,
             accessibilityTrace: .projectingForTests(.screenChanged(.init(elementCount: 1, newInterface: newInterface)))
         )
-        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "No receipt")))
+        let predicate = AccessibilityPredicate.present(ElementPredicate(label: "No receipt"))
         XCTAssertTrue(predicate.validate(against: result).met)
     }
 
-    func testElementAppearedNotMetOnScreenChangeWhenAbsent() {
+    func testPresentNotMetAgainstFinalInterfaceWhenAbsent() {
         let otherElement = makeElement(label: "New sale", traits: [.button])
         let newInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .wait,
             accessibilityTrace: .projectingForTests(.screenChanged(.init(elementCount: 1, newInterface: newInterface)))
         )
-        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "No receipt")))
+        let predicate = AccessibilityPredicate.present(ElementPredicate(label: "No receipt"))
         let outcome = predicate.validate(against: result)
         XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "screen changed but element not found in new interface")
+        XCTAssertEqual(outcome.actual, #"no element matches predicate(label="No receipt")"#)
     }
 
-    // MARK: - element disappeared
-
-    func testElementDisappearedCodableRoundTrip() throws {
-        let predicate = AccessibilityPredicate.changed(.disappeared(ElementPredicate(label: "Old Item", traits: [.button])))
+    func testAbsentCodableRoundTrip() throws {
+        let predicate = AccessibilityPredicate.absent(ElementPredicate(label: "Old Item", traits: [.button]))
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
         XCTAssertEqual(decoded, predicate)
     }
 
-    func testElementDisappearedMetWhenMatchFound() {
-        // The removed delta carries the full element, so the predicate matches it directly.
-        let removed = [makeElement(label: "Old Item", traits: [.button])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: removed)))
-        let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.changed(.disappeared(ElementPredicate(label: "Old Item", traits: [.button])))
-        XCTAssertTrue(predicate.validate(against: action).met)
-    }
-
-    func testElementDisappearedNotMetWhenRemovedElementDoesNotMatch() {
-        let removed = [makeElement(label: "Other Item", traits: [.button])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: removed)))
-        let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.changed(.disappeared(ElementPredicate(label: "Old Item")))
-        XCTAssertFalse(predicate.validate(against: action).met)
-    }
-
-    func testElementDisappearedNoRemovedElements() {
-        let result = ActionResult(
-            success: true, method: .activate,
-            accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits())))
-        )
-        let predicate = AccessibilityPredicate.changed(.disappeared(ElementPredicate(label: "Remove")))
-        let outcome = predicate.validate(against: result)
-        XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "no elements removed")
-    }
-
-    func testElementDisappearedMetOnScreenChange() {
+    func testAbsentMetAgainstFinalInterface() {
         let newElement = makeElement(label: "Done", traits: [.button])
         let newInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .wait,
             accessibilityTrace: .projectingForTests(.screenChanged(.init(elementCount: 1, newInterface: newInterface)))
         )
-        let predicate = AccessibilityPredicate.changed(.disappeared(ElementPredicate(label: "Recording payment")))
+        let predicate = AccessibilityPredicate.absent(ElementPredicate(label: "Recording payment"))
         XCTAssertTrue(predicate.validate(against: result).met)
     }
 
-    func testElementDisappearedNotMetOnScreenChangeWhenStillPresent() {
+    func testAbsentNotMetAgainstFinalInterfaceWhenStillPresent() {
         let sameElement = makeElement(label: "Header", traits: [.header])
         let newInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .wait,
             accessibilityTrace: .projectingForTests(.screenChanged(.init(elementCount: 1, newInterface: newInterface)))
         )
-        let predicate = AccessibilityPredicate.changed(.disappeared(ElementPredicate(label: "Header")))
+        let predicate = AccessibilityPredicate.absent(ElementPredicate(label: "Header"))
         let outcome = predicate.validate(against: result)
         XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "screen changed but element still present in new interface")
+        XCTAssertEqual(outcome.actual, #"still present: predicate(label="Header")"#)
     }
 
     // MARK: - Round-trip across cases
@@ -541,8 +476,6 @@ final class AccessibilityPredicateTests: XCTestCase {
             .changed(.screen()),
             .changed(.elements),
             .changed(.updated(ElementUpdatePredicate(element: ElementPredicate(label: "btn"), property: .value, from: "A", to: "B"))),
-            .changed(.appeared(ElementPredicate(label: "New"))),
-            .changed(.disappeared(ElementPredicate(identifier: "old"))),
         ]
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
@@ -571,10 +504,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json))
     }
 
-    func testAppearedElementRejectsUnknownFieldAtCodableBoundary() {
-        let json = Data(#"{"type":"element_appeared","element":{"label":"Save","unexpectedTargetField":"button_save"}}"#.utf8)
+    func testRemovedElementTransitionPredicatesRejectAtCodableBoundary() {
+        let json = Data(#"{"type":"element_appeared","element":{"label":"Save"}}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains("unexpectedTargetField"), "\(error)")
+            XCTAssertTrue("\(error)".contains("element_appeared"), "\(error)")
         }
     }
 

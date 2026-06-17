@@ -312,9 +312,9 @@ func runtimeSafetyEnforcesBounds() throws {
     )
     let deepPredicate = AccessibilityPredicateExpr.state(.all([
         .all([
-            .present(ElementPredicateTemplate(label: .literal("Nested"))),
+            .present(ElementPredicateTemplate(label: .exact(.literal("Nested")))),
         ]),
-        .present(ElementPredicateTemplate(label: .literal("Sibling"))),
+        .present(ElementPredicateTemplate(label: .exact(.literal("Sibling")))),
     ]))
     let raw = HeistPlanAdmissionCandidate(body: [
         .wait(WaitStep(predicate: deepPredicate, timeout: 0)),
@@ -357,11 +357,12 @@ func runtimeSafetyRejectsNestedCollectionLoops() throws {
             ])),
         ]), "$.body[0].conditional.cases[0].body[0].for_each_string"),
         (HeistPlanAdmissionCandidate(body: [
-            .waitForCases(try WaitForCasesStep(
+            .wait(WaitStep(
+                predicate: .state(.present(.label("Home"))),
                 timeout: 1,
-                cases: [PredicateCase(predicate: .state(.present(.label("Home"))), body: [.forEachString(nested)])]
+                elseBody: [.forEachString(nested)]
             )),
-        ]), "$.body[0].wait_for_cases.cases[0].body[0].for_each_string"),
+        ]), "$.body[0].wait.else_body[0].for_each_string"),
         (HeistPlanAdmissionCandidate(body: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
@@ -385,7 +386,7 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
     let definition = HeistPlanAdmissionCandidate(
         name: "addToCart",
         parameter: .string(name: "item"),
-        body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
+        body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item")))))))]
     )
     let cases: [(HeistPlanAdmissionCandidate, String)] = [
         (
@@ -520,11 +521,11 @@ func runtimeSafetyUsesInvokedDefinitionScopeForHelperDependencies() throws {
             parameter: .string(name: "item"),
             definitions: [
                 HeistPlanAdmissionCandidate(name: "tapAddButton", body: [
-                    .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Add to Cart")))))),
+                    .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Add to Cart"))))))),
                 ]),
             ],
             body: [
-                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item")))))),
+                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.ref("item"))))))),
                 .invoke(HeistInvocationStep(path: ["tapAddButton"])),
             ]
         ),
@@ -596,13 +597,12 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .state(.present(.label("Home"))), body: [.warn(WarnStep(message: "home"))]),
         ])),
-        .waitForCases(try WaitForCasesStep(
+        .wait(WaitStep(
+            predicate: .state(.present(.label("Done"))),
             timeout: 2,
-            cases: [
-                PredicateCase(predicate: .state(.present(.label("Done"))), body: [.warn(WarnStep(message: "done"))]),
-            ],
             elseBody: [.fail(FailStep(message: "timeout"))]
         )),
+        .warn(WarnStep(message: "done")),
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
             limit: 20,
@@ -621,7 +621,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
                 .action(try ActionStep(
                     command: .typeText(text: .ref("item"), target: .target(.predicate(.label("Add item")))),
                     expectation: WaitStep(
-                        predicate: .state(.present(ElementPredicateTemplate(label: .ref("item")))),
+                        predicate: .state(.present(ElementPredicateTemplate(label: .exact(.ref("item"))))),
                         timeout: 2
                     )
                 )),

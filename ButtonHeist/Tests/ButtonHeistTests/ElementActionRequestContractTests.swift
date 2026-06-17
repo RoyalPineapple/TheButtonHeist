@@ -14,7 +14,7 @@ final class ElementActionRequestContractTests: XCTestCase {
         for field in schemaFields {
             let spec = try XCTUnwrap(specsByKey[field.name])
             switch field.kind {
-            case .string:
+            case .string, .stringMatch:
                 XCTAssertEqual(spec.type, .string)
             case .stringArray:
                 XCTAssertEqual(spec.type, .stringArray)

@@ -22,8 +22,6 @@ import Foundation
 /// {"type": "screen_changed"}
 /// {"type": "screen_changed",     "where": { <State object> }}
 /// {"type": "elements_changed"}
-/// {"type": "element_appeared",   "element": { ...ElementPredicate... }}
-/// {"type": "element_disappeared","element": { ...ElementPredicate... }}
 /// {"type": "element_updated",    "element": { ... }?, "property": "value"?, "from": "foo"?, "to": "bar"?}
 /// ```
 public enum AccessibilityPredicate: Sendable, Equatable {
@@ -58,10 +56,6 @@ public enum AccessibilityPredicate: Sendable, Equatable {
         case screen(where: State? = nil)
         /// Elements were added, removed, or updated (or the screen changed).
         case elements
-        /// An element matching the predicate appeared.
-        case appeared(ElementPredicate)
-        /// An element matching the predicate disappeared.
-        case disappeared(ElementPredicate)
         /// A tracked element property changed, filtered by the update predicate.
         case updated(ElementUpdatePredicate)
     }
@@ -76,8 +70,6 @@ extension AccessibilityPredicate: Codable {
         case all
         case screenChanged = "screen_changed"
         case elementsChanged = "elements_changed"
-        case elementAppeared = "element_appeared"
-        case elementDisappeared = "element_disappeared"
         case elementUpdated = "element_updated"
     }
 
@@ -107,10 +99,6 @@ extension AccessibilityPredicate: Codable {
         case .elementsChanged:
             try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "elements_changed predicate")
             self = .changed(.elements)
-        case .elementAppeared:
-            self = .changed(.appeared(try Self.decodeRequiredElement(decoder, container)))
-        case .elementDisappeared:
-            self = .changed(.disappeared(try Self.decodeRequiredElement(decoder, container)))
         case .elementUpdated:
             try decoder.rejectUnknownKeys(allowed: ["type", "element", "property", "from", "to"], typeName: "element_updated predicate")
             self = .changed(.updated(ElementUpdatePredicate(
@@ -134,12 +122,6 @@ extension AccessibilityPredicate: Codable {
                 try container.encodeIfPresent(stateClause, forKey: .where)
             case .elements:
                 try container.encode(WireType.elementsChanged.rawValue, forKey: .type)
-            case .appeared(let predicate):
-                try container.encode(WireType.elementAppeared.rawValue, forKey: .type)
-                try container.encode(predicate, forKey: .element)
-            case .disappeared(let predicate):
-                try container.encode(WireType.elementDisappeared.rawValue, forKey: .type)
-                try container.encode(predicate, forKey: .element)
             case .updated(let update):
                 try container.encode(WireType.elementUpdated.rawValue, forKey: .type)
                 try container.encodeIfPresent(update.element, forKey: .element)
@@ -308,8 +290,6 @@ extension AccessibilityPredicate.Change: CustomStringConvertible {
             guard let stateClause else { return "screen_changed" }
             return ScoreDescription.call("screen_changed", ["where=\(stateClause)"])
         case .elements: return "elements_changed"
-        case .appeared(let predicate): return ScoreDescription.call("element_appeared", [predicate.description])
-        case .disappeared(let predicate): return ScoreDescription.call("element_disappeared", [predicate.description])
         case .updated(let update): return ScoreDescription.call("element_updated", [update.description])
         }
     }

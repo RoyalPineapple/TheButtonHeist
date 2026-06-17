@@ -118,8 +118,8 @@ flowchart LR
 
 `wait` is a one-step heist. TheInsideJob checks the current settled state first,
 then watches later settled captures until the requested accessibility predicate
-matches or the timeout expires. `element_disappeared` means current absence; it
-is not proof of a prior appearance/removal event.
+matches or the timeout expires. `absent` means current absence; it is not proof
+of a prior removal event.
 
 ### Replay
 

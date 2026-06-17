@@ -345,7 +345,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .changed(.appeared(ElementPredicate(label: "Loaded"))),
+                predicate: .present(ElementPredicate(label: "Loaded")),
                 timeout: 1
             ))
         }
@@ -375,7 +375,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .changed(.appeared(ElementPredicate(label: "Missing"))),
+                predicate: .present(ElementPredicate(label: "Missing")),
                 timeout: 0.05
             ))
         }
@@ -389,7 +389,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertFalse(receipt.actionResult.success)
         XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
         XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Known"])
-        XCTAssertTrue(receipt.actionResult.message?.contains("last observed: known: 1 elements") == true)
+        XCTAssertTrue(receipt.actionResult.message?.contains("known: 1 elements") == true)
+        XCTAssertTrue(receipt.actionResult.message?.contains("last result:") == true)
     }
 
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
@@ -580,7 +581,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         let exploration = await brains.navigation.exploreScreen(
-            target: .predicate(ElementPredicate(label: label))
+            target: .predicate(ElementPredicate(label: .exact(label)))
         )
 
         XCTAssertEqual(exploration.manifest.scrollCount, 0)

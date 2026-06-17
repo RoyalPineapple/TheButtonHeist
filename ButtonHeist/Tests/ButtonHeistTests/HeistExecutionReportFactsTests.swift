@@ -198,24 +198,18 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
     func testWaitForTimeoutWithoutElseReportsWaitFailure() {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let failure = HeistFailureDetail(
+            category: .wait,
+            contract: "wait predicate is met before timeout",
+            observed: "timed out after 2s",
+            expected: predicate.description
+        )
         let result = HeistExecutionResult(
             steps: [
-                caseStep(
-                    kind: .waitForCases,
-                    status: .failed,
-                    selection: HeistCaseSelectionResult(
-                        cases: [caseMatch(predicate, met: false)],
-                        selectedCaseIndex: nil,
-                        elapsedMs: 2000,
-                        timeout: 2,
-                        timedOut: true
-                    ),
-                    failure: HeistFailureDetail(
-                        category: .wait,
-                        contract: "wait_for_cases selects a case before timeout or runs else",
-                        observed: "timed out after 2s",
-                        expected: predicate.description
-                    )
+                waitStep(
+                    actionResult: ActionResult(success: false, method: .wait, message: "timed out after 2s", errorKind: .timeout),
+                    expectation: ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s"),
+                    failure: failure
                 ),
             ],
             durationMs: 2000,
@@ -223,28 +217,29 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         )
 
         let node = result.steps[0]
-        XCTAssertEqual(node.reportStepName, "wait_for_cases")
+        XCTAssertEqual(node.reportStepName, "wait")
         XCTAssertEqual(node.reportStatus, .failed)
         XCTAssertEqual(node.children.count, 0)
-        XCTAssertEqual(node.caseSelectionEvidence?.selection.timedOut, true)
+        XCTAssertEqual(node.waitEvidence?.expectation.met, false)
     }
 
     func testWaitForTimeoutWithElseReportsElseChildrenAsHandled() {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let expectation = ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s")
         let result = HeistExecutionResult(
             steps: [
-                caseStep(
-                    kind: .waitForCases,
-                    selection: HeistCaseSelectionResult(
-                        cases: [caseMatch(predicate, met: false)],
-                        selectedCaseIndex: nil,
-                        elapsedMs: 2000,
-                        timeout: 2,
-                        timedOut: true,
-                        elseRan: true
-                    ),
+                HeistExecutionStepResult(
+                    path: "$.body[0]",
+                    kind: .wait,
+                    status: .passed,
+                    durationMs: 2000,
+                    intent: .wait(predicate: predicate.description, timeout: 2),
+                    evidence: .wait(HeistWaitEvidence(
+                        actionResult: ActionResult(success: false, method: .wait, message: "timed out after 2s", errorKind: .timeout),
+                        expectation: expectation
+                    )),
                     children: [
-                        warnStep(path: "$.body[0].wait_for_cases.else_body[0]", message: "No result"),
+                        warnStep(path: "$.body[0].wait.else_body[0]", message: "No result"),
                     ]
                 ),
             ],
@@ -253,9 +248,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
 
         let node = result.steps[0]
         XCTAssertEqual(node.reportStatus, .passed)
-        XCTAssertEqual(node.children.map(\.path), ["$.body[0].wait_for_cases.else_body[0]"])
+        XCTAssertEqual(node.children.map(\.path), ["$.body[0].wait.else_body[0]"])
         XCTAssertEqual(node.children.first?.reportStatus, .passed)
-        XCTAssertEqual(result.warnings.map(\.path), ["$.body[0].wait_for_cases.else_body[0]"])
+        XCTAssertEqual(result.warnings.map(\.path), ["$.body[0].wait.else_body[0]"])
     }
 
     func testForEachBodyFailureReportsIterationFailureInStructuredNodes() {
@@ -494,7 +489,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             kind: kind,
             status: status,
             durationMs: selection.elapsedMs,
-            intent: kind == .waitForCases ? .waitForCases(timeout: selection.timeout ?? 0) : .conditional,
+            intent: .conditional,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
             failure: failure,
             abortedAtChildPath: children.firstFailedStep?.path,

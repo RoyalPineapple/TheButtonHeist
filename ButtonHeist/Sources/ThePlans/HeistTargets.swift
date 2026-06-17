@@ -1,20 +1,56 @@
 public extension ElementTarget {
-    static func label(_ label: String) -> ElementTarget {
+    static func label(_ label: StringMatch<String>) -> ElementTarget {
         .predicate(.label(label))
     }
 
-    static func identifier(_ identifier: String) -> ElementTarget {
+    static func label(contains label: String) -> ElementTarget {
+        .predicate(.label(contains: label))
+    }
+
+    static func label(prefix label: String) -> ElementTarget {
+        .predicate(.label(prefix: label))
+    }
+
+    static func label(suffix label: String) -> ElementTarget {
+        .predicate(.label(suffix: label))
+    }
+
+    static func identifier(_ identifier: StringMatch<String>) -> ElementTarget {
         .predicate(.identifier(identifier))
     }
 
-    static func value(_ value: String) -> ElementTarget {
+    static func identifier(contains identifier: String) -> ElementTarget {
+        .predicate(.identifier(contains: identifier))
+    }
+
+    static func identifier(prefix identifier: String) -> ElementTarget {
+        .predicate(.identifier(prefix: identifier))
+    }
+
+    static func identifier(suffix identifier: String) -> ElementTarget {
+        .predicate(.identifier(suffix: identifier))
+    }
+
+    static func value(_ value: StringMatch<String>) -> ElementTarget {
         .predicate(.value(value))
     }
 
+    static func value(contains value: String) -> ElementTarget {
+        .predicate(.value(contains: value))
+    }
+
+    static func value(prefix value: String) -> ElementTarget {
+        .predicate(.value(prefix: value))
+    }
+
+    static func value(suffix value: String) -> ElementTarget {
+        .predicate(.value(suffix: value))
+    }
+
     static func element(
-        label: String? = nil,
-        identifier: String? = nil,
-        value: String? = nil,
+        label: StringMatch<String>? = nil,
+        identifier: StringMatch<String>? = nil,
+        value: StringMatch<String>? = nil,
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) -> ElementTarget {
@@ -34,25 +70,69 @@ public extension ElementTarget {
 
 public extension ElementPredicateTemplate {
     static func label(_ label: StringExpr) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(label: label)
+        ElementPredicateTemplate(label: .exact(label))
     }
 
     static func label(_ label: String) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(label: .literal(label))
+        ElementPredicateTemplate(label: .exact(.literal(label)))
+    }
+
+    static func label(contains label: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(label: .contains(.literal(label)))
+    }
+
+    static func label(prefix label: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(label: .prefix(.literal(label)))
+    }
+
+    static func label(suffix label: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(label: .suffix(.literal(label)))
     }
 
     static func identifier(_ identifier: StringExpr) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(identifier: identifier)
+        ElementPredicateTemplate(identifier: .exact(identifier))
+    }
+
+    static func identifier(_ identifier: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(identifier: .exact(.literal(identifier)))
+    }
+
+    static func identifier(contains identifier: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(identifier: .contains(.literal(identifier)))
+    }
+
+    static func identifier(prefix identifier: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(identifier: .prefix(.literal(identifier)))
+    }
+
+    static func identifier(suffix identifier: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(identifier: .suffix(.literal(identifier)))
     }
 
     static func value(_ value: StringExpr) -> ElementPredicateTemplate {
-        ElementPredicateTemplate(value: value)
+        ElementPredicateTemplate(value: .exact(value))
+    }
+
+    static func value(_ value: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(value: .exact(.literal(value)))
+    }
+
+    static func value(contains value: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(value: .contains(.literal(value)))
+    }
+
+    static func value(prefix value: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(value: .prefix(.literal(value)))
+    }
+
+    static func value(suffix value: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(value: .suffix(.literal(value)))
     }
 
     static func element(
-        label: StringExpr? = nil,
-        identifier: StringExpr? = nil,
-        value: StringExpr? = nil,
+        label: StringMatch<StringExpr>? = nil,
+        identifier: StringMatch<StringExpr>? = nil,
+        value: StringMatch<StringExpr>? = nil,
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) -> ElementPredicateTemplate {
@@ -71,12 +151,60 @@ public extension ElementTargetExpr {
         .predicate(.label(label))
     }
 
+    static func label(_ label: String) -> ElementTargetExpr {
+        .predicate(.label(label))
+    }
+
+    static func label(contains label: String) -> ElementTargetExpr {
+        .predicate(.label(contains: label))
+    }
+
+    static func label(prefix label: String) -> ElementTargetExpr {
+        .predicate(.label(prefix: label))
+    }
+
+    static func label(suffix label: String) -> ElementTargetExpr {
+        .predicate(.label(suffix: label))
+    }
+
     static func identifier(_ identifier: StringExpr) -> ElementTargetExpr {
         .predicate(.identifier(identifier))
     }
 
+    static func identifier(_ identifier: String) -> ElementTargetExpr {
+        .predicate(.identifier(identifier))
+    }
+
+    static func identifier(contains identifier: String) -> ElementTargetExpr {
+        .predicate(.identifier(contains: identifier))
+    }
+
+    static func identifier(prefix identifier: String) -> ElementTargetExpr {
+        .predicate(.identifier(prefix: identifier))
+    }
+
+    static func identifier(suffix identifier: String) -> ElementTargetExpr {
+        .predicate(.identifier(suffix: identifier))
+    }
+
     static func value(_ value: StringExpr) -> ElementTargetExpr {
         .predicate(.value(value))
+    }
+
+    static func value(_ value: String) -> ElementTargetExpr {
+        .predicate(.value(value))
+    }
+
+    static func value(contains value: String) -> ElementTargetExpr {
+        .predicate(.value(contains: value))
+    }
+
+    static func value(prefix value: String) -> ElementTargetExpr {
+        .predicate(.value(prefix: value))
+    }
+
+    static func value(suffix value: String) -> ElementTargetExpr {
+        .predicate(.value(suffix: value))
     }
 
     static func target(_ predicate: ElementPredicateTemplate, ordinal: Int) -> ElementTargetExpr {

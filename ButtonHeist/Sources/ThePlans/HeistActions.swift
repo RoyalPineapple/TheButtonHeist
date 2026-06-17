@@ -45,6 +45,10 @@ public extension HeistActionContent {
         )
     }
 
+    func expect(timeout: Double? = nil) -> ActionContent {
+        expect(.changed(.elements), timeout: timeout)
+    }
+
     @_disfavoredOverload
     func expect(
         _ predicate: AccessibilityPredicate,

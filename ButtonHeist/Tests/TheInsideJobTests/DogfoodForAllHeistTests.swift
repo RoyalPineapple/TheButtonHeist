@@ -7,23 +7,23 @@ private enum DogfoodHome {
     static let openScreen = HeistDef<String>("DemoHome.openScreen", parameter: "screen") { screen in
         try DogfoodNavigation.backToRootIfNeeded()
 
-        Activate(.predicate(ElementPredicateTemplate(label: screen, traits: [.button])))
+        Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
             .expect(.changed(.screen(where: .present(.label(screen)))), timeout: .seconds(8))
     }
 }
 
 private enum DogfoodNavigation {
     private static let controlsBackTarget = ElementPredicateTemplate(
-        label: .literal("Controls Demo"),
+        label: .exact(.literal("Controls Demo")),
         traits: [.backButton]
     )
     private static let rootBackTarget = ElementPredicateTemplate(
-        label: .literal("ButtonHeist Demo"),
+        label: .exact(.literal("ButtonHeist Demo")),
         traits: [.backButton]
     )
 
     static let backToRootIfNeeded = HeistDef<Void>("DogfoodNavigation.backToRootIfNeeded") {
-        WaitFor(timeout: .milliseconds(500)) {
+        If {
             Case(.present(controlsBackTarget)) {
                 Activate(.predicate(controlsBackTarget))
                     .expect(.changed(.screen(where: .present(.label("Controls Demo")))), timeout: .seconds(8))
@@ -31,7 +31,7 @@ private enum DogfoodNavigation {
             Else {}
         }
 
-        WaitFor(timeout: .milliseconds(500)) {
+        If {
             Case(.present(rootBackTarget)) {
                 Activate(.predicate(rootBackTarget))
                     .expect(.changed(.screen(where: .present(.label("ButtonHeist Demo")))), timeout: .seconds(8))
@@ -41,14 +41,14 @@ private enum DogfoodNavigation {
     }
 
     static let backTo = HeistDef<String>("DogfoodNavigation.backTo", parameter: "title") { title in
-        Activate(.predicate(ElementPredicateTemplate(label: title, traits: [.backButton])))
+        Activate(.predicate(ElementPredicateTemplate(label: .exact(title), traits: [.backButton])))
             .expect(.changed(.screen(where: .present(.label(title)))), timeout: .seconds(8))
     }
 }
 
 private enum ControlsDemoScreen {
     static let openScreen = HeistDef<String>("ControlsDemo.openScreen", parameter: "screen") { screen in
-        Activate(.predicate(ElementPredicateTemplate(label: screen, traits: [.button])))
+        Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
             .expect(.changed(.screen(where: .present(.label(screen)))), timeout: .seconds(8))
     }
 }
@@ -87,7 +87,7 @@ private enum TodoScreen {
     static let completeItem = HeistDef<String>("TodoScreen.completeItem", parameter: "item") { item in
         CustomAction("Toggle", on: .label(item))
             .expect(
-                .present(ElementPredicateTemplate(label: item, value: StringExpr("Completed"))),
+                .present(ElementPredicateTemplate(label: .exact(item), value: .exact(.literal("Completed")))),
                 timeout: .seconds(2)
             )
     }
@@ -340,14 +340,12 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 }
             }
 
-            WaitFor(timeout: .seconds(2)) {
-                Case(.present(.label("Controls Demo"))) {
-                    Warn("wait case matched Controls Demo")
-                }
-                Else {
+            WaitFor(.label("Controls Demo"), timeout: .seconds(2))
+                .else {
                     Fail("wait case missed Controls Demo")
                 }
-            }
+
+            Warn("wait case matched Controls Demo")
 
             ForEach(
                 ElementMatches.matching(ElementPredicate(label: "Text Input", traits: [.button])),
@@ -362,14 +360,15 @@ final class DogfoodForAllHeistTests: XCTestCase {
         XCTAssertEqual(heist.result.steps.map(\.kind), [
             .invoke,
             .conditional,
-            .waitForCases,
+            .wait,
+            .warn,
             .forEachElement,
             .invoke,
         ])
         XCTAssertEqual(heist.result.steps[1].caseSelectionEvidence?.selection.selectedCaseIndex, 0)
-        XCTAssertEqual(heist.result.steps[2].caseSelectionEvidence?.selection.selectedCaseIndex, 0)
-        XCTAssertEqual(heist.result.steps[3].forEachElementEvidence?.matchedCount, 1)
-        XCTAssertEqual(heist.result.steps[3].forEachElementEvidence?.iterationCount, 1)
+        XCTAssertEqual(heist.result.steps[2].waitEvidence?.expectation.met, true)
+        XCTAssertEqual(heist.result.steps[4].forEachElementEvidence?.matchedCount, 1)
+        XCTAssertEqual(heist.result.steps[4].forEachElementEvidence?.iterationCount, 1)
         XCTAssertEqual(heist.result.warnings.map(\.message), [
             "conditional matched Controls Demo",
             "wait case matched Controls Demo",

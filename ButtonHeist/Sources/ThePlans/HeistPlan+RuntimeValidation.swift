@@ -97,7 +97,6 @@ import Foundation
     case action(ActionStep)
     case wait(WaitStep)
     case conditional(ConditionalStep)
-    case waitForCases(WaitForCasesStep)
     case forEachElement(ForEachElementStep)
     case forEachString(ForEachStringStep)
     case warn(WarnStep)
@@ -106,7 +105,7 @@ import Foundation
     case invoke(HeistInvocationStep)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, action, wait, conditional, waitForCases = "wait_for_cases"
+        case type, action, wait, conditional
         case forEachElement = "for_each_element"
         case forEachString = "for_each_string"
         case warn, fail, heist, invoke
@@ -116,7 +115,6 @@ import Foundation
         case action
         case wait
         case conditional
-        case waitForCases = "wait_for_cases"
         case forEachElement = "for_each_element"
         case forEachString = "for_each_string"
         case warn
@@ -133,8 +131,6 @@ import Foundation
             self = .wait(step)
         case .conditional(let step):
             self = .conditional(step)
-        case .waitForCases(let step):
-            self = .waitForCases(step)
         case .forEachElement(let step):
             self = .forEachElement(step)
         case .forEachString(let step):
@@ -158,8 +154,6 @@ import Foundation
             return .wait(step)
         case .conditional(let step):
             return .conditional(step)
-        case .waitForCases(let step):
-            return .waitForCases(step)
         case .forEachElement(let step):
             return .forEachElement(step)
         case .forEachString(let step):
@@ -188,12 +182,6 @@ import Foundation
         case .conditional:
             try decoder.rejectUnknownKeys(allowed: ["type", "conditional"], typeName: "conditional heist step")
             self = .conditional(try container.decode(ConditionalStep.self, forKey: .conditional))
-        case .waitForCases:
-            try decoder.rejectUnknownKeys(
-                allowed: ["type", CodingKeys.waitForCases.stringValue],
-                typeName: "wait_for_cases heist step"
-            )
-            self = .waitForCases(try container.decode(WaitForCasesStep.self, forKey: .waitForCases))
         case .forEachElement:
             try decoder.rejectUnknownKeys(
                 allowed: ["type", CodingKeys.forEachElement.stringValue],
@@ -233,9 +221,6 @@ import Foundation
         case .conditional(let step):
             try container.encode(StepType.conditional, forKey: .type)
             try container.encode(step, forKey: .conditional)
-        case .waitForCases(let step):
-            try container.encode(StepType.waitForCases, forKey: .type)
-            try container.encode(step, forKey: .waitForCases)
         case .forEachElement(let step):
             try container.encode(StepType.forEachElement, forKey: .type)
             try container.encode(step, forKey: .forEachElement)
@@ -410,10 +395,6 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {
         validateWait(wait, path: context.path, scope: context.scope, environment: context.environment)
-    }
-
-    mutating func visitWaitForCases(_ waitForCases: WaitForCasesStep, context: HeistTraversalContext) {
-        validateWaitForCases(waitForCases, path: context.path)
     }
 
     mutating func visitPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext) {
@@ -654,21 +635,6 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
                 observed: summarize(error),
                 correction: "Use scoped refs and predicate values that lower to a valid wait command."
             )
-        }
-    }
-
-    mutating func validateWaitForCases(
-        _ waitForCases: WaitForCasesStep,
-        path: String
-    ) {
-        guard waitForCases.timeout >= 0 else {
-            fail(
-                path: "\(path).timeout",
-                contract: "wait_for_cases timeout must be non-negative",
-                observed: "\(waitForCases.timeout)",
-                correction: "Use a timeout of 0 or more seconds."
-            )
-            return
         }
     }
 

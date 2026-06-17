@@ -11,7 +11,8 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         // A wait is a step with no command: just the predicate wait.
         await executeStep(
@@ -21,7 +22,8 @@ extension TheBrains {
             path: path,
             start: start,
             runtime: runtime,
-            environment: environment
+            environment: environment,
+            scope: scope
         )
     }
 }

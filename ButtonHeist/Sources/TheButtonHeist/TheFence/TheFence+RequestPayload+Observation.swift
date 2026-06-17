@@ -125,9 +125,9 @@ extension TheFence {
 
     private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementPredicate {
         ElementPredicate(
-            label: try arguments.schemaString("label"),
-            identifier: try arguments.schemaString("identifier"),
-            value: try arguments.schemaString("value"),
+            label: try arguments.schemaString("label").map(StringMatch.exact),
+            identifier: try arguments.schemaString("identifier").map(StringMatch.exact),
+            value: try arguments.schemaString("value").map(StringMatch.exact),
             traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")) ?? [],
             excludeTraits: try TheFence.parseTraitNames(
                 try arguments.schemaStringArray("excludeTraits"),

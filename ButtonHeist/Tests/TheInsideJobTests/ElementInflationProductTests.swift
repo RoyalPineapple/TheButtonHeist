@@ -217,14 +217,14 @@ final class ElementInflationProductTests: XCTestCase {
 
         if heist {
             let plan = try HeistPlan(body: [
-                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(identifier: .literal(identifier), traits: [.button]))))),
+                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact(.literal(identifier)), traits: [.button]))))),
             ])
             let result = await localBrains.executeHeistPlan(plan)
             return (result, fixture.target.activationCount)
         }
 
         let result = await localBrains.executeRuntimeAction(.activate(
-            .predicate(ElementPredicate(identifier: identifier, traits: [.button]))
+            .predicate(ElementPredicate(identifier: .exact(identifier), traits: [.button]))
         ))
         return (result, fixture.target.activationCount)
     }
@@ -629,6 +629,11 @@ private struct AmbiguousActivationFixture {
 
 private final class SemanticActivationView: UIView {
     private(set) var activationCount = 0
+
+    override var accessibilityTraits: UIAccessibilityTraits {
+        get { super.accessibilityTraits.union(.button) }
+        set { super.accessibilityTraits = newValue.union(.button) }
+    }
 
     override func accessibilityActivate() -> Bool {
         activationCount += 1

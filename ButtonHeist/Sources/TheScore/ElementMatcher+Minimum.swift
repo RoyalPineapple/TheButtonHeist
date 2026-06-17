@@ -202,11 +202,11 @@ public enum MinimumPredicateSelector {
     private static func predicate(for fact: AccessibilityMatcherFact) -> ElementPredicate? {
         switch fact {
         case .identifier(let identifier):
-            return ElementPredicate(identifier: identifier)
+            return ElementPredicate(identifier: .exact(identifier))
         case .label(let label):
-            return ElementPredicate(label: label)
+            return ElementPredicate(label: .exact(label))
         case .value(let value):
-            return ElementPredicate(value: value)
+            return ElementPredicate(value: .exact(value))
         case .trait(let trait):
             return ElementPredicate(traits: [trait])
         case .excludedTrait(let trait):
@@ -215,9 +215,9 @@ public enum MinimumPredicateSelector {
     }
 
     private static func combinedPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
-        var label: String?
-        var identifier: String?
-        var value: String?
+        var label: StringMatch<String>?
+        var identifier: StringMatch<String>?
+        var value: StringMatch<String>?
         var traits: [HeistTrait] = []
         var excludeTraits: [HeistTrait] = []
 

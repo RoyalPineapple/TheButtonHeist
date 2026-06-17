@@ -20,6 +20,20 @@ public enum ScoreDescription {
         nonEmpty(value).map { "\(name)=\(quoted($0))" }
     }
 
+    public static func stringMatchField(_ name: String, _ value: StringMatch<String>?) -> String? {
+        guard let value, !value.value.isEmpty else { return nil }
+        switch value {
+        case .exact(let string):
+            return "\(name)=\(quoted(string))"
+        case .contains(let string):
+            return "\(name)=contains(\(quoted(string)))"
+        case .prefix(let string):
+            return "\(name)=prefix(\(quoted(string)))"
+        case .suffix(let string):
+            return "\(name)=suffix(\(quoted(string)))"
+        }
+    }
+
     public static func valueField<T>(_ name: String, _ value: T?) -> String? {
         value.map { "\(name)=\($0)" }
     }

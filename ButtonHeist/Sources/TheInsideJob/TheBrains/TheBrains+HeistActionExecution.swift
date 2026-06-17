@@ -11,7 +11,8 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope? = nil
     ) async -> HeistExecutionStepResult {
         await executeStep(
             command: step.command,
@@ -20,7 +21,8 @@ extension TheBrains {
             path: path,
             start: start,
             runtime: runtime,
-            environment: environment
+            environment: environment,
+            scope: scope
         )
     }
 
@@ -36,7 +38,8 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope? = nil
     ) async -> HeistExecutionStepResult {
         let kind: HeistExecutionStepKind = command == nil ? .wait : .action
 
@@ -119,20 +122,85 @@ extension TheBrains {
         }
 
         let failure = waitFailure(wait: wait, receipt: receipt)
-        return HeistExecutionStepResult(
+        if failure != nil, let elseBody = wait.elseBody, let scope {
+            return await waitElseResult(
+                elseBody: elseBody,
+                wait: wait,
+                receipt: receipt,
+                path: path,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
+        }
+        return waitResult(
+            wait: wait,
+            receipt: receipt,
+            failure: failure,
+            path: path,
+            start: start
+        )
+    }
+
+    private func waitResult(
+        wait: WaitStep,
+        receipt: HeistWaitReceipt,
+        failure: HeistFailureDetail?,
+        path: String,
+        start: CFAbsoluteTime
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
             path: path,
             kind: .wait,
             status: failure == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: .wait(HeistWaitEvidence(
-                actionResult: receipt.actionResult,
-                expectation: receipt.expectation,
-                baselineSummary: nil,
-                finalSummary: receipt.expectation.actual
-            )),
+            evidence: waitEvidence(receipt),
             failure: failure
         )
+    }
+
+    private func waitElseResult(
+        elseBody: [HeistStep],
+        wait: WaitStep,
+        receipt: HeistWaitReceipt,
+        path: String,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
+    ) async -> HeistExecutionStepResult {
+        let children = await executeHeistSteps(
+            elseBody,
+            runtime: runtime,
+            environment: environment,
+            scope: scope,
+            path: "\(path).wait.else_body"
+        )
+        let abortedAtChildPath = children.firstFailedStep?.path
+        return HeistExecutionStepResult(
+            path: path,
+            kind: .wait,
+            status: abortedAtChildPath == nil ? .passed : .failed,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: waitIntent(wait),
+            evidence: waitEvidence(receipt),
+            failure: abortedAtChildPath.map {
+                childFailureDetail(category: .wait, childPath: $0)
+            },
+            abortedAtChildPath: abortedAtChildPath,
+            children: children
+        )
+    }
+
+    private func waitEvidence(_ receipt: HeistWaitReceipt) -> HeistStepEvidence {
+        .wait(HeistWaitEvidence(
+            actionResult: receipt.actionResult,
+            expectation: receipt.expectation,
+            baselineSummary: nil,
+            finalSummary: receipt.expectation.actual
+        ))
     }
 
     private func waitResolutionFailure(

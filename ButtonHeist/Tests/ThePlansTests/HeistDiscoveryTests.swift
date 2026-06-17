@@ -314,7 +314,7 @@ private func detailedSurfacePlan() throws -> HeistPlan {
                         name: "confirm",
                         body: [
                             .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(
-                                identifier: .literal("confirmation_button"),
+                                identifier: .exact(.literal("confirmation_button")),
                                 traits: [.button]
                             ))))),
                         ]

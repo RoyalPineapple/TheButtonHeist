@@ -136,7 +136,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
         let childAction = try HeistStep.action(ActionStep(
-            command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Submit")))),
+            command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
             expectation: WaitStep(predicate: expected, timeout: 1)
         ))
         let casePredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
@@ -726,7 +726,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             kind: kind,
             status: status,
             durationMs: 3,
-            intent: kind == .waitForCases ? .waitForCases(timeout: selection.timeout ?? 0) : .conditional,
+            intent: .conditional,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
             failure: failure,
             abortedAtChildPath: children.firstFailedStep?.path,

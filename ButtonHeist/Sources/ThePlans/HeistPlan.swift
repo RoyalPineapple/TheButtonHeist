@@ -223,7 +223,6 @@ public enum HeistStep: Codable, Sendable, Equatable {
     case action(ActionStep)
     case wait(WaitStep)
     case conditional(ConditionalStep)
-    case waitForCases(WaitForCasesStep)
     case forEachElement(ForEachElementStep)
     case forEachString(ForEachStringStep)
     case warn(WarnStep)
@@ -232,7 +231,7 @@ public enum HeistStep: Codable, Sendable, Equatable {
     case invoke(HeistInvocationStep)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, action, wait, conditional, waitForCases = "wait_for_cases"
+        case type, action, wait, conditional
         case forEachElement = "for_each_element"
         case forEachString = "for_each_string"
         case warn, fail, heist, invoke
@@ -242,7 +241,6 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case action
         case wait
         case conditional
-        case waitForCases = "wait_for_cases"
         case forEachElement = "for_each_element"
         case forEachString = "for_each_string"
         case warn
@@ -264,12 +262,6 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .conditional:
             try decoder.rejectUnknownKeys(allowed: ["type", "conditional"], typeName: "conditional heist step")
             self = .conditional(try container.decode(ConditionalStep.self, forKey: .conditional))
-        case .waitForCases:
-            try decoder.rejectUnknownKeys(
-                allowed: ["type", CodingKeys.waitForCases.stringValue],
-                typeName: "wait_for_cases heist step"
-            )
-            self = .waitForCases(try container.decode(WaitForCasesStep.self, forKey: .waitForCases))
         case .forEachElement:
             try decoder.rejectUnknownKeys(
                 allowed: ["type", CodingKeys.forEachElement.stringValue],
@@ -309,9 +301,6 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .conditional(let step):
             try container.encode(StepType.conditional, forKey: .type)
             try container.encode(step, forKey: .conditional)
-        case .waitForCases(let step):
-            try container.encode(StepType.waitForCases, forKey: .type)
-            try container.encode(step, forKey: .waitForCases)
         case .forEachElement(let step):
             try container.encode(StepType.forEachElement, forKey: .type)
             try container.encode(step, forKey: .forEachElement)
@@ -348,6 +337,9 @@ public struct ActionStep: Codable, Sendable, Equatable {
         expectationWaiver: String? = nil,
         expectationValidationFailure: String? = nil
     ) throws {
+        guard expectation?.elseBody == nil else {
+            throw HeistPlanError.expectationElseBodyUnsupported
+        }
         if let expectationWaiver {
             guard !expectationWaiver.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw HeistPlanError.emptyExpectationWaiver
@@ -394,20 +386,31 @@ public struct ActionStep: Codable, Sendable, Equatable {
 public struct WaitStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case predicate, timeout
+        case elseBody = "else_body"
     }
 
     public let predicate: AccessibilityPredicateExpr
     /// Seconds. `0` means immediate predicate evaluation.
     public let timeout: Double
+    public let elseBody: [HeistStep]?
 
-    public init(predicate: AccessibilityPredicateExpr, timeout: Double = 0) {
+    public init(
+        predicate: AccessibilityPredicateExpr,
+        timeout: Double = 0,
+        elseBody: [HeistStep]? = nil
+    ) {
         self.predicate = predicate
         self.timeout = timeout
+        self.elseBody = elseBody
     }
 
     @_disfavoredOverload
-    public init(predicate: AccessibilityPredicate, timeout: Double = 0) {
-        self.init(predicate: .predicate(predicate), timeout: timeout)
+    public init(
+        predicate: AccessibilityPredicate,
+        timeout: Double = 0,
+        elseBody: [HeistStep]? = nil
+    ) {
+        self.init(predicate: .predicate(predicate), timeout: timeout, elseBody: elseBody)
     }
 
     public init(from decoder: Decoder) throws {
@@ -423,7 +426,8 @@ public struct WaitStep: Codable, Sendable, Equatable {
         }
         self.init(
             predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
-            timeout: decodedTimeout
+            timeout: decodedTimeout,
+            elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
         )
     }
 
@@ -431,6 +435,7 @@ public struct WaitStep: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(predicate, forKey: .predicate)
         try container.encode(timeout, forKey: .timeout)
+        try container.encodeIfPresent(elseBody, forKey: .elseBody)
     }
 }
 
@@ -455,51 +460,6 @@ public struct ConditionalStep: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "conditional step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            cases: try container.decode([PredicateCase].self, forKey: .cases),
-            elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
-        )
-    }
-}
-
-public struct WaitForCasesStep: Codable, Sendable, Equatable {
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case timeout, cases
-        case elseBody = "else_body"
-    }
-
-    public let timeout: Double
-    public let cases: [PredicateCase]
-    public let elseBody: [HeistStep]?
-
-    public init(
-        timeout: Double,
-        cases: [PredicateCase],
-        elseBody: [HeistStep]? = nil
-    ) throws {
-        guard timeout >= 0 else {
-            throw HeistPlanError.negativeTimeout(timeout)
-        }
-        guard !cases.isEmpty else {
-            throw HeistPlanError.emptyPredicateCases("wait_for_cases")
-        }
-        self.timeout = timeout
-        self.cases = cases
-        self.elseBody = elseBody
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "wait_for_cases step")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let decodedTimeout = try container.decode(Double.self, forKey: .timeout)
-        if decodedTimeout < 0 {
-            throw DecodingError.dataCorruptedError(
-                forKey: .timeout,
-                in: container,
-                debugDescription: "wait_for_cases timeout must be non-negative"
-            )
-        }
-        try self.init(
-            timeout: decodedTimeout,
             cases: try container.decode([PredicateCase].self, forKey: .cases),
             elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
         )
@@ -717,6 +677,7 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case unsupportedActionCommand(String)
     case ambiguousExpectationContract
     case emptyExpectationWaiver
+    case expectationElseBodyUnsupported
     case emptyPredicateCases(String)
     case negativeTimeout(Double)
     case emptyForEachPredicate

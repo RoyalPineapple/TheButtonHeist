@@ -35,6 +35,7 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
     case unresolvedTargetReference(String)
     case unresolvedStringReference(String)
     case emptyReference(String)
+    case invalidStringMatch(mode: String)
     case unsupportedHeistActionCommand(String)
     case parameterArgumentMismatch(parameter: HeistParameterKind, argument: HeistParameterKind)
 
@@ -46,6 +47,8 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
             return "unresolved string reference \"\(reference)\""
         case .emptyReference(let type):
             return "\(type) reference must not be empty"
+        case .invalidStringMatch(let mode):
+            return "\(mode) string match value must not be empty"
         case .unsupportedHeistActionCommand(let command):
             return "unsupported heist action command \"\(command)\""
         case .parameterArgumentMismatch(let parameter, let argument):
@@ -326,19 +329,40 @@ extension StringExpr: CustomStringConvertible {
     }
 }
 
+extension StringExpr: StringMatchPayload {
+    public var stringMatchLiteralIsEmpty: Bool? {
+        switch self {
+        case .literal(let value):
+            return value.isEmpty
+        case .ref:
+            return nil
+        }
+    }
+}
+
+private extension StringMatch where Value == StringExpr {
+    func resolve(in environment: HeistExecutionEnvironment) throws -> StringMatch<String> {
+        let resolved = try map { try $0.resolve(in: environment) }
+        if resolved.hasInvalidEmptyBroadLiteral {
+            throw HeistExpressionError.invalidStringMatch(mode: resolved.mode.rawValue)
+        }
+        return resolved
+    }
+}
+
 // MARK: - Predicate Expressions
 
 public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
-    public let label: StringExpr?
-    public let identifier: StringExpr?
-    public let value: StringExpr?
+    public let label: StringMatch<StringExpr>?
+    public let identifier: StringMatch<StringExpr>?
+    public let value: StringMatch<StringExpr>?
     public let traits: [HeistTrait]
     public let excludeTraits: [HeistTrait]
 
     public init(
-        label: StringExpr? = nil,
-        identifier: StringExpr? = nil,
-        value: StringExpr? = nil,
+        label: StringMatch<StringExpr>? = nil,
+        identifier: StringMatch<StringExpr>? = nil,
+        value: StringMatch<StringExpr>? = nil,
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) {
@@ -351,9 +375,9 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
 
     public init(_ predicate: ElementPredicate) {
         self.init(
-            label: predicate.label.map(StringExpr.literal),
-            identifier: predicate.identifier.map(StringExpr.literal),
-            value: predicate.value.map(StringExpr.literal),
+            label: predicate.label.map { $0.map(StringExpr.literal) },
+            identifier: predicate.identifier.map { $0.map(StringExpr.literal) },
+            value: predicate.value.map { $0.map(StringExpr.literal) },
             traits: predicate.traits,
             excludeTraits: predicate.excludeTraits
         )
@@ -392,9 +416,9 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     }
 
     init(container: KeyedDecodingContainer<CodingKeys>) throws {
-        label = try Self.decodeStringExpr(container, literalKey: .label, refKey: .labelRef, field: "label")
-        identifier = try Self.decodeStringExpr(container, literalKey: .identifier, refKey: .identifierRef, field: "identifier")
-        value = try Self.decodeStringExpr(container, literalKey: .value, refKey: .valueRef, field: "value")
+        label = try Self.decodeStringMatchExpr(container, literalKey: .label, refKey: .labelRef, field: "label")
+        identifier = try Self.decodeStringMatchExpr(container, literalKey: .identifier, refKey: .identifierRef, field: "identifier")
+        value = try Self.decodeStringMatchExpr(container, literalKey: .value, refKey: .valueRef, field: "value")
         traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits) ?? []
         excludeTraits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
     }
@@ -408,17 +432,17 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         if !excludeTraits.isEmpty { try container.encode(excludeTraits, forKey: .excludeTraits) }
     }
 
-    private static func decodeStringExpr(
+    private static func decodeStringMatchExpr(
         _ container: KeyedDecodingContainer<CodingKeys>,
         literalKey: CodingKeys,
         refKey: CodingKeys,
         field: String
-    ) throws -> StringExpr? {
-        let literal = try container.decodeIfPresent(String.self, forKey: literalKey)
+    ) throws -> StringMatch<StringExpr>? {
+        let literal = try container.decodeIfPresent(StringMatch<StringExpr>.self, forKey: literalKey)
         let reference = try container.decodeIfPresent(String.self, forKey: refKey)
         switch (literal, reference) {
         case (.some(let literal), nil):
-            return .literal(literal)
+            return literal
         case (nil, .some(let reference)):
             let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
@@ -428,7 +452,7 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
                     debugDescription: "\(field)_ref must not be empty"
                 )
             }
-            return .ref(trimmed)
+            return .exact(.ref(trimmed))
         case (.some, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: refKey,
@@ -441,16 +465,16 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     }
 
     private static func encode(
-        _ expression: StringExpr?,
+        _ expression: StringMatch<StringExpr>?,
         literalKey: CodingKeys,
         refKey: CodingKeys,
         into container: inout KeyedEncodingContainer<CodingKeys>
     ) throws {
         switch expression {
-        case .literal(let literal):
-            try container.encode(literal, forKey: literalKey)
-        case .ref(let reference):
+        case .some(.exact(.ref(let reference))):
             try container.encode(reference, forKey: refKey)
+        case .some(let match):
+            try container.encode(match, forKey: literalKey)
         case nil:
             break
         }
@@ -756,15 +780,11 @@ extension ElementUpdatePredicateExpr: CustomStringConvertible {
 public enum ChangePredicateExpr: Codable, Sendable, Equatable {
     case screen(where: StatePredicateExpr? = nil)
     case elements
-    case appeared(ElementPredicateTemplate)
-    case disappeared(ElementPredicateTemplate)
     case updated(ElementUpdatePredicateExpr)
 
     private enum WireType: String, CaseIterable {
         case screenChanged = "screen_changed"
         case elementsChanged = "elements_changed"
-        case elementAppeared = "element_appeared"
-        case elementDisappeared = "element_disappeared"
         case elementUpdated = "element_updated"
     }
 
@@ -778,10 +798,6 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
             self = .screen(where: state.map(StatePredicateExpr.init))
         case .elements:
             self = .elements
-        case .appeared(let predicate):
-            self = .appeared(ElementPredicateTemplate(predicate))
-        case .disappeared(let predicate):
-            self = .disappeared(ElementPredicateTemplate(predicate))
         case .updated(let update):
             self = .updated(ElementUpdatePredicateExpr(update))
         }
@@ -793,10 +809,6 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
             return .screen(where: try state?.resolve(in: environment))
         case .elements:
             return .elements
-        case .appeared(let predicate):
-            return .appeared(try predicate.resolve(in: environment))
-        case .disappeared(let predicate):
-            return .disappeared(try predicate.resolve(in: environment))
         case .updated(let update):
             return .updated(try update.resolve(in: environment))
         }
@@ -819,12 +831,6 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
         case .elementsChanged:
             try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "elements_changed predicate expression")
             self = .elements
-        case .elementAppeared:
-            try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "element_appeared predicate expression")
-            self = .appeared(try container.decode(ElementPredicateTemplate.self, forKey: .element))
-        case .elementDisappeared:
-            try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "element_disappeared predicate expression")
-            self = .disappeared(try container.decode(ElementPredicateTemplate.self, forKey: .element))
         case .elementUpdated:
             self = .updated(try ElementUpdatePredicateExpr(from: decoder))
         }
@@ -838,12 +844,6 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
             try container.encodeIfPresent(state, forKey: .where)
         case .elements:
             try container.encode(WireType.elementsChanged.rawValue, forKey: .type)
-        case .appeared(let predicate):
-            try container.encode(WireType.elementAppeared.rawValue, forKey: .type)
-            try container.encode(predicate, forKey: .element)
-        case .disappeared(let predicate):
-            try container.encode(WireType.elementDisappeared.rawValue, forKey: .type)
-            try container.encode(predicate, forKey: .element)
         case .updated(let update):
             try container.encode(WireType.elementUpdated.rawValue, forKey: .type)
             try update.encode(to: encoder)
@@ -859,10 +859,6 @@ extension ChangePredicateExpr: CustomStringConvertible {
             return ScoreDescription.call("screen_changed", ["where=\(state)"])
         case .elements:
             return "elements_changed"
-        case .appeared(let predicate):
-            return ScoreDescription.call("element_appeared", [predicate.description])
-        case .disappeared(let predicate):
-            return ScoreDescription.call("element_disappeared", [predicate.description])
         case .updated(let update):
             return ScoreDescription.call("element_updated", [update.description])
         }
@@ -895,7 +891,7 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
         switch typeString {
         case "present", "absent", "all":
             self = .state(try StatePredicateExpr(from: decoder))
-        case "screen_changed", "elements_changed", "element_appeared", "element_disappeared", "element_updated":
+        case "screen_changed", "elements_changed", "element_updated":
             self = .changed(try ChangePredicateExpr(from: decoder))
         default:
             self = .predicate(try AccessibilityPredicate(from: decoder))

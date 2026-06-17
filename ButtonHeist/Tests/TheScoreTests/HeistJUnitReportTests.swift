@@ -304,7 +304,10 @@ final class HeistJUnitReportTests: XCTestCase {
 
     private func semanticTarget(label: String? = nil, identifier: String? = nil) -> ElementTarget {
         .predicate(
-            ElementPredicate(label: label, identifier: identifier)
+            ElementPredicate(
+                label: label.map(StringMatch.exact),
+                identifier: identifier.map(StringMatch.exact)
+            )
         )
     }
 }

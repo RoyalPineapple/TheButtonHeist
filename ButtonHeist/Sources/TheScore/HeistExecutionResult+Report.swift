@@ -65,8 +65,7 @@ public extension HeistExecutionStepResult {
         return warning
     }
 
-    /// Wire-format step name. Renames `conditional` -> `if` and
-    /// `waitForCases` -> `wait_for_cases`.
+    /// Wire-format step name. Renames `conditional` -> `if`.
     var reportStepName: String {
         switch kind {
         case .action:
@@ -75,8 +74,6 @@ public extension HeistExecutionStepResult {
             return "wait"
         case .conditional:
             return "if"
-        case .waitForCases:
-            return "wait_for_cases"
         case .forEachElement:
             return "for_each_element"
         case .forEachString:
@@ -252,7 +249,7 @@ public extension HeistExecutionStepResult {
         guard status == .failed else { return nil }
         if children.contains(where: { $0.status == .failed }) {
             switch kind {
-            case .conditional, .waitForCases, .forEachIteration, .heist, .invoke:
+            case .conditional, .forEachIteration, .heist, .invoke:
                 return nil
             case .action, .wait, .forEachElement, .forEachString, .warn, .fail:
                 break

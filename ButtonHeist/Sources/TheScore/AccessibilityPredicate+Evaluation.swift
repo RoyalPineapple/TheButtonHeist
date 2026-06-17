@@ -33,9 +33,8 @@ public extension AccessibilityPredicate {
     ///
     /// `state` evaluates against the result's final-capture interface;
     /// `changed` evaluates against the result's endpoint delta. Change
-    /// predicates read self-describing deltas — `disappeared`/`updated` carry
-    /// the affected element directly, so no pre-action element resolution is
-    /// needed.
+    /// predicates read self-describing deltas such as property updates, so no
+    /// pre-action element resolution is needed.
     func validate(against result: ActionResult) -> ExpectationResult {
         guard let trace = result.accessibilityTrace else {
             return ExpectationResult(
@@ -122,10 +121,6 @@ public extension AccessibilityPredicate.Change {
                 predicate: nil,
                 actual: delta?.kindDescription ?? "noTrace"
             )
-        case .appeared(let predicate):
-            result = Self.evaluateAppeared(predicate: predicate, delta: delta)
-        case .disappeared(let predicate):
-            result = Self.evaluateDisappeared(predicate: predicate, delta: delta)
         case .updated(let update):
             result = Self.evaluateUpdated(update: update, delta: delta)
         }
@@ -148,53 +143,6 @@ public extension AccessibilityPredicate.Change {
             predicate: nil,
             actual: outcome.met ? nil : "screen changed but new interface failed: \(outcome.actual ?? stateClause.description)"
         )
-    }
-
-    private static func evaluateAppeared(
-        predicate: ElementPredicate,
-        delta: AccessibilityTrace.Delta?
-    ) -> ExpectationResult {
-        let added = delta?.elementEdits.added ?? []
-        if !added.isEmpty {
-            if added.contains(where: { predicate.matches($0) }) {
-                return ExpectationResult(met: true, predicate: nil)
-            }
-            let labels = added.compactMap(\.label).prefix(5).joined(separator: ", ")
-            return ExpectationResult(met: false, predicate: nil, actual: "added: [\(labels)]")
-        }
-        if case .screenChanged(let payload)? = delta {
-            if payload.newInterface.projectedElements.contains(where: { predicate.matches($0) }) {
-                return ExpectationResult(met: true, predicate: nil)
-            }
-            return ExpectationResult(met: false, predicate: nil, actual: "screen changed but element not found in new interface")
-        }
-        return ExpectationResult(met: false, predicate: nil, actual: "no elements added")
-    }
-
-    private static func evaluateDisappeared(
-        predicate: ElementPredicate,
-        delta: AccessibilityTrace.Delta?
-    ) -> ExpectationResult {
-        let removed = delta?.elementEdits.removed ?? []
-        if !removed.isEmpty {
-            if removed.contains(where: { predicate.matches($0) }) {
-                return ExpectationResult(met: true, predicate: nil)
-            }
-            let labels = removed.compactMap(\.label).prefix(5).joined(separator: ", ")
-            return ExpectationResult(met: false, predicate: nil, actual: "removed: [\(labels)]")
-        }
-        if case .screenChanged(let payload)? = delta {
-            let stillPresent = payload.newInterface.projectedElements.contains { predicate.matches($0) }
-            if !stillPresent {
-                return ExpectationResult(met: true, predicate: nil)
-            }
-            return ExpectationResult(
-                met: false,
-                predicate: nil,
-                actual: "screen changed but element still present in new interface"
-            )
-        }
-        return ExpectationResult(met: false, predicate: nil, actual: "no elements removed")
     }
 
     private static func evaluateUpdated(

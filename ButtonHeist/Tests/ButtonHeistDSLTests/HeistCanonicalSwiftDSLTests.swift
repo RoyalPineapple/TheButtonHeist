@@ -31,15 +31,12 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
             }
         }
 
-        WaitFor(timeout: .seconds(8)) {
-            Case(.present(.label("Results"))) {
-                Warn("results")
-            }
-
-            Else {
+        WaitFor(.present(.label("Results")), timeout: .seconds(8))
+            .else {
                 Fail("timeout")
             }
-        }
+
+        Warn("results")
 
         ForEach(.matching(.label("Delete")), limit: 20) { target in
             Activate(target)
@@ -81,11 +78,9 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
             }
         }
 
-        WaitFor(timeout: .seconds(4)) {
-            Case(.absent(target)) {
-                Warn("target removed")
-            }
-        }
+        WaitFor(.absent(target), timeout: .seconds(4))
+
+        Warn("target removed")
     }
 
     let rendered = try plan.canonicalSwiftDSL()
@@ -105,9 +100,9 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
             Fail("target missing")
         }
 
-        WaitFor(.absent(target), timeout: .seconds(4)) {
-            Warn("target removed")
-        }
+        WaitFor(.absent(target), timeout: .seconds(4))
+
+        Warn("target removed")
     }
     """)
 
@@ -426,21 +421,18 @@ private let fullASTJSON = """
       }
     },
     {
-      "type": "wait_for_cases",
-      "wait_for_cases": {
+      "type": "wait",
+      "wait": {
+        "predicate": { "type": "present", "element": { "label": "Results" } },
         "timeout": 8,
-        "cases": [
-          {
-            "predicate": { "type": "present", "element": { "label": "Results" } },
-            "body": [
-              { "type": "warn", "warn": { "message": "results" } }
-            ]
-          }
-        ],
         "else_body": [
           { "type": "fail", "fail": { "message": "timeout" } }
         ]
       }
+    },
+    {
+      "type": "warn",
+      "warn": { "message": "results" }
     },
     {
       "type": "for_each_element",
@@ -566,12 +558,12 @@ HeistPlan {
         Fail("unknown")
     }
 
-    WaitFor(.present(.label("Results")), timeout: .seconds(8)) {
-        Warn("results")
-    }
+    WaitFor(.present(.label("Results")), timeout: .seconds(8))
     .else {
         Fail("timeout")
     }
+
+    Warn("results")
 
     ForEach(.matching(.label("Delete")), limit: 20) { target in
         Activate(target)

@@ -259,7 +259,7 @@ expectation result when one was requested.
 
 Expectations use object form with a `type` discriminator, for example
 `{"type":"screen_changed"}` or
-`{"type":"element_appeared","element":{"label":"Success"}}`.
+`{"type":"present","element":{"label":"Success"}}`.
 
 Expectations use the current object grammar at every public boundary. Element
 expectations select subjects with predicate fields, not `heistId`.

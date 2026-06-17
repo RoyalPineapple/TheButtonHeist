@@ -10,14 +10,6 @@ extension ConditionalStep {
     }
 }
 
-extension WaitForCasesStep {
-    var observationScope: SemanticObservationScope {
-        cases
-            .compactMap { try? $0.predicate.resolve(in: .empty).observationScope }
-            .max() ?? .visible
-    }
-}
-
 extension AccessibilityPredicate {
     var observationScope: SemanticObservationScope {
         switch self {
@@ -47,11 +39,7 @@ private extension AccessibilityPredicate.Change {
         switch self {
         case .screen(let state):
             return state?.observationScope ?? .visible
-        case .elements:
-            return .visible
-        case .appeared:
-            return .discovery
-        case .disappeared, .updated:
+        case .elements, .updated:
             return .visible
         }
     }

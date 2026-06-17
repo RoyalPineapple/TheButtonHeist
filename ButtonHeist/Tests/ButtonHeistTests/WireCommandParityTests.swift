@@ -373,14 +373,16 @@ final class WireCommandParityTests: XCTestCase {
             guard let command = try? action.command.resolveForRuntimeDispatch(in: .empty) else { return [] }
             return [command]
         case .wait(let wait):
-            guard let resolved = try? wait.resolve(in: .empty) else { return [] }
-            return [.wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))]
+            let waitActions: [RuntimeActionMessage]
+            if let resolved = try? wait.resolve(in: .empty) {
+                waitActions = [.wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))]
+            } else {
+                waitActions = []
+            }
+            return waitActions + (wait.elseBody ?? []).flatMap(runtimeActions)
         case .conditional(let conditional):
             return conditional.cases.flatMap { $0.body.flatMap(runtimeActions) }
                 + (conditional.elseBody ?? []).flatMap(runtimeActions)
-        case .waitForCases(let waitForCases):
-            return waitForCases.cases.flatMap { $0.body.flatMap(runtimeActions) }
-                + (waitForCases.elseBody ?? []).flatMap(runtimeActions)
         case .forEachElement, .forEachString, .heist, .invoke:
             return []
         case .warn, .fail:

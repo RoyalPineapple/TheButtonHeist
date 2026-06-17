@@ -21,7 +21,7 @@ extension TheBrains {
             return caseResolutionFailure(index: index, path: path, kind: .conditional, start: start, error: error)
         }
 
-        let selection = await runtime.waitForCases(resolvedCases, 0)
+        let selection = await runtime.selectPredicateCase(resolvedCases, 0)
         return await dispatchPredicateCases(
             PredicateCaseDispatch(
                 selection: selection,
@@ -39,42 +39,8 @@ extension TheBrains {
         )
     }
 
-    func executeWaitForCasesStep(
-        _ step: WaitForCasesStep,
-        index: Int,
-        path: String,
-        start: CFAbsoluteTime,
-        runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment,
-        scope: HeistExecutionScope
-    ) async -> HeistExecutionStepResult {
-        let resolvedCases: [ResolvedPredicateCase]
-        do {
-            resolvedCases = try step.cases.map { try $0.resolve(in: environment) }
-        } catch {
-            return caseResolutionFailure(index: index, path: path, kind: .waitForCases, start: start, error: error)
-        }
-
-        let selection = await runtime.waitForCases(resolvedCases, step.timeout)
-        return await dispatchPredicateCases(
-            PredicateCaseDispatch(
-                selection: selection,
-                cases: resolvedCases,
-                elseBody: step.elseBody,
-                path: path,
-                kind: .waitForCases,
-                intent: .waitForCases(timeout: step.timeout),
-                pathSegment: "wait_for_cases",
-                start: start
-            ),
-            runtime: runtime,
-            environment: environment,
-            scope: scope
-        )
-    }
-
     /// Run a resolved case selection: matched case body, else body, or a
-    /// terminal no-match node. Shared by `if` and `wait_for`.
+    /// terminal no-match node.
     private func dispatchPredicateCases(
         _ dispatch: PredicateCaseDispatch,
         runtime: HeistExecutionRuntime,
@@ -104,25 +70,14 @@ extension TheBrains {
             return caseNode(dispatch, selection: selection, children: children)
         }
 
-        let failure: HeistFailureDetail?
-        if dispatch.kind == .waitForCases, dispatch.selection.timedOut {
-            failure = HeistFailureDetail(
-                category: .wait,
-                contract: "wait_for_cases selects a case before timeout or runs else",
-                observed: waitForCasesTimeoutObserved(selection: dispatch.selection),
-                expected: dispatch.selection.cases.map(\.predicate.description).joined(separator: "; ")
-            )
-        } else {
-            failure = nil
-        }
         return HeistExecutionStepResult(
             path: dispatch.path,
             kind: dispatch.kind,
-            status: failure == nil ? .passed : .failed,
+            status: .passed,
             durationMs: elapsedMilliseconds(since: dispatch.start),
             intent: dispatch.intent,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
-            failure: failure
+            failure: nil
         )
     }
 
@@ -140,7 +95,7 @@ extension TheBrains {
             intent: dispatch.intent,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
             failure: abortedAtChildPath.map {
-                childFailureDetail(category: dispatch.kind == .waitForCases ? .wait : .invocation, childPath: $0)
+                childFailureDetail(category: .invocation, childPath: $0)
             },
             abortedAtChildPath: abortedAtChildPath,
             children: children
@@ -159,7 +114,7 @@ extension TheBrains {
             kind: kind,
             status: .failed,
             durationMs: elapsedMilliseconds(since: start),
-            intent: kind == .waitForCases ? .waitForCases(timeout: 0) : .conditional,
+            intent: .conditional,
             failure: HeistFailureDetail(
                 category: .validation,
                 contract: "case predicates resolve before evaluation",
@@ -168,22 +123,6 @@ extension TheBrains {
         )
     }
 
-    private func waitForCasesTimeoutObserved(selection: HeistCaseSelectionResult) -> String {
-        [
-            selection.timeout.map { "timed out after \(heistTimeoutDescription($0))s" }
-                ?? "timed out",
-            "last observed: \(selection.lastObservedSummary ?? "no settled accessibility state")",
-        ].joined(separator: "; ")
-    }
-
-    private func heistTimeoutDescription(_ timeout: Double) -> String {
-        guard timeout.isFinite else { return "\(timeout)" }
-        let rounded = timeout.rounded()
-        if abs(timeout - rounded) < 0.000_001 {
-            return "\(Int(rounded))"
-        }
-        return String(format: "%.3f", timeout)
-    }
 }
 
 extension Array where Element == ResolvedPredicateCase {
