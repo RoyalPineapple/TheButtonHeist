@@ -223,6 +223,83 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.visibleElementIds, ["observed"])
     }
 
+    func testLiveVisibleEntriesUseFreshObservedRevealMetadataOverSettledCache() throws {
+        let row = element(label: "Row", traits: .button)
+        let staleEntry = Screen.ScreenElement(
+            heistId: "row",
+            contentSpaceOrigin: CGPoint(x: 0, y: 100),
+            scrollContainerName: "menu_scroll",
+            element: row
+        )
+        bagman.semanticObservationStream.commitSettledDiscoveryObservation(Screen(
+            elements: ["row": staleEntry],
+            hierarchy: [],
+            containerNames: [:],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        ))
+
+        let freshEntry = Screen.ScreenElement(
+            heistId: "row",
+            contentSpaceOrigin: CGPoint(x: 0, y: 500),
+            scrollContainerName: "menu_scroll",
+            element: row
+        )
+        bagman.recordParsedObservedEvidence(Screen(
+            elements: ["row": freshEntry],
+            hierarchy: [.element(row, traversalIndex: 0)],
+            containerNames: [:],
+            heistIdByElement: [row: "row"],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        ))
+
+        XCTAssertEqual(
+            bagman.liveVisibleScreen.findElement(heistId: "row")?.contentSpaceOrigin,
+            CGPoint(x: 0, y: 500)
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(bagman.liveScreenElement(heistId: "row")).contentSpaceOrigin,
+            CGPoint(x: 0, y: 500)
+        )
+    }
+
+    func testLiveVisibleEntriesDoNotPreserveSettledRevealMetadataWhenFreshObservationHasNone() throws {
+        let row = element(label: "Row", traits: .button)
+        let staleEntry = Screen.ScreenElement(
+            heistId: "row",
+            contentSpaceOrigin: CGPoint(x: 0, y: 100),
+            scrollContainerName: "menu_scroll",
+            element: row
+        )
+        bagman.semanticObservationStream.commitSettledDiscoveryObservation(Screen(
+            elements: ["row": staleEntry],
+            hierarchy: [],
+            containerNames: [:],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        ))
+
+        let freshEntry = Screen.ScreenElement(
+            heistId: "row",
+            contentSpaceOrigin: nil,
+            element: row
+        )
+        bagman.recordParsedObservedEvidence(Screen(
+            elements: ["row": freshEntry],
+            hierarchy: [.element(row, traversalIndex: 0)],
+            containerNames: [:],
+            heistIdByElement: [row: "row"],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        ))
+
+        XCTAssertNil(bagman.liveVisibleScreen.findElement(heistId: "row")?.contentSpaceOrigin)
+        XCTAssertNil(try XCTUnwrap(bagman.liveScreenElement(heistId: "row")).contentSpaceOrigin)
+    }
+
     func testCancelledNoScreenSettleDoesNotPublishSettledTruth() async {
         let settled = Screen.makeForTests(elements: [(element(label: "Settled"), "settled")])
         bagman.semanticObservationStream.commitSettledVisibleObservation(settled)
@@ -833,6 +910,32 @@ final class TheStashResolutionTests: XCTestCase {
             bagman.resolveTarget(.predicate(ElementPredicate(label: "Controls Demo", traits: [.button]))).resolved?.heistId,
             "controls_demo"
         )
+    }
+
+    func testVisibleCommitDoesNotPreserveKnownOnlyMemoryForDisjointKnownViewport() {
+        let bottom = element(label: "Bottom Row", traits: .button)
+        let staleOffscreen = element(label: "Stale Row", traits: .button)
+        let discovery = Screen.makeForTests(
+            elements: [(bottom, "bottom_row")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    staleOffscreen,
+                    heistId: "shared_row",
+                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
+                    scrollContainer: "root_scroll"
+                ),
+            ]
+        )
+        bagman.semanticObservationStream.commitSettledDiscoveryObservation(discovery)
+
+        let freshVisible = element(label: "Fresh Row", traits: .button)
+        let refreshedTop = Screen.makeForTests(elements: [(freshVisible, "shared_row")])
+        bagman.semanticObservationStream.commitSettledVisibleObservation(refreshedTop)
+
+        XCTAssertEqual(bagman.visibleIds, ["shared_row"])
+        XCTAssertEqual(bagman.knownIds, ["shared_row"])
+        XCTAssertEqual(bagman.knownElement(heistId: "shared_row")?.element.label, "Fresh Row")
+        XCTAssertNil(bagman.knownElement(heistId: "bottom_row"))
     }
 
     // MARK: - Matcher Resolution

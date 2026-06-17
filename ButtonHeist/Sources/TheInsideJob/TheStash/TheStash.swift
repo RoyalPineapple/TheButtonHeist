@@ -118,12 +118,17 @@ final class TheStash {
             uniqueKeysWithValues: liveCapture.heistIdByElement.map { element, heistId in
                 let observedEntry = latestObservedSemanticWorld.elements[heistId]
                 let settledEntry = settledSemanticWorld.elements[heistId]
+                let scrollContentLocation: Screen.ScrollContentLocation?
+                if let observedEntry {
+                    scrollContentLocation = observedEntry.scrollContentLocation
+                } else {
+                    scrollContentLocation = settledEntry?.scrollContentLocation
+                }
                 return (
                     heistId,
                     ScreenElement(
                         heistId: heistId,
-                        scrollContentLocation: settledEntry?.scrollContentLocation
-                            ?? observedEntry?.scrollContentLocation,
+                        scrollContentLocation: scrollContentLocation,
                         element: element
                     )
                 )
@@ -209,17 +214,15 @@ final class TheStash {
 
     /// Latest observed capture payload for a visible heistId.
     ///
-    /// The parsed accessibility element and live handles are observational
-    /// evidence only. If the id is also settled, reveal metadata is borrowed
-    /// from settled semantic truth.
+    /// The parsed accessibility element, live handles, and reveal metadata are
+    /// observational evidence only. For visible live entries, the newest parse
+    /// owns viewport metadata; cached settled metadata must not override it.
     func liveScreenElement(heistId: HeistId) -> ScreenElement? {
         guard let liveElement = liveCapture.element(for: heistId),
               let observedEntry = latestObservedSemanticWorld.elements[heistId] else { return nil }
-        let settledEntry = settledSemanticWorld.elements[heistId]
         return ScreenElement(
             heistId: heistId,
-            scrollContentLocation: settledEntry?.scrollContentLocation
-                ?? observedEntry.scrollContentLocation,
+            scrollContentLocation: observedEntry.scrollContentLocation,
             element: liveElement
         )
     }
@@ -416,9 +419,6 @@ final class TheStash {
         _ visibleRefresh: Screen,
         knownOnlyIds: Set<HeistId>
     ) -> Bool {
-        if visibleRefresh.visibleIds.isSubset(of: settledSemanticWorld.heistIds) {
-            return true
-        }
         if !settledVisibleIds.isDisjoint(with: visibleRefresh.visibleIds) {
             return true
         }

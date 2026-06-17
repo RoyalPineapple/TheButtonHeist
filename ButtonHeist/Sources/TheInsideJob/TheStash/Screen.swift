@@ -258,8 +258,7 @@ struct Screen: Equatable {
         }
         let previousVisibleIds = visibleIds
         let knownOnlyIds = knownIds.subtracting(previousVisibleIds)
-        let refreshesKnownViewport = visibleRefresh.visibleIds.isSubset(of: knownIds)
-            || !previousVisibleIds.isDisjoint(with: visibleRefresh.visibleIds)
+        let refreshesKnownViewport = !previousVisibleIds.isDisjoint(with: visibleRefresh.visibleIds)
             || (!knownOnlyIds.isEmpty && previousVisibleIds.isEmpty)
         guard refreshesKnownViewport else { return visibleRefresh }
         let disappearedVisibleIds = previousVisibleIds.subtracting(visibleRefresh.visibleIds)

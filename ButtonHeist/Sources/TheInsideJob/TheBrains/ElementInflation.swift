@@ -115,17 +115,26 @@ final class ElementInflation {
         activationPointPolicy: ActivationPointPolicy = .requireOnscreen
     ) async -> ElementInflationResult {
         stash.refreshCurrentVisibleTree()
-        switch await findTargetInTree(target) {
-        case .success(let treeElement):
-            return await resolveTargetFromTree(
-                target: target,
-                treeElement: treeElement,
-                method: method,
-                deallocatedBoundary: deallocatedBoundary,
-                activationPointPolicy: activationPointPolicy
-            )
-        case .failure(let failure):
-            return .failed(failure)
+        var allowKnownFallback = true
+        while true {
+            switch await findTargetInTree(target, allowKnownFallback: allowKnownFallback) {
+            case .success(let treeElement):
+                let result = await resolveTargetFromTree(
+                    target: target,
+                    treeElement: treeElement,
+                    method: method,
+                    deallocatedBoundary: deallocatedBoundary,
+                    activationPointPolicy: activationPointPolicy
+                )
+                guard case .failed(let failure) = result,
+                      failure.failedStep == .staleRefresh,
+                      allowKnownFallback else {
+                    return result
+                }
+                allowKnownFallback = false
+            case .failure(let failure):
+                return .failed(failure)
+            }
         }
     }
 
@@ -177,7 +186,8 @@ final class ElementInflation {
     }
 
     private func findTargetInTree(
-        _ target: ElementTarget
+        _ target: ElementTarget,
+        allowKnownFallback: Bool
     ) async -> Result<TheStash.ScreenElement, ElementInflationFailure> {
         switch visibleTargetResolution(target) {
         case .success(let visible):
@@ -197,11 +207,27 @@ final class ElementInflation {
             case nil:
                 break
             }
-            if let revealable = uniquelyResolvedRevealableTarget(target, in: screen) {
-                return .success(revealable)
-            }
+        }
+        guard allowKnownFallback else {
+            return currentVisibleTargetFailure(target)
         }
         return knownSemanticTarget(target)
+    }
+
+    private func currentVisibleTargetFailure(
+        _ target: ElementTarget
+    ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+        switch stash.resolveVisibleTarget(target) {
+        case .resolved(let screenElement):
+            return .success(screenElement)
+        case .ambiguous(let facts):
+            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
+        case .notFound(let facts):
+            return .failure(.staleRefresh(
+                "target was not found after refreshing the current live tree: "
+                    + TargetResolutionDiagnostics.message(for: .notFound(facts))
+            ))
+        }
     }
 
     private func knownSemanticTarget(
