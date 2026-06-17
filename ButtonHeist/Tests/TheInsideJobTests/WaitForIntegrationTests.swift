@@ -143,6 +143,16 @@ final class WaitForIntegrationTests: XCTestCase {
         insideJob.brains.stash.invalidateSettledObservationFromTripwire()
     }
 
+    private func waitForSettledSemanticWaiter(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        for _ in 0..<50 where insideJob.brains.stash.semanticObservationStream.settledWaiterCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(insideJob.brains.stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
+    }
+
     // MARK: - Passive Observation
 
     func testPassiveVisibleObservationPublishesStableAXTreeWhileLayerAnimationRuns() async throws {
@@ -495,16 +505,23 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     func testWaitForChangeVisibleUpdatePreservesKnownOffViewportMemory() async throws {
-        let visible = addLabel(
-            "WaitForChange-KnownMemory-Anchor",
-            identifier: "wait_change_visible_anchor"
-        )
-        visible.accessibilityValue = "Old"
-        defer { visible.removeFromSuperview() }
+        insideJob.brains.stash.stopPassiveSemanticObservation()
 
-        guard insideJob.brains.stash.refreshLiveCapture() != nil else {
-            throw XCTSkip("No live hierarchy available for changed-wait memory test")
-        }
+        let visibleBefore = AccessibilityElement.make(
+            label: "WaitForChange-KnownMemory-Anchor",
+            value: "Old",
+            identifier: "wait_change_visible_anchor",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let visibleAfter = AccessibilityElement.make(
+            label: "WaitForChange-KnownMemory-Anchor",
+            value: "New",
+            identifier: "wait_change_visible_anchor",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let visibleHeistId = "wait_change_visible_anchor_staticText"
 
         let offViewportElement = AccessibilityElement.make(
             label: "WaitForChange-KnownMemory-OffViewport",
@@ -512,29 +529,25 @@ final class WaitForIntegrationTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let offViewportHeistId = "wait_change_known_offviewport_button"
-        let offViewportMemory = Screen.makeForTests(
+        let baseline = Screen.makeForTests(
+            elements: [(visibleBefore, visibleHeistId)],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
-        insideJob.brains.stash.installScreenForTesting(offViewportMemory.merging(
-            insideJob.brains.stash.settledSemanticScreen
-        ))
+        insideJob.brains.stash.installScreenForTesting(baseline)
         XCTAssertNotNil(insideJob.brains.stash.settledSemanticScreen.findElement(heistId: offViewportHeistId))
 
-        let mutationTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
-            self.mutateVisibleHierarchy {
-                // Mutate a tracked update property (value) while keeping the element's
-                // identity (identifier/label) stable so before/after pair on the same
-                // diffPairingKey and the change registers as an elements update.
-                visible.accessibilityValue = "New"
-            }
+        let waitTask = Task { @MainActor in
+            await self.changedWait(
+                expectation: .changed(.elements),
+                timeout: 5.0
+            )
         }
+        await waitForSettledSemanticWaiter()
 
-        let result = await changedWait(
-            expectation: .changed(.elements),
-            timeout: 5.0
-        )
-        await mutationTask.value
+        let updatedVisible = Screen.makeForTests(elements: [(visibleAfter, visibleHeistId)])
+        insideJob.brains.stash.installScreenForTesting(updatedVisible)
+
+        let result = await waitTask.value
 
         XCTAssertTrue(result.success, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(

@@ -60,6 +60,12 @@ actor TheMuscle {
         delivery.clearForTesting()
     }
 
+    /// Test seam: wait for the currently scheduled session release timer.
+    func awaitSessionReleaseTimerForTesting() async {
+        let timer = sessionReleaseTimer
+        await timer?.value
+    }
+
     // MARK: - Session Accessors
 
     var sessionToken: String { sessionTokenSource.token }
