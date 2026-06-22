@@ -49,7 +49,7 @@ import ThePlans
         }
     }
 
-    var runtimeActionType: ClientWireMessageType {
+    var runtimeActionType: RuntimeActionType {
         switch self {
         case .activate: return .activate
         case .increment: return .increment
@@ -68,10 +68,6 @@ import ThePlans
         case .setPasteboard: return .setPasteboard
         case .dismissKeyboard: return .resignFirstResponder
         }
-    }
-
-    var clientWireType: ClientWireMessageType {
-        runtimeActionType
     }
 
     func resolveForRuntimeDispatch(in environment: HeistExecutionEnvironment) throws -> RuntimeActionMessage {

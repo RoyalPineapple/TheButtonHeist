@@ -189,8 +189,7 @@ public final class TheFence {
             guard let device = DiscoveredDevice.fromHostPort(
                 target.device,
                 id: "config-\(name)",
-                name: name,
-                certFingerprint: target.certFingerprint
+                name: name
             ) else { return nil }
             return device
         }

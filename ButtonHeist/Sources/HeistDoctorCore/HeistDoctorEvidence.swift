@@ -19,6 +19,9 @@ extension HeistDoctor {
         else {
             throw HeistDoctorError.missingTrace(path: step.path)
         }
+        guard let commandName = step.reportCommandName else {
+            throw HeistDoctorError.missingActionEvidence(path: step.path)
+        }
 
         let result = HeistStepRepairResult(
             succeeded: step.status == .passed,
@@ -33,7 +36,7 @@ extension HeistDoctor {
 
         return HeistStepRepairEvidence(
             stepPath: step.path,
-            actionKind: step.reportCommandName ?? actionResult.method.rawValue,
+            actionKind: commandName,
             target: target,
             beforeSnapshot: before,
             afterDelta: trace.meaningfulEndpointDelta,

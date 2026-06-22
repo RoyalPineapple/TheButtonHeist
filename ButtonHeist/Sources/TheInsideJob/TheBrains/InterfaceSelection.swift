@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import Foundation
+import ThePlans
 
 import AccessibilitySnapshotModel
 import TheScore

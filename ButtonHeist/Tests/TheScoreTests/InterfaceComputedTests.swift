@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 @testable import TheScore
 
 // MARK: - Interface computed properties, slugify, isStableIdentifier

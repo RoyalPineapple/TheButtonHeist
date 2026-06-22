@@ -5,7 +5,7 @@ extension HeistPlanSourceParser {
         if let target = try parseTargetRefIfPresent() {
             return target
         }
-        let name = try parseDotCallName(allowedPrefixes: ["ElementTarget", "ElementTargetExpr"])
+        let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "label":
             try expectSymbol("(")
@@ -42,12 +42,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseElementPredicateTemplate() throws -> ElementPredicateTemplate {
-        let name = try parseDotCallName(allowedPrefixes: [
-            "ElementPredicate",
-            "ElementPredicateTemplate",
-            "ElementTarget",
-            "ElementTargetExpr",
-        ])
+        let name = try parseDotCallName(allowedPrefixes: [])
         return try parseElementPredicateTemplate(named: name)
     }
 
@@ -187,7 +182,7 @@ extension HeistPlanSourceParser {
     mutating func parseStringMatchFieldValue(field: String) throws -> StringMatch<StringExpr> {
         if startsStringMatchDotCall {
             let token = currentToken
-            let name = try parseDotCallName(allowedPrefixes: ["StringMatch"])
+            let name = try parseDotCallName(allowedPrefixes: [])
             guard let mode = stringMatchMode(named: name) else {
                 throw error(token, "unsupported string match '.\(name)'")
             }
@@ -213,9 +208,6 @@ extension HeistPlanSourceParser {
     var startsStringMatchDotCall: Bool {
         if currentToken.isSymbol(".") {
             return lookaheadIdentifier(in: ["exact", "contains", "prefix", "suffix"])
-        }
-        if case .identifier(let name) = currentToken.kind {
-            return name == "StringMatch"
         }
         return false
     }
@@ -276,9 +268,6 @@ extension HeistPlanSourceParser {
         }
         if currentToken.isSymbol(".") {
             return lookaheadIdentifier(in: ["target"])
-        }
-        if case .identifier(let name) = currentToken.kind {
-            return ["ElementTarget", "ElementTargetExpr"].contains(name)
         }
         return false
     }

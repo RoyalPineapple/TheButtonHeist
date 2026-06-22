@@ -837,8 +837,7 @@ final class TheHandoffStateTests: XCTestCase {
         let reachableDevice = DiscoveredDevice(
             id: "reachable-device",
             name: "ReachableApp#live",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
-            certFingerprint: "sha256:reachable"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1)
         )
         let handoff = TheHandoff()
         let mockDiscovery = MockDiscovery()
@@ -892,8 +891,7 @@ final class TheHandoffStateTests: XCTestCase {
         let discoveredDevice = DiscoveredDevice(
             id: "reachable-device",
             name: "AccessibilityTestApp#live",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 2),
-            certFingerprint: "sha256:reachable"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 2)
         )
 
         let handoff = TheHandoff()
@@ -932,8 +930,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(
             id: "single-device",
             name: "AccessibilityTestApp#single",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 3),
-            certFingerprint: "sha256:single"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 3)
         )
 
         let handoff = TheHandoff()
@@ -976,14 +973,12 @@ final class TheHandoffStateTests: XCTestCase {
         let firstDevice = DiscoveredDevice(
             id: "first-device",
             name: "AccessibilityTestApp#first",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 4),
-            certFingerprint: "sha256:first"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 4)
         )
         let secondDevice = DiscoveredDevice(
             id: "second-device",
             name: "AccessibilityTestApp#second",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 5),
-            certFingerprint: "sha256:second"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 5)
         )
 
         let handoff = TheHandoff()
@@ -1008,20 +1003,17 @@ final class TheHandoffStateTests: XCTestCase {
         let existingDevice = DiscoveredDevice(
             id: "existing-device",
             name: "AccessibilityTestApp#existing",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 6),
-            certFingerprint: "sha256:existing"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 6)
         )
         let firstDevice = DiscoveredDevice(
             id: "replacement-first",
             name: "AccessibilityTestApp#first",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 7),
-            certFingerprint: "sha256:first"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 7)
         )
         let secondDevice = DiscoveredDevice(
             id: "replacement-second",
             name: "AccessibilityTestApp#second",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 8),
-            certFingerprint: "sha256:second"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 8)
         )
 
         let handoff = TheHandoff()
@@ -1072,14 +1064,12 @@ final class TheHandoffStateTests: XCTestCase {
         let existingDevice = DiscoveredDevice(
             id: "existing-device",
             name: "AccessibilityTestApp#existing",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 9),
-            certFingerprint: "sha256:existing"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 9)
         )
         let replacementDevice = DiscoveredDevice(
             id: "replacement-device",
             name: "AccessibilityTestApp#replacement",
-            endpoint: .hostPort(host: .ipv6(.loopback), port: 10),
-            certFingerprint: "sha256:replacement"
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 10)
         )
 
         let handoff = TheHandoff()

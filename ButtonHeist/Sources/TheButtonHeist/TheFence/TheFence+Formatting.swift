@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 import AccessibilitySnapshotModel
 import TheScore
@@ -47,7 +48,7 @@ extension FenceResponse {
                 payload: payload,
                 options: options
             )
-        case .heistExecution(_, let result, _, _):
+        case .heistExecution(_, let result, _):
             var text = "Heist: \(result.executedTopLevelStepCount) top-level step(s) executed in \(result.durationMs)ms"
             if let abortedAtPath = result.abortedAtPath { text += " (stopped at \(abortedAtPath))" }
             let checked = result.expectationsChecked

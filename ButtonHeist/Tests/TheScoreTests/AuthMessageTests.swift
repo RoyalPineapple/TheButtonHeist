@@ -43,14 +43,6 @@ final class AuthMessageTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8)))
     }
 
-    func testLegacyAuthApprovedIsNotAValidServerMessage() {
-        let json = """
-        {"type":"authApproved","payload":{"token":"abc-123"}}
-        """
-        let data = Data(json.utf8)
-        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: data))
-    }
-
     // MARK: - authenticate (ClientMessage)
 
     func testAuthenticateEncodeDecode() throws {

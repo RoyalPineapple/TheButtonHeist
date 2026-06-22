@@ -427,9 +427,6 @@ final class TheMuscleTests: XCTestCase {
             return error
         }.first
         XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
-        let responseText = responses().compactMap { String(data: $0, encoding: .utf8) }.joined(separator: "\n")
-        XCTAssertFalse(responseText.contains("authApproved"))
-        XCTAssertFalse(responseText.contains("authApprovalPending"))
     }
 
     func testGeneratedTokenAuthenticatesWhenProvided() async throws {

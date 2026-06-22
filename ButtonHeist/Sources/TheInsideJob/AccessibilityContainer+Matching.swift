@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import AccessibilitySnapshotModel
+import ThePlans
 import TheScore
 
 extension AccessibilityContainer {

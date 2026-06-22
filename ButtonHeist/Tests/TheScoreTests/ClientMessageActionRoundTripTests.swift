@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 import CoreGraphics
 @_spi(ButtonHeistInternals) import TheScore
 
@@ -27,7 +28,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
 
         XCTAssertEqual(commands.count, 4)
-        let expectedTypes: [ClientWireMessageType] = [.activate, .rotor, .editAction, .resignFirstResponder]
+        let expectedTypes: [RuntimeActionType] = [.activate, .rotor, .editAction, .resignFirstResponder]
         XCTAssertEqual(commands.map(\.runtimeActionType), expectedTypes)
     }
 
@@ -53,7 +54,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             return action.command
         }
 
-        let expectedTypes: [ClientWireMessageType] = [.oneFingerTap, .longPress, .swipe, .drag]
+        let expectedTypes: [RuntimeActionType] = [.oneFingerTap, .longPress, .swipe, .drag]
         XCTAssertEqual(commands.map(\.runtimeActionType), expectedTypes)
     }
 
@@ -82,7 +83,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
         for json in primitiveMessages {
             XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)), json) { error in
-                XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
+                XCTAssertTrue("\(error)".contains("Unsupported client wire message type"), "\(error)")
             }
         }
     }

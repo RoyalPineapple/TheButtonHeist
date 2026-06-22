@@ -3,19 +3,9 @@ import Foundation
 extension HeistPlanSourceParser {
     mutating func parseWaitFor() throws -> HeistStep {
         try expectSymbol("(")
-        if lookaheadLabel("timeout") {
-            throw error(currentToken, "WaitFor requires a predicate. Use If { Case(...) { ... } Else { ... } } for branching.")
-        }
-
         let predicate = try parseAccessibilityPredicateExpr()
         let timeout = try parseTrailingTimeout(defaultValue: 0) ?? 0
         try expectSymbol(")")
-        if currentToken.isSymbol("{") {
-            throw error(
-                currentToken,
-                "WaitFor is a gate and does not accept a body. Use WaitFor(...).else { ... } or If(predicate) { ... }."
-            )
-        }
         return .wait(WaitStep(
             predicate: predicate,
             timeout: timeout,

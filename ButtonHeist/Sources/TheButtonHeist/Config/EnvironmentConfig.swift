@@ -131,8 +131,7 @@ public struct EnvironmentConfig: Sendable {
             directDevice = DiscoveredDevice.fromHostPort(
                 configTarget.device,
                 id: "config-\(fileConfig?.defaultTarget ?? configTarget.device)",
-                name: fileConfig?.defaultTarget,
-                certFingerprint: configTarget.certFingerprint
+                name: fileConfig?.defaultTarget
             )
         } else {
             resolvedDevice = nil

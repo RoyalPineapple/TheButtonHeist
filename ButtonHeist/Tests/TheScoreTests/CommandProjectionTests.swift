@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 @testable import TheScore
 
 final class CommandProjectionTests: XCTestCase {

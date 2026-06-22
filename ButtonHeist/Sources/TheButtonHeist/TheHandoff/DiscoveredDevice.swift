@@ -23,8 +23,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     private let advertisedDeviceName: String?
     /// Instance identifier from Bonjour TXT record (human-readable label)
     let instanceId: String?
-    /// Legacy TLS certificate fingerprint from older Bonjour TXT records. Current PSK transport ignores it.
-    let certFingerprint: String?
     /// Connection scope advertised or inferred at discovery time.
     let connectionType: ConnectionScope
 
@@ -33,7 +31,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
                 installationId: String? = nil,
                 displayDeviceName: String? = nil,
                 instanceId: String? = nil,
-                certFingerprint: String? = nil,
                 connectionType: ConnectionScope? = nil) {
         self.id = id
         self.name = name
@@ -42,7 +39,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.installationId = installationId
         self.advertisedDeviceName = displayDeviceName
         self.instanceId = instanceId
-        self.certFingerprint = certFingerprint
         self.connectionType = connectionType ?? Self.inferConnectionType(
             id: id,
             simulatorUDID: simulatorUDID
@@ -53,8 +49,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     static func fromHostPort(
         _ value: String,
         id: String? = nil,
-        name: String? = nil,
-        certFingerprint: String? = nil
+        name: String? = nil
     ) -> DiscoveredDevice? {
         guard let (host, port) = parseHostPort(from: value) else { return nil }
         let resolvedId = id ?? "\(host):\(port)"
@@ -62,8 +57,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return DiscoveredDevice(
             id: resolvedId,
             name: resolvedName,
-            endpoint: .hostPort(host: .init(host), port: .init(integerLiteral: port)),
-            certFingerprint: certFingerprint
+            endpoint: .hostPort(host: .init(host), port: .init(integerLiteral: port))
         )
     }
 
@@ -198,11 +192,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return nameMatches || identifierMatches
     }
 
-    /// Backwards-compatible spelling for existing callers.
-    func matches(filter: String) -> Bool {
-        matches(resolutionQuery: filter)
-    }
-
     /// Compute display text with disambiguation when multiple discovered
     /// devices advertise the same app label.
     func displayName(among devices: [DiscoveredDevice]) -> String {
@@ -224,7 +213,7 @@ extension Array where Element == DiscoveredDevice {
     /// Return the first device matching the filter, or the first device if filter is nil.
     func first(matching filter: String?) -> DiscoveredDevice? {
         guard let filter else { return first }
-        return first { $0.matches(filter: filter) }
+        return first { $0.matches(resolutionQuery: filter) }
     }
 
 }

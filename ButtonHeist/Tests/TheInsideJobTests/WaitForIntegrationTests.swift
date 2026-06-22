@@ -3,6 +3,7 @@
 // for an element to appear or disappear. Requires the BH Demo test host
 // since wait_for polls the semantic accessibility tree via TheStash.
 import XCTest
+import ThePlans
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @testable import TheScore

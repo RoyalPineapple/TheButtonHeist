@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 import TheScore
 
 final class ServerMessageTests: XCTestCase {
@@ -56,12 +57,6 @@ final class ServerMessageTests: XCTestCase {
         } else {
             XCTFail("Expected status, got \(decoded)")
         }
-    }
-
-    func testLegacyAuthApprovalPendingIsNotAValidServerMessage() {
-        let data = Data(#"{"type":"authApprovalPending","payload":{"message":"Waiting","hint":"Old UI approval hint"}}"#.utf8)
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: data))
     }
 
     func testInterfaceEncodeDecode() throws {

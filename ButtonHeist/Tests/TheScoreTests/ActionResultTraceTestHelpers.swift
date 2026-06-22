@@ -1,5 +1,6 @@
 import AccessibilitySnapshotModel
 import Foundation
+import ThePlans
 @testable import TheScore
 
 extension AccessibilityTrace {

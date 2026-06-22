@@ -35,33 +35,6 @@ public struct WaitFor: HeistContent {
         self.init(.present(predicate), timeout: timeout)
     }
 
-    @available(*, unavailable, message: "WaitFor is a gate: use WaitFor(predicate, timeout:) with optional .else { ... }, and use If for branching.")
-    public init(
-        _ predicate: AccessibilityPredicateExpr,
-        timeout: Double = 0,
-        @HeistBuilder _ content: () -> some HeistContent
-    ) {
-        preconditionFailure("WaitFor(predicate) { ... } was removed; use If(predicate) { ... } for branching.")
-    }
-
-    @_disfavoredOverload
-    @available(*, unavailable, message: "WaitFor is a gate: use WaitFor(predicate, timeout:) with optional .else { ... }, and use If for branching.")
-    public init(
-        _ predicate: AccessibilityPredicate,
-        timeout: Double = 0,
-        @HeistBuilder _ content: () -> some HeistContent
-    ) {
-        preconditionFailure("WaitFor(predicate) { ... } was removed; use If(predicate) { ... } for branching.")
-    }
-
-    @available(*, unavailable, message: "WaitFor(timeout:) { ... } was removed; use If for branching or WaitFor(...).else { ... }.")
-    public init(
-        timeout: Double,
-        @PredicateBranchBuilder _ branches: () -> PredicateBranches
-    ) {
-        preconditionFailure("WaitFor(timeout:) { Case ... } was removed; use If for branching.")
-    }
-
     public func `else`(
         @HeistBuilder _ content: () -> some HeistContent
     ) -> WaitFor {

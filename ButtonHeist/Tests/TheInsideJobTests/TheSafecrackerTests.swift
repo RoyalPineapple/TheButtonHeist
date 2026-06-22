@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import XCTest
+import ThePlans
 @testable import TheInsideJob
 
 @MainActor

@@ -76,19 +76,11 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 includePNGData: true,
                 includeInterface: options.includeInterface
             ).encode(to: encoder)
-        case .heistExecution(_, let result, let accessibilityTrace, _):
-            if let single = response.directCommandActionOutputProjection {
-                try PublicActionResponse(
-                    method: single.command.rawValue,
-                    result: single.result,
-                    expectation: single.expectation
-                ).encode(to: encoder)
-            } else {
-                try PublicHeistExecutionResponse(
-                    result: result,
-                    netDelta: accessibilityTrace?.meaningfulEndpointDelta
-                ).encode(to: encoder)
-            }
+        case .heistExecution(_, let result, let accessibilityTrace):
+            try PublicHeistExecutionResponse(
+                result: result,
+                netDelta: accessibilityTrace?.meaningfulEndpointDelta
+            ).encode(to: encoder)
         case .heistCatalog(let catalog):
             try PublicHeistCatalogResponse(catalog: catalog).encode(to: encoder)
         case .heistDescription(let description):

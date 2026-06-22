@@ -150,11 +150,6 @@ parameter inventories belong in the generated references.
 `driverId` is optional. When present, it is the session-locking identity. When
 absent, the token is used as the driver identity.
 
-### Unsupported Legacy Auth Messages
-
-`authApprovalPending` and `authApproved` are not valid current server messages.
-Current clients reject either tag as an unsupported auth response and instruct the
-user to rebuild or reinstall the app, then retry with the configured token.
 Clients without a token fail before starting the TLS connection.
 
 ### Protocol Mismatch

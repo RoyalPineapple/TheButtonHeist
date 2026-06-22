@@ -35,10 +35,10 @@ Mechanical.LongPress(.label("Message"))
 Mechanical.Swipe(.label("Carousel"), .left)
 Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 
-WaitFor(.present(.label("Checkout")), timeout: 5)
+WaitFor(.present(.label("Checkout")), timeout: .seconds(5))
 ```
 
-`perform(step:)` rejects program-shaped source: multiple statements, `HeistPlan`, `HeistDef`, `RunHeist`, `If`, `WaitFor { ... } Else { ... }`, `ForEach`, `Warn`, and `Fail`. Use `run_heist(plan:)` for those.
+`perform(step:)` rejects program-shaped source: multiple statements, `HeistPlan`, `HeistDef`, `RunHeist`, `If`, `WaitFor(...).else { ... }`, `ForEach`, `Warn`, and `Fail`. Use `run_heist(plan:)` for those.
 
 **Targets**: element actions share one target grammar:
 
@@ -65,9 +65,9 @@ Activate(.label("Pay"), ordinal: 0)
 **Waiting**: use `perform(step:)` with simple `WaitFor(...)` when the UI is updating asynchronously — network requests, timers, animations completing. The predicate should name the specific outcome:
 
 ```swift
-WaitFor(.changed(.screen()), timeout: 10)
-WaitFor(.present(.label("Receipt")), timeout: 5)
-WaitFor(.absent(.label("Loading")), timeout: 10)
+WaitFor(.changed(.screen()), timeout: .seconds(10))
+WaitFor(.present(.label("Receipt")), timeout: .seconds(5))
+WaitFor(.absent(.label("Loading")), timeout: .seconds(10))
 ```
 
 For `.absent(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
@@ -239,7 +239,7 @@ For operations that take time, keep using the DSL:
 Activate(.label("Pay"))
     .expect(.changed(.screen()))
 
-WaitFor(.present(.label("Receipt")), timeout: 10)
+WaitFor(.present(.label("Receipt")), timeout: .seconds(10))
 ```
 
 If the action receipt shows a spinner or loading overlay instead of the final state,

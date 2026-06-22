@@ -675,6 +675,35 @@ import ThePlans
     }
 }
 
+@Test func `runtime parser rejects removed compatibility spellings`() {
+    let cases: [(String, String)] = [
+        (
+            root(#"Activate(ElementTarget.label("Pay"))"#),
+            "expected a ButtonHeist expression beginning with '.'"
+        ),
+        (
+            root(#"WaitFor(AccessibilityPredicate.present(.label("Pay")))"#),
+            "expected a ButtonHeist expression beginning with '.'"
+        ),
+        (
+            root(#"Activate(.element(label: StringMatch.contains("Pay")))"#),
+            "expected a string literal or scoped string reference"
+        ),
+        (
+            root(#"WaitFor(.present(.label("Pay")), timeout: 1)"#),
+            "expected a timeout duration such as .seconds(1)"
+        ),
+        (
+            root(#"WaitFor(.present(.label("Pay")), timeout: Double.seconds(1))"#),
+            "expected a timeout duration such as .seconds(1)"
+        ),
+    ]
+
+    for (source, expectedDiagnostic) in cases {
+        expect(compileError(source), contains: expectedDiagnostic)
+    }
+}
+
 @Test func `element actions share the same target grammar`() throws {
     let source = """
     HeistPlan("TargetGrammar", targetParameter: "targetRef") { targetRef in

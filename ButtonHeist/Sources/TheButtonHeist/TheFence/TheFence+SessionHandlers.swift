@@ -50,8 +50,7 @@ extension TheFence {
             resolvedDirectDevice = DiscoveredDevice.fromHostPort(
                 target.device,
                 id: "config-\(targetName)",
-                name: targetName,
-                certFingerprint: target.certFingerprint
+                name: targetName
             )
         } else if handoff.isConnected || config.deviceFilter != nil || config.directDevice != nil {
             return try await establishSessionOnly()

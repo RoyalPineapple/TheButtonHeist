@@ -7,12 +7,10 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 public struct TargetConfig: Codable, Sendable, Equatable {
     public let device: String
     public let token: String?
-    public let certFingerprint: String?
 
-    public init(device: String, token: String? = nil, certFingerprint: String? = nil) {
+    public init(device: String, token: String? = nil) {
         self.device = device
         self.token = token
-        self.certFingerprint = certFingerprint
     }
 }
 
@@ -160,7 +158,7 @@ enum TargetConfigResolver {
         guard var target = config.targets[name] else { return nil }
 
         if let envToken {
-            target = TargetConfig(device: target.device, token: envToken, certFingerprint: target.certFingerprint)
+            target = TargetConfig(device: target.device, token: envToken)
         }
         return target
     }

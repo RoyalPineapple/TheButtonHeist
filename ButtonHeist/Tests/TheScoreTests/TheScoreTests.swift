@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
  import TheScore
 
 // MARK: - Integration Tests

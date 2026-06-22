@@ -79,7 +79,6 @@ public enum HeistArgument: Codable, Sendable, Equatable {
         case type, value
         case valueRef = "value_ref"
         case target
-        case values
     }
 
     public init(from decoder: Decoder) throws {
@@ -91,7 +90,6 @@ public enum HeistArgument: Codable, Sendable, Equatable {
             let hasValue = container.contains(.value)
                 || container.contains(.valueRef)
                 || container.contains(.target)
-                || container.contains(.values)
             if hasValue {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: container.codingPath,
@@ -100,12 +98,6 @@ public enum HeistArgument: Codable, Sendable, Equatable {
             }
             self = .none
         case .string:
-            if container.contains(.values) {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: container.codingPath + [CodingKeys.values],
-                    debugDescription: "string heist argument accepts exactly one value; use ForEach for multiple string values"
-                ))
-            }
             let hasValue = container.contains(.value)
             let hasRef = container.contains(.valueRef)
             guard hasValue != hasRef else {
