@@ -1,5 +1,6 @@
 import XCTest
 import ButtonHeist
+import ThePlans
 @testable import ButtonHeistCLIExe
 
 final class ElementTargetOptionsTests: XCTestCase {
