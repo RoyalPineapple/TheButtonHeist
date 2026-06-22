@@ -1,0 +1,68 @@
+import Foundation
+
+@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyFailure: Sendable, Equatable, CustomStringConvertible {
+    public let path: String
+    public let contract: String
+    public let observed: String
+    public let correction: String
+
+    public init(
+        path: String,
+        contract: String,
+        observed: String,
+        correction: String
+    ) {
+        self.path = path
+        self.contract = contract
+        self.observed = observed
+        self.correction = correction
+    }
+
+    public var description: String {
+        "\(path): \(contract); observed \(observed); \(correction)"
+    }
+}
+
+@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyError: Error, Sendable, Equatable, CustomStringConvertible {
+    public let failures: [HeistPlanRuntimeSafetyFailure]
+
+    public init(failures: [HeistPlanRuntimeSafetyFailure]) {
+        self.failures = failures
+    }
+
+    public var description: String {
+        guard let first = failures.first else { return "heist plan runtime safety validation failed" }
+        let suffix = failures.count > 1 ? " (+\(failures.count - 1) more)" : ""
+        return "heist plan runtime safety validation failed: \(first)\(suffix)"
+    }
+}
+
+extension HeistPlanRuntimeSafetyValidator {
+    mutating func fail(
+        path: String,
+        contract: String,
+        observed: String,
+        correction: String
+    ) {
+        failures.append(HeistPlanRuntimeSafetyFailure(
+            path: path,
+            contract: contract,
+            observed: observed,
+            correction: correction
+        ))
+    }
+
+    func summarize(_ error: Error) -> String {
+        let text = String(describing: error)
+        guard text.count > 220 else { return text }
+        return "\(text.prefix(217))..."
+    }
+
+    func escaped(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\0", with: "\\0")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\t", with: "\\t")
+    }
+}

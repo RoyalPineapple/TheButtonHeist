@@ -118,6 +118,142 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
 }
 
 @Test
+func rootStringPlanRendersDefinitionsRunHeistLoopsRefsAndBroadMatches() async throws {
+    let plan = try rootStringPlanFixture()
+    let rendered = try plan.canonicalSwiftDSL()
+
+    #expect(rendered == rootStringCanonicalSwiftDSL)
+
+    #if SWIFT_PACKAGE && (os(macOS) || os(Linux))
+    let source = """
+    import ThePlans
+
+    let heist = try \(rendered)
+    """
+    let compiled = try await compileCanonicalHeist(source)
+    let compiledCanonical = try compiled.canonicalSwiftDSL()
+    #expect(compiledCanonical == rendered, "Compiled canonical:\n\(compiledCanonical)\nRendered canonical:\n\(rendered)")
+    #endif
+}
+
+private func rootStringPlanFixture() throws -> HeistPlan {
+    let enterDefinition = try HeistPlan(
+        name: "enter",
+        parameter: .string(name: "term"),
+        body: [
+            .action(try ActionStep(
+                command: .typeText(text: .ref("term"), target: .label(contains: "Search")),
+                expectation: WaitStep(predicate: .present(.value(.ref("term"))), timeout: 2)
+            )),
+        ]
+    )
+    let pressRowDefinition = try HeistPlan(
+        name: "pressRow",
+        parameter: .elementTarget(name: "row"),
+        body: [
+            .action(try ActionStep(
+                command: .activate(.ref("row")),
+                expectation: WaitStep(predicate: .absent(.ref("row")), timeout: 1)
+            )),
+        ]
+    )
+    let rowPredicate = ElementPredicate.element(
+        label: .contains("Result"),
+        identifier: .prefix("row"),
+        value: .suffix("available"),
+        traits: [.button],
+        excludeTraits: [.staticText]
+    )
+    let readyPredicate = ElementPredicateTemplate.element(
+        label: .contains(.literal("Result")),
+        identifier: .prefix(.literal("row")),
+        value: .suffix(.literal("ready")),
+        traits: [.button],
+        excludeTraits: [.staticText]
+    )
+    let plan = try HeistPlan(
+        name: "RootSearch",
+        parameter: .string(name: "query"),
+        definitions: [
+            try HeistPlan(name: "Search", definitions: [enterDefinition], body: []),
+            try HeistPlan(name: "Rows", definitions: [pressRowDefinition], body: []),
+        ],
+        body: [
+            .invoke(HeistInvocationStep(path: ["Search", "enter"], argument: .string(.ref("query")))),
+            .wait(WaitStep(predicate: .present(.label(.ref("query"))), timeout: 1)),
+            .conditional(try ConditionalStep(
+                cases: [
+                    PredicateCase(
+                        predicate: .present(readyPredicate),
+                        body: [.warn(WarnStep(message: "ready"))]
+                    ),
+                ],
+                elseBody: [.fail(FailStep(message: "not ready"))]
+            )),
+            .forEachString(try ForEachStringStep(
+                values: ["Milk", "Eggs"],
+                parameter: "item",
+                body: [
+                    .action(try ActionStep(
+                        command: .typeText(text: .ref("item"), target: .label(contains: "Search")),
+                        expectation: WaitStep(predicate: .present(.label(.ref("item"))), timeout: 2)
+                    )),
+                ]
+            )),
+            .forEachElement(try ForEachElementStep(
+                matching: rowPredicate,
+                limit: 3,
+                parameter: "target",
+                body: [
+                    .invoke(HeistInvocationStep(
+                        path: ["Rows", "pressRow"],
+                        argument: .elementTarget(.ref("target"))
+                    )),
+                ]
+            )),
+        ]
+    )
+
+    return plan
+}
+
+// swiftlint:disable line_length
+private let rootStringCanonicalSwiftDSL = """
+    HeistPlan("RootSearch", parameter: "query") { query in
+        HeistDef<String>("Search.enter", parameter: "term") { term in
+            TypeText(term, into: .label(contains: "Search"))
+                .expect(.present(.value(term)), timeout: .seconds(2))
+        }
+
+        HeistDef<ElementTarget>("Rows.pressRow", parameter: "row") { row in
+            Activate(row)
+                .expect(.absent(row), timeout: .seconds(1))
+        }
+
+        RunHeist("Search.enter", query)
+
+        WaitFor(.present(.label(query)), timeout: .seconds(1))
+
+        If(.present(.element(label: .contains("Result"), identifier: .prefix("row"), value: .suffix("ready"), traits: [.button], excludeTraits: [.staticText]))) {
+            Warn("ready")
+        }
+        .else {
+            Fail("not ready")
+        }
+
+        ForEach(["Milk", "Eggs"]) { item in
+            TypeText(item, into: .label(contains: "Search"))
+                .expect(.present(.label(item)), timeout: .seconds(2))
+        }
+
+        ForEach(.matching(.element(label: .contains("Result"), identifier: .prefix("row"), value: .suffix("available"), traits: [.button], excludeTraits: [.staticText])), limit: 3) { target in
+            RunHeist("Rows.pressRow", target)
+        }
+    }
+    """
+// swiftlint:enable line_length
+
+@Test
 func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
     enum LibraryScreen {
         static let tapAddButton = HeistDef<Void>("AddButton.tap") {
@@ -265,6 +401,51 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
     #expect(try plan.canonicalSwiftDSL() == """
     HeistPlan {
         Mechanical.Swipe(.label("Carousel"), from: UnitPoint(x: 0.8, y: 0.5), to: UnitPoint(x: 0.2, y: 0.5))
+    }
+    """)
+}
+
+@Test
+func canonicalSwiftRendererRendersMechanicalActionForms() throws {
+    let plan = try HeistPlan(body: [
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(
+            selection: .element(.predicate(.label("Button")))
+        )))),
+        .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            selection: .coordinate(ScreenPoint(x: 1.25, y: 2.5)),
+            duration: GestureDuration(seconds: 1.2)
+        )))),
+        .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
+            .predicate(.label("List")),
+            .up
+        ))))),
+        .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .point(
+            start: .coordinate(ScreenPoint(x: 10, y: 20)),
+            destination: .direction(.left)
+        ))))),
+        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            start: .element(.predicate(.label("Slider"))),
+            end: ScreenPoint(x: 200, y: 40)
+        )))),
+        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            start: .coordinate(ScreenPoint(x: 3.3333333, y: 4)),
+            end: ScreenPoint(x: 5, y: 6.5)
+        )))),
+    ])
+
+    #expect(try plan.canonicalSwiftDSL() == """
+    HeistPlan {
+        Mechanical.Tap(.label("Button"))
+
+        Mechanical.LongPress(x: 1.25, y: 2.5, duration: GestureDuration(seconds: 1.2))
+
+        Mechanical.Swipe(.label("List"), .up)
+
+        Mechanical.Swipe(from: ScreenPoint(x: 10, y: 20), .left)
+
+        Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
+
+        Mechanical.Drag(from: ScreenPoint(x: 3.333333, y: 4), to: ScreenPoint(x: 5, y: 6.5))
     }
     """)
 }
