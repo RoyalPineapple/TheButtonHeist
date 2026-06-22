@@ -95,6 +95,7 @@ let project = Project(
             ),
 
             dependencies: [
+                .target(name: "ThePlans"),
                 .target(name: "TheScore"),
                 .external(name: "AccessibilitySnapshotParser"),
             ]
@@ -183,6 +184,7 @@ let project = Project(
             sources: ["ButtonHeist/Tests/TheInsideJobTests/**"],
             dependencies: [
                 .target(name: "TheInsideJob"),
+                .target(name: "ThePlans"),
                 .target(name: "TheScore"),
                 .project(target: "BH Demo", path: "TestApp"),
             ],

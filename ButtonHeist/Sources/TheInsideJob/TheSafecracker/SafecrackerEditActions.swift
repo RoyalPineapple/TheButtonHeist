@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 import TheScore
+import ThePlans
 
 struct SafecrackerEditActions {
 

@@ -205,17 +205,17 @@ final class DiscoveredDeviceTests: XCTestCase {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc123", endpoint: endpoint)
 
-        XCTAssertTrue(device.matches(filter: "TestApp"))
-        XCTAssertTrue(device.matches(filter: "testapp")) // case-insensitive
+        XCTAssertTrue(device.matches(resolutionQuery: "TestApp"))
+        XCTAssertTrue(device.matches(resolutionQuery: "testapp")) // case-insensitive
     }
 
     func testMatchesByAppName() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "MyApp#abc", endpoint: endpoint)
 
-        XCTAssertTrue(device.matches(filter: "MyApp"))
-        XCTAssertTrue(device.matches(filter: "myapp"))
-        XCTAssertFalse(device.matches(filter: "OtherApp"))
+        XCTAssertTrue(device.matches(resolutionQuery: "MyApp"))
+        XCTAssertTrue(device.matches(resolutionQuery: "myapp"))
+        XCTAssertFalse(device.matches(resolutionQuery: "OtherApp"))
     }
 
     func testMatchesByDeviceName() {
@@ -227,18 +227,18 @@ final class DiscoveredDeviceTests: XCTestCase {
             displayDeviceName: "iPhone 16 Pro"
         )
 
-        XCTAssertTrue(device.matches(filter: "iPhone 16"))
-        XCTAssertTrue(device.matches(filter: "iphone 16 pro"))
+        XCTAssertTrue(device.matches(resolutionQuery: "iPhone 16"))
+        XCTAssertTrue(device.matches(resolutionQuery: "iphone 16 pro"))
     }
 
     func testMatchesByShortIdPrefix() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc123", endpoint: endpoint)
 
-        XCTAssertTrue(device.matches(filter: "abc"))
-        XCTAssertTrue(device.matches(filter: "abc123"))
+        XCTAssertTrue(device.matches(resolutionQuery: "abc"))
+        XCTAssertTrue(device.matches(resolutionQuery: "abc123"))
         // "123" still matches via name.contains (full name includes "abc123")
-        XCTAssertTrue(device.matches(filter: "123"))
+        XCTAssertTrue(device.matches(resolutionQuery: "123"))
     }
 
     func testMatchesByInstanceIdPrefix() {
@@ -249,8 +249,8 @@ final class DiscoveredDeviceTests: XCTestCase {
             instanceId: "my-instance-42"
         )
 
-        XCTAssertTrue(device.matches(filter: "my-instance"))
-        XCTAssertFalse(device.matches(filter: "instance-42"))
+        XCTAssertTrue(device.matches(resolutionQuery: "my-instance"))
+        XCTAssertFalse(device.matches(resolutionQuery: "instance-42"))
     }
 
     func testMatchesBySimulatorUDIDPrefix() {
@@ -261,17 +261,17 @@ final class DiscoveredDeviceTests: XCTestCase {
             simulatorUDID: "DEADBEEF-1234-5678-9ABC-DEF012345678"
         )
 
-        XCTAssertTrue(device.matches(filter: "DEADBEEF"))
-        XCTAssertTrue(device.matches(filter: "deadbeef"))
-        XCTAssertFalse(device.matches(filter: "1234-5678"))
+        XCTAssertTrue(device.matches(resolutionQuery: "DEADBEEF"))
+        XCTAssertTrue(device.matches(resolutionQuery: "deadbeef"))
+        XCTAssertFalse(device.matches(resolutionQuery: "1234-5678"))
     }
 
     func testNoMatch() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc", endpoint: endpoint)
 
-        XCTAssertFalse(device.matches(filter: "Android"))
-        XCTAssertFalse(device.matches(filter: "zzzzz"))
+        XCTAssertFalse(device.matches(resolutionQuery: "Android"))
+        XCTAssertFalse(device.matches(resolutionQuery: "zzzzz"))
     }
 
     func testDiscoveryIdentityPrefersInstallationId() {
@@ -455,51 +455,21 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertNil(DiscoveredDevice.directConnectTarget(from: "QA:1"))
     }
 
-    // MARK: - TLS Certificate Fingerprint
-
-    func testCertFingerprintStored() {
+    func testAllDiscoveryFields() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let fingerprint = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
-        let device = DiscoveredDevice(
-            id: "test", name: "TestApp#abc",
-            endpoint: endpoint,
-            certFingerprint: fingerprint
-        )
-
-        XCTAssertEqual(device.certFingerprint, fingerprint)
-    }
-
-    func testCertFingerprintDefaultsToNil() {
-        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp", endpoint: endpoint)
-
-        XCTAssertNil(device.certFingerprint)
-    }
-
-    func testHostPortInitHasNilCertFingerprint() {
-        let device = DiscoveredDevice(host: "127.0.0.1", port: 8080)
-
-        XCTAssertNil(device.certFingerprint)
-    }
-
-    func testAllFieldsIncludingCertFingerprint() {
-        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         let device = DiscoveredDevice(
             id: "test", name: "TestApp#abc",
             endpoint: endpoint,
             simulatorUDID: "SIM-UUID",
             installationId: "install-1",
             displayDeviceName: "Chris's iPhone",
-            instanceId: "my-instance",
-            certFingerprint: fingerprint
+            instanceId: "my-instance"
         )
 
         XCTAssertEqual(device.simulatorUDID, "SIM-UUID")
         XCTAssertEqual(device.installationId, "install-1")
         XCTAssertEqual(device.deviceName, "Chris's iPhone")
         XCTAssertEqual(device.instanceId, "my-instance")
-        XCTAssertEqual(device.certFingerprint, fingerprint)
     }
 
     @ButtonHeistActor
@@ -507,8 +477,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         let device = DiscoveredDevice(
             id: "test",
             name: "ReachableApp#abc123",
-            endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1),
-            certFingerprint: "sha256:mock"
+            endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1)
         )
         let mockConnection = MockConnection()
         mockConnection.emitTransportReadyOnConnect = true
@@ -528,8 +497,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         let device = DiscoveredDevice(
             id: "test",
             name: "ReachableApp#abc123",
-            endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1),
-            certFingerprint: "sha256:mock"
+            endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1)
         )
 
         let previousFactory = makeReachabilityConnection

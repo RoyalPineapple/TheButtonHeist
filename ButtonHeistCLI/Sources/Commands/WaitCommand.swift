@@ -1,6 +1,7 @@
 import ArgumentParser
 import ButtonHeist
 import Foundation
+import ThePlans
 
 struct WaitCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(

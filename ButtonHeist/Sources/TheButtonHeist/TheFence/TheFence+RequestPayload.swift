@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 @_spi(ButtonHeistInternals) import TheScore
 

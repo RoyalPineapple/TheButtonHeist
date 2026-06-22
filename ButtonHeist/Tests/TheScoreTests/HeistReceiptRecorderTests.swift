@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 import Testing
 @testable import TheScore
 

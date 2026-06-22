@@ -9,14 +9,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseDuration() throws -> Double {
-        if let number = try parseNumberIfPresent() {
-            return number
-        }
         if consumeSymbol(".") {
-            return try parseDurationCall()
-        }
-        if consumeIdentifier("Double") != nil {
-            try expectSymbol(".")
             return try parseDurationCall()
         }
         throw error(currentToken, "expected a timeout duration such as .seconds(1)")
@@ -94,38 +87,12 @@ extension HeistPlanSourceParser {
         return value
     }
 
-    mutating func parseQualifiedOrShorthandCall(
-        allowedPrefixes: Set<String>,
-        expectedName: String
-    ) throws {
-        let name = try parseDotCallName(allowedPrefixes: allowedPrefixes)
-        guard name == expectedName else {
-            throw error(previous, "expected .\(expectedName)(...)")
-        }
-    }
-
-    mutating func parseDotCallName(allowedPrefixes: Set<String>) throws -> String {
-        if consumeSymbol(".") {
-            return try parseIdentifier()
-        }
+    mutating func parseDotCallName(allowedPrefixes _: Set<String>) throws -> String {
         let token = currentToken
-        let first = try parseIdentifier()
-        if consumeSymbol(".") {
-            var prefix = first
-            let second = try parseIdentifier()
-            if consumeSymbol(".") {
-                prefix += ".\(second)"
-                guard allowedPrefixes.contains(prefix) else {
-                    throw error(token, "unsupported ButtonHeist source type prefix '\(prefix)'")
-                }
-                return try parseIdentifier()
-            }
-            guard allowedPrefixes.contains(prefix) else {
-                throw error(token, "unsupported ButtonHeist source type prefix '\(prefix)'")
-            }
-            return second
+        guard consumeSymbol(".") else {
+            throw error(token, "expected a ButtonHeist expression beginning with '.'")
         }
-        throw error(token, "expected a ButtonHeist expression beginning with '.'")
+        return try parseIdentifier()
     }
 
     mutating func parseCalleeName() throws -> [String] {

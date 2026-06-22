@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 import AccessibilitySnapshotModel
 @_spi(ButtonHeistInternals) @testable import TheScore
 
@@ -386,7 +387,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scroll","payload":{"direction":"down","containerName":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: ["public mutating requests must be sent as heistPlan"])
+            assertDecodingError(error, contains: ["Unsupported client wire message type"])
         }
     }
 
@@ -439,7 +440,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToEdge","payload":{"edge":"bottom","unexpected":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: ["public mutating requests must be sent as heistPlan"])
+            assertDecodingError(error, contains: ["Unsupported client wire message type"])
         }
     }
 
@@ -1005,7 +1006,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(TXTRecordKey.installationId.rawValue, "installationid")
         XCTAssertEqual(TXTRecordKey.deviceName.rawValue, "devicename")
         XCTAssertEqual(TXTRecordKey.instanceId.rawValue, "instanceid")
-        XCTAssertEqual(TXTRecordKey.certFingerprint.rawValue, "certfp")
         XCTAssertEqual(TXTRecordKey.transport.rawValue, "transport")
     }
 

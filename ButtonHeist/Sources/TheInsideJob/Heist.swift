@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import ThePlans
 
 @_exported import TheScore
 

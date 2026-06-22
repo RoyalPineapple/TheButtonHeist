@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 import Network
 import AccessibilitySnapshotModel
 @testable import ButtonHeist
@@ -11,8 +12,7 @@ enum TheFenceFixtures {
     static let testDevice = DiscoveredDevice(
         id: "mock-device",
         name: "MockApp#test",
-        endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1),
-        certFingerprint: "sha256:mock"
+        endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1)
     )
 
     static let testServerInfo = ServerInfo(
@@ -49,13 +49,30 @@ extension FenceResponse {
     /// `.action` (e.g. the `get_pasteboard` read) or a single-leaf
     /// `.heistExecution` (a single command executed as a one-step heist).
     @ButtonHeistActor
-    var leafAction: (command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?)? {
-        if case .action(let command, let result, let expectation) = self {
-            return (command, result, expectation)
+    var leafAction: (result: ActionResult, expectation: ExpectationResult?)? {
+        if case .action(_, let result, let expectation) = self {
+            return (result, expectation)
         }
-        return directCommandActionOutputProjection.map {
-            (command: $0.command, result: $0.result, expectation: $0.expectation)
+        if case .heistExecution(_, let result, _) = self,
+           let step = result.steps.firstActionLeaf,
+           let actionResult = step.reportActionResult {
+            return (actionResult, step.reportExpectation)
         }
+        return nil
+    }
+}
+
+private extension Array where Element == HeistExecutionStepResult {
+    var firstActionLeaf: HeistExecutionStepResult? {
+        for step in self {
+            if step.kind == .action {
+                return step
+            }
+            if let child = step.children.firstActionLeaf {
+                return child
+            }
+        }
+        return nil
     }
 }
 
@@ -448,7 +465,7 @@ struct HeistInspection {
 }
 
 func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
-    guard case .heistExecution(let plan, let result, let accessibilityTrace, _) = response else {
+    guard case .heistExecution(let plan, let result, let accessibilityTrace) = response else {
         return nil
     }
     let plannedSteps = plan.body
@@ -480,27 +497,33 @@ private extension HeistStep {
 
 private extension HeistActionCommand {
     var fenceCommandForInspection: TheFence.Command {
-        switch clientWireType {
-        case .activate: return .activate
-        case .increment: return .activate
-        case .decrement: return .activate
-        case .performCustomAction: return .activate
-        case .rotor: return .rotor
-        case .oneFingerTap: return .oneFingerTap
-        case .longPress: return .longPress
-        case .swipe: return .swipe
-        case .drag: return .drag
-        case .typeText: return .typeText
-        case .editAction: return .editAction
-        case .setPasteboard: return .setPasteboard
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .scrollToEdge: return .scrollToEdge
-        case .resignFirstResponder: return .dismissKeyboard
-        case .getPasteboard: return .getPasteboard
-        case .wait: return .wait
-        case .clientHello, .authenticate, .requestInterface, .ping, .status, .heistPlan, .requestScreen:
-            return .runHeist
+        switch self {
+        case .activate, .increment, .decrement, .customAction:
+            return .activate
+        case .rotor:
+            return .rotor
+        case .mechanicalTap:
+            return .oneFingerTap
+        case .mechanicalLongPress:
+            return .longPress
+        case .mechanicalSwipe:
+            return .swipe
+        case .mechanicalDrag:
+            return .drag
+        case .typeText:
+            return .typeText
+        case .editAction:
+            return .editAction
+        case .setPasteboard:
+            return .setPasteboard
+        case .viewportScroll:
+            return .scroll
+        case .viewportScrollToVisible:
+            return .scrollToVisible
+        case .viewportScrollToEdge:
+            return .scrollToEdge
+        case .dismissKeyboard:
+            return .dismissKeyboard
         }
     }
 }

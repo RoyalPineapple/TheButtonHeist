@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 import TheScore
 
 public extension TheFence.Command {

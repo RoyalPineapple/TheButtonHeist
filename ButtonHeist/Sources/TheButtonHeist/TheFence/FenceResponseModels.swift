@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 import TheScore
 
@@ -93,16 +94,6 @@ enum FenceRequestErrorCode {
     static let missingTarget = "request.missing_target"
 }
 
-/// Where a heist execution response came from at the client boundary.
-///
-/// The runtime receipt is always `HeistExecutionResult`; this origin only
-/// preserves the public response shape for legacy direct commands that now run
-/// through the heist executor internally.
-public enum HeistExecutionResponseOrigin: Sendable, Equatable {
-    case heistRequest
-    case directCommand(TheFence.Command)
-}
-
 /// Typed response from TheFence command execution.
 ///
 /// Cases marked `…Data` carry the raw payload in memory (base64-encoded).
@@ -125,8 +116,7 @@ public enum FenceResponse {
     case heistExecution(
         plan: HeistPlan,
         result: HeistExecutionResult,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        origin: HeistExecutionResponseOrigin = .heistRequest
+        accessibilityTrace: AccessibilityTrace? = nil
     )
     case heistCatalog(HeistDiscoveryCatalog)
     case heistDescription(HeistDescription)
@@ -160,7 +150,7 @@ public enum FenceResponse {
             if !result.success { return true }
             if let expectation, !expectation.met { return true }
             return false
-        case .heistExecution(_, let result, _, _):
+        case .heistExecution(_, let result, _):
             return result.isFailure
         }
     }

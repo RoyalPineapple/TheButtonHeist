@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 import XCTest
+import ThePlans
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore

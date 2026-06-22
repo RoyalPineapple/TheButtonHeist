@@ -1,6 +1,7 @@
 import ArgumentParser
 import ButtonHeist
 import Foundation
+import ThePlans
 
 struct CLIParsedRequest {
     let command: TheFence.Command

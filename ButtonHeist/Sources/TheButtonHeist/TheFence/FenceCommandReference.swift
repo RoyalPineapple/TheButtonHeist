@@ -1,4 +1,5 @@
 import TheScore
+import ThePlans
 
 /// Descriptor-backed public command reference renderer.
 ///

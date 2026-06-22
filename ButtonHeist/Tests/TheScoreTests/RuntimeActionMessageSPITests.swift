@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 import XCTest
 
 final class RuntimeActionMessageSPITests: XCTestCase {

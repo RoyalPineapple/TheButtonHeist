@@ -4,6 +4,7 @@ import UIKit
 import os.log
 
 import TheScore
+import ThePlans
 
 import AccessibilitySnapshotParser
 

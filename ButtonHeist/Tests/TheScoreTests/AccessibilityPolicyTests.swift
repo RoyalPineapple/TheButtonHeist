@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 @testable import TheScore
 
 /// Sanity tests for `AccessibilityPolicy` — the single source of truth for

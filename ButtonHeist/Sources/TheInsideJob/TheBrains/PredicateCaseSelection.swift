@@ -3,6 +3,7 @@
 import Foundation
 
 import TheScore
+import ThePlans
 
 struct PredicateCaseSelection {
     typealias ObservationSource = PredicatePollingEngine<PredicateCaseSelection>.ObservationSource

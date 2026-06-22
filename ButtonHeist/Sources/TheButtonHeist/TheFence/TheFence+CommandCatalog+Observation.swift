@@ -1,4 +1,5 @@
 import TheScore
+import ThePlans
 
 enum ObservationCommand: String, CaseIterable, FenceCommand {
     case getInterface = "get_interface"

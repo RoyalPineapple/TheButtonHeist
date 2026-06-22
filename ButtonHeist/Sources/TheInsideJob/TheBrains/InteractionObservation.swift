@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import ThePlans
 import TheScore
 
 /// Owns the before/body/after observation contract for executable interactions.

@@ -17,13 +17,11 @@ extension DeviceDiscovery {
         var installationId: String?
         var displayDeviceName: String?
         var instanceId: String?
-        var certFingerprint: String?
         if let txtRecord {
             simUDID = txtRecord[TXTRecordKey.simUDID.rawValue]
             installationId = txtRecord[TXTRecordKey.installationId.rawValue]
             displayDeviceName = txtRecord[TXTRecordKey.deviceName.rawValue]
             instanceId = txtRecord[TXTRecordKey.instanceId.rawValue]
-            certFingerprint = txtRecord[TXTRecordKey.certFingerprint.rawValue]
         }
 
         return DiscoveredDevice(
@@ -33,8 +31,7 @@ extension DeviceDiscovery {
             simulatorUDID: simUDID,
             installationId: installationId,
             displayDeviceName: displayDeviceName,
-            instanceId: instanceId,
-            certFingerprint: certFingerprint
+            instanceId: instanceId
         )
     }
 }

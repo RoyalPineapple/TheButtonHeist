@@ -46,48 +46,9 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
     public static let directionName = "client"
 
     case clientHello, authenticate, requestInterface, ping, status
-    case activate, increment, decrement, performCustomAction, rotor
-    case oneFingerTap, longPress, swipe, drag
-    case typeText, editAction, setPasteboard, getPasteboard
-    case scroll, scrollToVisible, scrollToEdge, resignFirstResponder
+    case getPasteboard
     case requestScreen
-    case wait, heistPlan
-}
-
-/// High-level ownership classification for client-to-server message types.
-public enum ClientMessageCategory: String, Sendable, Equatable {
-    case transportSession
-    case pureReadObservation
-    case mutatingAppInteraction
-    case heistExecution
-}
-
-public extension ClientWireMessageType {
-    /// Product-level classification for the client message surface.
-    ///
-    /// Mutating app interactions, including one-shot waits that need heist
-    /// receipts, are intentionally not public direct wire requests. Public
-    /// callers send them as `heistPlan` instead.
-    var category: ClientMessageCategory {
-        switch self {
-        case .clientHello, .authenticate, .ping, .status:
-            return .transportSession
-        case .requestInterface, .getPasteboard, .requestScreen:
-            return .pureReadObservation
-        case .heistPlan:
-            return .heistExecution
-        case .activate, .increment, .decrement, .performCustomAction, .rotor,
-             .oneFingerTap, .longPress, .swipe, .drag,
-             .typeText, .editAction, .setPasteboard,
-             .scroll, .scrollToVisible, .scrollToEdge, .resignFirstResponder,
-             .wait:
-            return .mutatingAppInteraction
-        }
-    }
-
-    var isPublicWireRequestType: Bool {
-        category != .mutatingAppInteraction
-    }
+    case heistPlan
 }
 
 /// Explicit server-to-client wire message discriminator used at JSON boundaries.
@@ -106,7 +67,6 @@ public enum TXTRecordKey: String, Sendable {
     case installationId = "installationid"
     case deviceName = "devicename"
     case instanceId = "instanceid"
-    case certFingerprint = "certfp"
     case transport = "transport"
 }
 

@@ -137,9 +137,8 @@ envelopes. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for full details.
 {"buttonHeistVersion":"<semver>","requestId":"req-1","type":"authenticate","payload":{"token":"agent-token"}}
 ```
 
-`authApprovalPending` and `authApproved` are not valid current auth responses.
-If a client sees either legacy tag, it rejects the response and tells the user to
-rebuild or reinstall the app, then retry with the configured token.
+Only token-derived TLS-PSK auth is valid. Any non-current auth response is an
+ordinary protocol decode failure.
 
 ## Security Limits
 

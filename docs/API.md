@@ -184,9 +184,6 @@ Named targets live in `.buttonheist.json` or
 }
 ```
 
-Existing configs may still contain `certFingerprint`; the current
-Network.framework PSK transport ignores it and uses the target token instead.
-
 ## ButtonHeistMCP
 
 **Location**: `ButtonHeistMCP/`

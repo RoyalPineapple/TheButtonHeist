@@ -134,14 +134,17 @@ final class TheFenceHandlerTests: XCTestCase {
         _ response: FenceResponse,
         command: TheFence.Command,
         stepKind: HeistExecutionStepKind,
+        reportCommandName: String? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        guard case .heistExecution(_, let result, _, let origin) = response else {
+        guard case .heistExecution(_, let result, _) = response else {
             return XCTFail("Expected .heistExecution response, got \(response)", file: file, line: line)
         }
-        XCTAssertEqual(origin, .directCommand(command), file: file, line: line)
         XCTAssertEqual(result.steps.map(\.kind), [stepKind], file: file, line: line)
+        if stepKind == .action {
+            XCTAssertEqual(result.steps.first?.reportCommandName, reportCommandName ?? command.rawValue, file: file, line: line)
+        }
     }
 
     /// Assert that executing a typed operation passes validation (returns a non-error response).
@@ -465,7 +468,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "step": .string(#"Activate(.label("Pay"))"#),
         ])
 
-        guard case .heistExecution(let plan, let result, _, _) = response else {
+        guard case .heistExecution(let plan, let result, _) = response else {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         XCTAssertEqual(plan.body, [
@@ -481,7 +484,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let fence = TheFence(configuration: .init())
 
         let request = try fence.decodePerformRequest(TheFence.CommandArgumentEnvelope(values: [
-            "step": .string(#"WaitFor(.present(.label("Pay")), timeout: 5)"#),
+            "step": .string(#"WaitFor(.present(.label("Pay")), timeout: .seconds(5))"#),
         ]))
 
         XCTAssertEqual(request.plan.body, [
@@ -510,7 +513,7 @@ final class TheFenceHandlerTests: XCTestCase {
             }
             """,
             """
-            WaitFor(.present(.label("Receipt")), timeout: 5) {
+            WaitFor(.present(.label("Receipt")), timeout: .seconds(5)) {
                 Activate(.label("Done"))
             }
             """,
@@ -527,11 +530,11 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertThrowsError(try fence.decodePerformRequest(TheFence.CommandArgumentEnvelope(values: [
                 "step": .string(step),
             ])), step) { error in
+                let message = String(describing: error)
                 XCTAssertTrue(
-                    String(describing: error).contains(
-                        "perform accepts one action statement or one simple WaitFor statement"
-                    ),
-                    "\(error)"
+                    message.contains("perform accepts one action statement or one simple WaitFor statement")
+                        || message.contains("expected an identifier"),
+                    message
                 )
             }
         }
@@ -560,7 +563,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "plan": .string(Self.pureRuntimeHeistSource),
         ])
 
-        guard case .heistExecution(let plan, let result, _, _) = response else {
+        guard case .heistExecution(let plan, let result, _) = response else {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         XCTAssertEqual(plan.name, "agentFlow")
@@ -590,7 +593,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "plan": .string(Self.pureRuntimeHeistSource),
         ])
 
-        guard case .heistExecution(_, let result, _, _) = response else {
+        guard case .heistExecution(_, let result, _) = response else {
             return XCTFail("Expected heistExecution response, got \(response)")
         }
         let receiptURLs = receiptURLs(in: directory)
@@ -721,7 +724,9 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
 
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(TheFence.CommandArgumentEnvelope(values: arguments))) { error in
-            XCTAssertTrue(String(describing: error).contains("string heist argument accepts exactly one value"), "\(error)")
+            let message = String(describing: error)
+            XCTAssertTrue(message.contains("Unknown heist argument field"), message)
+            XCTAssertTrue(message.contains("values"), message)
         }
     }
 
@@ -1562,8 +1567,13 @@ final class TheFenceHandlerTests: XCTestCase {
             "point": .object(["x": .double(12), "y": .double(34)]),
         ])
 
-        assertDirectCommandHeistExecution(response, command: .oneFingerTap, stepKind: .action)
-        XCTAssertEqual(response.compactFormatted(), "one_finger_tap: ok")
+        assertDirectCommandHeistExecution(
+            response,
+            command: .oneFingerTap,
+            stepKind: .action,
+            reportCommandName: "oneFingerTap"
+        )
+        XCTAssertEqual(response.compactFormatted(), "heist: 1 top-level steps in 0ms\n  [0] oneFingerTap")
     }
 
     @ButtonHeistActor
@@ -1860,10 +1870,6 @@ final class TheFenceHandlerTests: XCTestCase {
                 return XCTFail("Expected \(testCase.command.rawValue) to send heistPlan, got \(String(describing: mockConn.sent.first?.0))")
             }
             XCTAssertEqual(run.plan.body.count, 1, testCase.command.rawValue)
-            XCTAssertFalse(
-                mockConn.sent.contains { $0.0.wireType.category == .mutatingAppInteraction },
-                "\(testCase.command.rawValue) sent primitive mutating wire message"
-            )
         }
     }
 
@@ -2151,9 +2157,9 @@ final class TheFenceHandlerTests: XCTestCase {
 
         assertDirectCommandHeistExecution(response, command: .activate, stepKind: .action)
         let json = publicJSONObject(response)
-        XCTAssertEqual(json["method"] as? String, "activate")
-        XCTAssertNil(json["report"])
-        XCTAssertEqual(response.compactFormatted(), "activate: ok")
+        XCTAssertNil(json["method"])
+        XCTAssertNotNil(json["report"])
+        XCTAssertEqual(response.compactFormatted(), "heist: 1 top-level steps in 0ms\n  [0] activate")
     }
 
     @ButtonHeistActor
@@ -2479,8 +2485,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
         assertDirectCommandHeistExecution(response, command: .wait, stepKind: .wait)
         let json = publicJSONObject(response)
-        XCTAssertEqual(json["method"] as? String, "wait")
-        XCTAssertNil(json["report"])
+        XCTAssertNil(json["method"])
+        XCTAssertNotNil(json["report"])
     }
 
     @ButtonHeistActor
@@ -2504,11 +2510,12 @@ final class TheFenceHandlerTests: XCTestCase {
             ]),
         ])
 
-        guard let leaf = response.leafAction else {
-            return XCTFail("Expected single-step action response, got \(response)")
+        guard case .heistExecution(_, let result, _) = response else {
+            return XCTFail("Expected heistExecution response, got \(response)")
         }
-        XCTAssertEqual(leaf.expectation?.met, false)
-        XCTAssertEqual(leaf.expectation?.actual, "noChange")
+        let waitEvidence = try XCTUnwrap(result.steps.first?.waitEvidence)
+        XCTAssertEqual(waitEvidence.expectation.met, false)
+        XCTAssertEqual(waitEvidence.expectation.actual, "noChange")
     }
 
     @ButtonHeistActor
@@ -2534,11 +2541,12 @@ final class TheFenceHandlerTests: XCTestCase {
             "timeout": .double(0.2),
         ])
 
-        guard let leaf = response.leafAction else {
-            return XCTFail("Expected single-step action response, got \(response)")
+        guard case .heistExecution(_, let result, _) = response else {
+            return XCTFail("Expected heistExecution response, got \(response)")
         }
-        XCTAssertEqual(leaf.expectation?.met, false)
-        XCTAssertEqual(leaf.result.message, "timed out after 0.2s — expectation not met")
+        let waitEvidence = try XCTUnwrap(result.steps.first?.waitEvidence)
+        XCTAssertEqual(waitEvidence.expectation.met, false)
+        XCTAssertEqual(waitEvidence.actionResult.message, "timed out after 0.2s — expectation not met")
     }
 
     @ButtonHeistActor

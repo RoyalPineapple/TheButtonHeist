@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import TheScore
 
@@ -253,7 +254,7 @@ final class WireCommandParityTests: XCTestCase {
         let samples = try sampleClientMessages()
         XCTAssertEqual(
             Set(samples.map(\.wireType)),
-            Set(ClientWireMessageType.allCases.filter(\.isPublicWireRequestType))
+            Set(ClientWireMessageType.allCases)
         )
 
         for message in samples {

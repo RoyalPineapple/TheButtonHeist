@@ -100,20 +100,10 @@ public extension HeistExecutionStepResult {
         return reportCommandName ?? reportStepName
     }
 
-    /// Wire message type for an action-kind step. Prefers the reported command;
-    /// falls back to the delivered action method.
-    var reportClientWireType: ClientWireMessageType? {
-        guard kind == .action else { return nil }
-        if let command = actionEvidence?.command {
-            return command.runtimeActionType
-        }
-        return actionEvidence?.actionResult?.method.heistReportWireType
-            ?? actionEvidence?.expectationActionResult?.method.heistReportWireType
-    }
-
     /// Wire command name for an action-kind step.
     var reportCommandName: String? {
-        reportClientWireType?.rawValue
+        guard kind == .action else { return nil }
+        return actionEvidence?.command?.runtimeActionType.rawValue
     }
 
     /// Durable matcher target for an action-kind step, if any.
@@ -372,34 +362,5 @@ private extension HeistExecutionStepResult {
     var reportedActionResults: [ActionResult] {
         (reportedActionResult.map { [$0] } ?? [])
             + children.flatMap(\.reportedActionResults)
-    }
-}
-
-// MARK: - Action Method Wire Mapping
-
-private extension ActionMethod {
-    /// The client wire message type a delivered action method corresponds to,
-    /// used to recover a command name when no reported command is present.
-    var heistReportWireType: ClientWireMessageType? {
-        switch self {
-        case .activate: return .activate
-        case .increment: return .increment
-        case .decrement: return .decrement
-        case .syntheticTap: return .oneFingerTap
-        case .syntheticLongPress: return .longPress
-        case .syntheticSwipe: return .swipe
-        case .syntheticDrag: return .drag
-        case .typeText: return .typeText
-        case .customAction: return .performCustomAction
-        case .editAction: return .editAction
-        case .resignFirstResponder: return .resignFirstResponder
-        case .setPasteboard: return .setPasteboard
-        case .rotor: return .rotor
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .scrollToEdge: return .scrollToEdge
-        case .getPasteboard, .heistPlan, .wait:
-            return nil
-        }
     }
 }

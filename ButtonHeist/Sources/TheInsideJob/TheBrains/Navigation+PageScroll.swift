@@ -3,6 +3,7 @@
 import UIKit
 
 import TheScore
+import ThePlans
 
 // MARK: - Page Scroll Commands
 

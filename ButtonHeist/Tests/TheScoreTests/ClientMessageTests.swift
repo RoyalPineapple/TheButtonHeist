@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 import TheScore
 
 final class ClientMessageTests: XCTestCase {
@@ -245,7 +246,7 @@ final class ClientMessageTests: XCTestCase {
 
         for json in primitiveRequests {
             XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: Data(json.utf8)), json) { error in
-                XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
+                XCTAssertTrue("\(error)".contains("Unsupported client wire message type"), "\(error)")
             }
         }
     }
@@ -260,7 +261,7 @@ final class ClientMessageTests: XCTestCase {
 
         for json in primitiveMessages {
             XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)), json) { error in
-                XCTAssertTrue("\(error)".contains("public mutating requests must be sent as heistPlan"), "\(error)")
+                XCTAssertTrue("\(error)".contains("Unsupported client wire message type"), "\(error)")
             }
         }
     }

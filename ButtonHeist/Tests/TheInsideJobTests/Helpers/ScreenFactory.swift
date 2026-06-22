@@ -3,6 +3,7 @@
 import UIKit
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+import ThePlans
 @testable import TheScore
 
 /// Test-only `Screen` factory.

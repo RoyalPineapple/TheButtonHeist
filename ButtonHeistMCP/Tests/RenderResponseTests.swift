@@ -2,6 +2,7 @@ import AccessibilitySnapshotModel
 import ButtonHeist
 import Foundation
 import Testing
+import ThePlans
 import TheScore
 @testable import ButtonHeistMCP
 

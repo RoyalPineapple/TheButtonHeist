@@ -78,6 +78,7 @@ let package = Package(
         .target(
             name: "TheInsideJob",
             dependencies: [
+                "ThePlans",
                 "TheScore",
                 .product(
                     name: "AccessibilitySnapshotParser",

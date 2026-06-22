@@ -3,6 +3,7 @@
 import UIKit
 
 import TheScore
+import ThePlans
 
 import AccessibilitySnapshotParser
 

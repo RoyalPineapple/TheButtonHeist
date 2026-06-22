@@ -1,6 +1,7 @@
 import ArgumentParser
 import ButtonHeist
 import Foundation
+import ThePlans
 
 typealias CLIRequestParameters = [FenceParameterKey: HeistValue]
 

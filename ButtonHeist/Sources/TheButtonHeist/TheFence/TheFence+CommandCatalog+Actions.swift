@@ -1,4 +1,5 @@
 import TheScore
+import ThePlans
 
 enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCommand, PayloadCheckedHeistPrimitiveCommand {
     case oneFingerTap = "one_finger_tap"

@@ -288,14 +288,13 @@ let search = try HeistPlan("searchFlow") {
     Activate(.label("Search"))
         .expect(.changed(.screen()), timeout: .seconds(5))
 
-    WaitFor(timeout: .seconds(5)) {
-        Case(.present(.label("Results"))) {
-            Warn("Search results loaded")
-        }
-
-        Else {
+    WaitFor(.present(.label("Results")), timeout: .seconds(5))
+        .else {
             Fail("Search did not settle")
         }
+
+    If(.present(.label("Results"))) {
+        Warn("Search results loaded")
     }
 }
 ```

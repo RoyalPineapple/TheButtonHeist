@@ -1,5 +1,6 @@
 import ArgumentParser
 import ButtonHeist
+import ThePlans
 
 extension GestureCLICommandContract {
     static func gestureRequest(

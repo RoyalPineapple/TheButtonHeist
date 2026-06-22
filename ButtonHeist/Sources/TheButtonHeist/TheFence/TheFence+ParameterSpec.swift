@@ -1,4 +1,5 @@
 import TheScore
+import ThePlans
 
 public struct FenceParameterSpec: Sendable, Equatable {
 

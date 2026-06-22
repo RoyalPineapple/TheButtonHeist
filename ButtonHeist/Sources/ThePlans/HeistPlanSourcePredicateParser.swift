@@ -2,9 +2,7 @@ import Foundation
 
 extension HeistPlanSourceParser {
     mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicateExpr {
-        let name = try parseDotCallName(
-            allowedPrefixes: ["AccessibilityPredicate", "AccessibilityPredicateExpr"]
-        )
+        let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "changed":
             try expectSymbol("(")
@@ -25,7 +23,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseChangePredicateExpr() throws -> ChangePredicateExpr {
-        let name = try parseDotCallName(allowedPrefixes: ["AccessibilityPredicate.Change", "ChangePredicateExpr"])
+        let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "screen":
             try expectSymbol("(")
@@ -53,9 +51,7 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseStatePredicateExpr() throws -> StatePredicateExpr {
-        let name = try parseDotCallName(
-            allowedPrefixes: ["AccessibilityPredicate.State", "StatePredicateExpr"]
-        )
+        let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "present", "absent":
             return try parsePresentAbsentState(name: name)

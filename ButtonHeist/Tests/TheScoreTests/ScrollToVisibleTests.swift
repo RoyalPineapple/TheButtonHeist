@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 @testable import TheScore
 
 final class ScrollToVisibleTests: XCTestCase {
@@ -67,7 +68,7 @@ final class ScrollToVisibleTests: XCTestCase {
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToVisible","payload":{"label":"Settings","unexpected":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: ["public mutating requests must be sent as heistPlan"])
+            assertDecodingError(error, contains: ["Unsupported client wire message type"])
         }
     }
 

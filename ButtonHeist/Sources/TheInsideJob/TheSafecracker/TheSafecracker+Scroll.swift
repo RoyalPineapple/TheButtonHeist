@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 import TheScore
+import ThePlans
 
 /// TheSafecracker scroll primitives — UIScrollView and screen-coordinate mechanics.
 /// Takes a scroll view and movement parameters, produces offset changes.

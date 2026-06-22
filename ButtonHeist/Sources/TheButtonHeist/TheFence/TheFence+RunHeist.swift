@@ -29,8 +29,7 @@ extension TheFence {
     func runHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        timeout: TimeInterval,
-        origin: HeistExecutionResponseOrigin = .heistRequest
+        timeout: TimeInterval
     ) async throws -> FenceResponse {
         let heistStart = CFAbsoluteTimeGetCurrent()
         let executionResult = try await sendAndAwaitHeistExecution(plan, argument: argument, timeout: timeout)
@@ -45,8 +44,7 @@ extension TheFence {
         return .heistExecution(
             plan: plan,
             result: result,
-            accessibilityTrace: accessibilityTrace,
-            origin: origin
+            accessibilityTrace: accessibilityTrace
         )
     }
 
@@ -86,8 +84,7 @@ extension TheFence {
     func executeSingleStepHeist(_ parsed: ParsedRequest, plan: HeistPlan) async throws -> FenceResponse {
         try await runHeistPlan(
             plan,
-            timeout: singleStepTimeout(for: parsed),
-            origin: .directCommand(parsed.command)
+            timeout: singleStepTimeout(for: parsed)
         )
     }
 

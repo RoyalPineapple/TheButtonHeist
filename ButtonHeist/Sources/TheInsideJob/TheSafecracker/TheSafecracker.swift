@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 import TheScore
+import ThePlans
 
 /// Facade for mechanical input injection.
 ///

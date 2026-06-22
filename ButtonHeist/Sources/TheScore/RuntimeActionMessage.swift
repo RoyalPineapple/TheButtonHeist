@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 /// Resolved, internal action dispatch used by the heist runtime.
 ///
@@ -58,8 +59,16 @@ import Foundation
     case wait(WaitTarget)
 }
 
+@_spi(ButtonHeistInternals) public enum RuntimeActionType: String, Sendable, Equatable, CaseIterable {
+    case activate, increment, decrement, performCustomAction, rotor
+    case oneFingerTap, longPress, swipe, drag
+    case typeText, editAction, setPasteboard
+    case scroll, scrollToVisible, scrollToEdge, resignFirstResponder
+    case wait
+}
+
 @_spi(ButtonHeistInternals) public extension RuntimeActionMessage {
-    var runtimeType: ClientWireMessageType {
+    var runtimeType: RuntimeActionType {
         switch self {
         case .activate: return .activate
         case .increment: return .increment
