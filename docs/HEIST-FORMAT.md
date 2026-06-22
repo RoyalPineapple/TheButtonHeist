@@ -1,22 +1,27 @@
-# Heist Plan Format
+# Heist Format
 
-Button Heist uses three file roles:
+Button Heist has one authored language and one generated artifact format.
+
+Humans and agents write ButtonHeist DSL. The runtime executes a validated
+`HeistPlan`. A `.heist` path is a generated package directory that carries that
+plan; it is not a hand-authored JSON file.
+
+## File Roles
 
 | Role | Meaning |
 |------|---------|
-| `.swift` | Preferred editable source for humans authoring rich Swift DSL files. |
-| `.json` | Explicit raw `HeistPlan` JSON IR for debug, import, export, and generated tooling. Do not use it as the agent-facing heist authoring format. |
-| `.heist` | Generated package artifact. Do not hand-author it. |
+| `.swift` | Full Swift source for reusable authored heists, tests, helpers, and local constants. |
+| `plan` source string | ButtonHeist DSL source for MCP/CLI inline authoring. It is Swift-like, but accepts only the DSL constructs Button Heist can parse and render canonically. |
+| `.heist` | Generated package artifact containing `manifest.json` and `plan.json`. Do not hand-author it. |
+| `.json` | Raw `HeistPlan` JSON IR for debugging, import/export, and generated tooling only. It is not public heist authoring input. |
 
-Agents authoring heists through MCP should prefer canonical ButtonHeist source
-strings in `run_heist(plan:)`. That source is Swift-like ButtonHeist DSL, not
-arbitrary Swift execution. It accepts the constructs Button Heist can render
-canonically and rejects imports, variables, functions, native Swift control
-flow, interpolation, custom calls, body-local `try`, `await`, and unbounded
-loops. The source must be rooted at `HeistPlan { ... }`, optionally with a name
-or root parameter.
+`run_heist` accepts ButtonHeist DSL source through `plan`, or a generated
+`.heist` package through `path`. Public run input does not accept raw structured
+JSON IR fields.
 
-A `.heist` path is an Apple-native package directory:
+## Package Shape
+
+A `.heist` path is a package directory:
 
 ```text
 SearchFlow.heist/
@@ -24,17 +29,13 @@ SearchFlow.heist/
   plan.json
 ```
 
-`manifest.json` describes the artifact container and names its root entry.
-`plan.json` stores the canonical `HeistPlan` JSON that the runtime executes
-after decoding. Runtime execution still receives a `HeistPlan`; it does not
-execute artifact internals or Swift source.
-
-Plain JSON with a `.heist` extension is invalid. Use `.json` for raw HeistPlan
-IR, or generate a `.heist` package from Swift DSL, canonical source, or export.
+Plain JSON with a `.heist` extension is invalid. Use `.json` when you are
+explicitly inspecting raw `HeistPlan` IR, or generate a fresh `.heist` package
+from Swift/DSL source.
 
 ## Manifest
 
-`manifest.json` is intentionally small:
+`manifest.json` is the artifact envelope:
 
 ```json
 {
@@ -60,36 +61,27 @@ IR, or generate a `.heist` package from Swift DSL, canonical source, or export.
 
 `entry` is not a path, registry key, alias, import, or selector for arbitrary
 definitions. It names the root `HeistPlan.name` stored in `plan.json`.
-Parameterized definitions are capabilities, not artifact entries; run them from
-a parameterless root plan with `RunHeist("Name", argument)`.
+Parameterized definitions are reusable capabilities, not artifact entries; run
+them from a root plan with `RunHeist("Name", argument)`.
 
-The manifest does not contain source metadata, app bundle IDs, step counts,
-command lists, screenshots, accessibility evidence, repair provenance, trace
-IDs, or target labels. Those belong in `plan.json` or future sidecars, not in
-the v1 manifest.
-
-This is v1 of the package artifact contract. Earlier development fixtures that
-stored raw JSON at a `.heist` path, including pre-package `version: 2` fixture
-JSON, are intentionally unsupported. Re-export those plans as `.json` IR or
-generate a fresh `.heist` package.
+The manifest does not contain app bundle IDs, step counts, screenshots,
+accessibility evidence, repair provenance, trace IDs, target labels, command
+lists, or source metadata. Those belong in `plan.json`, external evidence, or
+future sidecars.
 
 ## Plan JSON
 
-**Path**: `plan.json` inside `.heist`, or a standalone `.json` IR file.
-**Encoding**: JSON (UTF-8)
-**Current plan version**: `1`
+`plan.json` is the canonical generated `HeistPlan` value. It is storage, wire,
+and internal IR. It is not the surface humans or agents should write by hand.
 
-`plan.json` stores a `HeistPlan`: the canonical runtime and wire contract for
-semantic Button Heist tests. Swift DSL source, canonical ButtonHeist source,
-live-composed heists, and explicit raw JSON IR all converge on this value. JSON
-is storage, wire, and internal IR. It is not the authored surface for humans or
-agents.
+The wire contract is executable, not prose-only. Keep this document aligned
+with:
 
-The plan is not a transcript of viewport mechanics. Normal heists express
-semantic intent and semantic outcomes; Button Heist owns reveal, element inflation,
-settlement, live geometry, and diagnostics at execution time.
+- `ButtonHeist/Tests/ThePlansTests/HeistPlanWireContractTests.swift`
+- `ButtonHeist/Tests/ThePlansTests/ThePlansBoundaryTests.swift`
+- `ButtonHeist/Tests/TheScoreTests/HeistPlaybackTests.swift`
 
-## Structure
+The root shape is:
 
 ```json
 {
@@ -97,448 +89,115 @@ settlement, live geometry, and diagnostics at execution time.
   "name": "purchaseFlow",
   "parameter": { "type": "none" },
   "definitions": [],
-  "body": []
+  "body": [
+    {
+      "type": "warn",
+      "warn": { "message": "checkpoint" }
+    }
+  ]
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | `Int` | Must match the supported `HeistPlan` version. |
-| `name` | `String?` | Heist or definition name. Required for `.heist` root entries and for plans stored in `definitions`; optional for raw `.json` IR and inline one-step heists. |
+| `name` | `String?` | Heist or definition name. Required for `.heist` root entries and stored definitions; optional for inline one-step plans. |
 | `parameter` | `HeistParameter` | Optional reusable-heist parameter declaration. Omitted means no parameter. |
 | `definitions` | `[HeistPlan]` | Local named reusable heist definitions. |
 | `body` | `[HeistStep]` | Ordered list of typed heist steps. The body must be non-empty unless the plan only provides definitions. |
 
-Unknown keys are rejected. There is no app identifier, source metadata,
-runtime ID, capture-local element ID, or implicit viewport state in the root
+Unknown keys are rejected. There is no app identifier, source metadata, runtime
+ID, capture-local element ID, geometry, or implicit viewport state in the root
 plan contract.
 
-## Definitions and Invocations
+## Authored Shape
 
-Definitions are named `HeistPlan` values stored inside another plan. They are
-local to the containing plan and exported through that namespace only. There is
-no import mechanism, global lookup table, remote lookup, or arbitrary Swift
-source execution over the wire.
+Use DSL when explaining or authoring heists.
 
-```json
-{
-  "version": 1,
-  "name": "purchaseFlow",
-  "definitions": [
-    {
-      "version": 1,
-      "name": "LibraryScreen",
-      "definitions": [
-        {
-          "version": 1,
-          "name": "addToCart",
-          "parameter": { "type": "string", "name": "item" },
-          "body": [
-            {
-              "type": "action",
-              "action": {
-                "command": {
-                  "type": "activate",
-                  "payload": { "label_ref": "item" }
-                },
-                "expectation": {
-                  "predicate": { "type": "present", "element": { "label": "Cart" } },
-                  "timeout": 2
-                }
-              }
-            }
-          ]
+```swift
+HeistPlan("purchaseFlow") {
+    TypeText("milk", into: .label("Search"))
+        .expect(.present(.value("milk")), timeout: .seconds(2))
+
+    Activate(.label("Milk"))
+        .expect(.changed(.screen()))
+
+    WaitFor(.absent(.label("Loading")), timeout: .seconds(5))
+        .else {
+            Fail("Loading did not finish")
         }
-      ],
-      "body": []
+}
+```
+
+The same primitives scale up without creating a second runtime:
+
+```swift
+HeistDef<String>("addToCart", parameter: "item") { item in
+    TypeText(item, into: .label("Search"))
+        .expect(.present(.value(item)), timeout: .seconds(2))
+
+    Activate(.label(item))
+        .expect(.present(.label("Cart")), timeout: .seconds(2))
+}
+
+HeistPlan("cartFlow") {
+    ForEach(["Milk", "Eggs"]) { item in
+        RunHeist("addToCart", item)
     }
-  ],
-  "body": [
-    {
-      "type": "invoke",
-      "invoke": {
-        "path": ["LibraryScreen", "addToCart"],
-        "argument": { "type": "string", "value": "Milk" }
-      }
+
+    If {
+        Case(.present(.label("Checkout"))) {
+            Activate(.label("Checkout"))
+                .expect(.changed(.screen()))
+        }
+
+        Else {
+            Fail("Checkout unavailable")
+        }
     }
-  ]
 }
 ```
 
-Lookup is explicit:
-
-- `["LibraryScreen", "addToCart"]` can call a definition nested under `LibraryScreen`.
-- `["addToCart"]` is valid only when the current definition scope defines `addToCart` directly.
-- Duplicate names in the same `definitions` array are rejected.
-- Recursion and invocation cycles are rejected by runtime validation.
-
-Parameters are singular semantic values only:
-
-| Type | Meaning |
-|------|---------|
-| `none` | No argument accepted. |
-| `string` | One string value. |
-| `element_target` | One semantic `ElementTarget` value. |
-
-Arguments must match the target parameter type. String arguments may use
-`value` or `value_ref`; element-target arguments may use `target` or
-`target_ref`. Refs are scoped names, not objects. They carry no
-geometry, runtime ID, capture ID, or cached element.
-
-## Step Types
-
-Each step is a type-discriminated object with exactly one payload:
-
-```json
-{
-  "type": "action",
-  "action": {
-    "command": {
-      "type": "activate",
-      "payload": { "label": "Delete" }
-    },
-    "expectation": {
-      "predicate": {
-        "type": "absent",
-        "target": { "label": "Delete" }
-      },
-      "timeout": 2
-    }
-  }
-}
-```
-
-Supported step types:
-
-| Type | Payload key | Purpose |
-|------|-------------|---------|
-| `action` | `action` | Execute one command through the normal command pipeline. |
-| `wait` | `wait` | Wait for one predicate until timeout. |
-| `conditional` | `conditional` | Immediate settled-state branching. |
-| `wait_for_cases` | `wait_for_cases` | Wait until one case predicate matches, or Else handles timeout. |
-| `for_each_element` | `for_each_element` | Bounded loop over a semantic predicate match set. |
-| `for_each_string` | `for_each_string` | Bounded loop over a finite string array. |
-| `heist` | `heist` | Inline structural heist group executed through the same pipeline. |
-| `invoke` | `invoke` | Call a local named definition with a typed argument. |
-| `warn` | `warn` | Emit a non-failing report message. |
-| `fail` | `fail` | Fail the heist with a message. |
-
-## Actions And Expectations
-
-An action step wraps a `HeistActionCommand` plus either an expectation or an
-explicit expectation waiver:
-
-```json
-{
-  "type": "action",
-  "action": {
-    "command": {
-      "type": "type_text",
-      "payload": {
-        "text": "milk",
-        "elementTarget": { "label": "Search" }
-      }
-    },
-    "expectation": {
-      "predicate": {
-        "type": "present",
-        "element": { "label": "Search", "value": "milk" }
-      },
-      "timeout": 5
-    }
-  }
-}
-```
-
-Use `without_expectation` only when a semantic action has no durable semantic
-outcome:
-
-```json
-{
-  "type": "action",
-  "action": {
-    "command": {
-      "type": "rotor",
-      "payload": {
-        "label": "Article",
-        "rotor": "Headings",
-        "direction": "next"
-      }
-    },
-    "without_expectation": "Navigation cursor only"
-  }
-}
-```
-
-`expectation` and `without_expectation` are mutually exclusive.
-
-## Element Targets
-
-Semantic commands use `ElementTarget`. An element target is a predicate plus an
-optional ordinal disambiguator:
-
-```json
-{ "label": "Delete", "traits": ["button"], "ordinal": 0 }
-```
-
-Target fields:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `label` | `String` | Accessibility label exact match after normalization. |
-| `identifier` | `String` | Accessibility identifier exact match after normalization. |
-| `value` | `String` | Accessibility value exact match after normalization. |
-| `traits` | `[String]` | Required semantic traits. |
-| `excludeTraits` | `[String]` | Traits that must not be present. |
-| `ordinal` | `Int` | 0-based index among predicate matches. Requires at least one predicate field. |
-
-Ordinal is not durable identity. It only selects among the current semantic
-match set at runtime. Normal semantic actions re-resolve targets through
-Button Heist element inflation; users do not move the viewport first or provide
-viewport handles.
-
-## Predicates
-
-`AccessibilityPredicate` is the shared predicate vocabulary for waits,
-expectations, conditionals, and semantic ForEach.
-
-State predicates evaluate against one settled semantic observation:
-
-```json
-{ "type": "present", "element": { "label": "Home" } }
-{ "type": "absent", "target": { "label": "Loading" } }
-{ "type": "all", "states": [
-  { "type": "present", "element": { "label": "Results" } },
-  { "type": "absent", "element": { "label": "Loading" } }
-] }
-```
-
-Change predicates evaluate against settled transition evidence:
-
-```json
-{ "type": "screen_changed" }
-{ "type": "screen_changed", "where": { "type": "present", "element": { "label": "Home" } } }
-{ "type": "elements_changed" }
-{ "type": "element_updated", "element": { "label": "Search" }, "property": "value", "to": "milk" }
-```
-
-State predicates do not contain change predicates. Change predicates are not
-search selectors; they require event or action-result delta evidence.
-
-## Waits
-
-Single predicate wait:
-
-```json
-{
-  "type": "wait",
-  "wait": {
-    "predicate": { "type": "present", "element": { "label": "Home" } },
-    "timeout": 5
-  }
-}
-```
-
-Branching wait:
-
-```json
-{
-  "type": "wait_for_cases",
-  "wait_for_cases": {
-    "timeout": 8,
-    "cases": [
-      {
-        "predicate": { "type": "present", "element": { "label": "Home" } },
-        "body": [{ "type": "warn", "warn": { "message": "Logged in" } }]
-      }
-    ],
-    "else_body": [{ "type": "fail", "fail": { "message": "No known result" } }]
-  }
-}
-```
-
-Timeout without Else fails. Else handles timeout.
-
-## Conditionals
-
-Conditionals evaluate immediately against the current settled semantic state.
-The first matching case wins; no match without Else is a no-op.
-
-```json
-{
-  "type": "conditional",
-  "conditional": {
-    "cases": [
-      {
-        "predicate": { "type": "present", "element": { "label": "Login" } },
-        "body": [{ "type": "warn", "warn": { "message": "Login visible" } }]
-      }
-    ],
-    "else_body": [{ "type": "fail", "fail": { "message": "Unknown state" } }]
-  }
-}
-```
-
-## Semantic ForEach
-
-Semantic ForEach evaluates a predicate match set, enforces a bounded limit, and
-executes its body through the normal heist pipeline. It is a durable AST node,
-not native Swift loop expansion.
+Semantic ForEach binds a target expression, not a cached element handle:
 
 ```swift
 ForEach(.matching(.label("Delete")), limit: 20) { target in
-  Activate(target)
-    .expect(.absent(target), timeout: .seconds(2))
+    Activate(target)
+        .expect(.absent(target), timeout: .seconds(2))
 }
 ```
 
-Wire shape:
+At runtime each iteration re-resolves the target through the normal semantic
+pipeline. The body receives no UIKit object, live geometry, runtime ID, capture
+ID, or viewport handle.
 
-```json
-{
-  "type": "for_each_element",
-  "for_each_element": {
-    "matching": { "label": "Delete" },
-    "limit": 20,
-    "parameter": "target",
-    "body": [
-      {
-        "type": "action",
-        "action": {
-          "command": {
-            "type": "activate",
-            "payload": { "target_ref": "target" }
-          },
-          "expectation": {
-            "predicate": {
-              "type": "absent",
-              "target_ref": "target"
-            },
-            "timeout": 2
-          }
-        }
-      }
-    ]
-  }
-}
-```
+## Rejected Historical Forms
 
-At runtime each iteration computes
-`ElementTarget.predicate(matching, ordinal: index)`, binds it to the target
-reference, and executes the body steps. The body does not receive cached
-geometry, UIKit objects, or a capture-local handle. Nested collection ForEach
-is rejected by runtime validation.
+These forms existed during the prototype phase and should not appear in public
+docs, demos, or new fixtures:
 
-String-array ForEach serializes as `for_each_string`:
+- a tracked `.heist` file containing raw JSON instead of a package directory
+- `target.matcher` or `matcher` target wrappers
+- raw authored JSON examples that teach generated step names instead of DSL
+- public source spellings that use internal payload keys instead of DSL targets
+- viewport setup before semantic action as a durable heist step
+- geometry, runtime IDs, capture-local IDs, or container names as semantic identity
 
-```json
-{
-  "type": "for_each_string",
-  "for_each_string": {
-    "values": ["Milk", "Eggs"],
-    "parameter": "item",
-    "body": [
-      {
-        "type": "action",
-        "action": {
-          "command": {
-            "type": "type_text",
-            "payload": {
-              "text_ref": "item",
-              "target": { "label": "Add item" }
-            }
-          },
-          "expectation": {
-            "predicate": {
-              "type": "present",
-              "element": { "label_ref": "item" }
-            },
-            "timeout": 2
-          }
-        }
-      }
-    ]
-  }
-}
-```
+The generated `plan.json` may contain internal wire names. Do not copy those
+names into agent-facing examples. If a heist is meant for humans or agents to
+edit, render it as canonical DSL.
 
-## Inline Heists and Invocations
+## Runtime Contract
 
-Inline heists group steps structurally while preserving the same execution
-pipeline:
+Normal heists express semantic intent and semantic outcomes. Button Heist owns
+reveal, element inflation, settlement, live geometry, and diagnostics while the
+plan runs.
 
-```json
-{
-  "type": "heist",
-  "heist": {
-    "version": 1,
-    "name": "checkoutGroup",
-    "body": [
-      {
-        "type": "action",
-        "action": {
-          "command": { "type": "activate", "payload": { "label": "Checkout" } },
-          "expectation": { "predicate": { "type": "screen_changed" }, "timeout": 2 }
-        }
-      }
-    ]
-  }
-}
-```
+Runtime validation rejects non-executable plans before dispatch: unresolved
+refs, invalid payloads, oversized loops, excessive depth, noncanonical
+commands, nested collection loops, and unknown fields.
 
-Invocations call local definitions by explicit path:
-
-```json
-{
-  "type": "invoke",
-  "invoke": {
-    "path": ["LibraryScreen", "addToCart"],
-    "argument": { "type": "string", "value": "Milk" }
-  }
-}
-```
-
-Invocation execution binds the argument to the definition parameter in the
-heist execution environment, then executes the definition body through the
-normal heist pipeline. Reports preserve the invocation boundary and child step
-results. A failed invocation stops its caller unless the caller's control flow
-handles the failure explicitly.
-
-## Mechanical Escape Hatches And Viewport Debug
-
-Mechanical gestures are explicit escape hatches. They are valid durable plan
-actions when their payload passes durability checks, but strict semantic-test
-validation flags them.
-
-Coordinate gesture:
-
-```json
-{
-  "type": "action",
-  "action": {
-    "command": {
-      "type": "one_finger_tap",
-      "payload": { "point": { "x": 120, "y": 400 } }
-    },
-    "without_expectation": "Canvas coordinate interaction"
-  }
-}
-```
-
-Viewport/debug commands such as `scroll`, `scroll_to_edge`, and
-`scroll_to_visible` are directly executable inspection commands, not durable
-heist primitives. Heist JSON and canonical Swift DSL reject them as action
-steps. Semantic actions do not require `scroll_to_visible` before they run.
-Live composition drops pre-action viewport movement when a semantic action
-intent can be derived.
-
-## Runtime Admission And Lint
-
-Runtime admission is the hard execution preflight. It rejects non-executable
-plans before any action dispatch: unresolved refs, invalid payloads, oversized
-loops, excessive depth, noncanonical commands, and nested collection loops.
-
-Lint is quality guidance for authored or composed heist plans:
+Lint is separate quality guidance for authored or composed plans:
 
 | Mode | Purpose |
 |------|---------|
@@ -548,22 +207,21 @@ Lint is quality guidance for authored or composed heist plans:
 Lint returns structured findings with severity, step path, message, and a fix
 suggestion. It does not replace runtime validation.
 
-## Intentional Non-Goals
+## Non-Goals
 
 The durable heist AST is small on purpose. It does not support:
 
+- arbitrary dynamic code execution over the wire
 - unbounded loops, sleeps, retries, catch/recover, or arbitrary polling loops
-- preserving native Swift `for` loops as runtime loops
+- native Swift control flow as runtime control flow
 - hidden pre-action viewport movement for semantic actions
-- viewport/debug commands as durable action steps
-- arbitrary dynamic code or source execution over the wire
+- viewport/debug commands as durable semantic action steps
 - generic variables or expression evaluation beyond typed string and target refs
-- geometry, runtime IDs, capture-local IDs, or containerNames as
-  durable selectors
+- geometry, runtime IDs, capture-local IDs, or container names as durable selectors
 - unknown JSON keys
 - mechanical commands in strict semantic tests unless explicitly waived
 
-## Live Composition Contract
+## Live Composition
 
 Live composition turns completed interactions and settled semantic evidence into
 semantic action intent plus validated semantic expectation.
@@ -573,16 +231,16 @@ composition rules.
 
 Rules:
 
-- Observation commands are scratchpad and add no steps.
-- `wait` is an assertion primitive and becomes a wait step.
-- Failed actions add no steps.
-- Unmet expectations add no steps.
-- Direct viewport/debug commands add no steps.
-- Scroll setup before semantic action adds no setup step.
-- Coordinate gestures survive only when no semantic element intent exists.
-- Composed heists should pass composition-quality lint.
+- observation commands are scratchpad and add no steps
+- wait is an assertion primitive and becomes a wait step
+- failed actions add no steps
+- unmet expectations add no steps
+- direct viewport/debug commands add no steps
+- scroll setup before semantic action adds no setup step
+- coordinate gestures survive only when no semantic element intent exists
+- composed heists should pass composition-quality lint
 
 Composed and authored heists must not depend on scroll position, geometry,
-runtime IDs, capture-local IDs, or containerNames as semantic identity. Direct
-viewport/debug commands may use a current `container` value while inspecting the
+runtime IDs, capture-local IDs, or container names as semantic identity. Direct
+viewport/debug commands may use a current `containerName` while inspecting the
 live interface, but those commands are not durable heist primitives.

@@ -82,6 +82,19 @@ if grep -Eq 'LabeledContent\([[:space:]]*"Version"' "$BUTTONHEIST_DEMO_VERSION_F
         || fail "$BUTTONHEIST_DEMO_VERSION_FILE must source Version from TheScore.buttonHeistVersion or remove the Version row"
 fi
 
+RAW_HEIST_FILES=$(git ls-files '*.heist' || true)
+if [[ -n "$RAW_HEIST_FILES" ]]; then
+    fail "tracked .heist paths must be generated package directories, not raw files: $RAW_HEIST_FILES"
+fi
+
+HEIST_PACKAGE_DIRS=$(git ls-files | sed -n 's#^\(.*\.heist\)/.*#\1#p' | sort -u)
+while IFS= read -r package; do
+    [[ -z "$package" ]] && continue
+    [[ -d "$package" ]] || fail "$package must be a .heist package directory"
+    [[ -f "$package/manifest.json" ]] || fail "$package is missing manifest.json"
+    [[ -f "$package/plan.json" ]] || fail "$package is missing plan.json"
+done <<< "$HEIST_PACKAGE_DIRS"
+
 EXPECTED_HOMEPAGE="homepage \"https://github.com/$BUTTONHEIST_GITHUB_REPO\""
 grep -Fq "$EXPECTED_HOMEPAGE" "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE homepage does not match $BUTTONHEIST_GITHUB_REPO"
