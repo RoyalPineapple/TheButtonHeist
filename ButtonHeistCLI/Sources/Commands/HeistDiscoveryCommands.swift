@@ -95,7 +95,7 @@ private extension CLICommandContract {
         arguments: TheFence.CommandArgumentEnvelope,
         format: OutputFormat?
     ) async throws {
-        let fence = TheFence(configuration: EnvironmentConfig.resolve(autoReconnect: false).fenceConfiguration)
+        let fence = TheFence(configuration: try EnvironmentConfig.resolve(autoReconnect: false).fenceConfiguration)
         defer { fence.stop() }
         let response = try await fence.execute(command: command, arguments: arguments)
         CLIRunner.outputResponse(response, format: format ?? .auto)

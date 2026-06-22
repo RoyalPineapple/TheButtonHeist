@@ -17,7 +17,7 @@ struct ListCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         // list_devices doesn't require a connection — TheFence skips auto-connect
         // for this command, so we call execute() without start().
-        let config = EnvironmentConfig.resolve()
+        let config = try EnvironmentConfig.resolve()
         let fence = TheFence(configuration: config.fenceConfiguration)
         defer { fence.stop() }
 

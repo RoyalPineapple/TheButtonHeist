@@ -209,7 +209,7 @@ final class TargetConfigTests: XCTestCase {
             }
             XCTAssertEqual(error.kind, .readFailed)
             XCTAssertEqual(error.path, path)
-            XCTAssertTrue(error.localizedDescription.contains("Failed to read explicit config"))
+            XCTAssertTrue(error.localizedDescription.contains("Failed to read config"))
             XCTAssertEqual(error.failureDetails.errorCode, "config.read_failed")
             XCTAssertEqual(error.failureDetails.phase, .setup)
         }
@@ -228,7 +228,7 @@ final class TargetConfigTests: XCTestCase {
             }
             XCTAssertEqual(error.kind, .readFailed)
             XCTAssertEqual(error.path, tmpDir.path)
-            XCTAssertTrue(error.localizedDescription.contains("Failed to read explicit config"))
+            XCTAssertTrue(error.localizedDescription.contains("Failed to read config"))
             XCTAssertEqual(error.failureDetails.errorCode, "config.read_failed")
         }
     }
@@ -249,18 +249,48 @@ final class TargetConfigTests: XCTestCase {
             }
             XCTAssertEqual(error.kind, .decodeFailed)
             XCTAssertEqual(error.path, configFile.path)
-            XCTAssertTrue(error.localizedDescription.contains("Failed to decode explicit config"))
+            XCTAssertTrue(error.localizedDescription.contains("Failed to decode config"))
             XCTAssertEqual(error.failureDetails.errorCode, "config.decode_failed")
             XCTAssertEqual(error.failureDetails.phase, .setup)
         }
     }
 
-    func testAbsentDefaultConfigReturnsNil() {
-        let config = TargetConfigResolver.loadConfig(searchPaths: [
+    func testAbsentDefaultConfigReturnsNil() throws {
+        let config = try TargetConfigResolver.loadConfig(searchPaths: [
             "/nonexistent/default/.buttonheist.json",
             "/nonexistent/default/config.json",
         ])
         XCTAssertNil(config)
+    }
+
+    func testDefaultConfigSearchRejectsRemovedCertFingerprintField() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let configFile = tmpDir.appendingPathComponent(".buttonheist.json")
+        let json = """
+        {
+            "targets": {
+                "sim1": {
+                    "device": "127.0.0.1:1455",
+                    "certFingerprint": "stale"
+                }
+            }
+        }
+        """
+        try json.write(to: configFile, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try TargetConfigResolver.loadConfig(searchPaths: [configFile.path])) { error in
+            guard let error = error as? TargetConfigLoadError else {
+                XCTFail("Expected TargetConfigLoadError, got \(type(of: error))")
+                return
+            }
+            XCTAssertEqual(error.kind, .decodeFailed)
+            XCTAssertEqual(error.path, configFile.path)
+            XCTAssertEqual(error.failureDetails.errorCode, "config.decode_failed")
+        }
     }
 
     // MARK: - TheFence Command Enum

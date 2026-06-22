@@ -36,14 +36,14 @@ public struct EnvironmentConfig: Sendable {
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
         env: [String: String] = ProcessInfo.processInfo.environment
-    ) -> EnvironmentConfig {
+    ) throws -> EnvironmentConfig {
         resolve(
             deviceFilter: deviceFilter,
             token: token,
             sessionTimeout: sessionTimeout,
             connectionTimeout: connectionTimeout,
             autoReconnect: autoReconnect,
-            fileConfig: TargetConfigResolver.loadConfig(searchPaths: TargetConfigResolver.searchPaths),
+            fileConfig: try TargetConfigResolver.loadConfig(searchPaths: TargetConfigResolver.searchPaths),
             env: env
         )
     }
@@ -60,7 +60,7 @@ public struct EnvironmentConfig: Sendable {
         env: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> EnvironmentConfig {
         guard let configPath else {
-            return resolve(
+            return try resolve(
                 deviceFilter: deviceFilter,
                 token: token,
                 sessionTimeout: sessionTimeout,
@@ -104,7 +104,7 @@ public struct EnvironmentConfig: Sendable {
         )
     }
 
-    private static func resolve(
+    static func resolve(
         deviceFilter: String?,
         token: String?,
         sessionTimeout: TimeInterval?,

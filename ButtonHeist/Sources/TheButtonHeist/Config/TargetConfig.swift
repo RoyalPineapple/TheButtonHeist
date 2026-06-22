@@ -50,7 +50,7 @@ struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
     }
 }
 
-/// Diagnostic failure produced when an explicit user-provided config path cannot be loaded.
+/// Diagnostic failure produced when a config path cannot be loaded.
 public struct TargetConfigLoadError: Error, LocalizedError, Sendable {
     /// High-level loading phase that failed.
     public enum Kind: String, Sendable {
@@ -79,9 +79,9 @@ public struct TargetConfigLoadError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch kind {
         case .readFailed:
-            return "Failed to read explicit config at \(path): \(underlyingDescription)"
+            return "Failed to read config at \(path): \(underlyingDescription)"
         case .decodeFailed:
-            return "Failed to decode explicit config at \(path): \(underlyingDescription)"
+            return "Failed to decode config at \(path): \(underlyingDescription)"
         }
     }
 
@@ -91,7 +91,7 @@ public struct TargetConfigLoadError: Error, LocalizedError, Sendable {
             errorCode: kind.errorCode,
             phase: .setup,
             retryable: false,
-            hint: "Verify the explicit config path points to a readable JSON file matching the Button Heist config schema."
+            hint: "Verify the config path points to a readable JSON file matching the Button Heist config schema."
         )
     }
 }
@@ -107,21 +107,32 @@ enum TargetConfigResolver {
     ]
 
     /// Load and parse the first config file found in the provided default search paths.
-    static func loadConfig(searchPaths paths: [String]) -> ButtonHeistFileConfig? {
+    static func loadConfig(searchPaths paths: [String]) throws -> ButtonHeistFileConfig? {
         for path in paths {
             let url = configURL(for: path)
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                continue
+            }
             let data: Data
             do {
                 data = try Data(contentsOf: url)
             } catch {
-                continue
+                throw TargetConfigLoadError(
+                    path: url.path,
+                    kind: .readFailed,
+                    underlyingDescription: error.localizedDescription
+                )
             }
             let config: ButtonHeistFileConfig
             do {
                 config = try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)
             } catch {
-                logger.warning("Skipping malformed config \(url.path): \(error)")
-                continue
+                logger.error("Failed to decode config \(url.path): \(error)")
+                throw TargetConfigLoadError(
+                    path: url.path,
+                    kind: .decodeFailed,
+                    underlyingDescription: error.localizedDescription
+                )
             }
             return config
         }
