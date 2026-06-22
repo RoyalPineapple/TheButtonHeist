@@ -702,6 +702,119 @@ import ThePlans
     _ = try HeistPlanSourceCompiler().compile(source)
 }
 
+
+@Test func `parser scopes aliases through nested bodies`() throws {
+    let source = """
+    HeistPlan("Scoped", parameter: "rootValue") { rootAlias in
+        HeistDef<String>("Echo.item", parameter: "item") { itemAlias in
+            TypeText(itemAlias, into: .label(itemAlias))
+        }
+
+        HeistDef<ElementTarget>("Messages.archive", parameter: "message") { messageAlias in
+            CustomAction("Archive", on: messageAlias)
+        }
+
+        If(.present(.label(rootAlias))) {
+            TypeText(rootAlias)
+        }
+
+        ForEach(["inner"]) { loopItem in
+            TypeText(loopItem, into: .label(rootAlias))
+        }
+
+        ForEach(.matching(.label("Message")), limit: 1) { rowTarget in
+            Activate(rowTarget).expect(.absent(rowTarget))
+        }
+    }
+    """
+
+    let plan = try HeistPlanSourceCompiler().compile(source)
+    let echo = try #require(plan.definitions.first { $0.name == "Echo" })
+    let item = try #require(echo.definitions.first { $0.name == "item" })
+    let messages = try #require(plan.definitions.first { $0.name == "Messages" })
+    let archive = try #require(messages.definitions.first { $0.name == "archive" })
+
+    #expect(plan.parameter == .string(name: "rootValue"))
+    #expect(item.parameter == .string(name: "item"))
+    #expect(item.body == [
+        .action(try ActionStep(command: .typeText(
+            text: .ref("item"),
+            target: .predicate(.label(.ref("item")))
+        ))),
+    ])
+    #expect(archive.parameter == .elementTarget(name: "message"))
+    #expect(archive.body == [
+        .action(try ActionStep(command: .customAction(name: "Archive", target: .ref("message")))),
+    ])
+    #expect(plan.body == [
+        .conditional(try ConditionalStep(cases: [
+            PredicateCase(
+                predicate: .present(.label(.ref("rootValue"))),
+                body: [.action(try ActionStep(command: .typeText(text: .ref("rootValue"), target: nil)))]
+            ),
+        ])),
+        .forEachString(try ForEachStringStep(
+            values: ["inner"],
+            parameter: "loopItem",
+            body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("loopItem"),
+                    target: .predicate(.label(.ref("rootValue")))
+                ))),
+            ]
+        )),
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Message"),
+            limit: 1,
+            parameter: "rowTarget",
+            body: [
+                .action(try ActionStep(
+                    command: .activate(.ref("rowTarget")),
+                    expectation: WaitStep(predicate: .absent(.ref("rowTarget")), timeout: 0)
+                )),
+            ]
+        )),
+    ])
+}
+
+@Test func `parser rejects references outside lexical scope`() {
+    let cases: [(source: String, diagnostic: String)] = [
+        (
+            root("""
+            ForEach(["Milk"]) { item in
+                TypeText(item)
+            }
+            TypeText(item)
+            """),
+            "expected a string literal or scoped string reference"
+        ),
+        (
+            root("""
+            ForEach(.matching(.label("Row")), limit: 1) { row in
+                Activate(row).expect(.absent(row))
+            }
+            Activate(row)
+            """),
+            "expected a ButtonHeist expression beginning with '.'"
+        ),
+        (
+            """
+            HeistPlan {
+                HeistDef<String>("Echo.item", parameter: "item") { itemAlias in
+                    TypeText(itemAlias)
+                }
+                TypeText(itemAlias)
+            }
+            """,
+            "expected a string literal or scoped string reference"
+        ),
+    ]
+
+    for testCase in cases {
+        expect(compileError(testCase.source), contains: testCase.diagnostic)
+    }
+}
+
 private func assertCanonicalRoundTrip(_ plan: HeistPlan) throws {
     let source = try plan.canonicalSwiftDSL()
     let compiled = try HeistPlanSourceCompiler().compile(source)
