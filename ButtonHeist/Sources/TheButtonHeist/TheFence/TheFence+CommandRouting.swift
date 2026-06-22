@@ -28,6 +28,17 @@ public extension TheFence.Command {
         routeCanonicalStep(arguments, context: context, isExecutable: nil)
     }
 
+    static func routeCLICommandEnvelope(
+        _ arguments: TheFence.CommandArgumentEnvelope,
+        context: String
+    ) -> Result<(command: Self, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
+        routeCanonicalStep(
+            arguments,
+            context: context,
+            isExecutable: { $0.descriptor.projection.cliExposure == .directCommand }
+        )
+    }
+
 }
 
 private extension TheFence.Command {

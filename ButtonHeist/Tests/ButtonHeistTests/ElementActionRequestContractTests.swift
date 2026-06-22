@@ -1,5 +1,4 @@
 import XCTest
-import ThePlans
 @testable import ButtonHeist
 import TheScore
 
