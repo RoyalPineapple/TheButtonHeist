@@ -36,7 +36,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     `WaitFor(.present(.label("Checkout")), timeout: .seconds(5))`
 
                     Use `perform` when one line is enough. Use `run_heist` when the job needs
-                    multiple instructions, reusable heists, `RunHeist`, `If`/`Else`,
+                    multiple instructions, reusable heists, `RunHeist`, `If`,
                     `WaitFor(...).else { ... }`, `ForEach`, `Warn`, or `Fail`.
                     """
                 )
@@ -54,7 +54,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     `HeistPlan("shop") { ... }`
                     `HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
                     `RunHeist("Cart.addItem", "Milk")`
-                    `If(.present(.label("Pay"))) { ... } Else { ... }`
+                    `If(.present(.label("Pay"))) { ... }.else { ... }`
                     `WaitFor(.changed(.screen()), timeout: .seconds(10)).else { ... }`
                     `ForEach(["Milk", "Bread"]) { item in ... }`
                     `ForEach(.matching(.label("Delete")), limit: 20) { target in ... }`

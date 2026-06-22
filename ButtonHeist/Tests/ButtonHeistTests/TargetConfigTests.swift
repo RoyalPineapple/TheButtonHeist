@@ -59,6 +59,50 @@ final class TargetConfigTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ButtonHeistFileConfig.self, from: Data(json.utf8)))
     }
 
+    func testFileConfigRejectsUnknownTopLevelFields() {
+        let json = """
+        {
+            "targets": {
+                "sim1": {"device": "127.0.0.1:1455"}
+            },
+            "unexpected": true
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(ButtonHeistFileConfig.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(String(describing: error).contains("unexpected"), "Unexpected error: \(error)")
+        }
+    }
+
+    func testTargetConfigRejectsUnknownFields() {
+        let json = """
+        {
+            "targets": {
+                "sim1": {"device": "127.0.0.1:1455", "unexpected": true}
+            }
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(ButtonHeistFileConfig.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(String(describing: error).contains("unexpected"), "Unexpected error: \(error)")
+        }
+    }
+
+    func testTargetConfigRejectsRemovedCertFingerprintField() {
+        let json = """
+        {
+            "targets": {
+                "sim1": {
+                    "device": "127.0.0.1:1455",
+                    "token": "abc123",
+                    "certFingerprint": "stale"
+                }
+            }
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(ButtonHeistFileConfig.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(String(describing: error).contains("certFingerprint"), "Unexpected error: \(error)")
+        }
+    }
+
     // MARK: - TargetConfigResolver.resolveEffective
 
     func testEnvVarsOverrideEverything() {

@@ -8,9 +8,21 @@ public struct TargetConfig: Codable, Sendable, Equatable {
     public let device: String
     public let token: String?
 
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case device
+        case token
+    }
+
     public init(device: String, token: String? = nil) {
         self.device = device
         self.token = token
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownFields(allowed: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        device = try container.decode(String.self, forKey: .device)
+        token = try container.decodeIfPresent(String.self, forKey: .token)
     }
 }
 
@@ -20,7 +32,7 @@ struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
     let targets: [String: TargetConfig]
     let defaultTarget: String?
 
-    enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case targets
         case defaultTarget = "default"
     }
@@ -28,6 +40,13 @@ struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
     init(targets: [String: TargetConfig], defaultTarget: String? = nil) {
         self.targets = targets
         self.defaultTarget = defaultTarget
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownFields(allowed: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        targets = try container.decode([String: TargetConfig].self, forKey: .targets)
+        defaultTarget = try container.decodeIfPresent(String.self, forKey: .defaultTarget)
     }
 }
 
@@ -170,5 +189,34 @@ enum TargetConfigResolver {
         }
         return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(expanded)
+    }
+}
+
+private struct UnknownConfigField: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(intValue: Int) {
+        stringValue = "\(intValue)"
+        self.intValue = intValue
+    }
+}
+
+private extension Decoder {
+    func rejectUnknownFields<K: CodingKey & CaseIterable>(allowed: K.Type) throws where K.AllCases: Collection {
+        let allowedNames = Set(allowed.allCases.map(\.stringValue))
+        let container = try container(keyedBy: UnknownConfigField.self)
+        if let unknown = container.allKeys.first(where: { !allowedNames.contains($0.stringValue) }) {
+            throw DecodingError.dataCorruptedError(
+                forKey: unknown,
+                in: container,
+                debugDescription: "Unknown config field \"\(unknown.stringValue)\""
+            )
+        }
     }
 }
