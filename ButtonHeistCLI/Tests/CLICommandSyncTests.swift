@@ -410,6 +410,30 @@ final class CLICommandSyncTests: XCTestCase {
         ]))
     }
 
+    func testSharedRequestBuilderRejectsMCPOnlyPerformInJSONLinesMode() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(
+                from: #"{"command":"perform","step":"Activate(.label(\"Pay\"))"}"#
+            )
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains(
+                    #"JSON input command "perform" is not supported"#
+                ),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
+    func testSharedRequestBuilderAcceptsRunHeistInJSONLinesMode() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"command":"run_heist","plan":"HeistPlan(\"one\") { Warn(\"check\") }"}"#
+        )
+
+        XCTAssertEqual(parsed.command, .runHeist)
+        XCTAssertEqual(parsed.argument(.plan), .string(#"HeistPlan("one") { Warn("check") }"#))
+    }
+
     func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"type_text","text":"hello"}"#)
 
