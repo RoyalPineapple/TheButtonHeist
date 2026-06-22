@@ -702,7 +702,6 @@ import ThePlans
     _ = try HeistPlanSourceCompiler().compile(source)
 }
 
-
 @Test func `parser scopes aliases through nested bodies`() throws {
     let source = """
     HeistPlan("Scoped", parameter: "rootValue") { rootAlias in

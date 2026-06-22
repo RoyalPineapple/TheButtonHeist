@@ -6,7 +6,7 @@ import Testing
 func `all heist step kinds round trip through canonical JSON bytes`() throws {
     let plan = try representativeAllStepKindsPlan()
     let encoded = try plan.canonicalHeistJSONData()
-    let actualJSON = String(decoding: encoded, as: UTF8.self)
+    let actualJSON = try #require(String(data: encoded, encoding: .utf8))
 
     #expect(actualJSON == expectedAllStepKindsPlanJSON)
 
@@ -73,7 +73,13 @@ func `model Codable boundaries reject unknown fields`() {
         """.utf8))
     }
 
-    let stepPayloadCases: [(String, String, () throws -> Void)] = [
+    for (name, expectedMessage, decode) in unknownStepPayloadCases() {
+        expectUnknownField(name, contains: expectedMessage, decode: decode)
+    }
+}
+
+private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] {
+    [
         ("step wrapper", #"Unknown warn heist step field "unexpected""#, {
             _ = try JSONDecoder().decode(HeistStep.self, from: Data("""
             { "type": "warn", "warn": { "message": "hello" }, "unexpected": true }
@@ -155,10 +161,6 @@ func `model Codable boundaries reject unknown fields`() {
             """.utf8))
         }),
     ]
-
-    for (name, expectedMessage, decode) in stepPayloadCases {
-        expectUnknownField(name, contains: expectedMessage, decode: decode)
-    }
 }
 
 private func representativeAllStepKindsPlan() throws -> HeistPlan {

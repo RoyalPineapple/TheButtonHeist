@@ -119,6 +119,24 @@ func rootElementTargetPlanRendersCanonicalSwiftAndCompilesBack() async throws {
 
 @Test
 func rootStringPlanRendersDefinitionsRunHeistLoopsRefsAndBroadMatches() async throws {
+    let plan = try rootStringPlanFixture()
+    let rendered = try plan.canonicalSwiftDSL()
+
+    #expect(rendered == rootStringCanonicalSwiftDSL)
+
+    #if SWIFT_PACKAGE && (os(macOS) || os(Linux))
+    let source = """
+    import ThePlans
+
+    let heist = try \(rendered)
+    """
+    let compiled = try await compileCanonicalHeist(source)
+    let compiledCanonical = try compiled.canonicalSwiftDSL()
+    #expect(compiledCanonical == rendered, "Compiled canonical:\n\(compiledCanonical)\nRendered canonical:\n\(rendered)")
+    #endif
+}
+
+private func rootStringPlanFixture() throws -> HeistPlan {
     let enterDefinition = try HeistPlan(
         name: "enter",
         parameter: .string(name: "term"),
@@ -196,9 +214,11 @@ func rootStringPlanRendersDefinitionsRunHeistLoopsRefsAndBroadMatches() async th
         ]
     )
 
-    let rendered = try plan.canonicalSwiftDSL()
+    return plan
+}
 
-    #expect(rendered == """
+// swiftlint:disable line_length
+private let rootStringCanonicalSwiftDSL = """
     HeistPlan("RootSearch", parameter: "query") { query in
         HeistDef<String>("Search.enter", parameter: "term") { term in
             TypeText(term, into: .label(contains: "Search"))
@@ -230,19 +250,8 @@ func rootStringPlanRendersDefinitionsRunHeistLoopsRefsAndBroadMatches() async th
             RunHeist("Rows.pressRow", target)
         }
     }
-    """)
-
-    #if SWIFT_PACKAGE && (os(macOS) || os(Linux))
-    let source = """
-    import ThePlans
-
-    let heist = try \(rendered)
     """
-    let compiled = try await compileCanonicalHeist(source)
-    let compiledCanonical = try compiled.canonicalSwiftDSL()
-    #expect(compiledCanonical == rendered, "Compiled canonical:\n\(compiledCanonical)\nRendered canonical:\n\(rendered)")
-    #endif
-}
+// swiftlint:enable line_length
 
 @Test
 func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
