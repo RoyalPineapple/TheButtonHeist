@@ -372,6 +372,66 @@ func runtimeSafetyEnforcesBounds() throws {
 }
 
 @Test
+func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .conditional(try ConditionalStep(cases: [
+            PredicateCase(predicate: .state(.present(.label("Home"))), body: [.warn(WarnStep(message: "nested"))]),
+        ])),
+    ])
+
+    let failures = runtimeSafetyFailures(
+        for: raw,
+        limits: HeistPlanRuntimeSafetyLimits(maxNestedStepDepth: 1)
+    )
+
+    #expect(failures.contains {
+        $0.path == "$.body[0].conditional.cases[0].body[0]"
+            && $0.contract == "max nested step depth"
+            && $0.observed == "depth 2"
+    }, "\(failures)")
+}
+
+@Test
+func runtimeSafetyRejectsMaxDefinitionsWithPreciseDiagnostic() throws {
+    let raw = HeistPlanAdmissionCandidate(definitions: [
+        HeistPlanAdmissionCandidate(name: "one", body: [.warn(WarnStep(message: "one"))]),
+        HeistPlanAdmissionCandidate(name: "two", body: [.warn(WarnStep(message: "two"))]),
+    ], body: [
+        .warn(WarnStep(message: "body")),
+    ])
+
+    let failures = runtimeSafetyFailures(
+        for: raw,
+        limits: HeistPlanRuntimeSafetyLimits(maxDefinitions: 1)
+    )
+
+    #expect(failures.contains {
+        $0.path == "$.definitions"
+            && $0.contract == "max total heist definitions"
+            && $0.observed == "2 definitions"
+    }, "\(failures)")
+}
+
+@Test
+func runtimeSafetyDiagnosticsIncludePathRoleAndObservedValue() throws {
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .forEachString(try ForEachStringStep(
+            values: ["Milk"],
+            parameter: "bad name",
+            body: [.warn(WarnStep(message: "body"))]
+        )),
+    ])
+
+    let failures = runtimeSafetyFailures(for: raw)
+
+    #expect(failures.contains {
+        $0.path == "$.body[0].for_each_string.parameter"
+            && $0.contract == "for_each_string parameter must be a Swift-style identifier"
+            && $0.observed == #""bad name""#
+    }, "\(failures)")
+}
+
+@Test
 func runtimeSafetyRejectsNestedCollectionLoops() throws {
     let nested = try ForEachStringStep(
         values: ["Milk"],
@@ -474,6 +534,81 @@ func decodedHeistArgumentsRejectStringArrayShape() throws {
     for payload in payloads {
         #expect(throws: (any Error).self) {
             _ = try JSONDecoder().decode(HeistArgument.self, from: Data(payload.utf8))
+        }
+    }
+}
+
+@Test
+func admissionDecodingRejectsEmptyPredicates() throws {
+    let json = """
+    {
+      "version": \(HeistPlan.currentVersion),
+      "body": [
+        {
+          "type": "for_each_element",
+          "for_each_element": {
+            "matching": {},
+            "limit": 1,
+            "parameter": "target",
+            "body": [
+              { "type": "warn", "warn": { "message": "body" } }
+            ]
+          }
+        }
+      ]
+    }
+    """
+
+    #expect(throws: (any Error).self) {
+        _ = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: Data(json.utf8))
+    }
+}
+
+@Test
+func admissionDecodingRejectsUnsupportedAndInvalidCommands() throws {
+    let unsupportedCommand = """
+    {
+      "version": \(HeistPlan.currentVersion),
+      "body": [
+        {
+          "type": "action",
+          "action": {
+            "command": {
+              "type": "teleport",
+              "payload": {}
+            }
+          }
+        }
+      ]
+    }
+    """
+    let missingPayload = """
+    {
+      "version": \(HeistPlan.currentVersion),
+      "body": [
+        {
+          "type": "action",
+          "action": {
+            "command": {
+              "type": "activate"
+            }
+          }
+        }
+      ]
+    }
+    """
+
+    let cases = [
+        (unsupportedCommand, "is not a heist action command"),
+        (missingPayload, "Missing payload for heist action command type activate"),
+    ]
+
+    for (payload, expected) in cases {
+        do {
+            _ = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: Data(payload.utf8))
+            Issue.record("Expected admission decoding to fail")
+        } catch {
+            #expect("\(error)".contains(expected), "\(error)")
         }
     }
 }
