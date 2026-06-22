@@ -47,7 +47,7 @@ enum CLIRequestBuilder {
         }
         let requestId = envelope.requestId
         do {
-            switch TheFence.Command.routeCommandEnvelope(envelope.arguments, context: "JSON input") {
+            switch TheFence.Command.routeCLICommandEnvelope(envelope.arguments, context: "JSON input") {
             case .success(let routed):
                 return CLIParsedRequest(
                     command: routed.command,
