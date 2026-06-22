@@ -1,5 +1,6 @@
 import ArgumentParser
 import ButtonHeist
+import ThePlans
 
 /// Shared options for commands that target a UI element by accessibility properties.
 struct ElementTargetOptions: ParsableArguments {

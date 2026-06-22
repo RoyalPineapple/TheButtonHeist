@@ -1,5 +1,6 @@
 import ArgumentParser
 import ButtonHeist
+import ThePlans
 
 struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
