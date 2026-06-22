@@ -6,7 +6,7 @@ import TheScore
 @main
 struct ButtonHeistMCPServer {
     static func main() async throws {
-        let (fence, idleMonitor) = await setUp()
+        let (fence, idleMonitor) = try await setUp()
 
         let server = Server(
             name: "buttonheist",
@@ -28,8 +28,8 @@ struct ButtonHeistMCPServer {
     }
 
     @ButtonHeistActor
-    private static func setUp() -> (TheFence, IdleMonitor) {
-        let config = EnvironmentConfig.resolve()
+    private static func setUp() throws -> (TheFence, IdleMonitor) {
+        let config = try EnvironmentConfig.resolve()
         let fence = TheFence(configuration: config.fenceConfiguration)
         let idleMonitor = IdleMonitor(timeout: config.sessionTimeout) { [fence] in
             fence.stop()

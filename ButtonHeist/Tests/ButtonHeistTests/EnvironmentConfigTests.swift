@@ -3,8 +3,8 @@ import XCTest
 
 final class EnvironmentConfigTests: XCTestCase {
 
-    func testDefaultsWithEmptyEnv() {
-        let config = EnvironmentConfig.resolve(env: [:])
+    func testDefaultsWithEmptyEnv() throws {
+        let config = resolve(env: [:])
         XCTAssertNil(config.deviceFilter)
         XCTAssertNil(config.token)
         XCTAssertEqual(config.sessionTimeout, 60.0)
@@ -12,22 +12,22 @@ final class EnvironmentConfigTests: XCTestCase {
         XCTAssertTrue(config.autoReconnect)
     }
 
-    func testEnvVarDeviceAndToken() {
+    func testEnvVarDeviceAndToken() throws {
         let env = [
             "BUTTONHEIST_DEVICE": "127.0.0.1:1455",
             "BUTTONHEIST_TOKEN": "tok-123",
         ]
-        let config = EnvironmentConfig.resolve(env: env)
+        let config = resolve(env: env)
         XCTAssertEqual(config.deviceFilter, "127.0.0.1:1455")
         XCTAssertEqual(config.token, "tok-123")
     }
 
-    func testExplicitOverridesWinOverEnvVars() {
+    func testExplicitOverridesWinOverEnvVars() throws {
         let env = [
             "BUTTONHEIST_DEVICE": "env-device",
             "BUTTONHEIST_TOKEN": "env-token",
         ]
-        let config = EnvironmentConfig.resolve(
+        let config = resolve(
             deviceFilter: "explicit-device",
             token: "explicit-token",
             env: env
@@ -36,50 +36,50 @@ final class EnvironmentConfigTests: XCTestCase {
         XCTAssertEqual(config.token, "explicit-token")
     }
 
-    func testSessionTimeoutFromEnvVar() {
+    func testSessionTimeoutFromEnvVar() throws {
         let env = ["BUTTONHEIST_SESSION_TIMEOUT": "120"]
-        let config = EnvironmentConfig.resolve(env: env)
+        let config = resolve(env: env)
         XCTAssertEqual(config.sessionTimeout, 120.0)
     }
 
-    func testConnectionTimeoutFromEnvVar() {
+    func testConnectionTimeoutFromEnvVar() throws {
         let env = ["BUTTONHEIST_CONNECTION_TIMEOUT": "7.5"]
-        let config = EnvironmentConfig.resolve(env: env)
+        let config = resolve(env: env)
         XCTAssertEqual(config.connectionTimeout, 7.5)
     }
 
-    func testExplicitSessionTimeoutOverridesEnv() {
+    func testExplicitSessionTimeoutOverridesEnv() throws {
         let env = ["BUTTONHEIST_SESSION_TIMEOUT": "120"]
-        let config = EnvironmentConfig.resolve(sessionTimeout: 300, env: env)
+        let config = resolve(sessionTimeout: 300, env: env)
         XCTAssertEqual(config.sessionTimeout, 300.0)
     }
 
-    func testExplicitConnectionTimeoutOverridesEnv() {
+    func testExplicitConnectionTimeoutOverridesEnv() throws {
         let env = ["BUTTONHEIST_CONNECTION_TIMEOUT": "7.5"]
-        let config = EnvironmentConfig.resolve(connectionTimeout: 2.0, env: env)
+        let config = resolve(connectionTimeout: 2.0, env: env)
         XCTAssertEqual(config.connectionTimeout, 2.0)
     }
 
-    func testInvalidSessionTimeoutEnvFallsBackToDefault() {
+    func testInvalidSessionTimeoutEnvFallsBackToDefault() throws {
         let env = ["BUTTONHEIST_SESSION_TIMEOUT": "abc"]
-        let config = EnvironmentConfig.resolve(env: env)
+        let config = resolve(env: env)
         XCTAssertEqual(config.sessionTimeout, 60.0)
     }
 
-    func testInvalidConnectionTimeoutEnvFallsBackToDefault() {
+    func testInvalidConnectionTimeoutEnvFallsBackToDefault() throws {
         let env = ["BUTTONHEIST_CONNECTION_TIMEOUT": "abc"]
-        let config = EnvironmentConfig.resolve(env: env)
+        let config = resolve(env: env)
         XCTAssertEqual(config.connectionTimeout, 30.0)
     }
 
-    func testZeroSessionTimeoutEnvFallsBackToDefault() {
+    func testZeroSessionTimeoutEnvFallsBackToDefault() throws {
         let env = ["BUTTONHEIST_SESSION_TIMEOUT": "0"]
-        let config = EnvironmentConfig.resolve(env: env)
+        let config = resolve(env: env)
         XCTAssertEqual(config.sessionTimeout, 60.0)
     }
 
-    func testFenceConfigurationProducesMatchingValues() {
-        let config = EnvironmentConfig.resolve(
+    func testFenceConfigurationProducesMatchingValues() throws {
+        let config = resolve(
             deviceFilter: "127.0.0.1:1455",
             token: "tok",
             connectionTimeout: 15,
@@ -93,9 +93,9 @@ final class EnvironmentConfigTests: XCTestCase {
         XCTAssertEqual(fence.autoReconnect, false)
     }
 
-    func testNegativeSessionTimeoutEnvFallsBackToDefault() {
+    func testNegativeSessionTimeoutEnvFallsBackToDefault() throws {
         let env = ["BUTTONHEIST_SESSION_TIMEOUT": "-5"]
-        let config = EnvironmentConfig.resolve(env: env)
+        let config = resolve(env: env)
         XCTAssertEqual(config.sessionTimeout, 60.0)
     }
 
@@ -111,5 +111,24 @@ final class EnvironmentConfigTests: XCTestCase {
             XCTAssertEqual(error.path, path)
             XCTAssertEqual(error.failureDetails.errorCode, "config.read_failed")
         }
+    }
+
+    private func resolve(
+        deviceFilter: String? = nil,
+        token: String? = nil,
+        sessionTimeout: TimeInterval? = nil,
+        connectionTimeout: TimeInterval? = nil,
+        autoReconnect: Bool = true,
+        env: [String: String]
+    ) -> EnvironmentConfig {
+        EnvironmentConfig.resolve(
+            deviceFilter: deviceFilter,
+            token: token,
+            sessionTimeout: sessionTimeout,
+            connectionTimeout: connectionTimeout,
+            autoReconnect: autoReconnect,
+            fileConfig: nil,
+            env: env
+        )
     }
 }

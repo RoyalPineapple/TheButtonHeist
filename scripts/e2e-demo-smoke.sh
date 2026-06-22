@@ -534,8 +534,13 @@ printf '%s' "$ROTORS_JSON" | expect_element_label "Rotor Host"
 ROTOR_JSON="$(run_cli_json rotor --label "Rotor Host" --rotor "Errors" --timeout 30)"
 printf '%s' "$ROTOR_JSON" | json_expect_ok "rotor Errors"
 # The expected label comes from TestApp/Sources/RotorsDemo.swift's UIKit rotor result view.
-# The rotor result carries the found element directly (no heistId on the wire).
-ROTOR_RESULT_LABEL="$(printf '%s' "$ROTOR_JSON" | jq -r '.rotor.found.label // ""')"
+# Direct mutating commands return canonical heist receipts; rotor evidence lives
+# under the action report for the executed step.
+ROTOR_RESULT_LABEL="$(printf '%s' "$ROTOR_JSON" | jq -r '
+    .report.nodes[]?
+    | select(.action.commandName == "rotor")
+    | .action.result.rotor.found.label // ""
+' | head -n 1)"
 [[ "$ROTOR_RESULT_LABEL" == "Rotor Result: Missing amount" ]] \
     || fail "expected rotor result label 'Rotor Result: Missing amount', got '$ROTOR_RESULT_LABEL'"
 
