@@ -100,6 +100,20 @@ func `public artifact plan helpers reject standalone raw plan json`() throws {
 }
 
 @Test
+func `public artifact package helpers require heist extension`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let packageURL = temp.url.appendingPathComponent("SearchFlow.package")
+    let plan = try representativeArtifactPlan()
+
+    #expect(throws: HeistArtifactCodecError.self) {
+        try HeistArtifactCodec.write(HeistArtifact(plan: plan), to: packageURL)
+    }
+    #expect(throws: HeistArtifactCodecError.self) {
+        _ = try HeistArtifactCodec.read(from: packageURL)
+    }
+}
+
+@Test
 func `heist planning loads generated heist artifact source`() throws {
     let temp = try PlansTemporaryDirectory()
     let artifactURL = temp.url.appendingPathComponent("SearchFlow.heist")
