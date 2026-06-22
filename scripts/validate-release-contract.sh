@@ -77,6 +77,20 @@ if grep -Eq "\"$SEMVER_GREP\"" "$BUTTONHEIST_DEMO_VERSION_FILE"; then
     fail "$BUTTONHEIST_DEMO_VERSION_FILE must use buttonHeistVersion instead of a hardcoded release version"
 fi
 
+DOC_EXAMPLE_PATHS=(README.md docs examples)
+if grep -R -n -E '\} Else \{' "${DOC_EXAMPLE_PATHS[@]}" >/tmp/buttonheist-stale-dsl-grep.txt; then
+    cat /tmp/buttonheist-stale-dsl-grep.txt
+    fail "docs/examples must use canonical .else { ... } syntax, not } Else {"
+fi
+if grep -R -n -E 'WaitFor\(timeout:' "${DOC_EXAMPLE_PATHS[@]}" >/tmp/buttonheist-stale-dsl-grep.txt; then
+    cat /tmp/buttonheist-stale-dsl-grep.txt
+    fail "docs/examples must use WaitFor(predicate, timeout: .seconds(...)), not WaitFor(timeout:)"
+fi
+if grep -R -n -E 'timeout:[[:space:]]*[0-9]+' "${DOC_EXAMPLE_PATHS[@]}" >/tmp/buttonheist-stale-dsl-grep.txt; then
+    cat /tmp/buttonheist-stale-dsl-grep.txt
+    fail "docs/examples must use timeout: .seconds(...), not bare numeric timeouts"
+fi
+
 if grep -Eq 'LabeledContent\([[:space:]]*"Version"' "$BUTTONHEIST_DEMO_VERSION_FILE"; then
     grep -Eq 'LabeledContent\([[:space:]]*"Version"[[:space:]]*,[[:space:]]*value:[[:space:]]*(TheScore\.)?buttonHeistVersion[[:space:]]*\)' "$BUTTONHEIST_DEMO_VERSION_FILE" \
         || fail "$BUTTONHEIST_DEMO_VERSION_FILE must source Version from TheScore.buttonHeistVersion or remove the Version row"

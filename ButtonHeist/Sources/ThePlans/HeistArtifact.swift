@@ -161,29 +161,21 @@ public enum HeistArtifactCodec {
 
     public static func readPlan(from url: URL) throws -> HeistPlan {
         let fileURL = url.standardizedFileURL
-        switch fileURL.pathExtension.lowercased() {
-        case "heist":
-            return try read(from: fileURL).plan
-        case "json":
-            return try decodePlanJSON(try Data(contentsOf: fileURL), at: fileURL)
-        default:
+        guard fileURL.pathExtension.lowercased() == "heist" else {
             throw HeistArtifactCodecError.unsupportedInputExtension(path: fileURL.path)
         }
+        return try read(from: fileURL).plan
     }
 
     public static func writePlan(_ plan: HeistPlan, to url: URL) throws {
         let fileURL = url.standardizedFileURL
-        switch fileURL.pathExtension.lowercased() {
-        case "heist":
-            try write(HeistArtifact(plan: plan), to: fileURL)
-        case "json":
-            try plan.canonicalHeistJSONData().write(to: fileURL, options: .atomic)
-        default:
+        guard fileURL.pathExtension.lowercased() == "heist" else {
             throw HeistArtifactCodecError.unsupportedOutputExtension(path: fileURL.path)
         }
+        try write(HeistArtifact(plan: plan), to: fileURL)
     }
 
-    public static func decodePlanJSON(_ data: Data, at url: URL) throws -> HeistPlan {
+    static func decodePlanJSON(_ data: Data, at url: URL) throws -> HeistPlan {
         do {
             return try HeistPlanJSONCodec.decodeValidatedPlan(data, sourceURL: url)
         } catch let error as HeistPlanJSONCodecError {

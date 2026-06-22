@@ -75,6 +75,7 @@ let package = Package(
         .target(
             name: "TheInsideJob",
             dependencies: [
+                "ThePlans",
                 "TheScore",
                 .product(
                     name: "AccessibilitySnapshotParser",
@@ -95,6 +96,7 @@ let package = Package(
         .target(
             name: "ButtonHeist",
             dependencies: [
+                "ThePlans",
                 "TheScore",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
@@ -103,7 +105,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TheScoreTests",
-            dependencies: ["TheScore"],
+            dependencies: ["ThePlans", "TheScore"],
             path: "Tests/TheScoreTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
@@ -125,14 +127,14 @@ let package = Package(
         ),
         .testTarget(
             name: "ButtonHeistDSLTests",
-            dependencies: ["ButtonHeistDSL", "TheScore"],
+            dependencies: ["ButtonHeistDSL", "ThePlans", "TheScore"],
             path: "Tests/ButtonHeistDSLTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(
             name: "ButtonHeistTests",
             dependencies: [
-                "ButtonHeist", "TheScore",
+                "ButtonHeist", "ThePlans", "TheScore",
             ],
             path: "Tests/ButtonHeistTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
@@ -140,7 +142,7 @@ let package = Package(
         .testTarget(
             name: "TheInsideJobTests",
             dependencies: [
-                "TheInsideJob", "TheScore",
+                "TheInsideJob", "ThePlans", "TheScore",
             ],
             path: "Tests/TheInsideJobTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

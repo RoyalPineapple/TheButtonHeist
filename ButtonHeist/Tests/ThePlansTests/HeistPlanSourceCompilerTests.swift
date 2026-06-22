@@ -843,6 +843,28 @@ import ThePlans
     }
 }
 
+@Test func `runtime source compiler rejects standard definition cap`() throws {
+    let definitions = (0...250).map { index in
+        """
+            HeistDef<String>("Definitions.definition\(index)", parameter: "value") { value in
+                Activate(.label(value))
+            }
+        """
+    }.joined(separator: "\n\n")
+    let source = """
+    HeistPlan("tooManyDefinitions") {
+    \(definitions)
+
+        Warn("body")
+    }
+    """
+
+    let diagnostic = compileError(source)
+
+    expect(diagnostic, contains: "max total heist definitions")
+    expect(diagnostic, contains: "252 definitions")
+}
+
 private func assertCanonicalRoundTrip(_ plan: HeistPlan) throws {
     let source = try plan.canonicalSwiftDSL()
     let compiled = try HeistPlanSourceCompiler().compile(source)
