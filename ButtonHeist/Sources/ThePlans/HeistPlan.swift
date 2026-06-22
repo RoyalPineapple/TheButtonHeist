@@ -11,7 +11,7 @@ import Foundation
 // - HeistInvocationStep.swift owns named heist invocation payloads.
 // - WarnFailSteps.swift owns warning and failure step payloads.
 // - HeistPlanHelpers.swift owns plan model errors and helper APIs.
-// - HeistPlanExpressions.swift owns scoped expression/reference types.
+// - *Expressions.swift files own scoped expression/reference types.
 // - Runtime safety extensions own the bounded executable-plan boundary.
 // - HeistPlan+Validation.swift owns linting and composition-quality checks only.
 // - HeistPlanSourceCompiler/Lexer/Parser.swift owns canonical ButtonHeist source compilation.

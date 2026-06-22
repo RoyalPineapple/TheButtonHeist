@@ -1,0 +1,177 @@
+import Foundation
+
+// MARK: - Element Target Expressions
+
+public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
+    case target(ElementTarget)
+    case predicate(ElementPredicateTemplate, ordinal: Int? = nil)
+    case ref(HeistReferenceName)
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case ref, ordinal
+    }
+
+    public static var inlineFieldNames: [String] {
+        ElementTarget.inlineFieldNames
+            + ElementPredicateTemplate.CodingKeys.allCases.map(\.stringValue)
+    }
+
+    public init(_ target: ElementTarget) {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            self = .predicate(ElementPredicateTemplate(predicate), ordinal: ordinal)
+        }
+    }
+
+    public init(ref: HeistReferenceName) throws {
+        let trimmed = ref.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw HeistExpressionError.emptyReference("target") }
+        self = .ref(trimmed)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.ref) {
+            try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element target expression")
+            self = try .ref(Self.decodeReference(from: container, key: .ref, type: "target"))
+            return
+        }
+        let predicate = try ElementPredicateTemplate.decodeAllowingAdditionalKeys(from: decoder)
+        if predicate.hasPredicates {
+            let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+            if let ordinal, ordinal < 0 {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .ordinal,
+                    in: container,
+                    debugDescription: "ordinal must be non-negative"
+                )
+            }
+            self = .predicate(predicate, ordinal: ordinal)
+            return
+        }
+        self = .target(try ElementTarget(from: decoder))
+    }
+
+    public static func decodeInlineIfPresent(from decoder: Decoder) throws -> ElementTargetExpr? {
+        struct AnyCodingKey: CodingKey {
+            let stringValue: String
+            let intValue: Int? = nil
+
+            init?(stringValue: String) {
+                self.stringValue = stringValue
+            }
+
+            init?(intValue: Int) {
+                return nil
+            }
+        }
+
+        let probe = try decoder.container(keyedBy: AnyCodingKey.self)
+        let allowed = Set(inlineFieldNames)
+        guard probe.allKeys.contains(where: { allowed.contains($0.stringValue) }) else { return nil }
+        return try ElementTargetExpr(from: decoder)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .target(let target):
+            try target.encode(to: encoder)
+        case .predicate(let predicate, let ordinal):
+            try predicate.encode(to: encoder)
+            if let ordinal {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(ordinal, forKey: .ordinal)
+            }
+        case .ref(let reference):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(reference, forKey: .ref)
+        }
+    }
+
+    public func resolve(in environment: HeistExecutionEnvironment) throws -> ElementTarget {
+        switch self {
+        case .target(let target):
+            return target
+        case .predicate(let predicate, let ordinal):
+            return .predicate(try predicate.resolve(in: environment), ordinal: ordinal)
+        case .ref(let reference):
+            guard let target = environment.targets[reference] else {
+                throw HeistExpressionError.unresolvedTargetReference(reference)
+            }
+            return target
+        }
+    }
+
+    private static func decodeReference(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        key: CodingKeys,
+        type: String
+    ) throws -> HeistReferenceName {
+        let reference = try container.decode(String.self, forKey: key)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reference.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "\(type) reference must not be empty"
+            )
+        }
+        return reference
+    }
+}
+
+public extension ElementTargetExpr {
+    // Keep target-backed predicates equal to their canonical predicate-template form
+    // so Swift-authored targets and decoded inline predicate targets compare as the
+    // same heist intent.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.ref(let lhsReference), .ref(let rhsReference)):
+            return lhsReference == rhsReference
+        case (.target(let lhsTarget), .target(let rhsTarget)):
+            return lhsTarget == rhsTarget
+        case (.predicate(let lhsPredicate, let lhsOrdinal), .predicate(let rhsPredicate, let rhsOrdinal)):
+            return lhsPredicate == rhsPredicate && lhsOrdinal == rhsOrdinal
+        case (.target(let target), .predicate(let predicate, let ordinal)),
+             (.predicate(let predicate, let ordinal), .target(let target)):
+            guard case .predicate(let targetPredicate, let targetOrdinal) = target else {
+                return false
+            }
+            return ElementPredicateTemplate(targetPredicate) == predicate && targetOrdinal == ordinal
+        default:
+            return false
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        switch self {
+        case .ref(let reference):
+            hasher.combine("ref")
+            hasher.combine(reference)
+        case .target(.predicate(let predicate, let ordinal)):
+            hasher.combine("predicate")
+            hasher.combine(ElementPredicateTemplate(predicate))
+            hasher.combine(ordinal)
+        case .predicate(let predicate, let ordinal):
+            hasher.combine("predicate")
+            hasher.combine(predicate)
+            hasher.combine(ordinal)
+        }
+    }
+}
+
+extension ElementTargetExpr: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .target(let target):
+            return target.description
+        case .predicate(let predicate, let ordinal):
+            return ScoreDescription.call("targetExpr", [
+                predicate.description,
+                ScoreDescription.valueField("ordinal", ordinal),
+            ].compactMap { $0 })
+        case .ref(let reference):
+            return ScoreDescription.call("targetRef", [ScoreDescription.quoted(reference)])
+        }
+    }
+}
