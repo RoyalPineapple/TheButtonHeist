@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import TheScore
+import ThePlans
 
 // MARK: - Scroll To Visible
 

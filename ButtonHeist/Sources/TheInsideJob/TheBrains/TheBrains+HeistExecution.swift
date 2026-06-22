@@ -1,8 +1,8 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import ThePlans
 
+import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
 extension TheBrains {

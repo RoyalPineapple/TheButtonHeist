@@ -3,6 +3,7 @@
 import UIKit
 
 import AccessibilitySnapshotParser
+import ThePlans
 
 /// Viewport-tied live capture and UIKit lookup surface.
 ///

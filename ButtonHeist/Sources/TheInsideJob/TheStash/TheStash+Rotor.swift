@@ -5,6 +5,7 @@ import UIKit
 import AccessibilitySnapshotParser
 
 import TheScore
+import ThePlans
 
 // MARK: - Rotor Actions
 

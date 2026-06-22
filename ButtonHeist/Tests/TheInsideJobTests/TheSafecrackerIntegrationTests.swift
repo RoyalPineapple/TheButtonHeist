@@ -3,6 +3,7 @@
 // Requires the BH Demo test host for a live UIWindow and UIApplication.sendEvent pipeline.
 import XCTest
 @testable import TheInsideJob
+import ThePlans
 import TheScore
 
 @MainActor

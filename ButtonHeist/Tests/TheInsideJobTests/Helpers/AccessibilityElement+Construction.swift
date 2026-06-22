@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 @testable import AccessibilitySnapshotParser
+import ThePlans
 @testable import TheScore
 
 /// Shared `AccessibilityElement` construction helpers for tests.

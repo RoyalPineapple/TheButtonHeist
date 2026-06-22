@@ -3,6 +3,7 @@
 import UIKit
 
 import AccessibilitySnapshotParser
+import ThePlans
 
 // MARK: - Live Lookup Facade
 

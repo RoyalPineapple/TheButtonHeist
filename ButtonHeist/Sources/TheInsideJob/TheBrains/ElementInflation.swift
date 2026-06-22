@@ -2,6 +2,7 @@
 import UIKit
 
 import TheScore
+import ThePlans
 
 /// Converts a semantic target into a fresh live target that can receive the
 /// requested accessibility action.

@@ -16,7 +16,7 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case nestedForEachUnsupported
 }
 
-@_spi(ButtonHeistInternals) public extension HeistPlan {
+public extension HeistPlan {
     func heistDefinition(at path: [String]) -> HeistPlan? {
         HeistDefinitionScope(definitions: definitions).resolve(path: path)?.definition
     }

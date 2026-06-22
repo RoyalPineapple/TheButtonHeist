@@ -614,7 +614,7 @@ final class TheBrainsActionTests: XCTestCase {
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),
             .dismissKeyboard,
         ]
-        var dispatchedTypes: [ClientWireMessageType] = []
+        var dispatchedTypes: [RuntimeActionType] = []
         let runtime = heistRuntime(observations: []) { command in
             dispatchedTypes.append(command.runtimeType)
             return ActionResult(success: true, method: .heistPlan, message: command.runtimeType.rawValue)
@@ -629,7 +629,7 @@ final class TheBrainsActionTests: XCTestCase {
             return XCTFail("Expected heist execution payload")
         }
         XCTAssertEqual(heist.steps.count, commands.count)
-        XCTAssertTrue(heist.steps.allSatisfy { $0.status == .passed })
+        XCTAssertTrue(heist.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
     }
 
     func testHeistConditionalSelectsFirstMatchingCaseOnce() async throws {

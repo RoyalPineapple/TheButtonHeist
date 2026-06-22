@@ -2,6 +2,7 @@
 import UIKit
 
 import TheScore
+import ThePlans
 
 extension TheStash {
     func predicateSelectionContext(scope: SemanticObservationScope = .visible) -> PredicateSelectionContext {

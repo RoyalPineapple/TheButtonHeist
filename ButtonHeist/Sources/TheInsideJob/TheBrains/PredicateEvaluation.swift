@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import TheScore
+import ThePlans
 
 enum PredicateEvaluation {
     static func evaluate(
