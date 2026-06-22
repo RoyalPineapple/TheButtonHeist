@@ -119,7 +119,7 @@ HeistPlan("shop") {
     If(.present(.label("Pay"))) {
         Activate(.label("Pay"))
             .expect(.changed(.screen()))
-    } Else {
+    }.else {
         Warn("Pay button unavailable")
     }
 }

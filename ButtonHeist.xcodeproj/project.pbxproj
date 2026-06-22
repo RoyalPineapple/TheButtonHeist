@@ -140,6 +140,7 @@
 		38D4C4A3084FD9C990C1BE89 /* HeistReceiptRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1327DECF6172882ED9CEF364 /* HeistReceiptRecorderTests.swift */; };
 		3A63669D4D98331EBD0EE9CD /* ContainerName.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0BBC5AB2C7687FD94179B1 /* ContainerName.swift */; };
 		3A6CE10AA622BC7529D9E7CD /* HeistPlanSourceCompilerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B481977E54E74321A6CBA1E /* HeistPlanSourceCompilerTests.swift */; };
+		3AB516275AB77DFAAADEA39A /* ThePlans.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96D1DF8ADC7876970B2B284F /* ThePlans.framework */; };
 		3B71E4B90D486E4E81E21BC8 /* AccessibilityTraceDiffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F0E46D5FDF7214ED8460E8 /* AccessibilityTraceDiffTests.swift */; };
 		3B77ADFA2877DBF64C911BA1 /* Actions+ElementActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEBB6B59046741597C045AB /* Actions+ElementActions.swift */; };
 		3BB42015150466B591042391 /* HeistCanonicalSwiftDSLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 232BBCE8647760821CF70FD7 /* HeistCanonicalSwiftDSLTests.swift */; };
@@ -169,6 +170,7 @@
 		4668557879AFB2B968986F1B /* DogfoodForAllHeistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08AA74658401F9D7BB0A49C1 /* DogfoodForAllHeistTests.swift */; };
 		46E3B9C0792131023EAE4826 /* HeistActionCommand+ClientMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF27F029AA262DCB7BB58C4 /* HeistActionCommand+ClientMessage.swift */; };
 		470D7403EC2F1DFA9C9EB5EE /* HeistExpressionEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ACA519764CB203411ABAA49 /* HeistExpressionEnvironment.swift */; };
+		472DCAA5F3966F5ACEE8D65D /* ThePlans.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96D1DF8ADC7876970B2B284F /* ThePlans.framework */; };
 		47556EEB40FCB7D5768C37A1 /* AccessibilityHierarchyFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52EB3108DFAB4DF60AB11A4C /* AccessibilityHierarchyFilterTests.swift */; };
 		475C23DE0FA87D9D78D1DB5A /* TheStash+Capture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */; };
 		47FE63A0C05E7B0F3653B6C5 /* HeistPlan+RuntimeValidationLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4AF36D5F64363DBB33925B /* HeistPlan+RuntimeValidationLimits.swift */; };
@@ -271,6 +273,7 @@
 		7C9216379B68310FC37B5236 /* ServerTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F75B66F13FE91D3C14861B /* ServerTransportTests.swift */; };
 		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
 		7CC18EFE1CB52BF84DEF8842 /* HeistReceiptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3E7226EE3CB9C966C902DC /* HeistReceiptTests.swift */; };
+		7CF48D906BD4505BC27D934B /* ThePlans.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96D1DF8ADC7876970B2B284F /* ThePlans.framework */; };
 		7DE9C29580D34C57826B3ED0 /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */; };
 		7E0DBE48EA0C1A4CB250C386 /* TheFence+ScreenHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 403E52C7A12CB836468AA436 /* TheFence+ScreenHandlers.swift */; };
 		7E12A24AF6AB9194E21C2DE2 /* ConnectionScope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B00E3ADE91F58C1FDF40089 /* ConnectionScope.swift */; };
@@ -492,6 +495,7 @@
 		E04A409AF6997E327F9D1828 /* ConnectionResultWaitersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30350583523C830C2C298AE7 /* ConnectionResultWaitersTests.swift */; };
 		E053E068CA957250B66351E4 /* TheFenceHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D087B067D089CF13A7BBC /* TheFenceHandlerTests.swift */; };
 		E09C554A7108F2F3A37BB1B0 /* RuntimeActionMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D669CF03D7916F6AF2264D /* RuntimeActionMessage.swift */; };
+		E10B6E5CBB02F6E3D332CA3A /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		E1C21596B113413BBFE23F51 /* TheFence+CommandArguments.swift in Sources */ = {isa = PBXBuildFile; fileRef = B52DC7DFD3B9768E788237C8 /* TheFence+CommandArguments.swift */; };
 		E234C7529B103C6AEF8F8C02 /* ActionResultTraceTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA832429E87DDC774F3BE39C /* ActionResultTraceTestHelpers.swift */; };
 		E327E060E6709EE93A5BBEBB /* TheFence+ParameterSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */; };
@@ -524,6 +528,7 @@
 		F27EFB3BFD5F772ACEB4BAE6 /* PresentationObscuringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3471869CA78AB09EF66258C /* PresentationObscuringTests.swift */; };
 		F411A48EE92857483ED4303F /* Navigation+PresentationObstruction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B270D706A332CA587FAFDA9A /* Navigation+PresentationObstruction.swift */; };
 		F46D1E7BDE4F27CF95BF39A6 /* HeistCanonicalSwiftDSLRenderer+Steps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3D5FE7A0B37299D5524C3E /* HeistCanonicalSwiftDSLRenderer+Steps.swift */; };
+		F4C55BBA04181A03EA5CA3D8 /* ThePlans.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96D1DF8ADC7876970B2B284F /* ThePlans.framework */; };
 		F4DFAFE8BAAB41F58D72A120 /* TheBrains+HeistWaitExecution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6047229B60087E6446607CC7 /* TheBrains+HeistWaitExecution.swift */; };
 		F4FE5DB3A60F08245E5157E9 /* HeistPlan+RuntimeValidationAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F776E89C4BD983C82E7A48 /* HeistPlan+RuntimeValidationAdmission.swift */; };
 		F5EA14A80C12E096760C68C8 /* ControlSteps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36738E27F58B67D86922EC99 /* ControlSteps.swift */; };
@@ -614,12 +619,40 @@
 			remoteGlobalIDString = DE504387EAB6C70F9E30849E;
 			remoteInfo = TheScore;
 		};
+		A6547A3737B60BB8FB2424D6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4D55A4986E4C4C94D4077EE0;
+			remoteInfo = ThePlans;
+		};
 		A7D7B66CC2A9ED01D5B9BBD1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 01AB9D7BD988A7ADF961852B;
 			remoteInfo = ButtonHeist;
+		};
+		A851850830E1A8FD2A5BD09F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DE504387EAB6C70F9E30849E;
+			remoteInfo = TheScore;
+		};
+		AD5B794795B74065A4709F09 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4D55A4986E4C4C94D4077EE0;
+			remoteInfo = ThePlans;
+		};
+		B280620CC1EBBDDFEB8582D4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4D55A4986E4C4C94D4077EE0;
+			remoteInfo = ThePlans;
 		};
 		B897C4D0CE79B9BC1AAE1443 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -641,6 +674,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 4966D1848821855A88573DCD;
 			remoteInfo = TheInsideJob;
+		};
+		FABF93BC2A9BE54F987B48E2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4D55A4986E4C4C94D4077EE0;
+			remoteInfo = ThePlans;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -1313,6 +1353,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F4C55BBA04181A03EA5CA3D8 /* ThePlans.framework in Frameworks */,
 				674F25A2AE43B004B9BD49ED /* TheScore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1341,6 +1382,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */,
+				472DCAA5F3966F5ACEE8D65D /* ThePlans.framework in Frameworks */,
+				E10B6E5CBB02F6E3D332CA3A /* TheScore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1365,6 +1408,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CF042BCF61A90E916DAD1D30 /* ButtonHeistDSL.framework in Frameworks */,
+				3AB516275AB77DFAAADEA39A /* ThePlans.framework in Frameworks */,
 				0B911C20B3651AF4D83DA607 /* TheScore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1373,6 +1417,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7CF48D906BD4505BC27D934B /* ThePlans.framework in Frameworks */,
 				BAE49213A7F4FAACD9AE1EE0 /* TheScore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2257,6 +2302,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				E599656ABBCA5FEA55DAF266 /* PBXTargetDependency */,
 				DE4AF76A7E24F03406F80154 /* PBXTargetDependency */,
 			);
 			name = ButtonHeist;
@@ -2279,6 +2325,7 @@
 			);
 			dependencies = (
 				DA4476A9D833F9101A4CDBFE /* PBXTargetDependency */,
+				74FCAB80BDFD83E8BA703D56 /* PBXTargetDependency */,
 				C3FBB3B9CA62BED1992CC7DD /* PBXTargetDependency */,
 			);
 			name = ButtonHeistDSLTests;
@@ -2388,6 +2435,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				711D4F44536B782731B8C67B /* PBXTargetDependency */,
 				F3865920A9792F7DC6CF6C66 /* PBXTargetDependency */,
 			);
 			name = TheScoreTests;
@@ -2431,6 +2479,8 @@
 			);
 			dependencies = (
 				4FF73F7AC03BA7B3662026BE /* PBXTargetDependency */,
+				48A216E8E705A81FD71224AE /* PBXTargetDependency */,
+				ADA370B50A42D29B8151DD07 /* PBXTargetDependency */,
 			);
 			name = ButtonHeistTests;
 			packageProductDependencies = (
@@ -3190,6 +3240,12 @@
 			target = 4D55A4986E4C4C94D4077EE0 /* ThePlans */;
 			targetProxy = 4DBF338EF3989B6F31E1350A /* PBXContainerItemProxy */;
 		};
+		48A216E8E705A81FD71224AE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ThePlans;
+			target = 4D55A4986E4C4C94D4077EE0 /* ThePlans */;
+			targetProxy = FABF93BC2A9BE54F987B48E2 /* PBXContainerItemProxy */;
+		};
 		4FF73F7AC03BA7B3662026BE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = ButtonHeist;
@@ -3202,6 +3258,18 @@
 			target = 4D55A4986E4C4C94D4077EE0 /* ThePlans */;
 			targetProxy = 93C48D9F958BD37E1ED049D8 /* PBXContainerItemProxy */;
 		};
+		711D4F44536B782731B8C67B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ThePlans;
+			target = 4D55A4986E4C4C94D4077EE0 /* ThePlans */;
+			targetProxy = B280620CC1EBBDDFEB8582D4 /* PBXContainerItemProxy */;
+		};
+		74FCAB80BDFD83E8BA703D56 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ThePlans;
+			target = 4D55A4986E4C4C94D4077EE0 /* ThePlans */;
+			targetProxy = AD5B794795B74065A4709F09 /* PBXContainerItemProxy */;
+		};
 		865193B2740838EA3690CE95 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = ThePlans;
@@ -3213,6 +3281,12 @@
 			name = ThePlans;
 			target = 4D55A4986E4C4C94D4077EE0 /* ThePlans */;
 			targetProxy = B897C4D0CE79B9BC1AAE1443 /* PBXContainerItemProxy */;
+		};
+		ADA370B50A42D29B8151DD07 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = TheScore;
+			target = DE504387EAB6C70F9E30849E /* TheScore */;
+			targetProxy = A851850830E1A8FD2A5BD09F /* PBXContainerItemProxy */;
 		};
 		C3FBB3B9CA62BED1992CC7DD /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -3237,6 +3311,12 @@
 			name = TheScore;
 			target = DE504387EAB6C70F9E30849E /* TheScore */;
 			targetProxy = 9A57193D9ED424CFFB012FE4 /* PBXContainerItemProxy */;
+		};
+		E599656ABBCA5FEA55DAF266 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ThePlans;
+			target = 4D55A4986E4C4C94D4077EE0 /* ThePlans */;
+			targetProxy = A6547A3737B60BB8FB2424D6 /* PBXContainerItemProxy */;
 		};
 		F3865920A9792F7DC6CF6C66 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;

@@ -72,7 +72,7 @@ enum CLIRunner {
         connection: ConnectionOptions,
         statusMessage: String? = nil
     ) async throws -> TheFence {
-        let fence = makeFence(connection: connection)
+        let fence = try makeFence(connection: connection)
         do {
             try await fence.start()
             if let statusMessage, !connection.quiet {
@@ -111,8 +111,8 @@ enum CLIRunner {
     // MARK: - Private Helpers
 
     @ButtonHeistActor
-    private static func makeFence(connection: ConnectionOptions) -> TheFence {
-        let config = EnvironmentConfig.resolve(
+    private static func makeFence(connection: ConnectionOptions) throws -> TheFence {
+        let config = try EnvironmentConfig.resolve(
             deviceFilter: connection.device,
             token: connection.token,
             connectionTimeout: connection.connectTimeout,

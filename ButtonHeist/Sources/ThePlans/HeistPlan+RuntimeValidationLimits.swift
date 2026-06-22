@@ -2,6 +2,7 @@ import Foundation
 
 @_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
     public static let standard = HeistPlanRuntimeSafetyLimits()
+    public static let standardMaxDefinitions = 250
 
     public let maxTotalSteps: Int
     public let maxNestedStepDepth: Int
@@ -24,7 +25,7 @@ import Foundation
         maxStringBytes: Int = 4_096,
         maxTotalStringBytes: Int = 65_536,
         maxParameterBytes: Int = 64,
-        maxDefinitions: Int = .max
+        maxDefinitions: Int = Self.standardMaxDefinitions
     ) {
         self.maxTotalSteps = maxTotalSteps
         self.maxNestedStepDepth = maxNestedStepDepth

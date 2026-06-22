@@ -29,7 +29,7 @@ struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
         // produce a clear error naming what was checked. EnvironmentConfig
         // drops to nil when nothing is configured, and TheFence's own error
         // message is generic.
-        let resolved = EnvironmentConfig.resolve(
+        let resolved = try EnvironmentConfig.resolve(
             deviceFilter: connection.device,
             token: connection.token,
             connectionTimeout: connection.connectTimeout,

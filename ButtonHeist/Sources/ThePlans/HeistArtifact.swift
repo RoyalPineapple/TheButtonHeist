@@ -75,6 +75,7 @@ public enum HeistArtifactCodec {
 
     public static func read(from url: URL) throws -> HeistArtifact {
         let packageURL = url.standardizedFileURL
+        try requireHeistInputExtension(packageURL)
         try validateHeistPackageDirectory(packageURL)
 
         let manifestURL = packageURL.appendingPathComponent(manifestFileName)
@@ -116,6 +117,7 @@ public enum HeistArtifactCodec {
 
     public static func write(_ artifact: HeistArtifact, to url: URL) throws {
         let packageURL = url.standardizedFileURL
+        try requireHeistOutputExtension(packageURL)
         guard artifact.manifest.planVersion == artifact.plan.version else {
             throw HeistArtifactCodecError.versionMismatch(
                 path: packageURL.path,
@@ -161,29 +163,17 @@ public enum HeistArtifactCodec {
 
     public static func readPlan(from url: URL) throws -> HeistPlan {
         let fileURL = url.standardizedFileURL
-        switch fileURL.pathExtension.lowercased() {
-        case "heist":
-            return try read(from: fileURL).plan
-        case "json":
-            return try decodePlanJSON(try Data(contentsOf: fileURL), at: fileURL)
-        default:
-            throw HeistArtifactCodecError.unsupportedInputExtension(path: fileURL.path)
-        }
+        try requireHeistInputExtension(fileURL)
+        return try read(from: fileURL).plan
     }
 
     public static func writePlan(_ plan: HeistPlan, to url: URL) throws {
         let fileURL = url.standardizedFileURL
-        switch fileURL.pathExtension.lowercased() {
-        case "heist":
-            try write(HeistArtifact(plan: plan), to: fileURL)
-        case "json":
-            try plan.canonicalHeistJSONData().write(to: fileURL, options: .atomic)
-        default:
-            throw HeistArtifactCodecError.unsupportedOutputExtension(path: fileURL.path)
-        }
+        try requireHeistOutputExtension(fileURL)
+        try write(HeistArtifact(plan: plan), to: fileURL)
     }
 
-    public static func decodePlanJSON(_ data: Data, at url: URL) throws -> HeistPlan {
+    static func decodePlanJSON(_ data: Data, at url: URL) throws -> HeistPlan {
         do {
             return try HeistPlanJSONCodec.decodeValidatedPlan(data, sourceURL: url)
         } catch let error as HeistPlanJSONCodecError {
@@ -211,6 +201,18 @@ public enum HeistArtifactCodec {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(manifest)
+    }
+
+    private static func requireHeistInputExtension(_ url: URL) throws {
+        guard url.pathExtension.lowercased() == "heist" else {
+            throw HeistArtifactCodecError.unsupportedInputExtension(path: url.path)
+        }
+    }
+
+    private static func requireHeistOutputExtension(_ url: URL) throws {
+        guard url.pathExtension.lowercased() == "heist" else {
+            throw HeistArtifactCodecError.unsupportedOutputExtension(path: url.path)
+        }
     }
 
     private static func validateHeistPackageDirectory(_ url: URL) throws {
@@ -450,7 +452,7 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
         case .unsupportedInputExtension(let path):
             return "Unsupported heist input extension for \(path). Use a generated .heist package artifact."
         case .unsupportedOutputExtension(let path):
-            return "Unsupported heist output extension for \(path). Use .heist or .json."
+            return "Unsupported heist output extension for \(path). Use a generated .heist package artifact."
         }
     }
 

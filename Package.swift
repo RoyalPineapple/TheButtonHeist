@@ -99,6 +99,7 @@ let package = Package(
         .target(
             name: "ButtonHeist",
             dependencies: [
+                "ThePlans",
                 "TheScore",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],

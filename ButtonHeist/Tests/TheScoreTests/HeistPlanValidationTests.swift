@@ -413,6 +413,26 @@ func runtimeSafetyRejectsMaxDefinitionsWithPreciseDiagnostic() throws {
 }
 
 @Test
+func runtimeSafetyRejectsStandardDefinitionCapByDefault() throws {
+    let definitions = (0...HeistPlanRuntimeSafetyLimits.standardMaxDefinitions).map { index in
+        HeistPlanAdmissionCandidate(name: "definition\(index)", body: [
+            .warn(WarnStep(message: "definition \(index)")),
+        ])
+    }
+    let raw = HeistPlanAdmissionCandidate(definitions: definitions, body: [
+        .warn(WarnStep(message: "body")),
+    ])
+
+    let failures = runtimeSafetyFailures(for: raw)
+
+    #expect(failures.contains {
+        $0.path == "$.definitions"
+            && $0.contract == "max total heist definitions"
+            && $0.observed == "\(HeistPlanRuntimeSafetyLimits.standardMaxDefinitions + 1) definitions"
+    }, "\(failures)")
+}
+
+@Test
 func runtimeSafetyDiagnosticsIncludePathRoleAndObservedValue() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
         .forEachString(try ForEachStringStep(

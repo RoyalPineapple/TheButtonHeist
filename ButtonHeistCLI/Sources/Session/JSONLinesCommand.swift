@@ -42,7 +42,7 @@ struct JSONLinesCommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         let effectiveFormat = output.format ?? JSONLinesDefaults.outputFormat
-        let config = EnvironmentConfig.resolve(
+        let config = try EnvironmentConfig.resolve(
             deviceFilter: device,
             token: token,
             sessionTimeout: idleTimeout,

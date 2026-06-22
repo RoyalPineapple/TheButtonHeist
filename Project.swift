@@ -112,6 +112,7 @@ let project = Project(
             sources: ["ButtonHeist/Sources/TheButtonHeist/**"],
 
             dependencies: [
+                .target(name: "ThePlans"),
                 .target(name: "TheScore"),
             ]
         ),
@@ -140,6 +141,7 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TheScoreTests/**"],
             dependencies: [
+                .target(name: "ThePlans"),
                 .target(name: "TheScore"),
             ]
         ),
@@ -155,6 +157,7 @@ let project = Project(
             sources: ["ButtonHeist/Tests/ButtonHeistDSLTests/**"],
             dependencies: [
                 .target(name: "ButtonHeistDSL"),
+                .target(name: "ThePlans"),
                 .target(name: "TheScore"),
             ]
         ),
@@ -170,6 +173,8 @@ let project = Project(
             sources: ["ButtonHeist/Tests/ButtonHeistTests/**"],
             dependencies: [
                 .target(name: "ButtonHeist"),
+                .target(name: "ThePlans"),
+                .target(name: "TheScore"),
             ]
         ),
 
@@ -226,6 +231,7 @@ let project = Project(
             buildAction: .buildAction(targets: [
                 .target("ButtonHeistDSLTests"),
                 .target("ButtonHeistDSL"),
+                .target("ThePlans"),
                 .target("TheScore"),
             ]),
             testAction: .targets([
@@ -237,6 +243,7 @@ let project = Project(
             buildAction: .buildAction(targets: [
                 .target("ButtonHeistTests"),
                 .target("ButtonHeist"),
+                .target("ThePlans"),
                 .target("TheScore"),
             ]),
             testAction: .targets([

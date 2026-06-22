@@ -84,14 +84,33 @@ func `heist artifact entry uses root plan name not output path`() throws {
 }
 
 @Test
-func `artifact codec can read internal raw plan json`() throws {
+func `public artifact plan helpers reject standalone raw plan json`() throws {
     let temp = try PlansTemporaryDirectory()
     let jsonURL = temp.url.appendingPathComponent("SearchFlow.json")
     let plan = try HeistPlan(body: [.warn(WarnStep(message: "raw unnamed IR"))])
 
-    try HeistArtifactCodec.writePlan(plan, to: jsonURL)
+    try plan.canonicalHeistJSONData().write(to: jsonURL)
 
-    #expect(try HeistArtifactCodec.readPlan(from: jsonURL) == plan)
+    #expect(throws: HeistArtifactCodecError.self) {
+        try HeistArtifactCodec.readPlan(from: jsonURL)
+    }
+    #expect(throws: HeistArtifactCodecError.self) {
+        try HeistArtifactCodec.writePlan(plan, to: jsonURL)
+    }
+}
+
+@Test
+func `public artifact package helpers require heist extension`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let packageURL = temp.url.appendingPathComponent("SearchFlow.package")
+    let plan = try representativeArtifactPlan()
+
+    #expect(throws: HeistArtifactCodecError.self) {
+        try HeistArtifactCodec.write(HeistArtifact(plan: plan), to: packageURL)
+    }
+    #expect(throws: HeistArtifactCodecError.self) {
+        _ = try HeistArtifactCodec.read(from: packageURL)
+    }
 }
 
 @Test
@@ -350,6 +369,37 @@ func `heist artifact accepts parameterized root entry through validation contrac
         let plan = try HeistArtifactCodec.readPlan(from: url)
         #expect(plan.name == "search")
         #expect(plan.parameter.kind == .string)
+    }
+}
+
+@Test
+func `heist artifact loading rejects standard definition cap`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let definitions = (0...250).map { index in
+        HeistPlanAdmissionCandidate(name: "definition\(index)", body: [
+            .warn(WarnStep(message: "definition \(index)")),
+        ])
+    }
+    let raw = HeistPlanAdmissionCandidate(
+        name: "tooManyDefinitions",
+        definitions: definitions,
+        body: [.warn(WarnStep(message: "body"))]
+    )
+
+    try writePackage(
+        named: "TooManyDefinitions.heist",
+        in: temp.url,
+        manifest: validArtifactManifest(entry: "tooManyDefinitions"),
+        planJSON: try JSONEncoder().encode(raw)
+    ) { url in
+        do {
+            _ = try HeistArtifactCodec.readPlan(from: url)
+            Issue.record("Expected artifact loading to reject too many definitions")
+        } catch {
+            let diagnostic = String(describing: error)
+            #expect(diagnostic.contains("max total heist definitions"))
+            #expect(diagnostic.contains("251 definitions"))
+        }
     }
 }
 
