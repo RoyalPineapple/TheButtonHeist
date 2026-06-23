@@ -22,6 +22,7 @@ class Buttonheist < Formula
 
   depends_on :macos
   depends_on macos: :sonoma
+  depends_on arch: :arm64
 
   def install
     bin.install "buttonheist"

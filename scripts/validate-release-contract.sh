@@ -125,6 +125,8 @@ grep -Fq 'bin.install "heist-plan"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE must install the heist-plan compiler"
 grep -Fq 'lib.install "ThePlans"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE must install ThePlans compiler artifacts under lib"
+grep -Fq 'depends_on arch: :arm64' "$BUTTONHEIST_FORMULA_TEMPLATE" \
+    || fail "$BUTTONHEIST_FORMULA_TEMPLATE must declare Button Heist Homebrew artifacts as arm64-only"
 grep -Fq 'ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftinterface' "$BUTTONHEIST_FORMULA_TEMPLATE" \
     || fail "$BUTTONHEIST_FORMULA_TEMPLATE test must assert installed arm64 ThePlans artifacts"
 grep -Fq 'refute_predicate lib/"ThePlans/arm64-apple-macosx/release/Modules/ThePlans.swiftmodule"' "$BUTTONHEIST_FORMULA_TEMPLATE" \

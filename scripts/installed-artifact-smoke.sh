@@ -14,7 +14,8 @@ PREFIX="${BUTTONHEIST_INSTALL_PREFIX:-}"
 CLI_ARCHIVE="${BUTTONHEIST_CLI_ARCHIVE:-}"
 MCP_ARCHIVE="${BUTTONHEIST_MCP_ARCHIVE:-}"
 EXPECTED_VERSION="${BUTTONHEIST_EXPECTED_VERSION:-}"
-THEPLANS_TRIPLE="${BUTTONHEIST_THEPLANS_TRIPLE:-arm64-apple-macosx}"
+SUPPORTED_THEPLANS_TRIPLE="arm64-apple-macosx"
+THEPLANS_TRIPLE="${BUTTONHEIST_THEPLANS_TRIPLE:-$SUPPORTED_THEPLANS_TRIPLE}"
 COMMAND_TIMEOUT="${BUTTONHEIST_INSTALLED_SMOKE_TIMEOUT:-60}"
 MCP_TIMEOUT="${BUTTONHEIST_MCP_SMOKE_TIMEOUT:-5}"
 REQUIRE_INSTALLED=false
@@ -34,6 +35,7 @@ Options:
   --mcp-archive PATH       Release MCP archive to stage before smoking.
   --expected-version VER   Expected buttonheist --version output.
   --theplans-triple TRIPLE Installed ThePlans artifact triple. Defaults to arm64-apple-macosx.
+                         Homebrew distribution is Apple Silicon / arm64 only.
   --timeout SECONDS        Timeout for CLI/heist-plan invocations. Defaults to 60.
   --mcp-timeout SECONDS    Timeout for buttonheist-mcp launch smoke. Defaults to 5.
   --require-installed      Fail instead of skipping when no install is found.
@@ -123,6 +125,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$THEPLANS_TRIPLE" != "$SUPPORTED_THEPLANS_TRIPLE" ]]; then
+    fail "installed Button Heist artifacts are arm64-only; unsupported ThePlans triple: $THEPLANS_TRIPLE"
+fi
 
 case "$COMMAND_TIMEOUT" in
     ''|*[!0-9.]*)

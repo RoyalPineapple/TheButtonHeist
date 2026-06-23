@@ -405,6 +405,8 @@ If you enable network scope, add the Bonjour permissions:
 brew install RoyalPineapple/tap/buttonheist
 ```
 
+The Homebrew distribution currently supports Apple Silicon macOS only.
+
 Add the MCP server to your project's `.mcp.json`:
 
 ```json

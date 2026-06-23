@@ -269,11 +269,12 @@ module. Resolution runs in this order:
      heist-plan compile Flow.swift --entry makeHeist --output Flow.heist
    ```
 
-2. **Installed compiler artifacts** — Homebrew installs `heist-plan` next to
-   `buttonheist` and installs the arm64 `ThePlans` build artifacts under
-   `lib/ThePlans`. The installed artifact uses `ThePlans.swiftinterface`, not a
-   binary `ThePlans.swiftmodule`, so the user's active Swift compiler rebuilds
-   the importable module for its own toolchain. The artifact also includes
+2. **Installed compiler artifacts** — The Homebrew distribution supports Apple
+   Silicon macOS only. It installs `heist-plan` next to `buttonheist` and
+   installs the arm64 `ThePlans` build artifacts under `lib/ThePlans`. The
+   installed artifact uses `ThePlans.swiftinterface`, not a binary
+   `ThePlans.swiftmodule`, so the user's active Swift compiler rebuilds the
+   importable module for its own toolchain. The artifact also includes
    `description.json` so the compiler can link the active ThePlans object list
    after installation. From that install shape, `.swift` heists compile without a
    ButtonHeist checkout or environment variable:
