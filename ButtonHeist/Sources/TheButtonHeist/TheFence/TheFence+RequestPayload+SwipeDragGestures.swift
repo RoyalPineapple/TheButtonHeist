@@ -70,7 +70,11 @@ extension TheFence {
             guard let element = try payload.schemaGestureElementTarget("element") else {
                 throw SchemaValidationError(field: payload.field("element"), observed: "missing", expected: "object")
             }
-            selection = .elementToPoint(element, end: try payload.requiredScreenPoint("end"))
+            selection = .elementToPoint(
+                element,
+                start: try payload.schemaUnitPoint("start"),
+                end: try payload.requiredScreenPoint("end")
+            )
         case FenceParameterKey.pointToPoint.rawValue:
             try payload.rejectUnknownGestureIntentKeys(spec: FenceParameterBlocks.dragIntentSpec(intent))
             selection = .pointToPoint(

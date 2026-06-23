@@ -58,18 +58,24 @@ extension TheFence {
     func decodePointSelection(
         request: CommandArgumentEnvelope,
         elementKey: String = "element",
+        unitPointKey: String = "unitPoint",
         pointKey: String = "point"
     ) throws -> GesturePointSelection {
         let element = try request.schemaGestureElementTarget(elementKey)
+        let unitPoint = try request.schemaUnitPoint(unitPointKey)
         let point = try request.schemaScreenPoint(pointKey)
-        switch (element, point) {
-        case (.some(let element), nil):
+        switch (element, unitPoint, point) {
+        case (.some(let element), nil, nil):
             return .element(element)
-        case (nil, .some(let point)):
+        case (.some(let element), .some(let unitPoint), nil):
+            return .elementUnitPoint(element, unitPoint)
+        case (nil, nil, .some(let point)):
             return .coordinate(point)
-        case (.some, .some):
-            throw mixedGestureShape(field: "\(elementKey)/\(pointKey)", expected: "element or point")
-        case (nil, nil):
+        case (.some, _, .some), (nil, .some, .some):
+            throw mixedGestureShape(field: "\(elementKey)/\(unitPointKey)/\(pointKey)", expected: "element, element with unitPoint, or point")
+        case (nil, .some, nil):
+            throw SchemaValidationError(field: unitPointKey, observed: "unit point without element", expected: "element with unitPoint")
+        case (nil, nil, nil):
             throw FenceError.invalidRequest("Must specify element or point")
         }
     }

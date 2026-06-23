@@ -15,7 +15,8 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                 requestDecoder: TheFence.decodeOneFingerTapRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
                 projection: .cliOnly(
-                    "Explicit mechanical/spatial tap. An element target supplies live geometry; "
+                    "Explicit mechanical/spatial tap. Element targets dispatch at their activation point "
+                        + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. "
                         + "ordinary accessible controls should use the semantic command path."
                 )
             )
@@ -26,8 +27,8 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 projection: .cliOnly(
-                    "Explicit mechanical/spatial long press on a point "
-                        + "or element-relative point for a resolved duration."
+                    "Explicit mechanical/spatial long press. Element targets dispatch at their activation point "
+                        + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate."
                 )
             )
         case .swipe:
@@ -49,7 +50,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 projection: .cliOnly(
                     "Explicit mechanical/spatial drag using exactly one typed intent: "
-                        + "elementToPoint or pointToPoint."
+                        + "elementToPoint (activation point or unit start override) or pointToPoint."
                 )
             )
         }

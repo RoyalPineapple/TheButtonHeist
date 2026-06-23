@@ -23,6 +23,7 @@ import TheScore
     var settled: Bool?
     var settleTimeMs: Int?
     var subjectEvidence: ActionSubjectEvidence?
+    var activationTrace: ActivationTrace?
     var timing: ActionPerformanceTiming?
 
     init(method: ActionMethod) {
@@ -45,6 +46,7 @@ import TheScore
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
             timing: timing
         )
     }
@@ -60,6 +62,7 @@ import TheScore
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
             timing: timing
         )
     }

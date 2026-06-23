@@ -596,8 +596,11 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func appendTargetPredicate(_ selection: GesturePointSelection) {
-        if case .element(let target) = selection {
+        switch selection {
+        case .element(let target), .elementUnitPoint(let target, _):
             appendTargetPredicate(target)
+        case .coordinate:
+            break
         }
     }
 
@@ -617,7 +620,7 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func appendTargetPredicates(_ selection: DragGestureSelection) {
-        if case .elementToPoint(let target, _) = selection {
+        if case .elementToPoint(let target, _, _) = selection {
             appendTargetPredicate(target)
         }
     }

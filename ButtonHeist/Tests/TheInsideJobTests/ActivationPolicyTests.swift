@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import XCTest
+import ThePlans
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @testable import TheScore
@@ -54,6 +55,10 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(activateCount, 1)
         XCTAssertFalse(didRefresh)
         XCTAssertTrue(dispatchedPoints.isEmpty)
+        XCTAssertEqual(result.activationTrace, ActivationTrace(
+            axActivateReturned: true,
+            tapActivationDispatched: false
+        ))
     }
 
     func testRefreshReresolveRetryCanSucceed() async {
@@ -80,6 +85,11 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 2)
         XCTAssertTrue(dispatchedPoints.isEmpty)
+        XCTAssertEqual(result.activationTrace, ActivationTrace(
+            axActivateReturned: false,
+            retryAxActivateReturned: true,
+            tapActivationDispatched: false
+        ))
     }
 
     func testRefreshReresolveFailureReturnsWithoutActivationPointDispatch() async {
@@ -106,6 +116,10 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.message, "retry inflation failed")
         XCTAssertEqual(activateCount, 1)
         XCTAssertTrue(dispatchedPoints.isEmpty)
+        XCTAssertEqual(result.activationTrace, ActivationTrace(
+            axActivateReturned: false,
+            tapActivationDispatched: false
+        ))
     }
 
     func testActivationPointDispatchCanCompleteActivate() async {
@@ -132,6 +146,13 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 2)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 30, y: 40)])
+        XCTAssertEqual(result.activationTrace, ActivationTrace(
+            axActivateReturned: false,
+            retryAxActivateReturned: false,
+            tapActivationDispatched: true,
+            tapActivationPoint: ScreenPoint(x: 30, y: 40),
+            tapActivationSucceeded: true
+        ))
     }
 
     func testFinalFailureUsesRetryTargetAndFreshActivationPoint() async {
@@ -164,6 +185,13 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 2)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 52, y: 52)])
+        XCTAssertEqual(result.activationTrace, ActivationTrace(
+            axActivateReturned: false,
+            retryAxActivateReturned: false,
+            tapActivationDispatched: true,
+            tapActivationPoint: ScreenPoint(x: 52, y: 52),
+            tapActivationSucceeded: false
+        ))
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed: accessibilityActivate() declined after semantic refresh",
             "activation-point dispatch was attempted at the fresh accessibility activation point",

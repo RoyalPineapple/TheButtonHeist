@@ -89,6 +89,7 @@ final class InteractionObservation {
         afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
         errorKind: ErrorKind? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
         before: PostActionObservation.BeforeState,
         settleOutcome: SettleSession.Outcome? = nil
     ) async -> ActionResult {
@@ -113,6 +114,7 @@ final class InteractionObservation {
                 afterStatePayload: afterStatePayload,
                 errorKind: errorKind,
                 subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace,
                 before: before,
                 settleEvidence: settleEvidence,
                 finalEvidence: finalEvidence

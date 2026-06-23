@@ -1,14 +1,15 @@
 public enum DragGestureSelection: Sendable, Equatable, CustomStringConvertible {
-    case elementToPoint(ElementTarget, end: ScreenPoint)
+    case elementToPoint(ElementTarget, start: UnitPoint?, end: ScreenPoint)
     case pointToPoint(start: ScreenPoint, end: ScreenPoint)
 
     public var description: String {
         switch self {
-        case .elementToPoint(let target, let end):
+        case .elementToPoint(let target, let start, let end):
             return ScoreDescription.call("elementToPointDrag", [
                 target.description,
+                start.map { "start=\($0)" },
                 "end=\(end)",
-            ])
+            ].compactMap { $0 })
         case .pointToPoint(let start, let end):
             return ScoreDescription.call("pointToPointDrag", [
                 "start=\(start)",
@@ -27,14 +28,17 @@ private enum DragTargetCodingKeys: String, CodingKey, CaseIterable {
 private struct DragElementToPointPayload: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case element
+        case start
         case end
     }
 
     let element: ElementTarget
+    let start: UnitPoint?
     let end: ScreenPoint
 
-    init(element: ElementTarget, end: ScreenPoint) {
+    init(element: ElementTarget, start: UnitPoint? = nil, end: ScreenPoint) {
         self.element = element
+        self.start = start
         self.end = end
     }
 
@@ -43,6 +47,7 @@ private struct DragElementToPointPayload: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             element: try container.decode(ElementTarget.self, forKey: .element),
+            start: try container.decodeIfPresent(UnitPoint.self, forKey: .start),
             end: try container.decode(ScreenPoint.self, forKey: .end)
         )
     }
@@ -82,7 +87,9 @@ public struct DragTarget: Codable, Sendable, Equatable {
     public init(start: GesturePointSelection, end: ScreenPoint, duration: GestureDuration? = nil) {
         switch start {
         case .element(let target):
-            self.selection = .elementToPoint(target, end: end)
+            self.selection = .elementToPoint(target, start: nil, end: end)
+        case .elementUnitPoint(let target, let unitPoint):
+            self.selection = .elementToPoint(target, start: unitPoint, end: end)
         case .coordinate(let point):
             self.selection = .pointToPoint(start: point, end: end)
         }
@@ -96,7 +103,10 @@ public struct DragTarget: Codable, Sendable, Equatable {
 
     public var start: GesturePointSelection {
         switch selection {
-        case .elementToPoint(let target, _):
+        case .elementToPoint(let target, let start, _):
+            if let start {
+                return .elementUnitPoint(target, start)
+            }
             return .element(target)
         case .pointToPoint(let start, _):
             return .coordinate(start)
@@ -105,7 +115,7 @@ public struct DragTarget: Codable, Sendable, Equatable {
 
     public var end: ScreenPoint {
         switch selection {
-        case .elementToPoint(_, let end), .pointToPoint(_, let end):
+        case .elementToPoint(_, _, let end), .pointToPoint(_, let end):
             return end
         }
     }
@@ -125,7 +135,11 @@ public struct DragTarget: Codable, Sendable, Equatable {
             throw GestureProjectionError.mixedGestureIntent(kind: "drag")
         }
         if let elementToPoint {
-            self.selection = .elementToPoint(elementToPoint.element, end: elementToPoint.end)
+            self.selection = .elementToPoint(
+                elementToPoint.element,
+                start: elementToPoint.start,
+                end: elementToPoint.end
+            )
         } else if let pointToPoint {
             self.selection = .pointToPoint(start: pointToPoint.start, end: pointToPoint.end)
         } else {
@@ -137,8 +151,8 @@ public struct DragTarget: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: DragTargetCodingKeys.self)
         switch selection {
-        case .elementToPoint(let target, let end):
-            try container.encode(DragElementToPointPayload(element: target, end: end), forKey: .elementToPoint)
+        case .elementToPoint(let target, let start, let end):
+            try container.encode(DragElementToPointPayload(element: target, start: start, end: end), forKey: .elementToPoint)
         case .pointToPoint(let start, let end):
             try container.encode(DragPointToPointPayload(start: start, end: end), forKey: .pointToPoint)
         }

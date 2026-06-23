@@ -284,8 +284,12 @@ public enum Mechanical {
             self.init(command: .mechanicalTap(TapTarget(selection: .element(target))))
         }
 
-        public init(x: Double, y: Double) {
-            self.init(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: x, y: y)))))
+        public init(_ point: ScreenPoint) {
+            self.init(command: .mechanicalTap(TapTarget(selection: .coordinate(point))))
+        }
+
+        public init(_ target: ElementTarget, at point: UnitPoint) {
+            self.init(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(target, point))))
         }
 
         init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
@@ -300,15 +304,26 @@ public enum Mechanical {
         public let expectation: WaitStep?
         public let expectationWaiver: String?
 
-        public init(_ target: ElementTarget) {
-            self.init(command: .mechanicalLongPress(LongPressTarget(selection: .element(target))))
+        public init(_ target: ElementTarget, duration: GestureDuration = .longPressDefault) {
+            self.init(command: .mechanicalLongPress(LongPressTarget(selection: .element(target), duration: duration)))
         }
 
-        public init(x: Double, y: Double, duration: GestureDuration = .longPressDefault) {
+        public init(_ point: ScreenPoint, duration: GestureDuration = .longPressDefault) {
             self.init(
                 command: .mechanicalLongPress(
                     LongPressTarget(
-                        selection: .coordinate(ScreenPoint(x: x, y: y)),
+                        selection: .coordinate(point),
+                        duration: duration
+                    )
+                )
+            )
+        }
+
+        public init(_ target: ElementTarget, at point: UnitPoint, duration: GestureDuration = .longPressDefault) {
+            self.init(
+                command: .mechanicalLongPress(
+                    LongPressTarget(
+                        selection: .elementUnitPoint(target, point),
                         duration: duration
                     )
                 )
@@ -357,6 +372,10 @@ public enum Mechanical {
 
         public init(_ target: ElementTarget, to end: ScreenPoint) {
             self.init(command: .mechanicalDrag(DragTarget(start: .element(target), end: end)))
+        }
+
+        public init(_ target: ElementTarget, from start: UnitPoint, to end: ScreenPoint) {
+            self.init(command: .mechanicalDrag(DragTarget(start: .elementUnitPoint(target, start), end: end)))
         }
 
         public init(from start: ScreenPoint, to end: ScreenPoint) {

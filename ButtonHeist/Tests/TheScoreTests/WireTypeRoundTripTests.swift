@@ -219,12 +219,12 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTapAndLongPressRejectMixedPointAndElementIntents() {
         let tapJSON = #"{"element":{"label":"Save"},"point":{"x":10,"y":20}}"#
         XCTAssertThrowsError(try decoder.decode(TapTarget.self, from: Data(tapJSON.utf8))) { error in
-            assertErrorDescription(error, contains: ["accepts either a semantic target or coordinates"])
+            assertErrorDescription(error, contains: ["accepts element, element with unitPoint, or ScreenPoint"])
         }
 
         let longPressJSON = #"{"element":{"label":"Save"},"point":{"x":10,"y":20},"duration":1}"#
         XCTAssertThrowsError(try decoder.decode(LongPressTarget.self, from: Data(longPressJSON.utf8))) { error in
-            assertErrorDescription(error, contains: ["accepts either a semantic target or coordinates"])
+            assertErrorDescription(error, contains: ["accepts element, element with unitPoint, or ScreenPoint"])
         }
     }
 
@@ -314,9 +314,9 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testDragTargetRejectsUnknownNestedIntentField() {
-        let json = #"{"elementToPoint":{"element":{"label":"Handle"},"end":{"x":30,"y":40},"start":{"x":10,"y":20}}}"#
+        let json = #"{"elementToPoint":{"element":{"label":"Handle"},"end":{"x":30,"y":40},"offset":{"x":10,"y":20}}}"#
         XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(json.utf8))) { error in
-            assertDecodingError(error, contains: ["Unknown element-to-point drag field", "start"])
+            assertDecodingError(error, contains: ["Unknown element-to-point drag field", "offset"])
         }
     }
 
