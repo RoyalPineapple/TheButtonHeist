@@ -124,6 +124,7 @@ extension TheBrains {
             afterStatePayload: afterStatePayload,
             errorKind: Self.actionErrorKind(for: result),
             subjectEvidence: result.subjectEvidence,
+            activationTrace: result.activationTrace,
             before: before
         )
         return actionResult.withTiming(ActionPerformanceTiming(
@@ -193,7 +194,7 @@ extension TheBrains {
 
     private func observationScope(for selection: GesturePointSelection) -> SemanticObservationScope {
         switch selection {
-        case .element:
+        case .element, .elementUnitPoint:
             return .discovery
         case .coordinate:
             return .visible

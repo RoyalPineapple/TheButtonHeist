@@ -3,6 +3,7 @@
 import UIKit
 
 import AccessibilitySnapshotParser
+import ThePlans
 import TheScore
 
 /// Ordered activation delivery pipeline for `activate`.
@@ -31,7 +32,13 @@ struct ActivationPolicy {
     func apply(to liveTarget: TheStash.LiveActionTarget) async -> TheSafecracker.InteractionResult {
         let initialOutcome = accessibilityActivate(liveTarget)
         if initialOutcome == .success {
-            return .success(method: .activate)
+            return .success(
+                method: .activate,
+                activationTrace: ActivationTrace(
+                    axActivateReturned: initialOutcome.axActivateReturned,
+                    tapActivationDispatched: false
+                )
+            )
         }
 
         let screenElement: TheStash.ScreenElement
@@ -41,22 +48,41 @@ struct ActivationPolicy {
             screenElement = resolvedElement
             retryLiveTarget = liveTarget
         case .failure(let result):
-            return result
+            return result.withActivationTrace(ActivationTrace(
+                axActivateReturned: initialOutcome.axActivateReturned,
+                tapActivationDispatched: false
+            ))
         }
 
         let retryOutcome = accessibilityActivate(retryLiveTarget)
         if retryOutcome == .success {
-            return .success(method: .activate)
+            return .success(
+                method: .activate,
+                activationTrace: ActivationTrace(
+                    axActivateReturned: initialOutcome.axActivateReturned,
+                    retryAxActivateReturned: retryOutcome.axActivateReturned,
+                    tapActivationDispatched: false
+                )
+            )
         }
 
         let activationPoint = retryLiveTarget.activationPoint
-        if await activationPointDispatch(activationPoint) {
-            return .success(method: .activate)
+        let tapActivationSucceeded = await activationPointDispatch(activationPoint)
+        let trace = ActivationTrace(
+            axActivateReturned: initialOutcome.axActivateReturned,
+            retryAxActivateReturned: retryOutcome.axActivateReturned,
+            tapActivationDispatched: true,
+            tapActivationPoint: ScreenPoint(x: Double(activationPoint.x), y: Double(activationPoint.y)),
+            tapActivationSucceeded: tapActivationSucceeded
+        )
+        if tapActivationSucceeded {
+            return .success(method: .activate, activationTrace: trace)
         }
 
         return .failure(
             .activate,
-            message: activationFailureMessage(screenElement: screenElement, activateOutcome: retryOutcome)
+            message: activationFailureMessage(screenElement: screenElement, activateOutcome: retryOutcome),
+            activationTrace: trace
         )
     }
 
@@ -79,6 +105,16 @@ struct ActivationPolicy {
             "\(ActionCapabilityDiagnostic.formatElement(screenElement)); correction: target an element " +
             "with primary accessibility activation, or use an explicit mechanical gesture when the " +
             "test intent is viewport coordinate delivery"
+    }
+}
+
+private extension AccessibilityActionDispatcher.ActivateOutcome {
+    var axActivateReturned: Bool? {
+        switch self {
+        case .success: return true
+        case .refused: return false
+        case .objectDeallocated: return nil
+        }
     }
 }
 

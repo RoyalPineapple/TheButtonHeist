@@ -19,9 +19,28 @@ struct PublicActionResponse: FencePublicJSONResponse {
     let retryable: Bool?
     let hint: String?
     let expectation: PublicExpectationResult?
+    let activationTrace: ActivationTrace?
     let timing: ActionPerformanceTiming?
 
-    init(method: String, result: ActionResult, expectation: ExpectationResult?) {
+    init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
+        let surfacedExpectation = result.success ? expectation : nil
+        let expectationHint = surfacedExpectation.flatMap {
+            FenceResponse.expectationFailureHint($0, command: command, result: result)
+        }
+        self.init(
+            method: command.rawValue,
+            result: result,
+            expectation: expectation,
+            expectationHint: expectationHint
+        )
+    }
+
+    init(
+        method: String,
+        result: ActionResult,
+        expectation: ExpectationResult?,
+        expectationHint: String? = nil
+    ) {
         let surfacedExpectation = result.success ? expectation : nil
         self.status = PublicStatus(result.publicStatus(expectation: surfacedExpectation))
         self.method = method
@@ -46,7 +65,10 @@ struct PublicActionResponse: FencePublicJSONResponse {
         self.phase = details?.phase.rawValue
         self.retryable = details?.retryable
         self.hint = details?.hint
-        self.expectation = surfacedExpectation.map(PublicExpectationResult.init(result:))
+        self.expectation = surfacedExpectation.map {
+            PublicExpectationResult(result: $0, hint: expectationHint)
+        }
+        self.activationTrace = result.activationTrace
         self.timing = result.timing
     }
 
@@ -126,11 +148,13 @@ struct PublicExpectationResult: Encodable {
     let met: Bool
     let actual: String?
     let expected: AccessibilityPredicate?
+    let hint: String?
 
-    init(result: ExpectationResult) {
+    init(result: ExpectationResult, hint: String? = nil) {
         self.met = result.met
         self.actual = result.actual
         self.expected = result.predicate
+        self.hint = hint
     }
 }
 
@@ -293,7 +317,9 @@ struct PublicHeistReportNode: Encodable {
         self.failure = step.failure
         self.abortedAtChildPath = step.abortedAtChildPath
         self.action = PublicHeistReportAction(step: step)
-        self.expectation = step.reportExpectation.map(PublicExpectationResult.init(result:))
+        self.expectation = step.reportExpectation.map {
+            PublicExpectationResult(result: $0)
+        }
         self.children = step.children.map(PublicHeistReportNode.init(step:))
     }
 }

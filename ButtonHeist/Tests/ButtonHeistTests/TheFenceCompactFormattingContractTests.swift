@@ -113,6 +113,148 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.isFailure)
     }
 
+    func testActivateNoChangeExpectationFailureExplainsSemanticActivationPath() {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(success: true, method: .activate),
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .changed(.elements),
+                actual: "noChange"
+            )
+        )
+
+        let json = publicJSONObject(response)
+        let expectation = json["expectation"] as? [String: Any]
+        let compact = response.compactFormatted()
+        let human = response.humanFormatted()
+
+        XCTAssertEqual(json["status"] as? String, "expectation_failed")
+        XCTAssertEqual(expectation?["actual"] as? String, "noChange")
+        XCTAssertTrue(
+            (expectation?["hint"] as? String)?.contains("accessibilityActivate()") == true,
+            "\(String(describing: expectation?["hint"]))"
+        )
+        XCTAssertTrue(compact.contains("[expectation FAILED: got noChange]"), compact)
+        XCTAssertTrue(compact.contains("does not send activation-point tap dispatch"), compact)
+        XCTAssertTrue(human.contains("[expectation FAILED: expected changed(elements_changed), got noChange]"), human)
+        XCTAssertTrue(human.contains("accessibility activation path is inert or mismatched"), human)
+        XCTAssertTrue(response.isFailure)
+    }
+
+    func testActivateNoChangeWithoutExpectationRemainsSuccessful() {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(success: true, method: .activate)
+        )
+
+        let json = publicJSONObject(response)
+
+        XCTAssertEqual(json["status"] as? String, "ok")
+        XCTAssertNil(json["expectation"])
+        XCTAssertEqual(response.compactFormatted(), "activate: ok")
+        XCTAssertTrue(response.humanFormatted().contains("✓ activate"))
+        XCTAssertFalse(response.isFailure)
+    }
+
+    func testActivateNoChangeCarriesActivationTraceWithoutFailingAction() {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityTrace: makeReceiptTestTrace(
+                    before: makeReceiptTestInterface(elementCount: 3),
+                    after: makeReceiptTestInterface(elementCount: 3)
+                ),
+                activationTrace: ActivationTrace(
+                    axActivateReturned: false,
+                    retryAxActivateReturned: false,
+                    tapActivationDispatched: true,
+                    tapActivationPoint: ScreenPoint(x: 888, y: 372),
+                    tapActivationSucceeded: true
+                )
+            )
+        )
+
+        let json = publicJSONObject(response)
+        let activationTrace = json["activationTrace"] as? [String: Any]
+        let compact = response.compactFormatted()
+
+        XCTAssertEqual(json["status"] as? String, "ok")
+        XCTAssertEqual(activationTrace?["axActivateReturned"] as? Bool, false)
+        XCTAssertEqual(activationTrace?["tapActivationDispatched"] as? Bool, true)
+        XCTAssertEqual(activationTrace?["tapActivationSucceeded"] as? Bool, true)
+        XCTAssertEqual(response.isFailure, false)
+        XCTAssertTrue(compact.contains("activate: no change"), compact)
+        XCTAssertTrue(compact.contains("tapActivationDispatched=true"), compact)
+        XCTAssertTrue(compact.contains("tapActivationPoint=point(888,372)"), compact)
+    }
+
+    func testElementsChangedActionOutputIncludesConcreteElementDelta() {
+        let added = makeReceiptTestElement(
+            label: "Barbaresco",
+            value: "$55.00",
+            identifier: "wine_barbaresco",
+            traits: [.staticText]
+        )
+        let unchanged = (0..<11).map { index in
+            makeReceiptTestElement(label: "Row \(index)", identifier: "row_\(index)")
+        }
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(unchanged),
+            after: makeReceiptTestInterface(unchanged + [added])
+        )
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+        )
+
+        let json = publicJSONObject(response)
+        let delta = json["delta"] as? [String: Any]
+        let edits = delta?["edits"] as? [String: Any]
+        let addedJSON = edits?["added"] as? [[String: Any]]
+        let compact = response.compactFormatted()
+        let human = response.humanFormatted()
+
+        XCTAssertEqual(delta?["kind"] as? String, "elementsChanged")
+        XCTAssertEqual(addedJSON?.first?["label"] as? String, "Barbaresco")
+        XCTAssertEqual(addedJSON?.first?["identifier"] as? String, "wine_barbaresco")
+        XCTAssertTrue(compact.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), compact)
+        XCTAssertTrue(human.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), human)
+    }
+
+    func testScreenChangedActionOutputIncludesDestinationSummaryTree() {
+        let destination = makeReceiptTestInterface([
+            makeReceiptTestElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
+            makeReceiptTestElement(label: "Pay", identifier: "pay_button", traits: [.button], actions: [.activate]),
+        ])
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface([makeReceiptTestElement(label: "Cart", identifier: "cart_title")]),
+            after: destination,
+            beforeScreenId: "cart",
+            afterScreenId: "checkout"
+        )
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+        )
+
+        let json = publicJSONObject(response)
+        let delta = json["delta"] as? [String: Any]
+        let newInterface = delta?["newInterface"] as? [String: Any]
+        let compact = response.compactFormatted()
+        let human = response.humanFormatted()
+
+        XCTAssertEqual(delta?["kind"] as? String, "screenChanged")
+        XCTAssertNotNil(newInterface)
+        XCTAssertTrue(compact.contains("activate: screen changed\n2 elements"), compact)
+        XCTAssertTrue(compact.contains(#""Checkout" header id="checkout_title""#), compact)
+        XCTAssertTrue(compact.contains(#""Pay" button id="pay_button""#), compact)
+        XCTAssertTrue(human.contains("screen changed]\n2 elements"), human)
+        XCTAssertTrue(human.contains(#""Checkout" header id="checkout_title""#), human)
+    }
+
     func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() {
         let response = FenceResponse.action(
             command: .activate,

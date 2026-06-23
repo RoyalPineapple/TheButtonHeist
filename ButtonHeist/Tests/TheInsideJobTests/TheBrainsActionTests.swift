@@ -2156,6 +2156,36 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertNotEqual(dispatchedPoint, objectPoint)
     }
 
+    func testElementUnitPointActionUsesElementFrameOverride() async {
+        let frame = CGRect(x: 100, y: 200, width: 80, height: 40)
+        let activationPoint = CGPoint(x: 140, y: 220)
+        let element = AccessibilityElement.make(
+            label: "Live",
+            traits: .button,
+            shape: .frame(AccessibilityRect(frame)),
+            activationPoint: activationPoint
+        )
+        let liveObject = ActionGeometryView(activationPoint: activationPoint)
+        liveObject.accessibilityFrame = frame
+        installScreen(elements: [(element, "live_button")], objects: ["live_button": liveObject])
+
+        var dispatchedPoint: CGPoint?
+        let result = await brains.actions.performPointAction(
+            selection: .elementUnitPoint(
+                .predicate(ElementPredicate(label: "Live")),
+                UnitPoint(x: 0.25, y: 0.75)
+            ),
+            method: .syntheticTap
+        ) { point in
+            dispatchedPoint = point
+            return true
+        }
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(dispatchedPoint, CGPoint(x: 120, y: 230))
+        XCTAssertNotEqual(dispatchedPoint, activationPoint)
+    }
+
     func testRawCoordinatePointActionDispatchesUnchanged() async {
         let rawPoint = CGPoint(x: 222, y: 333)
 

@@ -10,7 +10,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `connect` | `session` | `connect` | direct | Establish or switch the active connection to a Button Heist app. |
 | `describe_heist` | `heistRuntime` | `describe_heist` | direct | Describe one root entry or reusable heist from a plan so an agent can call it safely. |
 | `dismiss_keyboard` | `semanticAction` | `dismiss_keyboard` | - | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
-| `drag` | `spatialAction` | `drag` | - | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
+| `drag` | `spatialAction` | `drag` | - | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint (activation point or unit start override) or pointToPoint. |
 | `edit_action` | `semanticAction` | `edit_action` | - | Perform an edit action on the current first responder. |
 | `get_interface` | `observation` | `get_interface` | direct | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `observation` | `get_pasteboard` | direct | Read text from the general pasteboard. |
@@ -19,8 +19,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `list_devices` | `session` | `list_devices` | - | List discovered iOS devices and configured connection targets. |
 | `list_heists` | `heistRuntime` | `list_heists` | direct | List the root entry and reusable heists in a plan. Use `detail: "detailed"` when composing against available capabilities. |
 | `list_targets` | `session` | `list_targets` | - | List configured connection targets and the default target. |
-| `long_press` | `spatialAction` | `long_press` | - | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
-| `one_finger_tap` | `spatialAction` | `one_finger_tap` | - | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
+| `long_press` | `spatialAction` | `long_press` | - | Explicit mechanical/spatial long press. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. |
+| `one_finger_tap` | `spatialAction` | `one_finger_tap` | - | Explicit mechanical/spatial tap. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. ordinary accessible controls should use the semantic command path. |
 | `perform` | `heistRuntime` | - | direct | Run one ButtonHeist DSL instruction from `step`: one action or one simple wait. |
 | `ping` | `session` | `ping` | - | Check connection health without reading accessibility state. |
 | `rotor` | `semanticAction` | `rotor` | - | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
@@ -109,7 +109,7 @@ Parameters:
 
 ### `drag`
 
-Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint.
+Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint (activation point or unit start override) or pointToPoint.
 
 - Family: `spatialAction`
 - CLI: direct command `drag`
@@ -260,7 +260,7 @@ _None._
 
 ### `long_press`
 
-Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration.
+Explicit mechanical/spatial long press. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate.
 
 - Family: `spatialAction`
 - CLI: direct command `long_press`
@@ -272,6 +272,7 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `element` | `object` | no | - | - |
+| `unitPoint` | `object` | no | - | - |
 | `point` | `object` | no | - | - |
 | `duration` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
@@ -279,7 +280,7 @@ Parameters:
 
 ### `one_finger_tap`
 
-Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path.
+Explicit mechanical/spatial tap. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. ordinary accessible controls should use the semantic command path.
 
 - Family: `spatialAction`
 - CLI: direct command `one_finger_tap`
@@ -291,6 +292,7 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `element` | `object` | no | - | - |
+| `unitPoint` | `object` | no | - | - |
 | `point` | `object` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
@@ -310,7 +312,9 @@ Examples:
 `Edit(.paste)`
 `DismissKeyboard()`
 `Mechanical.Tap(.label("Map"))`
-`Mechanical.LongPress(.label("Message"))`
+`Mechanical.Tap(ScreenPoint(x: 888, y: 372))`
+`Mechanical.Tap(.label("Map"), at: UnitPoint(x: 0.5, y: 0.25))`
+`Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.5))`
 `Mechanical.Swipe(.label("Carousel"), .left)`
 `Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))`
 `WaitFor(.present(.label("Checkout")), timeout: .seconds(5))`

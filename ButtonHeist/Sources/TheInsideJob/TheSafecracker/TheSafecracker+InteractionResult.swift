@@ -12,6 +12,7 @@ extension TheSafecracker {
         let message: String?
         let payload: ResultPayload?
         let subjectEvidence: ActionSubjectEvidence?
+        let activationTrace: ActivationTrace?
         let timing: ActionPerformanceTiming?
         /// Structural reason for failure when `success == false`. Lets dispatch code
         /// distinguish tree-unavailable from timeout without parsing `message`
@@ -24,6 +25,7 @@ extension TheSafecracker {
             message: String?,
             payload: ResultPayload?,
             subjectEvidence: ActionSubjectEvidence?,
+            activationTrace: ActivationTrace?,
             timing: ActionPerformanceTiming? = nil,
             failureKind: FailureKind? = nil
         ) {
@@ -32,6 +34,7 @@ extension TheSafecracker {
             self.message = message
             self.payload = payload
             self.subjectEvidence = subjectEvidence
+            self.activationTrace = activationTrace
             self.timing = timing
             self.failureKind = failureKind
         }
@@ -40,14 +43,16 @@ extension TheSafecracker {
             method: ActionMethod,
             message: String? = nil,
             payload: ResultPayload? = nil,
-            subjectEvidence: ActionSubjectEvidence? = nil
+            subjectEvidence: ActionSubjectEvidence? = nil,
+            activationTrace: ActivationTrace? = nil
         ) -> InteractionResult {
             InteractionResult(
                 success: true,
                 method: method,
                 message: message,
                 payload: payload,
-                subjectEvidence: subjectEvidence
+                subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace
             )
         }
 
@@ -56,6 +61,7 @@ extension TheSafecracker {
             message: String,
             payload: ResultPayload? = nil,
             subjectEvidence: ActionSubjectEvidence? = nil,
+            activationTrace: ActivationTrace? = nil,
             failureKind: FailureKind? = nil
         ) -> InteractionResult {
             InteractionResult(
@@ -64,6 +70,7 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace,
                 failureKind: failureKind
             )
         }
@@ -76,6 +83,21 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: evidence,
+                activationTrace: activationTrace,
+                timing: timing,
+                failureKind: failureKind
+            )
+        }
+
+        func withActivationTrace(_ trace: ActivationTrace?) -> InteractionResult {
+            guard let trace else { return self }
+            return InteractionResult(
+                success: success,
+                method: method,
+                message: message,
+                payload: payload,
+                subjectEvidence: subjectEvidence,
+                activationTrace: trace,
                 timing: timing,
                 failureKind: failureKind
             )
@@ -89,6 +111,7 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: subjectEvidence,
+                activationTrace: activationTrace,
                 timing: self.timing?.merging(timing) ?? timing,
                 failureKind: failureKind
             )

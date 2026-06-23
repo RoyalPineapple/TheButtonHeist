@@ -6,11 +6,6 @@ public extension HeistActionCommand {
         case .rotor(let selection, _, _):
             if case .named = selection { return nil }
             return "rotor selection \(selection) is not a durable heist action"
-        case .mechanicalLongPress(let target):
-            if case .element = target.selection, target.duration != .longPressDefault {
-                return "long_press element duration \(target.duration) is not a durable heist action"
-            }
-            return nil
         case .mechanicalSwipe(let target):
             if target.duration != nil {
                 return "swipe duration \(String(describing: target.duration)) is not a durable heist action"
@@ -18,7 +13,7 @@ public extension HeistActionCommand {
             switch target.selection {
             case .unitElement, .elementDirection, .point(.coordinate, .coordinate), .point(.coordinate, .direction):
                 return nil
-            case .point(.element, _):
+            case .point(.element, _), .point(.elementUnitPoint, _):
                 return "swipe selection \(target.selection) is not a durable heist action"
             }
         case .mechanicalDrag(let target):
@@ -32,7 +27,7 @@ public extension HeistActionCommand {
             return "scroll_to_visible is a viewport debug command, not a durable heist action"
         case .viewportScrollToEdge:
             return "scroll_to_edge is a viewport debug command, not a durable heist action"
-        case .activate, .increment, .decrement, .customAction, .typeText, .mechanicalTap,
+        case .activate, .increment, .decrement, .customAction, .typeText, .mechanicalTap, .mechanicalLongPress,
              .editAction, .setPasteboard, .dismissKeyboard:
             return nil
         }
@@ -47,22 +42,18 @@ public extension HeistActionCommand {
         case .typeText(_, let target):
             return target?.reportTarget
         case .mechanicalTap(let target):
-            if case .element(let target) = target.selection { return target }
-            return nil
+            return target.selection.reportTarget
         case .mechanicalLongPress(let target):
-            if case .element(let target) = target.selection { return target }
-            return nil
+            return target.selection.reportTarget
         case .mechanicalSwipe(let target):
             switch target.selection {
             case .unitElement(let target, _, _), .elementDirection(let target, _):
                 return target
             case .point(let start, _):
-                if case .element(let target) = start { return target }
-                return nil
+                return start.reportTarget
             }
         case .mechanicalDrag(let target):
-            if case .element(let target) = target.start { return target }
-            return nil
+            return target.start.reportTarget
         case .viewportScroll(let target):
             if case .element(let target) = target.selection { return target }
             return nil
@@ -70,6 +61,17 @@ public extension HeistActionCommand {
             if case .element(let target) = target.selection { return target }
             return nil
         case .editAction, .setPasteboard, .dismissKeyboard:
+            return nil
+        }
+    }
+}
+
+private extension GesturePointSelection {
+    var reportTarget: ElementTarget? {
+        switch self {
+        case .element(let target), .elementUnitPoint(let target, _):
+            return target
+        case .coordinate:
             return nil
         }
     }

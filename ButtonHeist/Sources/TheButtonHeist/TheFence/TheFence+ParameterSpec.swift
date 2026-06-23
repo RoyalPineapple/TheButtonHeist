@@ -74,6 +74,7 @@ public extension FenceParameterKey {
     static let startOffset = Self("startOffset")
     static let step = Self("step")
     static let containerName = Self("containerName")
+    static let unitPoint = Self("unitPoint")
     static let states = Self("states"), body = Self("body")
     static let name = Self("name"), parameter = Self("parameter"), definitions = Self("definitions")
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
@@ -249,10 +250,12 @@ enum FenceParameterBlocks: Sendable {
         param(.target, .object, objectProperties: inlineElementTargetFields),
     ]
     static let gestureElement = param(.element, .object, objectProperties: inlineElementTargetFields)
+    static let gestureUnitPoint = param(.unitPoint, .object, objectProperties: unitPoint)
     static let gesturePoint = param(.point, .object, objectProperties: screenPoint)
 
     static let gesturePointSelection: [FenceParameterSpec] = [
         gestureElement,
+        gestureUnitPoint,
         gesturePoint,
     ]
 
@@ -316,6 +319,7 @@ enum FenceParameterBlocks: Sendable {
         .object,
         objectProperties: [
             gestureElement,
+            param(.start, .object, objectProperties: unitPoint),
             param(.end, .object, required: true, objectProperties: screenPoint),
         ]
     )

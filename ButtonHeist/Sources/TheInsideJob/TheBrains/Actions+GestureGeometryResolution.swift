@@ -23,7 +23,7 @@ extension Actions {
     ) async -> GestureResolution<ResolvedGesturePoint> {
         let inflatedTarget: ElementInflation.InflatedElementTarget?
         switch selection {
-        case .element(let target):
+        case .element(let target), .elementUnitPoint(let target, _):
             switch await navigation.elementInflation.inflate(
                 for: target,
                 method: method,
@@ -51,6 +51,29 @@ extension Actions {
                 return .failure(.failure(method, message: "No target specified", failureKind: .targetUnavailable))
             }
             let point = inflatedTarget.liveTarget.activationPoint
+            if let failure = geometryFailure(method: method, field: "point", point: point) {
+                return .failure(failure)
+            }
+            return .success(ResolvedGesturePoint(
+                point: point,
+                subjectEvidence: inflatedTarget.subjectEvidence(source: .elementGestureTarget)
+            ))
+        case .elementUnitPoint(_, let unitPoint):
+            guard let inflatedTarget else {
+                return .failure(.failure(method, message: "No target specified", failureKind: .targetUnavailable))
+            }
+            let frame = inflatedTarget.liveTarget.frame
+            if let message = GeometryValidation.validateRect(frame, field: "frame") {
+                return .failure(.failure(
+                    method,
+                    message: "\(method.rawValue) failed: \(message)",
+                    failureKind: .inputValidation
+                ))
+            }
+            let point = CGPoint(
+                x: frame.origin.x + unitPoint.x * frame.width,
+                y: frame.origin.y + unitPoint.y * frame.height
+            )
             if let failure = geometryFailure(method: method, field: "point", point: point) {
                 return .failure(failure)
             }

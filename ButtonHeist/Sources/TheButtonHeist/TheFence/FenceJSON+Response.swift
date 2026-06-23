@@ -58,7 +58,7 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicInterfaceResponse(interface: interface, detail: detail).encode(to: encoder)
         case .action(let command, let result, let expectation):
             try PublicActionResponse(
-                method: command.rawValue,
+                command: command,
                 result: result,
                 expectation: expectation
             ).encode(to: encoder)

@@ -305,6 +305,7 @@ final class PostActionObservation {
         let afterStatePayload: ((BeforeState) -> ResultPayload?)?
         let errorKind: ErrorKind?
         let subjectEvidence: ActionSubjectEvidence?
+        let activationTrace: ActivationTrace?
         let before: BeforeState
         let settleEvidence: SettleEvidence
         let finalEvidence: FinalEvidence?
@@ -318,6 +319,7 @@ final class PostActionObservation {
             method: input.method,
             payload: input.payload,
             subjectEvidence: input.subjectEvidence,
+            activationTrace: input.activationTrace,
             before: input.before,
             settleEvidence: input.settleEvidence
         ) {
@@ -329,6 +331,7 @@ final class PostActionObservation {
                 method: input.method,
                 payload: input.payload,
                 subjectEvidence: input.subjectEvidence,
+                activationTrace: input.activationTrace,
                 before: input.before,
                 settleEvidence: input.settleEvidence
             )
@@ -344,7 +347,8 @@ final class PostActionObservation {
                 capture: input.before.capture,
                 message: input.message,
                 payload: resolvedPayload,
-                subjectEvidence: input.subjectEvidence
+                subjectEvidence: input.subjectEvidence,
+                activationTrace: input.activationTrace
             )
         }
 
@@ -356,6 +360,7 @@ final class PostActionObservation {
             errorKind: input.errorKind,
             accessibilityTrace: finalEvidence.trace,
             subjectEvidence: input.subjectEvidence,
+            activationTrace: input.activationTrace,
             settled: input.settleEvidence.didSettleCleanly,
             settleTimeMs: input.settleEvidence.timeMs,
             success: input.success
@@ -370,6 +375,7 @@ final class PostActionObservation {
         errorKind: ErrorKind? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
         success: Bool
@@ -382,6 +388,7 @@ final class PostActionObservation {
         builder.settled = settled
         builder.settleTimeMs = settleTimeMs
         builder.subjectEvidence = subjectEvidence
+        builder.activationTrace = activationTrace
         if success {
             return builder.success(payload: payload)
         }
@@ -395,6 +402,7 @@ final class PostActionObservation {
         payload: ResultPayload?,
         errorKind: ErrorKind? = .actionFailed,
         subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil
     ) -> ActionResult {
@@ -405,6 +413,7 @@ final class PostActionObservation {
             payload: payload,
             errorKind: errorKind,
             subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
             success: false
@@ -415,6 +424,7 @@ final class PostActionObservation {
         method: ActionMethod,
         payload: ResultPayload?,
         subjectEvidence: ActionSubjectEvidence?,
+        activationTrace: ActivationTrace?,
         before: BeforeState,
         settleEvidence: SettleEvidence
     ) -> ActionResult? {
@@ -425,6 +435,7 @@ final class PostActionObservation {
             message: "cancelled after \(cancelMs)ms",
             payload: payload,
             subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
             settled: false,
             settleTimeMs: cancelMs
         )
@@ -434,6 +445,7 @@ final class PostActionObservation {
         method: ActionMethod,
         payload: ResultPayload?,
         subjectEvidence: ActionSubjectEvidence?,
+        activationTrace: ActivationTrace?,
         before: BeforeState,
         settleEvidence: SettleEvidence
     ) -> ActionResult {
@@ -443,6 +455,7 @@ final class PostActionObservation {
             message: "Could not parse post-action accessibility tree",
             payload: payload,
             subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
             settled: settleEvidence.didSettleCleanly,
             settleTimeMs: settleEvidence.timeMs
         )

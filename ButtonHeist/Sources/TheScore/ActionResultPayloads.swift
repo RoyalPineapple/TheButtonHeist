@@ -164,6 +164,34 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
     }
 }
 
+/// Dispatch-path diagnostics for semantic `activate`.
+///
+/// `Activate` first calls `accessibilityActivate()`. A `true` result is treated
+/// as the semantic action completing, so activation-point tap dispatch is not sent.
+/// When the accessibility action declines, the runtime refreshes the target,
+/// retries, and then dispatches at the fresh activation point if needed.
+public struct ActivationTrace: Codable, Sendable, Equatable {
+    public let axActivateReturned: Bool?
+    public let retryAxActivateReturned: Bool?
+    public let tapActivationDispatched: Bool
+    public let tapActivationPoint: ScreenPoint?
+    public let tapActivationSucceeded: Bool?
+
+    public init(
+        axActivateReturned: Bool?,
+        retryAxActivateReturned: Bool? = nil,
+        tapActivationDispatched: Bool = false,
+        tapActivationPoint: ScreenPoint? = nil,
+        tapActivationSucceeded: Bool? = nil
+    ) {
+        self.axActivateReturned = axActivateReturned
+        self.retryAxActivateReturned = retryAxActivateReturned
+        self.tapActivationDispatched = tapActivationDispatched
+        self.tapActivationPoint = tapActivationPoint
+        self.tapActivationSucceeded = tapActivationSucceeded
+    }
+}
+
 /// Optional local timing breakdown for one observed action pipeline.
 public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
     public let beforeObservationMs: Int?
@@ -239,6 +267,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public let settleTimeMs: Int?
     /// Semantic subject the runtime resolved before dispatching the action.
     public let subjectEvidence: ActionSubjectEvidence?
+    /// Semantic activation dispatch-path diagnostics, present for `activate`.
+    public let activationTrace: ActivationTrace?
     /// Optional measured durations for the local observed action pipeline.
     public let timing: ActionPerformanceTiming?
 
@@ -252,6 +282,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) {
         self.success = success
@@ -263,6 +294,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         self.settled = settled
         self.settleTimeMs = settleTimeMs
         self.subjectEvidence = subjectEvidence
+        self.activationTrace = activationTrace
         self.timing = timing
     }
 
@@ -276,6 +308,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case settled
         case settleTimeMs
         case subjectEvidence
+        case activationTrace
         case timing
     }
 
@@ -292,6 +325,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs),
             subjectEvidence: try container.decodeIfPresent(ActionSubjectEvidence.self, forKey: .subjectEvidence),
+            activationTrace: try container.decodeIfPresent(ActivationTrace.self, forKey: .activationTrace),
             timing: try container.decodeIfPresent(ActionPerformanceTiming.self, forKey: .timing)
         )
     }
@@ -307,6 +341,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
         try container.encodeIfPresent(settled, forKey: .settled)
         try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
         try container.encodeIfPresent(subjectEvidence, forKey: .subjectEvidence)
+        try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
         try container.encodeIfPresent(timing, forKey: .timing)
     }
 
@@ -322,6 +357,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
             settled: settled,
             settleTimeMs: settleTimeMs,
             subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
             timing: self.timing?.merging(timing) ?? timing
         )
     }
