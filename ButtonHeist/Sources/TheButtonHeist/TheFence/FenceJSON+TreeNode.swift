@@ -57,6 +57,15 @@ final class PublicInterfaceProjectionStats {
     }
 }
 
+struct PublicTreeProjectionContext {
+    let detail: InterfaceDetail
+    let counter: PublicIndexCounter?
+    let visibleElementBudget: Int
+    let projectionStats: PublicInterfaceProjectionStats
+    let elementAnnotations: [TreePath: InterfaceElementAnnotation]
+    let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+}
+
 enum PublicTreeNode: Encodable {
     case element(PublicElement)
     case container(PublicContainer)
@@ -75,18 +84,21 @@ enum PublicTreeNode: Encodable {
         elementAnnotations: [TreePath: InterfaceElementAnnotation],
         containerAnnotations: [TreePath: InterfaceContainerAnnotation]
     ) -> [PublicTreeNode] {
+        let context = PublicTreeProjectionContext(
+            detail: detail,
+            counter: counter,
+            visibleElementBudget: visibleElementBudget,
+            projectionStats: projectionStats,
+            elementAnnotations: elementAnnotations,
+            containerAnnotations: containerAnnotations
+        )
         var remainingElements: Int?
         return tree.enumerated().compactMap { index, node in
             Self.node(
                 from: node,
                 path: TreePath([index]),
-                detail: detail,
-                counter: counter,
-                visibleElementBudget: visibleElementBudget,
+                context: context,
                 remainingElements: &remainingElements,
-                projectionStats: projectionStats,
-                elementAnnotations: elementAnnotations,
-                containerAnnotations: containerAnnotations
             )
         }
     }
@@ -94,36 +106,31 @@ enum PublicTreeNode: Encodable {
     static func node(
         from node: AccessibilityHierarchy,
         path: TreePath,
-        detail: InterfaceDetail,
-        counter: PublicIndexCounter?,
-        visibleElementBudget: Int,
-        remainingElements: inout Int?,
-        projectionStats: PublicInterfaceProjectionStats,
-        elementAnnotations: [TreePath: InterfaceElementAnnotation],
-        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+        context: PublicTreeProjectionContext,
+        remainingElements: inout Int?
     ) -> PublicTreeNode? {
         switch node {
         case .element(let element, _):
-            let order = counter?.value
-            counter?.value += 1
+            let order = context.counter?.value
+            context.counter?.value += 1
             if let remaining = remainingElements {
                 guard remaining > 0 else { return nil }
                 remainingElements = remaining - 1
             }
-            projectionStats.recordRenderedElement()
+            context.projectionStats.recordRenderedElement()
             let projected = HeistElement(
                 accessibilityElement: element,
-                annotation: elementAnnotations[path]
+                annotation: context.elementAnnotations[path]
             )
-            return .element(PublicElement(element: projected, detail: detail, order: order))
+            return .element(PublicElement(element: projected, detail: context.detail, order: order))
         case .container(let container, let children):
             let observedElementCount = children.reduce(0) { $0 + $1.pathIndexedElements().count }
             if let remaining = remainingElements, remaining <= 0 {
-                counter?.value += observedElementCount
+                context.counter?.value += observedElementCount
                 return nil
             }
 
-            let budgetCap = max(0, visibleElementBudget)
+            let budgetCap = max(0, context.visibleElementBudget)
             let isScrollable = {
                 if case .scrollable = container.type { return true }
                 return false
@@ -139,13 +146,8 @@ enum PublicTreeNode: Encodable {
                     if let childNode = Self.node(
                         from: child,
                         path: path.appending(index),
-                        detail: detail,
-                        counter: counter,
-                        visibleElementBudget: visibleElementBudget,
+                        context: context,
                         remainingElements: &scrollRemainingElements,
-                        projectionStats: projectionStats,
-                        elementAnnotations: elementAnnotations,
-                        containerAnnotations: containerAnnotations
                     ) {
                         childNodes.append(childNode)
                     }
@@ -155,13 +157,8 @@ enum PublicTreeNode: Encodable {
                     if let childNode = Self.node(
                         from: child,
                         path: path.appending(index),
-                        detail: detail,
-                        counter: counter,
-                        visibleElementBudget: visibleElementBudget,
+                        context: context,
                         remainingElements: &remainingElements,
-                        projectionStats: projectionStats,
-                        elementAnnotations: elementAnnotations,
-                        containerAnnotations: containerAnnotations
                     ) {
                         childNodes.append(childNode)
                     }
@@ -177,7 +174,7 @@ enum PublicTreeNode: Encodable {
                 }
                 let omittedElementCount = max(0, observedElementCount - renderedElementCount)
                 if omittedElementCount > 0 {
-                    projectionStats.recordTruncatedScrollContainer()
+                    context.projectionStats.recordTruncatedScrollContainer()
                     truncation = PublicSubtreeTruncation(
                         observedElementCount: observedElementCount,
                         renderedElementCount: renderedElementCount,
@@ -193,8 +190,8 @@ enum PublicTreeNode: Encodable {
 
             return .container(PublicContainer(
                 container: container,
-                annotation: containerAnnotations[path],
-                detail: detail,
+                annotation: context.containerAnnotations[path],
+                detail: context.detail,
                 observedElementCount: observedElementCount,
                 truncation: truncation,
                 children: childNodes
