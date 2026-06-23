@@ -103,6 +103,21 @@ struct ToolRoutingTests {
         ]))
     }
 
+    @Test("MCP rejects nested argument trees before HeistValue conversion")
+    func mcpRejectsNestedArgumentTreeBeforeHeistValueConversion() {
+        let nested = Self.nestedMCPValueOverLimit()
+
+        do {
+            _ = try ButtonHeistMCPServer.decodeArguments(["argument": nested])
+            Issue.record("Expected MCP argument depth limit error")
+        } catch {
+            #expect(
+                String(describing: error)
+                    .contains("MCP arguments nesting depth exceeds \(PublicAdapterInputLimits.maxNestingDepth)")
+            )
+        }
+    }
+
     @Test("heist discovery tools route directly with detail and selector arguments")
     func heistDiscoveryToolsRouteDirectly() throws {
         let list = try routed(
@@ -148,6 +163,14 @@ struct ToolRoutingTests {
 
     private func envelope(_ arguments: [String: Argument] = [:]) -> TheFence.CommandArgumentEnvelope {
         TheFence.CommandArgumentEnvelope(values: arguments)
+    }
+
+    private static func nestedMCPValueOverLimit() -> Value {
+        var value = Value.string("leaf")
+        for _ in 0..<PublicAdapterInputLimits.maxNestingDepth {
+            value = .object(["child": value])
+        }
+        return value
     }
 
 }

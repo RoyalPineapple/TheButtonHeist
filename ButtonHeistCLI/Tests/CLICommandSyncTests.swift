@@ -416,11 +416,10 @@ final class CLICommandSyncTests: XCTestCase {
                 from: #"{"command":"perform","step":"Activate(.label(\"Pay\"))"}"#
             )
         ) { error in
+            let message = CLIRequestBuilder.diagnosticMessage(for: error)
             XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains(
-                    #"JSON input command "perform" is not supported"#
-                ),
-                CLIRequestBuilder.diagnosticMessage(for: error)
+                message.contains(#"JSON input command "perform" is not supported"#),
+                message
             )
         }
     }
@@ -432,6 +431,59 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(parsed.command, .runHeist)
         XCTAssertEqual(parsed.argument(.plan), .string(#"HeistPlan("one") { Warn("check") }"#))
+    }
+
+    func testSharedRequestBuilderRejectsHugeMachineJSONLineBeforeDecoding() {
+        let hugeText = String(repeating: "x", count: PublicAdapterInputLimits.maxRequestBytes + 1)
+        let line = "{\"command\":\"type_text\",\"text\":\"" + hugeText + "\"}"
+
+        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
+            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            XCTAssertTrue(
+                message.contains("Public JSON request exceeds \(PublicAdapterInputLimits.maxRequestBytes) bytes"),
+                message
+            )
+        }
+    }
+
+    func testSharedRequestBuilderRejectsDeeplyNestedMachineJSONBeforeDecoding() {
+        var payload = "true"
+        for index in 0..<PublicAdapterInputLimits.maxNestingDepth {
+            if index.isMultiple(of: 2) {
+                payload = "{\"child\":\(payload)}"
+            } else {
+                payload = "[\(payload)]"
+            }
+        }
+        let line = "{\"command\":\"ping\",\"payload\":\(payload)}"
+
+        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
+            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            XCTAssertTrue(
+                message.contains(
+                    "Public JSON request nesting depth exceeds \(PublicAdapterInputLimits.maxNestingDepth)"
+                ),
+                message
+            )
+        }
+    }
+
+    func testSharedRequestBuilderRejectsExcessiveMachineJSONKeyCountBeforeDecoding() {
+        var fields = ["\"command\":\"ping\""]
+        for index in 0..<PublicAdapterInputLimits.maxTotalObjectKeys {
+            fields.append("\"\(index)\":\(index)")
+        }
+        let line = "{\(fields.joined(separator: ","))}"
+
+        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
+            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            XCTAssertTrue(
+                message.contains(
+                    "Public JSON request object key count exceeds \(PublicAdapterInputLimits.maxTotalObjectKeys)"
+                ),
+                message
+            )
+        }
     }
 
     func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {

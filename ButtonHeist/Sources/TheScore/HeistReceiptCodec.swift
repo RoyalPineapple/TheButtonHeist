@@ -1,6 +1,23 @@
 import Foundation
 import zlib
 
+@_spi(ButtonHeistInternals) public struct HeistReceiptCodecLimits: Sendable, Equatable {
+    public static let `default` = HeistReceiptCodecLimits(
+        maxGzipCompressedBytes: 16 * 1024 * 1024,
+        maxGzipDecompressedBytes: 64 * 1024 * 1024
+    )
+
+    public let maxGzipCompressedBytes: Int
+    public let maxGzipDecompressedBytes: Int
+
+    public init(maxGzipCompressedBytes: Int, maxGzipDecompressedBytes: Int) {
+        precondition(maxGzipCompressedBytes > 0, "maxGzipCompressedBytes must be positive")
+        precondition(maxGzipDecompressedBytes > 0, "maxGzipDecompressedBytes must be positive")
+        self.maxGzipCompressedBytes = maxGzipCompressedBytes
+        self.maxGzipDecompressedBytes = maxGzipDecompressedBytes
+    }
+}
+
 public enum HeistReceiptCodec {
     public static func write(_ receipt: HeistExecutionResult, to url: URL) throws {
         let data = try encode(receipt, format: format(for: url))
@@ -8,17 +25,45 @@ public enum HeistReceiptCodec {
     }
 
     public static func decode(contentsOf url: URL) throws -> HeistExecutionResult {
-        let data = try Data(contentsOf: url)
-        return try decode(data, format: format(for: url))
+        try decode(contentsOf: url, limits: .default)
+    }
+
+    @_spi(ButtonHeistInternals) public static func decode(
+        contentsOf url: URL,
+        limits: HeistReceiptCodecLimits
+    ) throws -> HeistExecutionResult {
+        let format = format(for: url)
+        let data: Data
+        switch format {
+        case .json:
+            data = try Data(contentsOf: url)
+        case .gzipJSON:
+            data = try readBoundedFile(url, maxBytes: limits.maxGzipCompressedBytes)
+        }
+        return try decode(data, format: format, limits: limits)
     }
 
     public static func decode(_ data: Data, format: HeistReceiptFormat = .json) throws -> HeistExecutionResult {
+        try decode(data, format: format, limits: .default)
+    }
+
+    @_spi(ButtonHeistInternals) public static func decode(
+        _ data: Data,
+        format: HeistReceiptFormat = .json,
+        limits: HeistReceiptCodecLimits
+    ) throws -> HeistExecutionResult {
         let jsonData: Data
         switch format {
         case .json:
             jsonData = data
         case .gzipJSON:
-            jsonData = try GzipCodec.decompress(data)
+            guard data.count <= limits.maxGzipCompressedBytes else {
+                throw HeistReceiptCodecError.gzipCompressedDataTooLarge(
+                    limit: limits.maxGzipCompressedBytes,
+                    observed: data.count
+                )
+            }
+            jsonData = try GzipCodec.decompress(data, maxBytes: limits.maxGzipDecompressedBytes)
         }
         return try JSONDecoder().decode(HeistExecutionResult.self, from: jsonData)
     }
@@ -36,6 +81,32 @@ public enum HeistReceiptCodec {
     private static func format(for url: URL) -> HeistReceiptFormat {
         url.pathExtension.lowercased() == "gz" ? .gzipJSON : .json
     }
+
+    private static func readBoundedFile(_ url: URL, maxBytes: Int) throws -> Data {
+        let values = try url.resourceValues(forKeys: [.fileSizeKey])
+        if let fileSize = values.fileSize, fileSize > maxBytes {
+            throw HeistReceiptCodecError.gzipCompressedDataTooLarge(limit: maxBytes, observed: fileSize)
+        }
+
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+
+        var data = Data()
+        while true {
+            let remaining = maxBytes - data.count
+            let readSize = min(GzipCodec.chunkSize, remaining + 1)
+            guard let chunk = try handle.read(upToCount: readSize), !chunk.isEmpty else {
+                return data
+            }
+            guard data.count + chunk.count <= maxBytes else {
+                throw HeistReceiptCodecError.gzipCompressedDataTooLarge(
+                    limit: maxBytes,
+                    observed: data.count + chunk.count
+                )
+            }
+            data.append(chunk)
+        }
+    }
 }
 
 public enum HeistReceiptFormat: Sendable, Equatable {
@@ -46,6 +117,9 @@ public enum HeistReceiptFormat: Sendable, Equatable {
 public enum HeistReceiptCodecError: Error, Sendable, Equatable, CustomStringConvertible {
     case gzipInitializationFailed(operation: String, code: Int32)
     case gzipStreamFailed(operation: String, code: Int32)
+    case gzipCompressedDataTooLarge(limit: Int, observed: Int)
+    case gzipDecompressedDataTooLarge(limit: Int, observed: Int)
+    case gzipCorruptData
 
     public var description: String {
         switch self {
@@ -53,15 +127,21 @@ public enum HeistReceiptCodecError: Error, Sendable, Equatable, CustomStringConv
             return "gzip \(operation) initialization failed with zlib code \(code)"
         case .gzipStreamFailed(let operation, let code):
             return "gzip \(operation) failed with zlib code \(code)"
+        case .gzipCompressedDataTooLarge(let limit, let observed):
+            return "gzip receipt compressed data is too large (\(observed) bytes; limit \(limit) bytes)"
+        case .gzipDecompressedDataTooLarge(let limit, let observed):
+            return "gzip receipt decompressed data is too large (\(observed) bytes; limit \(limit) bytes)"
+        case .gzipCorruptData:
+            return "gzip decompression failed: corrupt or truncated gzip data"
         }
     }
 }
 
 private enum GzipCodec {
-    private static let chunkSize = 64 * 1024
+    static let chunkSize = 64 * 1024
     private static let gzipWindowBits: Int32 = 15 + 16
 
-    static func decompress(_ data: Data) throws -> Data {
+    static func decompress(_ data: Data, maxBytes: Int) throws -> Data {
         var input = [UInt8](data)
         var stream = z_stream()
         let initStatus = inflateInit2_(
@@ -90,12 +170,18 @@ private enum GzipCodec {
                 }
                 let written = output.count - Int(stream.avail_out)
                 if written > 0 {
+                    guard outputData.count + written <= maxBytes else {
+                        throw HeistReceiptCodecError.gzipDecompressedDataTooLarge(
+                            limit: maxBytes,
+                            observed: outputData.count + written
+                        )
+                    }
                     outputData.append(contentsOf: output.prefix(written))
                 }
             } while status == Z_OK
 
             guard status == Z_STREAM_END else {
-                throw HeistReceiptCodecError.gzipStreamFailed(operation: "decompression", code: status)
+                throw HeistReceiptCodecError.gzipCorruptData
             }
             return outputData
         }

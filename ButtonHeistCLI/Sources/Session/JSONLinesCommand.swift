@@ -16,12 +16,14 @@ struct JSONLinesCommand: AsyncParsableCommand {
             Maintains a single connection and accepts canonical JSON commands on stdin.
             JSON output mode accepts one JSON object per line (e.g. {"command":"one_finger_tap"}).
             Output is JSON by default; pass --format human only for interactive inspection.
+            Machine JSON is preflighted before decoding with PublicAdapterInputLimits.maxRequestBytes,
+            PublicAdapterInputLimits.maxNestingDepth, and PublicAdapterInputLimits.maxTotalObjectKeys.
 
             Examples:
               buttonheist json_lines
               buttonheist json_lines --device a1b2
               echo '{"command":"get_interface"}' | buttonheist json_lines
-              echo '{"command":"activate","target":{"label":{"mode":"exact","value":"Sign In"},"traits":["button"]}}' | buttonheist json_lines
+              echo '{"command":"activate","target":{"label":"Sign In","traits":["button"]}}' | buttonheist json_lines
             """
     )
 

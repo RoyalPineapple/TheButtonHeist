@@ -1,7 +1,6 @@
 import ArgumentParser
 import ButtonHeist
 import Foundation
-import ThePlans
 
 struct CLIParsedRequest {
     let command: TheFence.Command
@@ -78,6 +77,7 @@ private struct CLIMachineRequestEnvelope: Decodable {
     let arguments: TheFence.CommandArgumentEnvelope
 
     static func decode(from line: String) throws -> Self {
+        try PublicJSONInputPreflight.validateObject(line)
         do {
             return try JSONDecoder().decode(Self.self, from: Data(line.utf8))
         } catch let error as DecodingError {

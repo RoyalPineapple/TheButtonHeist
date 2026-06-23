@@ -26,11 +26,11 @@ TEMPLATE="$REPO_ROOT/$BUTTONHEIST_FORMULA_TEMPLATE"
 CLI_URL="$(buttonheist_release_url "$VERSION")/$(buttonheist_cli_archive_name "$VERSION")"
 MCP_URL="$(buttonheist_release_url "$VERSION")/$(buttonheist_mcp_archive_name "$VERSION")"
 
-RELEASE_VERSION_REGEX='^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$'
+RELEASE_VERSION_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
 SHA256_REGEX='^[0-9a-f]{64}$'
 
 if ! [[ "$VERSION" =~ $RELEASE_VERSION_REGEX ]]; then
-    echo "Error: '$VERSION' is not a valid release version (e.g. 0.2.0 or 2026.05.15.1)"
+    echo "Error: '$VERSION' is not a valid release version (e.g. 0.2.0 or 1.0.0)"
     exit 1
 fi
 if ! [[ "$CLI_SHA" =~ $SHA256_REGEX ]]; then

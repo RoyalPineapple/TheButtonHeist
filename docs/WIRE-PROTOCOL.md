@@ -10,10 +10,22 @@ Use generated references for product command surfaces:
 
 ## Versioning
 
-There is no separate wire-protocol version. Both sides carry
-`buttonHeistVersion` in envelopes and compare it for exact equality during the
-hello handshake. Any mismatch returns `protocolMismatch` and closes the
-connection. Wire-format changes ship with a product version bump.
+There is no separate wire-protocol version. The wire contract is versioned by
+the Button Heist product SemVer carried in `buttonHeistVersion`.
+
+Compatibility is exact product-version lockstep:
+
+- the embedded iOS server, macOS framework, CLI, and MCP server must come from
+  the same Button Heist release
+- `buttonHeistVersion` must match exactly during the hello handshake
+- major, minor, and patch differences are all incompatible on the wire
+- there is no downgrade, feature negotiation, or best-effort compatibility mode
+
+On mismatch, the server returns `protocolMismatch` with both observed product
+versions, then closes the connection before authentication or command dispatch.
+Clients should surface this as an install/build mismatch and ask the caller to
+rebuild or reinstall both sides from the same release. Wire-format changes ship
+with a product version bump, not a parallel protocol version.
 
 ## Command Layers
 
@@ -150,6 +162,11 @@ parameter inventories belong in the generated references.
 `driverId` is optional. When present, it is the session-locking identity. When
 absent, the token is used as the driver identity.
 
+### Unsupported Legacy Auth Messages
+
+`authApprovalPending` and `authApproved` are not valid current server messages.
+Current clients reject either tag as an unsupported auth response and instruct the
+user to rebuild or reinstall the app, then retry with the configured token.
 Clients without a token fail before starting the TLS connection.
 
 ### Protocol Mismatch
@@ -223,7 +240,7 @@ such as `label`, `identifier`, `value`, `traits`, `excludeTraits`, and optional
 ### One-Step Semantic Action
 
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"action","action":{"command":{"type":"activate","payload":{"label":{"mode":"exact","value":"Sign In"},"traits":["button"]}}}}]},"argument":{"type":"none"}}}
+{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"action","action":{"command":{"type":"activate","payload":{"label":"Sign In","traits":["button"]}}}}]},"argument":{"type":"none"}}}
 ```
 
 Semantic action steps identify elements semantically. The host resolves the
