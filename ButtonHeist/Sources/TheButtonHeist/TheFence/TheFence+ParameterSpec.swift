@@ -29,8 +29,9 @@ extension TheFence {
 
     enum DecodeLimits {
         static let maxRunHeistSteps = 100
-        static let maxRunHeistRequestBytes = 1_000_000
-        static let maxRunHeistNestingDepth = 32
+        static let maxRunHeistRequestBytes = PublicAdapterInputLimits.maxRequestBytes
+        static let maxRunHeistNestingDepth = PublicAdapterInputLimits.maxNestingDepth
+        static let maxRunHeistObjectKeys = PublicAdapterInputLimits.maxTotalObjectKeys
         static let maxHeistResultRows = maxRunHeistSteps
         static let maxInlineScreenshotBase64Bytes = 1_000_000
     }

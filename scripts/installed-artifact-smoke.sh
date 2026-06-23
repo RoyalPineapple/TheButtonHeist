@@ -14,12 +14,17 @@ PREFIX="${BUTTONHEIST_INSTALL_PREFIX:-}"
 CLI_ARCHIVE="${BUTTONHEIST_CLI_ARCHIVE:-}"
 MCP_ARCHIVE="${BUTTONHEIST_MCP_ARCHIVE:-}"
 EXPECTED_VERSION="${BUTTONHEIST_EXPECTED_VERSION:-}"
+SUPPORTED_HOST_ARCH="arm64"
 SUPPORTED_THEPLANS_TRIPLE="arm64-apple-macosx"
 THEPLANS_TRIPLE="${BUTTONHEIST_THEPLANS_TRIPLE:-$SUPPORTED_THEPLANS_TRIPLE}"
 COMMAND_TIMEOUT="${BUTTONHEIST_INSTALLED_SMOKE_TIMEOUT:-60}"
 MCP_TIMEOUT="${BUTTONHEIST_MCP_SMOKE_TIMEOUT:-5}"
 REQUIRE_INSTALLED=false
 EXPLICIT_PREFIX=false
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+MCP_REFERENCE_FILE="${BUTTONHEIST_MCP_REFERENCE_FILE:-$REPO_ROOT/docs/reference/mcp-tools.md}"
 
 TMP_DIR=""
 RUN_TMP=""
@@ -37,7 +42,7 @@ Options:
   --theplans-triple TRIPLE Installed ThePlans artifact triple. Defaults to arm64-apple-macosx.
                          Homebrew distribution is Apple Silicon / arm64 only.
   --timeout SECONDS        Timeout for CLI/heist-plan invocations. Defaults to 60.
-  --mcp-timeout SECONDS    Timeout for buttonheist-mcp launch smoke. Defaults to 5.
+  --mcp-timeout SECONDS    Timeout for buttonheist-mcp protocol smoke. Defaults to 5.
   --require-installed      Fail instead of skipping when no install is found.
   -h, --help               Show this help.
 
@@ -126,6 +131,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+HOST_ARCH="$(uname -m)"
+if [[ "$HOST_ARCH" != "$SUPPORTED_HOST_ARCH" ]]; then
+    fail "installed Button Heist artifacts are arm64-only; unsupported host architecture: $HOST_ARCH"
+fi
 if [[ "$THEPLANS_TRIPLE" != "$SUPPORTED_THEPLANS_TRIPLE" ]]; then
     fail "installed Button Heist artifacts are arm64-only; unsupported ThePlans triple: $THEPLANS_TRIPLE"
 fi
@@ -291,6 +300,205 @@ require_dir() {
     [[ -d "$path" ]] || fail "missing installed artifact directory: $path"
 }
 
+smoke_mcp_tools() {
+    local timeout="$1"
+    local binary="$2"
+    local reference_file="$3"
+    local home_dir="$4"
+    local storage_dir="$5"
+
+    python3 - "$timeout" "$binary" "$reference_file" "$home_dir" "$storage_dir" <<'PY'
+import json
+import os
+import pathlib
+import re
+import selectors
+import subprocess
+import sys
+import time
+
+timeout = float(sys.argv[1])
+binary = sys.argv[2]
+reference_file = pathlib.Path(sys.argv[3])
+home_dir = sys.argv[4]
+storage_dir = sys.argv[5]
+
+
+def fail(message):
+    print(message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def expected_tool_names():
+    try:
+        text = reference_file.read_text(encoding="utf-8")
+    except OSError as error:
+        fail(f"failed to read generated MCP tool reference {reference_file}: {error}")
+
+    summary_start = text.find("## Summary")
+    details_start = text.find("## Details")
+    if summary_start == -1 or details_start == -1 or details_start <= summary_start:
+        fail(f"generated MCP tool reference has no bounded Summary table: {reference_file}")
+
+    names = []
+    for line in text[summary_start:details_start].splitlines():
+        match = re.match(r"\|\s*`([^`]+)`\s*\|", line)
+        if match:
+            names.append(match.group(1))
+
+    if not names:
+        fail(f"generated MCP tool reference contains no tool names: {reference_file}")
+    return sorted(names)
+
+
+expected = expected_tool_names()
+env = os.environ.copy()
+env.update({
+    "HOME": home_dir,
+    "CFFIXED_USER_HOME": home_dir,
+    "BUTTONHEIST_STORAGE_DIR": storage_dir,
+})
+
+process = subprocess.Popen(
+    [binary],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    env=env,
+)
+selector = selectors.DefaultSelector()
+selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+stdout_buffer = b""
+stderr_chunks = []
+deadline = time.monotonic() + timeout
+
+
+def stop_process():
+    if process.stdin:
+        try:
+            process.stdin.close()
+        except OSError:
+            pass
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2)
+
+
+def write_message(message):
+    payload = json.dumps(message, separators=(",", ":")).encode("utf-8") + b"\n"
+    try:
+        process.stdin.write(payload)
+        process.stdin.flush()
+    except BrokenPipeError:
+        stop_process()
+        stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+        fail(f"buttonheist-mcp exited before accepting JSON-RPC input\n{stderr}")
+
+
+def read_response(expected_id):
+    global stdout_buffer
+
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+            fail(f"buttonheist-mcp exited before JSON-RPC response id {expected_id}\n{stderr}")
+
+        events = selector.select(max(0.0, deadline - time.monotonic()))
+        if not events:
+            continue
+
+        for key, _ in events:
+            chunk = os.read(key.fileobj.fileno(), 4096)
+            if not chunk:
+                selector.unregister(key.fileobj)
+                continue
+
+            if key.data == "stderr":
+                stderr_chunks.append(chunk)
+                continue
+
+            stdout_buffer += chunk
+            while b"\n" in stdout_buffer:
+                line, stdout_buffer = stdout_buffer.split(b"\n", 1)
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    message = json.loads(line)
+                except json.JSONDecodeError:
+                    stop_process()
+                    fail(f"non-JSON stdout from buttonheist-mcp: {line.decode('utf-8', errors='replace')}")
+
+                if message.get("id") != expected_id:
+                    continue
+                if "error" in message:
+                    stop_process()
+                    fail(f"JSON-RPC response id {expected_id} returned error: {message['error']}")
+                if "result" not in message:
+                    stop_process()
+                    fail(f"JSON-RPC response id {expected_id} had no result: {message}")
+                return message["result"]
+
+    stop_process()
+    stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+    fail(f"timed out after {timeout:g}s waiting for JSON-RPC response id {expected_id}\n{stderr}")
+
+
+try:
+    write_message({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {
+                "name": "buttonheist-installed-smoke",
+                "version": "0.0.0",
+            },
+        },
+    })
+    initialize_result = read_response(1)
+    if initialize_result.get("serverInfo", {}).get("name") != "buttonheist":
+        fail(f"unexpected MCP serverInfo in initialize result: {initialize_result.get('serverInfo')}")
+    if "tools" not in initialize_result.get("capabilities", {}):
+        fail(f"initialize result did not advertise tools capability: {initialize_result}")
+
+    write_message({
+        "jsonrpc": "2.0",
+        "method": "notifications/initialized",
+        "params": {},
+    })
+    write_message({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {},
+    })
+    tools_result = read_response(2)
+    observed_names = [tool.get("name") for tool in tools_result.get("tools", [])]
+    if any(name is None for name in observed_names):
+        fail(f"tools/list returned a tool without a name: {tools_result}")
+    observed = sorted(observed_names)
+    if observed != expected:
+        missing = sorted(set(expected) - set(observed))
+        extra = sorted(set(observed) - set(expected))
+        fail(
+            "tools/list names differ from generated MCP reference "
+            f"{reference_file}\nmissing: {missing}\nextra: {extra}\nobserved: {observed}\nexpected: {expected}"
+        )
+
+    print(f"buttonheist-mcp listed {len(observed)} generated tools")
+finally:
+    stop_process()
+PY
+}
+
 if [[ -n "$CLI_ARCHIVE" || -n "$MCP_ARCHIVE" ]]; then
     require_tool tar
     require_tool python3
@@ -316,6 +524,9 @@ BUTTONHEIST="$PREFIX/bin/buttonheist"
 HEIST_PLAN="$PREFIX/bin/heist-plan"
 BUTTONHEIST_MCP="$PREFIX/bin/buttonheist-mcp"
 THEPLANS_BUILD_DIR="$PREFIX/lib/ThePlans/$THEPLANS_TRIPLE/release"
+# heist-doctor is intentionally excluded from installed-artifact smoke: it is
+# an alpha Swift package executable, not part of the current Homebrew/release
+# install surface. Add it here when the release archives and formula install it.
 
 missing=()
 [[ -x "$BUTTONHEIST" ]] || missing+=("$BUTTONHEIST")
@@ -348,9 +559,13 @@ if [[ -n "$EXPECTED_VERSION" && "$version" != "$EXPECTED_VERSION" ]]; then
 fi
 ok "buttonheist --version ($version)"
 
-run_checked "buttonheist-mcp launch/help smoke" "$MCP_TIMEOUT" \
-    env HOME="$SMOKE_HOME" CFFIXED_USER_HOME="$SMOKE_HOME" \
-        BUTTONHEIST_STORAGE_DIR="$RUN_TMP/storage" "$BUTTONHEIST_MCP" --help
+if output="$(smoke_mcp_tools "$MCP_TIMEOUT" "$BUTTONHEIST_MCP" "$MCP_REFERENCE_FILE" "$SMOKE_HOME" "$RUN_TMP/storage" 2>&1)"; then
+    ok "$output"
+else
+    status=$?
+    printf '%s\n' "$output" >&2
+    fail "buttonheist-mcp initialize/tools-list smoke failed with exit status $status"
+fi
 
 require_dir "$THEPLANS_BUILD_DIR"
 require_dir "$THEPLANS_BUILD_DIR/Modules"

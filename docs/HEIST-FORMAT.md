@@ -13,7 +13,7 @@ plan; it is not a hand-authored JSON file.
 | `.swift` | Full Swift source for reusable authored heists, tests, helpers, and local constants. |
 | `plan` source string | ButtonHeist DSL source for MCP/CLI inline authoring. It is Swift-like, but accepts only the DSL constructs Button Heist can parse and render canonically. |
 | `.heist` | Generated package artifact containing `manifest.json` and `plan.json`. Do not hand-author it. |
-| `.json` | Raw `HeistPlan` JSON IR for debugging, import/export, and generated tooling only. It is not public heist authoring input. |
+| `.json` | Raw `HeistPlan` JSON IR for internal diagnostics and generated tooling only. It is not public heist authoring input or a public artifact API. |
 
 `run_heist` accepts ButtonHeist DSL source through `plan`, or a generated
 `.heist` package through `path`. Public run input does not accept raw structured
@@ -29,9 +29,8 @@ SearchFlow.heist/
   plan.json
 ```
 
-Plain JSON with a `.heist` extension is invalid. Use `.json` when you are
-explicitly inspecting raw `HeistPlan` IR, or generate a fresh `.heist` package
-from Swift/DSL source.
+Plain JSON with a `.heist` extension is invalid. Generate a fresh `.heist`
+package from Swift/DSL source when crossing public artifact boundaries.
 
 ## Manifest
 
@@ -225,9 +224,6 @@ The durable heist AST is small on purpose. It does not support:
 
 Live composition turns completed interactions and settled semantic evidence into
 semantic action intent plus validated semantic expectation.
-
-See [Live Composition Contract](RECORDING-CONTRACT.md) for the focused
-composition rules.
 
 Rules:
 

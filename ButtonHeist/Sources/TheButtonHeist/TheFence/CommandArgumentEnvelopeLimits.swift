@@ -16,7 +16,8 @@ enum CommandArgumentEnvelopeLimits {
             arguments,
             field: field,
             maxBytes: TheFence.DecodeLimits.maxRunHeistRequestBytes,
-            maxDepth: TheFence.DecodeLimits.maxRunHeistNestingDepth
+            maxDepth: TheFence.DecodeLimits.maxRunHeistNestingDepth,
+            maxObjectKeys: TheFence.DecodeLimits.maxRunHeistObjectKeys
         )
     }
 
@@ -24,8 +25,10 @@ enum CommandArgumentEnvelopeLimits {
         _ arguments: TheFence.CommandArgumentEnvelope,
         field: String,
         maxBytes: Int,
-        maxDepth: Int
+        maxDepth: Int,
+        maxObjectKeys: Int
     ) throws {
+        try validateObjectKeyCount(arguments.argumentValues, field: field, maxObjectKeys: maxObjectKeys)
         let byteCount = try jsonEncodedSize(
             of: arguments.argumentValues,
             field: field,
@@ -38,6 +41,58 @@ enum CommandArgumentEnvelopeLimits {
                 observed: "\(byteCount) bytes",
                 expected: "JSON request <= \(maxBytes) bytes"
             )
+        }
+    }
+
+    private static func validateObjectKeyCount(
+        _ object: [String: HeistValue],
+        field: String,
+        maxObjectKeys: Int
+    ) throws {
+        var keyCount = 0
+        try countObjectKeys(in: object, field: field, maxObjectKeys: maxObjectKeys, count: &keyCount)
+    }
+
+    private static func countObjectKeys(
+        in object: [String: HeistValue],
+        field: String,
+        maxObjectKeys: Int,
+        count: inout Int
+    ) throws {
+        count += object.count
+        guard count <= maxObjectKeys else {
+            throw SchemaValidationError(
+                field: field,
+                observed: "object key count \(count)",
+                expected: "object key count <= \(maxObjectKeys)"
+            )
+        }
+
+        for value in object.values {
+            try countObjectKeys(
+                in: value,
+                field: field,
+                maxObjectKeys: maxObjectKeys,
+                count: &count
+            )
+        }
+    }
+
+    private static func countObjectKeys(
+        in value: HeistValue,
+        field: String,
+        maxObjectKeys: Int,
+        count: inout Int
+    ) throws {
+        switch value {
+        case .object(let object):
+            try countObjectKeys(in: object, field: field, maxObjectKeys: maxObjectKeys, count: &count)
+        case .array(let array):
+            for item in array {
+                try countObjectKeys(in: item, field: field, maxObjectKeys: maxObjectKeys, count: &count)
+            }
+        case .string, .bool, .int, .double:
+            return
         }
     }
 

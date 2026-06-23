@@ -27,6 +27,21 @@ discriminators such as `requestInterface` and `heistPlan` are transport names,
 not the public CLI/MCP command namespace. Side-effecting public commands lower
 to one-step or composed `HeistPlan`s before crossing the device wire.
 
+## Public Surface Matrix
+
+| Surface | Public status | Entry points | Contract source | Compatibility policy |
+|---------|---------------|--------------|-----------------|----------------------|
+| SwiftPM products and modules | Public integration surface | `TheInsideJob`, `ButtonHeist`, `ButtonHeistDSL`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. Use matching package, CLI, MCP, and embedded app builds. |
+| SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor` | [Heist Doctor](HEIST-DOCTOR.md) | Suggestion-only receipt analysis. Not installed by Homebrew and not a major-version stability contract. |
+| Homebrew release | Public install surface | `buttonheist`, `buttonheist-mcp`, `heist-plan`, installed `ThePlans` compiler artifacts | `Formula/buttonheist.rb` and `scripts/release-contract.sh` | Formula and release archives use SemVer `MAJOR.MINOR.PATCH`. Experimental `heist-doctor` is intentionally excluded. |
+| CLI commands | Public command surface | `buttonheist <command>` | Generated [Command Reference](reference/commands.md) | Command names, CLI exposure, and parameters are descriptor-owned. Regenerate references after command changes. |
+| JSON-lines input | Public CLI session surface | `buttonheist json_lines` | Generated [Command Reference](reference/commands.md) and `TheFence.Command` descriptors | Each line is a JSON object using CLI-exposed Fence commands. MCP-only tools are excluded. Raw plan IR fields are not the public `run_heist` input shape. |
+| MCP tools | Public agent tool surface | `buttonheist-mcp` tools | Generated [MCP Tool Reference](reference/mcp-tools.md) | Tool names and schemas are descriptor-owned. `perform` is MCP-only; `run_heist` accepts source `plan` or `.heist` `path`. |
+| `.heist` artifact format | Public generated artifact | `<name>.heist/manifest.json` and `plan.json` | [Heist Format](HEIST-FORMAT.md) | Generated package artifact. Do not hand-author it; regenerate artifacts when the plan or manifest contract changes. |
+| Plan DSL/source | Public authoring source | Swift DSL files, canonical ButtonHeist source strings, `heist-plan compile`, `run_heist --plan`, MCP `run_heist(plan:)` | [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md) and [Heist Format](HEIST-FORMAT.md) | Source must compile to canonical `HeistPlan` IR. MCP and JSON-lines should pass source or paths, not raw IR fields. |
+| Config and environment keys | Public runtime configuration | `.buttonheist.json`, `~/.config/buttonheist/config.json`, `BUTTONHEIST_*`, `INSIDEJOB_*` | This document, [Authentication](AUTH.md), and command help | Explicit flags and target config win over environment values where command-specific precedence applies. Unknown keys must fail or be ignored only as documented. |
+| Wire compatibility policy | Public transport contract | TheScore newline-delimited TLS JSON | [Wire Protocol](WIRE-PROTOCOL.md) | Exact product-version lockstep. Client and server `buttonHeistVersion` must match exactly; mismatch returns `protocolMismatch` and closes the connection. |
+
 ## TheInsideJob
 
 **Import**: `import TheInsideJob`
@@ -183,6 +198,9 @@ Named targets live in `.buttonheist.json` or
   "default": "demo"
 }
 ```
+
+Configs are strict. Removed fields such as `certFingerprint` are invalid, even
+when the file is discovered from a default config path.
 
 ## ButtonHeistMCP
 

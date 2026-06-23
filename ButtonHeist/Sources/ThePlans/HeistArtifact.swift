@@ -40,6 +40,10 @@ public struct HeistArtifactManifest: Codable, Sendable, Equatable {
     public let producer: HeistArtifactProducer
     public let createdAt: Date
 
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case format, entry, formatVersion, planVersion, producer, createdAt
+    }
+
     public init(
         format: String,
         entry: String,
@@ -56,26 +60,25 @@ public struct HeistArtifactManifest: Codable, Sendable, Equatable {
         self.createdAt = createdAt
     }
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case format
-        case entry
-        case formatVersion
-        case planVersion
-        case producer
-        case createdAt
-    }
-
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "manifest")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            format: try container.decodeRequired(String.self, forKey: .format, typeName: "manifest"),
-            entry: try container.decodeRequired(String.self, forKey: .entry, typeName: "manifest"),
-            formatVersion: try container.decodeRequired(Int.self, forKey: .formatVersion, typeName: "manifest"),
-            planVersion: try container.decodeRequired(Int.self, forKey: .planVersion, typeName: "manifest"),
-            producer: try container.decodeRequired(HeistArtifactProducer.self, forKey: .producer, typeName: "manifest"),
-            createdAt: try container.decodeRequired(Date.self, forKey: .createdAt, typeName: "manifest")
-        )
+        format = try container.decodeRequired(String.self, forKey: .format, typeName: "manifest")
+        entry = try container.decodeRequired(String.self, forKey: .entry, typeName: "manifest")
+        formatVersion = try container.decodeRequired(Int.self, forKey: .formatVersion, typeName: "manifest")
+        planVersion = try container.decodeRequired(Int.self, forKey: .planVersion, typeName: "manifest")
+        producer = try container.decodeRequired(HeistArtifactProducer.self, forKey: .producer, typeName: "manifest")
+        createdAt = try container.decodeRequired(Date.self, forKey: .createdAt, typeName: "manifest")
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(format, forKey: .format)
+        try container.encode(entry, forKey: .entry)
+        try container.encode(formatVersion, forKey: .formatVersion)
+        try container.encode(planVersion, forKey: .planVersion)
+        try container.encode(producer, forKey: .producer)
+        try container.encode(createdAt, forKey: .createdAt)
     }
 }
 
@@ -85,45 +88,57 @@ public struct HeistArtifactProducer: Codable, Sendable, Equatable {
     public let name: String
     public let version: String?
 
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case name, version
+    }
+
     public init(name: String, version: String? = nil) {
         self.name = name
         self.version = version
     }
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case name
-        case version
-    }
-
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "manifest producer")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            name: try container.decodeRequired(String.self, forKey: .name, typeName: "manifest producer"),
-            version: try container.decodeIfPresent(String.self, forKey: .version)
-        )
+        name = try container.decodeRequired(String.self, forKey: .name, typeName: "manifest producer")
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(version, forKey: .version)
     }
 }
 
 public enum HeistArtifactCodec {
     public static let manifestFileName = "manifest.json"
     public static let planFileName = "plan.json"
+    @_spi(ButtonHeistInternals) public static let manifestMemberSizeLimit = 64 * 1024
+    @_spi(ButtonHeistInternals) public static let planMemberSizeLimit = 8 * 1024 * 1024
+
+    private static let fileReadChunkSize = 64 * 1024
 
     public static func read(from url: URL) throws -> HeistArtifact {
         let packageURL = url.standardizedFileURL
         try requireHeistInputExtension(packageURL)
         try validateHeistPackageDirectory(packageURL)
 
-        let manifestURL = packageURL.appendingPathComponent(manifestFileName)
-        let planURL = packageURL.appendingPathComponent(planFileName)
-        try requireMember(manifestURL, member: manifestFileName, packageURL: packageURL)
-        try requireMember(planURL, member: planFileName, packageURL: packageURL)
+        let manifestMember = try readArtifactMemberData(
+            manifestFileName,
+            in: packageURL,
+            maxBytes: manifestMemberSizeLimit
+        )
+        let planMember = try readArtifactMemberData(
+            planFileName,
+            in: packageURL,
+            maxBytes: planMemberSizeLimit
+        )
 
-        let manifestPayload = try readManifestPayload(from: manifestURL, packageURL: packageURL)
+        let manifestPayload = try readManifestPayload(from: manifestMember.data, packageURL: packageURL)
         try validateArtifactEnvelope(manifest: manifestPayload, packageURL: packageURL)
 
-        let planData = try Data(contentsOf: planURL)
-        let planVersion = try decodePlanVersion(from: planData, at: planURL)
+        let planVersion = try decodePlanVersion(from: planMember.data, at: planMember.url)
         guard manifestPayload.planVersion == planVersion else {
             throw HeistArtifactCodecError.versionMismatch(
                 path: packageURL.path,
@@ -132,9 +147,9 @@ public enum HeistArtifactCodec {
             )
         }
         try validateSupportedPlanVersion(manifestPayload.planVersion, path: packageURL.path)
-        try validateSupportedPlanVersion(planVersion, path: planURL.path)
+        try validateSupportedPlanVersion(planVersion, path: planMember.url.path)
 
-        let plan = try decodePlanJSON(planData, at: planURL)
+        let plan = try decodePlanJSON(planMember.data, at: planMember.url)
         let entry = try validateArtifactEntry(
             manifestEntry: manifestPayload.entry,
             plan: plan,
@@ -257,7 +272,7 @@ public enum HeistArtifactCodec {
             throw HeistArtifactCodecError.invalidPackage(path: url.path)
         }
         guard isDirectory.boolValue else {
-            let firstByte = (try? Data(contentsOf: url))?.firstNonWhitespaceByte
+            let firstByte = firstNonWhitespaceByte(in: url)
             if firstByte.isJSONStartByte {
                 throw HeistArtifactCodecError.rawJSONHeist(path: url.path)
             }
@@ -265,20 +280,106 @@ public enum HeistArtifactCodec {
         }
     }
 
-    private static func requireMember(_ url: URL, member: String, packageURL: URL) throws {
+    private static func readArtifactMemberData(
+        _ member: String,
+        in packageURL: URL,
+        maxBytes: Int
+    ) throws -> (url: URL, data: Data) {
+        let url = try validateArtifactMember(member, in: packageURL, maxBytes: maxBytes)
+        return (url, try readBoundedFile(url, member: member, packageURL: packageURL, maxBytes: maxBytes))
+    }
+
+    private static func validateArtifactMember(
+        _ member: String,
+        in packageURL: URL,
+        maxBytes: Int
+    ) throws -> URL {
+        let url = packageURL.appendingPathComponent(member, isDirectory: false)
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
               !isDirectory.boolValue
         else {
             throw HeistArtifactCodecError.missingMember(path: packageURL.path, member: member)
         }
+        try validateMemberContainment(url, member: member, packageURL: packageURL)
+        if isSymbolicLink(url) {
+            throw HeistArtifactCodecError.symlinkMember(path: packageURL.path, member: member)
+        }
+        guard let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+            throw HeistArtifactCodecError.invalidMember(
+                path: packageURL.path,
+                member: member,
+                reason: "could not determine file size"
+            )
+        }
+        guard size <= maxBytes else {
+            throw HeistArtifactCodecError.memberTooLarge(
+                path: packageURL.path,
+                member: member,
+                limit: maxBytes,
+                observed: size
+            )
+        }
+        return url
     }
 
-    private static func readManifestPayload(from url: URL, packageURL: URL) throws -> HeistArtifactManifestPayload {
+    private static func validateMemberContainment(_ url: URL, member: String, packageURL: URL) throws {
+        let resolvedPackagePath = packageURL.resolvingSymlinksInPath().standardizedFileURL.path
+        let resolvedMemberPath = url.resolvingSymlinksInPath().standardizedFileURL.path
+        guard resolvedMemberPath.isSameOrDescendant(of: resolvedPackagePath) else {
+            throw HeistArtifactCodecError.unsafeMemberPath(
+                path: packageURL.path,
+                member: member,
+                resolvedPath: resolvedMemberPath
+            )
+        }
+    }
+
+    private static func readBoundedFile(
+        _ url: URL,
+        member: String,
+        packageURL: URL,
+        maxBytes: Int
+    ) throws -> Data {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+
+        var data = Data()
+        while true {
+            let remaining = maxBytes - data.count
+            let readSize = min(fileReadChunkSize, remaining + 1)
+            guard let chunk = try handle.read(upToCount: readSize), !chunk.isEmpty else {
+                return data
+            }
+            guard data.count + chunk.count <= maxBytes else {
+                throw HeistArtifactCodecError.memberTooLarge(
+                    path: packageURL.path,
+                    member: member,
+                    limit: maxBytes,
+                    observed: data.count + chunk.count
+                )
+            }
+            data.append(chunk)
+        }
+    }
+
+    private static func firstNonWhitespaceByte(in url: URL) -> UInt8? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            return nil
+        }
+        defer { try? handle.close() }
+        return (try? handle.read(upToCount: fileReadChunkSize))??.firstNonWhitespaceByte
+    }
+
+    private static func isSymbolicLink(_ url: URL) -> Bool {
+        (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) != nil
+    }
+
+    private static func readManifestPayload(from data: Data, packageURL: URL) throws -> HeistArtifactManifestPayload {
         do {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode(HeistArtifactManifestPayload.self, from: try Data(contentsOf: url))
+            return try decoder.decode(HeistArtifactManifestPayload.self, from: data)
         } catch {
             throw HeistArtifactCodecError.invalidManifest(
                 path: packageURL.path,
@@ -421,12 +522,7 @@ private struct HeistArtifactManifestPayload: Decodable {
     let createdAt: Date
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case format
-        case entry
-        case formatVersion
-        case planVersion
-        case producer
-        case createdAt
+        case format, entry, formatVersion, planVersion, producer, createdAt
     }
 
     init(from decoder: Decoder) throws {
@@ -445,6 +541,10 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
     case invalidPackage(path: String)
     case rawJSONHeist(path: String)
     case missingMember(path: String, member: String)
+    case symlinkMember(path: String, member: String)
+    case unsafeMemberPath(path: String, member: String, resolvedPath: String)
+    case invalidMember(path: String, member: String, reason: String)
+    case memberTooLarge(path: String, member: String, limit: Int, observed: Int)
     case invalidManifest(path: String, member: String, reason: String)
     case invalidManifestEntry(path: String, contract: String, observed: String, correction: String)
     case invalidManifestFormat(path: String, observed: String)
@@ -471,6 +571,23 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
             Invalid .heist artifact at \(path): missing \(member). \
             Expected package containing manifest.json and plan.json. \
             Re-export the heist or run a Swift heist source.
+            """
+        case .symlinkMember(let path, let member):
+            return """
+            Invalid .heist artifact at \(path): \(member) must be a regular file inside the artifact package, \
+            not a symbolic link.
+            """
+        case .unsafeMemberPath(let path, let member, let resolvedPath):
+            return """
+            Invalid .heist artifact at \(path): \(member) resolves outside the artifact package \
+            to \(resolvedPath).
+            """
+        case .invalidMember(let path, let member, let reason):
+            return "Invalid .heist artifact at \(path): invalid \(member): \(reason)"
+        case .memberTooLarge(let path, let member, let limit, let observed):
+            return """
+            Invalid .heist artifact at \(path): \(member) is too large \
+            (\(observed) bytes; limit \(limit) bytes).
             """
         case .invalidManifest(let path, let member, let reason):
             return "Invalid .heist artifact at \(path): invalid \(member): \(reason)"
@@ -513,6 +630,12 @@ public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, L
     }
 
     public var errorDescription: String? { description }
+}
+
+private extension String {
+    func isSameOrDescendant(of directory: String) -> Bool {
+        self == directory || hasPrefix(directory.hasSuffix("/") ? directory : "\(directory)/")
+    }
 }
 
 private extension Optional where Wrapped == UInt8 {

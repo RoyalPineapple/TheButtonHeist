@@ -13,7 +13,10 @@ change playback behavior.
 
 ## Current Status
 
-Treat this as alpha.
+Treat this as public experimental, SwiftPM-only alpha. The executable is a
+SwiftPM product for local and CI experiments. It is intentionally not installed
+by the Homebrew formula, and its CLI flags, receipt heuristics, scoring, and
+output JSON are not a major-version compatibility contract yet.
 
 The repair guardrails are deliberately conservative, but the workflow around
 the tool is still young:

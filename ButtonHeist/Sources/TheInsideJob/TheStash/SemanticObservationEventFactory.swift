@@ -39,7 +39,13 @@ enum SemanticObservationEventFactory {
         parentHash: String?,
         stash: TheStash
     ) -> AccessibilityTrace.Capture {
-        let interface = stash.semanticInterfaceWithHash(for: observation.screen).interface
+        let screen = switch observation.scope {
+        case .visible:
+            observation.screen.visibleOnly
+        case .discovery:
+            observation.screen
+        }
+        let interface = stash.semanticInterfaceWithHash(for: screen).interface
         let windows = observation.tripwireSignal.windowStack.windows.enumerated().map { index, window in
             AccessibilityTrace.WindowContext(
                 index: index,
@@ -52,7 +58,7 @@ enum SemanticObservationEventFactory {
             interface: interface,
             parentHash: parentHash,
             context: AccessibilityTrace.Context(
-                screenId: observation.screen.id,
+                screenId: screen.id,
                 windowStack: windows
             )
         )

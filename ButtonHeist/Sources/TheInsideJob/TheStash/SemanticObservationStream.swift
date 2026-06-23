@@ -141,6 +141,10 @@ final class SemanticObservationStream {
 
         if timeout == 0 {
             guard isActive else { return nil }
+            if scope == .visible {
+                _ = stash?.refreshCurrentVisibleTree()
+                return cleanEvent(scope: scope, after: requiredSequence)
+            }
             await cycles.waitForNextCycle(scope: scope, after: cycles.baselineCycle())
             return cleanEvent(scope: scope, after: requiredSequence)
         }
@@ -368,7 +372,7 @@ final class SemanticObservationStream {
     ) -> SettledSemanticObservationEvent? {
         guard !latestSettledObservationInvalidated,
               let latest = latestEvent,
-              latest.scope >= scope,
+              latest.scope.satisfies(requested: scope),
               latest.sequence > (sequence ?? 0)
         else {
             return nil

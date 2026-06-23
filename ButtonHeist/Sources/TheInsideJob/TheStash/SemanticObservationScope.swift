@@ -9,6 +9,10 @@ enum SemanticObservationScope: Int, Comparable, Sendable {
     static func < (lhs: SemanticObservationScope, rhs: SemanticObservationScope) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
+
+    func satisfies(requested scope: SemanticObservationScope) -> Bool {
+        self == scope
+    }
 }
 
 @MainActor

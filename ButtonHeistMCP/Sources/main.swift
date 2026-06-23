@@ -66,6 +66,7 @@ struct ButtonHeistMCPServer {
     static func decodeArguments(
         _ arguments: [String: Value]?
     ) throws -> TheFence.CommandArgumentEnvelope {
+        try MCPArgumentInputPreflight.validate(arguments)
         var values: [String: HeistValue] = [:]
         for (key, value) in arguments ?? [:] {
             values[key] = try heistValue(from: value, field: key)

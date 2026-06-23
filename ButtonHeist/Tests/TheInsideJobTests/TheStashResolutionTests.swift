@@ -251,6 +251,37 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(payload.edits.added.map(\.label), ["Toast"])
     }
 
+    func testVisibleObservationTraceExcludesDiscoveryOnlyElements() throws {
+        let visible = element(label: "Custom Rotors", traits: .button)
+        let discovered = element(label: "ButtonHeist Demo", traits: .button)
+        let discovery = Screen.makeForTests(
+            elements: [(visible, "custom_rotors")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    discovered,
+                    heistId: "buttonheist_demo",
+                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
+                    scrollContainer: "root_scroll"
+                ),
+            ]
+        )
+        bagman.semanticObservationStream.commitSettledDiscoveryObservation(discovery)
+
+        let refreshedVisible = Screen.makeForTests(elements: [(visible, "custom_rotors")])
+        bagman.semanticObservationStream.commitSettledVisibleObservation(refreshedVisible)
+
+        let event = try XCTUnwrap(bagman.latestSettledSemanticObservationEvent)
+        XCTAssertEqual(event.scope, .visible)
+        XCTAssertEqual(bagman.knownIds, ["buttonheist_demo", "custom_rotors"])
+
+        let labels = try XCTUnwrap(event.trace.captures.last)
+            .interface
+            .projectedElements
+            .compactMap(\.label)
+        XCTAssertEqual(labels, ["Custom Rotors"])
+        XCTAssertFalse(labels.contains("ButtonHeist Demo"))
+    }
+
     func testDiagnosticEvidenceInvalidatesLatestSettledObservationWithoutReplacingIt() {
         let settled = Screen.makeForTests(elements: [(element(label: "Settled"), "settled")])
         bagman.semanticObservationStream.commitSettledVisibleObservation(settled)
@@ -511,6 +542,38 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.scope, .discovery)
         XCTAssertEqual(observation?.sequence, 3)
         XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Discovery")
+    }
+
+    func testVisibleWaiterIgnoresDiscoveryObservation() async {
+        let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
+        bagman.semanticObservationStream.commitSettledVisibleObservation(first)
+        let firstSequence = bagman.latestSettledSemanticObservation?.sequence
+
+        let waiter = Task { @MainActor in
+            await bagman.observeSettledSemanticObservation(
+                scope: .visible,
+                after: firstSequence,
+                timeout: nil
+            )
+        }
+
+        for _ in 0..<10 where bagman.semanticObservationStream.settledWaiterCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
+
+        let discovery = Screen.makeForTests(elements: [(element(label: "Discovery"), "discovery")])
+        bagman.semanticObservationStream.commitSettledDiscoveryObservation(discovery)
+        XCTAssertEqual(bagman.latestSettledSemanticObservation?.sequence, 2)
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
+
+        let visible = Screen.makeForTests(elements: [(element(label: "Visible"), "visible")])
+        bagman.semanticObservationStream.commitSettledVisibleObservation(visible)
+
+        let observation = await waiter.value
+        XCTAssertEqual(observation?.scope, .visible)
+        XCTAssertEqual(observation?.sequence, 3)
+        XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Visible")
     }
 
     func testPublicInterfaceProjectionStaysVisibleWhileSemanticProjectionIncludesKnownElements() throws {

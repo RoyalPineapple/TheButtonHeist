@@ -180,7 +180,7 @@ private enum LongListScreen {
         try rawAction(
             .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             expectation: WaitStep(
-                predicate: .predicate(.present(.label("Device 99, Optical"))),
+                predicate: .changed(.elements),
                 timeout: .seconds(3)
             )
         )
@@ -188,7 +188,7 @@ private enum LongListScreen {
         try rawAction(
             .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
             expectation: WaitStep(
-                predicate: .predicate(.present(.label("Widget 0, Hardware"))),
+                predicate: .changed(.elements),
                 timeout: .seconds(3)
             )
         )

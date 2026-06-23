@@ -128,7 +128,7 @@ final class PostActionObservation {
     ) async -> FinalEvidence? {
         let finalState: BeforeState
         if let visibleEvent = settleEvidence.visibleEvent {
-            finalState = await captureFinalSemanticState(after: visibleEvent)
+            finalState = captureFinalSemanticState(after: visibleEvent)
         } else if let diagnosticScreen = settleEvidence.diagnosticScreen {
             finalState = captureSemanticState(
                 from: diagnosticScreen,
@@ -244,18 +244,16 @@ final class PostActionObservation {
         return AccessibilityTrace(captures: [parent.capture, capture])
     }
 
-    private func semanticStateAfterDiscovery(after sequence: UInt64?) async -> BeforeState? {
-        guard let event = await stash.observeSettledSemanticObservation(
-            scope: .discovery,
-            after: sequence,
-            timeout: 2.0
-        ) else { return nil }
-        return captureSemanticState(from: event.observation)
-    }
-
-    private func captureFinalSemanticState(after visibleEvent: SettledSemanticObservationEvent) async -> BeforeState {
-        await semanticStateAfterDiscovery(after: visibleEvent.sequence)
-            ?? captureSemanticState(from: visibleEvent.observation)
+    private func captureFinalSemanticState(after visibleEvent: SettledSemanticObservationEvent) -> BeforeState {
+        let observation = visibleEvent.observation
+        let screen = visibleEvent.scope == .visible
+            ? observation.screen.visibleOnly
+            : observation.screen
+        return captureSemanticState(
+            from: screen,
+            tripwireSignal: observation.tripwireSignal,
+            settledObservationSequence: observation.sequence
+        )
     }
 
     private func buildPostActionTrace(
