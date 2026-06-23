@@ -81,6 +81,9 @@ jobs:
           scripts/validate-release-contract.sh
           echo "Version $TAG_VERSION verified across tag, release contract, and source."
 
+      - name: Verify package manifest drift guard
+        run: scripts/check-package-manifest-drift.sh
+
       - name: Build CLI (universal)
         run: |
           cd ButtonHeistCLI
@@ -232,6 +235,16 @@ jobs:
           cd dist
           shasum -a 256 *.tar.gz *.zip > checksums.txt
           cat checksums.txt
+
+      - name: Smoke staged release artifacts
+        run: |
+          source scripts/release-contract.sh
+          VERSION="${{ steps.version.outputs.version }}"
+          scripts/installed-artifact-smoke.sh \
+            --cli-archive "dist/$(buttonheist_cli_archive_name "$VERSION")" \
+            --mcp-archive "dist/$(buttonheist_mcp_archive_name "$VERSION")" \
+            --expected-version "$VERSION" \
+            --require-installed
 
       - name: Create GitHub Release
         env:
