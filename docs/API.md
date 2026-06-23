@@ -71,13 +71,14 @@ Review the generated diff before committing. Do not hand-edit snapshot files;
 the checked-in text is generated from Swift symbol graphs so CI can distinguish
 intentional contract changes from accidental public API drift.
 
-The baseline lane is pinned to the CI toolchain: Xcode 26.3 / Apple Swift
-6.2.4. GitHub Actions selects that Xcode before running the check. Locally, set
-`DEVELOPER_DIR` to an Xcode 26.3 developer directory before checking or
-updating, for example:
+The baseline lane is pinned to the same Xcode and Swift toolchain used by CI.
+GitHub Actions selects that toolchain before running the check. Locally, set
+`DEVELOPER_DIR` to the matching developer directory before checking or
+updating. The script fails fast with the expected Swift version and an example
+command when a different toolchain is active.
 
 ```bash
-DEVELOPER_DIR=/Applications/Xcode-26.3.0.app/Contents/Developer scripts/check-swift-api-baseline.sh --update
+DEVELOPER_DIR=/Applications/<CI_XCODE>.app/Contents/Developer scripts/check-swift-api-baseline.sh --update
 ```
 
 ## TheInsideJob
