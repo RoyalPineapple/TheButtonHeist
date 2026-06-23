@@ -80,6 +80,10 @@ jobs:
         timeout-minutes: 5
         run: swift build --target ButtonHeist
 
+      - name: Check external ButtonHeist import contract
+        timeout-minutes: 5
+        run: scripts/check-buttonheist-import-contract.sh
+
       - name: Build heist-plan
         timeout-minutes: 5
         run: swift build --product heist-plan
@@ -101,6 +105,10 @@ jobs:
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule update --init --recursive submodules/AccessibilitySnapshotBH
+
+      - name: Verify package manifest drift guard
+        timeout-minutes: 3
+        run: scripts/check-package-manifest-drift.sh
 
       - name: Build heist-plan
         timeout-minutes: 8

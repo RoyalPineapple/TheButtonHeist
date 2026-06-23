@@ -81,6 +81,9 @@ jobs:
           scripts/validate-release-contract.sh
           echo "Version $TAG_VERSION verified across tag, release contract, and source."
 
+      - name: Verify package manifest drift guard
+        run: scripts/check-package-manifest-drift.sh
+
       - name: Build CLI (universal)
         run: |
           cd ButtonHeistCLI
