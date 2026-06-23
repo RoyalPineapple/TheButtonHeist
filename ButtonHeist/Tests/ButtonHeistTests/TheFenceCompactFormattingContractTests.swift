@@ -113,6 +113,50 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.isFailure)
     }
 
+    func testActivateNoChangeExpectationFailureExplainsSemanticActivationPath() {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(success: true, method: .activate),
+            expectation: ExpectationResult(
+                met: false,
+                predicate: .changed(.elements),
+                actual: "noChange"
+            )
+        )
+
+        let json = publicJSONObject(response)
+        let expectation = json["expectation"] as? [String: Any]
+        let compact = response.compactFormatted()
+        let human = response.humanFormatted()
+
+        XCTAssertEqual(json["status"] as? String, "expectation_failed")
+        XCTAssertEqual(expectation?["actual"] as? String, "noChange")
+        XCTAssertTrue(
+            (expectation?["hint"] as? String)?.contains("accessibilityActivate()") == true,
+            "\(String(describing: expectation?["hint"]))"
+        )
+        XCTAssertTrue(compact.contains("[expectation FAILED: got noChange]"), compact)
+        XCTAssertTrue(compact.contains("does not fall back to a physical tap"), compact)
+        XCTAssertTrue(human.contains("[expectation FAILED: expected changed(elements_changed), got noChange]"), human)
+        XCTAssertTrue(human.contains("accessibility activation path is inert or mismatched"), human)
+        XCTAssertTrue(response.isFailure)
+    }
+
+    func testActivateNoChangeWithoutExpectationRemainsSuccessful() {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(success: true, method: .activate)
+        )
+
+        let json = publicJSONObject(response)
+
+        XCTAssertEqual(json["status"] as? String, "ok")
+        XCTAssertNil(json["expectation"])
+        XCTAssertEqual(response.compactFormatted(), "activate: ok")
+        XCTAssertTrue(response.humanFormatted().contains("✓ activate"))
+        XCTAssertFalse(response.isFailure)
+    }
+
     func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() {
         let response = FenceResponse.action(
             command: .activate,

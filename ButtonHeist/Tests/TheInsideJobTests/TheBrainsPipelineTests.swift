@@ -118,29 +118,59 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Post-Action Success Path
 
-    func testActionResultWithDeltaSuccessAllowsNoSemanticDelta() async throws {
-        guard brains.stash.refreshLiveCapture() != nil else {
-            throw XCTSkip("No live hierarchy available for post-action observation test")
-        }
-        brains.startSemanticObservation()
-        guard await brains.stash.observeSettledSemanticObservation(scope: .discovery, after: nil, timeout: 2) != nil else {
-            throw XCTSkip("No settled discovery observation available")
-        }
-        let screen = brains.stash.settledSemanticScreen
+    func testAdvertisedActivateNoChangeCanRemainSuccessful() async {
+        let frame = CGRect(x: 424, y: 336, width: 928, height: 72)
+        let element = AccessibilityElement.make(
+            label: "Inert option",
+            identifier: "inert_option",
+            traits: .none,
+            shape: .frame(AccessibilityRect(frame)),
+            activationPoint: CGPoint(x: 888, y: 372),
+            respondsToUserInteraction: true
+        )
+        let screen = Screen.makeForTests(elements: [(element, "inert_option")])
+        brains.stash.installScreenForTesting(screen)
         let before = brains.postActionObservation.captureSemanticState()
 
         let result = await brains.interactionObservation.finishAfterAction(
             success: true,
             method: .activate,
+            subjectEvidence: activationSubjectEvidence(
+                target: .predicate(ElementPredicate(identifier: "inert_option")),
+                element: element,
+                settledObservationSequence: before.settledObservationSequence
+            ),
             before: before,
             settleOutcome: settledOutcome(finalScreen: screen)
         )
 
-        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertTrue(result.success, result.message ?? "activate unexpectedly failed")
         XCTAssertEqual(result.method, .activate)
+        XCTAssertNil(result.errorKind)
+        XCTAssertNil(result.message)
         XCTAssertNotNil(result.accessibilityTrace)
         XCTAssertEqual(result.accessibilityTrace?.captures.first?.hash, before.capture.hash)
         XCTAssertNotNil(result.accessibilityTrace?.captures.last?.hash)
+        guard case .noChange? = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
+        }
+    }
+
+    func testSyntheticTapNoChangeCanRemainSuccessful() async {
+        let beforeScreen = makeScreen(elements: [("Map", .button, "map_button")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            success: true,
+            method: .syntheticTap,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: beforeScreen)
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "tap unexpectedly failed")
+        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertNil(result.errorKind)
         guard case .noChange? = result.accessibilityTrace?.endpointDelta else {
             return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
         }
@@ -692,6 +722,19 @@ final class TheBrainsPipelineTests: XCTestCase {
             return (element, entry.heistId)
         }
         return .makeForTests(elements: pairs)
+    }
+
+    private func activationSubjectEvidence(
+        target: ElementTarget,
+        element: AccessibilityElement,
+        settledObservationSequence: UInt64?
+    ) -> ActionSubjectEvidence {
+        ActionSubjectEvidence(
+            source: .resolvedSemanticTarget,
+            target: target,
+            element: TheStash.WireConversion.convert(element),
+            settledObservationSequence: settledObservationSequence
+        )
     }
 
     private func makeScrollableContainer(frame: CGRect, contentSize: CGSize) -> AccessibilityContainer {

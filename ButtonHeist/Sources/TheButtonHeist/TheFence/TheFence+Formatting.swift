@@ -33,6 +33,9 @@ extension FenceResponse {
                 } else {
                     let tier = expectation.predicate.map(String.init(describing:)) ?? "delivery"
                     text += "  [expectation FAILED: expected \(tier), got \(expectation.actual ?? "nil")]"
+                    if let hint = Self.expectationFailureHint(expectation, command: command, result: result) {
+                        text += "  [hint: \(hint)]"
+                    }
                 }
             }
             return text

@@ -32,22 +32,48 @@ extension FenceResponse {
         }
         if let expectation, !expectation.met {
             text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
-            if let hint = Self.expectationFailureHint(expectation) {
+            if let hint = Self.expectationFailureHint(expectation, command: command, result: result) {
                 text += "\nhint: \(hint)"
             }
         }
         return text
     }
 
-    /// Recovery hint for a failed expectation. Currently surfaces the
-    /// screen-vs-element confusion behind `screen_changed`.
-    static func expectationFailureHint(_ expectation: ExpectationResult) -> String? {
-        guard expectation.predicate == .changed(.screen()), expectation.actual == "elementsChanged" else {
+    /// Recovery hint for failed expectations whose actual observation is easy
+    /// to misread without the command semantics.
+    static func expectationFailureHint(
+        _ expectation: ExpectationResult,
+        command: TheFence.Command? = nil,
+        result: ActionResult? = nil
+    ) -> String? {
+        if expectation.predicate == .changed(.screen()), expectation.actual == "elementsChanged" {
+            return "screen_changed requires a screen-level transition; " +
+                "use elements_changed for same-screen element updates " +
+                "or wait when the UI may settle asynchronously"
+        }
+
+        guard isActivateNoChangeExpectation(expectation, command: command, result: result) else {
             return nil
         }
-        return "screen_changed requires a screen-level transition; " +
-            "use elements_changed for same-screen element updates " +
-            "or wait when the UI may settle asynchronously"
+        return "activate uses accessibilityActivate() and trusts a true return; " +
+            "it does not fall back to a physical tap after semantic activation succeeds. " +
+            "If Mechanical.Tap changes the UI, the touch path works but the accessibility activation path is inert or mismatched."
+    }
+
+    private static func isActivateNoChangeExpectation(
+        _ expectation: ExpectationResult,
+        command: TheFence.Command?,
+        result: ActionResult?
+    ) -> Bool {
+        guard expectation.actual == AccessibilityTrace.DeltaKind.noChange.rawValue,
+              let predicate = expectation.predicate,
+              case .changed = predicate
+        else { return false }
+
+        if command == .activate {
+            return true
+        }
+        return result?.method == .activate
     }
 
     private static func compactRotor(_ search: RotorResult) -> String {
