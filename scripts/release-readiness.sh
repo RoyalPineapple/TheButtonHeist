@@ -25,6 +25,7 @@ check_generated_project() {
 
 run_step "Release contract and parser pin" "$SCRIPT_DIR/validate-release-contract.sh"
 run_step "Package manifest drift guard" "$SCRIPT_DIR/check-package-manifest-drift.sh"
+run_step "Swift public API baselines" "$SCRIPT_DIR/check-swift-api-baseline.sh"
 run_step "Generated project check" check_generated_project
 run_step "External ButtonHeist import fixture" "$SCRIPT_DIR/check-buttonheist-import-contract.sh"
 run_step "Build heist-plan" swift build --package-path ButtonHeist --product heist-plan

@@ -1,0 +1,24 @@
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+    name: "ButtonHeistIOSPublicProductsImportContract",
+    platforms: [
+        .iOS(.v17)
+    ],
+    products: [
+        .executable(name: "buttonheist-ios-public-products-import-contract", targets: ["ButtonHeistIOSPublicProductsImportContract"])
+    ],
+    dependencies: [
+        .package(name: "ButtonHeist", path: "../../..")
+    ],
+    targets: [
+        .executableTarget(
+            name: "ButtonHeistIOSPublicProductsImportContract",
+            dependencies: [
+                .product(name: "TheInsideJob", package: "ButtonHeist"),
+            ],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        )
+    ]
+)

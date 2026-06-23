@@ -31,7 +31,7 @@ to one-step or composed `HeistPlan`s before crossing the device wire.
 
 | Surface | Public status | Entry points | Contract source | Compatibility policy |
 |---------|---------------|--------------|-----------------|----------------------|
-| SwiftPM products and modules | Public integration surface | `TheInsideJob`, `ButtonHeist`, `ButtonHeistDSL`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. Use matching package, CLI, MCP, and embedded app builds. |
+| SwiftPM products and modules | Public integration surface | `TheInsideJob`, `ButtonHeist`, `ButtonHeistDSL`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, `api-baselines/swift/*.symbols.txt`, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. Use matching package, CLI, MCP, and embedded app builds. |
 | SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor` | [Heist Doctor](HEIST-DOCTOR.md) | Suggestion-only receipt analysis. Not installed by Homebrew and not a major-version stability contract. |
 | Homebrew release | Public install surface | `buttonheist`, `buttonheist-mcp`, `heist-plan`, installed `ThePlans` compiler artifacts | `Formula/buttonheist.rb` and `scripts/release-contract.sh` | Formula and release archives use SemVer `MAJOR.MINOR.PATCH`. Experimental `heist-doctor` is intentionally excluded. |
 | CLI commands | Public command surface | `buttonheist <command>` | Generated [Command Reference](reference/commands.md) | Command names, CLI exposure, and parameters are descriptor-owned. Regenerate references after command changes. |
@@ -41,6 +41,45 @@ to one-step or composed `HeistPlan`s before crossing the device wire.
 | Plan DSL/source | Public authoring source | Swift DSL files, canonical ButtonHeist source strings, `heist-plan compile`, `run_heist --plan`, MCP `run_heist(plan:)` | [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md) and [Heist Format](HEIST-FORMAT.md) | Source must compile to canonical `HeistPlan` IR. MCP and JSON-lines should pass source or paths, not raw IR fields. |
 | Config and environment keys | Public runtime configuration | `.buttonheist.json`, `~/.config/buttonheist/config.json`, `BUTTONHEIST_*`, `INSIDEJOB_*` | This document, [Authentication](AUTH.md), and command help | Explicit flags and target config win over environment values where command-specific precedence applies. Unknown keys must fail or be ignored only as documented. |
 | Wire compatibility policy | Public transport contract | TheScore newline-delimited TLS JSON | [Wire Protocol](WIRE-PROTOCOL.md) | Exact product-version lockstep. Client and server `buttonHeistVersion` must match exactly; mismatch returns `protocolMismatch` and closes the connection. |
+
+## Swift API Baselines
+
+CI checks compiler-exported public symbol snapshots for `ThePlans`,
+`TheScore`, `ButtonHeistDSL`, `ButtonHeist`, and `TheInsideJob` with:
+
+```bash
+scripts/check-swift-api-baseline.sh
+```
+
+The snapshots live in `api-baselines/swift/`. `ThePlans`, `TheScore`,
+`ButtonHeistDSL`, and `ButtonHeist` are extracted from the macOS SwiftPM build.
+`TheInsideJob` is extracted separately from an iOS simulator DEBUG SwiftPM build
+because its public module is UIKit/DEBUG-gated. `ButtonHeistDSL` and
+`ButtonHeist` are extracted with their public re-exported modules included, so
+removing a re-export or changing a re-exported symbol changes the product
+snapshot. The external import fixtures compile consumers from outside the
+repository to prove the documented macOS products and iOS DEBUG `TheInsideJob`
+import work in SwiftPM.
+
+For an intentional public Swift API change, update snapshots with:
+
+```bash
+scripts/check-swift-api-baseline.sh --update
+```
+
+Review the generated diff before committing. Do not hand-edit snapshot files;
+the checked-in text is generated from Swift symbol graphs so CI can distinguish
+intentional contract changes from accidental public API drift.
+
+The baseline lane is pinned to the same Xcode and Swift toolchain used by CI.
+GitHub Actions selects that toolchain before running the check. Locally, set
+`DEVELOPER_DIR` to the matching developer directory before checking or
+updating. The script fails fast with the expected Swift version and an example
+command when a different toolchain is active.
+
+```bash
+DEVELOPER_DIR=/Applications/<CI_XCODE>.app/Contents/Developer scripts/check-swift-api-baseline.sh --update
+```
 
 ## TheInsideJob
 
