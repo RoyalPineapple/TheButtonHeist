@@ -29,9 +29,6 @@ struct DictionaryEntry: Identifiable, Hashable {
         return "\(format), \(term.count) character\(term.count == 1 ? "" : "s")"
     }
 
-    var rowID: String {
-        "word-\(id)"
-    }
 }
 
 struct DictionarySection: Identifiable {
@@ -173,7 +170,6 @@ struct DictionaryView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityIdentifier("words.filter")
             }
 
             if isFilteredMode {
@@ -184,7 +180,6 @@ struct DictionaryView: View {
                         } description: {
                             Text(emptyResultMessage)
                         }
-                        .accessibilityIdentifier("words.search.empty")
                     } else {
                         ForEach(visibleSections) { section in
                             DictionarySectionHeaderView(title: section.title, wordCount: section.entries.count)
@@ -208,7 +203,6 @@ struct DictionaryView: View {
                 }
             }
         }
-        .accessibilityIdentifier("words.list")
         .navigationTitle("Words")
         .searchable(text: $searchText, prompt: "Search words")
     }
@@ -221,8 +215,6 @@ struct DictionaryView: View {
             } label: {
                 DictionaryRowView(entry: entry)
             }
-            .id(entry.rowID)
-            .accessibilityIdentifier("words.row.\(entry.id)")
             .accessibilityLabel(entry.term)
             .accessibilityValue(entry.detailSummary)
         }
@@ -273,7 +265,6 @@ private struct DictionaryOverviewView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Words overview")
         .accessibilityValue(accessibilityValue)
-        .accessibilityIdentifier("words.overview")
     }
 
     private var description: String {
