@@ -15,6 +15,21 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 /// `VERSIONING.md` in bh-infra.
 public let buttonHeistVersion = "0.6.0"
 
+/// Shared socket wire-framing limits.
+public enum WireFrameLimits {
+    /// JSON envelopes are newline-delimited on the socket.
+    public static let newlineDelimiterByte: UInt8 = 0x0A
+    public static let receiveChunkBytes: Int = 65_536
+
+    /// Client-to-server frames preserve the server receive framer's current 10 MB cap.
+    public static let clientToServerMaxBufferedBytes: Int = 10_000_000
+    /// Server-to-client frames preserve the client's current 64 MiB buffer cap,
+    /// intentionally larger than the client-to-server cap until the framer migration.
+    public static let serverToClientMaxBufferedBytes: Int = 64 * 1024 * 1024
+    /// Server-to-client writes preserve the current per-client pending-byte cap.
+    public static let serverToClientMaxPendingSendBytes: Int = 20_000_000
+}
+
 /// Direction-specific JSON `type` discriminator shared by client and server wire enums.
 public protocol DirectionalWireMessageType: RawRepresentable, Codable, CaseIterable, Sendable, CustomStringConvertible where RawValue == String {
     static var directionName: String { get }

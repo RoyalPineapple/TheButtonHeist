@@ -12,7 +12,7 @@ extension SimpleSocketServer {
     }
 
     private func receiveNextChunk(clientId: Int, connection: NWConnection, framer: SocketReceiveFramer) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: WireFrameLimits.receiveChunkBytes) { [weak self] content, _, isComplete, error in
             guard let self else { return }
             self.spawnTrackedTask { server in
                 await server.handleReceivedData(

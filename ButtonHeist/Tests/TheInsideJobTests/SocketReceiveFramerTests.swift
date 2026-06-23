@@ -1,7 +1,15 @@
 import XCTest
+import TheScore
 @testable import TheInsideJob
 
 final class SocketReceiveFramerTests: XCTestCase {
+    func testDefaultMaxBufferedBytesUsesSharedClientToServerLimit() {
+        XCTAssertEqual(
+            SocketReceiveFramer.defaultMaxBufferedBytes,
+            WireFrameLimits.clientToServerMaxBufferedBytes
+        )
+    }
+
     func testSuccessfulAppendLeavesOnlyUnfinishedSuffixAfterLastNewline() throws {
         var framer = SocketReceiveFramer(maxBufferedBytes: 64)
 

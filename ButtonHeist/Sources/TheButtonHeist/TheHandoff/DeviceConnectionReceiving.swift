@@ -1,11 +1,12 @@
 import Foundation
 import Network
+import TheScore
 
 enum DeviceReceiveFraming {
-    static let maxBufferSize = 64 * 1024 * 1024
+    static let maxBufferSize = WireFrameLimits.serverToClientMaxBufferedBytes
 
     static func nextFrame(from buffer: inout Data) -> Data? {
-        guard let newlineIndex = buffer.firstIndex(of: 0x0A) else { return nil }
+        guard let newlineIndex = buffer.firstIndex(of: WireFrameLimits.newlineDelimiterByte) else { return nil }
         let messageData = buffer.prefix(upTo: newlineIndex)
         buffer = Data(buffer.suffix(from: buffer.index(after: newlineIndex)))
         return Data(messageData)
@@ -20,7 +21,7 @@ extension DeviceConnection {
 
     func receiveNext(connection: NWConnection) {
         let continuation = eventContinuation
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, isComplete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: WireFrameLimits.receiveChunkBytes) { content, _, isComplete, error in
             guard let continuation else { return }
             DeviceConnectionEventStream.yield(
                 .received(content: content, isComplete: isComplete, error: error, connection: connection),

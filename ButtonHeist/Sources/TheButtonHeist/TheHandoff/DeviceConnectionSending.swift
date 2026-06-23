@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import TheScore
 
 extension DeviceConnection {
     @discardableResult
@@ -11,7 +12,7 @@ extension DeviceConnection {
         let data: Data
         do {
             var encoded = try JSONEncoder().encode(envelope)
-            encoded.append(0x0A)
+            encoded.append(WireFrameLimits.newlineDelimiterByte)
             data = encoded
         } catch {
             deviceConnectionLogger.error("Failed to encode message: \(error)")
