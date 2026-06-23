@@ -26,7 +26,9 @@ check_generated_project() {
 run_step "Release contract and parser pin" "$SCRIPT_DIR/validate-release-contract.sh"
 run_step "Package manifest drift guard" "$SCRIPT_DIR/check-package-manifest-drift.sh"
 run_step "Generated project check" check_generated_project
+run_step "External ButtonHeist import fixture" "$SCRIPT_DIR/check-buttonheist-import-contract.sh"
 run_step "Build heist-plan" swift build --package-path ButtonHeist --product heist-plan
 run_step "External import fixture and installed artifact smoke" "$SCRIPT_DIR/test-heist-plan-compile.sh"
+run_step "Installed artifact smoke when available" "$SCRIPT_DIR/installed-artifact-smoke.sh"
 
 echo "Release readiness checks passed."
