@@ -179,6 +179,50 @@ Responses may include compact deltas such as `noChange`, `elementsChanged`, or
 `screenChanged`. Those deltas summarize what changed between trace captures;
 they do not replace the underlying captures.
 
+## Interface Projection Quality
+
+Public interface JSON responses include `snapshotQuality` so machine clients can
+distinguish complete captures from bounded projections. The state vocabulary is:
+
+| State | Meaning |
+|-------|---------|
+| `full` | The response rendered every observed element in the requested projection. |
+| `filtered` | The caller requested a scoped projection, such as a subtree, and the response is complete for that scope. |
+| `truncated` | Button Heist intentionally omitted part of an otherwise available projection to keep the response bounded. |
+| `sparse` | The runtime had only partial semantic evidence for the screen. Clients may inspect it, but should not treat absence as conclusive. |
+| `failed` | The runtime could not produce a usable semantic projection. The response should carry the product error instead of a partial tree. |
+
+The current `get_interface` projection emits `full` or `truncated`.
+`filtered`, `sparse`, and `failed` are reserved contract states for scoped or
+degraded projections; they must use the same quality object before they are
+exposed. For huge scroll views, Button Heist bounds each scrollable subtree by
+`BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET`
+(default `100`, clamped to `0...1000`). A truncated scroll container keeps its
+scroll metrics and `observedElementCount`, renders only the leading elements,
+and adds a `truncation` object with:
+
+- `state: "truncated"`
+- `reasonCode: "scroll-subtree-element-budget"`
+- `observedElementCount`
+- `renderedElementCount`
+- `omittedElementCount`
+- `visibleElementBudget`
+
+Compact output mirrors the same decision with a `subtree truncated` line.
+
+Low-level runtime knobs are read from the app process environment. Test runners
+may prefix the same names with `TEST_RUNNER_`; the unprefixed name wins when it
+is valid.
+
+| Variable | Default | Clamp | Purpose |
+|----------|---------|-------|---------|
+| `BH_POST_SCROLL_LAYOUT_FRAMES` / `BUTTONHEIST_POST_SCROLL_LAYOUT_FRAMES` | `3` | `0...10` | Main-run-loop frames to wait after programmatic scrolling. |
+| `BH_TRIPWIRE_PULSE_HZ` / `BUTTONHEIST_TRIPWIRE_PULSE_HZ` | `10` | `1...120` | Accessibility tripwire polling frequency. |
+| `BH_MAX_SCROLLS_PER_CONTAINER` / `BUTTONHEIST_MAX_SCROLLS_PER_CONTAINER` | `200` | `1...2000` | Per-container scroll exploration safety limit. |
+| `BH_MAX_SCROLLS_PER_DISCOVERY` / `BUTTONHEIST_MAX_SCROLLS_PER_DISCOVERY` | `200` | `1...2000` | Whole-discovery scroll exploration safety limit. |
+| `BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET` | `100` | `0...1000` | Per-scroll-container public projection budget. |
+| `BH_VISIBLE_ELEMENT_BUDGET` / `BUTTONHEIST_VISIBLE_ELEMENT_BUDGET` | `100` | `0...1000` | Backward-compatible spelling for the same projection budget. |
+
 ## TheFence
 
 **Import**: `import ButtonHeist`

@@ -149,8 +149,12 @@ extension FenceResponse {
                 detail: detail,
                 observedElementCount: observedElementCount
             )
-            let shouldTruncate = isScrollable && observedElementCount > max(0, visibleElementBudget)
-            var scrollRemainingElements: Int? = shouldTruncate ? max(0, visibleElementBudget) : nil
+            let budgetCap = max(0, visibleElementBudget)
+            let shouldTruncate = isScrollable && observedElementCount > budgetCap
+            let parentRemainingBefore = remainingElements
+            var scrollRemainingElements: Int? = shouldTruncate
+                ? min(parentRemainingBefore ?? budgetCap, budgetCap)
+                : nil
             var body: [String] = []
 
             for (index, child) in children.enumerated() {
@@ -182,12 +186,16 @@ extension FenceResponse {
             }
 
             if shouldTruncate {
-                let renderedElementCount = max(0, max(0, visibleElementBudget) - (scrollRemainingElements ?? 0))
+                let effectiveBudget = min(parentRemainingBefore ?? budgetCap, budgetCap)
+                let renderedElementCount = max(0, effectiveBudget - (scrollRemainingElements ?? 0))
+                if let parentRemainingBefore {
+                    remainingElements = max(0, parentRemainingBefore - renderedElementCount)
+                }
                 let omittedElementCount = max(0, observedElementCount - renderedElementCount)
                 if omittedElementCount > 0 {
                     body.append(
                         "  ... subtree truncated: omitted \(omittedElementCount) observed elements " +
-                        "(visibleElementBudget=\(max(0, visibleElementBudget)))"
+                        "(visibleElementBudget=\(budgetCap))"
                     )
                 }
             }

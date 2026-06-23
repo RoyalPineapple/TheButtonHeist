@@ -452,6 +452,19 @@ func publicJSONObject(
     }
 }
 
+func publicInterfaceJSONObject(
+    _ interface: PublicInterface,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) throws -> [String: Any] {
+    let object = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(interface))
+    guard let dict = object as? [String: Any] else {
+        XCTFail("Expected public interface JSON object", file: file, line: line)
+        return [:]
+    }
+    return dict
+}
+
 struct HeistInspection {
     let commands: [TheFence.Command]
     let steps: [HeistStep]

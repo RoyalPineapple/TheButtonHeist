@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 import AccessibilitySnapshotModel
@@ -17,6 +16,7 @@ struct PublicContainer: Encodable {
     let pageScrollsX: Int?
     let pageScrollsY: Int?
     let observedElementCount: Int?
+    let truncation: PublicSubtreeTruncation?
     let isModalBoundary: Bool?
     let containerName: String?
     let frameX: Double?
@@ -29,9 +29,15 @@ struct PublicContainer: Encodable {
         container: AccessibilityContainer,
         annotation: InterfaceContainerAnnotation?,
         detail: InterfaceDetail,
+        observedElementCount: Int?,
+        truncation: PublicSubtreeTruncation?,
         children: [PublicTreeNode]
     ) {
-        let fields = Self.fields(for: container, children: children)
+        let fields = Self.fields(
+            for: container,
+            children: children,
+            observedElementCount: observedElementCount
+        )
         self.type = fields.type
         self.label = fields.label
         self.value = fields.value
@@ -44,6 +50,7 @@ struct PublicContainer: Encodable {
         self.pageScrollsX = fields.pageScrollsX
         self.pageScrollsY = fields.pageScrollsY
         self.observedElementCount = fields.observedElementCount
+        self.truncation = truncation
         self.isModalBoundary = container.isModalBoundary ? true : nil
         self.containerName = annotation?.containerName
         self.children = children
@@ -60,13 +67,14 @@ struct PublicContainer: Encodable {
         self.frameHeight = Self.sanitizedDouble(container.frame.size.height)
     }
 
-    private static func sanitizedDouble(_ value: CGFloat) -> Double {
-        value.isFinite ? Double(value) : 0
+    private static func sanitizedDouble(_ value: Double) -> Double {
+        value.isFinite ? value : 0
     }
 
     private static func fields(
         for container: AccessibilityContainer,
-        children: [PublicTreeNode]
+        children: [PublicTreeNode],
+        observedElementCount: Int?
     ) -> Fields {
         switch container.type {
         case .semanticGroup(let label, let value, let identifier):
@@ -83,15 +91,17 @@ struct PublicContainer: Encodable {
             return scrollableFields(
                 contentSize: contentSize,
                 frame: container.frame,
-                children: children
+                children: children,
+                observedElementCount: observedElementCount
             )
         }
     }
 
     private static func scrollableFields(
-        contentSize: CGSize,
-        frame: CGRect,
-        children: [PublicTreeNode]
+        contentSize: AccessibilitySize,
+        frame: AccessibilityRect,
+        children: [PublicTreeNode],
+        observedElementCount: Int?
     ) -> Fields {
         let contentWidth = Self.sanitizedDouble(contentSize.width)
         let contentHeight = Self.sanitizedDouble(contentSize.height)
@@ -118,7 +128,7 @@ struct PublicContainer: Encodable {
             scrollAxis: scrollAxis.rawValue,
             pageScrollsX: horizontalPageScrolls > 0 ? horizontalPageScrolls : nil,
             pageScrollsY: verticalPageScrolls > 0 ? verticalPageScrolls : nil,
-            observedElementCount: children.reduce(0) { $0 + $1.elementCount }
+            observedElementCount: observedElementCount ?? children.reduce(0) { $0 + $1.elementCount }
         )
     }
 
@@ -164,4 +174,13 @@ struct PublicContainer: Encodable {
             self.observedElementCount = observedElementCount
         }
     }
+}
+
+struct PublicSubtreeTruncation: Encodable {
+    let state = "truncated"
+    let reasonCode = "scroll-subtree-element-budget"
+    let observedElementCount: Int
+    let renderedElementCount: Int
+    let omittedElementCount: Int
+    let visibleElementBudget: Int
 }
