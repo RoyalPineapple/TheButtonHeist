@@ -29,6 +29,7 @@
 		373DF0BC2F86E6A5E0B60910 /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D07E273A0048DA7FE282A3 /* TodoListView.swift */; };
 		3C62D2B1007DC28E89D519EC /* ControlsDemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D2D7886DC0DE680588E698 /* ControlsDemoView.swift */; };
 		43C8041B72E140B0603988EC /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB069D6039881E065A92F23 /* RootView.swift */; };
+		4444C5606E556973AE7AD012 /* DictionaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52F6F0396217B3E8E573F4EF /* DictionaryView.swift */; };
 		4A075EBAEB8FC41C4D8E3D8B /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10CDD5E500E477B98B606858 /* TheInsideJob.framework */; };
 		4DF934707AE8F3560D688EF7 /* TheInsideJob.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 10CDD5E500E477B98B606858 /* TheInsideJob.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		4E9C59734A3E89DCF76E347A /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -59,6 +60,7 @@
 		A6B366DCE561F588CCCC99D6 /* ScrollSPIHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA71465EF21792B3AD3C61DC /* ScrollSPIHarnessView.swift */; };
 		A6DC8B1D132DD6D66B150811 /* TraitProbeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F126DA06C22255C1B97C32 /* TraitProbeView.swift */; };
 		AB3011D2BF16B7D0FDE11782 /* DemoTableViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08096B81FBB34A677903EC34 /* DemoTableViewController.swift */; };
+		B0A16F8F33D79245F2523117 /* web2a.txt in Resources */ = {isa = PBXBuildFile; fileRef = AEE6C7725A5261679EBB30B8 /* web2a.txt */; };
 		B01B06C83541BFEF61052AFF /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4BA1501628F80409378E6F /* LoginView.swift */; };
 		B50D650099D87AF0C2D52B11 /* CustomContentDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87327F54977A78F045D193DF /* CustomContentDemo.swift */; };
 		B72859EB3119D2493CA70B3A /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3440EB87568A6CD7D69264 /* SceneDelegate.swift */; };
@@ -153,6 +155,7 @@
 		3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonsActionsDemo.swift; sourceTree = "<group>"; };
 		469AB4E978353B2B59D74320 /* ModalPermutationsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModalPermutationsDemo.swift; sourceTree = "<group>"; };
 		484B42EBF5AEA433BA605F9B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		52F6F0396217B3E8E573F4EF /* DictionaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictionaryView.swift; sourceTree = "<group>"; };
 		695D9B596D045BB41F8C95A6 /* FormViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormViewController.swift; sourceTree = "<group>"; };
 		6EF972032CB124C82F21FE17 /* TheScore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheScore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -177,6 +180,7 @@
 		AA71465EF21792B3AD3C61DC /* ScrollSPIHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollSPIHarnessView.swift; sourceTree = "<group>"; };
 		AD5D49BE1F9E9BE0A7CA1CE9 /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
 		ADE0A205FE071CCD5616DC41 /* PhotosView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotosView.swift; sourceTree = "<group>"; };
+		AEE6C7725A5261679EBB30B8 /* web2a.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = web2a.txt; sourceTree = "<group>"; };
 		B30DEF646D2A291B883C6733 /* AlertsSheetDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsSheetDemo.swift; sourceTree = "<group>"; };
 		B5D2D7886DC0DE680588E698 /* ControlsDemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlsDemoView.swift; sourceTree = "<group>"; };
 		B613709BB3083CF0E472F4F9 /* TraitValidationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraitValidationView.swift; sourceTree = "<group>"; };
@@ -249,6 +253,7 @@
 				87327F54977A78F045D193DF /* CustomContentDemo.swift */,
 				85322473D5E71DA7818961F6 /* DashboardView.swift */,
 				1607B6B404E9A862D18A0758 /* DemoApp.swift */,
+				52F6F0396217B3E8E573F4EF /* DictionaryView.swift */,
 				7DFE4E9F0AE03F58228E92AD /* DisclosureGroupingDemo.swift */,
 				FC1B8E4B0AFCAA03702D3E7E /* DisplayDemo.swift */,
 				9B56E5A3E3980E2D0BE602F9 /* GridGalleryView.swift */,
@@ -326,6 +331,7 @@
 			isa = PBXGroup;
 			children = (
 				6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */,
+				AEE6C7725A5261679EBB30B8 /* web2a.txt */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -481,6 +487,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				703E27E25E57DEB7DA6BDA44 /* Assets.xcassets in Resources */,
+				B0A16F8F33D79245F2523117 /* web2a.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -582,6 +589,7 @@
 				B50D650099D87AF0C2D52B11 /* CustomContentDemo.swift in Sources */,
 				9E198EFA9A3EF1DA1EE17DE9 /* DashboardView.swift in Sources */,
 				95933F58D556C9E567B760DD /* DemoApp.swift in Sources */,
+				4444C5606E556973AE7AD012 /* DictionaryView.swift in Sources */,
 				57BA706FE1DCC5CE5F168A59 /* DisclosureGroupingDemo.swift in Sources */,
 				1E4F9858B96961EC977706BA /* DisplayDemo.swift in Sources */,
 				EBCEDB37EF91D97284509567 /* GridGalleryView.swift in Sources */,

@@ -81,4 +81,13 @@ enum PublicTreeNode: Encodable {
             try container.encode(node, forKey: .container)
         }
     }
+
+    var elementCount: Int {
+        switch self {
+        case .element:
+            return 1
+        case .container(let container):
+            return container.children.reduce(0) { $0 + $1.elementCount }
+        }
+    }
 }

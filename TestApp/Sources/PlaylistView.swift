@@ -26,6 +26,14 @@ struct PlaylistView: View {
                 }
             }
 
+            Section("Library Board") {
+                MusicLibraryBoard { tile in
+                    addSong(from: tile)
+                }
+                .frame(height: 280)
+                .listRowInsets(EdgeInsets())
+            }
+
             Section {
                 HStack(spacing: 12) {
                     Button { addSong() } label: {
@@ -111,6 +119,20 @@ struct PlaylistView: View {
         nextTrack += 1
     }
 
+    private func addSong(from tile: LibraryBoardTile) {
+        let song = Song(
+            track: nextTrack,
+            title: tile.title,
+            artist: tile.artist,
+            durationSeconds: tile.durationSeconds,
+            icon: tile.icon,
+            color: tile.color
+        )
+        songs.append(song)
+        nowPlayingID = song.id
+        nextTrack += 1
+    }
+
     private func addAlbum() {
         let count = Int.random(in: 3...5)
         for _ in 0..<count { addSong() }
@@ -161,6 +183,61 @@ struct PlaylistView: View {
             timer.invalidate()
         }
         autoplay = .off
+    }
+}
+
+// MARK: - Library Board
+
+private struct MusicLibraryBoard: View {
+    let onSelect: (LibraryBoardTile) -> Void
+
+    private let columns = Array(
+        repeating: GridItem(.fixed(160), spacing: 12, alignment: .top),
+        count: 6
+    )
+
+    var body: some View {
+        ScrollView([.horizontal, .vertical], showsIndicators: true) {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
+                ForEach(libraryBoardTiles) { tile in
+                    Button {
+                        onSelect(tile)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(tile.color.gradient)
+                                Image(systemName: tile.icon)
+                                    .font(.title2)
+                                    .foregroundStyle(.white)
+                            }
+                            .frame(height: 74)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(tile.title)
+                                    .font(.caption.bold())
+                                    .lineLimit(1)
+                                Text(tile.artist)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                Text(tile.duration)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                    .monospacedDigit()
+                            }
+                        }
+                        .frame(width: 160, alignment: .leading)
+                        .padding(8)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(tile.title) by \(tile.artist)")
+                    .accessibilityValue("Shelf \(tile.shelf), \(tile.duration)")
+                }
+            }
+            .padding(12)
+            .frame(minWidth: 1_020, minHeight: 880, alignment: .topLeading)
+        }
     }
 }
 
@@ -277,6 +354,22 @@ private struct Song: Identifiable {
     }
 }
 
+private struct LibraryBoardTile: Identifiable {
+    let id: String
+    let title: String
+    let artist: String
+    let durationSeconds: Int
+    let icon: String
+    let color: Color
+    let shelf: Int
+
+    var duration: String {
+        let m = durationSeconds / 60
+        let s = durationSeconds % 60
+        return "\(m):\(String(format: "%02d", s))"
+    }
+}
+
 private let catalog: [(title: String, artist: String, icon: String, color: Color)] = [
     ("Midnight Drive", "Neon Coast", "car.fill", .indigo),
     ("Golden Hour", "Saffron", "sun.max.fill", .orange),
@@ -294,6 +387,20 @@ private let catalog: [(title: String, artist: String, icon: String, color: Color
     ("Echoes", "Canyon Wire", "waveform", .mint),
     ("Frostbite", "Polar Drift", "snowflake", .cyan),
 ]
+
+private let libraryBoardTiles: [LibraryBoardTile] = (0..<4).flatMap { shelf in
+    catalog.enumerated().map { index, item in
+        LibraryBoardTile(
+            id: "\(shelf)-\(index)-\(item.title)",
+            title: item.title,
+            artist: item.artist,
+            durationSeconds: 155 + ((shelf * 19 + index * 11) % 170),
+            icon: item.icon,
+            color: item.color,
+            shelf: shelf + 1
+        )
+    }
+}
 
 #Preview {
     NavigationStack {

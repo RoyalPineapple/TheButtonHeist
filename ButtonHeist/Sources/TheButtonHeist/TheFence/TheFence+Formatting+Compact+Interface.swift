@@ -61,29 +61,43 @@ extension FenceResponse {
         return "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 
-    static func compactInterface(_ interface: Interface, detail: InterfaceDetail = .summary) -> String {
+    static func compactInterface(
+        _ interface: Interface,
+        detail: InterfaceDetail = .summary,
+        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget
+    ) -> String {
         var lines: [String] = ["\(interface.projectedElements.count) elements"]
-        lines.append(contentsOf: compactTreeLines(interface, detail: detail))
+        lines.append(contentsOf: compactTreeLines(
+            interface,
+            detail: detail,
+            visibleElementBudget: visibleElementBudget
+        ))
         return lines.joined(separator: "\n")
     }
 
     static func compactTreeLines(
         _ interface: Interface,
-        detail: InterfaceDetail
+        detail: InterfaceDetail,
+        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget
     ) -> [String] {
         let counter = LineIndexCounter()
         let elementAnnotations = interface.annotations.elementByPath
         let containerAnnotations = interface.annotations.containerByPath
-        return interface.tree.enumerated().flatMap { index, node in
-            compactTreeLines(
+        var remainingElements: Int?
+        var lines: [String] = []
+        for (index, node) in interface.tree.enumerated() {
+            lines.append(contentsOf: compactTreeLines(
                 node,
                 path: TreePath([index]),
                 detail: detail,
                 counter: counter,
                 elementAnnotations: elementAnnotations,
-                containerAnnotations: containerAnnotations
-            )
+                containerAnnotations: containerAnnotations,
+                visibleElementBudget: visibleElementBudget,
+                remainingElements: &remainingElements
+            ))
         }
+        return lines
     }
 
     /// Reference counter used by `compactTreeLines` to thread display indices
@@ -98,29 +112,88 @@ extension FenceResponse {
         detail: InterfaceDetail,
         counter: LineIndexCounter,
         elementAnnotations: [TreePath: InterfaceElementAnnotation],
-        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+        containerAnnotations: [TreePath: InterfaceContainerAnnotation],
+        visibleElementBudget: Int,
+        remainingElements: inout Int?
     ) -> [String] {
         switch node {
         case .element(let element, _):
+            let index = counter.value
+            counter.value += 1
+            if let remaining = remainingElements {
+                guard remaining > 0 else { return [] }
+                remainingElements = remaining - 1
+            }
             let projected = HeistElement(
                 accessibilityElement: element,
                 annotation: elementAnnotations[path]
             )
-            let index = counter.value
-            counter.value += 1
             return [compactElementLine(projected, displayIndex: index, detail: detail)]
 
         case .container(let container, let children):
-            let header = compactContainerLine(container, annotation: containerAnnotations[path], detail: detail)
-            let body = children.enumerated().flatMap { index, child in
-                indented(lines: compactTreeLines(
-                    child,
-                    path: path.appending(index),
-                    detail: detail,
-                    counter: counter,
-                    elementAnnotations: elementAnnotations,
-                    containerAnnotations: containerAnnotations
-                ))
+            var observedElementCount = 0
+            for child in children {
+                observedElementCount += child.pathIndexedElements().count
+            }
+            let isScrollable = {
+                if case .scrollable = container.type { return true }
+                return false
+            }()
+            if let remaining = remainingElements, remaining <= 0 {
+                counter.value += observedElementCount
+                return []
+            }
+            let header = compactContainerLine(
+                container,
+                annotation: containerAnnotations[path],
+                detail: detail,
+                observedElementCount: observedElementCount
+            )
+            let shouldTruncate = isScrollable && observedElementCount > max(0, visibleElementBudget)
+            var scrollRemainingElements: Int? = shouldTruncate ? max(0, visibleElementBudget) : nil
+            var body: [String] = []
+
+            for (index, child) in children.enumerated() {
+                let lines: [String]
+                if shouldTruncate {
+                    lines = compactTreeLines(
+                        child,
+                        path: path.appending(index),
+                        detail: detail,
+                        counter: counter,
+                        elementAnnotations: elementAnnotations,
+                        containerAnnotations: containerAnnotations,
+                        visibleElementBudget: visibleElementBudget,
+                        remainingElements: &scrollRemainingElements
+                    )
+                } else {
+                    lines = compactTreeLines(
+                        child,
+                        path: path.appending(index),
+                        detail: detail,
+                        counter: counter,
+                        elementAnnotations: elementAnnotations,
+                        containerAnnotations: containerAnnotations,
+                        visibleElementBudget: visibleElementBudget,
+                        remainingElements: &remainingElements
+                    )
+                }
+                body.append(contentsOf: indented(lines: lines))
+            }
+
+            if shouldTruncate {
+                let renderedElementCount = max(0, max(0, visibleElementBudget) - (scrollRemainingElements ?? 0))
+                let omittedElementCount = max(0, observedElementCount - renderedElementCount)
+                if omittedElementCount > 0 {
+                    body.append(
+                        "  ... subtree truncated: omitted \(omittedElementCount) observed elements " +
+                        "(visibleElementBudget=\(max(0, visibleElementBudget)))"
+                    )
+                }
+            }
+
+            if !isScrollable, remainingElements != nil, observedElementCount > 0, body.isEmpty {
+                return []
             }
             return [header] + body
         }
@@ -135,7 +208,8 @@ extension FenceResponse {
     private static func compactContainerLine(
         _ container: AccessibilityContainer,
         annotation: InterfaceContainerAnnotation?,
-        detail: InterfaceDetail
+        detail: InterfaceDetail,
+        observedElementCount: Int? = nil
     ) -> String {
         var parts: [String]
         switch container.type {
@@ -175,6 +249,30 @@ extension FenceResponse {
             }
             parts.append("viewport=\(Int(frame.size.width))x\(Int(frame.size.height))")
             parts.append("content=\(Int(contentSize.width))x\(Int(contentSize.height))")
+            let scrollAxis = ScrollContainerMetrics.axis(
+                contentWidth: Double(contentSize.width),
+                contentHeight: Double(contentSize.height),
+                viewportWidth: Double(frame.size.width),
+                viewportHeight: Double(frame.size.height)
+            )
+            parts.append("scrollAxis=\(scrollAxis.rawValue)")
+            let horizontalPageScrolls = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
+                contentWidth: Double(contentSize.width),
+                viewportWidth: Double(frame.size.width)
+            )
+            if horizontalPageScrolls > 0 {
+                parts.append("pageScrollsX=\(horizontalPageScrolls)")
+            }
+            let verticalPageScrolls = ScrollContainerMetrics.estimatedVerticalPageScrolls(
+                contentHeight: Double(contentSize.height),
+                viewportHeight: Double(frame.size.height)
+            )
+            if verticalPageScrolls > 0 {
+                parts.append("pageScrollsY=\(verticalPageScrolls)")
+            }
+            if let observedElementCount {
+                parts.append("observedElementCount=\(observedElementCount)")
+            }
         }
         if container.isModalBoundary {
             parts.append("modal=true")

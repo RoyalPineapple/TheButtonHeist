@@ -721,7 +721,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             [1] "Order ID" staticText
           tab_bar containerName="main_tabs"
             [2] "Home" tabBarItem
-        scrollable containerName="main_scroll" viewport=390x400 content=390x1200 modal=true
+        scrollable containerName="main_scroll" viewport=390x400 content=390x1200 scrollAxis=vertical pageScrollsY=3 observedElementCount=1 modal=true
           [3] "Bottom" staticText
         """)
         XCTAssertFalse(output.contains("<"), output)
@@ -729,6 +729,103 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertFalse(output.contains("dataTable"), output)
         XCTAssertFalse(output.contains("tabBar containerName"), output)
         XCTAssertFalse(output.contains("stableId"), output)
+    }
+
+    func testCompactInterfaceRendersHorizontalAndBothAxisScrollSummaries() {
+        let horizontal = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestScrollableContainer(
+                    contentWidth: 1200,
+                    contentHeight: 400,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                containerName: "horizontal_scroll",
+                children: [.element(makeReceiptTestElement(label: "Right"))]
+            ),
+        ])
+        let both = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestScrollableContainer(
+                    contentWidth: 1200,
+                    contentHeight: 1200,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                containerName: "both_axis_scroll",
+                children: [.element(makeReceiptTestElement(label: "Corner"))]
+            ),
+        ])
+
+        let horizontalOutput = FenceResponse.compactInterface(horizontal, detail: .summary)
+        let bothOutput = FenceResponse.compactInterface(both, detail: .summary)
+        let expectedHorizontalSummary =
+            #"scrollable containerName="horizontal_scroll" viewport=390x400 content=1200x400 "# +
+            #"scrollAxis=horizontal pageScrollsX=3 observedElementCount=1"#
+        let expectedBothSummary =
+            #"scrollable containerName="both_axis_scroll" viewport=390x400 content=1200x1200 "# +
+            #"scrollAxis=both pageScrollsX=3 pageScrollsY=3 observedElementCount=1"#
+
+        XCTAssertTrue(
+            horizontalOutput.contains(expectedHorizontalSummary),
+            horizontalOutput
+        )
+        XCTAssertFalse(horizontalOutput.contains("pageScrollsY"), horizontalOutput)
+        XCTAssertTrue(
+            bothOutput.contains(expectedBothSummary),
+            bothOutput
+        )
+    }
+
+    func testCompactInterfaceTruncatesScrollableSubtreeAtVisibleElementBudget() {
+        let rows = (0..<4).map { index in
+            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+        }
+        let interface = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestScrollableContainer(
+                    contentWidth: 390,
+                    contentHeight: 1200,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                containerName: "long_scroll",
+                children: rows
+            ),
+            .element(makeReceiptTestElement(label: "After")),
+        ])
+
+        let output = FenceResponse.compactInterface(
+            interface,
+            detail: .summary,
+            visibleElementBudget: 2
+        )
+
+        XCTAssertEqual(output, """
+        5 elements
+        scrollable containerName="long_scroll" viewport=390x400 content=390x1200 scrollAxis=vertical pageScrollsY=3 observedElementCount=4
+          [0] "Row 0" staticText
+          [1] "Row 1" staticText
+          ... subtree truncated: omitted 2 observed elements (visibleElementBudget=2)
+        [4] "After" staticText
+        """)
+    }
+
+    func testPublicInterfaceJSONRendersScrollSummaryFields() throws {
+        let response = FenceResponse.interface(formattingFixtureInterface(), detail: .summary)
+
+        let json = publicJSONObject(response)
+        let interface = try XCTUnwrap(json["interface"] as? [String: Any])
+        let tree = try XCTUnwrap(interface["tree"] as? [[String: Any]])
+        let scrollContainer = try XCTUnwrap(tree[1]["container"] as? [String: Any])
+
+        XCTAssertEqual(scrollContainer["type"] as? String, "scrollable")
+        XCTAssertEqual((scrollContainer["contentWidth"] as? NSNumber)?.doubleValue, 390)
+        XCTAssertEqual((scrollContainer["contentHeight"] as? NSNumber)?.doubleValue, 1200)
+        XCTAssertEqual(scrollContainer["scrollAxis"] as? String, "vertical")
+        XCTAssertNil(scrollContainer["pageScrollsX"])
+        XCTAssertEqual((scrollContainer["pageScrollsY"] as? NSNumber)?.intValue, 3)
+        XCTAssertEqual((scrollContainer["observedElementCount"] as? NSNumber)?.intValue, 1)
     }
 
     func testCompactContainerEscapesLabelsAndContainerNames() {
@@ -767,6 +864,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             full
         )
         XCTAssertTrue(summary.contains(#"scrollable containerName="main_scroll" viewport=390x400 content=390x1200"#), summary)
+        XCTAssertTrue(summary.contains(#"scrollAxis=vertical pageScrollsY=3 observedElementCount=1"#), summary)
     }
 
     func testHumanInterfaceRendersHierarchyAndRespectsDetail() {

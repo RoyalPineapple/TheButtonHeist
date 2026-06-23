@@ -54,9 +54,11 @@ final class Navigation {
 
     /// Layout frames to yield after a non-animated UIScrollView scroll before
     /// re-reading the accessibility tree.
-    /// Empirical: 3 frames covers a CATransaction flush plus a UIKit layout
-    /// pass without waiting for animations.
-    static let postScrollLayoutFrames: Int = 3
+    /// Empirical default: 3 frames covers a CATransaction flush plus a UIKit
+    /// layout pass without waiting for animations.
+    static var postScrollLayoutFrames: Int {
+        InsideJobRuntimeKnobs.current.postScrollLayoutFrames
+    }
 
     /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
     /// is the conservative budget for reversals (spring/inertia takes longer);
@@ -210,7 +212,14 @@ final class Navigation {
         var explorationTime: TimeInterval = 0
 
         /// Safety cap on per-container scroll iterations.
-        static let maxScrollsPerContainer = 200
+        static var maxScrollsPerContainer: Int {
+            InsideJobRuntimeKnobs.current.maxScrollsPerContainer
+        }
+
+        /// Safety cap on total scroll iterations across one discovery pass.
+        static var maxScrollsPerDiscovery: Int {
+            InsideJobRuntimeKnobs.current.maxScrollsPerDiscovery
+        }
 
         // MARK: - Building
 

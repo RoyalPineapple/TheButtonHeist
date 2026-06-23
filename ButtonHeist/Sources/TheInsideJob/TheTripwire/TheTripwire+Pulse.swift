@@ -47,7 +47,7 @@ extension TheTripwire {
         guard case .idle = pulsePhase else { return }
         let target = PulseTick(tripwire: self)
         let link = CADisplayLink(target: target, selector: #selector(PulseTick.handleTick))
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 8, maximum: 12, preferred: 10)
+        link.preferredFrameRateRange = Self.pulseFrameRateRange
         link.add(to: .main, forMode: .common)
         pulsePhase = .running(RunningContext(link: link, target: target))
     }

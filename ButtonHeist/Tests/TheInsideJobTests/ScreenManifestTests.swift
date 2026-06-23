@@ -68,6 +68,8 @@ final class ScreenManifestTests: XCTestCase {
     func testMaxScrollsPerContainerIsReasonable() {
         XCTAssertGreaterThan(Navigation.ScreenManifest.maxScrollsPerContainer, 0)
         XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerContainer, 200)
+        XCTAssertGreaterThan(Navigation.ScreenManifest.maxScrollsPerDiscovery, 0)
+        XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerDiscovery, 200)
     }
 }
 

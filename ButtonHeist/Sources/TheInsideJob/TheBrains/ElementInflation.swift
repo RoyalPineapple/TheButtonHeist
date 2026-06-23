@@ -22,7 +22,7 @@ final class ElementInflation {
     var discoverTarget: (@MainActor (ElementTarget) async -> Screen?)?
 
     static let comfortMarginFraction: CGFloat = 1.0 / 6.0
-    static let postScrollLayoutFrames = Navigation.postScrollLayoutFrames
+    static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
 
     init(
         stash: TheStash,

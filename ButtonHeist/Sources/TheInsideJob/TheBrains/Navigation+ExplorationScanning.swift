@@ -14,9 +14,15 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> Bool {
         while !exploration.manifest.pendingContainers.isEmpty {
+            guard exploration.manifest.scrollCount < ScreenManifest.maxScrollsPerDiscovery else {
+                return false
+            }
             let batch = sortedPendingContainers(in: exploration)
 
             for container in batch {
+                guard exploration.manifest.scrollCount < ScreenManifest.maxScrollsPerDiscovery else {
+                    return false
+                }
                 guard let containerExploration = prepareContainerExploration(for: container) else {
                     exploration.markExplored(container)
                     continue
@@ -113,6 +119,9 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> Bool {
         for _ in 0..<ScreenManifest.maxScrollsPerContainer {
+            guard exploration.manifest.scrollCount < ScreenManifest.maxScrollsPerDiscovery else {
+                return false
+            }
             let proof = await scrollOnePageAndSettle(
                 containerExploration.scrollTarget,
                 direction: containerExploration.direction,
@@ -141,7 +150,7 @@ extension Navigation {
         switch containerExploration.scrollTarget {
         case .uiScrollView(let scrollView):
             if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) {
-                await tripwire.yieldFrames(2)
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 exploration.absorb(stash.refreshTreeAfterViewportMove())
             }
         case .swipeable:
@@ -193,9 +202,20 @@ extension Navigation {
         if case .uiScrollView(let scrollView) = containerExploration.scrollTarget,
            let savedVisualOrigin {
             Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
-            await tripwire.yieldFrames(2)
+            await waitForRestoredViewportSettle()
             exploration.absorb(stash.refreshTreeAfterViewportMove())
         }
+    }
+
+    private func waitForRestoredViewportSettle() async {
+        guard tripwire.isPulseRunning else {
+            await tripwire.yieldFrames(1)
+            return
+        }
+        _ = await tripwire.waitForSettle(
+            timeout: TheTripwire.singleTickSettleTimeout,
+            requiredQuietFrames: 1
+        )
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {

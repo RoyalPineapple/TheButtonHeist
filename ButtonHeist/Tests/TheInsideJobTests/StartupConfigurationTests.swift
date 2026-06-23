@@ -185,5 +185,50 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(runtimeConfiguration.allowedScopesSource, .infoPlist)
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
     }
+
+    func testRuntimeKnobsUseDefaults() {
+        let knobs = InsideJobRuntimeKnobs.resolve(environment: [:])
+
+        XCTAssertEqual(knobs.postScrollLayoutFrames, 3)
+        XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 10)
+        XCTAssertEqual(knobs.maxScrollsPerContainer, 200)
+        XCTAssertEqual(knobs.maxScrollsPerDiscovery, 200)
+        XCTAssertEqual(knobs.visibleElementBudget, 100)
+        XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 0.2, accuracy: 0.001)
+    }
+
+    func testRuntimeKnobsReadEnvironmentFromOneResolver() {
+        let knobs = InsideJobRuntimeKnobs.resolve(environment: [
+            "BH_POST_SCROLL_LAYOUT_FRAMES": "0",
+            "BH_TRIPWIRE_PULSE_HZ": "60",
+            "BH_MAX_SCROLLS_PER_CONTAINER": "25",
+            "BH_MAX_SCROLLS_PER_DISCOVERY": "30",
+            "BH_SCROLL_SUBTREE_ELEMENT_BUDGET": "75"
+        ])
+
+        XCTAssertEqual(knobs.postScrollLayoutFrames, 0)
+        XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 60)
+        XCTAssertEqual(knobs.maxScrollsPerContainer, 25)
+        XCTAssertEqual(knobs.maxScrollsPerDiscovery, 30)
+        XCTAssertEqual(knobs.visibleElementBudget, 75)
+        XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 0.05, accuracy: 0.001)
+    }
+
+    func testRuntimeKnobsReadTestRunnerPrefixedEnvironmentAndClamp() {
+        let knobs = InsideJobRuntimeKnobs.resolve(environment: [
+            "TEST_RUNNER_BH_POST_SCROLL_LAYOUT_FRAMES": "99",
+            "TEST_RUNNER_BH_TRIPWIRE_PULSE_HZ": "0",
+            "TEST_RUNNER_BH_MAX_SCROLLS_PER_CONTAINER": "9999",
+            "TEST_RUNNER_BH_MAX_SCROLLS_PER_DISCOVERY": "9999",
+            "TEST_RUNNER_BH_SCROLL_SUBTREE_ELEMENT_BUDGET": "9999"
+        ])
+
+        XCTAssertEqual(knobs.postScrollLayoutFrames, 10)
+        XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 1)
+        XCTAssertEqual(knobs.maxScrollsPerContainer, 2_000)
+        XCTAssertEqual(knobs.maxScrollsPerDiscovery, 2_000)
+        XCTAssertEqual(knobs.visibleElementBudget, 1_000)
+        XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 2.0, accuracy: 0.001)
+    }
 }
 #endif
