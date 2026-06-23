@@ -29,6 +29,46 @@ import Testing
         )
     }
 
+    @Test func `oversized plain JSON receipt data is rejected before decode`() throws {
+        let limits = HeistReceiptCodecLimits(
+            maxJSONBytes: 8,
+            maxGzipCompressedBytes: 1024,
+            maxGzipDecompressedBytes: 1024
+        )
+        let data = Data(repeating: 0x7B, count: limits.maxJSONBytes + 1)
+
+        try expectReceiptDecodeError(
+            data,
+            format: .json,
+            limits: limits,
+            containing: [
+                "JSON receipt data is too large",
+                "limit 8 bytes",
+            ]
+        )
+    }
+
+    @Test func `oversized plain JSON receipt file is rejected before unbounded read`() throws {
+        let limits = HeistReceiptCodecLimits(
+            maxJSONBytes: 8,
+            maxGzipCompressedBytes: 1024,
+            maxGzipDecompressedBytes: 1024
+        )
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("receipt.json")
+        try Data(repeating: 0x7B, count: limits.maxJSONBytes + 1).write(to: url)
+
+        do {
+            _ = try HeistReceiptCodec.decode(contentsOf: url, limits: limits)
+            Issue.record("Expected receipt decode to fail")
+        } catch {
+            let description = String(describing: error)
+            #expect(description.contains("JSON receipt data is too large"), "\(description)")
+            #expect(description.contains("limit 8 bytes"), "\(description)")
+        }
+    }
+
     @Test func `oversized gzip decompressed receipt is rejected without unbounded growth`() throws {
         let receipt = sampleReceipt(message: String(repeating: "x", count: 4096))
         let data = try HeistReceiptCodec.encode(receipt, format: .gzipJSON)
@@ -84,11 +124,12 @@ import Testing
 
     private func expectReceiptDecodeError(
         _ data: Data,
+        format: HeistReceiptFormat = .gzipJSON,
         limits: HeistReceiptCodecLimits,
         containing substrings: [String]
     ) throws {
         do {
-            _ = try HeistReceiptCodec.decode(data, format: .gzipJSON, limits: limits)
+            _ = try HeistReceiptCodec.decode(data, format: format, limits: limits)
             Issue.record("Expected receipt decode to fail")
         } catch {
             let description = String(describing: error)

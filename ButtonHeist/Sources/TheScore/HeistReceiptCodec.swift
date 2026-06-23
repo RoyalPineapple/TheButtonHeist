@@ -3,16 +3,24 @@ import zlib
 
 @_spi(ButtonHeistInternals) public struct HeistReceiptCodecLimits: Sendable, Equatable {
     public static let `default` = HeistReceiptCodecLimits(
+        maxJSONBytes: 64 * 1024 * 1024,
         maxGzipCompressedBytes: 16 * 1024 * 1024,
         maxGzipDecompressedBytes: 64 * 1024 * 1024
     )
 
+    public let maxJSONBytes: Int
     public let maxGzipCompressedBytes: Int
     public let maxGzipDecompressedBytes: Int
 
-    public init(maxGzipCompressedBytes: Int, maxGzipDecompressedBytes: Int) {
+    public init(
+        maxJSONBytes: Int = 64 * 1024 * 1024,
+        maxGzipCompressedBytes: Int,
+        maxGzipDecompressedBytes: Int
+    ) {
+        precondition(maxJSONBytes > 0, "maxJSONBytes must be positive")
         precondition(maxGzipCompressedBytes > 0, "maxGzipCompressedBytes must be positive")
         precondition(maxGzipDecompressedBytes > 0, "maxGzipDecompressedBytes must be positive")
+        self.maxJSONBytes = maxJSONBytes
         self.maxGzipCompressedBytes = maxGzipCompressedBytes
         self.maxGzipDecompressedBytes = maxGzipDecompressedBytes
     }
@@ -36,9 +44,17 @@ public enum HeistReceiptCodec {
         let data: Data
         switch format {
         case .json:
-            data = try Data(contentsOf: url)
+            data = try readBoundedFile(
+                url,
+                maxBytes: limits.maxJSONBytes,
+                tooLargeError: HeistReceiptCodecError.jsonDataTooLarge
+            )
         case .gzipJSON:
-            data = try readBoundedFile(url, maxBytes: limits.maxGzipCompressedBytes)
+            data = try readBoundedFile(
+                url,
+                maxBytes: limits.maxGzipCompressedBytes,
+                tooLargeError: HeistReceiptCodecError.gzipCompressedDataTooLarge
+            )
         }
         return try decode(data, format: format, limits: limits)
     }
@@ -55,6 +71,12 @@ public enum HeistReceiptCodec {
         let jsonData: Data
         switch format {
         case .json:
+            guard data.count <= limits.maxJSONBytes else {
+                throw HeistReceiptCodecError.jsonDataTooLarge(
+                    limit: limits.maxJSONBytes,
+                    observed: data.count
+                )
+            }
             jsonData = data
         case .gzipJSON:
             guard data.count <= limits.maxGzipCompressedBytes else {
@@ -82,10 +104,14 @@ public enum HeistReceiptCodec {
         url.pathExtension.lowercased() == "gz" ? .gzipJSON : .json
     }
 
-    private static func readBoundedFile(_ url: URL, maxBytes: Int) throws -> Data {
+    private static func readBoundedFile(
+        _ url: URL,
+        maxBytes: Int,
+        tooLargeError: (Int, Int) -> HeistReceiptCodecError
+    ) throws -> Data {
         let values = try url.resourceValues(forKeys: [.fileSizeKey])
         if let fileSize = values.fileSize, fileSize > maxBytes {
-            throw HeistReceiptCodecError.gzipCompressedDataTooLarge(limit: maxBytes, observed: fileSize)
+            throw tooLargeError(maxBytes, fileSize)
         }
 
         let handle = try FileHandle(forReadingFrom: url)
@@ -99,10 +125,7 @@ public enum HeistReceiptCodec {
                 return data
             }
             guard data.count + chunk.count <= maxBytes else {
-                throw HeistReceiptCodecError.gzipCompressedDataTooLarge(
-                    limit: maxBytes,
-                    observed: data.count + chunk.count
-                )
+                throw tooLargeError(maxBytes, data.count + chunk.count)
             }
             data.append(chunk)
         }
@@ -117,6 +140,7 @@ public enum HeistReceiptFormat: Sendable, Equatable {
 public enum HeistReceiptCodecError: Error, Sendable, Equatable, CustomStringConvertible {
     case gzipInitializationFailed(operation: String, code: Int32)
     case gzipStreamFailed(operation: String, code: Int32)
+    case jsonDataTooLarge(limit: Int, observed: Int)
     case gzipCompressedDataTooLarge(limit: Int, observed: Int)
     case gzipDecompressedDataTooLarge(limit: Int, observed: Int)
     case gzipCorruptData
@@ -127,6 +151,8 @@ public enum HeistReceiptCodecError: Error, Sendable, Equatable, CustomStringConv
             return "gzip \(operation) initialization failed with zlib code \(code)"
         case .gzipStreamFailed(let operation, let code):
             return "gzip \(operation) failed with zlib code \(code)"
+        case .jsonDataTooLarge(let limit, let observed):
+            return "JSON receipt data is too large (\(observed) bytes; limit \(limit) bytes)"
         case .gzipCompressedDataTooLarge(let limit, let observed):
             return "gzip receipt compressed data is too large (\(observed) bytes; limit \(limit) bytes)"
         case .gzipDecompressedDataTooLarge(let limit, let observed):
