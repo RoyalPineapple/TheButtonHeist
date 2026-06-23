@@ -123,11 +123,11 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No live hierarchy available for post-action observation test")
         }
         brains.startSemanticObservation()
-        guard await brains.stash.observeSettledSemanticObservation(scope: .discovery, after: nil, timeout: 2) != nil else {
-            throw XCTSkip("No settled discovery observation available")
+        guard let visibleObservation = await brains.stash.observeSettledSemanticObservation(scope: .visible, after: nil, timeout: 2) else {
+            throw XCTSkip("No settled visible observation available")
         }
-        let screen = brains.stash.settledSemanticScreen
-        let before = brains.postActionObservation.captureSemanticState()
+        let screen = visibleObservation.observation.screen.visibleOnly
+        let before = brains.postActionObservation.captureSemanticState(from: visibleObservation.observation)
 
         let result = await brains.interactionObservation.finishAfterAction(
             success: true,
@@ -403,9 +403,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -433,7 +433,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(observedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(observedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
