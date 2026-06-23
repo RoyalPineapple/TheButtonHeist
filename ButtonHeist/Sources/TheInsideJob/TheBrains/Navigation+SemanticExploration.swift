@@ -25,6 +25,7 @@ extension Navigation {
         let scrollTarget: ScrollableTarget
         let hasHOverflow: Bool
         let hasVOverflow: Bool
+        let ancestorRestorations: [ViewportRestoration]
 
         var direction: UIAccessibilityScrollDirection { hasHOverflow ? .right : .down }
 
@@ -38,6 +39,11 @@ extension Navigation {
                 y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
             )
         }
+    }
+
+    struct ViewportRestoration {
+        let scrollView: UIScrollView
+        let visualOrigin: CGPoint
     }
 
     struct ExploredScreen {
@@ -56,6 +62,7 @@ extension Navigation {
         mutating func absorb(_ parsed: Screen?) {
             guard let parsed else { return }
             screen = screen.merging(parsed)
+            addDiscoveredContainers(parsed.liveCapture.hierarchy.scrollableContainers)
         }
 
         mutating func markExplored(_ container: AccessibilityContainer) {

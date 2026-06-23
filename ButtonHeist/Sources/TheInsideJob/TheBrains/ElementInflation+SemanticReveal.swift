@@ -3,7 +3,7 @@ import UIKit
 
 extension ElementInflation {
 
-    private static let maxNestedRevealDepth = 8
+    static let maxNestedRevealDepth = 8
 
     enum SemanticRevealFailure: Equatable {
         case missingContentOrigin
