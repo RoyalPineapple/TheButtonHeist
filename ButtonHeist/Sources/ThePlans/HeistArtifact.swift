@@ -40,6 +40,10 @@ public struct HeistArtifactManifest: Codable, Sendable, Equatable {
     public let producer: HeistArtifactProducer
     public let createdAt: Date
 
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case format, entry, formatVersion, planVersion, producer, createdAt
+    }
+
     public init(
         format: String,
         entry: String,
@@ -55,6 +59,27 @@ public struct HeistArtifactManifest: Codable, Sendable, Equatable {
         self.producer = producer
         self.createdAt = createdAt
     }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "manifest")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        format = try container.decodeRequired(String.self, forKey: .format, typeName: "manifest")
+        entry = try container.decodeRequired(String.self, forKey: .entry, typeName: "manifest")
+        formatVersion = try container.decodeRequired(Int.self, forKey: .formatVersion, typeName: "manifest")
+        planVersion = try container.decodeRequired(Int.self, forKey: .planVersion, typeName: "manifest")
+        producer = try container.decodeRequired(HeistArtifactProducer.self, forKey: .producer, typeName: "manifest")
+        createdAt = try container.decodeRequired(Date.self, forKey: .createdAt, typeName: "manifest")
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(format, forKey: .format)
+        try container.encode(entry, forKey: .entry)
+        try container.encode(formatVersion, forKey: .formatVersion)
+        try container.encode(planVersion, forKey: .planVersion)
+        try container.encode(producer, forKey: .producer)
+        try container.encode(createdAt, forKey: .createdAt)
+    }
 }
 
 public struct HeistArtifactProducer: Codable, Sendable, Equatable {
@@ -63,9 +88,26 @@ public struct HeistArtifactProducer: Codable, Sendable, Equatable {
     public let name: String
     public let version: String?
 
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case name, version
+    }
+
     public init(name: String, version: String? = nil) {
         self.name = name
         self.version = version
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "manifest producer")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeRequired(String.self, forKey: .name, typeName: "manifest producer")
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(version, forKey: .version)
     }
 }
 
@@ -381,6 +423,21 @@ private struct HeistArtifactManifestPayload: Decodable {
     let planVersion: Int
     let producer: HeistArtifactProducer
     let createdAt: Date
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case format, entry, formatVersion, planVersion, producer, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "manifest")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        format = try container.decodeRequired(String.self, forKey: .format, typeName: "manifest")
+        entry = try container.decodeIfPresent(String.self, forKey: .entry)
+        formatVersion = try container.decodeRequired(Int.self, forKey: .formatVersion, typeName: "manifest")
+        planVersion = try container.decodeRequired(Int.self, forKey: .planVersion, typeName: "manifest")
+        producer = try container.decodeRequired(HeistArtifactProducer.self, forKey: .producer, typeName: "manifest")
+        createdAt = try container.decodeRequired(Date.self, forKey: .createdAt, typeName: "manifest")
+    }
 }
 
 public enum HeistArtifactCodecError: Error, Sendable, CustomStringConvertible, LocalizedError {
@@ -478,5 +535,21 @@ private extension Data {
                 return true
             }
         }
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeRequired<T: Decodable>(
+        _ type: T.Type,
+        forKey key: Key,
+        typeName: String
+    ) throws -> T {
+        guard contains(key) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath + [key],
+                debugDescription: "Missing \(typeName) field \"\(key.stringValue)\""
+            ))
+        }
+        return try decode(type, forKey: key)
     }
 }

@@ -275,6 +275,81 @@ func `heist artifact validates manifest and plan versions`() throws {
 }
 
 @Test
+func `heist artifact rejects unknown manifest schema keys`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let planJSON = try representativeArtifactPlan().canonicalHeistJSONData()
+
+    try writePackage(
+        named: "StaleManifestVersionKey.heist",
+        in: temp.url,
+        manifestJSON: rawArtifactManifestJSON(additionalRootFields: [#"  "version" : 1"#]),
+        planJSON: planJSON
+    ) { url in
+        try expectArtifactReadError(from: url, containing: [
+            "invalid manifest.json",
+            #"Unknown manifest field "version""#,
+        ])
+    }
+
+    try writePackage(
+        named: "RandomManifestKey.heist",
+        in: temp.url,
+        manifestJSON: rawArtifactManifestJSON(additionalRootFields: [#"  "randomFutureKey" : true"#]),
+        planJSON: planJSON
+    ) { url in
+        try expectArtifactReadError(from: url, containing: [
+            "invalid manifest.json",
+            #"Unknown manifest field "randomFutureKey""#,
+        ])
+    }
+
+    try writePackage(
+        named: "UnknownProducerKey.heist",
+        in: temp.url,
+        manifestJSON: rawArtifactManifestJSON(producerFields: [
+            #""name" : "buttonheist""#,
+            #""displayName" : "Button Heist""#,
+        ]),
+        planJSON: planJSON
+    ) { url in
+        try expectArtifactReadError(from: url, containing: [
+            "invalid manifest.json",
+            #"Unknown manifest producer field "displayName""#,
+        ])
+    }
+}
+
+@Test
+func `heist artifact requires current manifest format version`() throws {
+    let temp = try PlansTemporaryDirectory()
+    let planJSON = try representativeArtifactPlan().canonicalHeistJSONData()
+
+    try writePackage(
+        named: "MissingFormatVersion.heist",
+        in: temp.url,
+        manifestJSON: rawArtifactManifestJSON(includeFormatVersion: false),
+        planJSON: planJSON
+    ) { url in
+        try expectArtifactReadError(from: url, containing: [
+            "invalid manifest.json",
+            #"Missing manifest field "formatVersion""#,
+        ])
+    }
+
+    try writePackage(
+        named: "FutureFormatVersion.heist",
+        in: temp.url,
+        manifestJSON: rawArtifactManifestJSON(formatVersion: currentHeistArtifactFormatVersion + 1),
+        planJSON: planJSON
+    ) { url in
+        try expectArtifactReadError(from: url, containing: [
+            "unsupported formatVersion 2",
+            "supports formatVersion 1",
+        ])
+    }
+}
+
+@Test
 func `heist artifact validates required entry against root plan name`() throws {
     let temp = try PlansTemporaryDirectory()
     let plan = try representativeArtifactPlan()
@@ -436,17 +511,27 @@ private func writePackage(
     try validate(packageURL)
 }
 
-private func rawArtifactManifestJSON(entry: String?) -> Data {
+private func rawArtifactManifestJSON(
+    entry: String? = "searchFlow",
+    includeFormatVersion: Bool = true,
+    formatVersion: Int = currentHeistArtifactFormatVersion,
+    planVersion: Int = currentHeistPlanVersion,
+    producerFields: [String] = [#""name" : "buttonheist""#],
+    additionalRootFields: [String] = []
+) -> Data {
     var fields = [
         #"  "createdAt" : "2026-06-05T00:00:00Z""#,
-        #"  "format" : "com.royalpineapple.buttonheist.heist""#,
-        #"  "formatVersion" : 1"#,
-        #"  "planVersion" : 1"#,
-        #"  "producer" : { "name" : "buttonheist" }"#,
+        #"  "format" : "\#(heistArtifactFormat)""#,
     ]
     if let entry {
         fields.insert(#"  "entry" : "\#(entry)""#, at: 1)
     }
+    if includeFormatVersion {
+        fields.append(#"  "formatVersion" : \#(formatVersion)"#)
+    }
+    fields.append(#"  "planVersion" : \#(planVersion)"#)
+    fields.append(#"  "producer" : { \#(producerFields.joined(separator: ", ")) }"#)
+    fields.append(contentsOf: additionalRootFields)
     return Data(("{\n" + fields.joined(separator: ",\n") + "\n}\n").utf8)
 }
 
