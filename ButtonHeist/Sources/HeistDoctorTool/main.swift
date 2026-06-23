@@ -50,7 +50,7 @@ struct HeistDoctorCommand: ParsableCommand {
         case .human:
             print(Self.humanReport(suggestions))
         case .json:
-            let report = HeistDoctorJSONReport(suggestions: suggestions)
+            let report = HeistDoctorReport(suggestions: suggestions)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(report)
@@ -118,9 +118,4 @@ struct HeistDoctorCommand: ParsableCommand {
 enum HeistDoctorOutputFormat: String, ExpressibleByArgument {
     case human
     case json
-}
-
-private struct HeistDoctorJSONReport: Encodable {
-    let featureStatus = "alpha"
-    let suggestions: [HeistRepairSuggestion]
 }
