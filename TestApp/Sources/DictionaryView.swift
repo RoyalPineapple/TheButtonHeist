@@ -6,6 +6,18 @@ struct DictionaryEntry: Identifiable, Hashable {
     let id: Int
     let term: String
 
+    var componentCount: Int {
+        term.split(separator: " ").count
+    }
+
+    var isPhrase: Bool {
+        componentCount > 1
+    }
+
+    var kind: String {
+        isPhrase ? "phrase" : "word"
+    }
+
     var sectionTitle: String {
         guard let first = term.first else { return "#" }
         let title = String(first).uppercased()
@@ -13,9 +25,12 @@ struct DictionaryEntry: Identifiable, Hashable {
     }
 
     var detailSummary: String {
-        let wordCount = term.split(separator: " ").count
-        let format = wordCount == 1 ? "single word" : "\(wordCount)-word phrase"
+        let format = componentCount == 1 ? "single word" : "\(componentCount)-word phrase"
         return "\(format), \(term.count) character\(term.count == 1 ? "" : "s")"
+    }
+
+    var rowID: String {
+        "word-\(id)"
     }
 }
 
@@ -26,19 +41,50 @@ struct DictionarySection: Identifiable {
     var id: String { title }
 }
 
+enum DictionaryFilter: String, CaseIterable, Identifiable {
+    case all
+    case words
+    case phrases
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .words: return "Words"
+        case .phrases: return "Phrases"
+        }
+    }
+
+    func includes(_ entry: DictionaryEntry) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .words:
+            return !entry.isPhrase
+        case .phrases:
+            return entry.isPhrase
+        }
+    }
+}
+
 // MARK: - Data
 
 enum DictionaryData {
     static let entries: [DictionaryEntry] = loadEntries()
     static let sections: [DictionarySection] = makeSections(from: entries)
+    static let phraseCount = entries.filter(\.isPhrase).count
 
-    static func sections(matching searchText: String) -> [DictionarySection] {
+    static func sections(matching searchText: String, filter: DictionaryFilter) -> [DictionarySection] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return sections }
+        let filteredEntries = entries.filter { entry in
+            filter.includes(entry) && (
+                query.isEmpty || entry.term.localizedCaseInsensitiveContains(query)
+            )
+        }
 
-        return makeSections(from: entries.filter { entry in
-            entry.term.localizedCaseInsensitiveContains(query)
-        })
+        guard filter != .all || !query.isEmpty else { return sections }
+        return makeSections(from: filteredEntries)
     }
 
     static func neighbors(for entry: DictionaryEntry) -> [DictionaryEntry] {
@@ -91,9 +137,10 @@ enum DictionaryData {
 
 struct DictionaryView: View {
     @State private var searchText = ""
+    @State private var filter = DictionaryFilter.all
 
     private var visibleSections: [DictionarySection] {
-        DictionaryData.sections(matching: searchText)
+        DictionaryData.sections(matching: searchText, filter: filter)
     }
 
     private var visibleEntryCount: Int {
@@ -104,13 +151,40 @@ struct DictionaryView: View {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var isFilteredMode: Bool {
+        isSearchMode || filter != .all
+    }
+
     var body: some View {
         List {
-            if isSearchMode {
+            Section {
+                DictionaryOverviewView(
+                    totalWordCount: DictionaryData.entries.count,
+                    sectionCount: DictionaryData.sections.count,
+                    phraseCount: DictionaryData.phraseCount,
+                    visibleWordCount: visibleEntryCount,
+                    filter: filter,
+                    isSearchMode: isSearchMode
+                )
+
+                Picker("Word Type", selection: $filter) {
+                    ForEach(DictionaryFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("words.filter")
+            }
+
+            if isFilteredMode {
                 Section {
                     if visibleSections.isEmpty {
-                        Text("No substring matches")
-                            .foregroundStyle(.secondary)
+                        ContentUnavailableView {
+                            Label("No Matches", systemImage: "magnifyingglass")
+                        } description: {
+                            Text(emptyResultMessage)
+                        }
+                        .accessibilityIdentifier("words.search.empty")
                     } else {
                         ForEach(visibleSections) { section in
                             DictionarySectionHeaderView(title: section.title, wordCount: section.entries.count)
@@ -134,6 +208,7 @@ struct DictionaryView: View {
                 }
             }
         }
+        .accessibilityIdentifier("words.list")
         .navigationTitle("Words")
         .searchable(text: $searchText, prompt: "Search words")
     }
@@ -146,6 +221,8 @@ struct DictionaryView: View {
             } label: {
                 DictionaryRowView(entry: entry)
             }
+            .id(entry.rowID)
+            .accessibilityIdentifier("words.row.\(entry.id)")
             .accessibilityLabel(entry.term)
             .accessibilityValue(entry.detailSummary)
         }
@@ -153,7 +230,83 @@ struct DictionaryView: View {
 
     private var resultSummary: String {
         let total = DictionaryData.entries.count
-        return "\(visibleEntryCount) substring \(visibleEntryCount == 1 ? "match" : "matches") of \(total) words"
+        let noun = visibleEntryCount == 1 ? "entry" : "entries"
+        if isSearchMode {
+            return "\(visibleEntryCount) matching \(noun) of \(total) total"
+        }
+        return "\(visibleEntryCount) \(filter.title.lowercased()) \(noun) of \(total) total"
+    }
+
+    private var emptyResultMessage: String {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty {
+            return "No \(filter.title.lowercased()) are available."
+        }
+        return "No \(filter.title.lowercased()) contain \(query)."
+    }
+}
+
+private struct DictionaryOverviewView: View {
+    let totalWordCount: Int
+    let sectionCount: Int
+    let phraseCount: Int
+    let visibleWordCount: Int
+    let filter: DictionaryFilter
+    let isSearchMode: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                DictionaryMetricView(title: "Entries", value: totalWordCount.formatted())
+                DictionaryMetricView(title: "Sections", value: sectionCount.formatted())
+                DictionaryMetricView(
+                    title: isSearchMode || filter != .all ? "Results" : "Phrases",
+                    value: (isSearchMode || filter != .all ? visibleWordCount : phraseCount).formatted()
+                )
+            }
+
+            Text(description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Words overview")
+        .accessibilityValue(accessibilityValue)
+        .accessibilityIdentifier("words.overview")
+    }
+
+    private var description: String {
+        if isSearchMode {
+            return "Search results from the bundled word list."
+        }
+        if filter != .all {
+            return "Showing \(filter.title.lowercased()) from the bundled word list."
+        }
+        return "Bundled word list with sectioned browsing and substring search."
+    }
+
+    private var accessibilityValue: String {
+        if isSearchMode || filter != .all {
+            return "\(visibleWordCount) visible entries, \(totalWordCount) total entries, \(sectionCount) sections"
+        }
+        return "\(totalWordCount) total entries, \(sectionCount) sections, \(phraseCount) phrases"
+    }
+}
+
+private struct DictionaryMetricView: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.headline.monospacedDigit())
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -230,7 +383,8 @@ private struct DictionaryDetailView: View {
 
             Section("Details") {
                 LabeledContent("Characters", value: "\(entry.term.count)")
-                LabeledContent("Words", value: "\(entry.term.split(separator: " ").count)")
+                LabeledContent("Type", value: entry.kind.capitalized)
+                LabeledContent("Words", value: "\(entry.componentCount)")
                 LabeledContent("Section", value: entry.sectionTitle)
                 LabeledContent("Source", value: "web2a word list")
             }
