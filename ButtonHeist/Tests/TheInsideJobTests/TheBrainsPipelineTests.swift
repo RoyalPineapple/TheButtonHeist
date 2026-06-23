@@ -217,6 +217,57 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
     }
 
+    func testActionResultFinalTraceUsesVisibleSettleNotLaterDiscovery() async throws {
+        let beforeScreen = makeScreen(elements: [("Text Input", .header, "text_input")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let visibleAfter = makeScreen(elements: [("Controls Demo", .header, "controls_demo")])
+        let discoveredOnly = AccessibilityElement.make(
+            label: "ButtonHeist Demo",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let discoveryAfter = Screen.makeForTests(
+            elements: [(AccessibilityElement.make(
+                label: "Controls Demo",
+                traits: .header,
+                respondsToUserInteraction: false
+            ), "controls_demo")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    discoveredOnly,
+                    heistId: "buttonheist_demo",
+                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
+                    scrollContainer: "root_scroll"
+                ),
+            ]
+        )
+
+        let resultTask = Task { @MainActor in
+            await brains.interactionObservation.finishAfterAction(
+                success: true,
+                method: .activate,
+                before: before,
+                settleOutcome: settledOutcome(finalScreen: visibleAfter)
+            )
+        }
+
+        for _ in 0..<50 where brains.stash.semanticObservationStream.settledWaiterCount == 0 {
+            await Task.yield()
+        }
+        brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(discoveryAfter)
+
+        let result = await resultTask.value
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+
+        let labels = try XCTUnwrap(result.accessibilityTrace?.captures.last)
+            .interface
+            .projectedElements
+            .compactMap(\.label)
+        XCTAssertEqual(labels, ["Controls Demo"])
+        XCTAssertFalse(labels.contains("ButtonHeist Demo"))
+    }
+
     func testActionResultWithDeltaSettleTimeoutStillReturnsSuccessfulAction() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(beforeScreen)
