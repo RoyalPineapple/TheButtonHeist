@@ -68,20 +68,30 @@ extension HeistCanonicalSwiftDSLRenderer {
         switch target.selection {
         case .element(let target):
             return "Mechanical.Tap(\(render(target: target)))"
+        case .elementUnitPoint(let target, let point):
+            return "Mechanical.Tap(\(render(target: target)), at: \(render(unitPoint: point)))"
         case .coordinate(let point):
-            return "Mechanical.Tap(x: \(decimal(point.x)), y: \(decimal(point.y)))"
+            return "Mechanical.Tap(\(render(point: point)))"
         }
     }
 
     func render(mechanicalLongPress target: LongPressTarget) throws -> String {
         switch target.selection {
         case .element(let elementTarget):
-            return "Mechanical.LongPress(\(render(target: elementTarget)))"
+            if target.duration == .longPressDefault {
+                return "Mechanical.LongPress(\(render(target: elementTarget)))"
+            }
+            return "Mechanical.LongPress(\(render(target: elementTarget)), duration: \(render(duration: target.duration)))"
+        case .elementUnitPoint(let elementTarget, let point):
+            if target.duration == .longPressDefault {
+                return "Mechanical.LongPress(\(render(target: elementTarget)), at: \(render(unitPoint: point)))"
+            }
+            return "Mechanical.LongPress(\(render(target: elementTarget)), at: \(render(unitPoint: point)), duration: \(render(duration: target.duration)))"
         case .coordinate(let point):
             if target.duration == .longPressDefault {
-                return "Mechanical.LongPress(x: \(decimal(point.x)), y: \(decimal(point.y)))"
+                return "Mechanical.LongPress(\(render(point: point)))"
             }
-            return "Mechanical.LongPress(x: \(decimal(point.x)), y: \(decimal(point.y)), duration: \(render(duration: target.duration)))"
+            return "Mechanical.LongPress(\(render(point: point)), duration: \(render(duration: target.duration)))"
         }
     }
 
@@ -95,14 +105,17 @@ extension HeistCanonicalSwiftDSLRenderer {
             return "Mechanical.Swipe(from: \(render(point: start)), to: \(render(point: end)))"
         case .point(.coordinate(let start), .direction(let direction)):
             return "Mechanical.Swipe(from: \(render(point: start)), .\(direction.rawValue))"
-        case .point(.element, _):
+        case .point(.element, _), .point(.elementUnitPoint, _):
             throw HeistCanonicalSwiftDSLError.unsupportedAction("swipe selection is not a durable heist action")
         }
     }
 
     func render(mechanicalDrag target: DragTarget) throws -> String {
         switch target.selection {
-        case .elementToPoint(let target, let end):
+        case .elementToPoint(let target, let start, let end):
+            if let start {
+                return "Mechanical.Drag(\(render(target: target)), from: \(render(unitPoint: start)), to: \(render(point: end)))"
+            }
             return "Mechanical.Drag(\(render(target: target)), to: \(render(point: end)))"
         case .pointToPoint(let start, let end):
             return "Mechanical.Drag(from: \(render(point: start)), to: \(render(point: end)))"

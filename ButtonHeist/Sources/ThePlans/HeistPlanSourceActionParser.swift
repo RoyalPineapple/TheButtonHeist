@@ -172,11 +172,17 @@ extension HeistPlanSourceParser {
     mutating func parseMechanicalTap() throws -> HeistActionCommand {
         try expectSymbol("(")
         let selection: GesturePointSelection
-        if lookaheadLabel("x") {
-            let point = try parseXYArguments()
-            selection = .coordinate(point)
+        if tokenIsIdentifier(currentToken, "ScreenPoint") {
+            selection = .coordinate(try parseScreenPoint())
         } else {
-            selection = .element(try parseConcreteElementTarget())
+            let target = try parseConcreteElementTarget()
+            if consumeSymbol(",") {
+                try expectIdentifier("at")
+                try expectSymbol(":")
+                selection = .elementUnitPoint(target, try parseUnitPoint())
+            } else {
+                selection = .element(target)
+            }
         }
         try expectSymbol(")")
         return .mechanicalTap(TapTarget(selection: selection))
@@ -186,16 +192,23 @@ extension HeistPlanSourceParser {
         try expectSymbol("(")
         let selection: GesturePointSelection
         var duration = GestureDuration.longPressDefault
-        if lookaheadLabel("x") {
-            let point = try parseXYArguments()
-            selection = .coordinate(point)
-            if consumeSymbol(",") {
-                try expectIdentifier("duration")
-                try expectSymbol(":")
-                duration = try parseGestureDuration()
-            }
+        if tokenIsIdentifier(currentToken, "ScreenPoint") {
+            selection = .coordinate(try parseScreenPoint())
         } else {
-            selection = .element(try parseConcreteElementTarget())
+            let target = try parseConcreteElementTarget()
+            if currentToken.isSymbol(","), lookaheadIdentifier(1, "at") {
+                try expectSymbol(",")
+                try expectIdentifier("at")
+                try expectSymbol(":")
+                selection = .elementUnitPoint(target, try parseUnitPoint())
+            } else {
+                selection = .element(target)
+            }
+        }
+        if consumeSymbol(",") {
+            try expectIdentifier("duration")
+            try expectSymbol(":")
+            duration = try parseGestureDuration()
         }
         try expectSymbol(")")
         return .mechanicalLongPress(LongPressTarget(selection: selection, duration: duration))
@@ -250,9 +263,18 @@ extension HeistPlanSourceParser {
         } else {
             let target = try parseConcreteElementTarget()
             try expectSymbol(",")
+            let start: UnitPoint?
+            if lookaheadLabel("from") {
+                try expectIdentifier("from")
+                try expectSymbol(":")
+                start = try parseUnitPoint()
+                try expectSymbol(",")
+            } else {
+                start = nil
+            }
             try expectIdentifier("to")
             try expectSymbol(":")
-            selection = .elementToPoint(target, end: try parseScreenPoint())
+            selection = .elementToPoint(target, start: start, end: try parseScreenPoint())
         }
         try expectSymbol(")")
         return .mechanicalDrag(DragTarget(selection: selection))

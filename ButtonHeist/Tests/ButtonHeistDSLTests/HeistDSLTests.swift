@@ -238,12 +238,22 @@ func actionWithoutExpectationAttachesExplicitWaiver() throws {
 @Test
 func mechanicalNamespaceBuildsExplicitEscapeHatches() throws {
     let heist = try HeistPlan {
-        Mechanical.Tap(x: 12, y: 34)
+        Mechanical.Tap(ScreenPoint(x: 12, y: 34))
+        Mechanical.Tap(.label("Handle"), at: UnitPoint(x: 0.25, y: 0.75))
+        Mechanical.Drag(.label("Slider"), from: UnitPoint(x: 0.8, y: 0.5), to: ScreenPoint(x: 200, y: 40))
         Mechanical.Drag(from: ScreenPoint(x: 1, y: 2), to: ScreenPoint(x: 3, y: 4))
     }
 
     #expect(heist.body == [
         .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))))),
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(
+            .predicate(.label("Handle")),
+            UnitPoint(x: 0.25, y: 0.75)
+        ))))),
+        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            start: .elementUnitPoint(.predicate(.label("Slider")), UnitPoint(x: 0.8, y: 0.5)),
+            end: ScreenPoint(x: 200, y: 40)
+        )))),
         .action(try ActionStep(command: .mechanicalDrag(DragTarget(
             start: .coordinate(ScreenPoint(x: 1, y: 2)),
             end: ScreenPoint(x: 3, y: 4)

@@ -30,6 +30,9 @@ extension FenceResponse {
         if case .value(let value) = result.payload {
             text += "\nvalue: \"\(value)\""
         }
+        if let activationTrace = result.activationTrace {
+            text += "\nactivate: \(Self.compactActivationTrace(activationTrace))"
+        }
         if let expectation, !expectation.met {
             text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
             if let hint = Self.expectationFailureHint(expectation, command: command, result: result) {
@@ -56,7 +59,7 @@ extension FenceResponse {
             return nil
         }
         return "activate uses accessibilityActivate() and trusts a true return; " +
-            "it does not fall back to a physical tap after semantic activation succeeds. " +
+            "it does not send activation-point tap dispatch after semantic activation succeeds. " +
             "If Mechanical.Tap changes the UI, the touch path works but the accessibility activation path is inert or mismatched."
     }
 
@@ -74,6 +77,25 @@ extension FenceResponse {
             return true
         }
         return result?.method == .activate
+    }
+
+    static func compactActivationTrace(_ trace: ActivationTrace) -> String {
+        var parts = ["ax=\(formatBool(trace.axActivateReturned))"]
+        if let retry = trace.retryAxActivateReturned {
+            parts.append("retryAx=\(retry)")
+        }
+        parts.append("tapActivationDispatched=\(trace.tapActivationDispatched)")
+        if let point = trace.tapActivationPoint {
+            parts.append("tapActivationPoint=\(point.description)")
+        }
+        if let succeeded = trace.tapActivationSucceeded {
+            parts.append("tapActivationSucceeded=\(succeeded)")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private static func formatBool(_ value: Bool?) -> String {
+        value.map(String.init(describing:)) ?? "nil"
     }
 
     private static func compactRotor(_ search: RotorResult) -> String {

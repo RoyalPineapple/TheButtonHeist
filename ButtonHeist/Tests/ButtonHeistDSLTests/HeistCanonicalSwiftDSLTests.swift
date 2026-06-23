@@ -383,7 +383,7 @@ func canonicalSwiftRendererSeparatesSemanticAndMechanicalActions() throws {
 
         Rotor("Headings", on: .label("Article"), direction: .next)
 
-        Mechanical.Tap(x: 12, y: 34)
+        Mechanical.Tap(ScreenPoint(x: 12, y: 34))
     }
     """)
 }
@@ -411,9 +411,22 @@ func canonicalSwiftRendererRendersMechanicalActionForms() throws {
         .action(try ActionStep(command: .mechanicalTap(TapTarget(
             selection: .element(.predicate(.label("Button")))
         )))),
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(
+            selection: .elementUnitPoint(
+                .predicate(.label("Cell")),
+                UnitPoint(x: 0.25, y: 0.75)
+            )
+        )))),
         .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 1.25, y: 2.5)),
             duration: GestureDuration(seconds: 1.2)
+        )))),
+        .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            selection: .elementUnitPoint(
+                .predicate(.label("Message")),
+                UnitPoint(x: 0.5, y: 0.2)
+            ),
+            duration: GestureDuration(seconds: 1.4)
         )))),
         .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(
             .predicate(.label("List")),
@@ -428,6 +441,10 @@ func canonicalSwiftRendererRendersMechanicalActionForms() throws {
             end: ScreenPoint(x: 200, y: 40)
         )))),
         .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            start: .elementUnitPoint(.predicate(.label("Slider")), UnitPoint(x: 0.8, y: 0.5)),
+            end: ScreenPoint(x: 220, y: 40)
+        )))),
+        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
             start: .coordinate(ScreenPoint(x: 3.3333333, y: 4)),
             end: ScreenPoint(x: 5, y: 6.5)
         )))),
@@ -437,13 +454,19 @@ func canonicalSwiftRendererRendersMechanicalActionForms() throws {
     HeistPlan {
         Mechanical.Tap(.label("Button"))
 
-        Mechanical.LongPress(x: 1.25, y: 2.5, duration: GestureDuration(seconds: 1.2))
+        Mechanical.Tap(.label("Cell"), at: UnitPoint(x: 0.25, y: 0.75))
+
+        Mechanical.LongPress(ScreenPoint(x: 1.25, y: 2.5), duration: GestureDuration(seconds: 1.2))
+
+        Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.2), duration: GestureDuration(seconds: 1.4))
 
         Mechanical.Swipe(.label("List"), .up)
 
         Mechanical.Swipe(from: ScreenPoint(x: 10, y: 20), .left)
 
         Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
+
+        Mechanical.Drag(.label("Slider"), from: UnitPoint(x: 0.8, y: 0.5), to: ScreenPoint(x: 220, y: 40))
 
         Mechanical.Drag(from: ScreenPoint(x: 3.333333, y: 4), to: ScreenPoint(x: 5, y: 6.5))
     }

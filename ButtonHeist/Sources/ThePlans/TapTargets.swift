@@ -1,6 +1,7 @@
 public struct TapTarget: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case element
+        case unitPoint
         case point
     }
 
@@ -12,29 +13,11 @@ public struct TapTarget: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "tap target")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.selection = try Self.decodeSelection(from: container)
+        self.selection = try GesturePointSelection(from: decoder)
     }
 
     public func encode(to encoder: Encoder) throws {
         try selection.encode(to: encoder)
-    }
-
-    private static func decodeSelection(
-        from container: KeyedDecodingContainer<CodingKeys>
-    ) throws -> GesturePointSelection {
-        let element = try container.decodeIfPresent(ElementTarget.self, forKey: .element)
-        let point = try container.decodeIfPresent(ScreenPoint.self, forKey: .point)
-        switch (element, point) {
-        case (.some(let element), nil):
-            return .element(element)
-        case (nil, .some(let point)):
-            return .coordinate(point)
-        case (.some, .some):
-            throw GestureProjectionError.mixedCoordinateAndElement(field: "point")
-        case (nil, nil):
-            throw GestureProjectionError.missingGesturePoint(field: "point")
-        }
     }
 }
 
@@ -49,6 +32,7 @@ extension TapTarget: CustomStringConvertible {
 public struct LongPressTarget: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case element
+        case unitPoint
         case point
         case duration
     }
@@ -65,18 +49,11 @@ public struct LongPressTarget: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "long press target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let element = try container.decodeIfPresent(ElementTarget.self, forKey: .element)
-        let point = try container.decodeIfPresent(ScreenPoint.self, forKey: .point)
-        switch (element, point) {
-        case (.some(let element), nil):
-            self.selection = .element(element)
-        case (nil, .some(let point)):
-            self.selection = .coordinate(point)
-        case (.some, .some):
-            throw GestureProjectionError.mixedCoordinateAndElement(field: "point")
-        case (nil, nil):
-            throw GestureProjectionError.missingGesturePoint(field: "point")
-        }
+        self.selection = try GesturePointSelection(
+            element: try container.decodeIfPresent(ElementTarget.self, forKey: .element),
+            unitPoint: try container.decodeIfPresent(UnitPoint.self, forKey: .unitPoint),
+            point: try container.decodeIfPresent(ScreenPoint.self, forKey: .point)
+        )
         self.duration = try container.decodeIfPresent(GestureDuration.self, forKey: .duration) ?? .longPressDefault
     }
 

@@ -61,8 +61,11 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String,
         scope: HeistReferenceScope
     ) {
-        if case .element(let target) = selection {
+        switch selection {
+        case .element(let target), .elementUnitPoint(let target, _):
             validateElementTarget(target, path: "\(path).element")
+        case .coordinate:
+            break
         }
     }
 
@@ -100,7 +103,7 @@ extension HeistPlanRuntimeSafetyValidator {
         scope: HeistReferenceScope
     ) {
         switch target.selection {
-        case .elementToPoint(let target, _):
+        case .elementToPoint(let target, _, _):
             validateElementTarget(target, path: "\(path).element")
         case .pointToPoint:
             break

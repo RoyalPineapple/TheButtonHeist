@@ -176,6 +176,49 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
     }
 
+    func testActivateNoChangeAfterTapActivationDispatchRemainsSuccessfulAndLegible() async {
+        let frame = CGRect(x: 424, y: 336, width: 928, height: 72)
+        let element = AccessibilityElement.make(
+            label: "Tap activated option",
+            identifier: "tap_activated_option",
+            traits: .none,
+            shape: .frame(AccessibilityRect(frame)),
+            activationPoint: CGPoint(x: 888, y: 372),
+            respondsToUserInteraction: true
+        )
+        let screen = Screen.makeForTests(elements: [(element, "tap_activated_option")])
+        brains.stash.installScreenForTesting(screen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let activationTrace = ActivationTrace(
+            axActivateReturned: false,
+            retryAxActivateReturned: false,
+            tapActivationDispatched: true,
+            tapActivationPoint: ScreenPoint(x: 888, y: 372),
+            tapActivationSucceeded: true
+        )
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            success: true,
+            method: .activate,
+            subjectEvidence: activationSubjectEvidence(
+                target: .predicate(ElementPredicate(identifier: "tap_activated_option")),
+                element: element,
+                settledObservationSequence: before.settledObservationSequence
+            ),
+            activationTrace: activationTrace,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: screen)
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "activate unexpectedly failed")
+        XCTAssertNil(result.errorKind)
+        XCTAssertNil(result.message)
+        XCTAssertEqual(result.activationTrace, activationTrace)
+        guard case .noChange? = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
+        }
+    }
+
     func testActionResultWithDeltaSuccessReturnsTraceAfterElementChange() async {
         let beforeScreen = makeScreen(elements: [("Total", .staticText, "total")])
         brains.stash.installScreenForTesting(beforeScreen)

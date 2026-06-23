@@ -19,6 +19,7 @@ struct PublicActionResponse: FencePublicJSONResponse {
     let retryable: Bool?
     let hint: String?
     let expectation: PublicExpectationResult?
+    let activationTrace: ActivationTrace?
     let timing: ActionPerformanceTiming?
 
     init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
@@ -67,6 +68,7 @@ struct PublicActionResponse: FencePublicJSONResponse {
         self.expectation = surfacedExpectation.map {
             PublicExpectationResult(result: $0, hint: expectationHint)
         }
+        self.activationTrace = result.activationTrace
         self.timing = result.timing
     }
 

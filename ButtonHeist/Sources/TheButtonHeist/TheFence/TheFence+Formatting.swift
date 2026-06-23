@@ -364,6 +364,9 @@ extension FenceResponse {
         if let delta = result.accessibilityTrace?.endpointDelta {
             output += "  \(formatDelta(delta))"
         }
+        if let activationTrace = result.activationTrace {
+            output += "  [activate: \(Self.compactActivationTrace(activationTrace))]"
+        }
         return output
     }
 
@@ -382,16 +385,44 @@ extension FenceResponse {
     private func formatDelta(_ delta: AccessibilityTrace.Delta) -> String {
         switch delta {
         case .noChange(let payload):
-            return "[\(payload.elementCount) elements, no change]"
+            guard !payload.transient.isEmpty else {
+                return "[\(payload.elementCount) elements, no change]"
+            }
+            let transients = payload.transient
+                .map { "+- \(Self.compactElementLine($0))" }
+                .joined(separator: "; ")
+            return "[\(payload.elementCount) elements, no net change: \(transients)]"
         case .elementsChanged(let payload):
             let edits = payload.edits
             var parts: [String] = ["\(payload.elementCount) elements"]
             if !edits.added.isEmpty { parts.append("+\(edits.added.count) added") }
             if !edits.removed.isEmpty { parts.append("-\(edits.removed.count) removed") }
             if !edits.updated.isEmpty { parts.append("~\(edits.updated.count) updated") }
-            return "[" + parts.joined(separator: ", ") + "]"
+            let detail = Self.compactElementEditLines(edits: edits, transient: payload.transient)
+            guard !detail.isEmpty else {
+                return "[" + parts.joined(separator: ", ") + "]"
+            }
+            return "[" + parts.joined(separator: ", ") + ": " + detail.joined(separator: "; ") + "]"
         case .screenChanged(let payload):
-            return "[\(payload.elementCount) elements, screen changed]"
+            return "[\(payload.elementCount) elements, screen changed]\n" +
+                Self.compactInterface(payload.newInterface, detail: .summary)
         }
+    }
+
+    private static func compactElementEditLines(edits: ElementEdits, transient: [HeistElement]) -> [String] {
+        var lines: [String] = []
+        lines.append(contentsOf: edits.added.map { "+ \(compactElementLine($0))" })
+        lines.append(contentsOf: edits.removed.map { "- \(compactElementLine($0))" })
+        for update in edits.updated {
+            let name = nonEmpty(update.element.label)
+                ?? nonEmpty(update.element.value)
+                ?? nonEmpty(update.element.identifier)
+                ?? update.element.description
+            for change in update.changes where !change.property.isGeometry {
+                lines.append("~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" -> \"\(change.new ?? "nil")\"")
+            }
+        }
+        lines.append(contentsOf: transient.map { "+- \(compactElementLine($0))" })
+        return lines
     }
 }

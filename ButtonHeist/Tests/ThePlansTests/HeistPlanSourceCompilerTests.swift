@@ -389,9 +389,16 @@ import ThePlans
         .action(try ActionStep(command: .mechanicalTap(TapTarget(
             selection: .coordinate(ScreenPoint(x: 12, y: 34))
         )))),
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(
+            selection: .elementUnitPoint(.label("Cell"), UnitPoint(x: 0.25, y: 0.75))
+        )))),
         .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 20, y: 40)),
             duration: GestureDuration(seconds: 1)
+        )))),
+        .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            selection: .elementUnitPoint(.label("Message"), UnitPoint(x: 0.5, y: 0.2)),
+            duration: GestureDuration(seconds: 1.4)
         )))),
         .action(try ActionStep(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(
             .label("Carousel"),
@@ -399,9 +406,55 @@ import ThePlans
             end: UnitPoint(x: 0.2, y: 0.5)
         ))))),
         .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            selection: .elementToPoint(.label("Slider"), start: UnitPoint(x: 0.8, y: 0.5), end: ScreenPoint(x: 200, y: 40))
+        )))),
+        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
             selection: .pointToPoint(start: ScreenPoint(x: 10, y: 10), end: ScreenPoint(x: 100, y: 100))
         )))),
     ]))
+}
+
+@Test func `mechanical tap ScreenPoint source compiles to raw coordinate tap`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    Mechanical.Tap(ScreenPoint(x: 888, y: 372))
+    """))
+    let expected = try HeistPlan(body: [
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(
+            selection: .coordinate(ScreenPoint(x: 888, y: 372))
+        )))),
+    ])
+
+    #expect(plan == expected)
+}
+
+@Test func `mechanical element unit-point source compiles to element-relative gesture`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    Mechanical.Tap(.label("Row"), at: UnitPoint(x: 0.25, y: 0.75))
+    Mechanical.LongPress(.label("Row"), at: UnitPoint(x: 0.5, y: 0.5), duration: GestureDuration(seconds: 1.4))
+    Mechanical.Drag(.label("Slider"), from: UnitPoint(x: 0.8, y: 0.5), to: ScreenPoint(x: 200, y: 40))
+    """))
+    let expected = try HeistPlan(body: [
+        .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .elementUnitPoint(
+            .predicate(.label("Row")),
+            UnitPoint(x: 0.25, y: 0.75)
+        ))))),
+        .action(try ActionStep(command: .mechanicalLongPress(LongPressTarget(
+            selection: .elementUnitPoint(
+                .predicate(.label("Row")),
+                UnitPoint(x: 0.5, y: 0.5)
+            ),
+            duration: GestureDuration(seconds: 1.4)
+        )))),
+        .action(try ActionStep(command: .mechanicalDrag(DragTarget(
+            selection: .elementToPoint(
+                .predicate(.label("Slider")),
+                start: UnitPoint(x: 0.8, y: 0.5),
+                end: ScreenPoint(x: 200, y: 40)
+            )
+        )))),
+    ])
+
+    #expect(plan == expected)
 }
 
 @Test func `canonical control flow and loops round trip through source compiler`() throws {

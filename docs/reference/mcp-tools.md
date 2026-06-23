@@ -139,7 +139,9 @@ Examples:
 `Edit(.paste)`
 `DismissKeyboard()`
 `Mechanical.Tap(.label("Map"))`
-`Mechanical.LongPress(.label("Message"))`
+`Mechanical.Tap(ScreenPoint(x: 888, y: 372))`
+`Mechanical.Tap(.label("Map"), at: UnitPoint(x: 0.5, y: 0.25))`
+`Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.5))`
 `Mechanical.Swipe(.label("Carousel"), .left)`
 `Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))`
 `WaitFor(.present(.label("Checkout")), timeout: .seconds(5))`

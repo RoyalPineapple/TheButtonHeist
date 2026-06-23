@@ -147,8 +147,12 @@ extension Actions {
         let selection: GesturePointSelection
         let end: ScreenPoint
         switch target.selection {
-        case .elementToPoint(let target, let endPoint):
-            selection = .element(target)
+        case .elementToPoint(let target, let start, let endPoint):
+            if let start {
+                selection = .elementUnitPoint(target, start)
+            } else {
+                selection = .element(target)
+            }
             end = endPoint
         case .pointToPoint(let startPoint, let endPoint):
             selection = .coordinate(startPoint)
