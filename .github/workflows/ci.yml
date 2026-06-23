@@ -68,6 +68,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
       - name: Resolve SPM dependencies
         timeout-minutes: 12
         run: swift package resolve
@@ -83,6 +86,10 @@ jobs:
       - name: Build ButtonHeist
         timeout-minutes: 5
         run: swift build --target ButtonHeist
+
+      - name: Verify Swift public API baselines
+        timeout-minutes: 8
+        run: scripts/check-swift-api-baseline.sh
 
       - name: Check external ButtonHeist import contract
         timeout-minutes: 8
