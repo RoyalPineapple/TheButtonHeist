@@ -28,7 +28,6 @@ struct DictionaryEntry: Identifiable, Hashable {
         let format = componentCount == 1 ? "single word" : "\(componentCount)-word phrase"
         return "\(format), \(term.count) character\(term.count == 1 ? "" : "s")"
     }
-
 }
 
 struct DictionarySection: Identifiable {
@@ -63,6 +62,17 @@ enum DictionaryFilter: String, CaseIterable, Identifiable {
             return entry.isPhrase
         }
     }
+
+    func resultNoun(count: Int) -> String {
+        switch self {
+        case .all:
+            return count == 1 ? "entry" : "entries"
+        case .words:
+            return count == 1 ? "word" : "words"
+        case .phrases:
+            return count == 1 ? "phrase" : "phrases"
+        }
+    }
 }
 
 // MARK: - Data
@@ -74,13 +84,14 @@ enum DictionaryData {
 
     static func sections(matching searchText: String, filter: DictionaryFilter) -> [DictionarySection] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard filter != .all || !query.isEmpty else { return sections }
+
         let filteredEntries = entries.filter { entry in
             filter.includes(entry) && (
                 query.isEmpty || entry.term.localizedCaseInsensitiveContains(query)
             )
         }
 
-        guard filter != .all || !query.isEmpty else { return sections }
         return makeSections(from: filteredEntries)
     }
 
@@ -156,15 +167,15 @@ struct DictionaryView: View {
         List {
             Section {
                 DictionaryOverviewView(
-                    totalWordCount: DictionaryData.entries.count,
+                    totalEntryCount: DictionaryData.entries.count,
                     sectionCount: DictionaryData.sections.count,
                     phraseCount: DictionaryData.phraseCount,
-                    visibleWordCount: visibleEntryCount,
+                    visibleEntryCount: visibleEntryCount,
                     filter: filter,
                     isSearchMode: isSearchMode
                 )
 
-                Picker("Word Type", selection: $filter) {
+                Picker("Entry Type", selection: $filter) {
                     ForEach(DictionaryFilter.allCases) { filter in
                         Text(filter.title).tag(filter)
                     }
@@ -182,7 +193,7 @@ struct DictionaryView: View {
                         }
                     } else {
                         ForEach(visibleSections) { section in
-                            DictionarySectionHeaderView(title: section.title, wordCount: section.entries.count)
+                            DictionarySectionHeaderView(title: section.title, entryCount: section.entries.count)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                                 .textCase(.uppercase)
@@ -198,13 +209,13 @@ struct DictionaryView: View {
                     Section {
                         dictionaryRows(for: section)
                     } header: {
-                        DictionarySectionHeaderView(title: section.title, wordCount: section.entries.count)
+                        DictionarySectionHeaderView(title: section.title, entryCount: section.entries.count)
                     }
                 }
             }
         }
         .navigationTitle("Words")
-        .searchable(text: $searchText, prompt: "Search words")
+        .searchable(text: $searchText, prompt: "Search entries")
     }
 
     @ViewBuilder
@@ -222,38 +233,39 @@ struct DictionaryView: View {
 
     private var resultSummary: String {
         let total = DictionaryData.entries.count
-        let noun = visibleEntryCount == 1 ? "entry" : "entries"
+        let noun = filter.resultNoun(count: visibleEntryCount)
         if isSearchMode {
             return "\(visibleEntryCount) matching \(noun) of \(total) total"
         }
-        return "\(visibleEntryCount) \(filter.title.lowercased()) \(noun) of \(total) total"
+        return "\(visibleEntryCount) \(noun) of \(total) total"
     }
 
     private var emptyResultMessage: String {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noun = filter.resultNoun(count: 2)
         if query.isEmpty {
-            return "No \(filter.title.lowercased()) are available."
+            return "No \(noun) are available."
         }
-        return "No \(filter.title.lowercased()) contain \(query)."
+        return "No \(noun) contain \(query)."
     }
 }
 
 private struct DictionaryOverviewView: View {
-    let totalWordCount: Int
+    let totalEntryCount: Int
     let sectionCount: Int
     let phraseCount: Int
-    let visibleWordCount: Int
+    let visibleEntryCount: Int
     let filter: DictionaryFilter
     let isSearchMode: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                DictionaryMetricView(title: "Entries", value: totalWordCount.formatted())
+                DictionaryMetricView(title: "Entries", value: totalEntryCount.formatted())
                 DictionaryMetricView(title: "Sections", value: sectionCount.formatted())
                 DictionaryMetricView(
                     title: isSearchMode || filter != .all ? "Results" : "Phrases",
-                    value: (isSearchMode || filter != .all ? visibleWordCount : phraseCount).formatted()
+                    value: (isSearchMode || filter != .all ? visibleEntryCount : phraseCount).formatted()
                 )
             }
 
@@ -274,14 +286,14 @@ private struct DictionaryOverviewView: View {
         if filter != .all {
             return "Showing \(filter.title.lowercased()) from the bundled word list."
         }
-        return "Bundled word list with sectioned browsing and substring search."
+        return "Browse entries by section, search by substring, or filter by type."
     }
 
     private var accessibilityValue: String {
         if isSearchMode || filter != .all {
-            return "\(visibleWordCount) visible entries, \(totalWordCount) total entries, \(sectionCount) sections"
+            return "\(visibleEntryCount) visible entries, \(totalEntryCount) total entries, \(sectionCount) sections"
         }
-        return "\(totalWordCount) total entries, \(sectionCount) sections, \(phraseCount) phrases"
+        return "\(totalEntryCount) total entries, \(sectionCount) sections, \(phraseCount) phrases"
     }
 }
 
@@ -320,7 +332,7 @@ private struct DictionaryResultsHeaderView: View {
 
 private struct DictionarySectionHeaderView: View {
     let title: String
-    var wordCount: Int?
+    var entryCount: Int?
 
     var body: some View {
         Text(title)
@@ -336,8 +348,8 @@ private struct DictionarySectionHeaderView: View {
     }
 
     private var accessibilityValue: String {
-        guard let wordCount else { return "" }
-        return "\(wordCount) \(wordCount == 1 ? "word" : "words")"
+        guard let entryCount else { return "" }
+        return "\(entryCount) \(entryCount == 1 ? "entry" : "entries")"
     }
 }
 
@@ -363,12 +375,12 @@ private struct DictionaryDetailView: View {
 
     var body: some View {
         Form {
-            Section("Word") {
+            Section("Entry") {
                 Text(entry.term)
                     .font(.title2.weight(.semibold))
                     .textSelection(.enabled)
 
-                Text("Bundled Unix word list item")
+                Text("Entry from the word list")
                     .foregroundStyle(.secondary)
             }
 
@@ -377,10 +389,10 @@ private struct DictionaryDetailView: View {
                 LabeledContent("Type", value: entry.kind.capitalized)
                 LabeledContent("Words", value: "\(entry.componentCount)")
                 LabeledContent("Section", value: entry.sectionTitle)
-                LabeledContent("Source", value: "web2a word list")
+                LabeledContent("Source", value: "Word list")
             }
 
-            Section("Nearby Words") {
+            Section("Nearby Entries") {
                 ForEach(DictionaryData.neighbors(for: entry)) { relatedEntry in
                     Text(relatedEntry.term)
                 }
