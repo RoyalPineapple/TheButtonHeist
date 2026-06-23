@@ -45,17 +45,21 @@ to one-step or composed `HeistPlan`s before crossing the device wire.
 ## Swift API Baselines
 
 CI checks compiler-exported public symbol snapshots for `ThePlans`,
-`TheScore`, `ButtonHeistDSL`, and `ButtonHeist` with:
+`TheScore`, `ButtonHeistDSL`, `ButtonHeist`, and `TheInsideJob` with:
 
 ```bash
 scripts/check-swift-api-baseline.sh
 ```
 
-The snapshots live in `api-baselines/swift/`. `ButtonHeistDSL` and
+The snapshots live in `api-baselines/swift/`. `ThePlans`, `TheScore`,
+`ButtonHeistDSL`, and `ButtonHeist` are extracted from the macOS SwiftPM build.
+`TheInsideJob` is extracted separately from an iOS simulator DEBUG SwiftPM build
+because its public module is UIKit/DEBUG-gated. `ButtonHeistDSL` and
 `ButtonHeist` are extracted with their public re-exported modules included, so
 removing a re-export or changing a re-exported symbol changes the product
-snapshot. The external import fixture still compiles a consumer from outside
-the repository to prove documented imports work in SwiftPM.
+snapshot. The external import fixtures compile consumers from outside the
+repository to prove the documented macOS products and iOS DEBUG `TheInsideJob`
+import work in SwiftPM.
 
 For an intentional public Swift API change, update snapshots with:
 
@@ -66,6 +70,15 @@ scripts/check-swift-api-baseline.sh --update
 Review the generated diff before committing. Do not hand-edit snapshot files;
 the checked-in text is generated from Swift symbol graphs so CI can distinguish
 intentional contract changes from accidental public API drift.
+
+The baseline lane is pinned to the CI toolchain: Xcode 26.3 / Apple Swift
+6.2.4. GitHub Actions selects that Xcode before running the check. Locally, set
+`DEVELOPER_DIR` to an Xcode 26.3 developer directory before checking or
+updating, for example:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-26.3.0.app/Contents/Developer scripts/check-swift-api-baseline.sh --update
+```
 
 ## TheInsideJob
 

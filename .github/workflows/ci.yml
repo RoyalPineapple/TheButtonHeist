@@ -88,11 +88,11 @@ jobs:
         run: swift build --target ButtonHeist
 
       - name: Verify Swift public API baselines
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: scripts/check-swift-api-baseline.sh
 
       - name: Check external ButtonHeist import contract
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: scripts/check-buttonheist-import-contract.sh
 
       - name: Build heist-plan

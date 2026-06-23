@@ -6,12 +6,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BASELINE_DIR="${BUTTONHEIST_SWIFT_API_BASELINE_DIR:-$REPO_ROOT/api-baselines/swift}"
+EXPECTED_SWIFT_VERSION="${BUTTONHEIST_SWIFT_API_EXPECTED_SWIFT_VERSION:-Apple Swift version 6.2.4}"
+ALLOW_TOOLCHAIN_MISMATCH="${BUTTONHEIST_SWIFT_API_ALLOW_TOOLCHAIN_MISMATCH:-0}"
+IOS_SIMULATOR_TRIPLE="${BUTTONHEIST_SWIFT_API_IOS_SIMULATOR_TRIPLE:-arm64-apple-ios17.0-simulator}"
 
-MODULES=(
+MACOS_MODULES=(
     "ThePlans:"
     "TheScore:"
     "ButtonHeistDSL:ThePlans"
     "ButtonHeist:ThePlans,TheScore"
+)
+IOS_DEBUG_MODULES=(
+    "TheInsideJob:"
 )
 
 UPDATE=0
@@ -21,7 +27,7 @@ usage() {
 Usage: scripts/check-swift-api-baseline.sh [--update]
 
 Checks checked-in public Swift API snapshots for ThePlans, TheScore,
-ButtonHeistDSL, and ButtonHeist.
+ButtonHeistDSL, ButtonHeist, and the iOS DEBUG TheInsideJob module.
 
 Options:
   --update    Regenerate snapshots after an intentional public API change.
@@ -48,11 +54,16 @@ done
 
 cd "$REPO_ROOT"
 
+SWIFT_BIN="$(xcrun --find swift)"
+SWIFTC_BIN="$(xcrun --find swiftc)"
 SWIFT_SYMBOLGRAPH_EXTRACT="$(xcrun --find swift-symbolgraph-extract)"
-SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
-TARGET_TRIPLE="$(swiftc -print-target-info | python3 -c 'import json, sys; print(json.load(sys.stdin)["target"]["triple"])')"
-SWIFT_TOOLCHAIN_ID="$(swiftc --version 2>&1 | shasum -a 256 | awk '{print substr($1, 1, 12)}')"
-SCRATCH_PATH="${BUTTONHEIST_SWIFT_API_SCRATCH_PATH:-$REPO_ROOT/.build/swift-api-baseline/$SWIFT_TOOLCHAIN_ID}"
+MACOS_SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+MACOS_TARGET_TRIPLE="$("$SWIFTC_BIN" -print-target-info | python3 -c 'import json, sys; print(json.load(sys.stdin)["target"]["triple"])')"
+IOS_SIMULATOR_SDK_PATH="$(xcrun --sdk iphonesimulator --show-sdk-path)"
+SWIFT_VERSION_OUTPUT="$("$SWIFTC_BIN" --version 2>&1)"
+SWIFT_VERSION_LINE="$(printf '%s\n' "$SWIFT_VERSION_OUTPUT" | grep -m1 'Apple Swift version' || true)"
+SWIFT_TOOLCHAIN_ID="$(printf '%s' "$SWIFT_VERSION_OUTPUT" | shasum -a 256 | awk '{print substr($1, 1, 12)}')"
+SCRATCH_ROOT="${BUTTONHEIST_SWIFT_API_SCRATCH_PATH:-$REPO_ROOT/.build/swift-api-baseline/$SWIFT_TOOLCHAIN_ID}"
 RAW_DIR="$(mktemp -d "${TMPDIR:-/tmp}/buttonheist-swift-api-raw.XXXXXX")"
 GENERATED_DIR="$(mktemp -d "${TMPDIR:-/tmp}/buttonheist-swift-api-generated.XXXXXX")"
 
@@ -61,24 +72,76 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Building public Swift API targets"
-mkdir -p "$SCRATCH_PATH"
-for entry in "${MODULES[@]}"; do
+if [[ "$SWIFT_VERSION_LINE" != *"$EXPECTED_SWIFT_VERSION"* ]]; then
+    severity="Error"
+    if [[ "$ALLOW_TOOLCHAIN_MISMATCH" == "1" ]]; then
+        severity="Warning"
+    fi
+    cat >&2 <<EOF
+$severity: Swift API baselines must be generated and checked with $EXPECTED_SWIFT_VERSION.
+
+Active toolchain:
+$SWIFT_VERSION_OUTPUT
+
+CI selects Xcode 26.3 before running this script. Locally, set DEVELOPER_DIR
+to an Xcode 26.3 developer directory before running check or update, for example:
+
+  DEVELOPER_DIR=/Applications/Xcode-26.3.0.app/Contents/Developer scripts/check-swift-api-baseline.sh
+
+Set BUTTONHEIST_SWIFT_API_ALLOW_TOOLCHAIN_MISMATCH=1 only while intentionally
+updating this contract for a new pinned Xcode/Swift toolchain.
+EOF
+    if [[ "$ALLOW_TOOLCHAIN_MISMATCH" != "1" ]]; then
+        exit 1
+    fi
+fi
+
+echo "Swift API baseline toolchain: $SWIFT_VERSION_LINE"
+
+macos_swift_build() {
+    "$SWIFT_BIN" build --scratch-path "$SCRATCH_ROOT/macos" "$@"
+}
+
+ios_debug_swift_build() {
+    "$SWIFT_BIN" build \
+        --scratch-path "$SCRATCH_ROOT/ios-simulator-debug" \
+        --triple "$IOS_SIMULATOR_TRIPLE" \
+        --sdk "$IOS_SIMULATOR_SDK_PATH" \
+        -Xswiftc -DDEBUG \
+        "$@"
+}
+
+echo "Building macOS public Swift API targets"
+mkdir -p "$SCRATCH_ROOT/macos"
+for entry in "${MACOS_MODULES[@]}"; do
     target="${entry%%:*}"
-    swift build --scratch-path "$SCRATCH_PATH" --target "$target"
+    macos_swift_build --target "$target"
 done
 
-BIN_PATH="$(swift build --scratch-path "$SCRATCH_PATH" --show-bin-path)"
-MODULE_SEARCH_PATH="$BIN_PATH/Modules"
-MODULE_CACHE_PATH="$BIN_PATH/ModuleCache"
-mkdir -p "$MODULE_CACHE_PATH"
+echo "Building iOS DEBUG public Swift API targets"
+mkdir -p "$SCRATCH_ROOT/ios-simulator-debug"
+for entry in "${IOS_DEBUG_MODULES[@]}"; do
+    target="${entry%%:*}"
+    ios_debug_swift_build --target "$target"
+done
+
+MACOS_BIN_PATH="$(macos_swift_build --show-bin-path)"
+MACOS_MODULE_SEARCH_PATH="$MACOS_BIN_PATH/Modules"
+MACOS_MODULE_CACHE_PATH="$MACOS_BIN_PATH/ModuleCache"
+mkdir -p "$MACOS_MODULE_CACHE_PATH"
+
+IOS_BIN_PATH="$(ios_debug_swift_build --show-bin-path)"
+IOS_MODULE_SEARCH_PATH="$IOS_BIN_PATH/Modules"
+IOS_MODULE_CACHE_PATH="$IOS_BIN_PATH/ModuleCache"
+mkdir -p "$IOS_MODULE_CACHE_PATH"
 
 normalize_module() {
     local module="$1"
     local raw_module_dir="$2"
     local output_file="$3"
+    local platform="$4"
 
-    python3 - "$module" "$raw_module_dir" "$output_file" <<'PY'
+    python3 - "$module" "$raw_module_dir" "$output_file" "$platform" <<'PY'
 import json
 import pathlib
 import sys
@@ -86,6 +149,7 @@ import sys
 module = sys.argv[1]
 raw_dir = pathlib.Path(sys.argv[2])
 output = pathlib.Path(sys.argv[3])
+platform = sys.argv[4]
 
 relationship_kinds = {
     "conformsTo",
@@ -180,6 +244,7 @@ for graph_name, graph in graphs:
 lines = [
     "# Button Heist Swift Public API Snapshot",
     f"# Module: {module}",
+    f"# Platform: {platform}",
     "# Generated by scripts/check-swift-api-baseline.sh --update",
     "# Source: swift-symbolgraph-extract --minimum-access-level public",
     "",
@@ -200,16 +265,21 @@ PY
 extract_module() {
     local module="$1"
     local reexports="$2"
+    local target_triple="$3"
+    local sdk_path="$4"
+    local module_search_path="$5"
+    local module_cache_path="$6"
+    local platform="$7"
     local raw_module_dir="$RAW_DIR/$module"
     mkdir -p "$raw_module_dir"
 
     local args=(
         "$SWIFT_SYMBOLGRAPH_EXTRACT"
         -module-name "$module"
-        -target "$TARGET_TRIPLE"
-        -sdk "$SDK_PATH"
-        -I "$MODULE_SEARCH_PATH"
-        -module-cache-path "$MODULE_CACHE_PATH"
+        -target "$target_triple"
+        -sdk "$sdk_path"
+        -I "$module_search_path"
+        -module-cache-path "$module_cache_path"
         -minimum-access-level public
         -skip-synthesized-members
         -skip-inherited-docs
@@ -222,13 +292,19 @@ extract_module() {
 
     echo "Extracting public API for $module"
     "${args[@]}"
-    normalize_module "$module" "$raw_module_dir" "$GENERATED_DIR/$module.symbols.txt"
+    normalize_module "$module" "$raw_module_dir" "$GENERATED_DIR/$module.symbols.txt" "$platform"
 }
 
-for entry in "${MODULES[@]}"; do
+for entry in "${MACOS_MODULES[@]}"; do
     module="${entry%%:*}"
     reexports="${entry#*:}"
-    extract_module "$module" "$reexports"
+    extract_module "$module" "$reexports" "$MACOS_TARGET_TRIPLE" "$MACOS_SDK_PATH" "$MACOS_MODULE_SEARCH_PATH" "$MACOS_MODULE_CACHE_PATH" "macOS"
+done
+
+for entry in "${IOS_DEBUG_MODULES[@]}"; do
+    module="${entry%%:*}"
+    reexports="${entry#*:}"
+    extract_module "$module" "$reexports" "$IOS_SIMULATOR_TRIPLE" "$IOS_SIMULATOR_SDK_PATH" "$IOS_MODULE_SEARCH_PATH" "$IOS_MODULE_CACHE_PATH" "iOS Simulator DEBUG"
 done
 
 if [[ "$UPDATE" == "1" ]]; then
