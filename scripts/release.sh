@@ -276,6 +276,9 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "  5. Wait for tag-level release workflow guardrails"
     echo "  6. On success: publish source to main and upgrade Homebrew"
     echo "     On tag workflow failure: delete tag and remove the local release commit"
+    echo ""
+    echo "Smallest local release-readiness preflight:"
+    echo "  ./scripts/release-readiness.sh"
     exit 0
 fi
 
