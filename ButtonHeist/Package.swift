@@ -19,6 +19,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../submodules/AccessibilitySnapshotBH"),
+        .package(name: "AccessibilitySnapshotModel", path: "../submodules/AccessibilitySnapshotBH/AccessibilitySnapshotModel"),
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
     ],
     targets: [
@@ -32,7 +33,7 @@ let package = Package(
             name: "TheScore",
             dependencies: [
                 "ThePlans",
-                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotModel"),
             ],
             path: "Sources/TheScore",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
@@ -98,7 +99,7 @@ let package = Package(
             dependencies: [
                 "ThePlans",
                 "TheScore",
-                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotModel"),
             ],
             path: "Sources/TheButtonHeist",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
@@ -120,7 +121,7 @@ let package = Package(
             dependencies: [
                 "HeistDoctorCore",
                 "TheScore",
-                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotModel"),
             ],
             path: "Tests/HeistDoctorCoreTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

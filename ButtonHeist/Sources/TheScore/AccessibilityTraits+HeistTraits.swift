@@ -2,6 +2,8 @@ import ThePlans
 import AccessibilitySnapshotModel
 
 public extension AccessibilityTraits {
+    static let alert = AccessibilityTraits(rawValue: UInt64(1) << 56)
+
     private static let heistKnownTraits: [(trait: AccessibilityTraits, name: String)] = [
         (.button, HeistTrait.button.rawValue),
         (.link, HeistTrait.link.rawValue),

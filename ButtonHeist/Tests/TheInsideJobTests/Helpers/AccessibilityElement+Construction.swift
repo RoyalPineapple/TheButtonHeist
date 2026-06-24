@@ -4,6 +4,12 @@ import UIKit
 import ThePlans
 @testable import TheScore
 
+extension UIAccessibilityTraits {
+    static func fromNames(_ names: [String]) -> UIAccessibilityTraits {
+        AccessibilityTraits.fromNames(names).uiAccessibilityTraits
+    }
+}
+
 /// Shared `AccessibilityElement` construction helpers for tests.
 ///
 /// Subsumes the per-file `makeElement` / `element` / `dummyElement` helpers
