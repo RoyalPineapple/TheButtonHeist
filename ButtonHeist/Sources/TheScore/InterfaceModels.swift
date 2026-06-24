@@ -2,6 +2,84 @@ import ThePlans
 import Foundation
 import AccessibilitySnapshotModel
 
+public enum ScrollContainerAxis: String, Codable, Sendable {
+    case none
+    case horizontal
+    case vertical
+    case both
+}
+
+public enum ScrollContainerMetrics {
+    public static let pageOverlap: Double = 44
+
+    public static func axis(
+        contentWidth: Double,
+        contentHeight: Double,
+        viewportWidth: Double,
+        viewportHeight: Double
+    ) -> ScrollContainerAxis {
+        let horizontal = isScrollable(contentLength: contentWidth, viewportLength: viewportWidth)
+        let vertical = isScrollable(contentLength: contentHeight, viewportLength: viewportHeight)
+
+        switch (horizontal, vertical) {
+        case (true, true):
+            return .both
+        case (true, false):
+            return .horizontal
+        case (false, true):
+            return .vertical
+        case (false, false):
+            return .none
+        }
+    }
+
+    public static func estimatedHorizontalPageScrolls(
+        contentWidth: Double,
+        viewportWidth: Double
+    ) -> Int {
+        estimatedPageScrolls(contentLength: contentWidth, viewportLength: viewportWidth)
+    }
+
+    public static func estimatedVerticalPageScrolls(
+        contentHeight: Double,
+        viewportHeight: Double
+    ) -> Int {
+        estimatedPageScrolls(contentLength: contentHeight, viewportLength: viewportHeight)
+    }
+
+    public static func estimatedPageScrolls(
+        contentLength: Double,
+        viewportLength: Double
+    ) -> Int {
+        guard contentLength.isFinite,
+              viewportLength.isFinite,
+              viewportLength > 0
+        else {
+            return 0
+        }
+
+        let scrollableDistance = contentLength - viewportLength
+        guard scrollableDistance > 1 else { return 0 }
+
+        let pageStep = max(1, viewportLength - pageOverlap)
+        return Int(ceil(scrollableDistance / pageStep))
+    }
+
+    private static func isScrollable(
+        contentLength: Double,
+        viewportLength: Double
+    ) -> Bool {
+        guard contentLength.isFinite,
+              viewportLength.isFinite,
+              viewportLength > 0
+        else {
+            return false
+        }
+
+        return contentLength > viewportLength + 1
+    }
+}
+
 // MARK: - Interface
 
 /// Position of a node in an accessibility hierarchy forest.

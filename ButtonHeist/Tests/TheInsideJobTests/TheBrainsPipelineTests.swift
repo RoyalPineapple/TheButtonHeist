@@ -758,6 +758,63 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(exploration.manifest.pendingContainers.contains(nested))
     }
 
+    func testSemanticExplorationAbsorbQueuesScrollContainersFromParsedPage() {
+        let outer = makeScrollableContainer(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400),
+            contentSize: CGSize(width: 320, height: 1_200)
+        )
+        let nested = makeScrollableContainer(
+            frame: CGRect(x: 20, y: 180, width: 280, height: 240),
+            contentSize: CGSize(width: 280, height: 900)
+        )
+        let page = Screen(
+            elements: [:],
+            hierarchy: [
+                .container(outer, children: [
+                    .container(nested, children: [])
+                ])
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        var exploration = Navigation.SemanticExploration(baseline: .empty)
+
+        exploration.absorb(page)
+
+        XCTAssertTrue(exploration.manifest.pendingContainers.contains(outer))
+        XCTAssertTrue(exploration.manifest.pendingContainers.contains(nested))
+    }
+
+    func testSemanticExplorationAbsorbQueuesNestedContainerWithoutRequeuingExploredOuter() {
+        let outer = makeScrollableContainer(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400),
+            contentSize: CGSize(width: 320, height: 1_200)
+        )
+        let nested = makeScrollableContainer(
+            frame: CGRect(x: 20, y: 520, width: 280, height: 240),
+            contentSize: CGSize(width: 280, height: 900)
+        )
+        let page = Screen(
+            elements: [:],
+            hierarchy: [
+                .container(outer, children: [
+                    .container(nested, children: [])
+                ])
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        exploration.manifest.addPendingContainers([outer])
+        exploration.markExplored(outer)
+
+        exploration.absorb(page)
+
+        XCTAssertTrue(exploration.manifest.exploredContainers.contains(outer))
+        XCTAssertFalse(exploration.manifest.pendingContainers.contains(outer))
+        XCTAssertTrue(exploration.manifest.pendingContainers.contains(nested))
+    }
+
     func testSemanticExplorationFinishOwnsExplorationTimestamp() {
         var exploration = Navigation.SemanticExploration(baseline: .empty)
 

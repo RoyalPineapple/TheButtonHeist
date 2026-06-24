@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 import AccessibilitySnapshotModel
@@ -13,6 +12,11 @@ struct PublicContainer: Encodable {
     let columnCount: Int?
     let contentWidth: Double?
     let contentHeight: Double?
+    let scrollAxis: String?
+    let pageScrollsX: Int?
+    let pageScrollsY: Int?
+    let observedElementCount: Int?
+    let truncation: PublicSubtreeTruncation?
     let isModalBoundary: Bool?
     let containerName: String?
     let frameX: Double?
@@ -25,64 +29,28 @@ struct PublicContainer: Encodable {
         container: AccessibilityContainer,
         annotation: InterfaceContainerAnnotation?,
         detail: InterfaceDetail,
+        observedElementCount: Int?,
+        truncation: PublicSubtreeTruncation?,
         children: [PublicTreeNode]
     ) {
-        switch container.type {
-        case .semanticGroup(let label, let value, let identifier):
-            self.type = "semanticGroup"
-            self.label = label
-            self.value = value
-            self.identifier = identifier
-            self.rowCount = nil
-            self.columnCount = nil
-            self.contentWidth = nil
-            self.contentHeight = nil
-        case .list:
-            self.type = "list"
-            self.label = nil
-            self.value = nil
-            self.identifier = nil
-            self.rowCount = nil
-            self.columnCount = nil
-            self.contentWidth = nil
-            self.contentHeight = nil
-        case .landmark:
-            self.type = "landmark"
-            self.label = nil
-            self.value = nil
-            self.identifier = nil
-            self.rowCount = nil
-            self.columnCount = nil
-            self.contentWidth = nil
-            self.contentHeight = nil
-        case .dataTable(let rowCount, let columnCount):
-            self.type = "dataTable"
-            self.label = nil
-            self.value = nil
-            self.identifier = nil
-            self.rowCount = rowCount
-            self.columnCount = columnCount
-            self.contentWidth = nil
-            self.contentHeight = nil
-        case .tabBar:
-            self.type = "tabBar"
-            self.label = nil
-            self.value = nil
-            self.identifier = nil
-            self.rowCount = nil
-            self.columnCount = nil
-            self.contentWidth = nil
-            self.contentHeight = nil
-        case .scrollable(let contentSize):
-            self.type = "scrollable"
-            self.label = nil
-            self.value = nil
-            self.identifier = nil
-            self.rowCount = nil
-            self.columnCount = nil
-            self.contentWidth = Self.sanitizedDouble(contentSize.width)
-            self.contentHeight = Self.sanitizedDouble(contentSize.height)
-        }
+        let fields = Self.fields(
+            for: container,
+            children: children,
+            observedElementCount: observedElementCount
+        )
+        self.type = fields.type
+        self.label = fields.label
+        self.value = fields.value
+        self.identifier = fields.identifier
+        self.rowCount = fields.rowCount
+        self.columnCount = fields.columnCount
+        self.contentWidth = fields.contentWidth
+        self.contentHeight = fields.contentHeight
+        self.scrollAxis = fields.scrollAxis
+        self.pageScrollsX = fields.pageScrollsX
+        self.pageScrollsY = fields.pageScrollsY
+        self.observedElementCount = fields.observedElementCount
+        self.truncation = truncation
         self.isModalBoundary = container.isModalBoundary ? true : nil
         self.containerName = annotation?.containerName
         self.children = children
@@ -99,7 +67,120 @@ struct PublicContainer: Encodable {
         self.frameHeight = Self.sanitizedDouble(container.frame.size.height)
     }
 
-    private static func sanitizedDouble(_ value: CGFloat) -> Double {
-        value.isFinite ? Double(value) : 0
+    private static func sanitizedDouble(_ value: Double) -> Double {
+        value.isFinite ? value : 0
     }
+
+    private static func fields(
+        for container: AccessibilityContainer,
+        children: [PublicTreeNode],
+        observedElementCount: Int?
+    ) -> Fields {
+        switch container.type {
+        case .semanticGroup(let label, let value, let identifier):
+            return Fields(type: "semanticGroup", label: label, value: value, identifier: identifier)
+        case .list:
+            return Fields(type: "list")
+        case .landmark:
+            return Fields(type: "landmark")
+        case .dataTable(let rowCount, let columnCount):
+            return Fields(type: "dataTable", rowCount: rowCount, columnCount: columnCount)
+        case .tabBar:
+            return Fields(type: "tabBar")
+        case .scrollable(let contentSize):
+            return scrollableFields(
+                contentSize: contentSize,
+                frame: container.frame,
+                children: children,
+                observedElementCount: observedElementCount
+            )
+        }
+    }
+
+    private static func scrollableFields(
+        contentSize: AccessibilitySize,
+        frame: AccessibilityRect,
+        children: [PublicTreeNode],
+        observedElementCount: Int?
+    ) -> Fields {
+        let contentWidth = Self.sanitizedDouble(contentSize.width)
+        let contentHeight = Self.sanitizedDouble(contentSize.height)
+        let viewportWidth = Self.sanitizedDouble(frame.size.width)
+        let viewportHeight = Self.sanitizedDouble(frame.size.height)
+        let horizontalPageScrolls = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
+            contentWidth: contentWidth,
+            viewportWidth: viewportWidth
+        )
+        let verticalPageScrolls = ScrollContainerMetrics.estimatedVerticalPageScrolls(
+            contentHeight: contentHeight,
+            viewportHeight: viewportHeight
+        )
+        let scrollAxis = ScrollContainerMetrics.axis(
+            contentWidth: contentWidth,
+            contentHeight: contentHeight,
+            viewportWidth: viewportWidth,
+            viewportHeight: viewportHeight
+        )
+        return Fields(
+            type: "scrollable",
+            contentWidth: contentWidth,
+            contentHeight: contentHeight,
+            scrollAxis: scrollAxis.rawValue,
+            pageScrollsX: horizontalPageScrolls > 0 ? horizontalPageScrolls : nil,
+            pageScrollsY: verticalPageScrolls > 0 ? verticalPageScrolls : nil,
+            observedElementCount: observedElementCount ?? children.reduce(0) { $0 + $1.elementCount }
+        )
+    }
+
+    private struct Fields {
+        let type: String
+        var label: String?
+        var value: String?
+        var identifier: String?
+        var rowCount: Int?
+        var columnCount: Int?
+        var contentWidth: Double?
+        var contentHeight: Double?
+        var scrollAxis: String?
+        var pageScrollsX: Int?
+        var pageScrollsY: Int?
+        var observedElementCount: Int?
+
+        init(
+            type: String,
+            label: String? = nil,
+            value: String? = nil,
+            identifier: String? = nil,
+            rowCount: Int? = nil,
+            columnCount: Int? = nil,
+            contentWidth: Double? = nil,
+            contentHeight: Double? = nil,
+            scrollAxis: String? = nil,
+            pageScrollsX: Int? = nil,
+            pageScrollsY: Int? = nil,
+            observedElementCount: Int? = nil
+        ) {
+            self.type = type
+            self.label = label
+            self.value = value
+            self.identifier = identifier
+            self.rowCount = rowCount
+            self.columnCount = columnCount
+            self.contentWidth = contentWidth
+            self.contentHeight = contentHeight
+            self.scrollAxis = scrollAxis
+            self.pageScrollsX = pageScrollsX
+            self.pageScrollsY = pageScrollsY
+            self.observedElementCount = observedElementCount
+        }
+    }
+}
+
+struct PublicSubtreeTruncation: Encodable {
+    let state = "truncated"
+    let reasonCode = "scroll-subtree-element-budget"
+    let observedElementCount: Int
+    let renderedElementCount: Int
+    let omittedElementCount: Int
+    let visibleElementBudget: Int
 }

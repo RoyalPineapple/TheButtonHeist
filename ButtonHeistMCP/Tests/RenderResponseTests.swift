@@ -31,6 +31,71 @@ struct RenderResponseTests {
         #expect(text.contains(#"group label="Actions" id="actions" containerName="semantic_actions__actions" frame=(0,40,200,100)"#))
     }
 
+    @Test("heist render attaches full structured receipt")
+    func heistRenderAttachesFullStructuredReceipt() throws {
+        let row = Self.staticText(label: "Row 0", identifier: "row_0")
+        let lazyRow = Self.staticText(
+            label: "Lazy Row",
+            value: "Loaded by scroll",
+            identifier: "lazy_row"
+        )
+        let trace = AccessibilityTrace(first: Self.interface([row]))
+            .appending(Self.interface([row, lazyRow]))
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Load More"))))
+        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
+        let response = FenceResponse.heistExecution(
+            plan: plan,
+            result: HeistExecutionResult(
+                steps: [
+                    HeistExecutionStepResult(
+                        path: "$.body[0]",
+                        kind: .action,
+                        status: .passed,
+                        durationMs: 1,
+                        intent: .action(
+                            command: command.wireType.rawValue,
+                            target: command.reportTarget.map(String.init(describing:))
+                        ),
+                        evidence: .action(HeistActionEvidence(
+                            command: command,
+                            actionResult: ActionResult(
+                                success: true,
+                                method: .activate,
+                                accessibilityTrace: trace
+                            )
+                        ))
+                    ),
+                ],
+                durationMs: 3
+            )
+        )
+
+        let result = ButtonHeistMCPServer.renderResponse(response)
+        let root = try #require(result.structuredContent?.objectValue)
+        let report = try #require(root["report"]?.objectValue)
+        let nodes = try #require(report["nodes"]?.arrayValue)
+        let node = try #require(nodes.first?.objectValue)
+        let action = try #require(node["action"]?.objectValue)
+        let actionResult = try #require(action["result"]?.objectValue)
+        let delta = try #require(actionResult["delta"]?.objectValue)
+        let edits = try #require(delta["edits"]?.objectValue)
+        let added = try #require(edits["added"]?.arrayValue)
+        let addedElement = try #require(added.first?.objectValue)
+
+        #expect(root["status"]?.stringValue == "ok")
+        #expect(actionResult["method"]?.stringValue == "activate")
+        #expect(delta["kind"]?.stringValue == "elementsChanged")
+        #expect(addedElement["label"]?.stringValue == "Lazy Row")
+        #expect(addedElement["value"]?.stringValue == "Loaded by scroll")
+        #expect(addedElement["identifier"]?.stringValue == "lazy_row")
+        guard case .text(let text, _, _)? = result.content.first else {
+            Issue.record("expected compact text content")
+            return
+        }
+        #expect(text.contains("-> elements changed"))
+        #expect(!text.contains(#"+ "Lazy Row""#))
+    }
+
     @Test("summary heist catalog render stays a compact menu")
     func summaryHeistCatalogRenderStaysCompactMenu() {
         let response = FenceResponse.heistCatalog(HeistDiscoveryCatalog(heists: [
@@ -132,6 +197,44 @@ struct RenderResponseTests {
                     InterfaceContainerAnnotation(path: TreePath([0]), containerName: "semantic_actions__actions"),
                 ]
             )
+        )
+    }
+
+    private static func interface(_ elements: [AccessibilityElement]) -> Interface {
+        Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: elements.enumerated().map { index, element in
+                .element(element, traversalIndex: index)
+            },
+            annotations: InterfaceAnnotations(
+                elements: elements.indices.map { index in
+                    InterfaceElementAnnotation(path: TreePath([index]), actions: [])
+                }
+            )
+        )
+    }
+
+    private static func staticText(
+        label: String,
+        value: String? = nil,
+        identifier: String? = nil
+    ) -> AccessibilityElement {
+        AccessibilityElement(
+            description: label,
+            label: label,
+            value: value,
+            traits: AccessibilityTraits.fromNames(["staticText"]),
+            identifier: identifier,
+            hint: nil,
+            userInputLabels: nil,
+            shape: .frame(AccessibilityRect(x: 0, y: 0, width: 100, height: 44)),
+            activationPoint: AccessibilityPoint(x: 50, y: 22),
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: false
         )
     }
 }

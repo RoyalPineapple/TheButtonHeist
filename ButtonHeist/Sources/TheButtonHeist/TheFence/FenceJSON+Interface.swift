@@ -17,22 +17,40 @@ struct PublicInterface: Encodable {
     let timestamp: String
     let screenDescription: String
     let screenId: String?
+    let snapshotQuality: PublicSnapshotQuality
     let navigation: PublicNavigation
     let tree: [PublicTreeNode]
 
-    init(interface: Interface, detail: InterfaceDetail) {
+    init(
+        interface: Interface,
+        detail: InterfaceDetail,
+        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
+        totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
+    ) {
         let formatter = ISO8601DateFormatter()
         self.timestamp = formatter.string(from: interface.timestamp)
         self.screenDescription = InterfaceSummary.screenDescription(for: interface)
         self.screenId = InterfaceSummary.screenId(for: interface)
         self.navigation = PublicNavigation(interface: interface)
         let counter = PublicIndexCounter()
+        let projectionStats = PublicInterfaceProjectionStats(
+            observedElementCount: interface.projectedElements.count
+        )
+        let totalNodeBudgetTracker = PublicNodeBudgetTracker(budget: totalNodeBudget)
         self.tree = PublicTreeNode.nodes(
             from: interface.tree,
             detail: detail,
             counter: counter,
+            visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudgetTracker,
+            projectionStats: projectionStats,
             elementAnnotations: interface.annotations.elementByPath,
             containerAnnotations: interface.annotations.containerByPath
+        )
+        self.snapshotQuality = projectionStats.snapshotQuality(
+            visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudget,
+            totalNodeBudgetHit: totalNodeBudgetTracker.wasLimited
         )
     }
 }

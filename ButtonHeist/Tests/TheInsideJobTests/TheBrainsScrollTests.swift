@@ -353,6 +353,48 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
+    func testSemanticRevealDoesNotNoopWhenVisibleIdRepresentsDifferentElement() async {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        scrollView.contentOffset = CGPoint(x: 0, y: 800)
+        let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
+        let scrollContainerName = "reused_cell_scroll"
+        let target = makeElement(label: "Controls Demo", traits: .button)
+        let currentlyVisibleReuse = makeElement(label: "Custom Rotors", traits: .button)
+        let entry = Screen.ScreenElement(
+            heistId: "reused_cell",
+            contentSpaceOrigin: CGPoint(x: 0, y: 20),
+            scrollContainerName: scrollContainerName,
+            element: target
+        )
+        brains.stash.installScreenForTesting(Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [
+                .container(container, children: [
+                    .element(currentlyVisibleReuse, traversalIndex: 0)
+                ])
+            ],
+            containerNames: [container: scrollContainerName],
+            heistIdByElement: [currentlyVisibleReuse: entry.heistId],
+            elementRefs: [
+                entry.heistId: .init(object: nil, scrollView: scrollView)
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [
+                container: .init(view: scrollView)
+            ]
+        ))
+
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(entry)
+
+        guard case .revealed(let resolvedScrollView) = result else {
+            return XCTFail("Expected reused visible id to trigger semantic reveal, got \(result)")
+        }
+        XCTAssertTrue(resolvedScrollView === scrollView)
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
+        XCTAssertLessThan(scrollView.contentOffset.y, 100)
+    }
+
     func testSemanticRevealUsesNonAnimatedJumpForKnownOffscreenElement() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -605,6 +647,72 @@ final class TheBrainsScrollTests: XCTestCase {
             result.message?.contains("after semantic reveal") ?? false,
             "Stale offscreen memory must not drive operation-local semantic reveal after a fresh screen change"
         )
+    }
+
+    func testTargetDiscoveryMissDoesNotRevealStaleKnownOffscreenTarget() async {
+        let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let staleVisible = makeElement(label: "Root Visible")
+        let staleRootButton = makeElement(label: "Controls Demo", traits: .button)
+        installScreenWithKnownOffscreen(
+            visible: (staleVisible, "root_visible"),
+            offscreen: (staleRootButton, "stale_controls_button", CGPoint(x: 0, y: 1_200), staleScrollView)
+        )
+
+        let currentHeader = makeElement(label: "Controls Demo", traits: .header)
+        let currentBackButton = makeElement(label: "ButtonHeist Demo", traits: [.button, .backButton])
+        let currentScreen = Screen.makeForTests(elements: [
+            (currentHeader, "current_controls_header"),
+            (currentBackButton, "current_back_button"),
+        ])
+        var discoveryAttempts = 0
+        brains.navigation.elementInflation.discoverTarget = { _ in
+            discoveryAttempts += 1
+            return currentScreen
+        }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Controls Demo", traits: [.button])),
+            method: .activate,
+            deallocatedBoundary: "test inflation"
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected current-screen target miss, got \(result)")
+        }
+        XCTAssertEqual(discoveryAttempts, 1)
+        XCTAssertEqual(failure.failedStep, .notFound)
+        XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [])
+        XCTAssertTrue(
+            failure.message.contains("traits=[button]"),
+            "Expected current semantic miss to preserve the requested button traits, got \(failure.message)"
+        )
+    }
+
+    func testActionTargetDiscoveryStartsFromCurrentVisibleScreen() async {
+        let staleVisible = makeElement(label: "Root Visible")
+        let staleRootButton = makeElement(label: "Controls Demo", traits: .button)
+        let staleRootScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(staleVisible, "root_visible")],
+            offViewport: [(staleRootButton, "stale_controls_button", CGPoint(x: 0, y: 1_200))]
+        )
+        brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleRootScreen)
+
+        let currentHeader = makeElement(label: "Controls Demo", traits: .header)
+        let currentBackButton = makeElement(label: "ButtonHeist Demo", traits: [.button, .backButton])
+        let currentScreen = Screen.makeForTests(elements: [
+            (currentHeader, "current_controls_header"),
+            (currentBackButton, "current_back_button"),
+        ])
+        brains.stash.recordParsedObservedEvidence(currentScreen)
+        brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
+
+        let discovered = await brains.navigation.elementInflation.discoverTarget?(
+            .predicate(ElementPredicate(label: "Controls Demo", traits: [.button]))
+        )
+
+        XCTAssertNotNil(discovered?.findElement(heistId: "current_controls_header"))
+        XCTAssertNil(discovered?.findElement(heistId: "stale_controls_button"))
     }
 
     func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async {

@@ -5,34 +5,57 @@ import ThePlans
 import TheInsideJob
 
 private enum DemoHome {
-    private static let controlsBackTarget = ElementPredicateTemplate(
-        label: .exact(.literal("Controls Demo")),
-        traits: [.backButton]
-    )
-    private static let rootBackTarget = ElementPredicateTemplate(
-        label: .exact(.literal("ButtonHeist Demo")),
-        traits: [.backButton]
-    )
+    private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
+    private static let rootBackTarget = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.button])
+    private static let rootTitle = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.header])
+    private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
+    private static let backChromeSettleTimeout = 0.25
 
     static let openMenu = HeistDef<Void>("DemoHome.openMenu") {
-        If {
-            Case(.present(controlsBackTarget)) {
-                Activate(.predicate(controlsBackTarget))
-                    .expect(.changed(.screen(where: .present(.label("Controls Demo")))), timeout: .seconds(8))
-            }
-            Else {}
-        }
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
+        WaitFor(.absent(rootBackTarget), timeout: .seconds(2))
+        WaitFor(.present(rootTitle), timeout: .seconds(4))
+
+        Activate(.label("Menu"))
+            .expect(.changed(.screen(where: .present(.label("Menu")))), timeout: .seconds(8))
+    }
+
+    private static let backOneLevelIfNeeded = HeistDef<Void>("DemoHome.backOneLevelIfNeeded") {
+        try reanchorLongListIfNeeded()
+
+        WaitFor(.present(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
+            .else {}
 
         If {
             Case(.present(rootBackTarget)) {
                 Activate(.predicate(rootBackTarget))
-                    .expect(.changed(.screen(where: .present(.label("ButtonHeist Demo")))), timeout: .seconds(8))
+                    .expect(.changed(.screen()), timeout: .seconds(8))
+            }
+            Case(.present(anyBackTarget)) {
+                Activate(.predicate(anyBackTarget))
+                    .expect(.changed(.screen()), timeout: .seconds(8))
             }
             Else {}
         }
+    }
 
-        Activate(.label("Menu"))
-            .expect(.changed(.screen(where: .present(.label("Menu")))), timeout: .seconds(8))
+    private static let reanchorLongListIfNeeded = HeistDef<Void>("DemoHome.reanchorLongListIfNeeded") {
+        let reanchorAction = try rawAction(
+            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
+            waiver: "Reanchors the long list before checking navigation chrome"
+        )
+
+        If {
+            Case(.present(longListFirstRow)) {
+                reanchorAction
+            }
+            Else {}
+        }
     }
 }
 

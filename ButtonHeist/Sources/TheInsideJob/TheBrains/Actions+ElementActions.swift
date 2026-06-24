@@ -176,8 +176,18 @@ extension Actions {
             method: .customAction,
             deallocatedBoundary: "custom action"
         ) { context in
-            let screenElement = context.screenElement
-            let liveTarget = context.liveTarget
+            let dispatchContext: ElementInflation.InflatedElementTarget
+            switch await self.customActionDispatchContext(
+                context,
+                actionName: target.actionName
+            ) {
+            case .resolved(let context):
+                dispatchContext = context
+            case .failed(let result):
+                return result
+            }
+            let screenElement = dispatchContext.screenElement
+            let liveTarget = dispatchContext.liveTarget
             switch self.accessibilityActions.performCustomAction(named: target.actionName, on: liveTarget) {
             case .deallocated:
                 return .failure(.customAction, message: "custom action failed")
@@ -200,6 +210,33 @@ extension Actions {
             case .succeeded:
                 return .success(method: .customAction)
             }
+        }
+    }
+
+    private enum CustomActionDispatchContextResolution {
+        case resolved(ElementInflation.InflatedElementTarget)
+        case failed(TheSafecracker.InteractionResult)
+    }
+
+    private func customActionDispatchContext(
+        _ context: ElementInflation.InflatedElementTarget,
+        actionName: String
+    ) async -> CustomActionDispatchContextResolution {
+        guard accessibilityActions.needsPreDispatchRefresh(named: actionName, on: context.liveTarget) else {
+            return .resolved(context)
+        }
+
+        // SwiftUI can update an AccessibilityNode's label/value before its block-backed custom actions.
+        await tripwire.yieldFrames(1)
+        switch await navigation.elementInflation.inflate(
+            for: context.target,
+            method: .customAction,
+            deallocatedBoundary: "custom action dispatch refresh"
+        ) {
+        case .inflated(let refreshedContext):
+            return .resolved(refreshedContext)
+        case .failed(let failure):
+            return .failed(failure.interactionResult(commandMethod: .customAction))
         }
     }
 

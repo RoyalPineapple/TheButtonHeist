@@ -59,7 +59,7 @@ struct ButtonHeistMCPServer {
             return renderResponse(response)
         } catch {
             let response = FenceResponse.failure(error)
-            return .init(content: [.text(text: response.compactFormatted(), annotations: nil, _meta: nil)], isError: true)
+            return renderResponse(response)
         }
     }
 
@@ -121,7 +121,24 @@ struct ButtonHeistMCPServer {
         }
 
         content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
-        return .init(content: content, isError: response.isFailure)
+        let structuredContent: Value? = structuredContent(for: response)
+        return .init(
+            content: content,
+            structuredContent: structuredContent,
+            isError: response.isFailure
+        )
+    }
+
+    private static func structuredContent(for response: FenceResponse) -> Value {
+        do {
+            let data = try response.jsonData(outputFormatting: [])
+            return try JSONDecoder().decode(Value.self, from: data)
+        } catch {
+            return .object([
+                "status": .string("error"),
+                "message": .string("Failed to encode structured tool response: \(error.localizedDescription)"),
+            ])
+        }
     }
 
 }

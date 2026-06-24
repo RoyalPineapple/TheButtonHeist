@@ -9,6 +9,12 @@ import UIKit
 @MainActor
 final class AccessibilityActionDispatcher {
 
+    private typealias CustomActionSelectorIMP = @convention(c) (
+        AnyObject,
+        Selector,
+        UIAccessibilityCustomAction
+    ) -> Bool
+
     enum ActivateOutcome {
         case success
         case objectDeallocated
@@ -42,6 +48,13 @@ final class AccessibilityActionDispatcher {
         performCustomAction(named: name, on: liveTarget.object)
     }
 
+    func needsPreDispatchRefresh(named name: String, on liveTarget: TheStash.LiveActionTarget) -> Bool {
+        guard !(liveTarget.object is UIView),
+              let action = liveTarget.object.accessibilityCustomActions?.first(where: { $0.name == name })
+        else { return false }
+        return action.actionHandler != nil
+    }
+
     private func performCustomAction(named name: String, on object: NSObject) -> CustomActionOutcome {
         guard let action = object.accessibilityCustomActions?
             .first(where: { $0.name == name }) else {
@@ -51,8 +64,15 @@ final class AccessibilityActionDispatcher {
             return handler(action) ? .succeeded : .declined
         }
         if let target = action.target {
-            _ = (target as AnyObject).perform(action.selector, with: action)
-            return .succeeded
+            let receiver = target as AnyObject
+            guard receiver.responds(to: action.selector) else {
+                return .noSuchAction
+            }
+            let implementation = unsafeBitCast(
+                receiver.method(for: action.selector),
+                to: CustomActionSelectorIMP.self
+            )
+            return implementation(receiver, action.selector, action) ? .succeeded : .declined
         }
         return .noSuchAction
     }

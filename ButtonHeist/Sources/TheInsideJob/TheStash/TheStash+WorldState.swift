@@ -130,6 +130,32 @@ extension TheStash {
         settledSemanticScreen
     }
 
+    /// Starting value for public interface discovery after a visible settle.
+    ///
+    /// Public reads should describe the current screen. Discovery-only memory
+    /// from a prior screen can share generated container names with the current
+    /// screen, so command-owned interface exploration starts from visible
+    /// current-screen state and grows from there.
+    func visibleExplorationBaseline(from screen: Screen) -> Screen {
+        screen.visibleOnly
+    }
+
+    /// Starting value for action-owned target discovery.
+    ///
+    /// Target inflation should retain current-screen discovery memory so
+    /// known off-viewport elements can fail with the right reveal diagnostic.
+    /// After navigation, though, old discovery-only rows can look actionable on
+    /// the new screen. Use the full settled baseline only while its visible
+    /// surface still pairs with the latest live visible screen.
+    func actionDiscoveryBaseline() -> Screen {
+        let currentVisible = liveVisibleScreen
+        let settledBaseline = explorationBaseline()
+        guard settledBaseline.visibleSurfacePairs(with: currentVisible) else {
+            return visibleExplorationBaseline(from: currentVisible)
+        }
+        return settledBaseline
+    }
+
     func knownContentOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
             selectElements().map { ($0.element, $0.contentSpaceOrigin) },
@@ -157,6 +183,15 @@ extension TheStash {
     /// need the interface of the settled screen, not an arbitrary one.
     func interface(timestamp: Date = Date()) -> Interface {
         WireConversion.toInterface(from: settledSemanticScreen, timestamp: timestamp)
+    }
+
+    /// Interface projection for command-owned discovery.
+    ///
+    /// Discovery retains off-viewport elements in semantic memory while the
+    /// latest parser hierarchy remains viewport-local. This projection returns
+    /// the live hierarchy plus discovered scroll-container content.
+    func discoveryInterface(timestamp: Date = Date()) -> Interface {
+        WireConversion.toDiscoveryInterface(from: settledSemanticScreen, timestamp: timestamp)
     }
 
     /// Semantic projection used for traces and deltas.
@@ -199,6 +234,40 @@ extension TheStash {
         recordParsedObservedEvidence(from: result.observedEvidence)
         observedState.clearFailedSettleDiagnosticEvidence()
         return result.settledScreen
+    }
+}
+
+private extension Screen {
+    @MainActor
+    func visibleSurfacePairs(with currentVisible: Screen) -> Bool {
+        guard !currentVisible.visibleIds.isEmpty else {
+            return !knownIds.isEmpty
+        }
+        if !visibleIds.isDisjoint(with: currentVisible.visibleIds) {
+            return true
+        }
+        if let baselineName = name,
+           let currentName = currentVisible.name,
+           baselineName == currentName {
+            return true
+        }
+        return visibleElementsPair(with: currentVisible)
+    }
+
+    @MainActor
+    func visibleElementsPair(with currentVisible: Screen) -> Bool {
+        let previous = visibleIds
+            .compactMap { semantic.elements[$0]?.element }
+            .map(TheStash.WireConversion.convert)
+        let current = currentVisible.visibleIds
+            .compactMap { currentVisible.semantic.elements[$0]?.element }
+            .map(TheStash.WireConversion.convert)
+        guard !previous.isEmpty, !current.isEmpty else { return false }
+
+        let edits = ElementEdits.between(beforeElements: previous, afterElements: current)
+        return !edits.updated.isEmpty
+            || edits.removed.count < previous.count
+            || edits.added.count < current.count
     }
 }
 

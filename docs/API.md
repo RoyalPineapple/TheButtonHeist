@@ -179,6 +179,66 @@ Responses may include compact deltas such as `noChange`, `elementsChanged`, or
 `screenChanged`. Those deltas summarize what changed between trace captures;
 they do not replace the underlying captures.
 
+## Interface Projection Quality
+
+Public interface JSON responses include `snapshotQuality` so machine clients can
+distinguish complete captures from bounded projections. The state vocabulary is:
+
+| State | Meaning |
+|-------|---------|
+| `full` | The response rendered every observed element in the requested projection. |
+| `filtered` | The caller requested a scoped projection, such as a subtree, and the response is complete for that scope. |
+| `truncated` | Button Heist intentionally omitted part of an otherwise available projection to keep the response bounded. |
+| `sparse` | The runtime had only partial semantic evidence for the screen. Clients may inspect it, but should not treat absence as conclusive. |
+| `failed` | The runtime could not produce a usable semantic projection. The response should carry the product error instead of a partial tree. |
+
+The current `get_interface` projection emits `full` or `truncated`.
+`filtered`, `sparse`, and `failed` are reserved contract states for scoped or
+degraded projections; they must use the same quality object before they are
+exposed. For huge scroll views, Button Heist bounds each scrollable subtree by
+`BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET`
+(default `300`, clamped to `0...1000`). A truncated scroll container keeps its
+scroll metrics and `observedElementCount`, renders only the leading elements,
+and adds a `truncation` object with:
+
+- `state: "truncated"`
+- `reasonCode: "scroll-subtree-element-budget"`
+- `observedElementCount`
+- `renderedElementCount`
+- `omittedElementCount`
+- `visibleElementBudget`
+
+Compact output mirrors the same decision with a `subtree truncated` line.
+
+Whole-interface public projection is also capped by `BH_TOTAL_NODE_BUDGET` /
+`BUTTONHEIST_TOTAL_NODE_BUDGET` (default and hard cap `5000`). When this cap is
+hit, top-level `snapshotQuality` reports:
+
+- `state: "truncated"`
+- `reasonCode: "total-node-budget"`
+- `observedElementCount`
+- `renderedElementCount`
+- `omittedElementCount`
+- `totalNodeBudget`
+
+Compact output mirrors the same decision with an `interface truncated` line.
+
+Runtime knobs are read from the process that uses them. Scroll exploration
+limits are app-side InsideJob knobs; public projection budgets are applied by
+TheFence and therefore affect CLI, JSON-lines, and MCP output in the client
+process. Test runners may prefix the same names with `TEST_RUNNER_`; the
+unprefixed name wins when it is valid.
+
+| Variable | Default | Clamp | Purpose |
+|----------|---------|-------|---------|
+| `BH_POST_SCROLL_LAYOUT_FRAMES` / `BUTTONHEIST_POST_SCROLL_LAYOUT_FRAMES` | `3` | `0...10` | Main-run-loop frames to wait after programmatic scrolling. |
+| `BH_TRIPWIRE_PULSE_HZ` / `BUTTONHEIST_TRIPWIRE_PULSE_HZ` | `10` | `1...120` | Accessibility tripwire polling frequency. |
+| `BH_MAX_SCROLLS_PER_CONTAINER` / `BUTTONHEIST_MAX_SCROLLS_PER_CONTAINER` | `200` | `1...2000` | Per-container scroll exploration safety limit. |
+| `BH_MAX_SCROLLS_PER_DISCOVERY` / `BUTTONHEIST_MAX_SCROLLS_PER_DISCOVERY` | `200` | `1...2000` | Whole-discovery scroll exploration safety limit. |
+| `BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET` | `300` | `0...1000` | Per-scroll-container public projection budget. |
+| `BH_VISIBLE_ELEMENT_BUDGET` / `BUTTONHEIST_VISIBLE_ELEMENT_BUDGET` | `300` | `0...1000` | Backward-compatible spelling for the same projection budget. |
+| `BH_TOTAL_NODE_BUDGET` / `BUTTONHEIST_TOTAL_NODE_BUDGET` | `5000` | `0...5000` | Whole-interface public projection budget. |
+
 ## TheFence
 
 **Import**: `import ButtonHeist`
@@ -256,6 +316,8 @@ Runtime behavior:
 - JSON-RPC over stdio
 - One reused `TheFence` instance per MCP server process
 - Auto-reconnects to the device on the next tool call after disconnect
+- Returns compact text as the first-glance summary and the same public JSON
+  response as MCP `structuredContent`
 - Returns screenshots as artifact paths by default
 - Requires explicit, size-bounded inline screenshot opt-ins
 
@@ -308,6 +370,15 @@ heist fixtures, scripts, and replay.
 `ActionResult` reports delivery, the action method used, optional typed error
 kind, optional command payload, trace-derived accessibility delta, and
 expectation result when one was requested.
+
+For `elementsChanged`, public responses include concrete semantic edits under
+`delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when
+present. For `screenChanged`, public responses include the destination
+`delta.newInterface`. Agents should inspect those payloads before deciding
+whether the action achieved its intended state or merely observed scroll/loading
+churn. Compact text is progressive: successful heist steps summarize the delta
+kind, while failed steps include concrete evidence lines when trace evidence is
+available.
 
 ### Expectations
 

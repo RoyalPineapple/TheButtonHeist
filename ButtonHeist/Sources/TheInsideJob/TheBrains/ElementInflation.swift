@@ -22,7 +22,7 @@ final class ElementInflation {
     var discoverTarget: (@MainActor (ElementTarget) async -> Screen?)?
 
     static let comfortMarginFraction: CGFloat = 1.0 / 6.0
-    static let postScrollLayoutFrames = Navigation.postScrollLayoutFrames
+    static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
 
     init(
         stash: TheStash,
@@ -206,13 +206,26 @@ final class ElementInflation {
             case .failure(let failure):
                 return .failure(failure)
             case nil:
-                break
+                return discoveredSemanticTarget(target)
             }
         }
         guard allowKnownFallback else {
             return currentVisibleTargetFailure(target)
         }
         return knownSemanticTarget(target)
+    }
+
+    private func discoveredSemanticTarget(
+        _ target: ElementTarget
+    ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+        switch knownSemanticTarget(target) {
+        case .success(let screenElement):
+            return .success(screenElement)
+        case .failure(let failure) where failure.failedStep == .notFound:
+            return .failure(failure)
+        case .failure(let failure):
+            return .failure(failure)
+        }
     }
 
     private func currentVisibleTargetFailure(
@@ -236,6 +249,9 @@ final class ElementInflation {
     ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
         if let revealable = uniquelyResolvedRevealableTarget(target) {
             return .success(revealable)
+        }
+        if let reachable = uniquelyResolvedReachableTarget(target) {
+            return .success(reachable)
         }
         switch stash.resolveTarget(target) {
         case .resolved(let screenElement):
@@ -280,6 +296,24 @@ final class ElementInflation {
             let revealableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
                 .filter { $0.contentSpaceOrigin != nil && stash.liveScrollView(for: $0) != nil }
             return revealableMatches.count == 1 ? revealableMatches[0] : nil
+        case .predicate:
+            return nil
+        }
+    }
+
+    private func uniquelyResolvedReachableTarget(_ target: ElementTarget) -> TheStash.ScreenElement? {
+        uniquelyResolvedReachableTarget(target, in: stash.settledSemanticScreen)
+    }
+
+    private func uniquelyResolvedReachableTarget(
+        _ target: ElementTarget,
+        in screen: Screen
+    ) -> TheStash.ScreenElement? {
+        switch target {
+        case .predicate(let predicate, ordinal: nil):
+            let reachableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
+                .filter { $0.scrollContentLocation != nil }
+            return reachableMatches.count == 1 ? reachableMatches[0] : nil
         case .predicate:
             return nil
         }
@@ -353,37 +387,33 @@ final class ElementInflation {
     ) -> Result<InflatedElementTarget, ElementInflationFailure> {
         let liveResolution = stash.resolveLiveActionTarget(for: screenElement)
         if case .resolved(let liveTarget) = liveResolution {
+            guard liveTarget.screenElement.matches(target) else {
+                return resolveFreshVisibleElementTarget(
+                    target: target,
+                    method: method,
+                    deallocatedBoundary: deallocatedBoundary
+                )
+            }
             return .success(InflatedElementTarget(
                 target: target,
-                screenElement: screenElement,
+                screenElement: liveTarget.screenElement,
                 liveTarget: liveTarget
             ))
         }
 
         if case .objectUnavailable = liveResolution {
-            stash.refreshCurrentVisibleTree()
-            switch stash.resolveVisibleTarget(target) {
-            case .resolved(let visibleElement):
-                return resolveVisibleReboundElementTarget(
-                    target: target,
-                    screenElement: visibleElement,
-                    method: method,
-                    deallocatedBoundary: deallocatedBoundary
-                )
-            case .notFound(let facts):
-                return .failure(.staleRefresh(
-                    "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))"
-                ))
-            case .ambiguous(let facts):
-                return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
-            }
+            return resolveFreshVisibleElementTarget(
+                target: target,
+                method: method,
+                deallocatedBoundary: deallocatedBoundary
+            )
         }
 
         switch liveResolution {
         case .resolved(let liveTarget):
             return .success(InflatedElementTarget(
                 target: target,
-                screenElement: screenElement,
+                screenElement: liveTarget.screenElement,
                 liveTarget: liveTarget
             ))
         case .objectUnavailable:
@@ -406,6 +436,30 @@ final class ElementInflation {
         }
     }
 
+    private func resolveFreshVisibleElementTarget(
+        target: ElementTarget,
+        method: ActionMethod,
+        deallocatedBoundary: String
+    ) -> Result<InflatedElementTarget, ElementInflationFailure> {
+        stash.refreshCurrentVisibleTree()
+        switch stash.resolveVisibleTarget(target) {
+        case .resolved(let visibleElement):
+            return resolveVisibleReboundElementTarget(
+                target: target,
+                screenElement: visibleElement,
+                method: method,
+                deallocatedBoundary: deallocatedBoundary
+            )
+        case .notFound(let facts):
+            return .failure(.staleRefresh(
+                "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))",
+                failureKind: .targetUnavailable
+            ))
+        case .ambiguous(let facts):
+            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
+        }
+    }
+
     private func resolveVisibleReboundElementTarget(
         target: ElementTarget,
         screenElement: TheStash.ScreenElement,
@@ -416,7 +470,7 @@ final class ElementInflation {
         case .resolved(let liveTarget):
             return .success(InflatedElementTarget(
                 target: target,
-                screenElement: screenElement,
+                screenElement: liveTarget.screenElement,
                 liveTarget: liveTarget
             ))
         case .objectUnavailable:
@@ -525,6 +579,15 @@ extension ElementInflation.InflatedElementTarget {
             target: target,
             element: TheStash.WireConversion.convert(screenElement.element)
         )
+    }
+}
+
+private extension TheStash.ScreenElement {
+    func matches(_ target: ElementTarget) -> Bool {
+        switch target {
+        case .predicate(let predicate, _):
+            return predicate.matches(element, mode: .exact)
+        }
     }
 }
 

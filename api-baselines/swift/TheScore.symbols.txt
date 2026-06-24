@@ -237,10 +237,12 @@ symbol	TheScore.symbols.json	s:8TheScore14EnvironmentKeyO8rawValueACSgSS_tcfc	sw
 symbol	TheScore.symbols.json	s:8TheScore14EnvironmentKeyO9boolValueSbvp	swift.property	public	boolValue	EnvironmentKey.boolValue	var boolValue: Bool { get }
 symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV	swift.struct	public	InterfaceQuery	InterfaceQuery	struct InterfaceQuery
 symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV11descriptionSSvp	swift.property	public	description	InterfaceQuery.description	var description: String { get }
+symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV22maxScrollsPerContainerSiSgvp	swift.property	public	maxScrollsPerContainer	InterfaceQuery.maxScrollsPerContainer	let maxScrollsPerContainer: Int?
+symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV22maxScrollsPerDiscoverySiSgvp	swift.property	public	maxScrollsPerDiscovery	InterfaceQuery.maxScrollsPerDiscovery	let maxScrollsPerDiscovery: Int?
 symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	InterfaceQuery.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	InterfaceQuery.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV7matcher0A5Plans16ElementPredicateVvp	swift.property	public	matcher	InterfaceQuery.matcher	let matcher: ElementPredicate
-symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV7subtree7matcherAcA15SubtreeSelectorOSg_0A5Plans16ElementPredicateVtcfc	swift.init	public	init(subtree:matcher:)	InterfaceQuery.init(subtree:matcher:)	init(subtree: SubtreeSelector? = nil, matcher: ElementPredicate = ElementPredicate())
+symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV7subtree7matcher22maxScrollsPerContainer0ghI9DiscoveryAcA15SubtreeSelectorOSg_0A5Plans16ElementPredicateVSiSgANtcfc	swift.init	public	init(subtree:matcher:maxScrollsPerContainer:maxScrollsPerDiscovery:)	InterfaceQuery.init(subtree:matcher:maxScrollsPerContainer:maxScrollsPerDiscovery:)	init(subtree: SubtreeSelector? = nil, matcher: ElementPredicate = ElementPredicate(), maxScrollsPerContainer: Int? = nil, maxScrollsPerDiscovery: Int? = nil)
 symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV7subtreeAA15SubtreeSelectorOSgvp	swift.property	public	subtree	InterfaceQuery.subtree	let subtree: SubtreeSelector?
 symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV	swift.struct	public	PropertyChange	PropertyChange	struct PropertyChange
 symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV3newSSSgvp	swift.property	public	new	PropertyChange.new	let new: String?
@@ -546,6 +548,12 @@ symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV12actionResultAA0d
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistActionEvidence.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV7command0A5Plans0cD7CommandOSgvp	swift.property	public	command	HeistActionEvidence.command	let command: HeistActionCommand?
 symbol	TheScore.symbols.json	s:8TheScore19HeistActionEvidenceV7command12actionResult011expectationdH00I0AC0A5Plans0cD7CommandOSg_AA0dH0VSgAnA011ExpectationH0VSgtcfc	swift.init	public	init(command:actionResult:expectationActionResult:expectation:)	HeistActionEvidence.init(command:actionResult:expectationActionResult:expectation:)	init(command: HeistActionCommand?, actionResult: ActionResult?, expectationActionResult: ActionResult? = nil, expectation: ExpectationResult? = nil)
+symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO	swift.enum	public	ScrollContainerAxis	ScrollContainerAxis	enum ScrollContainerAxis
+symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO10horizontalyA2CmF	swift.enum.case	public	ScrollContainerAxis.horizontal	ScrollContainerAxis.horizontal	case horizontal
+symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO4bothyA2CmF	swift.enum.case	public	ScrollContainerAxis.both	ScrollContainerAxis.both	case both
+symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO4noneyA2CmF	swift.enum.case	public	ScrollContainerAxis.none	ScrollContainerAxis.none	case none
+symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	ScrollContainerAxis.init(rawValue:)	init?(rawValue: String)
+symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO8verticalyA2CmF	swift.enum.case	public	ScrollContainerAxis.vertical	ScrollContainerAxis.vertical	case vertical
 symbol	TheScore.symbols.json	s:8TheScore19predicateCandidates3forSayAA18PredicateCandidateVGAA12HeistElementV_tF	swift.func	public	predicateCandidates(for:)	predicateCandidates(for:)	func predicateCandidates(for element: HeistElement) -> [PredicateCandidate]
 symbol	TheScore.symbols.json	s:8TheScore20HeistCaseMatchResultV	swift.struct	public	HeistCaseMatchResult	HeistCaseMatchResult	struct HeistCaseMatchResult
 symbol	TheScore.symbols.json	s:8TheScore20HeistCaseMatchResultV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistCaseMatchResult.init(from:)	init(from decoder: any Decoder) throws
@@ -671,6 +679,12 @@ symbol	TheScore.symbols.json	s:8TheScore22HeistReceiptCodecErrorO16jsonDataTooLa
 symbol	TheScore.symbols.json	s:8TheScore22HeistReceiptCodecErrorO24gzipInitializationFailedyACSS_s5Int32VtcACmF	swift.enum.case	public	HeistReceiptCodecError.gzipInitializationFailed(operation:code:)	HeistReceiptCodecError.gzipInitializationFailed(operation:code:)	case gzipInitializationFailed(operation: String, code: Int32)
 symbol	TheScore.symbols.json	s:8TheScore22HeistReceiptCodecErrorO26gzipCompressedDataTooLargeyACSi_SitcACmF	swift.enum.case	public	HeistReceiptCodecError.gzipCompressedDataTooLarge(limit:observed:)	HeistReceiptCodecError.gzipCompressedDataTooLarge(limit:observed:)	case gzipCompressedDataTooLarge(limit: Int, observed: Int)
 symbol	TheScore.symbols.json	s:8TheScore22HeistReceiptCodecErrorO28gzipDecompressedDataTooLargeyACSi_SitcACmF	swift.enum.case	public	HeistReceiptCodecError.gzipDecompressedDataTooLarge(limit:observed:)	HeistReceiptCodecError.gzipDecompressedDataTooLarge(limit:observed:)	case gzipDecompressedDataTooLarge(limit: Int, observed: Int)
+symbol	TheScore.symbols.json	s:8TheScore22ScrollContainerMetricsO	swift.enum	public	ScrollContainerMetrics	ScrollContainerMetrics	enum ScrollContainerMetrics
+symbol	TheScore.symbols.json	s:8TheScore22ScrollContainerMetricsO11pageOverlapSdvpZ	swift.type.property	public	pageOverlap	ScrollContainerMetrics.pageOverlap	static let pageOverlap: Double
+symbol	TheScore.symbols.json	s:8TheScore22ScrollContainerMetricsO20estimatedPageScrolls13contentLength08viewportJ0SiSd_SdtFZ	swift.type.method	public	estimatedPageScrolls(contentLength:viewportLength:)	ScrollContainerMetrics.estimatedPageScrolls(contentLength:viewportLength:)	static func estimatedPageScrolls(contentLength: Double, viewportLength: Double) -> Int
+symbol	TheScore.symbols.json	s:8TheScore22ScrollContainerMetricsO28estimatedVerticalPageScrolls13contentHeight08viewportK0SiSd_SdtFZ	swift.type.method	public	estimatedVerticalPageScrolls(contentHeight:viewportHeight:)	ScrollContainerMetrics.estimatedVerticalPageScrolls(contentHeight:viewportHeight:)	static func estimatedVerticalPageScrolls(contentHeight: Double, viewportHeight: Double) -> Int
+symbol	TheScore.symbols.json	s:8TheScore22ScrollContainerMetricsO30estimatedHorizontalPageScrolls12contentWidth08viewportK0SiSd_SdtFZ	swift.type.method	public	estimatedHorizontalPageScrolls(contentWidth:viewportWidth:)	ScrollContainerMetrics.estimatedHorizontalPageScrolls(contentWidth:viewportWidth:)	static func estimatedHorizontalPageScrolls(contentWidth: Double, viewportWidth: Double) -> Int
+symbol	TheScore.symbols.json	s:8TheScore22ScrollContainerMetricsO4axis12contentWidth0G6Height08viewportH00jI0AA0cD4AxisOSd_S3dtFZ	swift.type.method	public	axis(contentWidth:contentHeight:viewportWidth:viewportHeight:)	ScrollContainerMetrics.axis(contentWidth:contentHeight:viewportWidth:viewportHeight:)	static func axis(contentWidth: Double, contentHeight: Double, viewportWidth: Double, viewportHeight: Double) -> ScrollContainerAxis
 symbol	TheScore.symbols.json	s:8TheScore22buttonHeistServiceTypeSSvp	swift.var	public	buttonHeistServiceType	buttonHeistServiceType	let buttonHeistServiceType: String
 symbol	TheScore.symbols.json	s:8TheScore22minimumUniquePredicate3for2inAA07MinimumE9SelectionVSgSS_AA0eI7ContextVtF	swift.func	public	minimumUniquePredicate(for:in:)	minimumUniquePredicate(for:in:)	func minimumUniquePredicate(for contextElementId: String, in context: PredicateSelectionContext) -> MinimumPredicateSelection?
 symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV	swift.struct	public	ActionPerformanceTiming	ActionPerformanceTiming	struct ActionPerformanceTiming
@@ -685,6 +699,22 @@ symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV4fromACs7Decod
 symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV7mergingyA2CSgF	swift.method	public	merging(_:)	ActionPerformanceTiming.merging(_:)	func merging(_ other: ActionPerformanceTiming?) -> ActionPerformanceTiming
 symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV7totalMsSiSgvp	swift.property	public	totalMs	ActionPerformanceTiming.totalMs	let totalMs: Int?
 symbol	TheScore.symbols.json	s:8TheScore23ActionPerformanceTimingV8settleMsSiSgvp	swift.property	public	settleMs	ActionPerformanceTiming.settleMs	let settleMs: Int?
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV	swift.struct	public	ButtonHeistRuntimeKnobs	ButtonHeistRuntimeKnobs	struct ButtonHeistRuntimeKnobs
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV15totalNodeBudgetSivp	swift.property	public	totalNodeBudget	ButtonHeistRuntimeKnobs.totalNodeBudget	let totalNodeBudget: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV20visibleElementBudgetSivp	swift.property	public	visibleElementBudget	ButtonHeistRuntimeKnobs.visibleElementBudget	let visibleElementBudget: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV22defaultTotalNodeBudgetSivpZ	swift.type.property	public	defaultTotalNodeBudget	ButtonHeistRuntimeKnobs.defaultTotalNodeBudget	static let defaultTotalNodeBudget: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV22maxScrollsPerContainerSivp	swift.property	public	maxScrollsPerContainer	ButtonHeistRuntimeKnobs.maxScrollsPerContainer	let maxScrollsPerContainer: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV22maxScrollsPerDiscoverySivp	swift.property	public	maxScrollsPerDiscovery	ButtonHeistRuntimeKnobs.maxScrollsPerDiscovery	let maxScrollsPerDiscovery: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV22postScrollLayoutFramesSivp	swift.property	public	postScrollLayoutFrames	ButtonHeistRuntimeKnobs.postScrollLayoutFrames	let postScrollLayoutFrames: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV27defaultVisibleElementBudgetSivpZ	swift.type.property	public	defaultVisibleElementBudget	ButtonHeistRuntimeKnobs.defaultVisibleElementBudget	static let defaultVisibleElementBudget: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV28tripwirePulseFramesPerSecondSivp	swift.property	public	tripwirePulseFramesPerSecond	ButtonHeistRuntimeKnobs.tripwirePulseFramesPerSecond	let tripwirePulseFramesPerSecond: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV29defaultMaxScrollsPerContainerSivpZ	swift.type.property	public	defaultMaxScrollsPerContainer	ButtonHeistRuntimeKnobs.defaultMaxScrollsPerContainer	static let defaultMaxScrollsPerContainer: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV29defaultMaxScrollsPerDiscoverySivpZ	swift.type.property	public	defaultMaxScrollsPerDiscovery	ButtonHeistRuntimeKnobs.defaultMaxScrollsPerDiscovery	static let defaultMaxScrollsPerDiscovery: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV29defaultPostScrollLayoutFramesSivpZ	swift.type.property	public	defaultPostScrollLayoutFrames	ButtonHeistRuntimeKnobs.defaultPostScrollLayoutFrames	static let defaultPostScrollLayoutFrames: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV31singleTripwireTickSettleTimeoutSdvp	swift.property	public	singleTripwireTickSettleTimeout	ButtonHeistRuntimeKnobs.singleTripwireTickSettleTimeout	var singleTripwireTickSettleTimeout: TimeInterval { get }
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV35defaultTripwirePulseFramesPerSecondSivpZ	swift.type.property	public	defaultTripwirePulseFramesPerSecond	ButtonHeistRuntimeKnobs.defaultTripwirePulseFramesPerSecond	static let defaultTripwirePulseFramesPerSecond: Int
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV7currentACvpZ	swift.type.property	public	current	ButtonHeistRuntimeKnobs.current	static var current: ButtonHeistRuntimeKnobs { get }
+symbol	TheScore.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV7resolve11environmentACSDyS2SG_tFZ	swift.type.method	public	resolve(environment:)	ButtonHeistRuntimeKnobs.resolve(environment:)	static func resolve(environment: [String : String] = ProcessInfo.processInfo.environment) -> ButtonHeistRuntimeKnobs
 symbol	TheScore.symbols.json	s:8TheScore23HeistInvocationEvidenceV	swift.struct	public	HeistInvocationEvidence	HeistInvocationEvidence	struct HeistInvocationEvidence
 symbol	TheScore.symbols.json	s:8TheScore23HeistInvocationEvidenceV10invocation0A5Plans0cD4StepVSgvp	swift.property	public	invocation	HeistInvocationEvidence.invocation	let invocation: HeistInvocationStep?
 symbol	TheScore.symbols.json	s:8TheScore23HeistInvocationEvidenceV10invocation4name8argument15childFailedPathAC0A5Plans0cD4StepVSg_SSSgA2Ltcfc	swift.init	public	init(invocation:name:argument:childFailedPath:)	HeistInvocationEvidence.init(invocation:name:argument:childFailedPath:)	init(invocation: HeistInvocationStep? = nil, name: String? = nil, argument: String? = nil, childFailedPath: String? = nil)
@@ -1118,6 +1148,12 @@ relationship	conformsTo	s:8TheScore19HeistActionEvidenceV	s:SE	HeistActionEviden
 relationship	conformsTo	s:8TheScore19HeistActionEvidenceV	s:SQ	HeistActionEvidence	Swift.Equatable
 relationship	conformsTo	s:8TheScore19HeistActionEvidenceV	s:Se	HeistActionEvidence	Swift.Decodable
 relationship	conformsTo	s:8TheScore19HeistActionEvidenceV	s:s8SendableP	HeistActionEvidence	Swift.Sendable
+relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SE	ScrollContainerAxis	Swift.Encodable
+relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SH	ScrollContainerAxis	Swift.Hashable
+relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SQ	ScrollContainerAxis	Swift.Equatable
+relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SY	ScrollContainerAxis	Swift.RawRepresentable
+relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:Se	ScrollContainerAxis	Swift.Decodable
+relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:s8SendableP	ScrollContainerAxis	Swift.Sendable
 relationship	conformsTo	s:8TheScore20HeistCaseMatchResultV	s:SE	HeistCaseMatchResult	Swift.Encodable
 relationship	conformsTo	s:8TheScore20HeistCaseMatchResultV	s:SQ	HeistCaseMatchResult	Swift.Equatable
 relationship	conformsTo	s:8TheScore20HeistCaseMatchResultV	s:Se	HeistCaseMatchResult	Swift.Decodable
@@ -1194,6 +1230,8 @@ relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:SE	ActionPerform
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:SQ	ActionPerformanceTiming	Swift.Equatable
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:Se	ActionPerformanceTiming	Swift.Decodable
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:s8SendableP	ActionPerformanceTiming	Swift.Sendable
+relationship	conformsTo	s:8TheScore23ButtonHeistRuntimeKnobsV	s:SQ	ButtonHeistRuntimeKnobs	Swift.Equatable
+relationship	conformsTo	s:8TheScore23ButtonHeistRuntimeKnobsV	s:s8SendableP	ButtonHeistRuntimeKnobs	Swift.Sendable
 relationship	conformsTo	s:8TheScore23HeistInvocationEvidenceV	s:SE	HeistInvocationEvidence	Swift.Encodable
 relationship	conformsTo	s:8TheScore23HeistInvocationEvidenceV	s:SQ	HeistInvocationEvidence	Swift.Equatable
 relationship	conformsTo	s:8TheScore23HeistInvocationEvidenceV	s:Se	HeistInvocationEvidence	Swift.Decodable

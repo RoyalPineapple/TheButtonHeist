@@ -14,10 +14,19 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> Bool {
         while !exploration.manifest.pendingContainers.isEmpty {
+            guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
+                return false
+            }
             let batch = sortedPendingContainers(in: exploration)
 
             for container in batch {
-                guard let containerExploration = prepareContainerExploration(for: container) else {
+                guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
+                    return false
+                }
+                guard let containerExploration = await prepareContainerExploration(
+                    for: container,
+                    exploration: &exploration
+                ) else {
                     exploration.markExplored(container)
                     continue
                 }
@@ -40,7 +49,10 @@ extension Navigation {
             .map(\.container)
     }
 
-    private func prepareContainerExploration(for container: AccessibilityContainer) -> ContainerExploration? {
+    private func prepareContainerExploration(
+        for container: AccessibilityContainer,
+        exploration: inout SemanticExploration
+    ) async -> ContainerExploration? {
         guard case .scrollable(let contentSize) = container.type else { return nil }
 
         if let view = stash.scrollableContainerViews[container],
@@ -52,13 +64,114 @@ extension Navigation {
         let hasHOverflow = contentSize.width > container.frame.width + 1
         let hasVOverflow = contentSize.height > container.frame.height + 1
         guard hasHOverflow || hasVOverflow else { return nil }
-        guard let scrollTarget = scrollableTarget(for: container, contentSize: contentSize) else { return nil }
+        let semanticContainer = exploration.screen.orderedContainers.first { $0.container == container }
+        var ancestorRestorations: [ViewportRestoration] = []
+        if stash.scrollableContainerViews[container] == nil,
+           let semanticContainer {
+            _ = await revealSemanticContainerForExploration(
+                semanticContainer,
+                exploration: &exploration,
+                ancestorRestorations: &ancestorRestorations,
+                depth: 0
+            )
+        }
+        guard let scrollTarget = scrollableTarget(
+            for: container,
+            path: semanticContainer?.path,
+            contentSize: contentSize
+        ) else {
+            await restoreAncestorPositions(ancestorRestorations, ignoring: nil, exploration: &exploration)
+            return nil
+        }
         return ContainerExploration(
             container: container,
             scrollTarget: scrollTarget,
             hasHOverflow: hasHOverflow,
-            hasVOverflow: hasVOverflow
+            hasVOverflow: hasVOverflow,
+            ancestorRestorations: ancestorRestorations
         )
+    }
+
+    private func revealSemanticContainerForExploration(
+        _ container: SemanticScreen.Container,
+        exploration: inout SemanticExploration,
+        ancestorRestorations: inout [ViewportRestoration],
+        depth: Int
+    ) async -> Bool {
+        guard depth < ElementInflation.maxNestedRevealDepth else { return false }
+        if let containerName = container.containerName,
+           stash.capturedLiveScrollView(forContainerName: containerName) != nil {
+            return true
+        }
+        guard let location = container.scrollContentLocation else { return false }
+        return await revealSemanticLocationForExploration(
+            location,
+            exploration: &exploration,
+            ancestorRestorations: &ancestorRestorations,
+            depth: depth
+        )
+    }
+
+    private func revealSemanticLocationForExploration(
+        _ location: SemanticScreen.ScrollContentLocation,
+        exploration: inout SemanticExploration,
+        ancestorRestorations: inout [ViewportRestoration],
+        depth: Int
+    ) async -> Bool {
+        guard depth < ElementInflation.maxNestedRevealDepth else { return false }
+        if let scrollView = stash.capturedLiveScrollView(forContainerName: location.scrollContainer) {
+            return await revealContentOriginForExploration(
+                location.origin,
+                in: scrollView,
+                exploration: &exploration,
+                ancestorRestorations: &ancestorRestorations
+            )
+        }
+
+        guard let scrollContainer = stash.uniqueSemanticContainer(named: location.scrollContainer),
+              scrollContainer.scrollContentLocation != nil
+        else { return false }
+
+        guard await revealSemanticContainerForExploration(
+            scrollContainer,
+            exploration: &exploration,
+            ancestorRestorations: &ancestorRestorations,
+            depth: depth + 1
+        ) else {
+            return false
+        }
+
+        guard let scrollView = stash.capturedLiveScrollView(forContainerName: location.scrollContainer) else {
+            return false
+        }
+        return await revealContentOriginForExploration(
+            location.origin,
+            in: scrollView,
+            exploration: &exploration,
+            ancestorRestorations: &ancestorRestorations
+        )
+    }
+
+    private func revealContentOriginForExploration(
+        _ origin: CGPoint,
+        in scrollView: UIScrollView,
+        exploration: inout SemanticExploration,
+        ancestorRestorations: inout [ViewportRestoration]
+    ) async -> Bool {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
+        ancestorRestorations.append(
+            ViewportRestoration(
+                scrollView: scrollView,
+                visualOrigin: visualOrigin(in: scrollView)
+            )
+        )
+        scrollView.setContentOffset(
+            ElementInflation.semanticRevealTargetOffset(for: origin, in: scrollView),
+            animated: false
+        )
+        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+        exploration.absorb(stash.refreshTreeAfterViewportMove())
+        return true
     }
 
     private func exploreContainer(
@@ -91,6 +204,7 @@ extension Navigation {
             savedVisualOrigin: savedVisualOrigin,
             exploration: &exploration
         )
+        await restoreAncestorPositions(containerExploration, exploration: &exploration)
         exploration.markExplored(containerExploration.container)
 
         exploration.addDiscoveredContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
@@ -112,7 +226,10 @@ extension Navigation {
         scan: inout ContainerScan,
         exploration: inout SemanticExploration
     ) async -> Bool {
-        for _ in 0..<ScreenManifest.maxScrollsPerContainer {
+        for _ in 0..<exploration.manifest.maxScrollsPerContainer {
+            guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
+                return false
+            }
             let proof = await scrollOnePageAndSettle(
                 containerExploration.scrollTarget,
                 direction: containerExploration.direction,
@@ -141,7 +258,7 @@ extension Navigation {
         switch containerExploration.scrollTarget {
         case .uiScrollView(let scrollView):
             if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) {
-                await tripwire.yieldFrames(2)
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 exploration.absorb(stash.refreshTreeAfterViewportMove())
             }
         case .swipeable:
@@ -193,9 +310,50 @@ extension Navigation {
         if case .uiScrollView(let scrollView) = containerExploration.scrollTarget,
            let savedVisualOrigin {
             Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
-            await tripwire.yieldFrames(2)
+            await waitForRestoredViewportSettle()
             exploration.absorb(stash.refreshTreeAfterViewportMove())
         }
+    }
+
+    private func restoreAncestorPositions(
+        _ containerExploration: ContainerExploration,
+        exploration: inout SemanticExploration
+    ) async {
+        let ignoredScrollView: UIScrollView?
+        switch containerExploration.scrollTarget {
+        case .uiScrollView(let scrollView):
+            ignoredScrollView = scrollView
+        case .swipeable:
+            ignoredScrollView = nil
+        }
+        await restoreAncestorPositions(
+            containerExploration.ancestorRestorations,
+            ignoring: ignoredScrollView,
+            exploration: &exploration
+        )
+    }
+
+    private func restoreAncestorPositions(
+        _ restorations: [ViewportRestoration],
+        ignoring ignoredScrollView: UIScrollView?,
+        exploration: inout SemanticExploration
+    ) async {
+        for restoration in restorations.reversed() where restoration.scrollView !== ignoredScrollView {
+            Self.restoreVisualOrigin(restoration.visualOrigin, in: restoration.scrollView)
+            await waitForRestoredViewportSettle()
+            exploration.absorb(stash.refreshTreeAfterViewportMove())
+        }
+    }
+
+    private func waitForRestoredViewportSettle() async {
+        guard tripwire.isPulseRunning else {
+            await tripwire.yieldFrames(1)
+            return
+        }
+        _ = await tripwire.waitForSettle(
+            timeout: TheTripwire.singleTickSettleTimeout,
+            requiredQuietFrames: 1
+        )
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
@@ -228,6 +386,13 @@ extension Navigation {
             y: max(-insets.top, min(restoredOffset.y, maxY))
         )
         scrollView.setContentOffset(clampedOffset, animated: false)
+    }
+
+    private func visualOrigin(in scrollView: UIScrollView) -> CGPoint {
+        CGPoint(
+            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
+            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        )
     }
 
     private func totalOverflow(of container: AccessibilityContainer) -> CGFloat {

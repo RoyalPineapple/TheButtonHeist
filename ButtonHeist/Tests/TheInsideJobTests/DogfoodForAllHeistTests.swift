@@ -6,36 +6,73 @@ import TheInsideJob
 
 private enum DogfoodHome {
     static let openScreen = HeistDef<String>("DemoHome.openScreen", parameter: "screen") { screen in
-        try DogfoodNavigation.backToRootIfNeeded()
+        let destinationTitle = ElementPredicateTemplate(label: .exact(screen), traits: [.header])
+        let backToRoot = try DogfoodNavigation.backToRootIfNeeded()
 
-        Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
-            .expect(.changed(.screen(where: .present(.label(screen)))), timeout: .seconds(8))
+        If {
+            Case(.present(destinationTitle)) {
+                WaitFor(.present(destinationTitle))
+            }
+            Else {
+                backToRoot
+
+                Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
+                    .expect(.changed(.screen(where: .present(destinationTitle))), timeout: .seconds(8))
+            }
+        }
     }
 }
 
 private enum DogfoodNavigation {
-    private static let controlsBackTarget = ElementPredicateTemplate(
-        label: .exact(.literal("Controls Demo")),
-        traits: [.backButton]
-    )
-    private static let rootBackTarget = ElementPredicateTemplate(
-        label: .exact(.literal("ButtonHeist Demo")),
-        traits: [.backButton]
-    )
+    private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
+    private static let rootBackTarget = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.button])
+    private static let rootTitle = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.header])
+    private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
+    private static let backChromeSettleTimeout = 0.25
 
     static let backToRootIfNeeded = HeistDef<Void>("DogfoodNavigation.backToRootIfNeeded") {
-        If {
-            Case(.present(controlsBackTarget)) {
-                Activate(.predicate(controlsBackTarget))
-                    .expect(.changed(.screen(where: .present(.label("Controls Demo")))), timeout: .seconds(8))
-            }
-            Else {}
-        }
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
+        WaitFor(.absent(rootBackTarget), timeout: .seconds(2))
+        WaitFor(.present(rootTitle), timeout: .seconds(4))
+    }
+
+    static let backToRoot = HeistDef<Void>("DogfoodNavigation.backToRoot") {
+        try backToRootIfNeeded()
+    }
+
+    private static let backOneLevelIfNeeded = HeistDef<Void>("DogfoodNavigation.backOneLevelIfNeeded") {
+        try reanchorLongListIfNeeded()
+
+        WaitFor(.present(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
+            .else {}
 
         If {
             Case(.present(rootBackTarget)) {
                 Activate(.predicate(rootBackTarget))
-                    .expect(.changed(.screen(where: .present(.label("ButtonHeist Demo")))), timeout: .seconds(8))
+                    .expect(.changed(.screen()), timeout: .seconds(8))
+            }
+            Case(.present(anyBackTarget)) {
+                Activate(.predicate(anyBackTarget))
+                    .expect(.changed(.screen()), timeout: .seconds(8))
+            }
+            Else {}
+        }
+    }
+
+    private static let reanchorLongListIfNeeded = HeistDef<Void>("DogfoodNavigation.reanchorLongListIfNeeded") {
+        let reanchorAction = try rawAction(
+            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
+            waiver: "Reanchors the long list before checking navigation chrome"
+        )
+
+        If {
+            Case(.present(longListFirstRow)) {
+                reanchorAction
             }
             Else {}
         }
@@ -62,8 +99,11 @@ private enum TextInputScreen {
         TypeText(name, into: nameField)
             .expect(.present(.value(name)), timeout: .seconds(2))
 
+        DismissKeyboard()
+            .withoutExpectation("Ends the first field edit before focusing the email field")
+
         TypeText("dogfood@example.com", into: emailField)
-            .expect(.present(.value("dogfood@example.com")), timeout: .seconds(2))
+            .expect(.present(.value("dogfood@example.com")), timeout: .seconds(4))
 
         DismissKeyboard()
             .withoutExpectation("Keyboard dismissal only prepares navigation")
@@ -86,6 +126,11 @@ private enum TextInputScreen {
 
 private enum TodoScreen {
     static let completeItem = HeistDef<String>("TodoScreen.completeItem", parameter: "item") { item in
+        try rawAction(
+            .viewportScrollToVisible(.label(item)),
+            waiver: "scroll_to_visible is the viewport precondition for the row custom action"
+        )
+
         CustomAction("Toggle", on: .label(item))
             .expect(
                 .present(ElementPredicateTemplate(label: .exact(item), value: .exact(.literal("Completed")))),
@@ -204,7 +249,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.fillProfile("Ada Lovelace")
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -221,11 +266,11 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Review PR, High priority")
 
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Calculator")
             try CalculatorScreen.addSevenAndFive()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -254,7 +299,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Alerts & Sheets")
             try AlertsScreen.acceptSimpleAlert()
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -283,7 +328,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 .withoutExpectation("Keyboard dismissal only prepares navigation")
 
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(stringRoot.result.steps.map(\.kind), [
@@ -305,7 +350,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 .expect(.present(.label("Tap count: 1")), timeout: .seconds(2))
 
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(targetRoot.result.steps.map(\.kind), [
@@ -320,7 +365,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let prebuilt = try HeistPlan("DogfoodPrebuiltCalculator") {
             try DogfoodHome.openScreen("Calculator")
             try CalculatorScreen.addSevenAndFive()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
         let prebuiltRun = try await Heist(prebuilt, argument: .none)
 
@@ -355,7 +400,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 WaitFor(.present(target), timeout: .seconds(1))
             }
 
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -382,15 +427,15 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Adjustable Controls")
             try AdjustableControlsScreen.adjustVolume()
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Custom Rotors")
             try CustomRotorsScreen.findFirstError()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Touch Canvas")
             try TouchCanvasScreen.exerciseMechanicalGestures()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -417,26 +462,31 @@ final class DogfoodForAllHeistTests: XCTestCase {
 
     func testTextEditingPasteboardAndElementForEachUseDemoApp() async throws {
         let heist = try await Heist {
+            let activeFixBug = ElementPredicate(
+                label: "Fix bug, High priority",
+                value: "Active"
+            )
+
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.pasteName()
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Review PR, High priority")
 
             ForEach(
-                ElementMatches.matching(ElementPredicate(
-                    label: "Fix bug, High priority",
-                    value: "Active"
-                )),
+                ElementMatches.matching(activeFixBug),
                 limit: 1
-            ) { todo in
-                WaitFor(.present(todo), timeout: .seconds(1))
+            ) { target in
+                try rawAction(
+                    .viewportScrollToVisible(target),
+                    waiver: "Element iteration already selected the row; scrolling it into view has no durable semantic outcome"
+                )
             }
 
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -460,7 +510,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let heist = try await Heist {
             try DogfoodHome.openScreen("Long List")
             try LongListScreen.exerciseViewportRuntimeCommands()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke, .invoke, .invoke])

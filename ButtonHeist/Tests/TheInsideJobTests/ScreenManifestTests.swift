@@ -25,6 +25,18 @@ final class ScreenManifestTests: XCTestCase {
         XCTAssertTrue(manifest.pendingContainers.isEmpty)
         XCTAssertTrue(manifest.exploredContainers.isEmpty)
         XCTAssertEqual(manifest.scrollCount, 0)
+        XCTAssertEqual(manifest.maxScrollsPerContainer, Navigation.ScreenManifest.maxScrollsPerContainer)
+        XCTAssertEqual(manifest.maxScrollsPerDiscovery, Navigation.ScreenManifest.maxScrollsPerDiscovery)
+    }
+
+    func testManifestAcceptsPerPassScrollLimits() {
+        let manifest = Navigation.ScreenManifest(
+            maxScrollsPerContainer: 25,
+            maxScrollsPerDiscovery: 40
+        )
+
+        XCTAssertEqual(manifest.maxScrollsPerContainer, 25)
+        XCTAssertEqual(manifest.maxScrollsPerDiscovery, 40)
     }
 
     // MARK: - markExplored
@@ -68,6 +80,8 @@ final class ScreenManifestTests: XCTestCase {
     func testMaxScrollsPerContainerIsReasonable() {
         XCTAssertGreaterThan(Navigation.ScreenManifest.maxScrollsPerContainer, 0)
         XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerContainer, 200)
+        XCTAssertGreaterThan(Navigation.ScreenManifest.maxScrollsPerDiscovery, 0)
+        XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerDiscovery, 200)
     }
 }
 

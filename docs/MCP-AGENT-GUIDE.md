@@ -6,7 +6,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 1. **Read** — `get_interface` returns the app accessibility state with labels, values, traits, actions, and capture-local diagnostic annotations.
 2. **Act** — use `perform(step:)` with one ButtonHeist DSL step for ordinary app controls. Always attach `.expect(...)` when you know what should change.
-3. **Read the response** — action responses carry trace-backed result evidence. If the delta answers your question, skip `get_interface`.
+3. **Read the response** — tool text is the concise summary; `structuredContent` carries the full public JSON receipt. If the delta answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state, call `perform(step:)` with one simple `WaitFor(...)` statement. The server checks the current settled state first, then watches settled accessibility state until the predicate is true.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
@@ -277,7 +277,7 @@ Heists are authored reusable instructions, not logs inferred from live clicking.
 
 **One action, one purpose.** Each step should do exactly one thing and verify it. Do not chain five interactions and check at the end — check after each one. This makes replay failures precise: step 7 failed means the 7th interaction broke.
 
-**Read the delta before moving on.** If your expectation wasn't met, understand why before continuing. The receipt gives you the evidence to correct the next step or revise the authored plan.
+**Read the delta before moving on.** If your expectation wasn't met, understand why before continuing. Use `structuredContent.report.nodes[].action.result.delta` for full added, removed, updated, or destination-interface evidence; the text summary only expands details when the outcome needs attention.
 
 ## Efficiency
 

@@ -4,7 +4,7 @@ import UIKit
 
 /// Detects UIKit tripwire triggers without touching the accessibility tree.
 ///
-/// TheTripwire monitors UIKit signals via a persistent ~10 Hz pulse — a single
+/// TheTripwire monitors UIKit signals via a persistent low-frequency pulse — a single
 /// CADisplayLink that samples all UI state on one clock. Every tick runs the
 /// full set of checks: layer scan (fingerprint, animations, layout), VC
 /// identity, public navigation state, and ordered visible windows.
@@ -40,6 +40,25 @@ final class TheTripwire {
         "_UIParallaxMotionEffect",
         "match-",
     ]
+
+    static var pulseFrameRateRange: CAFrameRateRange {
+        pulseFrameRateRange(knobs: .current)
+    }
+
+    static var singleTickSettleTimeout: TimeInterval {
+        InsideJobRuntimeKnobs.current.singleTripwireTickSettleTimeout
+    }
+
+    static func pulseFrameRateRange(knobs: InsideJobRuntimeKnobs) -> CAFrameRateRange {
+        let preferred = knobs.tripwirePulseFramesPerSecond
+        let minimum = max(1, Int((Double(preferred) * 0.8).rounded(.down)))
+        let maximum = max(preferred, Int((Double(preferred) * 1.2).rounded(.up)))
+        return CAFrameRateRange(
+            minimum: Float(minimum),
+            maximum: Float(maximum),
+            preferred: Float(preferred)
+        )
+    }
 }
 
 #endif // DEBUG

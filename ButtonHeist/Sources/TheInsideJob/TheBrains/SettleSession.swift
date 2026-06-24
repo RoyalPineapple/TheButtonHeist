@@ -365,7 +365,7 @@ enum SettleOutcome: Equatable {
         SemanticQuietSettleSession(
             parseProvider: { stash.semanticObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
-            observationYield: { await tripwire.yieldFrames(1) },
+            observationYield: { await tripwire.yieldRealFrames(1) },
             quietWindowMs: quietWindowMs,
             timeoutMs: timeoutMs
         )

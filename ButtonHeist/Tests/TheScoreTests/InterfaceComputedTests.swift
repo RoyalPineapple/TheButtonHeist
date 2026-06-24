@@ -193,6 +193,55 @@ final class InterfaceComputedTests: XCTestCase {
         )
     }
 
+    func testScrollContainerMetricsEstimatePageScrollsUsingRuntimeOverlap() {
+        XCTAssertEqual(
+            ScrollContainerMetrics.estimatedVerticalPageScrolls(contentHeight: 1_200, viewportHeight: 400),
+            3
+        )
+        XCTAssertEqual(
+            ScrollContainerMetrics.estimatedHorizontalPageScrolls(contentWidth: 1_200, viewportWidth: 390),
+            3
+        )
+        XCTAssertEqual(
+            ScrollContainerMetrics.estimatedVerticalPageScrolls(contentHeight: 3_891_549, viewportHeight: 1_032),
+            3_938
+        )
+        XCTAssertEqual(
+            ScrollContainerMetrics.estimatedVerticalPageScrolls(contentHeight: 400, viewportHeight: 400),
+            0
+        )
+    }
+
+    func testScrollContainerMetricsDetectAxis() {
+        XCTAssertEqual(
+            ScrollContainerMetrics.axis(
+                contentWidth: 1_200,
+                contentHeight: 400,
+                viewportWidth: 390,
+                viewportHeight: 400
+            ),
+            .horizontal
+        )
+        XCTAssertEqual(
+            ScrollContainerMetrics.axis(
+                contentWidth: 390,
+                contentHeight: 1_200,
+                viewportWidth: 390,
+                viewportHeight: 400
+            ),
+            .vertical
+        )
+        XCTAssertEqual(
+            ScrollContainerMetrics.axis(
+                contentWidth: 1_200,
+                contentHeight: 1_200,
+                viewportWidth: 390,
+                viewportHeight: 400
+            ),
+            .both
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeElement(

@@ -52,6 +52,13 @@ private extension ElementEdits {
     var updatedOptional: [ElementUpdate]? { updated.isEmpty ? nil : updated }
 }
 
+private extension AccessibilityHierarchy {
+    var testLabel: String? {
+        guard case .element(let element, _) = self else { return nil }
+        return element.label
+    }
+}
+
 private final class WireActivationOverrideView: UIView {
     override func accessibilityActivate() -> Bool {
         true
@@ -371,6 +378,111 @@ final class WireConverterTests: XCTestCase {
             return XCTFail("Expected container root")
         }
         XCTAssertTrue(info.isModalBoundary)
+    }
+
+    func testDiscoveryInterfaceGraftsKnownOffViewportElementsUnderScrollContainer() throws {
+        let visible = makeElement(label: "aardvark", traits: [.staticText])
+        let offViewport = makeElement(label: "zymurgy", traits: [.staticText])
+        let container = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let screen = Screen(
+            elements: [
+                "aardvark_staticText": Screen.ScreenElement(
+                    heistId: "aardvark_staticText",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 0),
+                    scrollContainerName: "words_list",
+                    element: visible
+                ),
+                "zymurgy_staticText": Screen.ScreenElement(
+                    heistId: "zymurgy_staticText",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 1_600),
+                    scrollContainerName: "words_list",
+                    element: offViewport
+                ),
+            ],
+            hierarchy: [
+                .container(container, children: [
+                    .element(visible, traversalIndex: 0),
+                ]),
+            ],
+            containerNames: [container: "words_list"],
+            containerNamesByPath: [TreePath([0]): "words_list"],
+            heistIdByElement: [visible: "aardvark_staticText"],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let interface = WireConversion.toDiscoveryInterface(from: screen)
+
+        guard case .container(_, let children) = interface.tree.first else {
+            return XCTFail("Expected root scroll container")
+        }
+        XCTAssertEqual(children.count, 2)
+        XCTAssertEqual(children.compactMap(\.testLabel), ["aardvark", "zymurgy"])
+        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 1])])
+        XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["aardvark", "zymurgy"])
+    }
+
+    func testDiscoveryInterfaceGraftsKnownNestedScrollContainers() throws {
+        let outer = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let inner = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 280, height: 900))),
+            frame: AccessibilityRect(CGRect(x: 20, y: 700, width: 280, height: 240))
+        )
+        let nestedWord = makeElement(label: "interstitial", traits: [.staticText])
+        let liveScreen = Screen(
+            elements: [:],
+            hierarchy: [.container(outer, children: [])],
+            containerNames: [outer: "outer_words"],
+            containerNamesByPath: [TreePath([0]): "outer_words"],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        var containers = liveScreen.semantic.containers
+        containers[TreePath([0, 0])] = SemanticScreen.Container(
+            container: inner,
+            path: TreePath([0, 0]),
+            containerName: "inner_words",
+            contentFrame: nil,
+            scrollContentLocation: SemanticScreen.ScrollContentLocation(
+                origin: CGPoint(x: 20, y: 700),
+                scrollContainer: "outer_words"
+            )
+        )
+        let screen = Screen(
+            semantic: SemanticScreen(
+                elements: [
+                    "interstitial_staticText": SemanticScreen.Element(
+                        heistId: "interstitial_staticText",
+                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
+                            origin: CGPoint(x: 0, y: 300),
+                            scrollContainer: "inner_words"
+                        ),
+                        element: nestedWord
+                    ),
+                ],
+                containers: containers
+            ),
+            liveCapture: liveScreen.liveCapture
+        )
+
+        let interface = WireConversion.toDiscoveryInterface(from: screen)
+
+        guard case .container(_, let outerChildren) = interface.tree.first else {
+            return XCTFail("Expected outer container")
+        }
+        guard case .container(_, let innerChildren) = outerChildren.first else {
+            return XCTFail("Expected nested discovered container")
+        }
+        XCTAssertEqual(innerChildren.compactMap(\.testLabel), ["interstitial"])
+        XCTAssertEqual(interface.annotations.containerByPath[TreePath([0, 0])]?.containerName, "inner_words")
+        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0, 0])])
     }
 
     // MARK: - Delta: Identical Snapshots

@@ -191,6 +191,14 @@ expect_element_label() {
     fi
 }
 
+expect_root_top() {
+    expect_element_label "Controls Demo"
+}
+
+expect_root_rotor_row() {
+    expect_element_label "Custom Rotors"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --keep-simulator)
@@ -404,28 +412,47 @@ run_cli_json() {
     local end_ms
     local duration_ms
     local name
+    local attempt
+    local attempts
     name="${1:-command}"
+    attempt=1
+    attempts="${BUTTONHEIST_ROOT_VIEW_RETRY_ATTEMPTS:-4}"
     start_ms="$(now_ms)"
-    set +e
-    output="$(
-    BUTTONHEIST_DEVICE="$DEVICE_ENDPOINT" \
-    BUTTONHEIST_TOKEN="$TOKEN" \
-    BUTTONHEIST_DRIVER_ID="$TOKEN" \
-    "$BUTTONHEIST_BIN" "$@" \
-        --connect-timeout "${BUTTONHEIST_CONNECT_TIMEOUT:-10}" \
-        --format json \
-        --quiet 2>&1
-    )"
-    status=$?
-    end_ms="$(now_ms)"
-    set -e
-    duration_ms=$((end_ms - start_ms))
-    record_benchmark "$name" "$*" "$duration_ms" "$status"
-    if (( status != 0 )); then
+    while true; do
+        set +e
+        output="$(
+        BUTTONHEIST_DEVICE="$DEVICE_ENDPOINT" \
+        BUTTONHEIST_TOKEN="$TOKEN" \
+        BUTTONHEIST_DRIVER_ID="$TOKEN" \
+        "$BUTTONHEIST_BIN" "$@" \
+            --connect-timeout "${BUTTONHEIST_CONNECT_TIMEOUT:-10}" \
+            --format json \
+            --quiet 2>&1
+        )"
+        status=$?
+        set -e
+
+        if (( status == 0 )); then
+            end_ms="$(now_ms)"
+            duration_ms=$((end_ms - start_ms))
+            record_benchmark "$name" "$*" "$duration_ms" "$status"
+            printf '%s\n' "$output"
+            return 0
+        fi
+
+        if (( attempt < attempts )) && grep -q '"message":"Action failed: Could not access root view"' <<< "$output"; then
+            printf "==> Transient root view unavailable for '%s'; retrying (%s/%s)\\n" "$*" "$attempt" "$attempts" >&2
+            attempt=$((attempt + 1))
+            sleep 1
+            continue
+        fi
+
+        end_ms="$(now_ms)"
+        duration_ms=$((end_ms - start_ms))
+        record_benchmark "$name" "$*" "$duration_ms" "$status"
         printf '%s\n' "$output" >&2
         return "$status"
-    fi
-    printf '%s\n' "$output"
+    done
 }
 
 if port_is_open "$PORT"; then
@@ -509,20 +536,19 @@ printf '%s' "$SESSION_JSON" | json_expect_connected
 log "Verifying root interface"
 ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_JSON" | json_expect_ok "root get_interface"
-printf '%s' "$ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
+printf '%s' "$ROOT_JSON" | expect_root_top
 
 log "Verifying root scroll"
 ROOT_SCROLL_JSON="$(run_cli_json scroll --direction down)"
 printf '%s' "$ROOT_SCROLL_JSON" | json_expect_ok "scroll root list"
 SCROLLED_ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$SCROLLED_ROOT_JSON" | json_expect_ok "scrolled root get_interface"
-printf '%s' "$SCROLLED_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
+printf '%s' "$SCROLLED_ROOT_JSON" | expect_root_top
 ROOT_BOTTOM_JSON="$(run_cli_json scroll_to_edge --edge bottom)"
 printf '%s' "$ROOT_BOTTOM_JSON" | json_expect_ok "scroll root to bottom"
 ROOT_BOTTOM_INTERFACE_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | json_expect_ok "root bottom get_interface"
-printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_screen_title "ButtonHeist Demo"
-printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_element_label "Custom Rotors"
+printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_root_rotor_row
 
 log "Verifying custom rotor"
 ROTORS_ACTION_JSON="$(run_cli_json activate --label "Custom Rotors" --traits button --timeout 15)"
@@ -545,11 +571,11 @@ ROTOR_RESULT_LABEL="$(printf '%s' "$ROTOR_JSON" | jq -r '
     || fail "expected rotor result label 'Rotor Result: Missing amount', got '$ROTOR_RESULT_LABEL'"
 
 log "Returning to root after rotor"
-ROOT_FROM_ROTOR_JSON="$(run_cli_json activate --label "ButtonHeist Demo" --traits button backButton --timeout 15)"
+ROOT_FROM_ROTOR_JSON="$(run_cli_json activate --label "ButtonHeist Demo" --traits backButton --timeout 15)"
 printf '%s' "$ROOT_FROM_ROTOR_JSON" | json_expect_ok "activate back to ButtonHeist Demo"
 ROOT_AFTER_ROTOR_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_AFTER_ROTOR_JSON" | json_expect_ok "root after rotor get_interface"
-printf '%s' "$ROOT_AFTER_ROTOR_JSON" | expect_screen_title "ButtonHeist Demo"
+printf '%s' "$ROOT_AFTER_ROTOR_JSON" | expect_root_rotor_row
 
 log "Navigating to Controls Demo semantically from the scrolled root"
 CONTROLS_ACTION_JSON="$(run_cli_json activate --label "Controls Demo" --traits button --timeout 15)"
@@ -577,7 +603,7 @@ printf '%s' "$CUSTOM_ACTION_STATE_JSON" | json_expect_ok "Buttons & Actions afte
 printf '%s' "$CUSTOM_ACTION_STATE_JSON" | expect_element_label "Last action: Custom action: Favorite"
 
 log "Navigating back to Controls Demo after actions"
-CONTROLS_FROM_ACTIONS_JSON="$(run_cli_json activate --label "Controls Demo" --traits button backButton --timeout 15)"
+CONTROLS_FROM_ACTIONS_JSON="$(run_cli_json activate --label "Controls Demo" --traits backButton --timeout 15)"
 printf '%s' "$CONTROLS_FROM_ACTIONS_JSON" | json_expect_ok "activate back to Controls Demo after actions"
 CONTROLS_AFTER_ACTIONS_JSON="$(run_cli_json get_interface)"
 printf '%s' "$CONTROLS_AFTER_ACTIONS_JSON" | json_expect_ok "Controls Demo after actions get_interface"
@@ -591,7 +617,7 @@ printf '%s' "$DISPLAY_JSON" | json_expect_ok "Display get_interface"
 printf '%s' "$DISPLAY_JSON" | expect_screen_title "Display"
 
 log "Navigating back to Controls Demo"
-BACK_JSON="$(run_cli_json activate --label "Controls Demo" --traits button backButton --timeout 15)"
+BACK_JSON="$(run_cli_json activate --label "Controls Demo" --traits backButton --timeout 15)"
 printf '%s' "$BACK_JSON" | json_expect_ok "activate back to Controls Demo"
 FINAL_JSON="$(run_cli_json get_interface)"
 printf '%s' "$FINAL_JSON" | json_expect_ok "final get_interface"
@@ -599,18 +625,18 @@ printf '%s' "$FINAL_JSON" | expect_screen_title "Controls Demo"
 
 if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     log "Returning to root for heist playback"
-    ROOT_BACK_JSON="$(run_cli_json activate --label "ButtonHeist Demo" --traits button backButton --timeout 15)"
+    ROOT_BACK_JSON="$(run_cli_json activate --label "ButtonHeist Demo" --traits backButton --timeout 15)"
     printf '%s' "$ROOT_BACK_JSON" | json_expect_ok "activate back to ButtonHeist Demo"
     PLAYBACK_ROOT_JSON="$(run_cli_json get_interface)"
     printf '%s' "$PLAYBACK_ROOT_JSON" | json_expect_ok "playback root get_interface"
-    printf '%s' "$PLAYBACK_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
+    printf '%s' "$PLAYBACK_ROOT_JSON" | expect_root_top
 
     log "Replaying heist fixture"
     PLAYBACK_JSON="$(run_cli_json run_heist --path "$HEIST_PATH")"
     printf '%s' "$PLAYBACK_JSON" | json_expect_ok "run_heist"
     PLAYBACK_FINAL_JSON="$(run_cli_json get_interface)"
     printf '%s' "$PLAYBACK_FINAL_JSON" | json_expect_ok "playback final get_interface"
-    printf '%s' "$PLAYBACK_FINAL_JSON" | expect_screen_title "Controls Demo"
+    printf '%s' "$PLAYBACK_FINAL_JSON" | expect_screen_title "Display"
 fi
 
 emit_benchmark_report

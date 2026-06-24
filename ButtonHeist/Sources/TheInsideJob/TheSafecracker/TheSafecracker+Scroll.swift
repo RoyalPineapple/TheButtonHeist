@@ -10,9 +10,6 @@ import ThePlans
 /// entering this file.
 extension TheSafecracker {
 
-    /// Points of overlap retained between page scrolls so users keep context.
-    static let pageOverlap: CGFloat = 44
-
     /// Scroll by one page in the given direction with a 44pt overlap.
     /// Returns false if already at the edge (no movement possible).
     func scrollByPage(
@@ -22,7 +19,7 @@ extension TheSafecracker {
     ) -> Bool {
         guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
 
-        let overlap = Self.pageOverlap
+        let overlap = CGFloat(ScrollContainerMetrics.pageOverlap)
         let size = scrollView.frame.size
         let offset = scrollView.contentOffset
         let contentSize = scrollView.contentSize
