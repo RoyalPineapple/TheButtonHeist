@@ -64,13 +64,15 @@ extension FenceResponse {
     static func compactInterface(
         _ interface: Interface,
         detail: InterfaceDetail = .summary,
-        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget
+        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
+        totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
     ) -> String {
         var lines: [String] = ["\(interface.projectedElements.count) elements"]
         lines.append(contentsOf: compactTreeLines(
             interface,
             detail: detail,
-            visibleElementBudget: visibleElementBudget
+            visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudget
         ))
         return lines.joined(separator: "\n")
     }
@@ -78,11 +80,13 @@ extension FenceResponse {
     static func compactTreeLines(
         _ interface: Interface,
         detail: InterfaceDetail,
-        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget
+        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
+        totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
     ) -> [String] {
         let counter = LineIndexCounter()
         let elementAnnotations = interface.annotations.elementByPath
         let containerAnnotations = interface.annotations.containerByPath
+        let totalNodeBudgetTracker = PublicElementBudgetTracker(budget: totalNodeBudget)
         var remainingElements: Int?
         var lines: [String] = []
         for (index, node) in interface.tree.enumerated() {
@@ -94,8 +98,19 @@ extension FenceResponse {
                 elementAnnotations: elementAnnotations,
                 containerAnnotations: containerAnnotations,
                 visibleElementBudget: visibleElementBudget,
+                totalNodeBudget: totalNodeBudgetTracker,
                 remainingElements: &remainingElements
             ))
+        }
+        if totalNodeBudgetTracker.wasLimited {
+            let omittedElementCount = max(
+                0,
+                interface.projectedElements.count - (totalNodeBudgetTracker.budget - totalNodeBudgetTracker.remaining)
+            )
+            lines.append(
+                "... interface truncated: omitted \(omittedElementCount) observed elements " +
+                "(totalNodeBudget=\(totalNodeBudgetTracker.budget))"
+            )
         }
         return lines
     }
@@ -114,6 +129,7 @@ extension FenceResponse {
         elementAnnotations: [TreePath: InterfaceElementAnnotation],
         containerAnnotations: [TreePath: InterfaceContainerAnnotation],
         visibleElementBudget: Int,
+        totalNodeBudget: PublicElementBudgetTracker,
         remainingElements: inout Int?
     ) -> [String] {
         switch node {
@@ -122,6 +138,9 @@ extension FenceResponse {
             counter.value += 1
             if let remaining = remainingElements {
                 guard remaining > 0 else { return [] }
+            }
+            guard totalNodeBudget.consumeElement() else { return [] }
+            if let remaining = remainingElements {
                 remainingElements = remaining - 1
             }
             let projected = HeistElement(
@@ -141,6 +160,11 @@ extension FenceResponse {
             }()
             if let remaining = remainingElements, remaining <= 0 {
                 counter.value += observedElementCount
+                return []
+            }
+            if !totalNodeBudget.hasCapacity, observedElementCount > 0 {
+                counter.value += observedElementCount
+                totalNodeBudget.recordLimitHit()
                 return []
             }
             let header = compactContainerLine(
@@ -168,6 +192,7 @@ extension FenceResponse {
                         elementAnnotations: elementAnnotations,
                         containerAnnotations: containerAnnotations,
                         visibleElementBudget: visibleElementBudget,
+                        totalNodeBudget: totalNodeBudget,
                         remainingElements: &scrollRemainingElements
                     )
                 } else {
@@ -179,6 +204,7 @@ extension FenceResponse {
                         elementAnnotations: elementAnnotations,
                         containerAnnotations: containerAnnotations,
                         visibleElementBudget: visibleElementBudget,
+                        totalNodeBudget: totalNodeBudget,
                         remainingElements: &remainingElements
                     )
                 }
@@ -192,7 +218,8 @@ extension FenceResponse {
                     remainingElements = max(0, parentRemainingBefore - renderedElementCount)
                 }
                 let omittedElementCount = max(0, observedElementCount - renderedElementCount)
-                if omittedElementCount > 0 {
+                let scrollBudgetHit = (scrollRemainingElements ?? 0) <= 0
+                if scrollBudgetHit, omittedElementCount > 0 {
                     body.append(
                         "  ... subtree truncated: omitted \(omittedElementCount) observed elements " +
                         "(visibleElementBudget=\(budgetCap))"

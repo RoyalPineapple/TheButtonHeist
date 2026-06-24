@@ -14,6 +14,7 @@ struct PublicSnapshotQuality: Encodable {
     let renderedElementCount: Int
     let omittedElementCount: Int
     let visibleElementBudget: Int?
+    let totalNodeBudget: Int?
 }
 
 final class PublicInterfaceProjectionStats {
@@ -33,7 +34,11 @@ final class PublicInterfaceProjectionStats {
         truncatedScrollContainerCount += 1
     }
 
-    func snapshotQuality(visibleElementBudget: Int) -> PublicSnapshotQuality {
+    func snapshotQuality(
+        visibleElementBudget: Int,
+        totalNodeBudget: Int,
+        totalNodeBudgetHit: Bool
+    ) -> PublicSnapshotQuality {
         let omittedElementCount = max(0, observedElementCount - renderedElementCount)
         guard truncatedScrollContainerCount > 0 || omittedElementCount > 0 else {
             return PublicSnapshotQuality(
@@ -42,18 +47,49 @@ final class PublicInterfaceProjectionStats {
                 observedElementCount: observedElementCount,
                 renderedElementCount: renderedElementCount,
                 omittedElementCount: 0,
-                visibleElementBudget: nil
+                visibleElementBudget: nil,
+                totalNodeBudget: nil
             )
         }
 
         return PublicSnapshotQuality(
             state: "truncated",
-            reasonCode: "scroll-subtree-element-budget",
+            reasonCode: totalNodeBudgetHit ? "total-node-budget" : "scroll-subtree-element-budget",
             observedElementCount: observedElementCount,
             renderedElementCount: renderedElementCount,
             omittedElementCount: omittedElementCount,
-            visibleElementBudget: max(0, visibleElementBudget)
+            visibleElementBudget: truncatedScrollContainerCount > 0 ? max(0, visibleElementBudget) : nil,
+            totalNodeBudget: totalNodeBudgetHit ? max(0, totalNodeBudget) : nil
         )
+    }
+}
+
+final class PublicElementBudgetTracker {
+    let budget: Int
+    private(set) var remaining: Int
+    private(set) var wasLimited = false
+
+    init(budget: Int) {
+        let boundedBudget = max(0, budget)
+        self.budget = boundedBudget
+        self.remaining = boundedBudget
+    }
+
+    var hasCapacity: Bool {
+        remaining > 0
+    }
+
+    func consumeElement() -> Bool {
+        guard remaining > 0 else {
+            wasLimited = true
+            return false
+        }
+        remaining -= 1
+        return true
+    }
+
+    func recordLimitHit() {
+        wasLimited = true
     }
 }
 
@@ -61,6 +97,7 @@ struct PublicTreeProjectionContext {
     let detail: InterfaceDetail
     let counter: PublicIndexCounter?
     let visibleElementBudget: Int
+    let totalNodeBudget: PublicElementBudgetTracker
     let projectionStats: PublicInterfaceProjectionStats
     let elementAnnotations: [TreePath: InterfaceElementAnnotation]
     let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
@@ -80,6 +117,7 @@ enum PublicTreeNode: Encodable {
         detail: InterfaceDetail,
         counter: PublicIndexCounter?,
         visibleElementBudget: Int,
+        totalNodeBudget: PublicElementBudgetTracker,
         projectionStats: PublicInterfaceProjectionStats,
         elementAnnotations: [TreePath: InterfaceElementAnnotation],
         containerAnnotations: [TreePath: InterfaceContainerAnnotation]
@@ -88,6 +126,7 @@ enum PublicTreeNode: Encodable {
             detail: detail,
             counter: counter,
             visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudget,
             projectionStats: projectionStats,
             elementAnnotations: elementAnnotations,
             containerAnnotations: containerAnnotations
@@ -115,6 +154,9 @@ enum PublicTreeNode: Encodable {
             context.counter?.value += 1
             if let remaining = remainingElements {
                 guard remaining > 0 else { return nil }
+            }
+            guard context.totalNodeBudget.consumeElement() else { return nil }
+            if let remaining = remainingElements {
                 remainingElements = remaining - 1
             }
             context.projectionStats.recordRenderedElement()
@@ -127,6 +169,11 @@ enum PublicTreeNode: Encodable {
             let observedElementCount = children.reduce(0) { $0 + $1.pathIndexedElements().count }
             if let remaining = remainingElements, remaining <= 0 {
                 context.counter?.value += observedElementCount
+                return nil
+            }
+            if !context.totalNodeBudget.hasCapacity, observedElementCount > 0 {
+                context.counter?.value += observedElementCount
+                context.totalNodeBudget.recordLimitHit()
                 return nil
             }
 
@@ -173,7 +220,8 @@ enum PublicTreeNode: Encodable {
                     remainingElements = max(0, parentRemainingBefore - renderedElementCount)
                 }
                 let omittedElementCount = max(0, observedElementCount - renderedElementCount)
-                if omittedElementCount > 0 {
+                let scrollBudgetHit = (scrollRemainingElements ?? 0) <= 0
+                if scrollBudgetHit, omittedElementCount > 0 {
                     context.projectionStats.recordTruncatedScrollContainer()
                     truncation = PublicSubtreeTruncation(
                         observedElementCount: observedElementCount,

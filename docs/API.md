@@ -197,7 +197,7 @@ The current `get_interface` projection emits `full` or `truncated`.
 degraded projections; they must use the same quality object before they are
 exposed. For huge scroll views, Button Heist bounds each scrollable subtree by
 `BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET`
-(default `100`, clamped to `0...1000`). A truncated scroll container keeps its
+(default `300`, clamped to `0...1000`). A truncated scroll container keeps its
 scroll metrics and `observedElementCount`, renders only the leading elements,
 and adds a `truncation` object with:
 
@@ -210,9 +210,24 @@ and adds a `truncation` object with:
 
 Compact output mirrors the same decision with a `subtree truncated` line.
 
-Low-level runtime knobs are read from the app process environment. Test runners
-may prefix the same names with `TEST_RUNNER_`; the unprefixed name wins when it
-is valid.
+Whole-interface public projection is also capped by `BH_TOTAL_NODE_BUDGET` /
+`BUTTONHEIST_TOTAL_NODE_BUDGET` (default and hard cap `5000`). When this cap is
+hit, top-level `snapshotQuality` reports:
+
+- `state: "truncated"`
+- `reasonCode: "total-node-budget"`
+- `observedElementCount`
+- `renderedElementCount`
+- `omittedElementCount`
+- `totalNodeBudget`
+
+Compact output mirrors the same decision with an `interface truncated` line.
+
+Runtime knobs are read from the process that uses them. Scroll exploration
+limits are app-side InsideJob knobs; public projection budgets are applied by
+TheFence and therefore affect CLI, JSON-lines, and MCP output in the client
+process. Test runners may prefix the same names with `TEST_RUNNER_`; the
+unprefixed name wins when it is valid.
 
 | Variable | Default | Clamp | Purpose |
 |----------|---------|-------|---------|
@@ -220,8 +235,9 @@ is valid.
 | `BH_TRIPWIRE_PULSE_HZ` / `BUTTONHEIST_TRIPWIRE_PULSE_HZ` | `10` | `1...120` | Accessibility tripwire polling frequency. |
 | `BH_MAX_SCROLLS_PER_CONTAINER` / `BUTTONHEIST_MAX_SCROLLS_PER_CONTAINER` | `200` | `1...2000` | Per-container scroll exploration safety limit. |
 | `BH_MAX_SCROLLS_PER_DISCOVERY` / `BUTTONHEIST_MAX_SCROLLS_PER_DISCOVERY` | `200` | `1...2000` | Whole-discovery scroll exploration safety limit. |
-| `BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET` | `100` | `0...1000` | Per-scroll-container public projection budget. |
-| `BH_VISIBLE_ELEMENT_BUDGET` / `BUTTONHEIST_VISIBLE_ELEMENT_BUDGET` | `100` | `0...1000` | Backward-compatible spelling for the same projection budget. |
+| `BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET` | `300` | `0...1000` | Per-scroll-container public projection budget. |
+| `BH_VISIBLE_ELEMENT_BUDGET` / `BUTTONHEIST_VISIBLE_ELEMENT_BUDGET` | `300` | `0...1000` | Backward-compatible spelling for the same projection budget. |
+| `BH_TOTAL_NODE_BUDGET` / `BUTTONHEIST_TOTAL_NODE_BUDGET` | `5000` | `0...5000` | Whole-interface public projection budget. |
 
 ## TheFence
 

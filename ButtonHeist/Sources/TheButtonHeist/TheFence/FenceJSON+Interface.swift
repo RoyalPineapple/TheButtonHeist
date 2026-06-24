@@ -24,7 +24,8 @@ struct PublicInterface: Encodable {
     init(
         interface: Interface,
         detail: InterfaceDetail,
-        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget
+        visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
+        totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
     ) {
         let formatter = ISO8601DateFormatter()
         self.timestamp = formatter.string(from: interface.timestamp)
@@ -35,17 +36,21 @@ struct PublicInterface: Encodable {
         let projectionStats = PublicInterfaceProjectionStats(
             observedElementCount: interface.projectedElements.count
         )
+        let totalNodeBudgetTracker = PublicElementBudgetTracker(budget: totalNodeBudget)
         self.tree = PublicTreeNode.nodes(
             from: interface.tree,
             detail: detail,
             counter: counter,
             visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudgetTracker,
             projectionStats: projectionStats,
             elementAnnotations: interface.annotations.elementByPath,
             containerAnnotations: interface.annotations.containerByPath
         )
         self.snapshotQuality = projectionStats.snapshotQuality(
-            visibleElementBudget: visibleElementBudget
+            visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudget,
+            totalNodeBudgetHit: totalNodeBudgetTracker.wasLimited
         )
     }
 }

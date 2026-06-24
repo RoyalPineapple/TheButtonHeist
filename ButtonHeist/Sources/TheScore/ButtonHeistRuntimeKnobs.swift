@@ -6,12 +6,14 @@ public struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
     public let maxScrollsPerContainer: Int
     public let maxScrollsPerDiscovery: Int
     public let visibleElementBudget: Int
+    public let totalNodeBudget: Int
 
     public static let defaultPostScrollLayoutFrames = 3
     public static let defaultTripwirePulseFramesPerSecond = 10
     public static let defaultMaxScrollsPerContainer = 200
     public static let defaultMaxScrollsPerDiscovery = 200
-    public static let defaultVisibleElementBudget = 100
+    public static let defaultVisibleElementBudget = 300
+    public static let defaultTotalNodeBudget = 5_000
 
     public static var current: ButtonHeistRuntimeKnobs {
         resolve()
@@ -59,6 +61,12 @@ public struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
                 environment: environment,
                 defaultValue: defaultVisibleElementBudget,
                 range: 0...1_000
+            ),
+            totalNodeBudget: intOverride(
+                keys: ["BH_TOTAL_NODE_BUDGET", "BUTTONHEIST_TOTAL_NODE_BUDGET"],
+                environment: environment,
+                defaultValue: defaultTotalNodeBudget,
+                range: 0...5_000
             )
         )
     }

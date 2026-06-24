@@ -811,6 +811,58 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         """)
     }
 
+    func testCompactInterfaceTruncatesWholeInterfaceAtTotalNodeBudget() {
+        let rows = (0..<4).map { index in
+            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+        }
+        let interface = makeReceiptTestInterface(nodes: rows)
+
+        let output = FenceResponse.compactInterface(
+            interface,
+            detail: .summary,
+            visibleElementBudget: 10,
+            totalNodeBudget: 2
+        )
+
+        XCTAssertEqual(output, """
+        4 elements
+        [0] "Row 0" staticText
+        [1] "Row 1" staticText
+        ... interface truncated: omitted 2 observed elements (totalNodeBudget=2)
+        """)
+    }
+
+    func testCompactInterfaceDoesNotReportScrollBudgetWhenTotalNodeBudgetStopsFirst() {
+        let rows = (0..<4).map { index in
+            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+        }
+        let interface = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestScrollableContainer(
+                    contentWidth: 390,
+                    contentHeight: 1_200,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                containerName: "long_scroll",
+                children: rows
+            ),
+        ])
+
+        let output = FenceResponse.compactInterface(
+            interface,
+            detail: .summary,
+            visibleElementBudget: 3,
+            totalNodeBudget: 2
+        )
+
+        XCTAssertFalse(output.contains("subtree truncated"), output)
+        XCTAssertTrue(
+            output.contains("... interface truncated: omitted 2 observed elements (totalNodeBudget=2)"),
+            output
+        )
+    }
+
     func testCompactInterfaceNestedScrollCannotResetParentVisibleElementBudget() {
         let interface = makeReceiptTestInterface(nodes: [
             .container(
@@ -876,6 +928,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual((snapshotQuality["renderedElementCount"] as? NSNumber)?.intValue, 4)
         XCTAssertEqual((snapshotQuality["omittedElementCount"] as? NSNumber)?.intValue, 0)
         XCTAssertNil(snapshotQuality["visibleElementBudget"])
+        XCTAssertNil(snapshotQuality["totalNodeBudget"])
         XCTAssertEqual(scrollContainer["type"] as? String, "scrollable")
         XCTAssertEqual((scrollContainer["contentWidth"] as? NSNumber)?.doubleValue, 390)
         XCTAssertEqual((scrollContainer["contentHeight"] as? NSNumber)?.doubleValue, 1200)
@@ -920,6 +973,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual((snapshotQuality["renderedElementCount"] as? NSNumber)?.intValue, 3)
         XCTAssertEqual((snapshotQuality["omittedElementCount"] as? NSNumber)?.intValue, 2)
         XCTAssertEqual((snapshotQuality["visibleElementBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertNil(snapshotQuality["totalNodeBudget"])
         XCTAssertEqual(scrollChildren.count, 2)
         XCTAssertEqual((scrollContainer["observedElementCount"] as? NSNumber)?.intValue, 4)
         XCTAssertEqual(truncation["state"] as? String, "truncated")
@@ -930,6 +984,68 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual((truncation["visibleElementBudget"] as? NSNumber)?.intValue, 2)
         XCTAssertEqual(after["label"] as? String, "After")
         XCTAssertEqual((after["order"] as? NSNumber)?.intValue, 4)
+    }
+
+    func testPublicInterfaceJSONTruncatesWholeInterfaceAtTotalNodeBudget() throws {
+        let rows = (0..<4).map { index in
+            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+        }
+        let interface = makeReceiptTestInterface(nodes: rows)
+
+        let json = try publicInterfaceJSONObject(
+            PublicInterface(
+                interface: interface,
+                detail: .summary,
+                visibleElementBudget: 10,
+                totalNodeBudget: 2
+            )
+        )
+        let snapshotQuality = try XCTUnwrap(json["snapshotQuality"] as? [String: Any])
+        let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
+
+        XCTAssertEqual(snapshotQuality["state"] as? String, "truncated")
+        XCTAssertEqual(snapshotQuality["reasonCode"] as? String, "total-node-budget")
+        XCTAssertEqual((snapshotQuality["observedElementCount"] as? NSNumber)?.intValue, 4)
+        XCTAssertEqual((snapshotQuality["renderedElementCount"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual((snapshotQuality["omittedElementCount"] as? NSNumber)?.intValue, 2)
+        XCTAssertNil(snapshotQuality["visibleElementBudget"])
+        XCTAssertEqual((snapshotQuality["totalNodeBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual(tree.count, 2)
+    }
+
+    func testPublicInterfaceJSONDoesNotReportScrollBudgetWhenTotalNodeBudgetStopsFirst() throws {
+        let rows = (0..<4).map { index in
+            ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))
+        }
+        let interface = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestScrollableContainer(
+                    contentWidth: 390,
+                    contentHeight: 1_200,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                containerName: "long_scroll",
+                children: rows
+            ),
+        ])
+
+        let json = try publicInterfaceJSONObject(
+            PublicInterface(
+                interface: interface,
+                detail: .summary,
+                visibleElementBudget: 3,
+                totalNodeBudget: 2
+            )
+        )
+        let snapshotQuality = try XCTUnwrap(json["snapshotQuality"] as? [String: Any])
+        let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
+        let scrollContainer = try XCTUnwrap(tree[0]["container"] as? [String: Any])
+
+        XCTAssertEqual(snapshotQuality["reasonCode"] as? String, "total-node-budget")
+        XCTAssertNil(snapshotQuality["visibleElementBudget"])
+        XCTAssertEqual((snapshotQuality["totalNodeBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertNil(scrollContainer["truncation"])
     }
 
     func testCompactContainerEscapesLabelsAndContainerNames() {

@@ -193,7 +193,8 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 10)
         XCTAssertEqual(knobs.maxScrollsPerContainer, 200)
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 200)
-        XCTAssertEqual(knobs.visibleElementBudget, 100)
+        XCTAssertEqual(knobs.visibleElementBudget, 300)
+        XCTAssertEqual(knobs.totalNodeBudget, 5_000)
         XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 0.2, accuracy: 0.001)
     }
 
@@ -203,7 +204,8 @@ final class StartupConfigurationTests: XCTestCase {
             "BH_TRIPWIRE_PULSE_HZ": "60",
             "BH_MAX_SCROLLS_PER_CONTAINER": "25",
             "BH_MAX_SCROLLS_PER_DISCOVERY": "30",
-            "BH_SCROLL_SUBTREE_ELEMENT_BUDGET": "75"
+            "BH_SCROLL_SUBTREE_ELEMENT_BUDGET": "75",
+            "BH_TOTAL_NODE_BUDGET": "4000"
         ])
 
         XCTAssertEqual(knobs.postScrollLayoutFrames, 0)
@@ -211,6 +213,7 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(knobs.maxScrollsPerContainer, 25)
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 30)
         XCTAssertEqual(knobs.visibleElementBudget, 75)
+        XCTAssertEqual(knobs.totalNodeBudget, 4_000)
         XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 0.05, accuracy: 0.001)
     }
 
@@ -220,7 +223,8 @@ final class StartupConfigurationTests: XCTestCase {
             "TEST_RUNNER_BH_TRIPWIRE_PULSE_HZ": "0",
             "TEST_RUNNER_BH_MAX_SCROLLS_PER_CONTAINER": "9999",
             "TEST_RUNNER_BH_MAX_SCROLLS_PER_DISCOVERY": "9999",
-            "TEST_RUNNER_BH_SCROLL_SUBTREE_ELEMENT_BUDGET": "9999"
+            "TEST_RUNNER_BH_SCROLL_SUBTREE_ELEMENT_BUDGET": "9999",
+            "TEST_RUNNER_BH_TOTAL_NODE_BUDGET": "9999"
         ])
 
         XCTAssertEqual(knobs.postScrollLayoutFrames, 10)
@@ -228,6 +232,7 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(knobs.maxScrollsPerContainer, 2_000)
         XCTAssertEqual(knobs.maxScrollsPerDiscovery, 2_000)
         XCTAssertEqual(knobs.visibleElementBudget, 1_000)
+        XCTAssertEqual(knobs.totalNodeBudget, 5_000)
         XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 2.0, accuracy: 0.001)
     }
 }
