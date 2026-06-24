@@ -48,6 +48,13 @@ final class AccessibilityActionDispatcher {
         performCustomAction(named: name, on: liveTarget.object)
     }
 
+    func needsPreDispatchRefresh(named name: String, on liveTarget: TheStash.LiveActionTarget) -> Bool {
+        guard !(liveTarget.object is UIView),
+              let action = liveTarget.object.accessibilityCustomActions?.first(where: { $0.name == name })
+        else { return false }
+        return action.actionHandler != nil
+    }
+
     private func performCustomAction(named name: String, on object: NSObject) -> CustomActionOutcome {
         guard let action = object.accessibilityCustomActions?
             .first(where: { $0.name == name }) else {
