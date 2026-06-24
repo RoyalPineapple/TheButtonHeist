@@ -362,16 +362,26 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(customActionTarget.invocationCount, 1)
     }
 
-    func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async {
-        let heistId = "plain_action"
-        let liveObject = ActionActivationOverrideView()
-        registerScreenElement(
-            heistId: heistId,
-            element: makeElement(label: "Plain action"),
-            object: liveObject
+    func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async throws {
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+        let liveObject = ActionActivationOverrideView(
+            frame: CGRect(x: 80, y: 180, width: 180, height: 44)
         )
+        liveObject.isAccessibilityElement = true
+        liveObject.accessibilityLabel = "Plain action"
+        liveObject.accessibilityIdentifier = "plain_action"
+        liveObject.accessibilityTraits = .none
+        rootView.addSubview(liveObject)
 
-        let result = await brains.actions.executeActivate(.predicate(ElementPredicate(label: "Plain action")))
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let result = await brains.actions.executeActivate(.predicate(ElementPredicate(identifier: "plain_action")))
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
