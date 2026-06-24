@@ -387,38 +387,33 @@ final class ElementInflation {
     ) -> Result<InflatedElementTarget, ElementInflationFailure> {
         let liveResolution = stash.resolveLiveActionTarget(for: screenElement)
         if case .resolved(let liveTarget) = liveResolution {
+            guard liveTarget.screenElement.matches(target) else {
+                return resolveFreshVisibleElementTarget(
+                    target: target,
+                    method: method,
+                    deallocatedBoundary: deallocatedBoundary
+                )
+            }
             return .success(InflatedElementTarget(
                 target: target,
-                screenElement: screenElement,
+                screenElement: liveTarget.screenElement,
                 liveTarget: liveTarget
             ))
         }
 
         if case .objectUnavailable = liveResolution {
-            stash.refreshCurrentVisibleTree()
-            switch stash.resolveVisibleTarget(target) {
-            case .resolved(let visibleElement):
-                return resolveVisibleReboundElementTarget(
-                    target: target,
-                    screenElement: visibleElement,
-                    method: method,
-                    deallocatedBoundary: deallocatedBoundary
-                )
-            case .notFound(let facts):
-                return .failure(.staleRefresh(
-                    "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))",
-                    failureKind: .targetUnavailable
-                ))
-            case .ambiguous(let facts):
-                return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
-            }
+            return resolveFreshVisibleElementTarget(
+                target: target,
+                method: method,
+                deallocatedBoundary: deallocatedBoundary
+            )
         }
 
         switch liveResolution {
         case .resolved(let liveTarget):
             return .success(InflatedElementTarget(
                 target: target,
-                screenElement: screenElement,
+                screenElement: liveTarget.screenElement,
                 liveTarget: liveTarget
             ))
         case .objectUnavailable:
@@ -441,6 +436,30 @@ final class ElementInflation {
         }
     }
 
+    private func resolveFreshVisibleElementTarget(
+        target: ElementTarget,
+        method: ActionMethod,
+        deallocatedBoundary: String
+    ) -> Result<InflatedElementTarget, ElementInflationFailure> {
+        stash.refreshCurrentVisibleTree()
+        switch stash.resolveVisibleTarget(target) {
+        case .resolved(let visibleElement):
+            return resolveVisibleReboundElementTarget(
+                target: target,
+                screenElement: visibleElement,
+                method: method,
+                deallocatedBoundary: deallocatedBoundary
+            )
+        case .notFound(let facts):
+            return .failure(.staleRefresh(
+                "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))",
+                failureKind: .targetUnavailable
+            ))
+        case .ambiguous(let facts):
+            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
+        }
+    }
+
     private func resolveVisibleReboundElementTarget(
         target: ElementTarget,
         screenElement: TheStash.ScreenElement,
@@ -451,7 +470,7 @@ final class ElementInflation {
         case .resolved(let liveTarget):
             return .success(InflatedElementTarget(
                 target: target,
-                screenElement: screenElement,
+                screenElement: liveTarget.screenElement,
                 liveTarget: liveTarget
             ))
         case .objectUnavailable:
@@ -560,6 +579,15 @@ extension ElementInflation.InflatedElementTarget {
             target: target,
             element: TheStash.WireConversion.convert(screenElement.element)
         )
+    }
+}
+
+private extension TheStash.ScreenElement {
+    func matches(_ target: ElementTarget) -> Bool {
+        switch target {
+        case .predicate(let predicate, _):
+            return predicate.matches(element, mode: .exact)
+        }
     }
 }
 

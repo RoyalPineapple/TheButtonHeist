@@ -45,7 +45,7 @@ final class Navigation {
             guard let self else { return nil }
             return await self.exploreScreen(
                 target: target,
-                baseline: self.stash.visibleExplorationBaseline(from: self.stash.liveVisibleScreen)
+                baseline: self.stash.actionDiscoveryBaseline()
             ).screen
         }
     }
