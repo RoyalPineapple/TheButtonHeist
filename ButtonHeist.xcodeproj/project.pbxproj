@@ -529,6 +529,7 @@
 		F15B0694CFD24636E8A8CBAA /* InterfaceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A9301459818B5CDACB2165 /* InterfaceModels.swift */; };
 		F27830B9AF754EF55A035891 /* SchemaValidationError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37797014C48E03154F0FB75C /* SchemaValidationError.swift */; };
 		F27EFB3BFD5F772ACEB4BAE6 /* PresentationObscuringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3471869CA78AB09EF66258C /* PresentationObscuringTests.swift */; };
+		F3B48493D225A7155DB496D1 /* HeistActionCommandGuardrailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07BC7FE8693091625D87378 /* HeistActionCommandGuardrailTests.swift */; };
 		F411A48EE92857483ED4303F /* Navigation+PresentationObstruction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B270D706A332CA587FAFDA9A /* Navigation+PresentationObstruction.swift */; };
 		F46D1E7BDE4F27CF95BF39A6 /* HeistCanonicalSwiftDSLRenderer+Steps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3D5FE7A0B37299D5524C3E /* HeistCanonicalSwiftDSLRenderer+Steps.swift */; };
 		F4C55BBA04181A03EA5CA3D8 /* ThePlans.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96D1DF8ADC7876970B2B284F /* ThePlans.framework */; };
@@ -1279,6 +1280,7 @@
 		DFCA981B7E21FF878CF51159 /* SocketListenerStartup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketListenerStartup.swift; sourceTree = "<group>"; };
 		DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		DFFD49C0802C7C0B8FD2F181 /* HeistCanonicalSwiftDSLRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistCanonicalSwiftDSLRenderer.swift; sourceTree = "<group>"; };
+		E07BC7FE8693091625D87378 /* HeistActionCommandGuardrailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistActionCommandGuardrailTests.swift; sourceTree = "<group>"; };
 		E1806EE057A67130D7C55C1B /* SemanticObservationCycles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SemanticObservationCycles.swift; sourceTree = "<group>"; };
 		E239B3DF04A37884F2E211EA /* ServerExposureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerExposureTests.swift; sourceTree = "<group>"; };
 		E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+LiveGeometry.swift"; sourceTree = "<group>"; };
@@ -1640,6 +1642,7 @@
 			isa = PBXGroup;
 			children = (
 				EC20D5074E584DEBEFD7D09B /* CanonicalHeistSourceRoundTripTests.swift */,
+				E07BC7FE8693091625D87378 /* HeistActionCommandGuardrailTests.swift */,
 				100E34D2387FBCEC07E5DE9F /* HeistCompilerTests.swift */,
 				12287D13A81F0DF556026053 /* HeistDiscoveryTests.swift */,
 				8C04778F90D44AB05E3F71D8 /* HeistPlanExpressionContractTests.swift */,
@@ -2735,6 +2738,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FB8665DB19E0A3D48B3757E1 /* CanonicalHeistSourceRoundTripTests.swift in Sources */,
+				F3B48493D225A7155DB496D1 /* HeistActionCommandGuardrailTests.swift in Sources */,
 				BCB46A70ABF73A480EA3D35C /* HeistCompilerTests.swift in Sources */,
 				8C064875B4060986945F421D /* HeistDiscoveryTests.swift in Sources */,
 				26A3B6C54F5D1599D7BFA3F2 /* HeistPlanExpressionContractTests.swift in Sources */,
