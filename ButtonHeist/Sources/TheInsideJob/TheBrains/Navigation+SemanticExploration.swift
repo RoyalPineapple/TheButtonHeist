@@ -53,10 +53,18 @@ extension Navigation {
 
     struct SemanticExploration {
         var screen: Screen
-        var manifest = ScreenManifest()
+        var manifest: ScreenManifest
 
-        init(baseline: Screen) {
+        init(
+            baseline: Screen,
+            maxScrollsPerContainer: Int = ScreenManifest.maxScrollsPerContainer,
+            maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
+        ) {
             screen = baseline
+            manifest = ScreenManifest(
+                maxScrollsPerContainer: maxScrollsPerContainer,
+                maxScrollsPerDiscovery: maxScrollsPerDiscovery
+            )
         }
 
         mutating func absorb(_ parsed: Screen?) {

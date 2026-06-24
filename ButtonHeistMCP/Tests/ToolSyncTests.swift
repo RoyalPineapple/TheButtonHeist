@@ -99,6 +99,20 @@ struct ToolSyncTests {
         #expect(SchemaCombinatorScanner.combinatorPaths(in: container, path: "container").isEmpty)
     }
 
+    @Test("get_interface schema exposes bounded discovery limits")
+    func getInterfaceSchemaExposesBoundedDiscoveryLimits() throws {
+        let tool = try #require(ToolDefinitions.all.first { $0.name == "get_interface" })
+        for field in ["maxScrollsPerContainer", "maxScrollsPerDiscovery"] {
+            let schema = try #require(
+                schemaValue(at: ["properties", field], in: tool.inputSchema)?.objectValue,
+                "get_interface missing \(field)"
+            )
+            #expect(schema["type"] == .string("integer"))
+            #expect(schema["minimum"] == .int(1))
+            #expect(schema["maximum"] == .int(2_000))
+        }
+    }
+
     @Test("No MCP tool input schema contains a combinator at any depth")
     func noToolSchemaContainsCombinatorAtAnyDepth() {
         let offending = ToolDefinitions.all.flatMap { tool in

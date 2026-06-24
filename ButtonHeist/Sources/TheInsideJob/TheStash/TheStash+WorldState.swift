@@ -130,6 +130,16 @@ extension TheStash {
         settledSemanticScreen
     }
 
+    /// Starting value for public interface discovery after a visible settle.
+    ///
+    /// Public reads should describe the current screen. Discovery-only memory
+    /// from a prior screen can share generated container names with the current
+    /// screen, so command-owned interface exploration starts from visible
+    /// current-screen state and grows from there.
+    func visibleExplorationBaseline(from screen: Screen) -> Screen {
+        screen.visibleOnly
+    }
+
     func knownContentOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
             selectElements().map { ($0.element, $0.contentSpaceOrigin) },
@@ -157,6 +167,15 @@ extension TheStash {
     /// need the interface of the settled screen, not an arbitrary one.
     func interface(timestamp: Date = Date()) -> Interface {
         WireConversion.toInterface(from: settledSemanticScreen, timestamp: timestamp)
+    }
+
+    /// Interface projection for command-owned discovery.
+    ///
+    /// Discovery retains off-viewport elements in semantic memory while the
+    /// latest parser hierarchy remains viewport-local. This projection returns
+    /// the live hierarchy plus discovered scroll-container content.
+    func discoveryInterface(timestamp: Date = Date()) -> Interface {
+        WireConversion.toDiscoveryInterface(from: settledSemanticScreen, timestamp: timestamp)
     }
 
     /// Semantic projection used for traces and deltas.

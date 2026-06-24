@@ -211,6 +211,20 @@ final class Navigation {
         /// Wall-clock time spent exploring, in seconds.
         var explorationTime: TimeInterval = 0
 
+        /// Safety cap on per-container scroll iterations for this exploration pass.
+        let maxScrollsPerContainer: Int
+
+        /// Safety cap on total scroll iterations across this exploration pass.
+        let maxScrollsPerDiscovery: Int
+
+        init(
+            maxScrollsPerContainer: Int = ScreenManifest.maxScrollsPerContainer,
+            maxScrollsPerDiscovery: Int = ScreenManifest.maxScrollsPerDiscovery
+        ) {
+            self.maxScrollsPerContainer = maxScrollsPerContainer
+            self.maxScrollsPerDiscovery = maxScrollsPerDiscovery
+        }
+
         /// Safety cap on per-container scroll iterations.
         static var maxScrollsPerContainer: Int {
             InsideJobRuntimeKnobs.current.maxScrollsPerContainer

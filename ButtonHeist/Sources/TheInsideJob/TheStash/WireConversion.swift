@@ -100,6 +100,90 @@ extension TheStash {
         )
     }
 
+    /// Convert a Screen into the public discovery interface.
+    ///
+    /// The latest live capture is still the tree authority. Known off-viewport
+    /// elements and containers discovered by scroll exploration are grafted
+    /// under their owning semantic scroll container so public `get_interface`
+    /// does not discard the command's exploration work.
+    static func toDiscoveryInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
+        var elementAnnotations = elementAnnotations(from: screen)
+        var containerAnnotations = containerAnnotations(from: screen)
+        let containerAnnotationsByPath = Dictionary(
+            containerAnnotations.map { ($0.path, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        let liveIds = screen.liveCapture.heistIds
+        let liveContainerNames = Set(containerAnnotations.compactMap(\.containerName))
+        var nextTraversalIndex = (screen.liveCapture.hierarchy.pathIndexedElements.map(\.traversalIndex).max() ?? -1) + 1
+
+        var childrenByContainerName = DiscoveryChildren(
+            screen: screen,
+            liveIds: liveIds,
+            liveContainerNames: liveContainerNames
+        )
+
+        func appendDiscoveryChildren(
+            for containerName: ContainerName,
+            to children: inout [AccessibilityHierarchy],
+            path: TreePath
+        ) {
+            for child in childrenByContainerName.removeChildren(parent: containerName) {
+                let childPath = path.appending(children.count)
+                switch child.kind {
+                case .element(let entry):
+                    children.append(.element(entry.element, traversalIndex: nextTraversalIndex))
+                    nextTraversalIndex += 1
+                    elementAnnotations.append(InterfaceElementAnnotation(
+                        path: childPath,
+                        actions: buildActions(for: entry.element)
+                    ))
+                case .container(let entry):
+                    var nestedChildren: [AccessibilityHierarchy] = []
+                    if let nestedContainerName = entry.containerName {
+                        appendDiscoveryChildren(
+                            for: nestedContainerName,
+                            to: &nestedChildren,
+                            path: childPath
+                        )
+                    }
+                    children.append(.container(entry.container, children: nestedChildren))
+                    containerAnnotations.append(InterfaceContainerAnnotation(
+                        path: childPath,
+                        containerName: entry.containerName
+                    ))
+                }
+            }
+        }
+
+        func convert(_ node: AccessibilityHierarchy, path: TreePath) -> AccessibilityHierarchy {
+            switch node {
+            case .element:
+                return node
+            case .container(let container, let children):
+                var convertedChildren = children.enumerated().map { index, child in
+                    convert(child, path: path.appending(index))
+                }
+                if let containerName = containerAnnotationsByPath[path]?.containerName {
+                    appendDiscoveryChildren(for: containerName, to: &convertedChildren, path: path)
+                }
+                return .container(container, children: convertedChildren)
+            }
+        }
+
+        let tree = screen.liveCapture.hierarchy.enumerated().map { index, node in
+            convert(node, path: TreePath([index]))
+        }
+        return Interface(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: InterfaceAnnotations(
+                elements: elementAnnotations,
+                containers: containerAnnotations
+            )
+        )
+    }
+
     /// Convert the committed semantic screen into a trace-facing interface.
     ///
     /// Exploration commits the full targetable element set into
@@ -147,6 +231,74 @@ extension TheStash {
             )
         }
     }
+    }
+}
+
+private struct DiscoveryChildren {
+    struct Child {
+        let sortKey: SortKey
+        let kind: Kind
+
+        enum Kind {
+            case element(SemanticScreen.Element)
+            case container(SemanticScreen.Container)
+        }
+    }
+
+    struct SortKey: Comparable {
+        let y: CGFloat
+        let x: CGFloat
+        let stableName: String
+
+        static func < (lhs: SortKey, rhs: SortKey) -> Bool {
+            if lhs.y != rhs.y { return lhs.y < rhs.y }
+            if lhs.x != rhs.x { return lhs.x < rhs.x }
+            return lhs.stableName < rhs.stableName
+        }
+    }
+
+    private var childrenByParent: [ContainerName: [Child]]
+
+    init(
+        screen: Screen,
+        liveIds: Set<HeistId>,
+        liveContainerNames: Set<ContainerName>
+    ) {
+        var childrenByParent: [ContainerName: [Child]] = [:]
+        for entry in screen.semantic.elements.values {
+            guard !liveIds.contains(entry.heistId),
+                  let location = entry.scrollContentLocation
+            else { continue }
+            childrenByParent[location.scrollContainer, default: []].append(Child(
+                sortKey: SortKey(
+                    y: location.origin.y,
+                    x: location.origin.x,
+                    stableName: entry.heistId
+                ),
+                kind: .element(entry)
+            ))
+        }
+        for entry in screen.semantic.containers.values {
+            guard let containerName = entry.containerName,
+                  !liveContainerNames.contains(containerName),
+                  let location = entry.scrollContentLocation
+            else { continue }
+            childrenByParent[location.scrollContainer, default: []].append(Child(
+                sortKey: SortKey(
+                    y: location.origin.y,
+                    x: location.origin.x,
+                    stableName: containerName
+                ),
+                kind: .container(entry)
+            ))
+        }
+        self.childrenByParent = childrenByParent.mapValues { children in
+            children.sorted { $0.sortKey < $1.sortKey }
+        }
+    }
+
+    mutating func removeChildren(parent: ContainerName) -> [Child] {
+        childrenByParent.removeValue(forKey: parent) ?? []
     }
 }
 

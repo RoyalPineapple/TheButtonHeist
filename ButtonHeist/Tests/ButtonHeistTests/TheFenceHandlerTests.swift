@@ -2959,6 +2959,8 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertNil(query.subtree)
         XCTAssertFalse(query.matcher.hasPredicates)
+        XCTAssertNil(query.maxScrollsPerContainer)
+        XCTAssertNil(query.maxScrollsPerDiscovery)
     }
 
     @ButtonHeistActor
@@ -2996,6 +2998,15 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .getInterface,
             arguments: ["timeout": .int(15)],
             equals: "schema validation failed for timeout: observed integer 15; expected valid get_interface parameter"
+        )
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceRejectsDiscoveryLimitOutsideRuntimeRange() async {
+        await assertValidationError(
+            command: .getInterface,
+            arguments: ["maxScrollsPerContainer": .int(0)],
+            equals: "schema validation failed for maxScrollsPerContainer: observed integer 0; expected integer between 1 and 2000"
         )
     }
 
@@ -3056,6 +3067,8 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": .object([
                 "container": .object(["containerName": .string("semantic_actions__actions")]),
             ]),
+            "maxScrollsPerContainer": .int(25),
+            "maxScrollsPerDiscovery": .int(40),
         ])
 
         guard let (message, _) = mockConn.sent.last,
@@ -3064,6 +3077,8 @@ final class TheFenceHandlerTests: XCTestCase {
             return
         }
         XCTAssertNotNil(query.subtree)
+        XCTAssertEqual(query.maxScrollsPerContainer, 25)
+        XCTAssertEqual(query.maxScrollsPerDiscovery, 40)
 
         let json = publicJSONObject(response)
         let interface = json["interface"] as! [String: Any]

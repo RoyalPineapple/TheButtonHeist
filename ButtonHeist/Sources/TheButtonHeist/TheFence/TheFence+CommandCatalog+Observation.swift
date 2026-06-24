@@ -15,6 +15,8 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                 parameters: FenceParameterBlocks.elementFilter + [
                     FenceParameterBlocks.interfaceSubtree,
                     param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
+                    param(.maxScrollsPerContainer, .integer, minimum: 1, maximum: 2_000),
+                    param(.maxScrollsPerDiscovery, .integer, minimum: 1, maximum: 2_000),
                 ],
                 projection: .cliAndMCP(
                     """
@@ -27,6 +29,8 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
                     objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`.
                     `containerName` is for inspection and viewport/debug commands only; it is
                     not a semantic target or durable heist selector.
+                    `maxScrollsPerContainer` and `maxScrollsPerDiscovery` bound the command-owned
+                    interface discovery pass; omit them to use Inside Job runtime defaults.
                     """,
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
                 )

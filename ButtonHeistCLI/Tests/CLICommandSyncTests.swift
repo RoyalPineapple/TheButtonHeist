@@ -44,6 +44,18 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.connection.connectTimeout, 2.5)
     }
 
+    func testGetInterfaceAcceptsDiscoveryLimitOptions() throws {
+        let command = try GetInterfaceCommand.parse([
+            "--max-scrolls-per-container", "25",
+            "--max-scrolls-per-discovery", "40",
+        ])
+
+        XCTAssertEqual(command.discoveryLimits.maxScrollsPerContainer, 25)
+        XCTAssertEqual(command.discoveryLimits.maxScrollsPerDiscovery, 40)
+        XCTAssertEqual(command.discoveryLimits.parameters[.maxScrollsPerContainer], .int(25))
+        XCTAssertEqual(command.discoveryLimits.parameters[.maxScrollsPerDiscovery], .int(40))
+    }
+
     func testConnectCommandUsesTypedDeviceOption() throws {
         let command = try ConnectCommand.parse([
             "--device",

@@ -61,6 +61,8 @@ Direct matcher fields `label`, `identifier`, and `value` accept StringMatch
 objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`.
 `containerName` is for inspection and viewport/debug commands only; it is
 not a semantic target or durable heist selector.
+`maxScrollsPerContainer` and `maxScrollsPerDiscovery` bound the command-owned
+interface discovery pass; omit them to use Inside Job runtime defaults.
 
 - Family: `observation`
 
@@ -75,6 +77,8 @@ Parameters:
 | `excludeTraits` | `stringArray` | no | - | - |
 | `subtree` | `object` | no | - | - |
 | `detail` | `string` | no | - | `summary`, `full` |
+| `maxScrollsPerContainer` | `integer` | no | - | - |
+| `maxScrollsPerDiscovery` | `integer` | no | - | - |
 
 ### `get_pasteboard`
 

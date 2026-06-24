@@ -14,13 +14,13 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> Bool {
         while !exploration.manifest.pendingContainers.isEmpty {
-            guard exploration.manifest.scrollCount < ScreenManifest.maxScrollsPerDiscovery else {
+            guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
                 return false
             }
             let batch = sortedPendingContainers(in: exploration)
 
             for container in batch {
-                guard exploration.manifest.scrollCount < ScreenManifest.maxScrollsPerDiscovery else {
+                guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
                     return false
                 }
                 guard let containerExploration = await prepareContainerExploration(
@@ -226,8 +226,8 @@ extension Navigation {
         scan: inout ContainerScan,
         exploration: inout SemanticExploration
     ) async -> Bool {
-        for _ in 0..<ScreenManifest.maxScrollsPerContainer {
-            guard exploration.manifest.scrollCount < ScreenManifest.maxScrollsPerDiscovery else {
+        for _ in 0..<exploration.manifest.maxScrollsPerContainer {
+            guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
                 return false
             }
             let proof = await scrollOnePageAndSettle(

@@ -42,9 +42,26 @@ extension TheFence {
             detail: try arguments.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
             query: InterfaceQuery(
                 subtree: try decodeInterfaceSubtreeSelector(arguments),
-                matcher: try interfaceElementMatcher(arguments)
+                matcher: try interfaceElementMatcher(arguments),
+                maxScrollsPerContainer: try interfaceDiscoveryLimit(arguments, .maxScrollsPerContainer),
+                maxScrollsPerDiscovery: try interfaceDiscoveryLimit(arguments, .maxScrollsPerDiscovery)
             )
         )
+    }
+
+    private func interfaceDiscoveryLimit(
+        _ arguments: CommandArgumentEnvelope,
+        _ key: FenceParameterKey
+    ) throws -> Int? {
+        guard let value = try arguments.schemaInteger(key.rawValue) else { return nil }
+        guard (1...2_000).contains(value) else {
+            throw SchemaValidationError(
+                field: arguments.field(key.rawValue),
+                observed: value,
+                expected: "integer between 1 and 2000"
+            )
+        }
+        return value
     }
 
     private func makeScreenRequest(

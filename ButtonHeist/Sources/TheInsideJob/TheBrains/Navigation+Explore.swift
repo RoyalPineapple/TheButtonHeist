@@ -16,9 +16,18 @@ extension Navigation {
         return exploration.screen
     }
 
-    func exploreScreen(target: ElementTarget? = nil) async -> ExploredScreen {
+    func exploreScreen(
+        target: ElementTarget? = nil,
+        baseline: Screen? = nil,
+        maxScrollsPerContainer: Int? = nil,
+        maxScrollsPerDiscovery: Int? = nil
+    ) async -> ExploredScreen {
         let startTime = CACurrentMediaTime()
-        var exploration = SemanticExploration(baseline: stash.explorationBaseline())
+        var exploration = SemanticExploration(
+            baseline: baseline ?? stash.explorationBaseline(),
+            maxScrollsPerContainer: maxScrollsPerContainer ?? ScreenManifest.maxScrollsPerContainer,
+            maxScrollsPerDiscovery: maxScrollsPerDiscovery ?? ScreenManifest.maxScrollsPerDiscovery
+        )
 
         exploration.absorb(stash.refreshLiveCapture())
 

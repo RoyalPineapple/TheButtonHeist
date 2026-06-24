@@ -195,6 +195,55 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNil(worldStore.element(heistId: "bottom_row"))
     }
 
+    func testVisibleExplorationBaselineDropsStaleDiscoveryEntriesSharingContainerName() {
+        let visibleWord = element(label: "Words", traits: .staticText)
+        let staleHomeButton = element(label: "Auto-Settle Fixtures", traits: .button)
+        let container = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let currentVisible = Screen(
+            elements: [
+                "words_header": Screen.ScreenElement(
+                    heistId: "words_header",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 0),
+                    scrollContainerName: "scrollable_0_0_50_109",
+                    element: visibleWord
+                ),
+            ],
+            hierarchy: [
+                .container(container, children: [
+                    .element(visibleWord, traversalIndex: 0),
+                ]),
+            ],
+            containerNames: [container: "scrollable_0_0_50_109"],
+            containerNamesByPath: [TreePath([0]): "scrollable_0_0_50_109"],
+            heistIdByElement: [visibleWord: "words_header"],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        var elements = currentVisible.semantic.elements
+        elements["home_button"] = Screen.ScreenElement(
+            heistId: "home_button",
+            contentSpaceOrigin: CGPoint(x: 0, y: 800),
+            scrollContainerName: "scrollable_0_0_50_109",
+            element: staleHomeButton
+        )
+        let pollutedSettledScreen = Screen(
+            semantic: SemanticScreen(
+                elements: elements,
+                containers: currentVisible.semantic.containers
+            ),
+            liveCapture: currentVisible.liveCapture
+        )
+        let baseline = bagman.visibleExplorationBaseline(from: pollutedSettledScreen)
+
+        XCTAssertEqual(baseline.knownIds, ["words_header"])
+        XCTAssertEqual(baseline.visibleIds, ["words_header"])
+        XCTAssertNil(baseline.findElement(heistId: "home_button"))
+        XCTAssertEqual(baseline.liveCapture.hierarchy, currentVisible.liveCapture.hierarchy)
+    }
+
     func testLatestSettledSemanticObservationAdvancesMonotonically() {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitSettledVisibleObservation(first)

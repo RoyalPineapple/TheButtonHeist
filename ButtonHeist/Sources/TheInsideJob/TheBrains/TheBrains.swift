@@ -121,16 +121,19 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)
         }
-        guard await interactionObservation.observeSemanticState(
-            scope: .discovery,
-            after: nil,
-            timeout: 2.0
-        ) != nil else {
+        guard let visibleEvidence = await stash.observeVisibleSemanticEvidence(timeout: 2.0) else {
             return .failure(.rootViewUnavailable)
         }
 
+        let exploration = await navigation.exploreScreen(
+            baseline: stash.visibleExplorationBaseline(from: visibleEvidence.screen),
+            maxScrollsPerContainer: query.maxScrollsPerContainer,
+            maxScrollsPerDiscovery: query.maxScrollsPerDiscovery
+        )
+        _ = stash.commitSettledDiscoveryWorld(exploration.screen)
+
         do {
-            let interface = try InterfaceSelector(interface: stash.interface()).select(query)
+            let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)
             return .success(interface)
         } catch {
             return .failure(.selection(error))

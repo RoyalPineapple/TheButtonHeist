@@ -12,14 +12,35 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var output: OutputOptions
 
+    @OptionGroup var discoveryLimits: InterfaceDiscoveryLimitOptions
+
     @ButtonHeistActor
     mutating func run() async throws {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(),
+            arguments: Self.fenceArguments(discoveryLimits.parameters),
             statusMessage: "Reading interface..."
         )
+    }
+}
+
+struct InterfaceDiscoveryLimitOptions: ParsableArguments {
+    @Option(name: .long, help: "Maximum page-scroll attempts per scroll container during interface discovery.")
+    var maxScrollsPerContainer: Int?
+
+    @Option(name: .long, help: "Maximum total page-scroll attempts during interface discovery.")
+    var maxScrollsPerDiscovery: Int?
+
+    var parameters: CLIRequestParameters {
+        var parameters: CLIRequestParameters = [:]
+        if let maxScrollsPerContainer {
+            parameters.set(.maxScrollsPerContainer, .int(maxScrollsPerContainer))
+        }
+        if let maxScrollsPerDiscovery {
+            parameters.set(.maxScrollsPerDiscovery, .int(maxScrollsPerDiscovery))
+        }
+        return parameters
     }
 }
