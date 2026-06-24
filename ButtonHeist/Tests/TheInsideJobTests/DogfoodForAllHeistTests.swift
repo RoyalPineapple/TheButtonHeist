@@ -6,17 +6,29 @@ import TheInsideJob
 
 private enum DogfoodHome {
     static let openScreen = HeistDef<String>("DemoHome.openScreen", parameter: "screen") { screen in
-        try DogfoodNavigation.backToRootIfNeeded()
+        let destinationTitle = ElementPredicateTemplate(label: .exact(screen), traits: [.header])
+        let backToRoot = try DogfoodNavigation.backToRootIfNeeded()
 
-        Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
-            .expect(.changed(.screen(where: .present(.label(screen)))), timeout: .seconds(8))
+        If {
+            Case(.present(destinationTitle)) {
+                WaitFor(.present(destinationTitle))
+            }
+            Else {
+                backToRoot
+
+                Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
+                    .expect(.changed(.screen(where: .present(destinationTitle))), timeout: .seconds(8))
+            }
+        }
     }
 }
 
 private enum DogfoodNavigation {
     private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
-    private static let rootControlsButton = ElementPredicateTemplate(label: .exact("Controls Demo"), traits: [.button])
+    private static let rootBackTarget = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.button])
+    private static let rootTitle = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.header])
     private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
+    private static let backChromeSettleTimeout = 0.25
 
     static let backToRootIfNeeded = HeistDef<Void>("DogfoodNavigation.backToRootIfNeeded") {
         try backOneLevelIfNeeded()
@@ -24,9 +36,9 @@ private enum DogfoodNavigation {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
         WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
-        WaitFor(.present(rootControlsButton), timeout: .seconds(4))
+        WaitFor(.absent(rootBackTarget), timeout: .seconds(2))
+        WaitFor(.present(rootTitle), timeout: .seconds(4))
     }
 
     static let backToRoot = HeistDef<Void>("DogfoodNavigation.backToRoot") {
@@ -36,7 +48,14 @@ private enum DogfoodNavigation {
     private static let backOneLevelIfNeeded = HeistDef<Void>("DogfoodNavigation.backOneLevelIfNeeded") {
         try reanchorLongListIfNeeded()
 
+        WaitFor(.present(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
+            .else {}
+
         If {
+            Case(.present(rootBackTarget)) {
+                Activate(.predicate(rootBackTarget))
+                    .expect(.changed(.screen()), timeout: .seconds(8))
+            }
             Case(.present(anyBackTarget)) {
                 Activate(.predicate(anyBackTarget))
                     .expect(.changed(.screen()), timeout: .seconds(8))
@@ -107,6 +126,11 @@ private enum TextInputScreen {
 
 private enum TodoScreen {
     static let completeItem = HeistDef<String>("TodoScreen.completeItem", parameter: "item") { item in
+        try rawAction(
+            .viewportScrollToVisible(.label(item)),
+            waiver: "scroll_to_visible is the viewport precondition for the row custom action"
+        )
+
         CustomAction("Toggle", on: .label(item))
             .expect(
                 .present(ElementPredicateTemplate(label: .exact(item), value: .exact(.literal("Completed")))),
@@ -455,8 +479,11 @@ final class DogfoodForAllHeistTests: XCTestCase {
             ForEach(
                 ElementMatches.matching(activeFixBug),
                 limit: 1
-            ) { _ in
-                WaitFor(.present(ElementPredicateTemplate(activeFixBug)), timeout: .seconds(4))
+            ) { target in
+                try rawAction(
+                    .viewportScrollToVisible(target),
+                    waiver: "Element iteration already selected the row; scrolling it into view has no durable semantic outcome"
+                )
             }
 
             try DogfoodNavigation.backToRoot()

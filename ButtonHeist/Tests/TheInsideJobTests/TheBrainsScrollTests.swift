@@ -689,6 +689,32 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
+    func testActionTargetDiscoveryStartsFromCurrentVisibleScreen() async {
+        let staleVisible = makeElement(label: "Root Visible")
+        let staleRootButton = makeElement(label: "Controls Demo", traits: .button)
+        let staleRootScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(staleVisible, "root_visible")],
+            offViewport: [(staleRootButton, "stale_controls_button", CGPoint(x: 0, y: 1_200))]
+        )
+        brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleRootScreen)
+
+        let currentHeader = makeElement(label: "Controls Demo", traits: .header)
+        let currentBackButton = makeElement(label: "ButtonHeist Demo", traits: [.button, .backButton])
+        let currentScreen = Screen.makeForTests(elements: [
+            (currentHeader, "current_controls_header"),
+            (currentBackButton, "current_back_button"),
+        ])
+        brains.stash.recordParsedObservedEvidence(currentScreen)
+        brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
+
+        let discovered = await brains.navigation.elementInflation.discoverTarget?(
+            .predicate(ElementPredicate(label: "Controls Demo", traits: [.button]))
+        )
+
+        XCTAssertNotNil(discovered?.findElement(heistId: "current_controls_header"))
+        XCTAssertNil(discovered?.findElement(heistId: "stale_controls_button"))
+    }
+
     func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)

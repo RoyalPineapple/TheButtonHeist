@@ -43,7 +43,10 @@ final class Navigation {
         )
         self.elementInflation.discoverTarget = { [weak self] target in
             guard let self else { return nil }
-            return await self.exploreScreen(target: target).screen
+            return await self.exploreScreen(
+                target: target,
+                baseline: self.stash.visibleExplorationBaseline(from: self.stash.liveVisibleScreen)
+            ).screen
         }
     }
 

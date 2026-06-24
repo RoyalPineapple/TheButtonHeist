@@ -6,8 +6,10 @@ import TheInsideJob
 
 private enum DemoHome {
     private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
-    private static let rootMenuButton = ElementPredicateTemplate(label: .exact("Menu"), traits: [.button])
+    private static let rootBackTarget = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.button])
+    private static let rootTitle = ElementPredicateTemplate(label: .exact("ButtonHeist Demo"), traits: [.header])
     private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
+    private static let backChromeSettleTimeout = 0.25
 
     static let openMenu = HeistDef<Void>("DemoHome.openMenu") {
         try backOneLevelIfNeeded()
@@ -15,9 +17,9 @@ private enum DemoHome {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
-        try backOneLevelIfNeeded()
         WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
-        WaitFor(.present(rootMenuButton), timeout: .seconds(4))
+        WaitFor(.absent(rootBackTarget), timeout: .seconds(2))
+        WaitFor(.present(rootTitle), timeout: .seconds(4))
 
         Activate(.label("Menu"))
             .expect(.changed(.screen(where: .present(.label("Menu")))), timeout: .seconds(8))
@@ -26,7 +28,14 @@ private enum DemoHome {
     private static let backOneLevelIfNeeded = HeistDef<Void>("DemoHome.backOneLevelIfNeeded") {
         try reanchorLongListIfNeeded()
 
+        WaitFor(.present(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
+            .else {}
+
         If {
+            Case(.present(rootBackTarget)) {
+                Activate(.predicate(rootBackTarget))
+                    .expect(.changed(.screen()), timeout: .seconds(8))
+            }
             Case(.present(anyBackTarget)) {
                 Activate(.predicate(anyBackTarget))
                     .expect(.changed(.screen()), timeout: .seconds(8))
