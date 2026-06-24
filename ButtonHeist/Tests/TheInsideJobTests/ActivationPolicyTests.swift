@@ -29,20 +29,20 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.message, "element inflation failed [notFound]: no such element")
     }
 
-    func testAccessibilityActivateSuccessStopsPolicy() async {
+    func testRefreshReresolveActivateSuccessStopsPolicy() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        var activateCount = 0
-        var didRefresh = false
+        let refreshedTarget = makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
+        var events: [String] = []
         var dispatchedPoints: [CGPoint] = []
 
         let result = await makePolicy(
-            accessibilityActivate: { _ in
-                activateCount += 1
+            accessibilityActivate: { target in
+                events.append("activate:\(target.screenElement.heistId)")
                 return .success
             },
             refreshAndResolve: {
-                didRefresh = true
-                return .failure(.failure(.activate, message: "unexpected refresh"))
+                events.append("refresh")
+                return .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -52,8 +52,7 @@ final class ActivationPolicyTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(activateCount, 1)
-        XCTAssertFalse(didRefresh)
+        XCTAssertEqual(events, ["refresh", "activate:refreshed"])
         XCTAssertTrue(dispatchedPoints.isEmpty)
         XCTAssertEqual(result.activationTrace, ActivationTrace(
             axActivateReturned: true,
@@ -61,38 +60,7 @@ final class ActivationPolicyTests: XCTestCase {
         ))
     }
 
-    func testRefreshReresolveRetryCanSucceed() async {
-        let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let retryTarget = makeLiveTarget(heistId: "retry", activationPoint: CGPoint(x: 30, y: 40))
-        var activateCount = 0
-        var dispatchedPoints: [CGPoint] = []
-
-        let result = await makePolicy(
-            accessibilityActivate: { _ in
-                activateCount += 1
-                return activateCount == 1 ? .refused : .success
-            },
-            refreshAndResolve: {
-                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
-            },
-            activationPointDispatch: { point in
-                dispatchedPoints.append(point)
-                return true
-            }
-        ).apply(to: initialTarget)
-
-        XCTAssertTrue(result.success)
-        XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(activateCount, 2)
-        XCTAssertTrue(dispatchedPoints.isEmpty)
-        XCTAssertEqual(result.activationTrace, ActivationTrace(
-            axActivateReturned: false,
-            retryAxActivateReturned: true,
-            tapActivationDispatched: false
-        ))
-    }
-
-    func testRefreshReresolveFailureReturnsWithoutActivationPointDispatch() async {
+    func testRefreshReresolveFailureReturnsWithoutActivationAttemptOrDispatch() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
@@ -103,7 +71,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .failure(.failure(.activate, message: "retry inflation failed"))
+                .failure(.failure(.activate, message: "activation refresh failed"))
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -113,18 +81,18 @@ final class ActivationPolicyTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.message, "retry inflation failed")
-        XCTAssertEqual(activateCount, 1)
+        XCTAssertEqual(result.message, "activation refresh failed")
+        XCTAssertEqual(activateCount, 0)
         XCTAssertTrue(dispatchedPoints.isEmpty)
         XCTAssertEqual(result.activationTrace, ActivationTrace(
-            axActivateReturned: false,
+            axActivateReturned: nil,
             tapActivationDispatched: false
         ))
     }
 
     func testActivationPointDispatchCanCompleteActivate() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let retryTarget = makeLiveTarget(heistId: "retry", activationPoint: CGPoint(x: 30, y: 40))
+        let refreshedTarget = makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
 
@@ -134,7 +102,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
+                .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -144,22 +112,21 @@ final class ActivationPolicyTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(activateCount, 2)
+        XCTAssertEqual(activateCount, 1)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 30, y: 40)])
         XCTAssertEqual(result.activationTrace, ActivationTrace(
             axActivateReturned: false,
-            retryAxActivateReturned: false,
             tapActivationDispatched: true,
             tapActivationPoint: ScreenPoint(x: 30, y: 40),
             tapActivationSucceeded: true
         ))
     }
 
-    func testFinalFailureUsesRetryTargetAndFreshActivationPoint() async {
+    func testFinalFailureUsesRefreshedTargetAndFreshActivationPoint() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
-        let retryTarget = makeLiveTarget(
-            heistId: "retry",
-            label: "Retry Button",
+        let refreshedTarget = makeLiveTarget(
+            heistId: "refreshed",
+            label: "Refreshed Button",
             traits: .button,
             frame: CGRect(x: 12, y: 30, width: 80, height: 44),
             activationPoint: CGPoint(x: 52, y: 52)
@@ -173,7 +140,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
+                .resolved(screenElement: refreshedTarget.screenElement, liveTarget: refreshedTarget)
             },
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -183,11 +150,10 @@ final class ActivationPolicyTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(activateCount, 2)
+        XCTAssertEqual(activateCount, 1)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 52, y: 52)])
         XCTAssertEqual(result.activationTrace, ActivationTrace(
             axActivateReturned: false,
-            retryAxActivateReturned: false,
             tapActivationDispatched: true,
             tapActivationPoint: ScreenPoint(x: 52, y: 52),
             tapActivationSucceeded: false
@@ -195,7 +161,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed: accessibilityActivate() declined after semantic refresh",
             "activation-point dispatch was attempted at the fresh accessibility activation point",
-            "label=\"Retry Button\"",
+            "label=\"Refreshed Button\"",
             "actions=[activate]",
             "correction: target an element with primary accessibility activation",
         ])

@@ -15,8 +15,11 @@ private final class ActionActivationOverrideView: UIView {
 }
 
 private final class RefusingActivationView: UIView {
+    private(set) var activationCount = 0
+
     override func accessibilityActivate() -> Bool {
-        false
+        activationCount += 1
+        return false
     }
 }
 
@@ -1915,7 +1918,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testExecuteActivateUsesRefreshedTargetForSecondActivationAttempt() async throws {
+    func testExecuteActivateRefreshesBeforeSingleActivationAttempt() async throws {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
         let liveObject = ActionActivationOverrideView(
@@ -1934,6 +1937,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
 
+        let staleObject = RefusingActivationView()
         registerScreenElement(
             heistId: "stale_refresh_activate",
             element: makeElement(
@@ -1941,7 +1945,7 @@ final class TheBrainsActionTests: XCTestCase {
                 identifier: "refresh_activate",
                 traits: .button
             ),
-            object: RefusingActivationView()
+            object: staleObject
         )
 
         let result = await brains.actions.executeActivate(
@@ -1951,6 +1955,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "activate failed")
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(liveObject.activationCount, 1)
+        XCTAssertEqual(staleObject.activationCount, 0)
     }
 
     func testExecuteTypeTextReportsFinalValueFromInteractionAfterState() async throws {

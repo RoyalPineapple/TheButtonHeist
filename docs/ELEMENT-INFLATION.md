@@ -23,8 +23,9 @@ live-geometry work required to execute that intent.
   commands, not as durable semantic identity.
 - Semantic reveal is product-owned viewport mechanics. It is not a public
   instruction to scroll before ordinary semantic commands.
-- `activate` remains accessibility activation. Delivery through a fresh
-  activation point is part of activation, not a separate user-requested tap.
+- `activate` remains accessibility activation. It refreshes live geometry before
+  one `accessibilityActivate()` call; delivery through a fresh activation point
+  is part of activation when UIKit declines, not a separate user-requested tap.
 - If element inflation cannot be proven, the command fails with diagnostics instead
   of acting on stale or guessed state.
 

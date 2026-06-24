@@ -191,7 +191,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
         let activationTrace = ActivationTrace(
             axActivateReturned: false,
-            retryAxActivateReturned: false,
             tapActivationDispatched: true,
             tapActivationPoint: ScreenPoint(x: 888, y: 372),
             tapActivationSucceeded: true

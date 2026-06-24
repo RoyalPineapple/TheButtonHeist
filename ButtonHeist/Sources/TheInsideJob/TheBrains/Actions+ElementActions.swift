@@ -91,8 +91,8 @@ extension Actions {
     // MARK: - Accessibility Actions
 
     /// Deliver `activate` through the accessibility contract:
-    /// semantic target -> reveal -> fresh live accessibility geometry ->
-    /// `accessibilityActivate()` -> activation-point dispatch if UIKit declines.
+    /// semantic target -> reveal -> activation refresh ->
+    /// one `accessibilityActivate()` -> activation-point dispatch if UIKit declines.
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
@@ -101,7 +101,7 @@ extension Actions {
             await ActivationPolicy(
                 accessibilityActivate: accessibilityActions.activate,
                 refreshAndResolve: {
-                    switch await self.navigation.elementInflation.inflateAfterActivationRetryRefresh(
+                    switch await self.navigation.elementInflation.inflateAfterActivationRefresh(
                         for: context.target
                     ) {
                     case .inflated(let inflatedTarget):

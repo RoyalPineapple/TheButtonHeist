@@ -171,18 +171,18 @@ final class ElementInflation {
         }
     }
 
-    func inflateAfterActivationRetryRefresh(
+    func inflateAfterActivationRefresh(
         for target: ElementTarget
     ) async -> ElementInflationResult {
-        refreshLiveCaptureForActivationRetry()
+        refreshLiveCaptureForActivation()
         return await inflate(
             for: target,
             method: .activate,
-            deallocatedBoundary: "activation retry"
+            deallocatedBoundary: "activation refresh"
         )
     }
 
-    private func refreshLiveCaptureForActivationRetry() {
+    private func refreshLiveCaptureForActivation() {
         stash.refreshCurrentVisibleTree()
     }
 

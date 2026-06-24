@@ -166,12 +166,15 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 
 /// Dispatch-path diagnostics for semantic `activate`.
 ///
-/// `Activate` first calls `accessibilityActivate()`. A `true` result is treated
-/// as the semantic action completing, so activation-point tap dispatch is not sent.
-/// When the accessibility action declines, the runtime refreshes the target,
-/// retries, and then dispatches at the fresh activation point if needed.
+/// `Activate` refreshes semantic and live geometry first, then calls
+/// `accessibilityActivate()` once. A `true` result is treated as the semantic
+/// action completing, so activation-point tap dispatch is not sent. When the
+/// accessibility action declines, the runtime dispatches at the fresh activation
+/// point if needed.
 public struct ActivationTrace: Codable, Sendable, Equatable {
     public let axActivateReturned: Bool?
+    /// Populated only by older receipts from runtimes that retried activation
+    /// after refresh.
     public let retryAxActivateReturned: Bool?
     public let tapActivationDispatched: Bool
     public let tapActivationPoint: ScreenPoint?
