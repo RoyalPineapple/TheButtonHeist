@@ -83,14 +83,14 @@ extension TheStash {
     /// live view; the observation stream alone promotes a proven final screen
     /// to settled world.
     func semanticObservationForSettle() -> Screen? {
-        parse()
+        refreshLiveCapture()
     }
 
     /// Produce one page observation for scroll exploration. Exploration owns a
     /// local semantic union until it finishes; the observation stream commits
     /// only the final explored screen as settled discovery world.
     func semanticPageForExploration() -> Screen? {
-        parse()
+        refreshLiveCapture()
     }
 
     @discardableResult

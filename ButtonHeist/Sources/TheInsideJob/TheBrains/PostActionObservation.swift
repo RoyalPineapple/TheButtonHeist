@@ -30,6 +30,7 @@ final class PostActionObservation {
 
     /// State captured before an action for delta computation.
     struct BeforeState {
+        let screen: Screen
         let snapshot: [Screen.ScreenElement]
         let elements: [AccessibilityElement]
         let hierarchy: [AccessibilityHierarchy]
@@ -126,11 +127,11 @@ final class PostActionObservation {
         before: BeforeState,
         settleEvidence: SettleEvidence
     ) async -> FinalEvidence? {
-        let finalState: BeforeState
+        let observedFinalState: BeforeState
         if let visibleEvent = settleEvidence.visibleEvent {
-            finalState = captureFinalSemanticState(after: visibleEvent)
+            observedFinalState = captureFinalSemanticState(after: visibleEvent)
         } else if let diagnosticScreen = settleEvidence.diagnosticScreen {
-            finalState = captureSemanticState(
+            observedFinalState = captureSemanticState(
                 from: diagnosticScreen,
                 tripwireSignal: tripwire.tripwireSignal(),
                 settledObservationSequence: nil
@@ -138,6 +139,10 @@ final class PostActionObservation {
         } else {
             return nil
         }
+        let finalState = refinedScreenChangeFinalState(
+            before: before,
+            observedFinal: observedFinalState
+        ) ?? observedFinalState
         let trace = buildPostActionTrace(
             before: before,
             final: finalState,
@@ -155,6 +160,7 @@ final class PostActionObservation {
         let (interface, interfaceHash) = stash.semanticInterfaceWithHash(for: screen)
         let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
         return BeforeState(
+            screen: screen,
             snapshot: snapshot,
             elements: snapshot.map(\.element),
             hierarchy: screen.liveCapture.hierarchy,
@@ -254,6 +260,64 @@ final class PostActionObservation {
             tripwireSignal: observation.tripwireSignal,
             settledObservationSequence: observation.sequence
         )
+    }
+
+    private func refinedScreenChangeFinalState(
+        before: BeforeState,
+        observedFinal: BeforeState
+    ) -> BeforeState? {
+        guard observedFinal.settledObservationSequence != nil else { return nil }
+        let classification = ScreenClassifier.classify(
+            before: before.screenSnapshot,
+            after: observedFinal.screenSnapshot
+        )
+        guard classification.isScreenChange else { return nil }
+
+        let observedOverlap = Self.visibleOverlapCount(before: before, after: observedFinal)
+        guard observedOverlap > 0 else { return nil }
+        if let pruned = prunedScreenChangeFinalState(
+            before: before,
+            observedFinal: observedFinal,
+            classification: classification,
+            observedOverlap: observedOverlap
+        ) {
+            return pruned
+        }
+        return nil
+    }
+
+    private func prunedScreenChangeFinalState(
+        before: BeforeState,
+        observedFinal: BeforeState,
+        classification: ScreenClassifier.Classification,
+        observedOverlap: Int
+    ) -> BeforeState? {
+        guard Self.shouldPruneOldVisibleOverlap(classification) else { return nil }
+        let beforeVisibleIds = Set(before.snapshot.map(\.heistId))
+        let prunedScreen = observedFinal.screen.removingElements(withIds: beforeVisibleIds)
+        let candidate = captureSemanticState(
+            from: prunedScreen,
+            tripwireSignal: observedFinal.tripwireSignal,
+            settledObservationSequence: observedFinal.settledObservationSequence
+        )
+        guard Self.visibleOverlapCount(before: before, after: candidate) < observedOverlap else {
+            return nil
+        }
+        let event = stash.semanticObservationStream.commitSettledVisibleObservation(prunedScreen)
+        return captureFinalSemanticState(after: event)
+    }
+
+    private static func shouldPruneOldVisibleOverlap(_ classification: ScreenClassifier.Classification) -> Bool {
+        switch classification.reason {
+        case .navigationMarkerChanged, .modalBoundaryChanged:
+            return true
+        case .selectedTabChanged, .primaryHeaderChanged, .rootShapeChanged, nil:
+            return false
+        }
+    }
+
+    private static func visibleOverlapCount(before: BeforeState, after: BeforeState) -> Int {
+        Set(before.snapshot.map(\.heistId)).intersection(after.snapshot.map(\.heistId)).count
     }
 
     private func buildPostActionTrace(
@@ -486,6 +550,58 @@ final class PostActionObservation {
             baseline: before.elements,
             final: final.elements
         ).map { TheStash.WireConversion.convert($0) }
+    }
+}
+
+private extension Screen {
+    func removingElements(withIds removedIds: Set<HeistId>) -> Screen {
+        guard !removedIds.isEmpty else { return self }
+        return Screen(
+            semantic: SemanticScreen(
+                elements: semantic.elements.filter { !removedIds.contains($0.key) },
+                containers: semantic.containers
+            ),
+            liveCapture: liveCapture.removingElements(withIds: removedIds)
+        )
+    }
+}
+
+private extension LiveCapture {
+    func removingElements(withIds removedIds: Set<HeistId>) -> LiveCapture {
+        guard !removedIds.isEmpty else { return self }
+        let removedElements = Set(heistIdByElement.compactMap { element, heistId in
+            removedIds.contains(heistId) ? element : nil
+        })
+        let filteredHierarchy = hierarchy.compactMap {
+            $0.removingElements(removedElements)
+        }
+        return LiveCapture(
+            hierarchy: filteredHierarchy,
+            containerNames: containerNames,
+            containerNamesByPath: containerNamesByPath,
+            heistIdByElement: heistIdByElement.filter { !removedIds.contains($0.value) },
+            elementRefs: elementRefs.filter { !removedIds.contains($0.key) },
+            containerRefsByPath: containerRefsByPath,
+            containerContentFramesByPath: containerContentFramesByPath,
+            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
+            firstResponderHeistId: firstResponderHeistId.flatMap { removedIds.contains($0) ? nil : $0 },
+            scrollableContainerViews: scrollableContainerViews,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+        )
+    }
+}
+
+private extension AccessibilityHierarchy {
+    func removingElements(_ removedElements: Set<AccessibilityElement>) -> AccessibilityHierarchy? {
+        switch self {
+        case .element(let element, _):
+            return removedElements.contains(element) ? nil : self
+        case .container(let container, let children):
+            return .container(
+                container,
+                children: children.compactMap { $0.removingElements(removedElements) }
+            )
+        }
     }
 }
 
