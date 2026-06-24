@@ -206,13 +206,26 @@ final class ElementInflation {
             case .failure(let failure):
                 return .failure(failure)
             case nil:
-                break
+                return discoveredSemanticTarget(target)
             }
         }
         guard allowKnownFallback else {
             return currentVisibleTargetFailure(target)
         }
         return knownSemanticTarget(target)
+    }
+
+    private func discoveredSemanticTarget(
+        _ target: ElementTarget
+    ) -> Result<TheStash.ScreenElement, ElementInflationFailure> {
+        switch knownSemanticTarget(target) {
+        case .success(let screenElement):
+            return .success(screenElement)
+        case .failure(let failure) where failure.failedStep == .notFound:
+            return .failure(failure)
+        case .failure(let failure):
+            return .failure(failure)
+        }
     }
 
     private func currentVisibleTargetFailure(
@@ -393,7 +406,8 @@ final class ElementInflation {
                 )
             case .notFound(let facts):
                 return .failure(.staleRefresh(
-                    "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))"
+                    "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))",
+                    failureKind: .targetUnavailable
                 ))
             case .ambiguous(let facts):
                 return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))

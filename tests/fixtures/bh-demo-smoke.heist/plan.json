@@ -13,9 +13,12 @@
         },
         "expectation" : {
           "predicate" : {
-            "type" : "screen_changed"
+            "element" : {
+              "label" : "Text Input"
+            },
+            "type" : "present"
           },
-          "timeout" : 0
+          "timeout" : 15
         }
       },
       "type" : "action"
@@ -33,30 +36,12 @@
         },
         "expectation" : {
           "predicate" : {
-            "type" : "screen_changed"
+            "element" : {
+              "label" : "Apple Accessibility"
+            },
+            "type" : "present"
           },
-          "timeout" : 0
-        }
-      },
-      "type" : "action"
-    },
-    {
-      "action" : {
-        "command" : {
-          "payload" : {
-            "label" : "Controls Demo",
-            "traits" : [
-              "button",
-              "backButton"
-            ]
-          },
-          "type" : "activate"
-        },
-        "expectation" : {
-          "predicate" : {
-            "type" : "screen_changed"
-          },
-          "timeout" : 0
+          "timeout" : 15
         }
       },
       "type" : "action"

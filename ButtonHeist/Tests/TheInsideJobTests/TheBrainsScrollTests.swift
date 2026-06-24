@@ -649,6 +649,46 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
+    func testTargetDiscoveryMissDoesNotRevealStaleKnownOffscreenTarget() async {
+        let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let staleVisible = makeElement(label: "Root Visible")
+        let staleRootButton = makeElement(label: "Controls Demo", traits: .button)
+        installScreenWithKnownOffscreen(
+            visible: (staleVisible, "root_visible"),
+            offscreen: (staleRootButton, "stale_controls_button", CGPoint(x: 0, y: 1_200), staleScrollView)
+        )
+
+        let currentHeader = makeElement(label: "Controls Demo", traits: .header)
+        let currentBackButton = makeElement(label: "ButtonHeist Demo", traits: [.button, .backButton])
+        let currentScreen = Screen.makeForTests(elements: [
+            (currentHeader, "current_controls_header"),
+            (currentBackButton, "current_back_button"),
+        ])
+        var discoveryAttempts = 0
+        brains.navigation.elementInflation.discoverTarget = { _ in
+            discoveryAttempts += 1
+            return currentScreen
+        }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Controls Demo", traits: [.button])),
+            method: .activate,
+            deallocatedBoundary: "test inflation"
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected current-screen target miss, got \(result)")
+        }
+        XCTAssertEqual(discoveryAttempts, 1)
+        XCTAssertEqual(failure.failedStep, .notFound)
+        XCTAssertEqual(staleScrollView.setContentOffsetAnimations, [])
+        XCTAssertTrue(
+            failure.message.contains("traits=[button]"),
+            "Expected current semantic miss to preserve the requested button traits, got \(failure.message)"
+        )
+    }
+
     func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)

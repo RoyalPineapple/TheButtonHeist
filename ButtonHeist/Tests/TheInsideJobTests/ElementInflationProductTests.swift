@@ -210,6 +210,7 @@ final class ElementInflationProductTests: XCTestCase {
         defer { fixture.cleanup() }
 
         let result = await brains.executeRuntimeAction(.scroll(ScrollTarget(
+            elementTarget: .predicate(ElementPredicate(identifier: "visible_anchor_explicit_scroll_revealed")),
             direction: .down
         )))
 

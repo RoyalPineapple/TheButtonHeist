@@ -6,6 +6,8 @@ import TheInsideJob
 
 private enum DemoHome {
     private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
+    private static let rootMenuButton = ElementPredicateTemplate(label: .exact("Menu"), traits: [.button])
+    private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
 
     static let openMenu = HeistDef<Void>("DemoHome.openMenu") {
         try backOneLevelIfNeeded()
@@ -15,17 +17,33 @@ private enum DemoHome {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
-        WaitFor(.present(.label("ButtonHeist Demo")), timeout: .seconds(2))
+        WaitFor(.present(rootMenuButton), timeout: .seconds(4))
 
         Activate(.label("Menu"))
             .expect(.changed(.screen(where: .present(.label("Menu")))), timeout: .seconds(8))
     }
 
     private static let backOneLevelIfNeeded = HeistDef<Void>("DemoHome.backOneLevelIfNeeded") {
+        try reanchorLongListIfNeeded()
+
         If {
             Case(.present(anyBackTarget)) {
                 Activate(.predicate(anyBackTarget))
                     .expect(.changed(.screen()), timeout: .seconds(8))
+            }
+            Else {}
+        }
+    }
+
+    private static let reanchorLongListIfNeeded = HeistDef<Void>("DemoHome.reanchorLongListIfNeeded") {
+        let reanchorAction = try rawAction(
+            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
+            waiver: "Reanchors the long list before checking navigation chrome"
+        )
+
+        If {
+            Case(.present(longListFirstRow)) {
+                reanchorAction
             }
             Else {}
         }

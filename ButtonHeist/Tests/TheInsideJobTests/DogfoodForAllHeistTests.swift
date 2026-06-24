@@ -15,6 +15,8 @@ private enum DogfoodHome {
 
 private enum DogfoodNavigation {
     private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
+    private static let rootControlsButton = ElementPredicateTemplate(label: .exact("Controls Demo"), traits: [.button])
+    private static let longListFirstRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
 
     static let backToRootIfNeeded = HeistDef<Void>("DogfoodNavigation.backToRootIfNeeded") {
         try backOneLevelIfNeeded()
@@ -24,7 +26,7 @@ private enum DogfoodNavigation {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
-        WaitFor(.present(.label("ButtonHeist Demo")), timeout: .seconds(2))
+        WaitFor(.present(rootControlsButton), timeout: .seconds(4))
     }
 
     static let backToRoot = HeistDef<Void>("DogfoodNavigation.backToRoot") {
@@ -32,10 +34,26 @@ private enum DogfoodNavigation {
     }
 
     private static let backOneLevelIfNeeded = HeistDef<Void>("DogfoodNavigation.backOneLevelIfNeeded") {
+        try reanchorLongListIfNeeded()
+
         If {
             Case(.present(anyBackTarget)) {
                 Activate(.predicate(anyBackTarget))
                     .expect(.changed(.screen()), timeout: .seconds(8))
+            }
+            Else {}
+        }
+    }
+
+    private static let reanchorLongListIfNeeded = HeistDef<Void>("DogfoodNavigation.reanchorLongListIfNeeded") {
+        let reanchorAction = try rawAction(
+            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
+            waiver: "Reanchors the long list before checking navigation chrome"
+        )
+
+        If {
+            Case(.present(longListFirstRow)) {
+                reanchorAction
             }
             Else {}
         }
@@ -62,8 +80,11 @@ private enum TextInputScreen {
         TypeText(name, into: nameField)
             .expect(.present(.value(name)), timeout: .seconds(2))
 
+        DismissKeyboard()
+            .withoutExpectation("Ends the first field edit before focusing the email field")
+
         TypeText("dogfood@example.com", into: emailField)
-            .expect(.present(.value("dogfood@example.com")), timeout: .seconds(2))
+            .expect(.present(.value("dogfood@example.com")), timeout: .seconds(4))
 
         DismissKeyboard()
             .withoutExpectation("Keyboard dismissal only prepares navigation")
