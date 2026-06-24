@@ -86,14 +86,16 @@ extension FenceResponse {
         let counter = LineIndexCounter()
         let elementAnnotations = interface.annotations.elementByPath
         let containerAnnotations = interface.annotations.containerByPath
-        let totalNodeBudgetTracker = PublicElementBudgetTracker(budget: totalNodeBudget)
+        let totalNodeBudgetTracker = PublicNodeBudgetTracker(budget: totalNodeBudget)
+        let projectionStats = PublicInterfaceProjectionStats(observedElementCount: interface.projectedElements.count)
         let context = CompactTreeRenderContext(
             detail: detail,
             counter: counter,
             elementAnnotations: elementAnnotations,
             containerAnnotations: containerAnnotations,
             visibleElementBudget: visibleElementBudget,
-            totalNodeBudget: totalNodeBudgetTracker
+            totalNodeBudget: totalNodeBudgetTracker,
+            projectionStats: projectionStats
         )
         var remainingElements: Int?
         var lines: [String] = []
@@ -108,7 +110,7 @@ extension FenceResponse {
         if totalNodeBudgetTracker.wasLimited {
             let omittedElementCount = max(
                 0,
-                interface.projectedElements.count - (totalNodeBudgetTracker.budget - totalNodeBudgetTracker.remaining)
+                projectionStats.observedElementCount - projectionStats.renderedElementCount
             )
             lines.append(
                 "... interface truncated: omitted \(omittedElementCount) observed elements " +
@@ -130,7 +132,8 @@ extension FenceResponse {
         let elementAnnotations: [TreePath: InterfaceElementAnnotation]
         let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
         let visibleElementBudget: Int
-        let totalNodeBudget: PublicElementBudgetTracker
+        let totalNodeBudget: PublicNodeBudgetTracker
+        let projectionStats: PublicInterfaceProjectionStats
     }
 
     private static func compactTreeLines(
@@ -146,10 +149,11 @@ extension FenceResponse {
             if let remaining = remainingElements {
                 guard remaining > 0 else { return [] }
             }
-            guard context.totalNodeBudget.consumeElement() else { return [] }
+            guard context.totalNodeBudget.consumeNode() else { return [] }
             if let remaining = remainingElements {
                 remainingElements = remaining - 1
             }
+            context.projectionStats.recordRenderedElement()
             let projected = HeistElement(
                 accessibilityElement: element,
                 annotation: context.elementAnnotations[path]
@@ -169,9 +173,8 @@ extension FenceResponse {
                 context.counter.value += observedElementCount
                 return []
             }
-            if !context.totalNodeBudget.hasCapacity, observedElementCount > 0 {
+            guard context.totalNodeBudget.consumeNode() else {
                 context.counter.value += observedElementCount
-                context.totalNodeBudget.recordLimitHit()
                 return []
             }
             let header = compactContainerLine(

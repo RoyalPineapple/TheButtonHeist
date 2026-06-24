@@ -40,7 +40,7 @@ final class PublicInterfaceProjectionStats {
         totalNodeBudgetHit: Bool
     ) -> PublicSnapshotQuality {
         let omittedElementCount = max(0, observedElementCount - renderedElementCount)
-        guard truncatedScrollContainerCount > 0 || omittedElementCount > 0 else {
+        guard truncatedScrollContainerCount > 0 || omittedElementCount > 0 || totalNodeBudgetHit else {
             return PublicSnapshotQuality(
                 state: "full",
                 reasonCode: nil,
@@ -64,7 +64,7 @@ final class PublicInterfaceProjectionStats {
     }
 }
 
-final class PublicElementBudgetTracker {
+final class PublicNodeBudgetTracker {
     let budget: Int
     private(set) var remaining: Int
     private(set) var wasLimited = false
@@ -79,7 +79,7 @@ final class PublicElementBudgetTracker {
         remaining > 0
     }
 
-    func consumeElement() -> Bool {
+    func consumeNode() -> Bool {
         guard remaining > 0 else {
             wasLimited = true
             return false
@@ -97,7 +97,7 @@ struct PublicTreeProjectionContext {
     let detail: InterfaceDetail
     let counter: PublicIndexCounter?
     let visibleElementBudget: Int
-    let totalNodeBudget: PublicElementBudgetTracker
+    let totalNodeBudget: PublicNodeBudgetTracker
     let projectionStats: PublicInterfaceProjectionStats
     let elementAnnotations: [TreePath: InterfaceElementAnnotation]
     let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
@@ -117,7 +117,7 @@ enum PublicTreeNode: Encodable {
         detail: InterfaceDetail,
         counter: PublicIndexCounter?,
         visibleElementBudget: Int,
-        totalNodeBudget: PublicElementBudgetTracker,
+        totalNodeBudget: PublicNodeBudgetTracker,
         projectionStats: PublicInterfaceProjectionStats,
         elementAnnotations: [TreePath: InterfaceElementAnnotation],
         containerAnnotations: [TreePath: InterfaceContainerAnnotation]
@@ -155,7 +155,7 @@ enum PublicTreeNode: Encodable {
             if let remaining = remainingElements {
                 guard remaining > 0 else { return nil }
             }
-            guard context.totalNodeBudget.consumeElement() else { return nil }
+            guard context.totalNodeBudget.consumeNode() else { return nil }
             if let remaining = remainingElements {
                 remainingElements = remaining - 1
             }
@@ -171,9 +171,8 @@ enum PublicTreeNode: Encodable {
                 context.counter?.value += observedElementCount
                 return nil
             }
-            if !context.totalNodeBudget.hasCapacity, observedElementCount > 0 {
+            guard context.totalNodeBudget.consumeNode() else {
                 context.counter?.value += observedElementCount
-                context.totalNodeBudget.recordLimitHit()
                 return nil
             }
 

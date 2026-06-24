@@ -35,6 +35,17 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data))
     }
 
+    func testRequestSnapshotRejectsInvalidDiscoveryLimits() throws {
+        let data = Data(#"{"type":"requestInterface","payload":{"maxScrollsPerContainer":-1}}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data)) { error in
+            XCTAssertTrue(
+                "\(error)".contains("maxScrollsPerContainer must be between 1 and 2000"),
+                "\(error)"
+            )
+        }
+    }
+
     func testRequestEnvelopeRejectsServerOnlyMessageTypeAtTypedBoundary() {
         let data = Data("""
         {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"serverHello"}

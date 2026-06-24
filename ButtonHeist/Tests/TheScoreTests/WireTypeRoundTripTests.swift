@@ -494,6 +494,32 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded, container)
     }
 
+    // MARK: - InterfaceQuery
+
+    func testInterfaceQueryDiscoveryLimitsRoundTrip() throws {
+        let query = InterfaceQuery(maxScrollsPerContainer: 1, maxScrollsPerDiscovery: 2_000)
+        let data = try encoder.encode(query)
+        let decoded = try decoder.decode(InterfaceQuery.self, from: data)
+
+        XCTAssertEqual(decoded, query)
+    }
+
+    func testInterfaceQueryRejectsNegativeDiscoveryLimit() {
+        let json = #"{"maxScrollsPerContainer":-1}"#
+
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
+            assertDecodingError(error, contains: ["maxScrollsPerContainer must be between 1 and 2000"])
+        }
+    }
+
+    func testInterfaceQueryRejectsOversizedDiscoveryLimit() {
+        let json = #"{"maxScrollsPerDiscovery":2001}"#
+
+        XCTAssertThrowsError(try decoder.decode(InterfaceQuery.self, from: Data(json.utf8))) { error in
+            assertDecodingError(error, contains: ["maxScrollsPerDiscovery must be between 1 and 2000"])
+        }
+    }
+
     // MARK: - SubtreeSelector
 
     func testSubtreeSelectorElementUsesToolSchemaShape() throws {

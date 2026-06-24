@@ -36,7 +36,7 @@ struct PublicInterface: Encodable {
         let projectionStats = PublicInterfaceProjectionStats(
             observedElementCount: interface.projectedElements.count
         )
-        let totalNodeBudgetTracker = PublicElementBudgetTracker(budget: totalNodeBudget)
+        let totalNodeBudgetTracker = PublicNodeBudgetTracker(budget: totalNodeBudget)
         self.tree = PublicTreeNode.nodes(
             from: interface.tree,
             detail: detail,
