@@ -14,28 +14,24 @@ private enum DogfoodHome {
 }
 
 private enum DogfoodNavigation {
-    private static let controlsBackTarget = ElementPredicateTemplate(
-        label: .exact(.literal("Controls Demo")),
-        traits: [.backButton]
-    )
-    private static let rootBackTarget = ElementPredicateTemplate(
-        label: .exact(.literal("ButtonHeist Demo")),
-        traits: [.backButton]
-    )
+    private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
 
     static let backToRootIfNeeded = HeistDef<Void>("DogfoodNavigation.backToRootIfNeeded") {
-        If {
-            Case(.present(controlsBackTarget)) {
-                Activate(.predicate(controlsBackTarget))
-                    .expect(.changed(.screen(where: .present(.label("Controls Demo")))), timeout: .seconds(8))
-            }
-            Else {}
-        }
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
+    }
 
+    static let backToRoot = HeistDef<Void>("DogfoodNavigation.backToRoot") {
+        try backToRootIfNeeded()
+    }
+
+    private static let backOneLevelIfNeeded = HeistDef<Void>("DogfoodNavigation.backOneLevelIfNeeded") {
         If {
-            Case(.present(rootBackTarget)) {
-                Activate(.predicate(rootBackTarget))
-                    .expect(.changed(.screen(where: .present(.label("ButtonHeist Demo")))), timeout: .seconds(8))
+            Case(.present(anyBackTarget)) {
+                Activate(.predicate(anyBackTarget))
+                    .expect(.changed(.screen()), timeout: .seconds(8))
             }
             Else {}
         }
@@ -204,7 +200,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.fillProfile("Ada Lovelace")
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -221,11 +217,11 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Review PR, High priority")
 
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Calculator")
             try CalculatorScreen.addSevenAndFive()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -254,7 +250,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Alerts & Sheets")
             try AlertsScreen.acceptSimpleAlert()
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -283,7 +279,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 .withoutExpectation("Keyboard dismissal only prepares navigation")
 
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(stringRoot.result.steps.map(\.kind), [
@@ -305,7 +301,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 .expect(.present(.label("Tap count: 1")), timeout: .seconds(2))
 
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(targetRoot.result.steps.map(\.kind), [
@@ -320,7 +316,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let prebuilt = try HeistPlan("DogfoodPrebuiltCalculator") {
             try DogfoodHome.openScreen("Calculator")
             try CalculatorScreen.addSevenAndFive()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
         let prebuiltRun = try await Heist(prebuilt, argument: .none)
 
@@ -355,7 +351,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 WaitFor(.present(target), timeout: .seconds(1))
             }
 
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -382,15 +378,15 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Adjustable Controls")
             try AdjustableControlsScreen.adjustVolume()
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Custom Rotors")
             try CustomRotorsScreen.findFirstError()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Touch Canvas")
             try TouchCanvasScreen.exerciseMechanicalGestures()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -421,7 +417,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.pasteName()
             try DogfoodNavigation.backTo("Controls Demo")
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Review PR, High priority")
@@ -436,7 +432,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 WaitFor(.present(todo), timeout: .seconds(1))
             }
 
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [
@@ -460,7 +456,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let heist = try await Heist {
             try DogfoodHome.openScreen("Long List")
             try LongListScreen.exerciseViewportRuntimeCommands()
-            try DogfoodNavigation.backTo("ButtonHeist Demo")
+            try DogfoodNavigation.backToRoot()
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke, .invoke, .invoke])

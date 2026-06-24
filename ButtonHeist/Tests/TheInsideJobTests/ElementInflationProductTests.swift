@@ -121,6 +121,30 @@ final class ElementInflationProductTests: XCTestCase {
         ])
     }
 
+    func testSemanticActivateIgnoresStaleUnreachableDuplicateWhenOneCandidateIsReachable() async throws {
+        let fixture = try installOffscreenActivationFixture(
+            identifier: "reachable_duplicate_submit",
+            label: "Duplicate Submit"
+        )
+        defer { fixture.cleanup() }
+        try seedKnownOffscreenTarget(fixture)
+        seedKnownUnreachableDuplicate(
+            label: fixture.label,
+            identifier: "stale_\(fixture.identifier)",
+            heistId: "stale_\(fixture.knownHeistId)"
+        )
+
+        let result = await brains.executeRuntimeAction(.activate(
+            .predicate(ElementPredicate(label: .exact(fixture.label), traits: [.button]))
+        ))
+
+        XCTAssertTrue(result.success, result.message ?? "semantic activate failed")
+        guard result.success else { return }
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(fixture.target.activationCount, 1)
+        XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
+    }
+
     func testMissingRevealPathFailsAsInflationDiagnostic() async throws {
         let fixture = try installOffscreenActivationFixture(
             identifier: "unrevealable_submit",
@@ -452,6 +476,25 @@ final class ElementInflationProductTests: XCTestCase {
         targetBrains.stash.installScreenForTesting(Screen(
             semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
             liveCapture: liveCapture
+        ))
+    }
+
+    private func seedKnownUnreachableDuplicate(
+        label: String,
+        identifier: String,
+        heistId: HeistId
+    ) {
+        let screen = brains.stash.settledSemanticScreen
+        let entry = Screen.ScreenElement(
+            heistId: heistId,
+            scrollContentLocation: nil,
+            element: makeElement(label: label, identifier: identifier)
+        )
+        var elements = screen.semantic.elements
+        elements[heistId] = entry
+        brains.stash.installScreenForTesting(Screen(
+            semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
+            liveCapture: screen.liveCapture
         ))
     }
 

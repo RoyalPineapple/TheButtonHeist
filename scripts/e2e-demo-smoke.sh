@@ -191,6 +191,14 @@ expect_element_label() {
     fi
 }
 
+expect_root_top() {
+    expect_element_label "Controls Demo"
+}
+
+expect_root_rotor_row() {
+    expect_element_label "Custom Rotors"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --keep-simulator)
@@ -509,20 +517,19 @@ printf '%s' "$SESSION_JSON" | json_expect_connected
 log "Verifying root interface"
 ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_JSON" | json_expect_ok "root get_interface"
-printf '%s' "$ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
+printf '%s' "$ROOT_JSON" | expect_root_top
 
 log "Verifying root scroll"
 ROOT_SCROLL_JSON="$(run_cli_json scroll --direction down)"
 printf '%s' "$ROOT_SCROLL_JSON" | json_expect_ok "scroll root list"
 SCROLLED_ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$SCROLLED_ROOT_JSON" | json_expect_ok "scrolled root get_interface"
-printf '%s' "$SCROLLED_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
+printf '%s' "$SCROLLED_ROOT_JSON" | expect_root_top
 ROOT_BOTTOM_JSON="$(run_cli_json scroll_to_edge --edge bottom)"
 printf '%s' "$ROOT_BOTTOM_JSON" | json_expect_ok "scroll root to bottom"
 ROOT_BOTTOM_INTERFACE_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | json_expect_ok "root bottom get_interface"
-printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_screen_title "ButtonHeist Demo"
-printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_element_label "Custom Rotors"
+printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_root_rotor_row
 
 log "Verifying custom rotor"
 ROTORS_ACTION_JSON="$(run_cli_json activate --label "Custom Rotors" --traits button --timeout 15)"
@@ -549,7 +556,7 @@ ROOT_FROM_ROTOR_JSON="$(run_cli_json activate --label "ButtonHeist Demo" --trait
 printf '%s' "$ROOT_FROM_ROTOR_JSON" | json_expect_ok "activate back to ButtonHeist Demo"
 ROOT_AFTER_ROTOR_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_AFTER_ROTOR_JSON" | json_expect_ok "root after rotor get_interface"
-printf '%s' "$ROOT_AFTER_ROTOR_JSON" | expect_screen_title "ButtonHeist Demo"
+printf '%s' "$ROOT_AFTER_ROTOR_JSON" | expect_root_rotor_row
 
 log "Navigating to Controls Demo semantically from the scrolled root"
 CONTROLS_ACTION_JSON="$(run_cli_json activate --label "Controls Demo" --traits button --timeout 15)"
@@ -603,7 +610,7 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '%s' "$ROOT_BACK_JSON" | json_expect_ok "activate back to ButtonHeist Demo"
     PLAYBACK_ROOT_JSON="$(run_cli_json get_interface)"
     printf '%s' "$PLAYBACK_ROOT_JSON" | json_expect_ok "playback root get_interface"
-    printf '%s' "$PLAYBACK_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
+    printf '%s' "$PLAYBACK_ROOT_JSON" | expect_root_top
 
     log "Replaying heist fixture"
     PLAYBACK_JSON="$(run_cli_json run_heist --path "$HEIST_PATH")"

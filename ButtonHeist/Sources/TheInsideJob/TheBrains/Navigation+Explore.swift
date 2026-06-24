@@ -32,6 +32,7 @@ extension Navigation {
         exploration.absorb(stash.refreshLiveCapture())
 
         if let target, hasVisibleTerminalExplorationResolution(target) {
+            exploration.manifest.pendingContainers.removeAll()
             return exploration.finish(startTime: startTime)
         }
 

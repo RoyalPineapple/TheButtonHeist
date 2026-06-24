@@ -237,6 +237,9 @@ final class ElementInflation {
         if let revealable = uniquelyResolvedRevealableTarget(target) {
             return .success(revealable)
         }
+        if let reachable = uniquelyResolvedReachableTarget(target) {
+            return .success(reachable)
+        }
         switch stash.resolveTarget(target) {
         case .resolved(let screenElement):
             return .success(screenElement)
@@ -280,6 +283,24 @@ final class ElementInflation {
             let revealableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
                 .filter { $0.contentSpaceOrigin != nil && stash.liveScrollView(for: $0) != nil }
             return revealableMatches.count == 1 ? revealableMatches[0] : nil
+        case .predicate:
+            return nil
+        }
+    }
+
+    private func uniquelyResolvedReachableTarget(_ target: ElementTarget) -> TheStash.ScreenElement? {
+        uniquelyResolvedReachableTarget(target, in: stash.settledSemanticScreen)
+    }
+
+    private func uniquelyResolvedReachableTarget(
+        _ target: ElementTarget,
+        in screen: Screen
+    ) -> TheStash.ScreenElement? {
+        switch target {
+        case .predicate(let predicate, ordinal: nil):
+            let reachableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
+                .filter { $0.scrollContentLocation != nil }
+            return reachableMatches.count == 1 ? reachableMatches[0] : nil
         case .predicate:
             return nil
         }
