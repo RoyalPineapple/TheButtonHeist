@@ -254,6 +254,96 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(human.contains(#""Checkout" header id="checkout_title""#), human)
     }
 
+    func testHeistActionStructuredOutputIncludesConcreteElementDeltaWithoutDumpingSuccessCompact() throws {
+        let unchanged = (0..<3).map { index in
+            makeReceiptTestElement(label: "Row \(index)", identifier: "row_\(index)")
+        }
+        let lazyRow = makeReceiptTestElement(
+            label: "Lazy Row",
+            value: "Loaded by scroll",
+            identifier: "lazy_row",
+            traits: [.staticText]
+        )
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(unchanged),
+            after: makeReceiptTestInterface(unchanged + [lazyRow])
+        )
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Load More"))))
+        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
+        let result = HeistExecutionResult(
+            steps: [
+                actionReceiptStep(
+                    command: command,
+                    result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+                ),
+            ],
+            durationMs: 8
+        )
+        let response = FenceResponse.heistExecution(plan: plan, result: result)
+
+        let compact = response.compactFormatted()
+        let json = publicJSONObject(response)
+        let report = try XCTUnwrap(json["report"] as? [String: Any])
+        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let action = try XCTUnwrap(nodes.first?["action"] as? [String: Any])
+        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
+        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
+        let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
+        let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
+
+        XCTAssertTrue(compact.contains("-> elements changed"), compact)
+        XCTAssertFalse(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
+        XCTAssertEqual(delta["kind"] as? String, "elementsChanged")
+        XCTAssertEqual(added.first?["label"] as? String, "Lazy Row")
+        XCTAssertEqual(added.first?["value"] as? String, "Loaded by scroll")
+        XCTAssertEqual(added.first?["identifier"] as? String, "lazy_row")
+    }
+
+    func testFailedHeistActionCompactOutputIncludesConcreteElementDeltaEvidence() throws {
+        let unchanged = (0..<3).map { index in
+            makeReceiptTestElement(label: "Row \(index)", identifier: "row_\(index)")
+        }
+        let lazyRow = makeReceiptTestElement(
+            label: "Lazy Row",
+            value: "Loaded by scroll",
+            identifier: "lazy_row",
+            traits: [.staticText]
+        )
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(unchanged),
+            after: makeReceiptTestInterface(unchanged + [lazyRow])
+        )
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Load More"))))
+        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
+        let result = HeistExecutionResult(
+            steps: [
+                actionReceiptStep(
+                    command: command,
+                    result: ActionResult(
+                        success: false,
+                        method: .activate,
+                        message: "target stopped responding",
+                        errorKind: .actionFailed,
+                        accessibilityTrace: trace
+                    ),
+                    failure: HeistFailureDetail(
+                        category: .action,
+                        contract: "activate command succeeds",
+                        observed: "target stopped responding"
+                    )
+                ),
+            ],
+            durationMs: 8,
+            abortedAtPath: "$.body[0]"
+        )
+
+        let compact = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
+
+        XCTAssertTrue(compact.contains("-> error: target stopped responding"), compact)
+        XCTAssertTrue(compact.contains("evidence: elements changed"), compact)
+        XCTAssertTrue(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
+    }
+
     func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() {
         let response = FenceResponse.action(
             command: .activate,

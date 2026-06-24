@@ -477,6 +477,13 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(mockConn.sent.sentHeistPlan, plan)
         XCTAssertEqual(result.steps.map(\.kind), [.action])
         XCTAssertFalse(result.isFailure)
+
+        let json = publicJSONObject(response)
+        let report = try XCTUnwrap(json["report"] as? [String: Any])
+        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        XCTAssertNil(json["method"])
+        XCTAssertEqual(nodes.first?["kind"] as? String, "action")
+        XCTAssertNotNil(nodes.first?["action"])
     }
 
     @ButtonHeistActor

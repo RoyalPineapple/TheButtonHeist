@@ -316,6 +316,8 @@ Runtime behavior:
 - JSON-RPC over stdio
 - One reused `TheFence` instance per MCP server process
 - Auto-reconnects to the device on the next tool call after disconnect
+- Returns compact text as the first-glance summary and the same public JSON
+  response as MCP `structuredContent`
 - Returns screenshots as artifact paths by default
 - Requires explicit, size-bounded inline screenshot opt-ins
 
@@ -368,6 +370,15 @@ heist fixtures, scripts, and replay.
 `ActionResult` reports delivery, the action method used, optional typed error
 kind, optional command payload, trace-derived accessibility delta, and
 expectation result when one was requested.
+
+For `elementsChanged`, public responses include concrete semantic edits under
+`delta.edits.added`, `delta.edits.removed`, and `delta.edits.updated` when
+present. For `screenChanged`, public responses include the destination
+`delta.newInterface`. Agents should inspect those payloads before deciding
+whether the action achieved its intended state or merely observed scroll/loading
+churn. Compact text is progressive: successful heist steps summarize the delta
+kind, while failed steps include concrete evidence lines when trace evidence is
+available.
 
 ### Expectations
 
