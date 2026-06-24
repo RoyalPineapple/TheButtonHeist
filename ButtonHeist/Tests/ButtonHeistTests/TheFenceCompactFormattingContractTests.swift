@@ -169,7 +169,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 ),
                 activationTrace: ActivationTrace(
                     axActivateReturned: false,
-                    retryAxActivateReturned: false,
                     tapActivationDispatched: true,
                     tapActivationPoint: ScreenPoint(x: 888, y: 372),
                     tapActivationSucceeded: true

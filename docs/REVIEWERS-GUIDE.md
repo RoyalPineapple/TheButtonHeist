@@ -35,7 +35,7 @@ This boundary exists so that **tests can inject mock connections** at the TheHan
 
 ## Semantic Commands And Mechanical Gestures
 
-- **`activate`** is the primary interaction command. It resolves semantic identity, reveals the element when needed, acquires fresh accessibility geometry, then dispatches the primary activation policy. This abstracts viewport position across SwiftUI, UIKit, and custom controls.
+- **`activate`** is the primary interaction command. It resolves semantic identity, reveals the element when needed, refreshes live accessibility geometry, calls `accessibilityActivate()` once, then dispatches at the activation point only if UIKit declines. This abstracts viewport position across SwiftUI, UIKit, and custom controls.
 - **`one_finger_tap`** is an explicit mechanical/spatial gesture. With an element target it still resolves semantic identity and fresh geometry first; with coordinates it acts on the current viewport.
 
 Rule of thumb: use semantic commands for ordinary accessible controls, and use gesture commands only when the intended product action is spatial.
