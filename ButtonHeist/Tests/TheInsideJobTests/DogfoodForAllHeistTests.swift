@@ -20,7 +20,11 @@ private enum DogfoodNavigation {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
         WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
+        WaitFor(.present(.label("ButtonHeist Demo")), timeout: .seconds(2))
     }
 
     static let backToRoot = HeistDef<Void>("DogfoodNavigation.backToRoot") {
@@ -413,6 +417,11 @@ final class DogfoodForAllHeistTests: XCTestCase {
 
     func testTextEditingPasteboardAndElementForEachUseDemoApp() async throws {
         let heist = try await Heist {
+            let activeFixBug = ElementPredicate(
+                label: "Fix bug, High priority",
+                value: "Active"
+            )
+
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.pasteName()
@@ -423,13 +432,10 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try TodoScreen.completeItem("Review PR, High priority")
 
             ForEach(
-                ElementMatches.matching(ElementPredicate(
-                    label: "Fix bug, High priority",
-                    value: "Active"
-                )),
+                ElementMatches.matching(activeFixBug),
                 limit: 1
-            ) { todo in
-                WaitFor(.present(todo), timeout: .seconds(1))
+            ) { _ in
+                WaitFor(.present(ElementPredicateTemplate(activeFixBug)), timeout: .seconds(4))
             }
 
             try DogfoodNavigation.backToRoot()

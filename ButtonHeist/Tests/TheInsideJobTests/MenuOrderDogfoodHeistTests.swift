@@ -11,7 +11,11 @@ private enum DemoHome {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
+        try backOneLevelIfNeeded()
         WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
+        WaitFor(.present(.label("ButtonHeist Demo")), timeout: .seconds(2))
 
         Activate(.label("Menu"))
             .expect(.changed(.screen(where: .present(.label("Menu")))), timeout: .seconds(8))
