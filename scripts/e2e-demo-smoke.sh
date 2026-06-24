@@ -412,28 +412,47 @@ run_cli_json() {
     local end_ms
     local duration_ms
     local name
+    local attempt
+    local attempts
     name="${1:-command}"
+    attempt=1
+    attempts="${BUTTONHEIST_ROOT_VIEW_RETRY_ATTEMPTS:-4}"
     start_ms="$(now_ms)"
-    set +e
-    output="$(
-    BUTTONHEIST_DEVICE="$DEVICE_ENDPOINT" \
-    BUTTONHEIST_TOKEN="$TOKEN" \
-    BUTTONHEIST_DRIVER_ID="$TOKEN" \
-    "$BUTTONHEIST_BIN" "$@" \
-        --connect-timeout "${BUTTONHEIST_CONNECT_TIMEOUT:-10}" \
-        --format json \
-        --quiet 2>&1
-    )"
-    status=$?
-    end_ms="$(now_ms)"
-    set -e
-    duration_ms=$((end_ms - start_ms))
-    record_benchmark "$name" "$*" "$duration_ms" "$status"
-    if (( status != 0 )); then
+    while true; do
+        set +e
+        output="$(
+        BUTTONHEIST_DEVICE="$DEVICE_ENDPOINT" \
+        BUTTONHEIST_TOKEN="$TOKEN" \
+        BUTTONHEIST_DRIVER_ID="$TOKEN" \
+        "$BUTTONHEIST_BIN" "$@" \
+            --connect-timeout "${BUTTONHEIST_CONNECT_TIMEOUT:-10}" \
+            --format json \
+            --quiet 2>&1
+        )"
+        status=$?
+        set -e
+
+        if (( status == 0 )); then
+            end_ms="$(now_ms)"
+            duration_ms=$((end_ms - start_ms))
+            record_benchmark "$name" "$*" "$duration_ms" "$status"
+            printf '%s\n' "$output"
+            return 0
+        fi
+
+        if (( attempt < attempts )) && grep -q '"message":"Action failed: Could not access root view"' <<< "$output"; then
+            printf "==> Transient root view unavailable for '%s'; retrying (%s/%s)\\n" "$*" "$attempt" "$attempts" >&2
+            attempt=$((attempt + 1))
+            sleep 1
+            continue
+        fi
+
+        end_ms="$(now_ms)"
+        duration_ms=$((end_ms - start_ms))
+        record_benchmark "$name" "$*" "$duration_ms" "$status"
         printf '%s\n' "$output" >&2
         return "$status"
-    fi
-    printf '%s\n' "$output"
+    done
 }
 
 if port_is_open "$PORT"; then

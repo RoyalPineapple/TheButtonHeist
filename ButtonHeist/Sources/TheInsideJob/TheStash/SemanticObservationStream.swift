@@ -39,6 +39,7 @@ final class SemanticObservationStream {
 
     private weak var stash: TheStash?
     private let tripwire: TheTripwire
+    private static let rootUnavailableRecoveryTimeoutMs = 3_000
 
     // MARK: - Observation Bookkeeping
 
@@ -181,11 +182,16 @@ final class SemanticObservationStream {
 
         guard let stash else { return nil }
 
-        let outcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
+        let initialOutcome = await SemanticObservationSettleCadence.settleVisibleObservationForCurrentDemand(
             hasActiveDemand: hasActiveObservationDemand,
             stash: stash,
             tripwire: tripwire,
             baselineTripwireSignal: latestEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal(),
+            timeoutMs: Self.timeoutMilliseconds(from: timeout)
+        )
+        let outcome = await recoverTransientRootUnavailableIfNeeded(
+            initialOutcome,
+            stash: stash,
             timeoutMs: Self.timeoutMilliseconds(from: timeout)
         )
 
@@ -214,6 +220,26 @@ final class SemanticObservationStream {
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
         stash.recordFailedSettleDiagnosticEvidence(screen)
         return nil
+    }
+
+    private func recoverTransientRootUnavailableIfNeeded(
+        _ outcome: SettleSession.Outcome,
+        stash: TheStash,
+        timeoutMs: Int
+    ) async -> SettleSession.Outcome {
+        guard timeoutMs >= 1_000,
+              outcome.finalScreen == nil,
+              latestEvent != nil
+        else { return outcome }
+        if case .cancelled = outcome.outcome {
+            return outcome
+        }
+        return await SemanticObservationSettleCadence.settleVisibleObservationAtIdleCadence(
+            stash: stash,
+            tripwire: tripwire,
+            baselineTripwireSignal: tripwire.tripwireSignal(),
+            timeoutMs: Self.rootUnavailableRecoveryTimeoutMs
+        )
     }
 
     @discardableResult

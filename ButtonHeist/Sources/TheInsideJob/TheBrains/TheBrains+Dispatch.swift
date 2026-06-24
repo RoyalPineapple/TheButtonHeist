@@ -102,8 +102,6 @@ extension TheBrains {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: method)
         }
-        let demand = stash.beginSemanticObservationDemand(scope: observationScope)
-        defer { demand.cancel() }
 
         let actionStart = CFAbsoluteTimeGetCurrent()
         let beforeStart = actionStart
@@ -111,6 +109,9 @@ extension TheBrains {
             return treeUnavailableResult(method: method)
         }
         let beforeObservationMs = elapsedMilliseconds(since: beforeStart)
+
+        let demand = stash.beginSemanticObservationDemand(scope: observationScope)
+        defer { demand.cancel() }
 
         let interactionStart = CFAbsoluteTimeGetCurrent()
         let result = await interaction()
