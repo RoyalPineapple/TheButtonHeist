@@ -66,8 +66,8 @@ extension SimpleSocketServer {
         }
 
         var data = response
-        if !data.hasSuffix(Data([0x0A])) {
-            data.append(0x0A)
+        if !data.hasSuffix(Data([WireFrameLimits.newlineDelimiterByte])) {
+            data.append(WireFrameLimits.newlineDelimiterByte)
         }
 
         sendContent(connection, data, .contentProcessed { error in

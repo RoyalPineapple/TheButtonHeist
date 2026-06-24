@@ -92,7 +92,7 @@ struct HeistPlanToolTests {
         #expect(result.exitCode == 0, "\(result.stderr)")
         #expect(result.stdout.isEmpty)
         let output = try String(contentsOf: outputURL.appendingPathComponent("plan.json"), encoding: .utf8)
-        let expected = try String(data: canonicalJSONData(plan) + Data([0x0A]), encoding: .utf8)
+        let expected = try String(data: plan.canonicalHeistJSONData() + Data([0x0A]), encoding: .utf8)
         #expect(output + "\n" == expected)
         #expect(FileManager.default.fileExists(atPath: outputURL.appendingPathComponent("manifest.json").path))
     }
@@ -149,14 +149,8 @@ private func representativePlan() throws -> HeistPlan {
     }
 }
 
-private func canonicalJSONData(_ plan: HeistPlan) throws -> Data {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    return try encoder.encode(plan)
-}
-
 private func writeCanonicalJSON(_ plan: HeistPlan, to url: URL) throws {
-    try canonicalJSONData(plan).write(to: url)
+    try plan.canonicalHeistJSONData().write(to: url)
 }
 
 private func writeRuntimeInvalidHeistArtifact(to url: URL) throws {

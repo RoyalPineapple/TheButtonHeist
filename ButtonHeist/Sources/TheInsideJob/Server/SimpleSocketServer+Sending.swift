@@ -11,8 +11,8 @@ extension SimpleSocketServer {
     @discardableResult
     func send(_ data: Data, to clientId: Int) -> ServerSendOutcome {
         var dataToSend = data
-        if !dataToSend.hasSuffix(Data([0x0A])) {
-            dataToSend.append(0x0A)
+        if !dataToSend.hasSuffix(Data([WireFrameLimits.newlineDelimiterByte])) {
+            dataToSend.append(WireFrameLimits.newlineDelimiterByte)
         }
 
         let byteCount = dataToSend.count
@@ -87,8 +87,8 @@ extension SimpleSocketServer {
             return
         }
         var errorData = response
-        if !errorData.hasSuffix(Data([0x0A])) {
-            errorData.append(0x0A)
+        if !errorData.hasSuffix(Data([WireFrameLimits.newlineDelimiterByte])) {
+            errorData.append(WireFrameLimits.newlineDelimiterByte)
         }
         sendContent(state.connection, errorData, .contentProcessed { error in
             if let error {

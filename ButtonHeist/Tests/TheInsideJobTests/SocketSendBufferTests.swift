@@ -1,7 +1,15 @@
 import XCTest
+import TheScore
 @testable import TheInsideJob
 
 final class SocketSendBufferTests: XCTestCase {
+    func testDefaultMaxPendingBytesUsesSharedServerToClientLimit() {
+        XCTAssertEqual(
+            SocketSendBuffer.defaultMaxPendingBytes,
+            WireFrameLimits.serverToClientMaxPendingSendBytes
+        )
+    }
+
     func testReserveIncrementsPendingBytesUntilCompleted() {
         var buffer = SocketSendBuffer(maxPendingBytes: 10)
 

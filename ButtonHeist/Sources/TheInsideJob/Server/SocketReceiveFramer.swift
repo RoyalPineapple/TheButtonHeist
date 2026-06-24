@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 /// Newline-delimited receive framing invariant: after a successful append,
 /// `pendingData` contains only bytes after the final newline and never exceeds `maxBufferedBytes`,
@@ -16,7 +17,7 @@ struct SocketReceiveFramer: Equatable, Sendable {
         }
     }
 
-    static let defaultMaxBufferedBytes = 10_000_000
+    static let defaultMaxBufferedBytes = WireFrameLimits.clientToServerMaxBufferedBytes
 
     let maxBufferedBytes: Int
     private(set) var pendingData: Data
@@ -37,7 +38,7 @@ struct SocketReceiveFramer: Equatable, Sendable {
         }
 
         var frames: [Data] = []
-        while let newlineIndex = candidate.firstIndex(of: 0x0A) {
+        while let newlineIndex = candidate.firstIndex(of: WireFrameLimits.newlineDelimiterByte) {
             let frame = Data(candidate.prefix(upTo: newlineIndex))
             if !frame.isEmpty {
                 frames.append(frame)

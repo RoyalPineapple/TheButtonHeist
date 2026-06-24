@@ -4,12 +4,7 @@ import ThePlans
 import TheScore
 @testable import HeistDoctorCore
 
-private struct RepairJSONReport: Encodable {
-    let featureStatus = "alpha"
-    let suggestions: [HeistRepairSuggestion]
-}
-
-private let repairJSONReportFixture = RepairJSONReport(suggestions: [
+private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
     HeistRepairSuggestion(
         stepPath: "$.body[0]",
         failureKind: .missingTarget,
@@ -509,8 +504,10 @@ private let expectedRepairJSONReportJSON = """
 
         let data = try encoder.encode(repairJSONReportFixture)
         let json = try #require(String(data: data, encoding: .utf8))
+        let decodedReport = try JSONDecoder().decode(HeistDoctorReport.self, from: data)
 
         #expect(json == expectedRepairJSONReportJSON)
+        #expect(decodedReport == repairJSONReportFixture)
     }
 
     @Test("Candidate scoring rejects compatible-only successors without continuity")

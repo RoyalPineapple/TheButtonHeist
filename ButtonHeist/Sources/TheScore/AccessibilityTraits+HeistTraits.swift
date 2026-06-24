@@ -1,5 +1,8 @@
 import ThePlans
 import AccessibilitySnapshotModel
+#if canImport(UIKit)
+import UIKit
+#endif
 
 public extension AccessibilityTraits {
     private static let heistKnownTraits: [(trait: AccessibilityTraits, name: String)] = [
@@ -70,3 +73,11 @@ public extension AccessibilityTraits {
         Self.heistKnownTraits.compactMap { contains($0.trait) ? $0.name : nil }
     }
 }
+
+#if canImport(UIKit)
+public extension UIAccessibilityTraits {
+    static func fromNames(_ names: [String]) -> UIAccessibilityTraits {
+        UIAccessibilityTraits(rawValue: AccessibilityTraits.fromNames(names).rawValue)
+    }
+}
+#endif

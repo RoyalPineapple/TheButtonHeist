@@ -1869,6 +1869,12 @@ symbol	ButtonHeist.symbols.json	s:8TheScore15SubtreeSelectorO6encode2toys7Encode
 symbol	ButtonHeist.symbols.json	s:8TheScore15SubtreeSelectorO7elementyAC0A5Plans13ElementTargetOcACmF	swift.enum.case	public	SubtreeSelector.element(_:)	SubtreeSelector.element(_:)	case element(ElementTarget)
 symbol	ButtonHeist.symbols.json	s:8TheScore15SubtreeSelectorO7ordinalSiSgvp	swift.property	public	ordinal	SubtreeSelector.ordinal	var ordinal: Int? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore15SubtreeSelectorO9containeryAcA16ContainerMatcherV_SiSgtcACmF	swift.enum.case	public	SubtreeSelector.container(_:ordinal:)	SubtreeSelector.container(_:ordinal:)	case container(ContainerMatcher, ordinal: Int? = nil)
+symbol	ButtonHeist.symbols.json	s:8TheScore15WireFrameLimitsO	swift.enum	public	WireFrameLimits	WireFrameLimits	enum WireFrameLimits
+symbol	ButtonHeist.symbols.json	s:8TheScore15WireFrameLimitsO17receiveChunkBytesSivpZ	swift.type.property	public	receiveChunkBytes	WireFrameLimits.receiveChunkBytes	static let receiveChunkBytes: Int
+symbol	ButtonHeist.symbols.json	s:8TheScore15WireFrameLimitsO20newlineDelimiterBytes5UInt8VvpZ	swift.type.property	public	newlineDelimiterByte	WireFrameLimits.newlineDelimiterByte	static let newlineDelimiterByte: UInt8
+symbol	ButtonHeist.symbols.json	s:8TheScore15WireFrameLimitsO30clientToServerMaxBufferedBytesSivpZ	swift.type.property	public	clientToServerMaxBufferedBytes	WireFrameLimits.clientToServerMaxBufferedBytes	static let clientToServerMaxBufferedBytes: Int
+symbol	ButtonHeist.symbols.json	s:8TheScore15WireFrameLimitsO30serverToClientMaxBufferedBytesSivpZ	swift.type.property	public	serverToClientMaxBufferedBytes	WireFrameLimits.serverToClientMaxBufferedBytes	static let serverToClientMaxBufferedBytes: Int
+symbol	ButtonHeist.symbols.json	s:8TheScore15WireFrameLimitsO33serverToClientMaxPendingSendBytesSivpZ	swift.type.property	public	serverToClientMaxPendingSendBytes	WireFrameLimits.serverToClientMaxPendingSendBytes	static let serverToClientMaxPendingSendBytes: Int
 symbol	ButtonHeist.symbols.json	s:8TheScore16ContainerMatcherV	swift.struct	public	ContainerMatcher	ContainerMatcher	struct ContainerMatcher
 symbol	ButtonHeist.symbols.json	s:8TheScore16ContainerMatcherV10identifierSSSgvp	swift.property	public	identifier	ContainerMatcher.identifier	let identifier: String?
 symbol	ButtonHeist.symbols.json	s:8TheScore16ContainerMatcherV11descriptionSSvp	swift.property	public	description	ContainerMatcher.description	var description: String { get }

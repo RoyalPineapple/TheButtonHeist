@@ -118,6 +118,36 @@ struct ToolRoutingTests {
         }
     }
 
+    @Test("MCP rejects oversized argument payloads before HeistValue conversion")
+    func mcpRejectsOversizedArgumentPayloadBeforeHeistValueConversion() {
+        let oversizedText = String(repeating: "x", count: PublicAdapterInputLimits.maxRequestBytes + 1)
+
+        do {
+            _ = try ButtonHeistMCPServer.decodeArguments(["text": .string(oversizedText)])
+            Issue.record("Expected MCP argument byte limit error")
+        } catch {
+            #expect(
+                String(describing: error)
+                    .contains("MCP arguments exceeds \(PublicAdapterInputLimits.maxRequestBytes) bytes")
+            )
+        }
+    }
+
+    @Test("MCP rejects excessive argument object keys before HeistValue conversion")
+    func mcpRejectsExcessiveArgumentObjectKeysBeforeHeistValueConversion() {
+        let excessiveKeys = Self.mcpObjectWithEnoughKeysToExceedLimitFromRoot()
+
+        do {
+            _ = try ButtonHeistMCPServer.decodeArguments(["argument": .object(excessiveKeys)])
+            Issue.record("Expected MCP argument object key limit error")
+        } catch {
+            #expect(
+                String(describing: error)
+                    .contains("MCP arguments object key count exceeds \(PublicAdapterInputLimits.maxTotalObjectKeys)")
+            )
+        }
+    }
+
     @Test("heist discovery tools route directly with detail and selector arguments")
     func heistDiscoveryToolsRouteDirectly() throws {
         let list = try routed(
@@ -171,6 +201,14 @@ struct ToolRoutingTests {
             value = .object(["child": value])
         }
         return value
+    }
+
+    private static func mcpObjectWithEnoughKeysToExceedLimitFromRoot() -> [String: Value] {
+        var object: [String: Value] = [:]
+        for index in 0..<PublicAdapterInputLimits.maxTotalObjectKeys {
+            object[String(index)] = .int(index)
+        }
+        return object
     }
 
 }

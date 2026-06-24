@@ -1,3 +1,5 @@
+import TheScore
+
 /// Per-client send-buffer accounting: reservations are admitted only while
 /// total queued bytes stay within the configured high-water mark.
 struct SocketSendBuffer: Equatable, Sendable {
@@ -19,7 +21,7 @@ struct SocketSendBuffer: Equatable, Sendable {
         }
     }
 
-    static let defaultMaxPendingBytes = 20_000_000
+    static let defaultMaxPendingBytes = WireFrameLimits.serverToClientMaxPendingSendBytes
 
     let maxPendingBytes: Int
     private(set) var pendingBytes: Int
