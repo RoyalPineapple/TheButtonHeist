@@ -353,6 +353,48 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
+    func testSemanticRevealDoesNotNoopWhenVisibleIdRepresentsDifferentElement() async {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        scrollView.contentOffset = CGPoint(x: 0, y: 800)
+        let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
+        let scrollContainerName = "reused_cell_scroll"
+        let target = makeElement(label: "Controls Demo", traits: .button)
+        let currentlyVisibleReuse = makeElement(label: "Custom Rotors", traits: .button)
+        let entry = Screen.ScreenElement(
+            heistId: "reused_cell",
+            contentSpaceOrigin: CGPoint(x: 0, y: 20),
+            scrollContainerName: scrollContainerName,
+            element: target
+        )
+        brains.stash.installScreenForTesting(Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [
+                .container(container, children: [
+                    .element(currentlyVisibleReuse, traversalIndex: 0)
+                ])
+            ],
+            containerNames: [container: scrollContainerName],
+            heistIdByElement: [currentlyVisibleReuse: entry.heistId],
+            elementRefs: [
+                entry.heistId: .init(object: nil, scrollView: scrollView)
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [
+                container: .init(view: scrollView)
+            ]
+        ))
+
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(entry)
+
+        guard case .revealed(let resolvedScrollView) = result else {
+            return XCTFail("Expected reused visible id to trigger semantic reveal, got \(result)")
+        }
+        XCTAssertTrue(resolvedScrollView === scrollView)
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
+        XCTAssertLessThan(scrollView.contentOffset.y, 100)
+    }
+
     func testSemanticRevealUsesNonAnimatedJumpForKnownOffscreenElement() async throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)

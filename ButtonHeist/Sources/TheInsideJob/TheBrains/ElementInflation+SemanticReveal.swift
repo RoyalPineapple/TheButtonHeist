@@ -1,4 +1,5 @@
 #if canImport(UIKit) && DEBUG
+import AccessibilitySnapshotModel
 import UIKit
 
 extension ElementInflation {
@@ -27,7 +28,8 @@ extension ElementInflation {
     /// retained a live scroll ancestor.
     @discardableResult
     func revealSemanticTarget(_ screenElement: TheStash.ScreenElement) async -> SemanticRevealResult {
-        if stash.visibleIds.contains(screenElement.heistId) {
+        if let visible = stash.liveScreenElement(heistId: screenElement.heistId),
+           visible.element.representsSameSemanticElement(as: screenElement.element) {
             return .alreadyVisible
         }
 
@@ -105,6 +107,15 @@ extension ElementInflation {
         let targetX = min(max(contentOrigin.x - insets.left - visibleSize.width / 2, -insets.left), maxX)
         let targetY = min(max(contentOrigin.y - insets.top - visibleSize.height / 2, -insets.top), maxY)
         return CGPoint(x: targetX, y: targetY)
+    }
+}
+
+private extension AccessibilityElement {
+    func representsSameSemanticElement(as other: AccessibilityElement) -> Bool {
+        label == other.label
+            && identifier == other.identifier
+            && value == other.value
+            && traits == other.traits
     }
 }
 
