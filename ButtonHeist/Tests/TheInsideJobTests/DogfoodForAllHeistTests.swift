@@ -126,22 +126,16 @@ private enum TextInputScreen {
 
 private enum TodoScreen {
     static let completeItem = HeistDef<String>("TodoScreen.completeItem", parameter: "item") { item in
-        let activeItem = ElementTargetExpr.predicate(ElementPredicateTemplate(
-            label: .exact(item),
-            value: .exact(.literal("Active"))
-        ))
-        let completedItem = ElementPredicateTemplate(
-            label: .exact(item),
-            value: .exact(.literal("Completed"))
-        )
-
         try rawAction(
-            .viewportScrollToVisible(activeItem),
+            .viewportScrollToVisible(.label(item)),
             waiver: "scroll_to_visible is the viewport precondition for the row custom action"
         )
 
-        CustomAction("Toggle", on: activeItem)
-            .expect(.present(completedItem), timeout: .seconds(3))
+        CustomAction("Toggle", on: .label(item))
+            .expect(
+                .present(ElementPredicateTemplate(label: .exact(item), value: .exact(.literal("Completed")))),
+                timeout: .seconds(2)
+            )
     }
 }
 

@@ -76,6 +76,11 @@ private final class CustomActionTargetObject: NSObject {
         invocationCount += 1
         return true
     }
+
+    @objc func decline(_ action: UIAccessibilityCustomAction) -> Bool {
+        invocationCount += 1
+        return false
+    }
 }
 
 private final class ActionGeometryView: UIView {
@@ -360,6 +365,37 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .customAction)
         XCTAssertEqual(customActionTarget.invocationCount, 1)
+    }
+
+    func testExecuteCustomActionSelectorDeclineReportsFailure() async {
+        let heistId = "declining_custom_action_host"
+        let liveObject = UIView()
+        let customActionTarget = CustomActionTargetObject()
+        liveObject.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(
+                name: "Archive",
+                target: customActionTarget,
+                selector: #selector(CustomActionTargetObject.decline(_:))
+            ),
+        ]
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Options", traits: .button, customActions: ["Archive"]),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeCustomAction(
+            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "Options")), actionName: "Archive")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .customAction)
+        XCTAssertEqual(customActionTarget.invocationCount, 1)
+        XCTAssertDiagnostic(result.message, contains: [
+            "custom action failed",
+            "requestedAction=\"Archive\" declined by handler",
+            "label=\"Options\"",
+        ])
     }
 
     func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async throws {
