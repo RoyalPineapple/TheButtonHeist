@@ -87,18 +87,21 @@ extension FenceResponse {
         let elementAnnotations = interface.annotations.elementByPath
         let containerAnnotations = interface.annotations.containerByPath
         let totalNodeBudgetTracker = PublicElementBudgetTracker(budget: totalNodeBudget)
+        let context = CompactTreeRenderContext(
+            detail: detail,
+            counter: counter,
+            elementAnnotations: elementAnnotations,
+            containerAnnotations: containerAnnotations,
+            visibleElementBudget: visibleElementBudget,
+            totalNodeBudget: totalNodeBudgetTracker
+        )
         var remainingElements: Int?
         var lines: [String] = []
         for (index, node) in interface.tree.enumerated() {
             lines.append(contentsOf: compactTreeLines(
                 node,
                 path: TreePath([index]),
-                detail: detail,
-                counter: counter,
-                elementAnnotations: elementAnnotations,
-                containerAnnotations: containerAnnotations,
-                visibleElementBudget: visibleElementBudget,
-                totalNodeBudget: totalNodeBudgetTracker,
+                context: context,
                 remainingElements: &remainingElements
             ))
         }
@@ -121,33 +124,37 @@ extension FenceResponse {
         var value: Int = 0
     }
 
+    private struct CompactTreeRenderContext {
+        let detail: InterfaceDetail
+        let counter: LineIndexCounter
+        let elementAnnotations: [TreePath: InterfaceElementAnnotation]
+        let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+        let visibleElementBudget: Int
+        let totalNodeBudget: PublicElementBudgetTracker
+    }
+
     private static func compactTreeLines(
         _ node: AccessibilityHierarchy,
         path: TreePath,
-        detail: InterfaceDetail,
-        counter: LineIndexCounter,
-        elementAnnotations: [TreePath: InterfaceElementAnnotation],
-        containerAnnotations: [TreePath: InterfaceContainerAnnotation],
-        visibleElementBudget: Int,
-        totalNodeBudget: PublicElementBudgetTracker,
+        context: CompactTreeRenderContext,
         remainingElements: inout Int?
     ) -> [String] {
         switch node {
         case .element(let element, _):
-            let index = counter.value
-            counter.value += 1
+            let index = context.counter.value
+            context.counter.value += 1
             if let remaining = remainingElements {
                 guard remaining > 0 else { return [] }
             }
-            guard totalNodeBudget.consumeElement() else { return [] }
+            guard context.totalNodeBudget.consumeElement() else { return [] }
             if let remaining = remainingElements {
                 remainingElements = remaining - 1
             }
             let projected = HeistElement(
                 accessibilityElement: element,
-                annotation: elementAnnotations[path]
+                annotation: context.elementAnnotations[path]
             )
-            return [compactElementLine(projected, displayIndex: index, detail: detail)]
+            return [compactElementLine(projected, displayIndex: index, detail: context.detail)]
 
         case .container(let container, let children):
             var observedElementCount = 0
@@ -159,21 +166,21 @@ extension FenceResponse {
                 return false
             }()
             if let remaining = remainingElements, remaining <= 0 {
-                counter.value += observedElementCount
+                context.counter.value += observedElementCount
                 return []
             }
-            if !totalNodeBudget.hasCapacity, observedElementCount > 0 {
-                counter.value += observedElementCount
-                totalNodeBudget.recordLimitHit()
+            if !context.totalNodeBudget.hasCapacity, observedElementCount > 0 {
+                context.counter.value += observedElementCount
+                context.totalNodeBudget.recordLimitHit()
                 return []
             }
             let header = compactContainerLine(
                 container,
-                annotation: containerAnnotations[path],
-                detail: detail,
+                annotation: context.containerAnnotations[path],
+                detail: context.detail,
                 observedElementCount: observedElementCount
             )
-            let budgetCap = max(0, visibleElementBudget)
+            let budgetCap = max(0, context.visibleElementBudget)
             let shouldTruncate = isScrollable && observedElementCount > budgetCap
             let parentRemainingBefore = remainingElements
             var scrollRemainingElements: Int? = shouldTruncate
@@ -187,24 +194,14 @@ extension FenceResponse {
                     lines = compactTreeLines(
                         child,
                         path: path.appending(index),
-                        detail: detail,
-                        counter: counter,
-                        elementAnnotations: elementAnnotations,
-                        containerAnnotations: containerAnnotations,
-                        visibleElementBudget: visibleElementBudget,
-                        totalNodeBudget: totalNodeBudget,
+                        context: context,
                         remainingElements: &scrollRemainingElements
                     )
                 } else {
                     lines = compactTreeLines(
                         child,
                         path: path.appending(index),
-                        detail: detail,
-                        counter: counter,
-                        elementAnnotations: elementAnnotations,
-                        containerAnnotations: containerAnnotations,
-                        visibleElementBudget: visibleElementBudget,
-                        totalNodeBudget: totalNodeBudget,
+                        context: context,
                         remainingElements: &remainingElements
                     )
                 }

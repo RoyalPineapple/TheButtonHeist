@@ -235,14 +235,14 @@ extension TheStash {
 }
 
 private struct DiscoveryChildren {
+    enum ChildKind {
+        case element(SemanticScreen.Element)
+        case container(SemanticScreen.Container)
+    }
+
     struct Child {
         let sortKey: SortKey
-        let kind: Kind
-
-        enum Kind {
-            case element(SemanticScreen.Element)
-            case container(SemanticScreen.Container)
-        }
+        let kind: ChildKind
     }
 
     struct SortKey: Comparable {
