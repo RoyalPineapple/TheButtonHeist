@@ -79,6 +79,39 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
     }
 
+    func testSemanticTypeTextRevealsOffscreenTextTargetWithoutManualPreScroll() async throws {
+        let fixture = try installOffscreenTextInputFixture(
+            identifier: "semantic_delivery_note",
+            label: "Delivery Note"
+        )
+        defer { fixture.cleanup() }
+        try seedKnownOffscreenTextInputTarget(fixture)
+
+        let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) { [stash = brains.stash] in
+            stash.invalidateSettledObservationFromTripwire()
+        }
+        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+
+        XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
+        XCTAssertFalse(fixture.target.isFirstResponder)
+
+        let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
+            text: "leave at desk",
+            elementTarget: .predicate(ElementPredicate(identifier: .exact(fixture.identifier)))
+        )))
+
+        XCTAssertTrue(result.success, result.message ?? "semantic type_text failed")
+        guard result.success else { return }
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(fixture.target.text, "leave at desk")
+        XCTAssertTrue(fixture.target.isFirstResponder)
+        XCTAssertTrue(fixture.scrollView.didReceiveRevealRequest)
+        guard case .value(let value) = result.payload else {
+            return XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
+        }
+        XCTAssertEqual(value, "leave at desk")
+    }
+
     func testSemanticActivateRevealsTargetInsideNestedOffscreenScrollContainer() async throws {
         let fixture = try installNestedScrollActivationFixture(
             identifier: "nested_scroll_checkout_submit",
@@ -372,6 +405,57 @@ final class ElementInflationProductTests: XCTestCase {
         return AmbiguousActivationFixture(window: window, first: first, second: second)
     }
 
+    private func installOffscreenTextInputFixture(
+        identifier: String,
+        label: String
+    ) throws -> TextInputRevealFixture {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .white
+        viewController.view.accessibilityViewIsModal = true
+
+        let scrollView = RevealingScrollView(frame: CGRect(x: 24, y: 80, width: 320, height: 280))
+        scrollView.contentSize = CGSize(width: 320, height: 1_400)
+        scrollView.backgroundColor = .white
+        scrollView.isAccessibilityElement = false
+
+        let anchor = UILabel(frame: CGRect(x: 24, y: 24, width: 240, height: 44))
+        anchor.text = "Visible Anchor \(identifier)"
+        anchor.accessibilityLabel = anchor.text
+        anchor.accessibilityIdentifier = "visible_anchor_\(identifier)"
+        anchor.isAccessibilityElement = true
+        scrollView.addSubview(anchor)
+
+        let target = UITextField(frame: CGRect(x: 40, y: 900, width: 220, height: 44))
+        target.borderStyle = .roundedRect
+        target.accessibilityLabel = label
+        target.accessibilityIdentifier = identifier
+        target.accessibilityValue = ""
+        target.isAccessibilityElement = true
+        scrollView.addSubview(target)
+
+        scrollView.revealedElements = [target]
+        scrollView.updateAccessibilityVisibility()
+        viewController.view.addSubview(scrollView)
+
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.windowLevel = .alert + 80
+        window.rootViewController = viewController
+        window.isHidden = false
+        window.layoutIfNeeded()
+
+        return TextInputRevealFixture(
+            window: window,
+            scrollView: scrollView,
+            target: target,
+            identifier: identifier,
+            label: label,
+            knownHeistId: "known_\(identifier)",
+            contentOrigin: target.frame.origin
+        )
+    }
+
     private func installNestedScrollActivationFixture(
         identifier: String,
         label: String
@@ -494,6 +578,38 @@ final class ElementInflationProductTests: XCTestCase {
         ))
     }
 
+    private func seedKnownOffscreenTextInputTarget(
+        _ fixture: TextInputRevealFixture
+    ) throws {
+        let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
+        let scrollContainerName = try XCTUnwrap(
+            firstLiveScrollableContainerName(in: screen),
+            "Expected fixture to expose a live scroll container. \(scrollContainerDiagnostics(in: screen))"
+        )
+        let element = makeElement(
+            label: fixture.label,
+            identifier: fixture.identifier,
+            traits: UIAccessibilityTraits.fromNames(["textEntry"]),
+            frame: CGRect(
+                origin: fixture.contentOrigin,
+                size: fixture.target.bounds.size
+            )
+        )
+        let entry = Screen.ScreenElement(
+            heistId: fixture.knownHeistId,
+            contentSpaceOrigin: fixture.contentOrigin,
+            scrollContainerName: scrollContainerName,
+            element: element
+        )
+        var elements = screen.semantic.elements
+        elements[entry.heistId] = entry
+
+        brains.stash.installScreenForTesting(Screen(
+            semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
+            liveCapture: screen.liveCapture
+        ))
+    }
+
     private func seedKnownUnreachableDuplicate(
         label: String,
         identifier: String,
@@ -595,12 +711,13 @@ final class ElementInflationProductTests: XCTestCase {
     private func makeElement(
         label: String,
         identifier: String,
+        traits: UIAccessibilityTraits = .button,
         frame: CGRect = CGRect(x: 20, y: 20, width: 160, height: 44)
     ) -> AccessibilityElement {
         .make(
             label: label,
             identifier: identifier,
-            traits: .button,
+            traits: traits,
             frame: frame,
             respondsToUserInteraction: true
         )
@@ -653,6 +770,24 @@ private struct SemanticRevealFixture {
     }
 }
 
+private struct TextInputRevealFixture {
+    let window: UIWindow
+    let scrollView: RevealingScrollView
+    let target: UITextField
+    let identifier: String
+    let label: String
+    let knownHeistId: HeistId
+    let contentOrigin: CGPoint
+
+    @MainActor
+    func cleanup() {
+        _ = target.resignFirstResponder()
+        window.rootViewController?.view.accessibilityViewIsModal = false
+        window.isHidden = true
+        window.rootViewController = nil
+    }
+}
+
 private struct NestedScrollRevealFixture {
     let window: UIWindow
     let outerScrollView: RevealingScrollView
@@ -697,6 +832,54 @@ private final class SemanticActivationView: UIView {
     override func accessibilityActivate() -> Bool {
         activationCount += 1
         return true
+    }
+}
+
+@MainActor
+private final class ProductTextInputKeyboardImpl: NSObject {
+    private final class TextInputDelegate: NSObject, UIKeyInput {
+        var hasText: Bool { false }
+        func insertText(_ text: String) {}
+        func deleteBackward() {}
+    }
+
+    private let inputDelegate = TextInputDelegate()
+    private weak var textField: UITextField?
+    private let onInput: @MainActor () -> Void
+
+    init(textField: UITextField, onInput: @escaping @MainActor () -> Void) {
+        self.textField = textField
+        self.onInput = onInput
+    }
+
+    @objc(delegate)
+    func delegate() -> AnyObject? {
+        guard textField?.isFirstResponder == true else { return nil }
+        return inputDelegate
+    }
+
+    @objc(addInputString:)
+    func addInputString(_ text: NSString) {
+        guard textField?.isFirstResponder == true else { return }
+        let nextValue = (textField?.text ?? "") + (text as String)
+        textField?.text = nextValue
+        textField?.accessibilityValue = nextValue
+        onInput()
+    }
+
+    @objc(taskQueue)
+    func taskQueue() -> AnyObject? {
+        self
+    }
+
+    @objc(waitUntilAllTasksAreFinished)
+    func waitUntilAllTasksAreFinished() {}
+
+    func bridge() -> KeyboardBridge {
+        KeyboardBridge(
+            impl: self,
+            textInjection: UIKeyboardImplTextInjection(impl: self)
+        )
     }
 }
 

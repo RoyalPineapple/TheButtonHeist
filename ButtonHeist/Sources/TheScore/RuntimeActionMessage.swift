@@ -55,6 +55,9 @@ import ThePlans
     /// Write text to the general pasteboard from inside the app.
     case setPasteboard(SetPasteboardTarget)
 
+    /// Capture the current screen as heist receipt evidence.
+    case takeScreenshot
+
     /// Wait until an accessibility predicate is satisfied.
     case wait(WaitTarget)
 }
@@ -63,6 +66,7 @@ import ThePlans
     case activate, increment, decrement, performCustomAction, rotor
     case oneFingerTap, longPress, swipe, drag
     case typeText, editAction, setPasteboard
+    case takeScreenshot
     case scroll, scrollToVisible, scrollToEdge, resignFirstResponder
     case wait
 }
@@ -86,6 +90,7 @@ import ThePlans
         case .scrollToEdge: return .scrollToEdge
         case .resignFirstResponder: return .resignFirstResponder
         case .setPasteboard: return .setPasteboard
+        case .takeScreenshot: return .takeScreenshot
         case .wait: return .wait
         }
     }

@@ -10,7 +10,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `describe_heist` | `heistRuntime` | Describe one root entry or reusable heist from a plan so an agent can call it safely. |
 | `get_interface` | `observation` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `observation` | Read text from the general pasteboard. |
-| `get_screen` | `observation` | Capture a PNG screenshot with optional inline data and interface state. |
+| `get_screen` | `observation` | Capture a PNG screenshot with visible interface state. |
 | `get_session_state` | `session` | Inspect connection, device, and last-action session state. |
 | `list_heists` | `heistRuntime` | List the root entry and reusable heists in a plan. Use `detail: "detailed"` when composing against available capabilities. |
 | `perform` | `heistRuntime` | Run one ButtonHeist DSL instruction from `step`: one action or one simple wait. |
@@ -92,7 +92,7 @@ _None._
 
 ### `get_screen`
 
-Capture a PNG screenshot with optional inline data and interface state.
+Capture a PNG screenshot with visible interface state.
 
 - Family: `observation`
 
@@ -102,7 +102,6 @@ Parameters:
 |-----------|------|----------|---------|--------|
 | `output` | `string` | no | - | - |
 | `inlineData` | `boolean` | no | - | - |
-| `includeInterface` | `boolean` | no | - | - |
 
 ### `get_session_state`
 

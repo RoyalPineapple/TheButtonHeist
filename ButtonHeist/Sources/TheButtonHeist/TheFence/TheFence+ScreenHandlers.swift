@@ -1,19 +1,5 @@
 import Foundation
 
-import TheScore
-
-private extension ScreenPayload {
-    func responsePayload(includeInterface: Bool) -> ScreenPayload {
-        ScreenPayload(
-            pngData: pngData,
-            width: width,
-            height: height,
-            timestamp: timestamp,
-            interface: includeInterface ? interface : nil
-        )
-    }
-}
-
 @ButtonHeistActor
 extension TheFence {
 
@@ -21,8 +7,7 @@ extension TheFence {
 
     func handleGetScreen(_ request: ScreenRequest) async throws -> FenceResponse {
         let screen = try await sendAndAwaitScreen(.requestScreen, timeout: 30)
-        let responsePayload = screen.responsePayload(includeInterface: request.includeInterface)
-        let options = ScreenshotResponseOptions(includeInterface: request.includeInterface)
+        let options = ScreenshotResponseOptions()
 
         if request.inlineData {
             let byteCount = screen.pngData.utf8.count
@@ -38,7 +23,7 @@ extension TheFence {
                     )
                 )
             }
-            return .screenshotData(payload: responsePayload, options: options)
+            return .screenshotData(payload: screen, options: options)
         }
 
         do {
@@ -47,7 +32,7 @@ extension TheFence {
                 outputPath: request.outputPath,
                 command: .getScreen
             )
-            return .screenshot(path: url.path, payload: responsePayload, options: options)
+            return .screenshot(path: url.path, payload: screen, options: options)
         } catch StorageError.unsafePath {
             throw FenceError.invalidRequest(
                 "Invalid output path: must not contain '..' components or control characters"

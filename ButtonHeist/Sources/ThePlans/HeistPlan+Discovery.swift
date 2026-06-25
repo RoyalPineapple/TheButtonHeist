@@ -557,7 +557,7 @@ private struct HeistSemanticSurfaceBuilder {
             appendTargetPredicate(target.selection)
         case .viewportScrollToEdge(let target):
             appendTargetPredicate(target.selection)
-        case .editAction, .setPasteboard, .dismissKeyboard:
+        case .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             break
         }
     }

@@ -156,6 +156,12 @@ extension HeistPlanSourceParser {
         return .setPasteboard(SetPasteboardTarget(text: text))
     }
 
+    mutating func parseTakeScreenshotAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        try expectSymbol(")")
+        return .takeScreenshot
+    }
+
     mutating func parseEditAction() throws -> HeistActionCommand {
         try expectSymbol("(")
         let action = try parseEnumCase(EditAction.self, role: "edit action")

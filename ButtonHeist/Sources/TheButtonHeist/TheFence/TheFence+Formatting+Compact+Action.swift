@@ -17,6 +17,8 @@ extension FenceResponse {
             text = Self.compactRotor(rotor)
         case .heistExecution(let heist):
             text = "\(TheFence.Command.runHeist.rawValue): \(heist.steps.count) step(s)"
+        case .screenshot(let payload):
+            text = "screenshot: \(Int(payload.width))x\(Int(payload.height))"
         case .value, .none:
             if let delta = result.accessibilityTrace?.endpointDelta {
                 text = Self.compactDelta(delta, method: commandName)

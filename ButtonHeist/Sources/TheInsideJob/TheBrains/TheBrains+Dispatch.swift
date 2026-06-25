@@ -41,6 +41,8 @@ extension TheBrains {
             return await performInteraction(method: .editAction) { await self.actions.executeEditAction(target) }
         case .setPasteboard(let target):
             return await performInteraction(method: .setPasteboard) { await self.actions.executeSetPasteboard(target) }
+        case .takeScreenshot:
+            return await executeTakeScreenshot()
         case .resignFirstResponder:
             return await performInteraction(method: .resignFirstResponder) { await self.actions.executeResignFirstResponder() }
         case .oneFingerTap(let target):

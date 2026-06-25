@@ -42,6 +42,8 @@ import ThePlans
             self = .editAction(target)
         case .setPasteboard(let target):
             self = .setPasteboard(target)
+        case .takeScreenshot:
+            self = .takeScreenshot
         case .resignFirstResponder:
             self = .dismissKeyboard
         case .wait:
@@ -66,6 +68,7 @@ import ThePlans
         case .viewportScrollToEdge: return .scrollToEdge
         case .editAction: return .editAction
         case .setPasteboard: return .setPasteboard
+        case .takeScreenshot: return .takeScreenshot
         case .dismissKeyboard: return .resignFirstResponder
         }
     }
@@ -113,6 +116,8 @@ import ThePlans
             return .editAction(target)
         case .setPasteboard(let target):
             return .setPasteboard(target)
+        case .takeScreenshot:
+            return .takeScreenshot
         case .dismissKeyboard:
             return .resignFirstResponder
         }

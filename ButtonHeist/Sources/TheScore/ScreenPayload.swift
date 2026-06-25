@@ -2,7 +2,7 @@ import ThePlans
 import Foundation
 
 /// Payload containing screen capture data and optional interface evidence.
-public struct ScreenPayload: Codable, Sendable {
+public struct ScreenPayload: Codable, Sendable, Equatable {
     public let pngData: String
     public let width: Double
     public let height: Double

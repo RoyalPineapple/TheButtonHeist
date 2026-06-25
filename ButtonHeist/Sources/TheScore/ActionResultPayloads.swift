@@ -54,14 +54,17 @@ public struct ServerError: Codable, Sendable, Equatable {
 /// documented. Encodes natively as a tagged union under the `payload` key on
 /// `ActionResult`: `{"kind": "value", "data": "..."}`, etc.
 ///   - `.value`        → typeText / setPasteboard / getPasteboard
+///   - `.screenshot`   → takeScreenshot
 public enum ResultPayload: Codable, Sendable, Equatable {
     case value(String)
     case rotor(RotorResult)
+    case screenshot(ScreenPayload)
     case heistExecution(HeistExecutionResult)
 
     private enum Kind: String, Codable {
         case value
         case rotor
+        case screenshot
         case heistExecution
     }
 
@@ -78,6 +81,8 @@ public enum ResultPayload: Codable, Sendable, Equatable {
             self = .value(try container.decode(String.self, forKey: .data))
         case .rotor:
             self = .rotor(try container.decode(RotorResult.self, forKey: .data))
+        case .screenshot:
+            self = .screenshot(try container.decode(ScreenPayload.self, forKey: .data))
         case .heistExecution:
             self = .heistExecution(try container.decode(HeistExecutionResult.self, forKey: .data))
         }
@@ -92,6 +97,9 @@ public enum ResultPayload: Codable, Sendable, Equatable {
         case .rotor(let rotor):
             try container.encode(Kind.rotor, forKey: .kind)
             try container.encode(rotor, forKey: .data)
+        case .screenshot(let screen):
+            try container.encode(Kind.screenshot, forKey: .kind)
+            try container.encode(screen, forKey: .data)
         case .heistExecution(let result):
             try container.encode(Kind.heistExecution, forKey: .kind)
             try container.encode(result, forKey: .data)

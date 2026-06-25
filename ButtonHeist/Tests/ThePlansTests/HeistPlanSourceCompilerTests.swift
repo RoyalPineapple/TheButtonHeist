@@ -543,6 +543,11 @@ import ThePlans
         .action(try ActionStep(command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))))),
     ])
 
+    let screenshot = try HeistPlanSourceCompiler().compile(root("TakeScreenshot()"))
+    #expect(screenshot.body == [
+        .action(try ActionStep(command: .takeScreenshot)),
+    ])
+
     let waived = try HeistPlanSourceCompiler().compile(root(#"Activate(.label("Pay")).withoutExpectation("reason")"#))
     #expect(waived.body == [
         .action(try ActionStep(

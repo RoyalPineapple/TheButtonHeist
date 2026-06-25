@@ -661,6 +661,7 @@ final class TheBrainsActionTests: XCTestCase {
             .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             .editAction(EditActionTarget(action: .paste)),
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),
+            .takeScreenshot,
             .dismissKeyboard,
         ]
         var dispatchedTypes: [RuntimeActionType] = []
@@ -679,6 +680,51 @@ final class TheBrainsActionTests: XCTestCase {
         }
         XCTAssertEqual(heist.steps.count, commands.count)
         XCTAssertTrue(heist.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
+    }
+
+    func testHeistFailureRecordsScreenshotAsActionEvidence() async throws {
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let screenshot = ScreenPayload(
+            pngData: "png",
+            width: 10,
+            height: 20,
+            timestamp: Date(timeIntervalSince1970: 0),
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        )
+        var dispatchedTypes: [RuntimeActionType] = []
+        let runtime = heistRuntime(observations: []) { command in
+            dispatchedTypes.append(command.runtimeType)
+            if case .takeScreenshot = command {
+                return ActionResult(success: true, method: .takeScreenshot, payload: .screenshot(screenshot))
+            }
+            return ActionResult(
+                success: false,
+                method: .activate,
+                message: "activate failed",
+                errorKind: .actionFailed
+            )
+        }
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.target(target)))),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(dispatchedTypes, [.activate, .takeScreenshot])
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        XCTAssertEqual(heist.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(heist.executedTopLevelStepCount, 1)
+        XCTAssertEqual(heist.outputReceiptNodes.count, 2)
+        XCTAssertEqual(heist.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
+        let screenshotStep = try XCTUnwrap(heist.steps.last)
+        XCTAssertEqual(screenshotStep.kind, .action)
+        XCTAssertEqual(screenshotStep.status, .passed)
+        XCTAssertEqual(screenshotStep.actionEvidence?.command, .takeScreenshot)
+        guard case .screenshot(let payload) = screenshotStep.actionEvidence?.actionResult?.payload else {
+            return XCTFail("Expected screenshot action payload")
+        }
+        XCTAssertEqual(payload, screenshot)
     }
 
     func testHeistConditionalSelectsFirstMatchingCaseOnce() async throws {

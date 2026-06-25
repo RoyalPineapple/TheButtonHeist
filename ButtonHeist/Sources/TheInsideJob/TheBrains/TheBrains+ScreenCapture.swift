@@ -33,6 +33,21 @@ extension TheBrains {
             interface: observation.interface
         ))
     }
+
+    func executeTakeScreenshot() async -> ActionResult {
+        let start = CFAbsoluteTimeGetCurrent()
+        var builder = ActionResultBuilder(method: .takeScreenshot)
+        switch await captureScreenPayload() {
+        case .success(let payload):
+            builder.message = "Captured screenshot \(Int(payload.width))x\(Int(payload.height))"
+            builder.timing = ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
+            return builder.success(payload: .screenshot(payload))
+        case .failure(let message):
+            builder.message = message
+            builder.timing = ActionPerformanceTiming(totalMs: elapsedMilliseconds(since: start))
+            return builder.failure(errorKind: .general)
+        }
+    }
 }
 
 #endif // DEBUG

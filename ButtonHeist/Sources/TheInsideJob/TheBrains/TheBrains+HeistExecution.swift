@@ -70,7 +70,7 @@ extension TheBrains {
             builder.message = "Could not bind root heist argument: \(error)"
             return builder.failure(errorKind: .validationError)
         }
-        let stepResults = await executeHeistSteps(
+        var stepResults = await executeHeistSteps(
             plan.body,
             runtime: runtime,
             environment: environment,
@@ -78,6 +78,13 @@ extension TheBrains {
             path: "$.body"
         )
         let abortedAtPath = stepResults.firstFailedStep?.path
+        if let abortedAtPath,
+           let failureScreenshotStep = await failureScreenshotStep(
+               runtime: runtime,
+               failedPath: abortedAtPath
+           ) {
+            stepResults.append(failureScreenshotStep)
+        }
         let heistResult = HeistExecutionResult(
             steps: stepResults,
             durationMs: Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000),
@@ -94,6 +101,35 @@ extension TheBrains {
             return builder.success(payload: .heistExecution(heistResult))
         }
         return builder.failure(errorKind: .actionFailed, payload: .heistExecution(heistResult))
+    }
+
+    private func failureScreenshotStep(
+        runtime: HeistExecutionRuntime,
+        failedPath: String
+    ) async -> HeistExecutionStepResult? {
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = await runtime.execute(.takeScreenshot)
+        guard result.method == .takeScreenshot else { return nil }
+        let command = HeistActionCommand.takeScreenshot
+        return HeistExecutionStepResult(
+            path: "\(failedPath).failure.actions[0]",
+            kind: .action,
+            status: result.success ? .passed : .failed,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: .action(command: command.wireType.rawValue, target: nil),
+            evidence: .action(HeistActionEvidence(command: command, actionResult: result)),
+            failure: failureScreenshotDetail(for: result)
+        )
+    }
+
+    private func failureScreenshotDetail(for result: ActionResult) -> HeistFailureDetail? {
+        guard !result.success else { return nil }
+        return HeistFailureDetail(
+            category: .action,
+            contract: "failure screenshot action captures visible screen",
+            observed: result.message ?? "screenshot action failed",
+            expected: HeistActionCommandType.takeScreenshot.rawValue
+        )
     }
 
     func executeHeistSteps(

@@ -241,6 +241,22 @@ public struct SetPasteboard: HeistActionContent {
     }
 }
 
+public struct TakeScreenshot: HeistActionContent {
+    public let command: HeistActionCommand
+    public let expectation: WaitStep?
+    public let expectationWaiver: String?
+
+    public init() {
+        self.init(command: .takeScreenshot)
+    }
+
+    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        self.command = command
+        self.expectation = expectation
+        self.expectationWaiver = expectationWaiver
+    }
+}
+
 public struct Edit: HeistActionContent {
     public let command: HeistActionCommand
     public let expectation: WaitStep?

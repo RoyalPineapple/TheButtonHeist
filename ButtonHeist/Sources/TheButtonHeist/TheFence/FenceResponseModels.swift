@@ -12,7 +12,7 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
 public struct ScreenshotResponseOptions: Sendable, Equatable {
     public let includeInterface: Bool
 
-    public init(includeInterface: Bool = false) {
+    public init(includeInterface: Bool = true) {
         self.includeInterface = includeInterface
     }
 }

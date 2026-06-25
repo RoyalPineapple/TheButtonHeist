@@ -243,6 +243,30 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(payload["data"] as? String, "Hi")
     }
 
+    func testActionResultPayloadScreenshotWireShape() throws {
+        let screen = ScreenPayload(
+            pngData: "png",
+            width: 390,
+            height: 844,
+            timestamp: Date(timeIntervalSince1970: 0),
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        )
+        let result = ActionResult(success: true, method: .takeScreenshot, payload: .screenshot(screen))
+
+        let data = try JSONEncoder().encode(result)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let payload = try XCTUnwrap(json["payload"] as? [String: Any])
+        XCTAssertEqual(payload["kind"] as? String, "screenshot")
+        let inner = try XCTUnwrap(payload["data"] as? [String: Any])
+        XCTAssertEqual(inner["pngData"] as? String, "png")
+        XCTAssertEqual(inner["width"] as? Double, 390)
+        XCTAssertEqual(inner["height"] as? Double, 844)
+        XCTAssertNotNil(inner["interface"])
+
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+        XCTAssertEqual(decoded.payload, .screenshot(screen))
+    }
+
     func testActionResultSubjectEvidenceWireShape() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete", traits: [.button]))
         let element = HeistElement(

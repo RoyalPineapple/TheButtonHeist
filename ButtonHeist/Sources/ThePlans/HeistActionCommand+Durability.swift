@@ -28,7 +28,7 @@ public extension HeistActionCommand {
         case .viewportScrollToEdge:
             return "scroll_to_edge is a viewport debug command, not a durable heist action"
         case .activate, .increment, .decrement, .customAction, .typeText, .mechanicalTap, .mechanicalLongPress,
-             .editAction, .setPasteboard, .dismissKeyboard:
+             .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             return nil
         }
     }
@@ -60,7 +60,7 @@ public extension HeistActionCommand {
         case .viewportScrollToEdge(let target):
             if case .element(let target) = target.selection { return target }
             return nil
-        case .editAction, .setPasteboard, .dismissKeyboard:
+        case .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
             return nil
         }
     }

@@ -5,7 +5,7 @@ import TheScore
 final class GetScreenArtifactResponseTests: XCTestCase {
 
     @ButtonHeistActor
-    func testDefaultGetScreenWritesArtifactAndOmitsInlineDataAndInterface() async throws {
+    func testDefaultGetScreenWritesArtifactAndIncludesVisibleInterface() async throws {
         let tempDirectory = Self.makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: tempDirectory) }
 
@@ -26,8 +26,8 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         }
         XCTAssertEqual(payload.width, 393)
         XCTAssertEqual(payload.height, 852)
-        XCTAssertNil(payload.interface)
-        XCTAssertFalse(options.includeInterface)
+        XCTAssertEqual(payload.interface?.projectedElements.count, 1)
+        XCTAssertTrue(options.includeInterface)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), pngBytes)
 
         let json = publicJSONObject(response)
@@ -36,11 +36,11 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertEqual(json["width"] as? Double, 393)
         XCTAssertEqual(json["height"] as? Double, 852)
         XCTAssertNil(json["pngData"])
-        XCTAssertNil(json["interface"])
+        XCTAssertNotNil(json["interface"])
     }
 
     @ButtonHeistActor
-    func testInlineGetScreenRequiresOptInAndInterfaceRequiresExplicitOptIn() async throws {
+    func testInlineGetScreenIncludesVisibleInterface() async throws {
         let tempDirectory = Self.makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: tempDirectory) }
 
@@ -58,26 +58,13 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             return XCTFail("Expected inline screenshot response, got \(inlineResponse)")
         }
         XCTAssertEqual(inlinePayload.pngData, pngData)
-        XCTAssertNil(inlinePayload.interface)
-        XCTAssertFalse(inlineOptions.includeInterface)
+        XCTAssertEqual(inlinePayload.interface?.projectedElements.count, 1)
+        XCTAssertTrue(inlineOptions.includeInterface)
 
         let inlineJson = publicJSONObject(inlineResponse)
         XCTAssertEqual(inlineJson["pngData"] as? String, pngData)
         XCTAssertNil(inlineJson["path"])
-        XCTAssertNil(inlineJson["interface"])
-
-        let includedInterfaceResponse = try await fence.execute(command: .getScreen, values: [
-            "inlineData": .bool(true),
-            "includeInterface": .bool(true),
-        ])
-
-        guard case .screenshotData(let includedInterfacePayload, let includedInterfaceOptions) = includedInterfaceResponse else {
-            return XCTFail("Expected inline screenshot response with interface, got \(includedInterfaceResponse)")
-        }
-        XCTAssertEqual(includedInterfacePayload.pngData, pngData)
-        XCTAssertEqual(includedInterfacePayload.interface?.projectedElements.count, 1)
-        XCTAssertTrue(includedInterfaceOptions.includeInterface)
-        XCTAssertNotNil(publicJSONObject(includedInterfaceResponse)["interface"])
+        XCTAssertNotNil(inlineJson["interface"])
     }
 
     @ButtonHeistActor
