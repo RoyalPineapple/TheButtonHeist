@@ -86,13 +86,27 @@ extension TheFence {
             guard case .object(let object) = value else { return }
             for key in ["label", "identifier", "value"] {
                 guard let match = object[key] else { continue }
-                guard case .object = match else {
+                guard isStringMatchObjectOrArray(match) else {
                     throw SchemaValidationError(
                         field: (path + [key]).joined(separator: "."),
                         observed: match.schemaObservedDescription,
-                        expected: "StringMatch object with mode and value"
+                        expected: "StringMatch object with mode and value, or array of StringMatch objects"
                     )
                 }
+            }
+        }
+
+        private static func isStringMatchObjectOrArray(_ value: HeistValue) -> Bool {
+            switch value {
+            case .object:
+                return true
+            case .array(let values):
+                return values.allSatisfy {
+                    if case .object = $0 { return true }
+                    return false
+                }
+            default:
+                return false
             }
         }
 

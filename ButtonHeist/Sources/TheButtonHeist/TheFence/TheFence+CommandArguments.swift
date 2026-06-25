@@ -153,6 +153,39 @@ extension TheFence.CommandArgumentEnvelope {
         }
     }
 
+    func schemaStringMatches(_ key: String) throws -> [StringMatch<String>] {
+        guard let value = argumentValues[key] else { return [] }
+        switch value {
+        case .object:
+            guard let match = try schemaStringMatch(key) else { return [] }
+            return [match]
+        case .array(let values):
+            for (index, value) in values.enumerated() {
+                guard case .object = value else {
+                    throw SchemaValidationError(
+                        field: "\(field(key))[\(index)]",
+                        observed: value.schemaObservedDescription,
+                        expected: "StringMatch object with mode and value"
+                    )
+                }
+            }
+            do {
+                let data = try JSONEncoder().encode(value)
+                return try JSONDecoder().decode([StringMatch<String>].self, from: data)
+            } catch let error as DecodingError {
+                throw stringMatchPayloadFailure(error, key: key, value: value)
+            } catch {
+                throw FenceError.invalidRequest(String(describing: error))
+            }
+        default:
+            throw SchemaValidationError(
+                field: field(key),
+                observed: value.schemaObservedDescription,
+                expected: "StringMatch object with mode and value, or array of StringMatch objects"
+            )
+        }
+    }
+
     func requiredSchemaString(_ key: String) throws -> String {
         guard let value = try schemaString(key) else {
             throw SchemaValidationError(field: field(key), observed: "missing", expected: "string")

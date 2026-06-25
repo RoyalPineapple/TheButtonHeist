@@ -39,6 +39,23 @@ import ThePlans
     #expect(plan == expected)
 }
 
+@Test func `runtime parser accepts repeated string predicate checks for one field`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    Activate(.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")), traits: [.button]))
+    """))
+    let expected = try HeistPlan(body: [
+        .action(try ActionStep(command: .activate(.predicate(.element(
+            .label(.prefix(.literal("foo"))),
+            .label(.contains(.literal("bar"))),
+            .label(.suffix(.literal("baz"))),
+            traits: [.button]
+        ))))),
+    ])
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `inline plan source chained expectation compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     Activate(.label("Pay")).expect(.changed(.screen()))

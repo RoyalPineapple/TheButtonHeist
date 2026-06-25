@@ -30,6 +30,22 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testElementTargetAcceptsStringMatchArrayForRepeatedField() async throws {
+        guard let target = try decodedElementTarget(target: elementTargetValue([
+            "label": .array([
+                stringMatchValue(mode: "prefix", value: "foo"),
+                stringMatchValue(mode: "contains", value: "bar"),
+                stringMatchValue(mode: "suffix", value: "baz"),
+            ]),
+        ])),
+              case .predicate(let matcher, _) = target else {
+            return XCTFail("Expected .matcher")
+        }
+
+        XCTAssertEqual(matcher.labelMatches, [.prefix("foo"), .contains("bar"), .suffix("baz")])
+    }
+
+    @ButtonHeistActor
     func testElementTargetRejectsRawStringMatcherField() async throws {
         XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
             "label": .string("Pay"),
@@ -55,6 +71,26 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         }
 
         XCTAssertEqual(query.matcher.label, StringMatch<String>.contains("Pay"))
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceAcceptsStringMatchArrayInMatcherField() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+
+        _ = try await fence.execute(command: .getInterface, values: [
+            "label": .array([
+                stringMatchValue(mode: "prefix", value: "foo"),
+                stringMatchValue(mode: "contains", value: "bar"),
+                stringMatchValue(mode: "suffix", value: "baz"),
+            ]),
+        ])
+
+        guard let (message, _) = mockConn.sent.last,
+              case .requestInterface(let query) = message else {
+            return XCTFail("Expected requestInterface query, got \(String(describing: mockConn.sent.last))")
+        }
+
+        XCTAssertEqual(query.matcher.labelMatches, [.prefix("foo"), .contains("bar"), .suffix("baz")])
     }
 
     @ButtonHeistActor
@@ -120,6 +156,25 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         ]))
 
         XCTAssertEqual(predicate, .present(ElementPredicate(label: .contains("Pay"))))
+    }
+
+    func testPredicateAcceptsStringMatchArrayInElementField() throws {
+        let predicate = try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
+            "type": .string("present"),
+            "element": elementTargetValue([
+                "label": .array([
+                    stringMatchValue(mode: "prefix", value: "foo"),
+                    stringMatchValue(mode: "contains", value: "bar"),
+                    stringMatchValue(mode: "suffix", value: "baz"),
+                ]),
+            ]),
+        ]))
+
+        XCTAssertEqual(predicate, .present(ElementPredicate.element(
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz"))
+        )))
     }
 
     func testPredicateSchemaTreatsUpdateFromAndToAsStringMatchFields() throws {

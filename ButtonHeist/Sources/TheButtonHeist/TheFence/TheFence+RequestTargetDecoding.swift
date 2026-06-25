@@ -91,13 +91,27 @@ extension TheFence.CommandArgumentEnvelope {
     private func requireObjectStringMatchFields() throws {
         for field in ElementTarget.inlineSchemaFields where field.kind == .stringMatch {
             guard let value = argumentValues[field.name] else { continue }
-            guard case .object = value else {
+            guard Self.isStringMatchObjectOrArray(value) else {
                 throw SchemaValidationError(
                     field: self.field(field.name),
                     observed: value.schemaObservedDescription,
-                    expected: "StringMatch object with mode and value"
+                    expected: "StringMatch object with mode and value, or array of StringMatch objects"
                 )
             }
+        }
+    }
+
+    private static func isStringMatchObjectOrArray(_ value: HeistValue) -> Bool {
+        switch value {
+        case .object:
+            return true
+        case .array(let values):
+            return values.allSatisfy {
+                if case .object = $0 { return true }
+                return false
+            }
+        default:
+            return false
         }
     }
 

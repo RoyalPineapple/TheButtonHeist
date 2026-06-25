@@ -308,25 +308,25 @@ public enum MinimumPredicateSelector {
     }
 
     private static func combinedPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
-        var label: StringMatch<String>?
-        var identifier: StringMatch<String>?
-        var value: StringMatch<String>?
+        var labelMatches: [StringMatch<String>] = []
+        var identifierMatches: [StringMatch<String>] = []
+        var valueMatches: [StringMatch<String>] = []
         var traits: [HeistTrait] = []
         var excludeTraits: [HeistTrait] = []
 
         for atom in atoms {
             let predicate = atom.predicate
-            if label == nil { label = predicate.label }
-            if identifier == nil { identifier = predicate.identifier }
-            if value == nil { value = predicate.value }
+            labelMatches.append(contentsOf: predicate.labelMatches)
+            identifierMatches.append(contentsOf: predicate.identifierMatches)
+            valueMatches.append(contentsOf: predicate.valueMatches)
             traits.append(contentsOf: predicate.traits)
             excludeTraits.append(contentsOf: predicate.excludeTraits)
         }
 
         return ElementPredicate(
-            label: label,
-            identifier: identifier,
-            value: value,
+            labelMatches: labelMatches,
+            identifierMatches: identifierMatches,
+            valueMatches: valueMatches,
             traits: AccessibilityPolicy.orderedMatcherTraits(unique(traits)),
             excludeTraits: AccessibilityPolicy.orderedMatcherTraits(unique(excludeTraits))
         )

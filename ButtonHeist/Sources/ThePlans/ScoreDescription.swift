@@ -22,15 +22,28 @@ public enum ScoreDescription {
 
     public static func stringMatchField(_ name: String, _ value: StringMatch<String>?) -> String? {
         guard let value, !value.value.isEmpty else { return nil }
+        return "\(name)=\(stringMatch(value))"
+    }
+
+    public static func stringMatchFields(_ name: String, _ values: [StringMatch<String>]) -> String? {
+        let fields = values.compactMap { value -> String? in
+            guard !value.value.isEmpty else { return nil }
+            return "\(name)=\(stringMatch(value))"
+        }
+        guard !fields.isEmpty else { return nil }
+        return fields.joined(separator: " ")
+    }
+
+    public static func stringMatch(_ value: StringMatch<String>) -> String {
         switch value {
         case .exact(let string):
-            return "\(name)=\(quoted(string))"
+            return quoted(string)
         case .contains(let string):
-            return "\(name)=contains(\(quoted(string)))"
+            return "contains(\(quoted(string)))"
         case .prefix(let string):
-            return "\(name)=prefix(\(quoted(string)))"
+            return "prefix(\(quoted(string)))"
         case .suffix(let string):
-            return "\(name)=suffix(\(quoted(string)))"
+            return "suffix(\(quoted(string)))"
         }
     }
 

@@ -47,6 +47,7 @@ WaitFor(.present(.label("Checkout")), timeout: .seconds(5))
 .identifier("pay_button")
 .value("Milk")
 .element(label: "Pay", traits: [.button])
+.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")))
 .target(.element(label: "Delete"), ordinal: 1)
 ```
 

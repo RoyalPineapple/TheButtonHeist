@@ -150,9 +150,9 @@ extension ElementTarget: Codable {
             )
         }
         let predicate = ElementPredicate(
-            label: try container.decodeIfPresent(StringMatch<String>.self, forKey: .label),
-            identifier: try container.decodeIfPresent(StringMatch<String>.self, forKey: .identifier),
-            value: try container.decodeIfPresent(StringMatch<String>.self, forKey: .value),
+            labelMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .label),
+            identifierMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .identifier),
+            valueMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value),
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits) ?? [],
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
         )
@@ -199,9 +199,9 @@ extension ElementTarget: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .predicate(let predicate, let ordinal):
-            try container.encodeIfPresent(predicate.label, forKey: .label)
-            try container.encodeIfPresent(predicate.identifier, forKey: .identifier)
-            try container.encodeIfPresent(predicate.value, forKey: .value)
+            try StringMatch<String>.encodeOneOrMany(predicate.labelMatches, to: &container, forKey: .label)
+            try StringMatch<String>.encodeOneOrMany(predicate.identifierMatches, to: &container, forKey: .identifier)
+            try StringMatch<String>.encodeOneOrMany(predicate.valueMatches, to: &container, forKey: .value)
             if !predicate.traits.isEmpty { try container.encode(predicate.traits, forKey: .traits) }
             if !predicate.excludeTraits.isEmpty { try container.encode(predicate.excludeTraits, forKey: .excludeTraits) }
             try container.encodeIfPresent(ordinal, forKey: .ordinal)

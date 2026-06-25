@@ -84,10 +84,10 @@ extension HeistJUnitReport {
         public var displayName: String {
             var name = "[\(index)] \(command)"
             if case .predicate(let predicate, _)? = target {
-                if let label = predicate.label {
-                    name += " label=\"\(label)\""
-                } else if let identifier = predicate.identifier {
-                    name += " identifier=\"\(identifier)\""
+                if !predicate.labelMatches.isEmpty {
+                    name += " label=\"\(predicate.labelMatches.map(\.description).joined(separator: ","))\""
+                } else if !predicate.identifierMatches.isEmpty {
+                    name += " identifier=\"\(predicate.identifierMatches.map(\.description).joined(separator: ","))\""
                 }
             }
             return name
@@ -193,9 +193,9 @@ extension HeistJUnitReport {
         if let target = failedStep.target {
             var parts: [String] = []
             if case .predicate(let predicate, _) = target {
-                if let label = predicate.label { parts.append("label=\"\(label)\"") }
-                if let identifier = predicate.identifier { parts.append("identifier=\"\(identifier)\"") }
-                if let value = predicate.value { parts.append("value=\"\(value)\"") }
+                for label in predicate.labelMatches { parts.append("label=\"\(label)\"") }
+                for identifier in predicate.identifierMatches { parts.append("identifier=\"\(identifier)\"") }
+                for value in predicate.valueMatches { parts.append("value=\"\(value)\"") }
             }
             if !parts.isEmpty {
                 body += "target: \(parts.joined(separator: ", "))\n"

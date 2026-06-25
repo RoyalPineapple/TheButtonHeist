@@ -104,9 +104,9 @@ extension TheStash {
     /// Format a predicate's fields as a human-readable query string.
     static func formatMatcher(_ predicate: ElementPredicate) -> String {
         var fields: [String] = []
-        if let label = predicate.label { fields.append("label=\"\(label)\"") }
-        if let identifier = predicate.identifier { fields.append("identifier=\"\(identifier)\"") }
-        if let value = predicate.value { fields.append("value=\"\(value)\"") }
+        for label in predicate.labelMatches { fields.append("label=\"\(label)\"") }
+        for identifier in predicate.identifierMatches { fields.append("identifier=\"\(identifier)\"") }
+        for value in predicate.valueMatches { fields.append("value=\"\(value)\"") }
         if !predicate.traits.isEmpty { fields.append("traits=[\(predicate.traits.map(\.rawValue).joined(separator: ","))]") }
         if !predicate.excludeTraits.isEmpty {
             fields.append("excludeTraits=[\(predicate.excludeTraits.map(\.rawValue).joined(separator: ","))]")
@@ -128,11 +128,12 @@ extension TheStash {
         visibleHeistIds: Set<HeistId>
     ) -> String? {
         var relaxations: [Relaxation] = []
-        if predicate.value != nil {
+        if !predicate.valueMatches.isEmpty {
             relaxations.append(Relaxation(
                 field: "value",
                 relaxed: ElementPredicate(
-                    label: predicate.label, identifier: predicate.identifier,
+                    labelMatches: predicate.labelMatches,
+                    identifierMatches: predicate.identifierMatches,
                     traits: predicate.traits, excludeTraits: predicate.excludeTraits
                 ),
                 actual: { $0.value ?? "(nil)" }
@@ -142,8 +143,10 @@ extension TheStash {
             relaxations.append(Relaxation(
                 field: "traits",
                 relaxed: ElementPredicate(
-                    label: predicate.label, identifier: predicate.identifier,
-                    value: predicate.value, excludeTraits: predicate.excludeTraits
+                    labelMatches: predicate.labelMatches,
+                    identifierMatches: predicate.identifierMatches,
+                    valueMatches: predicate.valueMatches,
+                    excludeTraits: predicate.excludeTraits
                 ),
                 actual: { element in
                     AccessibilityTraits.knownTraits
@@ -152,21 +155,23 @@ extension TheStash {
                 }
             ))
         }
-        if predicate.label != nil {
+        if !predicate.labelMatches.isEmpty {
             relaxations.append(Relaxation(
                 field: "label",
                 relaxed: ElementPredicate(
-                    identifier: predicate.identifier, value: predicate.value,
+                    identifierMatches: predicate.identifierMatches,
+                    valueMatches: predicate.valueMatches,
                     traits: predicate.traits, excludeTraits: predicate.excludeTraits
                 ),
                 actual: { $0.label ?? "(nil)" }
             ))
         }
-        if predicate.identifier != nil {
+        if !predicate.identifierMatches.isEmpty {
             relaxations.append(Relaxation(
                 field: "identifier",
                 relaxed: ElementPredicate(
-                    label: predicate.label, value: predicate.value,
+                    labelMatches: predicate.labelMatches,
+                    valueMatches: predicate.valueMatches,
                     traits: predicate.traits, excludeTraits: predicate.excludeTraits
                 ),
                 actual: { $0.identifier ?? "(nil)" }
@@ -216,9 +221,9 @@ extension TheStash {
 
     private static func diagnosticContainsPredicate(from predicate: ElementPredicate) -> ElementPredicate? {
         let diagnostic = ElementPredicate(
-            label: predicate.label.map { .contains($0.value) },
-            identifier: predicate.identifier.map { .contains($0.value) },
-            value: predicate.value.map { .contains($0.value) },
+            labelMatches: predicate.labelMatches.map { .contains($0.value) },
+            identifierMatches: predicate.identifierMatches.map { .contains($0.value) },
+            valueMatches: predicate.valueMatches.map { .contains($0.value) },
             traits: predicate.traits,
             excludeTraits: predicate.excludeTraits
         )
@@ -231,13 +236,13 @@ extension TheStash {
         element: HeistElement
     ) -> String {
         var observed: [String] = []
-        if failedPredicate.label != nil, let label = element.label, !label.isEmpty {
+        if !failedPredicate.labelMatches.isEmpty, let label = element.label, !label.isEmpty {
             observed.append("label=\"\(label)\"")
         }
-        if failedPredicate.identifier != nil, let identifier = element.identifier, !identifier.isEmpty {
+        if !failedPredicate.identifierMatches.isEmpty, let identifier = element.identifier, !identifier.isEmpty {
             observed.append("id=\"\(identifier)\"")
         }
-        if failedPredicate.value != nil, let value = element.value, !value.isEmpty {
+        if !failedPredicate.valueMatches.isEmpty, let value = element.value, !value.isEmpty {
             observed.append("value=\"\(value)\"")
         }
         return "\(observed.joined(separator: " ")) — try \(exactPredicateDescription(failedPredicate, element: element)) or \(diagnosticPredicate)"
@@ -245,9 +250,9 @@ extension TheStash {
 
     private static func exactPredicateDescription(_ failedPredicate: ElementPredicate, element: HeistElement) -> String {
         ElementPredicate(
-            label: failedPredicate.label != nil ? element.label.map(StringMatch.exact) : nil,
-            identifier: failedPredicate.identifier != nil ? element.identifier.map(StringMatch.exact) : nil,
-            value: failedPredicate.value != nil ? element.value.map(StringMatch.exact) : nil,
+            labelMatches: !failedPredicate.labelMatches.isEmpty ? element.label.map { [.exact($0)] } ?? [] : [],
+            identifierMatches: !failedPredicate.identifierMatches.isEmpty ? element.identifier.map { [.exact($0)] } ?? [] : [],
+            valueMatches: !failedPredicate.valueMatches.isEmpty ? element.value.map { [.exact($0)] } ?? [] : [],
             traits: failedPredicate.traits,
             excludeTraits: failedPredicate.excludeTraits
         ).description

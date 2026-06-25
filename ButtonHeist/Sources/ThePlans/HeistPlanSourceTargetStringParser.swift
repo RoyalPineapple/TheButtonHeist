@@ -79,24 +79,41 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseElementPredicateTemplateFields() throws -> ElementPredicateTemplate {
-        var label: StringMatch<StringExpr>?
-        var identifier: StringMatch<StringExpr>?
-        var value: StringMatch<StringExpr>?
+        var labelMatches: [StringMatch<StringExpr>] = []
+        var identifierMatches: [StringMatch<StringExpr>] = []
+        var valueMatches: [StringMatch<StringExpr>] = []
         var traits: [HeistTrait] = []
         var excludeTraits: [HeistTrait] = []
         if currentToken.isSymbol(")") {
-            return .element()
+            return ElementPredicateTemplate()
         }
         while true {
-            if consumeIdentifier("label") != nil {
+            if currentToken.isSymbol("."), lookaheadIdentifier(in: Set(["label", "identifier", "value"])) {
+                switch try parseDotCallName(allowedPrefixes: []) {
+                case "label":
+                    try expectSymbol("(")
+                    labelMatches.append(try parseStringMatchCallArgument(field: "label"))
+                    try expectSymbol(")")
+                case "identifier":
+                    try expectSymbol("(")
+                    identifierMatches.append(try parseStringMatchCallArgument(field: "identifier"))
+                    try expectSymbol(")")
+                case "value":
+                    try expectSymbol("(")
+                    valueMatches.append(try parseStringMatchCallArgument(field: "value"))
+                    try expectSymbol(")")
+                default:
+                    throw error(previous, ".element(...) repeated checks accept .label, .identifier, and .value")
+                }
+            } else if consumeIdentifier("label") != nil {
                 try expectSymbol(":")
-                label = try parseStringMatchFieldValue(field: "label")
+                labelMatches.append(try parseStringMatchFieldValue(field: "label"))
             } else if consumeIdentifier("identifier") != nil {
                 try expectSymbol(":")
-                identifier = try parseStringMatchFieldValue(field: "identifier")
+                identifierMatches.append(try parseStringMatchFieldValue(field: "identifier"))
             } else if consumeIdentifier("value") != nil {
                 try expectSymbol(":")
-                value = try parseStringMatchFieldValue(field: "value")
+                valueMatches.append(try parseStringMatchFieldValue(field: "value"))
             } else if consumeIdentifier("traits") != nil {
                 try expectSymbol(":")
                 traits = try parseTraitArray(role: "traits")
@@ -109,9 +126,9 @@ extension HeistPlanSourceParser {
             guard consumeSymbol(",") else { break }
         }
         return .element(
-            label: label,
-            identifier: identifier,
-            value: value,
+            labelMatches: labelMatches,
+            identifierMatches: identifierMatches,
+            valueMatches: valueMatches,
             traits: traits,
             excludeTraits: excludeTraits
         )
@@ -133,15 +150,29 @@ extension HeistPlanSourceParser {
     }
 
     mutating func concretePredicate(from template: ElementPredicateTemplate) throws -> ElementPredicate {
-        let label = try concreteStringMatch(template.label, role: "label")
-        let identifier = try concreteStringMatch(template.identifier, role: "identifier")
-        let value = try concreteStringMatch(template.value, role: "value")
         return ElementPredicate(
-            label: label,
-            identifier: identifier,
-            value: value,
+            labelMatches: try concreteStringMatches(template.labelMatches, role: "label"),
+            identifierMatches: try concreteStringMatches(template.identifierMatches, role: "identifier"),
+            valueMatches: try concreteStringMatches(template.valueMatches, role: "value"),
             traits: template.traits,
             excludeTraits: template.excludeTraits
+        )
+    }
+
+    mutating func concreteStringMatches(
+        _ matches: [StringMatch<StringExpr>],
+        role: String
+    ) throws -> [StringMatch<String>] {
+        try matches.map { try concreteStringMatch($0, role: role) }
+    }
+
+    mutating func concreteStringMatch(
+        _ match: StringMatch<StringExpr>,
+        role: String
+    ) throws -> StringMatch<String> {
+        StringMatch<String>(
+            mode: StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact,
+            value: try concreteString(match.value, role: role)
         )
     }
 

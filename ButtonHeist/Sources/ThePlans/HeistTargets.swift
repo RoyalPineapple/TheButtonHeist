@@ -27,6 +27,9 @@ public extension ElementTarget {
         label: StringMatch<String>? = nil,
         identifier: StringMatch<String>? = nil,
         value: StringMatch<String>? = nil,
+        labelMatches: [StringMatch<String>] = [],
+        identifierMatches: [StringMatch<String>] = [],
+        valueMatches: [StringMatch<String>] = [],
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) -> ElementTarget {
@@ -34,9 +37,20 @@ public extension ElementTarget {
             label: label,
             identifier: identifier,
             value: value,
+            labelMatches: labelMatches,
+            identifierMatches: identifierMatches,
+            valueMatches: valueMatches,
             traits: traits,
             excludeTraits: excludeTraits
         ))
+    }
+
+    static func element(
+        _ checks: ElementPredicateCheck<String>...,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> ElementTarget {
+        .predicate(ElementPredicate(checks, traits: traits, excludeTraits: excludeTraits))
     }
 
     static func target(_ predicate: ElementPredicate, ordinal: Int) -> ElementTarget {
@@ -88,6 +102,9 @@ public extension ElementPredicateTemplate {
         label: StringMatch<StringExpr>? = nil,
         identifier: StringMatch<StringExpr>? = nil,
         value: StringMatch<StringExpr>? = nil,
+        labelMatches: [StringMatch<StringExpr>] = [],
+        identifierMatches: [StringMatch<StringExpr>] = [],
+        valueMatches: [StringMatch<StringExpr>] = [],
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) -> ElementPredicateTemplate {
@@ -95,9 +112,20 @@ public extension ElementPredicateTemplate {
             label: label,
             identifier: identifier,
             value: value,
+            labelMatches: labelMatches,
+            identifierMatches: identifierMatches,
+            valueMatches: valueMatches,
             traits: traits,
             excludeTraits: excludeTraits
         )
+    }
+
+    static func element(
+        _ checks: ElementPredicateCheck<StringExpr>...,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(checks, traits: traits, excludeTraits: excludeTraits)
     }
 }
 
@@ -142,6 +170,14 @@ public extension ElementTargetExpr {
     @_disfavoredOverload
     static func value(_ value: String) -> ElementTargetExpr {
         .predicate(.value(value))
+    }
+
+    static func element(
+        _ checks: ElementPredicateCheck<StringExpr>...,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> ElementTargetExpr {
+        .predicate(ElementPredicateTemplate(checks, traits: traits, excludeTraits: excludeTraits))
     }
 
     static func target(_ predicate: ElementPredicateTemplate, ordinal: Int) -> ElementTargetExpr {

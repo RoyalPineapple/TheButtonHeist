@@ -631,11 +631,14 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicate) {
-        if let label = predicate.label, label.hasPredicateLiteral {
+        for label in predicate.labelMatches where label.hasPredicateLiteral {
             appendUnique("label=\(label)", to: &semanticSurfaces)
         }
-        if let identifier = predicate.identifier, identifier.hasPredicateLiteral {
+        for identifier in predicate.identifierMatches where identifier.hasPredicateLiteral {
             appendUnique("identifier=\(identifier)", to: &semanticSurfaces)
+        }
+        for value in predicate.valueMatches where value.hasPredicateLiteral {
+            appendUnique("value=\(value)", to: &semanticSurfaces)
         }
         if !predicate.traits.isEmpty {
             appendUnique("traits=\(predicate.traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
@@ -649,11 +652,14 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicateTemplate) {
-        if let label = predicate.label {
+        for label in predicate.labelMatches {
             appendUnique("label=\(semanticString(label))", to: &semanticSurfaces)
         }
-        if let identifier = predicate.identifier {
+        for identifier in predicate.identifierMatches {
             appendUnique("identifier=\(semanticString(identifier))", to: &semanticSurfaces)
+        }
+        for value in predicate.valueMatches {
+            appendUnique("value=\(semanticString(value))", to: &semanticSurfaces)
         }
         if !predicate.traits.isEmpty {
             appendUnique("traits=\(predicate.traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)

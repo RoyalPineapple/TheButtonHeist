@@ -133,6 +133,10 @@ String predicates are exact by default. Every element string field accepts
 explicit non-exact `StringMatch` modes: `.contains(...)`, `.prefix(...)`, or
 `.suffix(...)` on `.label(...)`, `.identifier(...)`, `.value(...)`, or the
 corresponding `.element(label: ..., identifier: ..., value: ...)` fields.
+When one string property needs multiple checks, use the repeated-check form:
+`.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")))`.
+All checks against that property must pass. Traits stay as the `traits` and
+`excludeTraits` collections.
 Property-update `from` and `to` filters use the same exact-by-default matching
 model. For KIF migrations that previously used a selector such as
 `usingLabelContaining("Search")`, write the looseness explicitly with

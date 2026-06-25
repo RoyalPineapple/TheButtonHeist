@@ -35,7 +35,7 @@ _Generated from `TheFence.Command.descriptors`._
 
 ## StringMatch
 
-`stringMatch` fields such as `label`, `identifier`, `value`, and update `from`/`to` filters accept object form `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`. Use `exact` for exact matching; broad modes require a non-empty value.
+`stringMatch` fields such as `label`, `identifier`, `value`, and update `from`/`to` filters accept object form `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`. Use `exact` for exact matching; broad modes require a non-empty value. Element matcher fields `label`, `identifier`, and `value` may also accept an array of StringMatch objects; every object in the array must match the same property. Update `from` and `to` filters remain single StringMatch objects.
 
 ## Details
 
@@ -151,7 +151,8 @@ Build DSL targets from returned accessibility language: `.label("Pay")`,
 `.identifier("pay_button")`, `.value("Milk")`, `.element(label: "Pay",
 traits: [.button])`, or `.target(..., ordinal: n)` for duplicates.
 Direct matcher fields `label`, `identifier`, and `value` accept StringMatch
-objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`.
+objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`,
+or an array of those objects when one property needs multiple checks.
 `containerName` is for inspection and viewport/debug commands only; it is
 not a semantic target or durable heist selector.
 `maxScrollsPerContainer` and `maxScrollsPerDiscovery` bound the command-owned

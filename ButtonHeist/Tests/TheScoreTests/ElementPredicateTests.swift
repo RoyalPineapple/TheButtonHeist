@@ -163,6 +163,11 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertNil(predicate.nonEmpty, "All-empty-string predicate should be nonEmpty == nil")
     }
 
+    func testEmptyStringTemplatePredicateTreatedAsNoPredicate() {
+        let predicate = ElementPredicateTemplate(label: "", identifier: "", value: "")
+        XCTAssertFalse(predicate.hasPredicates, "All-empty-string template predicate should have no predicates")
+    }
+
     // MARK: - String Matching
     //
     // Client-side HeistElement.matches uses the same semantics as server-side
@@ -222,6 +227,47 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertTrue(element.matches(ElementPredicate(value: .suffix("results"))))
         XCTAssertFalse(element.matches(ElementPredicate(label: "results")))
         XCTAssertFalse(element.matches(ElementPredicate(value: "0 result")))
+    }
+
+    func testMultipleStringMatchesForSamePropertyMustAllMatch() {
+        let element = HeistElement.stub(label: "foobarbaz")
+        let predicate = ElementPredicate.element(
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz"))
+        )
+
+        XCTAssertTrue(element.matches(predicate))
+        XCTAssertEqual(predicate.labelMatches, [.prefix("foo"), .contains("bar"), .suffix("baz")])
+        XCTAssertFalse(element.matches(ElementPredicate.element(
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("qux"))
+        )))
+        XCTAssertFalse(HeistElement.stub(label: "foobarqux").matches(predicate))
+    }
+
+    func testRepeatedStringMatchesDecodeFromArrayJSON() throws {
+        let data = Data(#"""
+        {
+          "label": [
+            { "mode": "prefix", "value": "foo" },
+            { "mode": "contains", "value": "bar" },
+            { "mode": "suffix", "value": "baz" }
+          ],
+          "traits": ["button"]
+        }
+        """#.utf8)
+
+        let predicate = try JSONDecoder().decode(ElementPredicate.self, from: data)
+
+        XCTAssertEqual(predicate.labelMatches, [.prefix("foo"), .contains("bar"), .suffix("baz")])
+        XCTAssertEqual(predicate.traits, [.button])
+        XCTAssertTrue(HeistElement.stub(label: "foobarbaz", traits: [.button]).matches(predicate))
+
+        let encoded = try JSONEncoder().encode(predicate)
+        let decoded = try JSONDecoder().decode(ElementPredicate.self, from: encoded)
+        XCTAssertEqual(decoded, predicate)
     }
 
     func testTypographyFoldingOnLabel() {

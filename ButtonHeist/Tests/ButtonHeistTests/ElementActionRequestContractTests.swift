@@ -18,7 +18,7 @@ final class ElementActionRequestContractTests: XCTestCase {
                 XCTAssertEqual(spec.type, .string)
             case .stringMatch:
                 XCTAssertEqual(spec.type, .stringMatch)
-                assertStringMatchSchema(spec, file: #filePath, line: #line)
+                assertStringMatchObjectSchema(spec, file: #filePath, line: #line)
             case .stringArray:
                 XCTAssertEqual(spec.type, .stringArray)
             case .nonNegativeInteger:
@@ -111,13 +111,14 @@ private func jsonSchemaProperty(_ key: String, in spec: FenceParameterSpec) -> H
     return schema[key]
 }
 
-private func assertStringMatchSchema(
+private func assertStringMatchObjectSchema(
     _ spec: FenceParameterSpec,
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
-    guard case .object(let schema) = spec.jsonSchemaProperty else {
-        return XCTFail("Expected object schema", file: file, line: line)
+    guard case .object(let schema) = spec.jsonSchemaProperty
+    else {
+        return XCTFail("Expected StringMatch object schema", file: file, line: line)
     }
 
     XCTAssertEqual(schema["type"], .string("object"), file: file, line: line)

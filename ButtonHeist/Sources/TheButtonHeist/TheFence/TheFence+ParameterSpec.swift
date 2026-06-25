@@ -462,14 +462,15 @@ enum FenceParameterBlocks: Sendable {
         exclusiveMinimum: 0
     )
 
-    private static func stringMatchParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+    private static func stringMatchParam(_ key: FenceParameterKey, allowsArray: Bool = false) -> FenceParameterSpec {
         let modeValues = StringMatch<String>.Mode.allCases.map(\.rawValue)
+        let description = "StringMatch object with mode \(modeValues.joined(separator: "/")) and value. " +
+            "Use mode exact for exact matching. Broad modes require a non-empty value." +
+            (allowsArray
+                ? " Element matcher fields also accept an array of StringMatch objects; every object must match."
+                : "")
         let schema: [String: HeistValue] = [
             "type": .string(FenceParameterSpec.ParamType.object.jsonSchemaType),
-            "description": .string(
-                "StringMatch object with mode \(modeValues.joined(separator: "/")) and value. " +
-                    "Use mode exact for exact matching. Broad modes require a non-empty value."
-            ),
             "properties": .object([
                 "mode": .object([
                     "type": .string(FenceParameterSpec.ParamType.string.jsonSchemaType),
@@ -481,6 +482,7 @@ enum FenceParameterBlocks: Sendable {
             ]),
             "required": .array(["mode", "value"].map { .string($0) }),
             "additionalProperties": .bool(false),
+            "description": .string(description),
         ]
         return FenceParameterSpec(
             key: key.rawValue,
@@ -511,7 +513,7 @@ enum FenceParameterBlocks: Sendable {
         case .string:
             return param(key, .string)
         case .stringMatch:
-            return stringMatchParam(key)
+            return stringMatchParam(key, allowsArray: true)
         case .stringArray:
             return param(key, .stringArray)
         case .nonNegativeInteger:

@@ -25,6 +25,27 @@ func actionConstructorBuildsOneActionStep() throws {
 }
 
 @Test
+func actionTargetSupportsRepeatedStringChecksForOneProperty() throws {
+    let heist = try HeistPlan {
+        Activate(.element(
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz")),
+            traits: [.button]
+        ))
+    }
+
+    #expect(try heist == HeistPlan(body: [
+        .action(try ActionStep(command: .activate(.predicate(.element(
+            .label(.prefix(.literal("foo"))),
+            .label(.contains(.literal("bar"))),
+            .label(.suffix(.literal("baz"))),
+            traits: [.button]
+        ))))),
+    ]))
+}
+
+@Test
 func actionExpectationAttachesWaitStep() throws {
     let heist = try HeistPlan {
         Activate(.label("Sign In"))

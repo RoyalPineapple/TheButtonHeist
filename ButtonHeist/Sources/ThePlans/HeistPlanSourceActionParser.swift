@@ -49,21 +49,34 @@ extension HeistPlanSourceParser {
 
     func renderPredicateCorrection(_ predicate: ElementPredicateTemplate) -> String {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            switch (predicate.label, predicate.identifier, predicate.value) {
-            case (.some(let label), nil, nil):
-                return ".label(\(renderStringMatchCallArgument(label)))"
-            case (nil, .some(let identifier), nil):
-                return ".identifier(\(renderStringMatchCallArgument(identifier)))"
-            case (nil, nil, .some(let value)):
-                return ".value(\(renderStringMatchCallArgument(value)))"
-            default:
-                break
+            if predicate.labelMatches.count == 1,
+               predicate.identifierMatches.isEmpty,
+               predicate.valueMatches.isEmpty {
+                return ".label(\(renderStringMatchCallArgument(predicate.labelMatches[0])))"
+            }
+            if predicate.labelMatches.isEmpty,
+               predicate.identifierMatches.count == 1,
+               predicate.valueMatches.isEmpty {
+                return ".identifier(\(renderStringMatchCallArgument(predicate.identifierMatches[0])))"
+            }
+            if predicate.labelMatches.isEmpty,
+               predicate.identifierMatches.isEmpty,
+               predicate.valueMatches.count == 1 {
+                return ".value(\(renderStringMatchCallArgument(predicate.valueMatches[0])))"
             }
         }
         var fields: [String] = []
-        if let label = predicate.label { fields.append("label: \(renderStringMatchFieldArgument(label))") }
-        if let identifier = predicate.identifier { fields.append("identifier: \(renderStringMatchFieldArgument(identifier))") }
-        if let value = predicate.value { fields.append("value: \(renderStringMatchFieldArgument(value))") }
+        if predicate.labelMatches.count > 1 ||
+            predicate.identifierMatches.count > 1 ||
+            predicate.valueMatches.count > 1 {
+            fields += predicate.labelMatches.map { ".label(\(renderStringMatchCallArgument($0)))" }
+            fields += predicate.identifierMatches.map { ".identifier(\(renderStringMatchCallArgument($0)))" }
+            fields += predicate.valueMatches.map { ".value(\(renderStringMatchCallArgument($0)))" }
+        } else {
+            if let label = predicate.label { fields.append("label: \(renderStringMatchFieldArgument(label))") }
+            if let identifier = predicate.identifier { fields.append("identifier: \(renderStringMatchFieldArgument(identifier))") }
+            if let value = predicate.value { fields.append("value: \(renderStringMatchFieldArgument(value))") }
+        }
         if !predicate.traits.isEmpty {
             fields.append("traits: [\(predicate.traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
         }

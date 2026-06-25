@@ -72,9 +72,9 @@ extension HeistPlanRuntimeSafetyValidator {
         _ predicate: ElementPredicate,
         path: String
     ) {
-        validateString(predicate.label, path: "\(path).label", role: "element label")
-        validateString(predicate.identifier, path: "\(path).identifier", role: "element identifier")
-        validateString(predicate.value, path: "\(path).value", role: "element value")
+        validateStrings(predicate.labelMatches, path: "\(path).label", role: "element label")
+        validateStrings(predicate.identifierMatches, path: "\(path).identifier", role: "element identifier")
+        validateStrings(predicate.valueMatches, path: "\(path).value", role: "element value")
     }
 
     mutating func validateElementPredicate(
@@ -82,15 +82,9 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String,
         scope: HeistReferenceScope
     ) {
-        if let label = predicate.label {
-            validateString(label, path: "\(path).label", scope: scope)
-        }
-        if let identifier = predicate.identifier {
-            validateString(identifier, path: "\(path).identifier", scope: scope)
-        }
-        if let value = predicate.value {
-            validateString(value, path: "\(path).value", scope: scope)
-        }
+        validateStrings(predicate.labelMatches, path: "\(path).label", scope: scope)
+        validateStrings(predicate.identifierMatches, path: "\(path).identifier", scope: scope)
+        validateStrings(predicate.valueMatches, path: "\(path).value", scope: scope)
     }
 
     mutating func validateParameter(_ parameter: String, path: String, role: String) {
@@ -169,6 +163,22 @@ extension HeistPlanRuntimeSafetyValidator {
                 observed: "empty \(match.mode.rawValue) match",
                 correction: "Use a non-empty string, or an exact match when the empty string is intentional."
             )
+        }
+    }
+
+    mutating func validateStrings(_ matches: [StringMatch<String>], path: String, role: String) {
+        for (index, match) in matches.enumerated() {
+            validateString(match, path: "\(path)[\(index)]", role: role)
+        }
+    }
+
+    mutating func validateStrings(
+        _ matches: [StringMatch<StringExpr>],
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        for (index, match) in matches.enumerated() {
+            validateString(match, path: "\(path)[\(index)]", scope: scope)
         }
     }
 }

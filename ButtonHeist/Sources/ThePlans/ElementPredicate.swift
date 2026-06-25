@@ -182,38 +182,110 @@ public extension StringMatch where Value == String {
 
 }
 
+public extension StringMatch where Value: Codable {
+    static func decodeOneOrMany<Key: CodingKey>(
+        from container: KeyedDecodingContainer<Key>,
+        forKey key: Key
+    ) throws -> [Self] {
+        guard container.contains(key) else { return [] }
+        let decoder = try container.superDecoder(forKey: key)
+        if (try? decoder.unkeyedContainer()) != nil {
+            return try [Self](from: decoder)
+        }
+        return [try Self(from: decoder)]
+    }
+
+    static func encodeOneOrMany<Key: CodingKey>(
+        _ matches: [Self],
+        to container: inout KeyedEncodingContainer<Key>,
+        forKey key: Key
+    ) throws {
+        switch matches.count {
+        case 0:
+            break
+        case 1:
+            try container.encode(matches[0], forKey: key)
+        default:
+            try container.encode(matches, forKey: key)
+        }
+    }
+}
+
+public enum ElementPredicateCheck<Value: StringMatchPayload>: Sendable, Equatable, Hashable {
+    case label(StringMatch<Value>)
+    case identifier(StringMatch<Value>)
+    case value(StringMatch<Value>)
+}
+
 // MARK: - Element Predicate
 
 /// The canonical predicate for matching a single accessibility element.
 ///
-/// String fields (`label`, `identifier`, `value`) use `StringMatch`; exact
-/// matching is the default for legacy `.label("Pay")`-style construction.
+/// String fields (`label`, `identifier`, `value`) use ordered `StringMatch`
+/// checks; exact matching is the default for legacy `.label("Pay")`-style construction.
 /// Trait fields use exact bitmask comparison. Specificity is expressed entirely
 /// by which fields are set — there is no separate scope or query system.
 public struct ElementPredicate: Sendable, Equatable, Hashable {
-    /// Match against element label.
-    public let label: StringMatch<String>?
-    /// Match against accessibility identifier.
-    public let identifier: StringMatch<String>?
-    /// Match against element value.
-    public let value: StringMatch<String>?
+    /// Match checks against element label. All checks must match.
+    public let labelMatches: [StringMatch<String>]
+    /// Match checks against accessibility identifier. All checks must match.
+    public let identifierMatches: [StringMatch<String>]
+    /// Match checks against element value. All checks must match.
+    public let valueMatches: [StringMatch<String>]
     /// All listed traits must be present on the element.
     public let traits: [HeistTrait]
     /// None of the listed traits may be present on the element.
     public let excludeTraits: [HeistTrait]
 
+    /// The first label check, retained for existing callers that only need the legacy single-check view.
+    public var label: StringMatch<String>? { labelMatches.first }
+    /// The first identifier check, retained for existing callers that only need the legacy single-check view.
+    public var identifier: StringMatch<String>? { identifierMatches.first }
+    /// The first value check, retained for existing callers that only need the legacy single-check view.
+    public var value: StringMatch<String>? { valueMatches.first }
+
     public init(
         label: StringMatch<String>? = nil,
         identifier: StringMatch<String>? = nil,
         value: StringMatch<String>? = nil,
+        labelMatches: [StringMatch<String>] = [],
+        identifierMatches: [StringMatch<String>] = [],
+        valueMatches: [StringMatch<String>] = [],
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) {
-        self.label = label
-        self.identifier = identifier
-        self.value = value
+        self.labelMatches = Self.combined(label, with: labelMatches)
+        self.identifierMatches = Self.combined(identifier, with: identifierMatches)
+        self.valueMatches = Self.combined(value, with: valueMatches)
         self.traits = traits
         self.excludeTraits = excludeTraits
+    }
+
+    public init(
+        _ checks: [ElementPredicateCheck<String>],
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) {
+        var labelMatches: [StringMatch<String>] = []
+        var identifierMatches: [StringMatch<String>] = []
+        var valueMatches: [StringMatch<String>] = []
+        for check in checks {
+            switch check {
+            case .label(let match):
+                labelMatches.append(match)
+            case .identifier(let match):
+                identifierMatches.append(match)
+            case .value(let match):
+                valueMatches.append(match)
+            }
+        }
+        self.init(
+            labelMatches: labelMatches,
+            identifierMatches: identifierMatches,
+            valueMatches: valueMatches,
+            traits: traits,
+            excludeTraits: excludeTraits
+        )
     }
 
     public var hasTraitPredicates: Bool {
@@ -223,12 +295,21 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
     /// Whether any property predicate is set. Empty strings are treated as
     /// unset: they match nothing rather than everything.
     public var hasPredicates: Bool {
-        label?.hasPredicateLiteral == true || identifier?.hasPredicateLiteral == true ||
-            value?.hasPredicateLiteral == true || hasTraitPredicates
+        labelMatches.contains { $0.hasPredicateLiteral } ||
+            identifierMatches.contains { $0.hasPredicateLiteral } ||
+            valueMatches.contains { $0.hasPredicateLiteral } ||
+            hasTraitPredicates
     }
 
     /// Returns `self` when at least one predicate field is set, else `nil`.
     public var nonEmpty: Self? { hasPredicates ? self : nil }
+
+    private static func combined(
+        _ primary: StringMatch<String>?,
+        with additional: [StringMatch<String>]
+    ) -> [StringMatch<String>] {
+        primary.map { [$0] + additional } ?? additional
+    }
 }
 
 // MARK: - Convenience Constructors
@@ -269,6 +350,9 @@ public extension ElementPredicate {
         label: StringMatch<String>? = nil,
         identifier: StringMatch<String>? = nil,
         value: StringMatch<String>? = nil,
+        labelMatches: [StringMatch<String>] = [],
+        identifierMatches: [StringMatch<String>] = [],
+        valueMatches: [StringMatch<String>] = [],
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) -> ElementPredicate {
@@ -276,9 +360,22 @@ public extension ElementPredicate {
             label: label,
             identifier: identifier,
             value: value,
+            labelMatches: labelMatches,
+            identifierMatches: identifierMatches,
+            valueMatches: valueMatches,
             traits: traits,
             excludeTraits: excludeTraits
         )
+    }
+
+    /// Match by an ordered list of property checks. Repeating a property means
+    /// every check against that property must pass.
+    static func element(
+        _ checks: ElementPredicateCheck<String>...,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> ElementPredicate {
+        ElementPredicate(checks, traits: traits, excludeTraits: excludeTraits)
     }
 }
 
@@ -303,13 +400,13 @@ public extension ElementPredicate {
     /// The single source of truth for predicate evaluation.
     func matches(_ subject: some ElementPredicateSubject) -> Bool {
         guard hasPredicates else { return false }
-        if let label {
+        for label in labelMatches {
             guard let candidate = subject.predicateLabel, label.matches(candidate) else { return false }
         }
-        if let identifier {
+        for identifier in identifierMatches {
             guard let candidate = subject.predicateIdentifier, identifier.matches(candidate) else { return false }
         }
-        if let value {
+        for value in valueMatches {
             guard let candidate = subject.predicateValue, value.matches(candidate) else { return false }
         }
         if !traits.isEmpty, !subject.satisfiesRequiredTraits(traits) { return false }
@@ -330,9 +427,9 @@ extension ElementPredicate: Codable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            label: try container.decodeIfPresent(StringMatch<String>.self, forKey: .label),
-            identifier: try container.decodeIfPresent(StringMatch<String>.self, forKey: .identifier),
-            value: try container.decodeIfPresent(StringMatch<String>.self, forKey: .value),
+            labelMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .label),
+            identifierMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .identifier),
+            valueMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value),
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits) ?? [],
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
         )
@@ -340,9 +437,9 @@ extension ElementPredicate: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(label, forKey: .label)
-        try container.encodeIfPresent(identifier, forKey: .identifier)
-        try container.encodeIfPresent(value, forKey: .value)
+        try StringMatch<String>.encodeOneOrMany(labelMatches, to: &container, forKey: .label)
+        try StringMatch<String>.encodeOneOrMany(identifierMatches, to: &container, forKey: .identifier)
+        try StringMatch<String>.encodeOneOrMany(valueMatches, to: &container, forKey: .value)
         if !traits.isEmpty { try container.encode(traits, forKey: .traits) }
         if !excludeTraits.isEmpty { try container.encode(excludeTraits, forKey: .excludeTraits) }
     }
@@ -351,9 +448,9 @@ extension ElementPredicate: Codable {
 extension ElementPredicate: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("predicate", [
-            ScoreDescription.stringMatchField("label", label),
-            ScoreDescription.stringMatchField("identifier", identifier),
-            ScoreDescription.stringMatchField("value", value),
+            ScoreDescription.stringMatchFields("label", labelMatches),
+            ScoreDescription.stringMatchFields("identifier", identifierMatches),
+            ScoreDescription.stringMatchFields("value", valueMatches),
             ScoreDescription.listField("traits", traits.isEmpty ? nil : traits),
             ScoreDescription.listField("excludeTraits", excludeTraits.isEmpty ? nil : excludeTraits),
         ].compactMap { $0 })

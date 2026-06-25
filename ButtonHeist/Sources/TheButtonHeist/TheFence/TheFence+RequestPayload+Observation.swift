@@ -131,13 +131,27 @@ extension TheFence {
         }
         for key in ["label", "identifier", "value"] {
             guard let match = object[key] else { continue }
-            guard case .object = match else {
+            guard Self.isStringMatchObjectOrArray(match) else {
                 throw SchemaValidationError(
                     field: "\(field).element.\(key)",
                     observed: match.schemaObservedDescription,
-                    expected: "StringMatch object with mode and value"
+                    expected: "StringMatch object with mode and value, or array of StringMatch objects"
                 )
             }
+        }
+    }
+
+    private static func isStringMatchObjectOrArray(_ value: HeistValue) -> Bool {
+        switch value {
+        case .object:
+            return true
+        case .array(let values):
+            return values.allSatisfy {
+                if case .object = $0 { return true }
+                return false
+            }
+        default:
+            return false
         }
     }
 
@@ -161,9 +175,9 @@ extension TheFence {
 
     private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementPredicate {
         ElementPredicate(
-            label: try arguments.schemaStringMatch("label"),
-            identifier: try arguments.schemaStringMatch("identifier"),
-            value: try arguments.schemaStringMatch("value"),
+            labelMatches: try arguments.schemaStringMatches("label"),
+            identifierMatches: try arguments.schemaStringMatches("identifier"),
+            valueMatches: try arguments.schemaStringMatches("value"),
             traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")) ?? [],
             excludeTraits: try TheFence.parseTraitNames(
                 try arguments.schemaStringArray("excludeTraits"),

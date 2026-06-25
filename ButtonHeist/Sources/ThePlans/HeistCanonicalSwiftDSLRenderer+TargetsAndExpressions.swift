@@ -27,48 +27,72 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func renderTargetPredicate(_ predicate: ElementPredicate) -> String {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            switch (predicate.label, predicate.identifier, predicate.value) {
-            case (.some(let label), nil, nil):
-                return ".label(\(renderCallArgument(label)))"
-            case (nil, .some(let identifier), nil):
-                return ".identifier(\(renderCallArgument(identifier)))"
-            case (nil, nil, .some(let value)):
-                return ".value(\(renderCallArgument(value)))"
-            default:
-                break
+            if predicate.labelMatches.count == 1,
+               predicate.identifierMatches.isEmpty,
+               predicate.valueMatches.isEmpty {
+                return ".label(\(renderCallArgument(predicate.labelMatches[0])))"
             }
+            if predicate.labelMatches.isEmpty,
+               predicate.identifierMatches.count == 1,
+               predicate.valueMatches.isEmpty {
+                return ".identifier(\(renderCallArgument(predicate.identifierMatches[0])))"
+            }
+            if predicate.labelMatches.isEmpty,
+               predicate.identifierMatches.isEmpty,
+               predicate.valueMatches.count == 1 {
+                return ".value(\(renderCallArgument(predicate.valueMatches[0])))"
+            }
+        }
+        if usesRepeatedStringMatches(predicate) {
+            return ".element(\(renderElementPredicateChecks(predicate)))"
         }
         return ".element(\(renderElementPredicateFields(predicate)))"
     }
 
     func render(predicate: ElementPredicate) -> String {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            switch (predicate.label, predicate.identifier, predicate.value) {
-            case (.some(let label), nil, nil):
-                return ".label(\(renderCallArgument(label)))"
-            case (nil, .some(let identifier), nil):
-                return ".identifier(\(renderCallArgument(identifier)))"
-            case (nil, nil, .some(let value)):
-                return ".value(\(renderCallArgument(value)))"
-            default:
-                break
+            if predicate.labelMatches.count == 1,
+               predicate.identifierMatches.isEmpty,
+               predicate.valueMatches.isEmpty {
+                return ".label(\(renderCallArgument(predicate.labelMatches[0])))"
             }
+            if predicate.labelMatches.isEmpty,
+               predicate.identifierMatches.count == 1,
+               predicate.valueMatches.isEmpty {
+                return ".identifier(\(renderCallArgument(predicate.identifierMatches[0])))"
+            }
+            if predicate.labelMatches.isEmpty,
+               predicate.identifierMatches.isEmpty,
+               predicate.valueMatches.count == 1 {
+                return ".value(\(renderCallArgument(predicate.valueMatches[0])))"
+            }
+        }
+        if usesRepeatedStringMatches(predicate) {
+            return ".element(\(renderElementPredicateChecks(predicate)))"
         }
         return ".element(\(renderElementPredicateFields(predicate)))"
     }
 
     func render(predicate: ElementPredicateTemplate, environment: RenderEnvironment) throws -> String {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            switch (predicate.label, predicate.identifier, predicate.value) {
-            case (.some(let label), nil, nil):
-                return ".label(\(try renderCallArgument(label, environment: environment)))"
-            case (nil, .some(let identifier), nil):
-                return ".identifier(\(try renderCallArgument(identifier, environment: environment)))"
-            case (nil, nil, .some(let value)):
-                return ".value(\(try renderCallArgument(value, environment: environment)))"
-            default:
-                break
+            if predicate.labelMatches.count == 1,
+               predicate.identifierMatches.isEmpty,
+               predicate.valueMatches.isEmpty {
+                return ".label(\(try renderCallArgument(predicate.labelMatches[0], environment: environment)))"
             }
+            if predicate.labelMatches.isEmpty,
+               predicate.identifierMatches.count == 1,
+               predicate.valueMatches.isEmpty {
+                return ".identifier(\(try renderCallArgument(predicate.identifierMatches[0], environment: environment)))"
+            }
+            if predicate.labelMatches.isEmpty,
+               predicate.identifierMatches.isEmpty,
+               predicate.valueMatches.count == 1 {
+                return ".value(\(try renderCallArgument(predicate.valueMatches[0], environment: environment)))"
+            }
+        }
+        if usesRepeatedStringMatches(predicate) {
+            return ".element(\(try renderElementPredicateTemplateChecks(predicate, environment: environment)))"
         }
         return ".element(\(try renderElementPredicateTemplateFields(predicate, environment: environment)))"
     }
@@ -83,6 +107,17 @@ extension HeistCanonicalSwiftDSLRenderer {
         ].compactMap { $0 }.joined(separator: ", ")
     }
 
+    func renderElementPredicateChecks(_ predicate: ElementPredicate) -> String {
+        var fields = predicate.labelMatches.map { ".label(\(renderCallArgument($0)))" }
+        fields += predicate.identifierMatches.map { ".identifier(\(renderCallArgument($0)))" }
+        fields += predicate.valueMatches.map { ".value(\(renderCallArgument($0)))" }
+        fields += [
+            renderTraits("traits", predicate.traits),
+            renderTraits("excludeTraits", predicate.excludeTraits),
+        ].compactMap { $0 }
+        return fields.joined(separator: ", ")
+    }
+
     func renderElementPredicateTemplateFields(
         _ predicate: ElementPredicateTemplate,
         environment: RenderEnvironment
@@ -94,6 +129,38 @@ extension HeistCanonicalSwiftDSLRenderer {
             renderTraits("traits", predicate.traits),
             renderTraits("excludeTraits", predicate.excludeTraits),
         ].compactMap { $0 }.joined(separator: ", ")
+    }
+
+    func renderElementPredicateTemplateChecks(
+        _ predicate: ElementPredicateTemplate,
+        environment: RenderEnvironment
+    ) throws -> String {
+        var fields = try predicate.labelMatches.map {
+            ".label(\(try renderCallArgument($0, environment: environment)))"
+        }
+        fields += try predicate.identifierMatches.map {
+            ".identifier(\(try renderCallArgument($0, environment: environment)))"
+        }
+        fields += try predicate.valueMatches.map {
+            ".value(\(try renderCallArgument($0, environment: environment)))"
+        }
+        fields += [
+            renderTraits("traits", predicate.traits),
+            renderTraits("excludeTraits", predicate.excludeTraits),
+        ].compactMap { $0 }
+        return fields.joined(separator: ", ")
+    }
+
+    func usesRepeatedStringMatches(_ predicate: ElementPredicate) -> Bool {
+        predicate.labelMatches.count > 1 ||
+            predicate.identifierMatches.count > 1 ||
+            predicate.valueMatches.count > 1
+    }
+
+    func usesRepeatedStringMatches(_ predicate: ElementPredicateTemplate) -> Bool {
+        predicate.labelMatches.count > 1 ||
+            predicate.identifierMatches.count > 1 ||
+            predicate.valueMatches.count > 1
     }
 
     func renderCallArgument(_ match: StringMatch<String>) -> String {
