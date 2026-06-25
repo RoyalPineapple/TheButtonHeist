@@ -147,12 +147,14 @@ final class ElementInflationProductTests: XCTestCase {
 
     func testMissingRevealPathFailsAsInflationDiagnostic() async throws {
         let fixture = try installOffscreenActivationFixture(
-            identifier: "unrevealable_submit",
-            label: "Submit Order"
+            identifier: "live_decoy_unrevealable_submit",
+            label: "Live Decoy"
         )
         defer { fixture.cleanup() }
         try seedKnownOffscreenTarget(
             fixture,
+            semanticIdentifier: "unrevealable_submit",
+            semanticLabel: "Submit Order",
             scrollContainerOverride: "missing_scroll"
         )
 
@@ -168,6 +170,7 @@ final class ElementInflationProductTests: XCTestCase {
         ])
         XCTAssertFalse(result.message?.localizedCaseInsensitiveContains("scroll first") ?? false)
         XCTAssertFalse(result.message?.contains("get_interface") ?? false)
+        XCTAssertEqual(fixture.target.activationCount, 0)
     }
 
     func testHeistSemanticActivateMatchesSingleActionResultSemantics() async throws {
@@ -432,10 +435,14 @@ final class ElementInflationProductTests: XCTestCase {
     private func seedKnownOffscreenTarget(
         _ fixture: SemanticRevealFixture,
         in targetBrains: TheBrains? = nil,
+        semanticIdentifier: String? = nil,
+        semanticLabel: String? = nil,
         scrollContainerOverride: ContainerName? = nil
     ) throws {
         let targetBrains = targetBrains ?? brains!
         let screen = try XCTUnwrap(targetBrains.stash.refreshLiveCapture())
+        let identifier = semanticIdentifier ?? fixture.identifier
+        let label = semanticLabel ?? fixture.label
         let scrollContainerName: ContainerName
         if let scrollContainerOverride {
             scrollContainerName = scrollContainerOverride
@@ -446,8 +453,8 @@ final class ElementInflationProductTests: XCTestCase {
             )
         }
         let element = makeElement(
-            label: fixture.label,
-            identifier: fixture.identifier,
+            label: label,
+            identifier: identifier,
             frame: CGRect(
                 origin: fixture.contentOrigin,
                 size: fixture.target.bounds.size

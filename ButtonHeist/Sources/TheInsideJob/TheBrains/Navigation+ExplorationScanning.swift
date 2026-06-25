@@ -247,7 +247,11 @@ extension Navigation {
             }
 
             let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
-            guard !result.inserted.isEmpty else { return false }
+            // Full discovery can stop once a page contributes nothing new.
+            // Targeted discovery must keep going: the current page may have
+            // been known from the starting viewport while the target is still
+            // between here and the edge.
+            guard target != nil || !result.inserted.isEmpty else { return false }
         }
         return false
     }

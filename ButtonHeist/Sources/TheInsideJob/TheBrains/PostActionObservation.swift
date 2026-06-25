@@ -158,7 +158,12 @@ final class PostActionObservation {
     ) -> BeforeState {
         let snapshot = stash.selectElements(in: screen)
         let (interface, interfaceHash) = stash.semanticInterfaceWithHash(for: screen)
-        let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
+        let capture = makeTraceCapture(
+            interface: interface,
+            sequence: 0,
+            tripwireSignal: tripwireSignal,
+            screenId: screen.id
+        )
         return BeforeState(
             screen: screen,
             snapshot: snapshot,
@@ -190,13 +195,14 @@ final class PostActionObservation {
         sequence: Int = 1,
         parentHash: String? = nil,
         tripwireSignal: TheTripwire.TripwireSignal? = nil,
+        screenId: String? = nil,
         transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace.Capture {
         AccessibilityTrace.Capture(
             sequence: sequence,
             interface: interface,
             parentHash: parentHash,
-            context: makeCaptureContext(tripwireSignal: tripwireSignal),
+            context: makeCaptureContext(tripwireSignal: tripwireSignal, screenId: screenId),
             transition: transition
         )
     }
@@ -342,7 +348,10 @@ final class PostActionObservation {
         )
     }
 
-    private func makeCaptureContext(tripwireSignal: TheTripwire.TripwireSignal? = nil) -> AccessibilityTrace.Context {
+    private func makeCaptureContext(
+        tripwireSignal: TheTripwire.TripwireSignal? = nil,
+        screenId: String? = nil
+    ) -> AccessibilityTrace.Context {
         let signal = tripwireSignal ?? tripwire.tripwireSignal()
         let windows = signal.windowStack.windows.enumerated().map { index, window in
             AccessibilityTrace.WindowContext(
@@ -353,7 +362,7 @@ final class PostActionObservation {
         }
         return AccessibilityTrace.Context(
             keyboardVisible: safecracker.isKeyboardVisible(),
-            screenId: stash.lastScreenId,
+            screenId: screenId ?? stash.lastScreenId,
             windowStack: windows
         )
     }
