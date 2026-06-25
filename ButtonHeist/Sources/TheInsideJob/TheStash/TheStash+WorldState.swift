@@ -22,6 +22,14 @@ extension TheStash {
         clearWorldForLifecycleReset()
     }
 
+    /// Clear stale settled world at a top-level heist boundary while leaving a
+    /// queued synthetic visible refresh intact for in-process runtime tests.
+    func clearWorldForHeistBootstrap() {
+        let queuedVisibleRefresh = nextVisibleRefreshScreenForTesting
+        clearWorldForLifecycleReset()
+        nextVisibleRefreshScreenForTesting = queuedVisibleRefresh
+    }
+
     /// Read the live accessibility tree and produce one observed capture value.
     /// Every successful parse refreshes latest observed capture and visible
     /// live view, but it never promotes settled world.
@@ -83,14 +91,14 @@ extension TheStash {
     /// live view; the observation stream alone promotes a proven final screen
     /// to settled world.
     func semanticObservationForSettle() -> Screen? {
-        parse()
+        refreshLiveCapture()
     }
 
     /// Produce one page observation for scroll exploration. Exploration owns a
     /// local semantic union until it finishes; the observation stream commits
     /// only the final explored screen as settled discovery world.
     func semanticPageForExploration() -> Screen? {
-        parse()
+        refreshLiveCapture()
     }
 
     @discardableResult
@@ -242,6 +250,11 @@ private extension Screen {
     func visibleSurfacePairs(with currentVisible: Screen) -> Bool {
         guard !currentVisible.visibleIds.isEmpty else {
             return !knownIds.isEmpty
+        }
+        if let baselineId = id,
+           let currentId = currentVisible.id,
+           baselineId != currentId {
+            return false
         }
         if !visibleIds.isDisjoint(with: currentVisible.visibleIds) {
             return true

@@ -27,7 +27,8 @@ extension Navigation {
     func settleSwipeMotion(
         previousVisibleIds: Set<HeistId>,
         previousAnchor: Int?,
-        requireDirectionChangeSettle: Bool
+        requireDirectionChangeSettle: Bool,
+        commitViewportMoves: Bool = true
     ) async -> ScrollSettleResult {
         let profile: SettleSwipeProfile = requireDirectionChangeSettle
             ? .directionChange
@@ -40,7 +41,7 @@ extension Navigation {
         var seenVisibleIds = stash.visibleIds
 
         while true {
-            stash.refreshTreeAfterViewportMove()
+            observeViewportAfterScroll(commitViewportMoves: commitViewportMoves)
             let currentVisibleIds = stash.visibleIds
             let newHeistIds = currentVisibleIds.subtracting(seenVisibleIds)
             seenVisibleIds.formUnion(newHeistIds)

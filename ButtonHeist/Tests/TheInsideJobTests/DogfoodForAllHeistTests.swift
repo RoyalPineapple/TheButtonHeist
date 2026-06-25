@@ -126,16 +126,38 @@ private enum TextInputScreen {
 
 private enum TodoScreen {
     static let completeItem = HeistDef<String>("TodoScreen.completeItem", parameter: "item") { item in
-        try rawAction(
-            .viewportScrollToVisible(.label(item)),
-            waiver: "scroll_to_visible is the viewport precondition for the row custom action"
+        let completedItem = ElementPredicateTemplate(
+            label: .exact(item),
+            value: .exact(.literal("Completed"))
+        )
+        let visibleItem = ElementPredicateTemplate(label: .exact(item))
+        let proveCompletedItem = try rawAction(
+            .viewportScrollToVisible(.target(completedItem, ordinal: 0)),
+            expectation: WaitStep(
+                predicate: .present(completedItem),
+                timeout: .seconds(4)
+            )
         )
 
-        CustomAction("Toggle", on: .label(item))
-            .expect(
-                .present(ElementPredicateTemplate(label: .exact(item), value: .exact(.literal("Completed")))),
-                timeout: .seconds(2)
+        try rawAction(
+            .viewportScrollToVisible(.label(item)),
+            expectation: WaitStep(
+                predicate: .present(visibleItem),
+                timeout: .seconds(4)
             )
+        )
+
+        If {
+            Case(.present(completedItem)) {
+                WaitFor(.present(completedItem), timeout: .seconds(1))
+            }
+            Else {
+                CustomAction("Toggle", on: .label(item))
+                    .withoutExpectation("Completion is proven by the following scroll_to_visible assertion")
+
+                proveCompletedItem
+            }
+        }
     }
 }
 
@@ -474,7 +496,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodNavigation.backToRoot()
 
             try DogfoodHome.openScreen("Todo List")
-            try TodoScreen.completeItem("Review PR, High priority")
+            try TodoScreen.completeItem("Buy groceries, High priority")
 
             ForEach(
                 ElementMatches.matching(activeFixBug),

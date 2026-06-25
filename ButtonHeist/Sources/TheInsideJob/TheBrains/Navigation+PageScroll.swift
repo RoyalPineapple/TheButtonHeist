@@ -82,7 +82,8 @@ extension Navigation {
     func scrollOnePageAndSettle(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
-        animated: Bool = true
+        animated: Bool = true,
+        commitViewportMoves: Bool = true
     ) async -> ScrollSettleProof {
         let before = stash.visibleIds
         let beforeAnchor = visibleAnchorSignature()
@@ -98,7 +99,7 @@ extension Navigation {
             } else {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             }
-            stash.refreshTreeAfterViewportMove()
+            observeViewportAfterScroll(commitViewportMoves: commitViewportMoves)
             return ScrollSettleProof(result: .moved, previousVisibleIds: before)
         case .swipeable(let frame, let contentSize):
             let targetKey = swipeTargetKey(frame: frame, contentSize: contentSize)
@@ -114,11 +115,19 @@ extension Navigation {
             let result = await settleSwipeMotion(
                 previousVisibleIds: before,
                 previousAnchor: beforeAnchor,
-                requireDirectionChangeSettle: isDirectionChange
+                requireDirectionChangeSettle: isDirectionChange,
+                commitViewportMoves: commitViewportMoves
             )
             lastSwipeDirectionByTarget[targetKey] = direction
             return ScrollSettleProof(result: result, previousVisibleIds: before)
         }
+    }
+
+    @discardableResult
+    func observeViewportAfterScroll(commitViewportMoves: Bool) -> Screen? {
+        commitViewportMoves
+            ? stash.refreshTreeAfterViewportMove()
+            : stash.semanticPageForExploration()
     }
 }
 

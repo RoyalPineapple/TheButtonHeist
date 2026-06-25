@@ -289,6 +289,58 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
     }
 
+    func testScreenChangeReceiptRefinesMixedTransitionSurface() async throws {
+        let beforeScreen = makeScreen(elements: [
+            ("ButtonHeist Demo", .header, "root_header"),
+            ("Controls Demo", .button, "controls_demo"),
+            ("Todo List", .button, "todo_list"),
+            ("Words", .button, "words"),
+        ])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+
+        let mixedTransitionScreen = makeScreen(elements: [
+            ("Controls Demo", .button, "controls_demo"),
+            ("Todo List", .button, "todo_list"),
+            ("Words", .button, "words"),
+            ("Section A", .header, "section_a_header"),
+            ("A acid", .button, "a_acid"),
+            ("abacus major", .button, "abacus_major"),
+            ("ButtonHeist Demo", .backButton, "back_button"),
+        ])
+        let cleanSettledScreen = makeScreen(elements: [
+            ("Section A", .header, "section_a_header"),
+            ("A acid", .button, "a_acid"),
+            ("abacus major", .button, "abacus_major"),
+            ("ButtonHeist Demo", .backButton, "back_button"),
+        ])
+        brains.stash.nextVisibleRefreshScreenForTesting = cleanSettledScreen
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            success: true,
+            method: .activate,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: mixedTransitionScreen)
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        guard case .screenChanged(let payload)? = result.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected screenChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDelta))")
+        }
+
+        let labels = payload.newInterface.projectedElements.compactMap(\.label)
+        XCTAssertTrue(labels.contains("Section A"), "Expected new screen labels: \(labels)")
+        XCTAssertTrue(labels.contains("A acid"), "Expected new screen labels: \(labels)")
+        XCTAssertTrue(labels.contains("abacus major"), "Expected new screen labels: \(labels)")
+        XCTAssertTrue(labels.contains("ButtonHeist Demo"), "Expected back button to remain: \(labels)")
+        XCTAssertFalse(labels.contains("Controls Demo"))
+        XCTAssertFalse(labels.contains("Todo List"))
+        XCTAssertEqual(
+            brains.stash.settledSemanticScreen.orderedElements.compactMap(\.element.label),
+            ["Section A", "A acid", "abacus major", "ButtonHeist Demo"]
+        )
+    }
+
     func testActionResultFinalTraceUsesVisibleSettleNotLaterDiscovery() async throws {
         let beforeScreen = makeScreen(elements: [("Text Input", .header, "text_input")])
         brains.stash.installScreenForTesting(beforeScreen)

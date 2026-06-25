@@ -170,7 +170,7 @@ extension Navigation {
             animated: false
         )
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        exploration.absorb(stash.refreshTreeAfterViewportMove())
+        absorbExplorationPage(in: &exploration)
         return true
     }
 
@@ -233,7 +233,8 @@ extension Navigation {
             let proof = await scrollOnePageAndSettle(
                 containerExploration.scrollTarget,
                 direction: containerExploration.direction,
-                animated: false
+                animated: false,
+                commitViewportMoves: false
             )
             guard proof.result == .moved else { return false }
             exploration.manifest.scrollCount += 1
@@ -246,7 +247,11 @@ extension Navigation {
             }
 
             let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
-            guard !result.inserted.isEmpty else { return false }
+            // Full discovery can stop once a page contributes nothing new.
+            // Targeted discovery must keep going: the current page may have
+            // been known from the starting viewport while the target is still
+            // between here and the edge.
+            guard target != nil || !result.inserted.isEmpty else { return false }
         }
         return false
     }
@@ -259,7 +264,7 @@ extension Navigation {
         case .uiScrollView(let scrollView):
             if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                exploration.absorb(stash.refreshTreeAfterViewportMove())
+                absorbExplorationPage(in: &exploration)
             }
         case .swipeable:
             let toLeading = Self.edgeDirection(for: containerExploration.leadingEdge)
@@ -267,7 +272,8 @@ extension Navigation {
                 let proof = await scrollOnePageAndSettle(
                     containerExploration.scrollTarget,
                     direction: toLeading,
-                    animated: false
+                    animated: false,
+                    commitViewportMoves: false
                 )
                 if proof.result == .moved {
                     _ = absorbVisiblePage(in: &exploration)
@@ -280,9 +286,13 @@ extension Navigation {
     }
 
     private func absorbVisiblePage(in exploration: inout SemanticExploration) -> Bool {
-        guard let parsed = stash.refreshTreeAfterViewportMove() else { return false }
+        guard let parsed = stash.semanticPageForExploration() else { return false }
         exploration.absorb(parsed)
         return true
+    }
+
+    private func absorbExplorationPage(in exploration: inout SemanticExploration) {
+        exploration.absorb(stash.semanticPageForExploration())
     }
 
     private func reconcileVisiblePage(
@@ -311,7 +321,7 @@ extension Navigation {
            let savedVisualOrigin {
             Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
             await waitForRestoredViewportSettle()
-            exploration.absorb(stash.refreshTreeAfterViewportMove())
+            absorbExplorationPage(in: &exploration)
         }
     }
 
@@ -341,7 +351,7 @@ extension Navigation {
         for restoration in restorations.reversed() where restoration.scrollView !== ignoredScrollView {
             Self.restoreVisualOrigin(restoration.visualOrigin, in: restoration.scrollView)
             await waitForRestoredViewportSettle()
-            exploration.absorb(stash.refreshTreeAfterViewportMove())
+            absorbExplorationPage(in: &exploration)
         }
     }
 

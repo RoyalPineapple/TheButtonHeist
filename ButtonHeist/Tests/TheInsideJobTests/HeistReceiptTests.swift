@@ -1,6 +1,9 @@
 #if canImport(UIKit)
+import UIKit
 import XCTest
+@testable import AccessibilitySnapshotParser
 import ThePlans
+@testable import TheScore
 
 @testable import TheInsideJob
 
@@ -36,6 +39,43 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertFalse(job.isRunning)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
+    }
+
+    func testTopLevelHeistBootstrapsFromFreshVisibleScreen() async throws {
+        let job = TheInsideJob(token: "in-app-heist-bootstrap-test")
+        let staleHeader = AccessibilityElement.make(
+            label: "Controls Demo",
+            traits: .header,
+            respondsToUserInteraction: false
+        )
+        let staleOffscreen = AccessibilityElement.make(
+            label: "Stale Row",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let staleDiscovery = Screen.makeForTests(
+            elements: [(staleHeader, "controls_demo")],
+            offViewport: [Screen.OffViewportEntry(staleOffscreen, heistId: "stale_row")]
+        )
+        job.brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleDiscovery)
+
+        let currentHeader = AccessibilityElement.make(
+            label: "ButtonHeist Demo",
+            traits: .header,
+            respondsToUserInteraction: false
+        )
+        let currentScreen = Screen.makeForTests(elements: [(currentHeader, "buttonheist_demo")])
+        job.brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
+
+        let plan = try HeistPlan {
+            Warn("bootstrapped")
+        }
+
+        _ = try await Heist(plan, runtime: .insideJob(job))
+
+        XCTAssertEqual(job.brains.stash.lastScreenName, "ButtonHeist Demo")
+        XCTAssertEqual(job.brains.stash.knownElementIds, ["buttonheist_demo"])
+        XCTAssertNil(job.brains.stash.knownElement(heistId: "stale_row"))
     }
 
     func testSingleStringRootHeistBindsOneRootArgument() async throws {

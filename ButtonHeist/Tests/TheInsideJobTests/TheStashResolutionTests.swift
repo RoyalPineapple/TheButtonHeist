@@ -244,6 +244,45 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(baseline.liveCapture.hierarchy, currentVisible.liveCapture.hierarchy)
     }
 
+    func testActionDiscoveryBaselineDropsStaleDiscoveryMemoryWhenScreenIdChanges() throws {
+        let previousHeader = element(label: "Controls Demo", traits: .header)
+        let sharedPreviousAction = element(label: "Shared Action", traits: .button)
+        let staleOffscreen = element(label: "Stale Offscreen", traits: .button)
+        let previousDiscovery = Screen.makeForTests(
+            elements: [
+                (previousHeader, "controls_demo"),
+                (sharedPreviousAction, "shared_action"),
+            ],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    staleOffscreen,
+                    heistId: "stale_offscreen",
+                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
+                    scrollContainer: "root_scroll"
+                ),
+            ]
+        )
+        XCTAssertEqual(previousDiscovery.id, "controls_demo")
+        bagman.semanticObservationStream.commitSettledDiscoveryObservation(previousDiscovery)
+
+        let currentHeader = element(label: "ButtonHeist Demo", traits: .header)
+        let sharedCurrentAction = element(label: "Shared Action", traits: .button)
+        let currentVisible = Screen.makeForTests(elements: [
+            (currentHeader, "buttonheist_demo"),
+            (sharedCurrentAction, "shared_action"),
+        ])
+        XCTAssertEqual(currentVisible.id, "buttonheist_demo")
+        bagman.recordParsedObservedEvidence(currentVisible)
+
+        let baseline = bagman.actionDiscoveryBaseline()
+
+        XCTAssertEqual(baseline.id, "buttonheist_demo")
+        XCTAssertEqual(baseline.visibleIds, ["buttonheist_demo", "shared_action"])
+        XCTAssertEqual(baseline.knownIds, ["buttonheist_demo", "shared_action"])
+        XCTAssertNil(baseline.findElement(heistId: "controls_demo"))
+        XCTAssertNil(baseline.findElement(heistId: "stale_offscreen"))
+    }
+
     func testLatestSettledSemanticObservationAdvancesMonotonically() {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitSettledVisibleObservation(first)
@@ -1110,6 +1149,42 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.knownIds, ["shared_row"])
         XCTAssertEqual(bagman.knownElement(heistId: "shared_row")?.element.label, "Fresh Row")
         XCTAssertNil(bagman.knownElement(heistId: "bottom_row"))
+    }
+
+    func testVisibleCommitDropsDiscoveryMemoryWhenScreenIdChangesDespiteSharedVisibleElement() {
+        let previousHeader = element(label: "Controls Demo", traits: .header)
+        let sharedPreviousAction = element(label: "Shared Action", traits: .button)
+        let staleOffscreen = element(label: "Stale Offscreen", traits: .button)
+        let previousDiscovery = Screen.makeForTests(
+            elements: [
+                (previousHeader, "controls_demo"),
+                (sharedPreviousAction, "shared_action"),
+            ],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    staleOffscreen,
+                    heistId: "stale_offscreen",
+                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
+                    scrollContainer: "root_scroll"
+                ),
+            ]
+        )
+        XCTAssertEqual(previousDiscovery.id, "controls_demo")
+        bagman.semanticObservationStream.commitSettledDiscoveryObservation(previousDiscovery)
+
+        let currentHeader = element(label: "ButtonHeist Demo", traits: .header)
+        let sharedCurrentAction = element(label: "Shared Action", traits: .button)
+        let currentVisible = Screen.makeForTests(elements: [
+            (currentHeader, "buttonheist_demo"),
+            (sharedCurrentAction, "shared_action"),
+        ])
+        XCTAssertEqual(currentVisible.id, "buttonheist_demo")
+        bagman.semanticObservationStream.commitSettledVisibleObservation(currentVisible)
+
+        XCTAssertEqual(bagman.visibleIds, ["buttonheist_demo", "shared_action"])
+        XCTAssertEqual(bagman.knownIds, ["buttonheist_demo", "shared_action"])
+        XCTAssertNil(bagman.knownElement(heistId: "controls_demo"))
+        XCTAssertNil(bagman.knownElement(heistId: "stale_offscreen"))
     }
 
     // MARK: - Matcher Resolution

@@ -76,6 +76,11 @@ struct WorldStore {
         guard !visibleRefresh.visibleIds.isEmpty else {
             return visibleRefresh
         }
+        if let settledScreenId = screen.id,
+           let refreshScreenId = visibleRefresh.id,
+           settledScreenId != refreshScreenId {
+            return visibleRefresh
+        }
         let knownOnlyIds = semanticWorld.heistIds.subtracting(settledVisibleIds)
         let refreshesKnownViewport = visibleRefreshBelongsToSettledViewport(
             visibleRefresh,

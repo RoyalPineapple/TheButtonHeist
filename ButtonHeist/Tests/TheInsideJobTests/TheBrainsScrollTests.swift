@@ -715,6 +715,128 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertNil(discovered?.findElement(heistId: "stale_controls_button"))
     }
 
+    func testInterfaceDiscoveryDoesNotGraftStaleRowsFromReusedScrollContainerName() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let scrollView = AccessibilityRevealingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 600))
+        scrollView.contentSize = CGSize(width: 320, height: 1_200)
+        scrollView.revealThreshold = 300
+
+        let visibleWord = UILabel(frame: CGRect(x: 40, y: 80, width: 240, height: 44))
+        visibleWord.text = "Words"
+        visibleWord.accessibilityLabel = "Words"
+        visibleWord.accessibilityTraits = .staticText
+        visibleWord.isAccessibilityElement = true
+
+        let discoveredWord = UILabel(frame: CGRect(x: 40, y: 760, width: 240, height: 44))
+        discoveredWord.text = "zymurgy"
+        discoveredWord.accessibilityLabel = "zymurgy"
+        discoveredWord.accessibilityTraits = .staticText
+        discoveredWord.isAccessibilityElement = true
+
+        scrollView.revealedElements = [discoveredWord]
+        scrollView.updateAccessibilityVisibility()
+        scrollView.addSubview(visibleWord)
+        scrollView.addSubview(discoveredWord)
+        rootView.addSubview(scrollView)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        guard let visibleScreen = brains.stash.refreshLiveCapture() else {
+            throw XCTSkip("No live hierarchy available for interface discovery contamination regression test")
+        }
+        guard let scrollContainerName = visibleScreen.orderedContainers.compactMap({ container -> ContainerName? in
+            guard case .scrollable = container.container.type else { return nil }
+            return container.containerName
+        }).first else {
+            throw XCTSkip("Parser did not expose the test scroll view as a named scroll container")
+        }
+
+        let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
+        let staleEntry = TheStash.ScreenElement(
+            heistId: "stale_auto_settle_fixtures",
+            contentSpaceOrigin: CGPoint(x: 0, y: 900),
+            scrollContainerName: scrollContainerName,
+            element: staleRootRow
+        )
+        let staleScreen = Screen(
+            semantic: SemanticScreen(
+                elements: [staleEntry.heistId: staleEntry],
+                containers: visibleScreen.semantic.containers
+            ),
+            liveCapture: visibleScreen.liveCapture
+        )
+        brains.stash.semanticObservationStream.commitSettledDiscoveryObservation(staleScreen)
+
+        let exploration = await brains.navigation.exploreScreen(
+            baseline: brains.stash.visibleExplorationBaseline(from: visibleScreen),
+            maxScrollsPerContainer: 3,
+            maxScrollsPerDiscovery: 3
+        )
+        _ = brains.stash.commitSettledDiscoveryWorld(exploration.screen)
+
+        let labels = brains.stash.discoveryInterface().projectedElements.compactMap(\.label)
+        XCTAssertGreaterThan(exploration.manifest.scrollCount, 0, "Expected discovery to scroll the word list")
+        XCTAssertTrue(labels.contains("Words"), "Expected visible word in discovered interface: \(labels)")
+        XCTAssertTrue(labels.contains("zymurgy"), "Expected scrolled word in discovered interface: \(labels)")
+        XCTAssertFalse(
+            labels.contains("Auto-Settle Fixtures"),
+            "Stale root rows must not be grafted into the current scroll container: \(labels)"
+        )
+    }
+
+    func testScrollToVisibleDiscoversTargetAboveCurrentViewport() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let scrollView = AccessibilityRevealingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 500))
+        scrollView.contentSize = CGSize(width: 320, height: 1_200)
+        scrollView.revealMode = .atOrAbove
+        scrollView.revealThreshold = 10
+
+        let target = UIButton(type: .system)
+        target.setTitle("Top Target", for: .normal)
+        target.accessibilityLabel = "Top Target"
+        target.accessibilityTraits = .button
+        target.isAccessibilityElement = true
+        target.frame = CGRect(x: 40, y: 40, width: 240, height: 44)
+
+        let visibleMarker = UILabel(frame: CGRect(x: 40, y: 620, width: 240, height: 44))
+        visibleMarker.text = "Visible Marker"
+        visibleMarker.accessibilityLabel = "Visible Marker"
+        visibleMarker.accessibilityTraits = .staticText
+        visibleMarker.isAccessibilityElement = true
+
+        scrollView.revealedElements = [target]
+        scrollView.addSubview(target)
+        scrollView.addSubview(visibleMarker)
+        scrollView.contentOffset = CGPoint(x: 0, y: 520)
+        scrollView.updateAccessibilityVisibility()
+        rootView.addSubview(scrollView)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+        _ = brains.stash.refreshCurrentVisibleTree()
+
+        let result = await brains.navigation.executeScrollToVisible(
+            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Top Target")))
+        )
+
+        XCTAssertTrue(result.success, "Expected scroll_to_visible to discover the target above; got \(result)")
+        XCTAssertLessThanOrEqual(scrollView.contentOffset.y, 10)
+        XCTAssertTrue(brains.stash.liveVisibleScreen.orderedElements.contains {
+            $0.element.label == "Top Target"
+        })
+    }
+
     func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -1601,9 +1723,15 @@ final class TheBrainsScrollTests: XCTestCase {
         }
     }
 
+    private enum AccessibilityRevealMode {
+        case atOrAbove
+        case atOrBelow
+    }
+
     private final class AccessibilityRevealingScrollView: UIScrollView {
         var revealedElements: [UIView] = []
-        private let revealThreshold: CGFloat = 500
+        var revealThreshold: CGFloat = 500
+        var revealMode: AccessibilityRevealMode = .atOrBelow
 
         override var contentOffset: CGPoint {
             didSet {
@@ -1617,8 +1745,16 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         func updateAccessibilityVisibility(for offset: CGPoint? = nil) {
-            let isRevealed = (offset ?? contentOffset).y >= revealThreshold
+            let y = (offset ?? contentOffset).y
+            let isRevealed: Bool
+            switch revealMode {
+            case .atOrAbove:
+                isRevealed = y <= revealThreshold
+            case .atOrBelow:
+                isRevealed = y >= revealThreshold
+            }
             for element in revealedElements {
+                element.isHidden = !isRevealed
                 element.isAccessibilityElement = isRevealed
             }
         }

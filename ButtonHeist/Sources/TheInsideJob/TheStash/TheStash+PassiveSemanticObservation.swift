@@ -46,6 +46,7 @@ extension TheStash {
     }
 
     func invalidateSettledObservationFromTripwire() {
+        nextVisibleRefreshScreenForTesting = nil
         semanticObservationStream.invalidateLatestSettledObservation()
     }
 }

@@ -386,6 +386,14 @@ extension TheInsideJob {
                 brains.safecracker.stopKeyboardObservation()
             }
         }
+        // Each top-level heist starts from a fresh live visible state. This
+        // keeps conditionals, waits, and first actions from inheriting the
+        // previous run's settled semantic world when the app is already on
+        // another screen.
+        brains.stash.clearWorldForHeistBootstrap()
+        _ = await brains.interactionObservation.observeVisibleState(
+            timeout: SemanticObservationTiming.defaultTimeout
+        )
         return await brains.executeHeistPlan(plan, argument: argument)
     }
 }
