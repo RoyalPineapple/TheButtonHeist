@@ -23,10 +23,6 @@ extension TheFence {
         let description: HeistDescription
     }
 
-    struct HeistStepPlanBuildError: Error {
-        let message: String
-    }
-
     enum PerformableHeistStep: Sendable, Equatable {
         case action(ActionStep)
         case wait(WaitStep)
@@ -150,40 +146,6 @@ extension TheFence {
         }
     }
 
-    func heistStep(for request: ParsedRequest) throws -> HeistStep {
-        guard request.command.heistPrimitiveCommand != nil else {
-            throw HeistStepPlanBuildError(
-                message: "command \"\(request.command.rawValue)\" is not a heist primitive"
-            )
-        }
-
-        let messages = try executableRuntimeActions(for: request)
-        guard let message = messages.first, messages.count == 1 else {
-            let commandName = request.command.rawValue
-            throw HeistStepPlanBuildError(
-                message: """
-                heist action command "\(commandName)" expands to \(messages.count) actions; \
-                express repeats as separate ordered steps
-                """
-            )
-        }
-
-        if case .wait(let target) = message {
-            return .wait(WaitStep(
-                predicate: target.predicate,
-                timeout: target.resolvedTimeout
-            ))
-        }
-
-        if request.command.payloadCheckedHeistPrimitiveCommand != nil {
-            try validateDurableHeistPrimitivePolicy(message, commandName: request.command.rawValue)
-        }
-
-        return .action(try ActionStep(
-            command: HeistActionCommand(runtimeActionMessage: message),
-            expectation: actionExpectationStep(for: request)
-        ))
-    }
 }
 
 private extension HeistActionCommand {
@@ -265,24 +227,4 @@ private extension TheFence {
         }
     }
 
-    func actionExpectationStep(for request: ParsedRequest) -> WaitStep? {
-        guard let expectation = request.expectationPayload.expectation else { return nil }
-        return WaitStep(
-            predicate: expectation,
-            timeout: request.expectationPayload.postActionValidationTimeout ?? 10
-        )
-    }
-
-    func validateDurableHeistPrimitivePolicy(_ message: RuntimeActionMessage, commandName: String) throws {
-        // Durability: primitive tool calls that can be persisted as durable
-        // heist source/artifacts pass here. RuntimeSafety alone is not enough.
-        let command = try HeistActionCommand(runtimeActionMessage: message)
-        if let failure = command.durableHeistActionFailure {
-            throw HeistStepPlanBuildError(
-                message: """
-                command "\(commandName)" is not accepted by the heist primitive durability policy: \(failure)
-                """
-            )
-        }
-    }
 }

@@ -32,6 +32,12 @@ final class ScreenTests: XCTestCase {
         )
     }
 
+    private func commitVisibleRefresh(from settled: Screen, with refresh: Screen) -> WorldStore.CommitResult {
+        var worldStore = WorldStore()
+        worldStore.commitDiscovery(settled)
+        return worldStore.commitVisible(refresh)
+    }
+
     // MARK: - .empty
 
     func testEmptyHasNoElements() {
@@ -431,9 +437,9 @@ final class ScreenTests: XCTestCase {
         XCTAssertEqual(lhs.merging(rhs).liveCapture.firstResponderHeistId, "new_field")
     }
 
-    // MARK: - refreshingVisibleState
+    // MARK: - WorldStore visible commits
 
-    func testRefreshingVisibleStatePreservesKnownElementsWhenVisibleIdsAreKnown() {
+    func testWorldStoreVisibleCommitPreservesDiscoveryMemoryWhenVisibleIdsAreKnown() {
         let visible = makeElement(label: "Visible", traits: .button)
         let knownOnly = makeElement(label: "Known", traits: .button)
         let refreshedVisible = makeElement(label: "Visible", traits: .button)
@@ -452,15 +458,17 @@ final class ScreenTests: XCTestCase {
             firstResponderHeistId: "button_visible"
         )
 
-        let updated = screen.refreshingVisibleState(with: refresh)
+        let result = commitVisibleRefresh(from: screen, with: refresh)
+        let updated = result.settledScreen
 
         XCTAssertEqual(updated.knownIds, ["button_visible", "button_known"])
         XCTAssertEqual(updated.visibleIds, ["button_visible"])
-        XCTAssertEqual(updated.liveCapture.firstResponderHeistId, "button_visible")
+        XCTAssertEqual(result.observedEvidence.liveCapture.firstResponderHeistId, "button_visible")
+        XCTAssertNil(updated.liveCapture.firstResponderHeistId)
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
     }
 
-    func testRefreshingVisibleStateSlotsVisibleUpdatesWithoutTouchingOffViewportElements() {
+    func testWorldStoreVisibleCommitSlotsVisibleUpdatesWithoutTouchingDiscoveryMemory() {
         let counter = makeElement(label: "Total", value: "$4.00", traits: .staticText)
         let knownOnly = makeElement(label: "Below Fold", value: "old", traits: .button)
         let updatedCounter = makeElement(label: "Total", value: "$8.00", traits: .staticText)
@@ -476,7 +484,7 @@ final class ScreenTests: XCTestCase {
         )
         let refresh = Screen.makeForTests(elements: [(updatedCounter, "total_staticText")])
 
-        let updated = screen.refreshingVisibleState(with: refresh)
+        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
 
         XCTAssertEqual(updated.findElement(heistId: "total_staticText")?.element.value, "$8.00")
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.value, "old")
@@ -484,7 +492,7 @@ final class ScreenTests: XCTestCase {
         XCTAssertEqual(updated.knownIds, ["below_fold_button", "total_staticText"])
     }
 
-    func testRefreshingVisibleStateDoesNotPreserveKnownOnlyMemoryForDisjointKnownViewport() {
+    func testWorldStoreVisibleCommitDoesNotPreserveDiscoveryMemoryForDisjointKnownViewport() {
         let oldVisible = makeElement(label: "Old Visible", traits: .button)
         let staleKnownOnly = makeElement(label: "Stale Below Fold", traits: .button)
         let freshVisible = makeElement(label: "Fresh Visible", traits: .button)
@@ -500,14 +508,14 @@ final class ScreenTests: XCTestCase {
         )
         let refresh = Screen.makeForTests(elements: [(freshVisible, "stale_below_fold")])
 
-        let updated = screen.refreshingVisibleState(with: refresh)
+        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
 
         XCTAssertEqual(updated.visibleIds, ["stale_below_fold"])
         XCTAssertEqual(updated.knownIds, ["stale_below_fold"])
         XCTAssertEqual(updated.findElement(heistId: "stale_below_fold")?.element.label, "Fresh Visible")
     }
 
-    func testRefreshingVisibleStatePreservesKnownOnlyMemoryFromKnownOnlyBaseline() {
+    func testWorldStoreVisibleCommitPreservesDiscoveryMemoryFromKnownOnlyBaseline() {
         let knownOnly = makeElement(label: "Below Fold", traits: .button)
         let visible = makeElement(label: "Visible", traits: .button)
         let screen = Screen.makeForTests(
@@ -515,14 +523,14 @@ final class ScreenTests: XCTestCase {
         )
         let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = screen.refreshingVisibleState(with: refresh)
+        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
 
         XCTAssertEqual(updated.visibleIds, ["button_visible"])
         XCTAssertEqual(updated.knownIds, ["below_fold_button", "button_visible"])
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.label, "Below Fold")
     }
 
-    func testRefreshingVisibleStatePreservesKnownOnlyMemoryWhenKnownViewportAddsElement() {
+    func testWorldStoreVisibleCommitPreservesDiscoveryMemoryWhenKnownViewportAddsElement() {
         let visible = makeElement(label: "Visible", traits: .button)
         let added = makeElement(label: "Added", traits: .button)
         let knownOnly = makeElement(label: "Below Fold", traits: .button)
@@ -535,14 +543,14 @@ final class ScreenTests: XCTestCase {
             (added, "button_added")
         ])
 
-        let updated = screen.refreshingVisibleState(with: refresh)
+        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
 
         XCTAssertEqual(updated.visibleIds, ["button_added", "button_visible"])
         XCTAssertEqual(updated.knownIds, ["below_fold_button", "button_added", "button_visible"])
         XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.label, "Below Fold")
     }
 
-    func testRefreshingVisibleStateDropsDisappearedVisibleNonScrollElements() {
+    func testWorldStoreVisibleCommitDropsDisappearedVisibleNonScrollElements() {
         let disappearing = makeElement(label: "Disappearing", traits: .staticText)
         let visible = makeElement(label: "Visible", traits: .button)
         let screen = Screen.makeForTests(
@@ -553,13 +561,13 @@ final class ScreenTests: XCTestCase {
         )
         let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = screen.refreshingVisibleState(with: refresh)
+        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
 
         XCTAssertEqual(updated.knownIds, ["button_visible"])
         XCTAssertNil(updated.findElement(heistId: "disappearing_staticText"))
     }
 
-    func testRefreshingVisibleStateDropsDisappearedVisibleScrollElements() {
+    func testWorldStoreVisibleCommitDropsDisappearedVisibleScrollElements() {
         let scrolledAway = makeElement(label: "Scrolled Away", traits: .button)
         let visible = makeElement(label: "Visible", traits: .button)
         let screen = Screen(
@@ -590,14 +598,14 @@ final class ScreenTests: XCTestCase {
         )
         let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
 
-        let updated = screen.refreshingVisibleState(with: refresh)
+        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
 
         XCTAssertEqual(updated.knownIds, ["button_visible"])
         XCTAssertEqual(updated.visibleIds, ["button_visible"])
         XCTAssertNil(updated.findElement(heistId: "button_scrolled_away"))
     }
 
-    func testRefreshingVisibleStateReplacesKnownElementsWhenVisibleIdsAreUnknown() {
+    func testWorldStoreVisibleCommitReplacesWorldForUnrelatedVisibleRefresh() {
         let old = makeElement(label: "Old", traits: .button)
         let knownOnly = makeElement(label: "Known", traits: .button)
         let replacement = makeElement(label: "Replacement", traits: .button)
@@ -609,17 +617,17 @@ final class ScreenTests: XCTestCase {
         )
         let refresh = Screen.makeForTests(elements: [(replacement, "button_replacement")])
 
-        let updated = screen.refreshingVisibleState(with: refresh)
+        let updated = commitVisibleRefresh(from: screen, with: refresh).settledScreen
 
         XCTAssertEqual(updated.knownIds, ["button_replacement"])
         XCTAssertNil(updated.findElement(heistId: "button_known"))
     }
 
-    func testRefreshingVisibleStateReplacesKnownElementsForEmptyRefresh() {
+    func testWorldStoreVisibleCommitReplacesWorldForEmptyRefresh() {
         let old = makeElement(label: "Old", traits: .button)
         let screen = Screen.makeForTests(elements: [(old, "button_old")])
 
-        let updated = screen.refreshingVisibleState(with: .empty)
+        let updated = commitVisibleRefresh(from: screen, with: .empty).settledScreen
 
         XCTAssertTrue(updated.knownIds.isEmpty)
         XCTAssertTrue(updated.visibleIds.isEmpty)
