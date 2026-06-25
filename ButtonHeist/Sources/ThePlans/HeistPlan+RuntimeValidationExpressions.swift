@@ -72,9 +72,19 @@ extension HeistPlanRuntimeSafetyValidator {
         _ predicate: ElementPredicate,
         path: String
     ) {
-        validateStrings(predicate.labelMatches, path: "\(path).label", role: "element label")
-        validateStrings(predicate.identifierMatches, path: "\(path).identifier", role: "element identifier")
-        validateStrings(predicate.valueMatches, path: "\(path).value", role: "element value")
+        for (index, check) in predicate.checks.enumerated() {
+            let checkPath = "\(path).checks[\(index)]"
+            switch check {
+            case .label(let match):
+                validateString(match, path: "\(checkPath).label", role: "element label")
+            case .identifier(let match):
+                validateString(match, path: "\(checkPath).identifier", role: "element identifier")
+            case .value(let match):
+                validateString(match, path: "\(checkPath).value", role: "element value")
+            case .traits, .excludeTraits:
+                break
+            }
+        }
     }
 
     mutating func validateElementPredicate(
@@ -82,9 +92,19 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String,
         scope: HeistReferenceScope
     ) {
-        validateStrings(predicate.labelMatches, path: "\(path).label", scope: scope)
-        validateStrings(predicate.identifierMatches, path: "\(path).identifier", scope: scope)
-        validateStrings(predicate.valueMatches, path: "\(path).value", scope: scope)
+        for (index, check) in predicate.checks.enumerated() {
+            let checkPath = "\(path).checks[\(index)]"
+            switch check {
+            case .label(let match):
+                validateString(match, path: "\(checkPath).label", scope: scope)
+            case .identifier(let match):
+                validateString(match, path: "\(checkPath).identifier", scope: scope)
+            case .value(let match):
+                validateString(match, path: "\(checkPath).value", scope: scope)
+            case .traits, .excludeTraits:
+                break
+            }
+        }
     }
 
     mutating func validateParameter(_ parameter: String, path: String, role: String) {

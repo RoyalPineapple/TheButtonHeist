@@ -936,7 +936,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected semantic replay target to carry matcher identity, got \(executableTarget)")
             return
         }
-        XCTAssertEqual(matcher.identifier, "quantity_stepper")
+        XCTAssertEqual(matcher.checks, [.identifier(.exact("quantity_stepper"))])
         XCTAssertNil(ordinal)
 
         guard let resolved = bagman.resolveTarget(executableTarget).resolved else {

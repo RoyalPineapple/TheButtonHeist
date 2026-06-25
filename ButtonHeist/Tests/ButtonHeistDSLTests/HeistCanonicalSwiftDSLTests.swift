@@ -234,7 +234,7 @@ private let rootStringCanonicalSwiftDSL = """
 
         WaitFor(.present(.label(query)), timeout: .seconds(1))
 
-        If(.present(.element(label: .contains("Result"), identifier: .prefix("row"), value: .suffix("ready"), traits: [.button], excludeTraits: [.staticText]))) {
+        If(.present(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("ready")), .traits([.button]), .excludeTraits([.staticText])))) {
             Warn("ready")
         }
         .else {
@@ -246,7 +246,7 @@ private let rootStringCanonicalSwiftDSL = """
                 .expect(.present(.label(item)), timeout: .seconds(2))
         }
 
-        ForEach(.matching(.element(label: .contains("Result"), identifier: .prefix("row"), value: .suffix("available"), traits: [.button], excludeTraits: [.staticText])), limit: 3) { target in
+        ForEach(.matching(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("available")), .traits([.button]), .excludeTraits([.staticText]))), limit: 3) { target in
             RunHeist("Rows.pressRow", target)
         }
     }

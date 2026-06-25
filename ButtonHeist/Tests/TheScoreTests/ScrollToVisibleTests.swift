@@ -15,8 +15,10 @@ final class ScrollToVisibleTests: XCTestCase {
         guard case .predicate(let matcher, _) = decoded.elementTarget else {
             return XCTFail("Expected .matcher")
         }
-        XCTAssertEqual(matcher.label, "Color Picker")
-        XCTAssertEqual(matcher.traits, [.button])
+        XCTAssertEqual(matcher.checks, [
+            .label(.exact("Color Picker")),
+            .traits([.button]),
+        ])
     }
 
     func testScrollToVisibleTargetMinimal() throws {
@@ -26,7 +28,7 @@ final class ScrollToVisibleTests: XCTestCase {
         guard case .predicate(let matcher, _) = decoded.elementTarget else {
             return XCTFail("Expected .matcher")
         }
-        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(matcher.checks, [.label(.exact("Save"))])
     }
 
     func testScrollToVisibleHeistPlanRoundTrip() throws {
@@ -45,8 +47,10 @@ final class ScrollToVisibleTests: XCTestCase {
               case .predicate(let matcher, _) = try decodedTarget.resolve(in: .empty) else {
             return XCTFail("Expected heistPlan with scrollToVisible action")
         }
-        XCTAssertEqual(matcher.label, "Settings")
-        XCTAssertEqual(matcher.traits, [.header])
+        XCTAssertEqual(matcher.checks, [
+            .label(.exact("Settings")),
+            .traits([.header]),
+        ])
     }
 
     func testScrollToVisibleTargetRejectsUnknownPayloadKey() throws {

@@ -47,6 +47,24 @@ public enum ScoreDescription {
         }
     }
 
+    public static func predicateCheckField(_ check: ElementPredicateCheck<String>) -> String? {
+        switch check {
+        case .label(let match):
+            guard !match.value.isEmpty else { return nil }
+            return "label=\(stringMatch(match))"
+        case .identifier(let match):
+            guard !match.value.isEmpty else { return nil }
+            return "identifier=\(stringMatch(match))"
+        case .value(let match):
+            guard !match.value.isEmpty else { return nil }
+            return "value=\(stringMatch(match))"
+        case .traits(let traits):
+            return listField("traits", traits.isEmpty ? nil : traits)
+        case .excludeTraits(let traits):
+            return listField("excludeTraits", traits.isEmpty ? nil : traits)
+        }
+    }
+
     public static func valueField<T>(_ name: String, _ value: T?) -> String? {
         value.map { "\(name)=\($0)" }
     }

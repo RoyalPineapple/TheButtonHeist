@@ -4,14 +4,15 @@ import Foundation
 
 /// Target for element actions.
 ///
-/// An element is described by a predicate (label, identifier, value, traits,
-/// excludeTraits); `ordinal` disambiguates among matches. Predicate fields use
-/// `StringMatch` semantics; exact matching is the default.
+/// An element is described by an ordered predicate check chain; `ordinal`
+/// disambiguates among matches. String checks use `StringMatch` semantics;
+/// exact matching is the default.
 /// Broad string matches such as `.label(.contains(...))` are opt-in; there is no
 /// automatic substring fallback. On miss, the resolver returns structured
 /// suggestions.
 public enum ElementTarget: Sendable, Equatable, Hashable {
-    /// Element predicate: label, identifier, value, traits, excludeTraits.
+    /// Element predicate: ordered checks over label, identifier, value, traits,
+    /// and excluded traits.
     /// `ordinal` is a 0-based selection index into the list of matches
     /// after semantic narrowing. When nil, requires a unique match and reports
     /// ambiguity on 2+ hits. When set, selects the Nth narrowed match.
@@ -22,6 +23,7 @@ public enum ElementTarget: Sendable, Equatable, Hashable {
 
 public extension ElementTarget {
     enum SchemaFieldKind: Sendable, Equatable {
+        case predicateChecks
         case string
         case stringMatch
         case stringArray
@@ -34,7 +36,7 @@ public extension ElementTarget {
     }
 
     static var predicateSchemaFields: [SchemaField] {
-        CodingKeys.predicateKeys.map { schemaField(for: $0) }
+        CodingKeys.orderedPredicateKeys.map { schemaField(for: $0) }
     }
 
     static var disambiguatorSchemaFields: [SchemaField] {
@@ -63,6 +65,8 @@ public extension ElementTarget {
 
     private static func schemaField(for key: CodingKeys) -> SchemaField {
         switch key {
+        case .checks:
+            return SchemaField(name: key.stringValue, kind: .predicateChecks)
         case .label, .identifier, .value:
             return SchemaField(name: key.stringValue, kind: .stringMatch)
         case .traits, .excludeTraits:
@@ -89,13 +93,15 @@ extension ElementTarget: CustomStringConvertible {
 
 extension ElementTarget: Codable {
     public enum CodingKeys: String, CodingKey {
+        case checks
         case label, identifier, value, traits, excludeTraits
         case ordinal
 
         /// The predicate keys whose presence in a parent container indicates an
         /// `ElementTarget` is flattened at that level.
         static let predicateKeys: [CodingKeys] = [.label, .identifier, .value, .traits, .excludeTraits]
-        static let allInlineKeys: [CodingKeys] = predicateKeys + [.ordinal]
+        static let orderedPredicateKeys: [CodingKeys] = [.checks] + predicateKeys
+        static let allInlineKeys: [CodingKeys] = orderedPredicateKeys + [.ordinal]
     }
 
     /// Decode an optional `ElementTarget` flattened into the same JSON object
@@ -149,16 +155,21 @@ extension ElementTarget: Codable {
                 debugDescription: ElementTargetGrammarError.negativeOrdinal(ordinal).diagnosticDescription
             )
         }
-        let predicate = ElementPredicate(
-            labelMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .label),
-            identifierMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .identifier),
-            valueMatches: try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value),
-            traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits) ?? [],
-            excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
-        )
+        let hasChecks = container.contains(.checks)
+        let hasFlatPredicate = CodingKeys.predicateKeys.contains { container.contains($0) }
+        if hasChecks, hasFlatPredicate {
+            throw DecodingError.dataCorruptedError(
+                forKey: .checks,
+                in: container,
+                debugDescription: "ElementTarget accepts either checks or flat predicate fields, not both"
+            )
+        }
+        let predicate = ElementPredicate(hasChecks
+            ? try container.decode([ElementPredicateCheck<String>].self, forKey: .checks)
+            : try decodeFlatChecks(from: container))
         return try targetOrDecodingError(
             predicate: predicate,
-            predicateWasProvided: hasPredicateFields(in: container),
+            predicateWasProvided: hasChecks || hasFlatPredicate,
             ordinal: ordinal,
             codingPath: container.codingPath
         )
@@ -171,8 +182,21 @@ extension ElementTarget: Codable {
         try decoder.rejectUnknownKeys(allowed: allowedKeys, typeName: "element target")
     }
 
-    private static func hasPredicateFields(in container: KeyedDecodingContainer<CodingKeys>) -> Bool {
-        CodingKeys.predicateKeys.contains { container.contains($0) }
+    private static func decodeFlatChecks(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [ElementPredicateCheck<String>] {
+        var checks: [ElementPredicateCheck<String>] = []
+        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .label).map(ElementPredicateCheck.label)
+        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .identifier)
+            .map(ElementPredicateCheck.identifier)
+        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value).map(ElementPredicateCheck.value)
+        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits), !traits.isEmpty {
+            checks.append(.traits(traits))
+        }
+        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits), !traits.isEmpty {
+            checks.append(.excludeTraits(traits))
+        }
+        return checks
     }
 
     private static func targetOrDecodingError(
@@ -199,11 +223,7 @@ extension ElementTarget: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .predicate(let predicate, let ordinal):
-            try StringMatch<String>.encodeOneOrMany(predicate.labelMatches, to: &container, forKey: .label)
-            try StringMatch<String>.encodeOneOrMany(predicate.identifierMatches, to: &container, forKey: .identifier)
-            try StringMatch<String>.encodeOneOrMany(predicate.valueMatches, to: &container, forKey: .value)
-            if !predicate.traits.isEmpty { try container.encode(predicate.traits, forKey: .traits) }
-            if !predicate.excludeTraits.isEmpty { try container.encode(predicate.excludeTraits, forKey: .excludeTraits) }
+            if !predicate.checks.isEmpty { try container.encode(predicate.checks, forKey: .checks) }
             try container.encodeIfPresent(ordinal, forKey: .ordinal)
         }
     }

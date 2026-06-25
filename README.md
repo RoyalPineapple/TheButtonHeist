@@ -132,15 +132,15 @@ control in its screen context.
 String predicates are exact by default. Every element string field accepts
 explicit non-exact `StringMatch` modes: `.contains(...)`, `.prefix(...)`, or
 `.suffix(...)` on `.label(...)`, `.identifier(...)`, `.value(...)`, or the
-corresponding `.element(label: ..., identifier: ..., value: ...)` fields.
-When one string property needs multiple checks, use the repeated-check form:
-`.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")))`.
-All checks against that property must pass. Traits stay as the `traits` and
-`excludeTraits` collections.
+corresponding ordered `.element(...)` checks. When one element needs multiple
+checks, put them in order:
+`.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")), .traits([.button]))`.
+All checks must pass. Use `.traits([...])` for required traits and
+`.excludeTraits([...])` for rejected traits.
 Property-update `from` and `to` filters use the same exact-by-default matching
 model. For KIF migrations that previously used a selector such as
 `usingLabelContaining("Search")`, write the looseness explicitly with
-`.label(.contains("Search"))` or `.element(label: .contains("Search"))`;
+`.label(.contains("Search"))` or `.element(.label(.contains("Search")))`;
 prefer an exact label, identifier, value, or trait when one names the intended
 control clearly.
 
@@ -195,7 +195,7 @@ In compact form, that shape is closer to:
 In the Swift DSL, the action stays in the accessibility language:
 
 ```swift
-Activate(.element(label: "Controls Demo", traits: [.button]))
+Activate(.element(.label("Controls Demo"), .traits([.button])))
 ```
 
 ## From One Move To A Runtime
@@ -270,7 +270,7 @@ import ThePlans
 
 let login = try HeistPlan("login") {
     TypeText("agent@example.com", into: .label("Email"))
-        .expect(.present(.element(label: "Email", value: "agent@example.com")), timeout: .seconds(2))
+        .expect(.present(.element(.label("Email"), .value("agent@example.com"))), timeout: .seconds(2))
 
     Activate(.label("Sign In"))
         .expect(.present(.label("Home")), timeout: .seconds(5))
@@ -298,7 +298,7 @@ control primitives:
 ```swift
 let search = try HeistPlan("searchFlow") {
     TypeText("milk", into: .label("Search"))
-        .expect(.present(.element(label: "Search", value: "milk")), timeout: .seconds(2))
+        .expect(.present(.element(.label("Search"), .value("milk"))), timeout: .seconds(2))
 
     Activate(.label("Search"))
         .expect(.changed(.screen()), timeout: .seconds(5))

@@ -48,42 +48,39 @@ extension HeistPlanSourceParser {
     }
 
     func renderPredicateCorrection(_ predicate: ElementPredicateTemplate) -> String {
-        if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            if predicate.labelMatches.count == 1,
-               predicate.identifierMatches.isEmpty,
-               predicate.valueMatches.isEmpty {
-                return ".label(\(renderStringMatchCallArgument(predicate.labelMatches[0])))"
-            }
-            if predicate.labelMatches.isEmpty,
-               predicate.identifierMatches.count == 1,
-               predicate.valueMatches.isEmpty {
-                return ".identifier(\(renderStringMatchCallArgument(predicate.identifierMatches[0])))"
-            }
-            if predicate.labelMatches.isEmpty,
-               predicate.identifierMatches.isEmpty,
-               predicate.valueMatches.count == 1 {
-                return ".value(\(renderStringMatchCallArgument(predicate.valueMatches[0])))"
+        if predicate.checks.count == 1 {
+            switch predicate.checks[0] {
+            case .label(let match):
+                return ".label(\(renderStringMatchCallArgument(match)))"
+            case .identifier(let match):
+                return ".identifier(\(renderStringMatchCallArgument(match)))"
+            case .value(let match):
+                return ".value(\(renderStringMatchCallArgument(match)))"
+            case .traits, .excludeTraits:
+                break
             }
         }
-        var fields: [String] = []
-        if predicate.labelMatches.count > 1 ||
-            predicate.identifierMatches.count > 1 ||
-            predicate.valueMatches.count > 1 {
-            fields += predicate.labelMatches.map { ".label(\(renderStringMatchCallArgument($0)))" }
-            fields += predicate.identifierMatches.map { ".identifier(\(renderStringMatchCallArgument($0)))" }
-            fields += predicate.valueMatches.map { ".value(\(renderStringMatchCallArgument($0)))" }
-        } else {
-            if let label = predicate.label { fields.append("label: \(renderStringMatchFieldArgument(label))") }
-            if let identifier = predicate.identifier { fields.append("identifier: \(renderStringMatchFieldArgument(identifier))") }
-            if let value = predicate.value { fields.append("value: \(renderStringMatchFieldArgument(value))") }
-        }
-        if !predicate.traits.isEmpty {
-            fields.append("traits: [\(predicate.traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
-        }
-        if !predicate.excludeTraits.isEmpty {
-            fields.append("excludeTraits: [\(predicate.excludeTraits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
-        }
+        let fields = predicate.checks.map(renderPredicateCheckCorrection)
         return ".element(\(fields.joined(separator: ", ")))"
+    }
+
+    func renderPredicateCheckCorrection(_ check: ElementPredicateCheck<StringExpr>) -> String {
+        switch check {
+        case .label(let match):
+            return ".label(\(renderStringMatchCallArgument(match)))"
+        case .identifier(let match):
+            return ".identifier(\(renderStringMatchCallArgument(match)))"
+        case .value(let match):
+            return ".value(\(renderStringMatchCallArgument(match)))"
+        case .traits(let traits):
+            return ".traits(\(renderTraitArrayCorrection(traits)))"
+        case .excludeTraits(let traits):
+            return ".excludeTraits(\(renderTraitArrayCorrection(traits)))"
+        }
+    }
+
+    func renderTraitArrayCorrection(_ traits: [HeistTrait]) -> String {
+        "[\(traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
     }
 
     func renderStringMatchCallArgument(_ match: StringMatch<StringExpr>) -> String {

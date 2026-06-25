@@ -59,7 +59,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     `If(.present(.label("Pay"))) { ... }.else { ... }`
                     `WaitFor(.changed(.screen()), timeout: .seconds(10)).else { ... }`
                     `ForEach(["Milk", "Bread"]) { item in ... }`
-                    `ForEach(.matching(.label("Delete")), limit: 20) { target in ... }`
+                    `ForEach(.matching(.element(.label(.prefix("Delete")), .traits([.button]))), limit: 20) { target in ... }`
                     `Warn("message")`
                     `Fail("message")`
 

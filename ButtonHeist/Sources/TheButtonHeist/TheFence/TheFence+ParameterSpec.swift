@@ -62,6 +62,7 @@ public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
 public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
     static let argument = Self("argument")
+    static let checks = Self("checks")
     static let command = Self("command")
     static let container = Self("container")
     static let continuation = Self("continuation")
@@ -73,7 +74,7 @@ public extension FenceParameterKey {
     static let expect = Self("expect"), from = Self("from"), heistId = Self("heistId")
     static let heist = Self("heist"), identifier = Self("identifier"), includeInterface = Self("includeInterface")
     static let inlineData = Self("inlineData"), path = Self("path"), isModalBoundary = Self("isModalBoundary")
-    static let label = Self("label"), matcher = Self("matcher")
+    static let kind = Self("kind"), label = Self("label"), match = Self("match"), matcher = Self("matcher")
     static let maxScrollsPerContainer = Self("maxScrollsPerContainer")
     static let maxScrollsPerDiscovery = Self("maxScrollsPerDiscovery")
     static let mode = Self("mode")
@@ -510,6 +511,8 @@ enum FenceParameterBlocks: Sendable {
             preconditionFailure("ElementTarget field '\(field.name)' is not a Fence parameter key")
         }
         switch field.kind {
+        case .predicateChecks:
+            return predicateChecksParam(key)
         case .string:
             return param(key, .string)
         case .stringMatch:
@@ -519,5 +522,21 @@ enum FenceParameterBlocks: Sendable {
         case .nonNegativeInteger:
             return param(key, .integer, minimum: 0)
         }
+    }
+
+    private static func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+        param(
+            key, .array,
+            arrayItemType: .object,
+            arrayItemProperties: [
+                param(
+                    .kind, .string, required: true,
+                    enumValues: ["label", "identifier", "value", "traits", "excludeTraits"]
+                ),
+                stringMatchParam(.match),
+                param(.values, .stringArray),
+            ],
+            arrayItemAdditionalProperties: false
+        )
     }
 }

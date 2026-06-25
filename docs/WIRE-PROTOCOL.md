@@ -233,12 +233,14 @@ contract.
 ```
 
 `heistId` is a current-capture annotation for correlation and diagnostics.
-Public action messages identify elements with `ElementTarget` predicate fields
+Public action messages identify elements with `ElementTarget` predicate checks
 such as `label`, `identifier`, `value`, `traits`, `excludeTraits`, and optional
 `ordinal`. Durable replay uses the same semantic target shape.
 The string predicate fields may carry one StringMatch value or an array of
 StringMatch values; arrays require every check against that property to match.
-Trait inclusion and exclusion stay in the `traits` and `excludeTraits` arrays.
+Prefer ordered `checks` when string checks and trait checks belong in one
+predicate chain. Trait inclusion and exclusion are `.traits([...])` and
+`.excludeTraits([...])` checks in that chain.
 
 ### One-Step Semantic Action
 

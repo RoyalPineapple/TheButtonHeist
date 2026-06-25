@@ -103,15 +103,43 @@ extension TheStash {
 
     /// Format a predicate's fields as a human-readable query string.
     static func formatMatcher(_ predicate: ElementPredicate) -> String {
-        var fields: [String] = []
-        for label in predicate.labelMatches { fields.append("label=\"\(label)\"") }
-        for identifier in predicate.identifierMatches { fields.append("identifier=\"\(identifier)\"") }
-        for value in predicate.valueMatches { fields.append("value=\"\(value)\"") }
-        if !predicate.traits.isEmpty { fields.append("traits=[\(predicate.traits.map(\.rawValue).joined(separator: ","))]") }
-        if !predicate.excludeTraits.isEmpty {
-            fields.append("excludeTraits=[\(predicate.excludeTraits.map(\.rawValue).joined(separator: ","))]")
+        predicate.checks.compactMap(formatCheck).joined(separator: " ")
+    }
+
+    private static func formatCheck(_ check: ElementPredicateCheck<String>) -> String? {
+        ScoreDescription.predicateCheckField(check)
+    }
+
+    private static func checkName(_ check: ElementPredicateCheck<String>) -> String {
+        switch check {
+        case .label:
+            return "label"
+        case .identifier:
+            return "identifier"
+        case .value:
+            return "value"
+        case .traits:
+            return "traits"
+        case .excludeTraits:
+            return "excludeTraits"
         }
-        return fields.joined(separator: " ")
+    }
+
+    private static func actualValueReader(for check: ElementPredicateCheck<String>) -> (AccessibilityElement) -> String {
+        switch check {
+        case .label:
+            return { $0.label ?? "(nil)" }
+        case .identifier:
+            return { $0.identifier ?? "(nil)" }
+        case .value:
+            return { $0.value ?? "(nil)" }
+        case .traits, .excludeTraits:
+            return { element in
+                AccessibilityTraits.knownTraits
+                    .filter { element.traits.contains($0.trait) }
+                    .map { $0.name }.joined(separator: ", ")
+            }
+        }
     }
 
     /// Try relaxing one predicate at a time. Value is relaxed first (most likely
@@ -127,55 +155,15 @@ extension TheStash {
         in screenElements: [Screen.ScreenElement],
         visibleHeistIds: Set<HeistId>
     ) -> String? {
-        var relaxations: [Relaxation] = []
-        if !predicate.valueMatches.isEmpty {
-            relaxations.append(Relaxation(
-                field: "value",
-                relaxed: ElementPredicate(
-                    labelMatches: predicate.labelMatches,
-                    identifierMatches: predicate.identifierMatches,
-                    traits: predicate.traits, excludeTraits: predicate.excludeTraits
-                ),
-                actual: { $0.value ?? "(nil)" }
-            ))
-        }
-        if !predicate.traits.isEmpty {
-            relaxations.append(Relaxation(
-                field: "traits",
-                relaxed: ElementPredicate(
-                    labelMatches: predicate.labelMatches,
-                    identifierMatches: predicate.identifierMatches,
-                    valueMatches: predicate.valueMatches,
-                    excludeTraits: predicate.excludeTraits
-                ),
-                actual: { element in
-                    AccessibilityTraits.knownTraits
-                        .filter { element.traits.contains($0.trait) }
-                        .map { $0.name }.joined(separator: ", ")
-                }
-            ))
-        }
-        if !predicate.labelMatches.isEmpty {
-            relaxations.append(Relaxation(
-                field: "label",
-                relaxed: ElementPredicate(
-                    identifierMatches: predicate.identifierMatches,
-                    valueMatches: predicate.valueMatches,
-                    traits: predicate.traits, excludeTraits: predicate.excludeTraits
-                ),
-                actual: { $0.label ?? "(nil)" }
-            ))
-        }
-        if !predicate.identifierMatches.isEmpty {
-            relaxations.append(Relaxation(
-                field: "identifier",
-                relaxed: ElementPredicate(
-                    labelMatches: predicate.labelMatches,
-                    valueMatches: predicate.valueMatches,
-                    traits: predicate.traits, excludeTraits: predicate.excludeTraits
-                ),
-                actual: { $0.identifier ?? "(nil)" }
-            ))
+        let relaxations = predicate.checks.enumerated().compactMap { index, check -> Relaxation? in
+            guard check.hasPredicateLiteral else { return nil }
+            return Relaxation(
+                field: "check \(index + 1) (\(checkName(check)))",
+                relaxed: ElementPredicate(predicate.checks.enumerated().compactMap { offset, candidate in
+                    offset == index ? nil : candidate
+                }),
+                actual: actualValueReader(for: check)
+            )
         }
 
         let suggestionCap = 3
@@ -220,13 +208,20 @@ extension TheStash {
     }
 
     private static func diagnosticContainsPredicate(from predicate: ElementPredicate) -> ElementPredicate? {
-        let diagnostic = ElementPredicate(
-            labelMatches: predicate.labelMatches.map { .contains($0.value) },
-            identifierMatches: predicate.identifierMatches.map { .contains($0.value) },
-            valueMatches: predicate.valueMatches.map { .contains($0.value) },
-            traits: predicate.traits,
-            excludeTraits: predicate.excludeTraits
-        )
+        let diagnostic = ElementPredicate(predicate.checks.map { check in
+            switch check {
+            case .label(let match):
+                return .label(.contains(match.value))
+            case .identifier(let match):
+                return .identifier(.contains(match.value))
+            case .value(let match):
+                return .value(.contains(match.value))
+            case .traits(let traits):
+                return .traits(traits)
+            case .excludeTraits(let traits):
+                return .excludeTraits(traits)
+            }
+        })
         return diagnostic == predicate ? nil : diagnostic
     }
 
@@ -236,26 +231,33 @@ extension TheStash {
         element: HeistElement
     ) -> String {
         var observed: [String] = []
-        if !failedPredicate.labelMatches.isEmpty, let label = element.label, !label.isEmpty {
+        if failedPredicate.includesCheck(.label), let label = element.label, !label.isEmpty {
             observed.append("label=\"\(label)\"")
         }
-        if !failedPredicate.identifierMatches.isEmpty, let identifier = element.identifier, !identifier.isEmpty {
+        if failedPredicate.includesCheck(.identifier), let identifier = element.identifier, !identifier.isEmpty {
             observed.append("id=\"\(identifier)\"")
         }
-        if !failedPredicate.valueMatches.isEmpty, let value = element.value, !value.isEmpty {
+        if failedPredicate.includesCheck(.value), let value = element.value, !value.isEmpty {
             observed.append("value=\"\(value)\"")
         }
         return "\(observed.joined(separator: " ")) — try \(exactPredicateDescription(failedPredicate, element: element)) or \(diagnosticPredicate)"
     }
 
     private static func exactPredicateDescription(_ failedPredicate: ElementPredicate, element: HeistElement) -> String {
-        ElementPredicate(
-            labelMatches: !failedPredicate.labelMatches.isEmpty ? element.label.map { [.exact($0)] } ?? [] : [],
-            identifierMatches: !failedPredicate.identifierMatches.isEmpty ? element.identifier.map { [.exact($0)] } ?? [] : [],
-            valueMatches: !failedPredicate.valueMatches.isEmpty ? element.value.map { [.exact($0)] } ?? [] : [],
-            traits: failedPredicate.traits,
-            excludeTraits: failedPredicate.excludeTraits
-        ).description
+        ElementPredicate(failedPredicate.checks.compactMap { check in
+            switch check {
+            case .label:
+                return element.label.map { .label(.exact($0)) }
+            case .identifier:
+                return element.identifier.map { .identifier(.exact($0)) }
+            case .value:
+                return element.value.map { .value(.exact($0)) }
+            case .traits(let traits):
+                return .traits(traits)
+            case .excludeTraits(let traits):
+                return .excludeTraits(traits)
+            }
+        }).description
     }
 
     /// Compact summary of known elements for total-miss diagnostics.
@@ -344,6 +346,25 @@ extension TheStash {
     }
 }
 
+}
+
+private enum DiagnosticPredicateCheckKind {
+    case label
+    case identifier
+    case value
+}
+
+private extension ElementPredicate {
+    func includesCheck(_ kind: DiagnosticPredicateCheckKind) -> Bool {
+        checks.contains { check in
+            switch (kind, check) {
+            case (.label, .label), (.identifier, .identifier), (.value, .value):
+                return true
+            case (.label, _), (.identifier, _), (.value, _):
+                return false
+            }
+        }
+    }
 }
 
 #endif // DEBUG

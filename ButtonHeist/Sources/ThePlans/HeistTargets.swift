@@ -27,9 +27,6 @@ public extension ElementTarget {
         label: StringMatch<String>? = nil,
         identifier: StringMatch<String>? = nil,
         value: StringMatch<String>? = nil,
-        labelMatches: [StringMatch<String>] = [],
-        identifierMatches: [StringMatch<String>] = [],
-        valueMatches: [StringMatch<String>] = [],
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) -> ElementTarget {
@@ -37,9 +34,6 @@ public extension ElementTarget {
             label: label,
             identifier: identifier,
             value: value,
-            labelMatches: labelMatches,
-            identifierMatches: identifierMatches,
-            valueMatches: valueMatches,
             traits: traits,
             excludeTraits: excludeTraits
         ))
@@ -102,9 +96,6 @@ public extension ElementPredicateTemplate {
         label: StringMatch<StringExpr>? = nil,
         identifier: StringMatch<StringExpr>? = nil,
         value: StringMatch<StringExpr>? = nil,
-        labelMatches: [StringMatch<StringExpr>] = [],
-        identifierMatches: [StringMatch<StringExpr>] = [],
-        valueMatches: [StringMatch<StringExpr>] = [],
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) -> ElementPredicateTemplate {
@@ -112,9 +103,6 @@ public extension ElementPredicateTemplate {
             label: label,
             identifier: identifier,
             value: value,
-            labelMatches: labelMatches,
-            identifierMatches: identifierMatches,
-            valueMatches: valueMatches,
             traits: traits,
             excludeTraits: excludeTraits
         )

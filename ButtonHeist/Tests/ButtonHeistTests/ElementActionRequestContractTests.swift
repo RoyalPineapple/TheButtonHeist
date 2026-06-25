@@ -14,6 +14,9 @@ final class ElementActionRequestContractTests: XCTestCase {
         for field in schemaFields {
             let spec = try XCTUnwrap(specsByKey[field.name])
             switch field.kind {
+            case .predicateChecks:
+                XCTAssertEqual(spec.type, .array)
+                assertPredicateChecksSchema(spec, file: #filePath, line: #line)
             case .string:
                 XCTAssertEqual(spec.type, .string)
             case .stringMatch:
@@ -138,4 +141,44 @@ private func assertStringMatchObjectSchema(
         ]),
     ]), file: file, line: line)
     XCTAssertEqual(properties["value"], .object(["type": .string("string")]), file: file, line: line)
+}
+
+private func assertPredicateChecksSchema(
+    _ spec: FenceParameterSpec,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .object(let schema) = spec.jsonSchemaProperty else {
+        return XCTFail("Expected predicate checks array schema", file: file, line: line)
+    }
+    XCTAssertEqual(schema["type"], .string("array"), file: file, line: line)
+
+    guard case .object(let items)? = schema["items"] else {
+        return XCTFail("Expected predicate check item schema", file: file, line: line)
+    }
+    XCTAssertEqual(items["type"], .string("object"), file: file, line: line)
+    XCTAssertEqual(items["additionalProperties"], .bool(false), file: file, line: line)
+    XCTAssertEqual(items["required"], .array([.string("kind")]), file: file, line: line)
+
+    guard case .object(let properties)? = items["properties"] else {
+        return XCTFail("Expected predicate check item properties", file: file, line: line)
+    }
+    XCTAssertEqual(properties["kind"], .object([
+        "type": .string("string"),
+        "enum": .array([
+            .string("label"),
+            .string("identifier"),
+            .string("value"),
+            .string("traits"),
+            .string("excludeTraits"),
+        ]),
+    ]), file: file, line: line)
+
+    guard case .object? = properties["match"] else {
+        return XCTFail("Expected match StringMatch object schema", file: file, line: line)
+    }
+    guard case .object(let values)? = properties["values"] else {
+        return XCTFail("Expected values string array schema", file: file, line: line)
+    }
+    XCTAssertEqual(values["type"], .string("array"), file: file, line: line)
 }

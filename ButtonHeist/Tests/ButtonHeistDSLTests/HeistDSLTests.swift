@@ -229,7 +229,7 @@ func `string heist search flow preserves query ref in composed post activation e
     let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
 
     #expect(decoded == heist)
-    #expect(json.contains(#""label_ref":"query""#))
+    #expect(json.contains(#""checks":[{"kind":"label","match":{"ref":"query"}}]"#))
 }
 
 @Test

@@ -129,30 +129,7 @@ extension TheFence {
         else {
             return
         }
-        for key in ["label", "identifier", "value"] {
-            guard let match = object[key] else { continue }
-            guard Self.isStringMatchObjectOrArray(match) else {
-                throw SchemaValidationError(
-                    field: "\(field).element.\(key)",
-                    observed: match.schemaObservedDescription,
-                    expected: "StringMatch object with mode and value, or array of StringMatch objects"
-                )
-            }
-        }
-    }
-
-    private static func isStringMatchObjectOrArray(_ value: HeistValue) -> Bool {
-        switch value {
-        case .object:
-            return true
-        case .array(let values):
-            return values.allSatisfy {
-                if case .object = $0 { return true }
-                return false
-            }
-        default:
-            return false
-        }
+        try Self.validateElementPredicatePayloadStringMatches(.object(object), field: "\(field).element")
     }
 
     private func decodingContext(from error: DecodingError) -> DecodingError.Context {
@@ -174,15 +151,46 @@ extension TheFence {
     }
 
     private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementPredicate {
-        ElementPredicate(
-            labelMatches: try arguments.schemaStringMatches("label"),
-            identifierMatches: try arguments.schemaStringMatches("identifier"),
-            valueMatches: try arguments.schemaStringMatches("value"),
-            traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")) ?? [],
-            excludeTraits: try TheFence.parseTraitNames(
+        let hasChecks = arguments.argumentValues["checks"] != nil
+        let hasFlatFields = ["label", "identifier", "value", "traits", "excludeTraits"].contains {
+            arguments.argumentValues[$0] != nil
+        }
+        if hasChecks, hasFlatFields {
+            throw SchemaValidationError(
+                field: arguments.field("checks"),
+                observed: "mixed ordered checks and flat predicate fields",
+                expected: "use either checks or flat predicate fields, not both"
+            )
+        }
+        if let checksValue = arguments.argumentValues["checks"] {
+            try Self.validateElementPredicateChecks(checksValue, field: arguments.field("checks"))
+            do {
+                let data = try JSONEncoder().encode(checksValue)
+                return ElementPredicate(try JSONDecoder().decode([ElementPredicateCheck<String>].self, from: data))
+            } catch let error as DecodingError {
+                throw SchemaValidationError(
+                    field: arguments.field("checks"),
+                    observed: checksValue.schemaObservedDescription,
+                    expected: decodingContext(from: error).debugDescription
+                )
+            }
+        }
+
+        var checks: [ElementPredicateCheck<String>] = []
+        checks += try arguments.schemaStringMatches("label").map(ElementPredicateCheck.label)
+        checks += try arguments.schemaStringMatches("identifier").map(ElementPredicateCheck.identifier)
+        checks += try arguments.schemaStringMatches("value").map(ElementPredicateCheck.value)
+        if let traits = try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")),
+           !traits.isEmpty {
+            checks.append(.traits(traits))
+        }
+        if let traits = try TheFence.parseTraitNames(
                 try arguments.schemaStringArray("excludeTraits"),
                 field: arguments.field("excludeTraits")
-            ) ?? []
-        )
+            ),
+           !traits.isEmpty {
+            checks.append(.excludeTraits(traits))
+        }
+        return ElementPredicate(checks)
     }
 }

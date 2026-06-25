@@ -112,7 +112,7 @@ func `expression codable shapes remain stable`() throws {
         identifier: .contains(.literal("field")),
         value: .exact(.literal("Ready"))
     )
-    #expect(try sortedJSON(template) == #"{"identifier":{"mode":"contains","value":"field"},"label_ref":"title","value":"Ready"}"#)
+    #expect(try sortedJSON(template) == #"{"checks":[{"kind":"label","match":{"ref":"title"}},{"kind":"identifier","match":{"mode":"contains","value":"field"}},{"kind":"value","match":"Ready"}]}"#)
 
     #expect(try sortedJSON(StatePredicateExpr.presentTarget(.ref("target"))) == #"{"target_ref":"target","type":"present"}"#)
 
@@ -122,7 +122,7 @@ func `expression codable shapes remain stable`() throws {
         from: .ref("old"),
         to: .literal("new")
     ))
-    #expect(try sortedJSON(change) == #"{"element":{"label_ref":"item"},"from_ref":"old","property":"value","to":"new","type":"element_updated"}"#)
+    #expect(try sortedJSON(change) == #"{"element":{"checks":[{"kind":"label","match":{"ref":"item"}}]},"from_ref":"old","property":"value","to":"new","type":"element_updated"}"#)
 
     let broadChange = ChangePredicateExpr.updated(ElementUpdatePredicateExpr(
         property: .value,

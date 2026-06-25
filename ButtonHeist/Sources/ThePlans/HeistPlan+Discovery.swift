@@ -631,44 +631,40 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicate) {
-        for label in predicate.labelMatches where label.hasPredicateLiteral {
-            appendUnique("label=\(label)", to: &semanticSurfaces)
-        }
-        for identifier in predicate.identifierMatches where identifier.hasPredicateLiteral {
-            appendUnique("identifier=\(identifier)", to: &semanticSurfaces)
-        }
-        for value in predicate.valueMatches where value.hasPredicateLiteral {
-            appendUnique("value=\(value)", to: &semanticSurfaces)
-        }
-        if !predicate.traits.isEmpty {
-            appendUnique("traits=\(predicate.traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
-        }
-        if !predicate.excludeTraits.isEmpty {
-            appendUnique(
-                "excludeTraits=\(predicate.excludeTraits.map(\.rawValue).joined(separator: "|"))",
-                to: &semanticSurfaces
-            )
+        for check in predicate.checks {
+            switch check {
+            case .label(let label) where label.hasPredicateLiteral:
+                appendUnique("label=\(label)", to: &semanticSurfaces)
+            case .identifier(let identifier) where identifier.hasPredicateLiteral:
+                appendUnique("identifier=\(identifier)", to: &semanticSurfaces)
+            case .value(let value) where value.hasPredicateLiteral:
+                appendUnique("value=\(value)", to: &semanticSurfaces)
+            case .traits(let traits) where !traits.isEmpty:
+                appendUnique("traits=\(traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
+            case .excludeTraits(let traits) where !traits.isEmpty:
+                appendUnique("excludeTraits=\(traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
+            case .label, .identifier, .value, .traits, .excludeTraits:
+                break
+            }
         }
     }
 
     mutating func appendSemanticSurfaces(_ predicate: ElementPredicateTemplate) {
-        for label in predicate.labelMatches {
-            appendUnique("label=\(semanticString(label))", to: &semanticSurfaces)
-        }
-        for identifier in predicate.identifierMatches {
-            appendUnique("identifier=\(semanticString(identifier))", to: &semanticSurfaces)
-        }
-        for value in predicate.valueMatches {
-            appendUnique("value=\(semanticString(value))", to: &semanticSurfaces)
-        }
-        if !predicate.traits.isEmpty {
-            appendUnique("traits=\(predicate.traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
-        }
-        if !predicate.excludeTraits.isEmpty {
-            appendUnique(
-                "excludeTraits=\(predicate.excludeTraits.map(\.rawValue).joined(separator: "|"))",
-                to: &semanticSurfaces
-            )
+        for check in predicate.checks {
+            switch check {
+            case .label(let label):
+                appendUnique("label=\(semanticString(label))", to: &semanticSurfaces)
+            case .identifier(let identifier):
+                appendUnique("identifier=\(semanticString(identifier))", to: &semanticSurfaces)
+            case .value(let value):
+                appendUnique("value=\(semanticString(value))", to: &semanticSurfaces)
+            case .traits(let traits) where !traits.isEmpty:
+                appendUnique("traits=\(traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
+            case .excludeTraits(let traits) where !traits.isEmpty:
+                appendUnique("excludeTraits=\(traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
+            case .traits, .excludeTraits:
+                break
+            }
         }
     }
 

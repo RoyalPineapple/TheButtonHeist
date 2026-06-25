@@ -301,35 +301,14 @@ public enum MinimumPredicateSelector {
         case .value(let value):
             return ElementPredicate(value: .exact(value))
         case .trait(let trait):
-            return ElementPredicate(traits: [trait])
+            return ElementPredicate([.traits([trait])])
         case .excludedTrait(let trait):
-            return ElementPredicate(excludeTraits: [trait])
+            return ElementPredicate([.excludeTraits([trait])])
         }
     }
 
     private static func combinedPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
-        var labelMatches: [StringMatch<String>] = []
-        var identifierMatches: [StringMatch<String>] = []
-        var valueMatches: [StringMatch<String>] = []
-        var traits: [HeistTrait] = []
-        var excludeTraits: [HeistTrait] = []
-
-        for atom in atoms {
-            let predicate = atom.predicate
-            labelMatches.append(contentsOf: predicate.labelMatches)
-            identifierMatches.append(contentsOf: predicate.identifierMatches)
-            valueMatches.append(contentsOf: predicate.valueMatches)
-            traits.append(contentsOf: predicate.traits)
-            excludeTraits.append(contentsOf: predicate.excludeTraits)
-        }
-
-        return ElementPredicate(
-            labelMatches: labelMatches,
-            identifierMatches: identifierMatches,
-            valueMatches: valueMatches,
-            traits: AccessibilityPolicy.orderedMatcherTraits(unique(traits)),
-            excludeTraits: AccessibilityPolicy.orderedMatcherTraits(unique(excludeTraits))
-        )
+        ElementPredicate(atoms.flatMap { $0.predicate.checks })
     }
 
     private static func tier(for atoms: [MatcherAtom]) -> CandidateTier {
@@ -345,11 +324,6 @@ public enum MinimumPredicateSelector {
         case (false, false):
             return .ordinalDisambiguation
         }
-    }
-
-    private static func unique(_ traits: [HeistTrait]) -> [HeistTrait] {
-        var seen = Set<HeistTrait>()
-        return traits.filter { seen.insert($0).inserted }
     }
 
     private static func nonEmpty(_ value: String?) -> String? {
