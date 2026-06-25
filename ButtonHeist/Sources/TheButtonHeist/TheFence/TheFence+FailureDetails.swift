@@ -2,79 +2,80 @@ import Foundation
 
 import TheScore
 
+struct ServerFailureDescriptor: Sendable {
+    let errorCode: String
+    let phase: FailurePhase
+    let retryable: Bool
+    let hint: String?
+}
+
 public extension ServerError {
+    internal var failureDescriptor: ServerFailureDescriptor {
+        kind.failureDescriptor
+    }
+
     var errorCode: String {
-        kind.errorCode
+        failureDescriptor.errorCode
     }
 
     var phase: FailurePhase {
-        kind.phase
+        failureDescriptor.phase
     }
 
     var retryable: Bool {
-        kind.retryable
+        failureDescriptor.retryable
     }
 
     var hint: String? {
-        if kind == .authFailure {
-            return FenceError.authFailureRecoveryHint(for: message)
-        }
-        return kind.hint
+        failureDescriptor.hint
     }
 }
 
 private extension ErrorKind {
-    var errorCode: String {
+    var failureDescriptor: ServerFailureDescriptor {
         switch self {
         case .elementNotFound:
-            return "request.element_not_found"
+            return ServerFailureDescriptor(
+                errorCode: "request.element_not_found",
+                phase: .request,
+                retryable: false,
+                hint: "Refresh the interface and verify the target's accessibility properties."
+            )
         case .timeout:
-            return "request.timeout"
+            return ServerFailureDescriptor(
+                errorCode: "request.timeout",
+                phase: .request,
+                retryable: true,
+                hint: "The request timed out; retry on the same session if the app is responsive."
+            )
         case .validationError:
-            return "request.validation_error"
+            return ServerFailureDescriptor(
+                errorCode: "request.validation_error",
+                phase: .request,
+                retryable: false,
+                hint: "Fix the request so it satisfies the server-side validation rules."
+            )
         case .actionFailed:
-            return "request.action_failed"
+            return ServerFailureDescriptor(
+                errorCode: "request.action_failed",
+                phase: .request,
+                retryable: false,
+                hint: nil
+            )
         case .authFailure:
-            return "auth.failed"
+            return ServerFailureDescriptor(
+                errorCode: "auth.failed",
+                phase: .authentication,
+                retryable: false,
+                hint: nil
+            )
         case .general:
-            return "server.general"
-        }
-    }
-
-    var phase: FailurePhase {
-        switch self {
-        case .elementNotFound, .timeout, .validationError, .actionFailed:
-            return .request
-        case .authFailure:
-            return .authentication
-        case .general:
-            return .server
-        }
-    }
-
-    var retryable: Bool {
-        switch self {
-        case .timeout:
-            return true
-        case .elementNotFound, .validationError, .actionFailed, .authFailure, .general:
-            return false
-        }
-    }
-
-    var hint: String? {
-        switch self {
-        case .elementNotFound:
-            return "Refresh the interface and verify the target's accessibility properties."
-        case .timeout:
-            return "The request timed out; retry on the same session if the app is responsive."
-        case .validationError:
-            return "Fix the request so it satisfies the server-side validation rules."
-        case .actionFailed:
-            return nil
-        case .authFailure:
-            return nil
-        case .general:
-            return nil
+            return ServerFailureDescriptor(
+                errorCode: "server.general",
+                phase: .server,
+                retryable: false,
+                hint: nil
+            )
         }
     }
 }

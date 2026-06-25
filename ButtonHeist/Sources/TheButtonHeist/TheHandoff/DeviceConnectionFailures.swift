@@ -98,14 +98,6 @@ enum DisconnectReason: Error, LocalizedError {
                 hint: "Check that the app is still running and reachable, then retry."
             )
         case .authFailed(let reason):
-            let hint: String?
-            if reason.localizedCaseInsensitiveContains("configured token") {
-                hint = "Retry with the configured token."
-            } else if reason.localizedCaseInsensitiveContains("retry without") {
-                hint = "Retry without a token to request a fresh session."
-            } else {
-                hint = nil
-            }
             return HandoffFailureDiagnostic(
                 operation: .connection,
                 target: nil,
@@ -113,7 +105,7 @@ enum DisconnectReason: Error, LocalizedError {
                 errorCode: "auth.failed",
                 phase: .authentication,
                 retryable: false,
-                hint: hint
+                hint: nil
             )
         case .sessionLocked(let message):
             return HandoffFailureDiagnostic(
