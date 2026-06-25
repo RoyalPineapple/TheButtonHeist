@@ -29,7 +29,7 @@ public enum StringExpr: Codable, Sendable, Equatable, Hashable {
         }
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "string expression")
-        self = .ref(try HeistReferenceName.decode(from: container, forKey: .ref))
+        self = .ref(try HeistReferenceName.decode(from: container, forKey: .ref, type: "string"))
     }
 
     public func encode(to encoder: Encoder) throws {

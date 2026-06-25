@@ -61,29 +61,33 @@ extension HeistReferenceName: CustomStringConvertible {
 extension HeistReferenceName {
     static func decode<K: CodingKey>(
         from container: KeyedDecodingContainer<K>,
-        forKey key: K
+        forKey key: K,
+        type: String? = nil
     ) throws -> HeistReferenceName {
-        try decode(try container.decode(String.self, forKey: key), from: container, forKey: key)
+        try decode(try container.decode(String.self, forKey: key), from: container, forKey: key, type: type)
     }
 
     static func decodeIfPresent<K: CodingKey>(
         from container: KeyedDecodingContainer<K>,
-        forKey key: K
+        forKey key: K,
+        type: String? = nil
     ) throws -> HeistReferenceName? {
         guard let value = try container.decodeIfPresent(String.self, forKey: key) else { return nil }
-        return try decode(value, from: container, forKey: key)
+        return try decode(value, from: container, forKey: key, type: type)
     }
 
     private static func decode<K: CodingKey>(
         _ value: String,
         from container: KeyedDecodingContainer<K>,
-        forKey key: K
+        forKey key: K,
+        type: String?
     ) throws -> HeistReferenceName {
         guard let normalized = normalized(value) else {
+            let subject = type.map { "\($0) reference" } ?? key.stringValue
             throw DecodingError.dataCorruptedError(
                 forKey: key,
                 in: container,
-                debugDescription: "\(key.stringValue) must not be empty"
+                debugDescription: "\(subject) must not be empty"
             )
         }
         return normalized

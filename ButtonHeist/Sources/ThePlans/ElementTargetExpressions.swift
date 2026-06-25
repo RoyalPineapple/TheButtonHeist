@@ -108,7 +108,7 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
         from container: KeyedDecodingContainer<CodingKeys>,
         key: CodingKeys
     ) throws -> HeistReferenceName {
-        try HeistReferenceName.decode(from: container, forKey: key)
+        try HeistReferenceName.decode(from: container, forKey: key, type: "target")
     }
 }
 
