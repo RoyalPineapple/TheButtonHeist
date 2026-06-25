@@ -14,7 +14,7 @@ enum DisconnectReason: Error, LocalizedError {
     case bufferOverflow
     case eventBacklogOverflow(maxEvents: Int)
     case serverClosed
-    case authFailed(String)
+    case authFailed(String, hint: String? = nil)
     case sessionLocked(String)
     case protocolMismatch(String)
     case localDisconnect
@@ -97,7 +97,7 @@ enum DisconnectReason: Error, LocalizedError {
                 retryable: true,
                 hint: "Check that the app is still running and reachable, then retry."
             )
-        case .authFailed(let reason):
+        case .authFailed(let reason, let hint):
             return HandoffFailureDiagnostic(
                 operation: .connection,
                 target: nil,
@@ -105,7 +105,7 @@ enum DisconnectReason: Error, LocalizedError {
                 errorCode: "auth.failed",
                 phase: .authentication,
                 retryable: false,
-                hint: nil
+                hint: hint
             )
         case .sessionLocked(let message):
             return HandoffFailureDiagnostic(
@@ -194,8 +194,8 @@ extension DisconnectReason: Equatable {
             return true
         case (.eventBacklogOverflow(let lhsMaxEvents), .eventBacklogOverflow(let rhsMaxEvents)):
             return lhsMaxEvents == rhsMaxEvents
-        case (.authFailed(let lhsReason), .authFailed(let rhsReason)):
-            return lhsReason == rhsReason
+        case (.authFailed(let lhsReason, let lhsHint), .authFailed(let rhsReason, let rhsHint)):
+            return lhsReason == rhsReason && lhsHint == rhsHint
         case (.sessionLocked(let lhsMessage), .sessionLocked(let rhsMessage)):
             return lhsMessage == rhsMessage
         case (.protocolMismatch(let lhsMessage), .protocolMismatch(let rhsMessage)):

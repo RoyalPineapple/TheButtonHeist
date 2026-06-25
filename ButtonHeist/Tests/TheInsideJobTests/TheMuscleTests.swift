@@ -398,6 +398,7 @@ final class TheMuscleTests: XCTestCase {
             authFailure?.message,
             "Invalid token. Retry with the configured token."
         )
+        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
     }
 
     func testExplicitTokenRejectsEmptyTokenWithoutUIApproval() async throws {
@@ -409,6 +410,7 @@ final class TheMuscleTests: XCTestCase {
             return error
         }.first
         XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
+        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
         let connections = await muscle.activeSessionConnections
         XCTAssertFalse(connections.contains(1))
         XCTAssertEqual(connections.count, 0)
@@ -427,6 +429,7 @@ final class TheMuscleTests: XCTestCase {
             return error
         }.first
         XCTAssertEqual(authFailure?.message, "Token is required. Retry with the configured token.")
+        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
     }
 
     func testGeneratedTokenAuthenticatesWhenProvided() async throws {
@@ -459,6 +462,7 @@ final class TheMuscleTests: XCTestCase {
             authFailure?.message,
             "Invalid token. Retry with the configured token."
         )
+        XCTAssertEqual(authFailure?.recoveryHint, "Retry with the configured token.")
     }
 
     func testGeneratedTokenStillRejectsEmptyTokenWhileSessionActive() async throws {

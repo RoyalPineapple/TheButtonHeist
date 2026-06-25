@@ -19,19 +19,19 @@ struct MuscleTokenAuthenticationPhase {
 
         case .rejected(let rejection):
             switch rejection {
-            case .invalidToken(let retryMessage, let attempts):
+            case .invalidToken(let error, let attempts):
                 muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
                 return .handled(.response(
-                    .error(ServerError(kind: .authFailure, message: retryMessage)),
+                    .error(error),
                     respond: respond,
                     disconnect: clientId
                 ))
 
-            case .lockoutStarted(let retryMessage, let attempts):
+            case .lockoutStarted(let error, let attempts):
                 muscleAuthenticationLogger.warning("Address \(address) locked out after \(attempts) failed attempts")
                 muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
                 return .handled(.response(
-                    .error(ServerError(kind: .authFailure, message: retryMessage)),
+                    .error(error),
                     respond: respond,
                     disconnect: clientId
                 ))

@@ -26,13 +26,18 @@ final class AuthMessageTests: XCTestCase {
     // MARK: - error(ServerError) — authFailure
 
     func testAuthFailedEncodeDecode() throws {
-        let message = ServerMessage.error(ServerError(kind: .authFailure, message: "Invalid token"))
+        let message = ServerMessage.error(ServerError(
+            kind: .authFailure,
+            message: "Invalid token",
+            recoveryHint: "Retry with the configured token."
+        ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .error(let serverError) = decoded {
             XCTAssertEqual(serverError.kind, .authFailure)
             XCTAssertEqual(serverError.message, "Invalid token")
+            XCTAssertEqual(serverError.recoveryHint, "Retry with the configured token.")
         } else {
             XCTFail("Expected error, got \(decoded)")
         }

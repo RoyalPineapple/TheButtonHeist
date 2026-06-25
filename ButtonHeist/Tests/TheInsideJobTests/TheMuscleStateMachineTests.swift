@@ -10,23 +10,25 @@ final class TheMuscleStateMachineTests: XCTestCase {
             lockoutDuration: 30
         )
 
-        guard case .rejected(.invalidToken(let firstMessage, let firstAttempts)) = admission.decideToken(
+        guard case .rejected(.invalidToken(let firstError, let firstAttempts)) = admission.decideToken(
             "bad-token",
             driverId: nil,
             address: "127.0.0.1"
         ) else {
             return XCTFail("Expected the first bad token to be rejected")
         }
-        XCTAssertEqual(firstMessage, "Invalid token. Retry with the configured token.")
+        XCTAssertEqual(firstError.message, "Invalid token. Retry with the configured token.")
+        XCTAssertEqual(firstError.recoveryHint, "Retry with the configured token.")
         XCTAssertEqual(firstAttempts, 1)
 
-        guard case .rejected(.lockoutStarted(_, let secondAttempts)) = admission.decideToken(
+        guard case .rejected(.lockoutStarted(let secondError, let secondAttempts)) = admission.decideToken(
             "bad-token",
             driverId: nil,
             address: "127.0.0.1"
         ) else {
             return XCTFail("Expected the second bad token to be rejected")
         }
+        XCTAssertEqual(secondError.recoveryHint, "Retry with the configured token.")
         XCTAssertEqual(secondAttempts, 2)
 
         guard case .lockedOut(let error) = admission.decideToken(
