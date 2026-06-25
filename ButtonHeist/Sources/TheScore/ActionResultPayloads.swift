@@ -20,22 +20,27 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
 public struct ServerError: Codable, Sendable, Equatable {
     public let kind: ErrorKind
     public let message: String
+    public let recoveryHint: String?
 
-    public init(kind: ErrorKind, message: String) {
+    public init(kind: ErrorKind, message: String, recoveryHint: String? = nil) {
         precondition(!message.isEmpty, "ServerError message must not be empty")
+        precondition(recoveryHint?.isEmpty != true, "ServerError recoveryHint must not be empty")
         self.kind = kind
         self.message = message
+        self.recoveryHint = recoveryHint
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind
         case message
+        case recoveryHint
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(ErrorKind.self, forKey: .kind)
         let message = try container.decode(String.self, forKey: .message)
+        let recoveryHint = try container.decodeIfPresent(String.self, forKey: .recoveryHint)
         guard !message.isEmpty else {
             throw DecodingError.dataCorruptedError(
                 forKey: .message,
@@ -43,8 +48,16 @@ public struct ServerError: Codable, Sendable, Equatable {
                 debugDescription: "server error message must not be empty"
             )
         }
+        if recoveryHint?.isEmpty == true {
+            throw DecodingError.dataCorruptedError(
+                forKey: .recoveryHint,
+                in: container,
+                debugDescription: "server error recoveryHint must not be empty"
+            )
+        }
         self.kind = kind
         self.message = message
+        self.recoveryHint = recoveryHint
     }
 }
 

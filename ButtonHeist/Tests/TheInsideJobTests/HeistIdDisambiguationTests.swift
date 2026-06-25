@@ -84,7 +84,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
     ) {
         for heistId in screen.semantic.elements.keys {
             XCTAssertNil(
-                heistId.firstMatch(of: Self.contentPositionSuffixRegex),
+                heistId.rawValue.firstMatch(of: Self.contentPositionSuffixRegex),
                 "buildScreen produced an `_at_X_Y` suffix: \(heistId)",
                 file: file,
                 line: line

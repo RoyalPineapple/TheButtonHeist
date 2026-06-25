@@ -41,9 +41,9 @@ public enum HeistParameter: Codable, Sendable, Equatable {
             }
             self = .none
         case .string:
-            self = .string(name: try container.decode(String.self, forKey: .name))
+            self = .string(name: try HeistReferenceName.decode(from: container, forKey: .name))
         case .elementTarget:
-            self = .elementTarget(name: try container.decode(String.self, forKey: .name))
+            self = .elementTarget(name: try HeistReferenceName.decode(from: container, forKey: .name))
         }
     }
 
@@ -108,7 +108,7 @@ public enum HeistArgument: Codable, Sendable, Equatable {
             }
             self = hasValue
                 ? .string(.literal(try container.decode(String.self, forKey: .value)))
-                : .string(.ref(try container.decode(String.self, forKey: .valueRef)))
+                : .string(.ref(try HeistReferenceName.decode(from: container, forKey: .valueRef)))
         case .elementTarget:
             // Singular: a predicate for exactly one element, carried under `target`
             // as an element-target expression (concrete target, predicate, or ref).

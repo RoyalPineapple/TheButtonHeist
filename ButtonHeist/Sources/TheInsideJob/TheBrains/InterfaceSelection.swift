@@ -100,7 +100,7 @@ struct InterfaceSelector {
                     summary: container.subtreeCandidateSummary(annotation: annotation)
                 )
             }
-        }.sorted(by: InterfaceSubtreeCandidate.isBefore)
+        }.sorted()
         guard !candidates.isEmpty else {
             throw .subtreeNotFound
         }
@@ -144,7 +144,7 @@ struct InterfaceSelector {
     }
 
     private func selectedInterface(forLeafCandidates candidates: [InterfaceLeafCandidate]) -> Interface {
-        let orderedCandidates = candidates.sorted(by: InterfaceLeafCandidate.isBefore)
+        let orderedCandidates = candidates.sorted()
         let tree = orderedCandidates.map(\.node)
         let elementAnnotations = orderedCandidates.enumerated().compactMap { index, candidate -> InterfaceElementAnnotation? in
             guard let annotation = candidate.annotation else { return nil }
@@ -162,13 +162,17 @@ struct InterfaceSelector {
     }
 }
 
-private struct InterfaceLeafCandidate {
+private struct InterfaceLeafCandidate: Comparable {
     let node: AccessibilityHierarchy
     let path: TreePath
     let traversalIndex: Int
     let annotation: InterfaceElementAnnotation?
 
-    static func isBefore(_ lhs: InterfaceLeafCandidate, _ rhs: InterfaceLeafCandidate) -> Bool {
+    static func == (lhs: InterfaceLeafCandidate, rhs: InterfaceLeafCandidate) -> Bool {
+        lhs.traversalIndex == rhs.traversalIndex && lhs.path == rhs.path
+    }
+
+    static func < (lhs: InterfaceLeafCandidate, rhs: InterfaceLeafCandidate) -> Bool {
         if lhs.traversalIndex != rhs.traversalIndex {
             return lhs.traversalIndex < rhs.traversalIndex
         }
@@ -176,13 +180,17 @@ private struct InterfaceLeafCandidate {
     }
 }
 
-private struct InterfaceSubtreeCandidate {
+private struct InterfaceSubtreeCandidate: Comparable {
     let node: AccessibilityHierarchy
     let originalPath: TreePath
     let traversalIndex: Int?
     let summary: String
 
-    static func isBefore(_ lhs: InterfaceSubtreeCandidate, _ rhs: InterfaceSubtreeCandidate) -> Bool {
+    static func == (lhs: InterfaceSubtreeCandidate, rhs: InterfaceSubtreeCandidate) -> Bool {
+        lhs.traversalIndex == rhs.traversalIndex && lhs.originalPath == rhs.originalPath
+    }
+
+    static func < (lhs: InterfaceSubtreeCandidate, rhs: InterfaceSubtreeCandidate) -> Bool {
         switch (lhs.traversalIndex, rhs.traversalIndex) {
         case let (left?, right?) where left != right:
             return left < right
@@ -197,7 +205,7 @@ private extension AccessibilityContainer {
         [
             "container",
             subtreeSummaryRequiredField("type", typeName.rawValue),
-            subtreeSummaryField("containerName", annotation?.containerName),
+            subtreeSummaryField("containerName", annotation?.containerName?.rawValue),
             subtreeSummaryField("identifier", containerIdentifier),
             subtreeSummaryField("label", containerLabel),
             subtreeSummaryField("value", containerValue),

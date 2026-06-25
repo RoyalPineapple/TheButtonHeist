@@ -154,7 +154,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testPostActionObservationCaptureIncludesRegisteredElements() {
         let element = makeElement(label: "Title", traits: .header)
-        let heistId = "header_title"
+        let heistId: HeistId = "header_title"
         installScreen(elements: [(element, heistId)])
 
         let before = brains.postActionObservation.captureSemanticState()
@@ -238,7 +238,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteIncrementFailsWhenElementIsNotAdjustable() async {
-        let heistId = "live_button"
+        let heistId: HeistId = "live_button"
         let liveObject = UIButton(type: .system)
         registerScreenElement(
             heistId: heistId,
@@ -260,7 +260,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteDecrementFailsWhenElementIsNotAdjustable() async {
-        let heistId = "live_button"
+        let heistId: HeistId = "live_button"
         let liveObject = UIButton(type: .system)
         registerScreenElement(
             heistId: heistId,
@@ -282,7 +282,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteCustomActionMissingReportsAvailableCustomActions() async {
-        let heistId = "options_button"
+        let heistId: HeistId = "options_button"
         let liveObject = ActionActivationOverrideView()
         registerScreenElement(
             heistId: heistId,
@@ -310,7 +310,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteCustomActionDeclinedReportsAlternatives() async {
-        let heistId = "options_button"
+        let heistId: HeistId = "options_button"
         let liveObject = ActionActivationOverrideView()
         liveObject.accessibilityCustomActions = [
             UIAccessibilityCustomAction(name: "Delete") { _ in false },
@@ -342,7 +342,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteCustomActionDispatchesLiveCustomAction() async {
-        let heistId = "live_custom_action_host"
+        let heistId: HeistId = "live_custom_action_host"
         let liveObject = UIView()
         let customActionTarget = CustomActionTargetObject()
         liveObject.accessibilityCustomActions = [
@@ -368,7 +368,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteCustomActionSelectorDeclineReportsFailure() async {
-        let heistId = "declining_custom_action_host"
+        let heistId: HeistId = "declining_custom_action_host"
         let liveObject = UIView()
         let customActionTarget = CustomActionTargetObject()
         liveObject.accessibilityCustomActions = [
@@ -425,7 +425,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteActivateFailsForNoTraitElementWithoutActivationSignal() async {
-        let heistId = "plain_label"
+        let heistId: HeistId = "plain_label"
         let liveObject = UIView()
         registerScreenElement(
             heistId: heistId,
@@ -487,7 +487,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteActivateBlocksDisabledElementWithActivationOverride() async {
-        let heistId = "disabled_action"
+        let heistId: HeistId = "disabled_action"
         let liveObject = ActionActivationOverrideView()
         registerScreenElement(
             heistId: heistId,
@@ -504,7 +504,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteIncrementSucceedsWhenElementObjectIsLive() async {
-        let heistId = "live_slider"
+        let heistId: HeistId = "live_slider"
         let liveObject = UISlider()
         registerScreenElement(
             heistId: heistId,
@@ -519,7 +519,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testElementActionUsesCurrentAccessibilityCaptureGeometry() async {
-        let heistId = "moving_slider"
+        let heistId: HeistId = "moving_slider"
         let staleObjectPoint = CGPoint(x: 20, y: 20)
         let staleObjectFrame = CGRect(x: 0, y: 0, width: 40, height: 40)
         let capturePoint = CGPoint(x: 190, y: 302)
@@ -560,7 +560,7 @@ final class TheBrainsActionTests: XCTestCase {
             identifier: "quantity_stepper",
             traits: .adjustable
         )
-        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
+        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, HeistId(rawValue: "quantity_0"))])
         let currentElement = makeElement(
             label: "Quantity",
             value: "1",
@@ -572,8 +572,8 @@ final class TheBrainsActionTests: XCTestCase {
             activationPoint: CGPoint(x: 170, y: 202)
         )
         brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(currentElement, "quantity_1")],
-            objects: ["quantity_1": liveObject]
+            elements: [(currentElement, HeistId(rawValue: "quantity_1"))],
+            objects: [HeistId(rawValue: "quantity_1"): liveObject]
         ))
         let target = try matcherTarget(label: "Quantity", in: sourceScreen)
 
@@ -591,7 +591,7 @@ final class TheBrainsActionTests: XCTestCase {
             identifier: "quantity_stepper",
             traits: .adjustable
         )
-        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
+        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, HeistId(rawValue: "quantity_0"))])
         let currentElement = makeElement(
             label: "Quantity",
             value: "1",
@@ -600,8 +600,8 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 170, y: 202))
         brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(currentElement, "quantity_1")],
-            objects: ["quantity_1": liveObject]
+            elements: [(currentElement, HeistId(rawValue: "quantity_1"))],
+            objects: [HeistId(rawValue: "quantity_1"): liveObject]
         ))
         let target = try matcherTarget(label: "Quantity", in: sourceScreen)
 
@@ -750,7 +750,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .conditional)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -773,7 +773,10 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(heist.steps.map(\.kind), [.conditional, .warn])
-        XCTAssertEqual(heist.steps.first?.caseSelectionEvidence?.selection.selectedCaseIndex, nil)
+        XCTAssertEqual(
+            heist.steps.first?.caseSelectionEvidence?.selection.outcome,
+            .elseBranch(reason: .noMatch)
+        )
     }
 
     func testHeistWaitForTimeoutWithoutElseFails() async throws {
@@ -842,7 +845,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .conditional)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -869,7 +872,7 @@ final class TheBrainsActionTests: XCTestCase {
         let selection = try XCTUnwrap(step.caseSelectionEvidence?.selection)
 
         XCTAssertTrue(result.success)
-        XCTAssertNil(selection.selectedCaseIndex)
+        XCTAssertEqual(selection.outcome, .elseBranch(reason: .noMatch))
         XCTAssertEqual(
             selection.cases.first?.result.actual,
             "change predicate requires future settled observation after baseline"
@@ -898,7 +901,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertNil(step.caseSelectionEvidence?.selection.selectedCaseIndex)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .elseBranch(reason: .noMatch))
         XCTAssertEqual(step.children.map(\.kind), [])
     }
 
@@ -968,7 +971,7 @@ final class TheBrainsActionTests: XCTestCase {
     func testPerformWaitTimeoutZeroDoesNotStartObservationWhenRuntimeInactive() async {
         let inactiveBrains = TheBrains(tripwire: TheTripwire())
         inactiveBrains.stash.installScreenForTesting(.makeForTests(elements: [
-            (makeElement(label: "Home"), "home"),
+            (makeElement(label: "Home"), HeistId(rawValue: "home")),
         ]))
         XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
@@ -1540,7 +1543,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertNil(step.caseSelectionEvidence?.selection.selectedCaseIndex)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .elseBranch(reason: .noMatch))
         XCTAssertEqual(step.caseSelectionEvidence?.selection.cases.first?.result.met, false)
     }
 
@@ -1929,7 +1932,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
-        let heistId = "geometry_missing_slider"
+        let heistId: HeistId = "geometry_missing_slider"
         let element = AccessibilityElement.make(
             label: "Geometry Missing",
             traits: .adjustable,
@@ -1992,8 +1995,8 @@ final class TheBrainsActionTests: XCTestCase {
             respondsToUserInteraction: false
         )
         brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(staleElement, "stale_refreshed_slider")],
-            objects: ["stale_refreshed_slider": nil]
+            elements: [(staleElement, HeistId(rawValue: "stale_refreshed_slider"))],
+            objects: [HeistId(rawValue: "stale_refreshed_slider"): nil]
         ))
         guard let staleResolved = brains.stash.resolveTarget(
             .predicate(ElementPredicate(identifier: "refreshed_slider"))
@@ -2232,7 +2235,7 @@ final class TheBrainsActionTests: XCTestCase {
     func testElementTargetedPointActionUsesAccessibilityCaptureActivationPoint() async {
         let capturePoint = CGPoint(x: 10, y: 20)
         let objectPoint = CGPoint(x: 123, y: 456)
-        let heistId = "live_button"
+        let heistId: HeistId = "live_button"
         let element = AccessibilityElement.make(
             label: "Live",
             traits: .button,
@@ -2320,7 +2323,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteRotorWithoutCustomRotorsReportsNextStep() async {
-        let heistId = "plain_rotor_host"
+        let heistId: HeistId = "plain_rotor_host"
         let liveObject = UIView()
         registerScreenElement(
             heistId: heistId,
@@ -2344,7 +2347,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteRotorDispatchesLiveRotorAction() async {
-        let heistId = "live_rotor_host"
+        let heistId: HeistId = "live_rotor_host"
         let liveObject = UIView()
         liveObject.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Live Rotor") { _ in
@@ -2368,11 +2371,11 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteRotorUsesOnscreenAccessibilityGeometryAtViewportEdge() async {
-        let heistId = "edge_rotor_host"
+        let heistId: HeistId = "edge_rotor_host"
         let frame = CGRect(x: 20, y: -20, width: 180, height: 44)
         let element = AccessibilityElement.make(
             label: "Edge Rotor Host",
-            identifier: heistId,
+            identifier: heistId.rawValue,
             traits: .staticText,
             shape: .frame(AccessibilityRect(frame)),
             activationPoint: CGPoint(x: frame.midX, y: 2),
@@ -2398,13 +2401,13 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteRotorDoesNotRequireHostActivationPointOnscreen() async {
-        let heistId = "offscreen_rotor_host"
+        let heistId: HeistId = "offscreen_rotor_host"
         let screenBounds = ScreenMetrics.current.bounds
         let frame = CGRect(x: 32, y: screenBounds.maxY - 8, width: 240, height: 44)
         let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
         let element = AccessibilityElement.make(
             label: "Offscreen Rotor Host",
-            identifier: heistId,
+            identifier: heistId.rawValue,
             traits: .staticText,
             shape: .frame(AccessibilityRect(frame)),
             activationPoint: activationPoint,
@@ -2434,8 +2437,8 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteRotorScrollsViewportTowardResultActivationPoint() async {
-        let hostHeistId = "rotor_result_host"
-        let resultHeistId = "rotor_result_target"
+        let hostHeistId: HeistId = "rotor_result_host"
+        let resultHeistId: HeistId = "rotor_result_target"
         let screenBounds = ScreenMetrics.current.bounds
         let scrollView = UIScrollView(frame: screenBounds)
         scrollView.contentSize = CGSize(width: screenBounds.width, height: screenBounds.height + 900)
@@ -2443,7 +2446,7 @@ final class TheBrainsActionTests: XCTestCase {
         let hostFrame = CGRect(x: 32, y: 80, width: 240, height: 44)
         let hostElement = AccessibilityElement.make(
             label: "Rotor Host",
-            identifier: hostHeistId,
+            identifier: hostHeistId.rawValue,
             traits: .staticText,
             shape: .frame(AccessibilityRect(hostFrame)),
             activationPoint: CGPoint(x: hostFrame.midX, y: hostFrame.midY),
@@ -2452,7 +2455,7 @@ final class TheBrainsActionTests: XCTestCase {
         let resultFrame = CGRect(x: 32, y: screenBounds.maxY + 240, width: 240, height: 44)
         let resultElement = AccessibilityElement.make(
             label: "Rotor Result",
-            identifier: resultHeistId,
+            identifier: resultHeistId.rawValue,
             traits: .staticText,
             shape: .frame(AccessibilityRect(resultFrame)),
             activationPoint: CGPoint(x: resultFrame.midX, y: resultFrame.midY)
@@ -2505,7 +2508,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         let result = await brains.actions.executeRotor(
             RotorTarget(
-                elementTarget: .predicate(ElementPredicate(identifier: .exact(hostHeistId))),
+                elementTarget: .predicate(ElementPredicate(identifier: .exact(hostHeistId.rawValue))),
                 selection: .named("Live Rotor")
             )
         )
@@ -2518,7 +2521,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteRotorNotFoundReportsAvailableRotorsAndNextStep() async {
-        let heistId = "rotor_host"
+        let heistId: HeistId = "rotor_host"
         let liveObject = UIView()
         liveObject.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil },
@@ -2549,7 +2552,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteRotorDiagnosticsMergeLiveRotors() async {
-        let heistId = "rotor_host"
+        let heistId: HeistId = "rotor_host"
         let liveObject = UIView()
         liveObject.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil },
@@ -2572,7 +2575,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testExecuteRotorDiagnosticsUseSystemRotorDisplayName() async {
-        let heistId = "rotor_host"
+        let heistId: HeistId = "rotor_host"
         let liveObject = UIView()
         liveObject.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(systemType: .link) { _ in nil },
@@ -2636,7 +2639,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     private func installScreen(
-        elements: [(AccessibilityElement, String)],
+        elements: [(AccessibilityElement, HeistId)],
         objects: [HeistId: NSObject?] = [:]
     ) {
         brains.stash.installScreenForTesting(.makeForTests(
@@ -2708,7 +2711,7 @@ final class TheBrainsActionTests: XCTestCase {
         let context = PredicateSelectionContext(
             elements: screen.orderedElements.map {
                 PredicateSelectionContext.Element(
-                    id: $0.heistId,
+                    id: $0.heistId.predicateSelectionElementId,
                     element: TheStash.WireConversion.convert($0.element)
                 )
             },
@@ -2716,7 +2719,7 @@ final class TheBrainsActionTests: XCTestCase {
             semanticHash: screen.semanticHash,
             scope: .visible
         )
-        return try XCTUnwrap(minimumUniquePredicate(for: screenElement.heistId, in: context)).target
+        return try XCTUnwrap(minimumUniquePredicate(for: screenElement.heistId.predicateSelectionElementId, in: context)).target
     }
 
     private func XCTAssertDiagnostic(
@@ -2844,7 +2847,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func observedState(labels: [String]) -> PostActionObservation.BeforeState {
         observedState(elements: labels.enumerated().map { index, label in
-            (makeElement(label: label), "element_\(index)")
+            (makeElement(label: label), HeistId(rawValue: "element_\(index)"))
         })
     }
 
@@ -2860,7 +2863,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     private func observedState(
-        elements: [(AccessibilityElement, String)]
+        elements: [(AccessibilityElement, HeistId)]
     ) -> PostActionObservation.BeforeState {
         brains.stash.installScreenForTesting(.makeForTests(elements: elements))
         return brains.postActionObservation.captureSemanticState()

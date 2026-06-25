@@ -9,7 +9,7 @@ extension TheStash {
         PredicateSelectionContext(
             elements: orderedSemanticElements.map {
                 PredicateSelectionContext.Element(
-                    id: $0.heistId,
+                    id: $0.heistId.predicateSelectionElementId,
                     element: WireConversion.convert($0.element)
                 )
             },
@@ -24,7 +24,7 @@ extension TheStash {
         scope: SemanticObservationScope = .visible
     ) -> ElementTarget? {
         minimumUniquePredicate(
-            for: screenElement.heistId,
+            for: screenElement.heistId.predicateSelectionElementId,
             in: predicateSelectionContext(scope: scope)
         )?.target
     }

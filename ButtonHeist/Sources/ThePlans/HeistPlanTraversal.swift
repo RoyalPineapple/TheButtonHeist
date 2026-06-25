@@ -423,10 +423,18 @@ struct HeistReferenceScope {
         return copy
     }
 
+    func bindingTarget(_ reference: String) -> HeistReferenceScope {
+        bindingTarget(HeistReferenceName(rawValue: reference))
+    }
+
     func bindingString(_ reference: HeistReferenceName) -> HeistReferenceScope {
         var copy = self
         copy.stringRefs.insert(reference)
         return copy
+    }
+
+    func bindingString(_ reference: String) -> HeistReferenceScope {
+        bindingString(HeistReferenceName(rawValue: reference))
     }
 
     func binding(parameter: HeistParameter) -> HeistReferenceScope {

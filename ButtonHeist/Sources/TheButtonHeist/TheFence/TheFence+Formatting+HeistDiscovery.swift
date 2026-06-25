@@ -50,7 +50,7 @@ extension FenceResponse {
     private func parameterSummary(_ entry: HeistCatalogEntry) -> String {
         parameterSummary(
             kind: entry.parameterKind,
-            name: entry.parameterName,
+            name: entry.parameterName?.rawValue,
             requiresArgument: entry.requiresArgument
         )
     }
@@ -92,7 +92,7 @@ extension FenceResponse {
     private func parameterSummary(_ description: HeistDescription) -> String {
         parameterSummary(
             kind: description.parameterKind,
-            name: description.parameterName,
+            name: description.parameterName?.rawValue,
             requiresArgument: description.requiresArgument
         )
     }

@@ -492,7 +492,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                                 result: ExpectationResult(met: true, predicate: casePredicate)
                             ),
                         ],
-                        selectedCaseIndex: 0,
+                        outcome: .matchedCase(index: 0),
                         elapsedMs: 1
                     ),
                     children: [childResult]
@@ -711,7 +711,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                                 result: ExpectationResult(met: true, predicate: casePredicate)
                             ),
                         ],
-                        selectedCaseIndex: 0,
+                        outcome: .matchedCase(index: 0),
                         elapsedMs: 1
                     ),
                     failure: HeistFailureDetail(
@@ -733,13 +733,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let children = try XCTUnwrap(root["children"] as? [[String: Any]])
         let child = try XCTUnwrap(children.first)
         let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
+        let caseSelection = try XCTUnwrap(evidence["caseSelection"] as? [String: Any])
         let action = try XCTUnwrap(child["action"] as? [String: Any])
         let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
 
         XCTAssertNil(json["results"])
         XCTAssertEqual(root["path"] as? String, "$.body[0]")
         XCTAssertEqual(root["kind"] as? String, "if")
-        XCTAssertNotNil(evidence["caseSelection"])
+        XCTAssertNotNil(caseSelection["outcome"])
+        XCTAssertNil(caseSelection["selectedCaseIndex"])
+        XCTAssertNil(caseSelection["timedOut"])
+        XCTAssertNil(caseSelection["elseRan"])
         XCTAssertEqual(root["abortedAtChildPath"] as? String, childPath)
         XCTAssertEqual(child["path"] as? String, "$.body[0].conditional.cases[0].body[0]")
         XCTAssertEqual(child["kind"] as? String, "action")
@@ -782,9 +786,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                                 result: ExpectationResult(met: false, predicate: predicate)
                             ),
                         ],
-                        selectedCaseIndex: nil,
+                        outcome: .elseBranch(reason: .noMatch),
                         elapsedMs: 1,
-                        elseRan: true
+                        lastObservedSummary: nil
                     ),
                     children: [childResult]
                 ),

@@ -11,15 +11,46 @@ enum RepairActionFamily: Sendable, Equatable {
     case textInput
     case unknown
 
-    init(actionKind: String, method: ActionMethod?) {
-        if let method {
-            self = Self(method: method, actionKind: actionKind)
+    init(actionIdentity: HeistRepairActionIdentity?, actionKind: String, method: ActionMethod?) {
+        if let actionIdentity {
+            self = Self(actionIdentity: actionIdentity)
             return
         }
-        self = Self(actionKind: actionKind)
+        self = Self(legacyActionKind: actionKind, method: method)
     }
 
-    private init(method: ActionMethod, actionKind: String) {
+    init(actionKind: String, method: ActionMethod?) {
+        self = Self(legacyActionKind: actionKind, method: method)
+    }
+
+    private init(actionIdentity: HeistRepairActionIdentity) {
+        switch actionIdentity.commandType {
+        case .activate, .oneFingerTap, .longPress:
+            self = .activate
+        case .increment:
+            self = .increment
+        case .decrement:
+            self = .decrement
+        case .performCustomAction:
+            self = .customAction(actionIdentity.customActionName)
+        case .rotor:
+            self = .rotor
+        case .typeText:
+            self = .textInput
+        default:
+            self = .unknown
+        }
+    }
+
+    private init(legacyActionKind actionKind: String, method: ActionMethod?) {
+        if let method {
+            self = Self(legacyMethod: method, actionKind: actionKind)
+            return
+        }
+        self = Self(legacyActionKind: actionKind)
+    }
+
+    private init(legacyMethod method: ActionMethod, actionKind: String) {
         switch method {
         case .activate, .syntheticTap, .syntheticLongPress:
             self = .activate
@@ -34,11 +65,11 @@ enum RepairActionFamily: Sendable, Equatable {
         case .typeText:
             self = .textInput
         default:
-            self = Self(actionKind: actionKind)
+            self = Self(legacyActionKind: actionKind)
         }
     }
 
-    private init(actionKind: String) {
+    private init(legacyActionKind actionKind: String) {
         let normalized = actionKind.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if normalized == "activate"
             || normalized == "onefingertap"

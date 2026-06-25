@@ -208,7 +208,7 @@ struct CandidateScoringContext: Sendable, Equatable {
     let expectationEvidence: Set<String>
     let compatibleCandidateCount: Int
     let currentElementCount: Int
-    let preferredCandidates: Set<String>
+    let preferredCandidates: Set<PredicateSelectionElementId>
     let failureKind: HeistRepairFailureKind
     let actionFamily: RepairActionFamily
 }
@@ -241,14 +241,28 @@ struct ScoredCandidate: Sendable, Equatable {
     let caveats: [String]
     let continuitySignals: Set<CandidateContinuitySignal>
 
-    static func precedes(_ lhs: ScoredCandidate, _ rhs: ScoredCandidate) -> Bool {
-        if lhs.score != rhs.score {
-            return lhs.score > rhs.score
+    struct Rank: Sendable, Equatable, Comparable {
+        let score: Int
+        let traversalIndex: Int
+        let semanticKey: String
+
+        static func < (lhs: Rank, rhs: Rank) -> Bool {
+            if lhs.score != rhs.score {
+                return lhs.score > rhs.score
+            }
+            if lhs.traversalIndex != rhs.traversalIndex {
+                return lhs.traversalIndex < rhs.traversalIndex
+            }
+            return lhs.semanticKey < rhs.semanticKey
         }
-        if lhs.element.traversalIndex != rhs.element.traversalIndex {
-            return lhs.element.traversalIndex < rhs.element.traversalIndex
-        }
-        return semanticSortKey(lhs.element.element) < semanticSortKey(rhs.element.element)
+    }
+
+    var rank: Rank {
+        Rank(
+            score: score,
+            traversalIndex: element.traversalIndex,
+            semanticKey: semanticSortKey(element.element)
+        )
     }
 }
 

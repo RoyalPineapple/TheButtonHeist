@@ -20,7 +20,7 @@ extension ElementInflation {
         case .noLiveScrollableAncestor:
             let scrollContainer: String
             if let containerName = entry.scrollContentLocation?.scrollContainer {
-                scrollContainer = " expectedScrollContainer=\(containerName)"
+                scrollContainer = " expectedScrollContainer=\(containerName.rawValue)"
             } else {
                 scrollContainer = ""
             }

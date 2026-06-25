@@ -876,7 +876,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                                 result: ExpectationResult(met: true, predicate: predicate)
                             ),
                         ],
-                        selectedCaseIndex: 0,
+                        outcome: .matchedCase(index: 0),
                         elapsedMs: 2,
                         lastObservedSummary: "screen: login; known: 3 elements"
                     ))),
@@ -899,9 +899,44 @@ final class WireTypeRoundTripTests: XCTestCase {
         let decodedStep = try XCTUnwrap(decoded.steps.first)
         XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.cases.first?.predicate, predicate)
         XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.cases.first?.result.met, true)
-        XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(decodedStep.caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
         XCTAssertEqual(decodedStep.children.first?.actionEvidence?.actionResult?.errorKind, .actionFailed)
         XCTAssertTrue(decodedStep.children.first?.isFailure == true)
+    }
+
+    func testHeistCaseSelectionRejectsLegacyAndLooseOutcomeShapes() throws {
+        let legacy = """
+        {
+          "cases": [],
+          "selectedCaseIndex": 0,
+          "elapsedMs": 1,
+          "timedOut": false,
+          "elseRan": false
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(legacy.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(
+                ["selectedCaseIndex", "timedOut", "elseRan"].contains { context.debugDescription.contains($0) },
+                context.debugDescription
+            )
+        }
+
+        let looseOutcome = """
+        {
+          "cases": [],
+          "outcome": {
+            "kind": "no_match",
+            "index": 0
+          },
+          "elapsedMs": 1
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(looseOutcome.utf8))) { error in
+            assertDecodingError(error, contains: ["no_match", "index"])
+        }
     }
 
     private func forEachElementIteration(

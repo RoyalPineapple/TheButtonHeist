@@ -5,7 +5,7 @@ enum RepairCandidateGenerator {
     static func rankedSuccessorCandidates(
         oldResolved: RepairScreen.Element,
         currentScreen: RepairScreen,
-        preferredCandidates: Set<String>,
+        preferredCandidates: Set<PredicateSelectionElementId>,
         failureKind: HeistRepairFailureKind,
         actionFamily: RepairActionFamily,
         lastSuccess: HeistStepRepairEvidence,
@@ -31,7 +31,7 @@ enum RepairCandidateGenerator {
         )
 
         return currentScreen.elements.compactMap { RepairCandidateScorer.scoredCandidate($0, context: context) }
-            .sorted(by: ScoredCandidate.precedes)
+            .sorted { $0.rank < $1.rank }
     }
 }
 

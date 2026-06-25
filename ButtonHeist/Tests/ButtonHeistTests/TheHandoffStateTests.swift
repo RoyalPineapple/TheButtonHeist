@@ -1312,7 +1312,7 @@ final class TheHandoffStateTests: XCTestCase {
             try await waitTask.value
             XCTFail("Expected auth failure")
         } catch let error as HandoffConnectionError {
-            guard case .disconnected(.authFailed(let reason)) = error else {
+            guard case .disconnected(.authFailed(let reason, hint: _)) = error else {
                 return XCTFail("Expected auth-failed disconnect, got \(error)")
             }
             XCTAssertEqual(reason, "bad token")

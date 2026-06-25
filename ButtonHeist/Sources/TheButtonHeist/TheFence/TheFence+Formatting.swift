@@ -292,33 +292,33 @@ extension FenceResponse {
             if let label = Self.nonEmpty(label) { parts.append(Self.quotedString(label)) }
             if let value = Self.nonEmpty(value) { parts.append("value=\(Self.quotedString(value))") }
             if let identifier = Self.nonEmpty(identifier) { parts.append("id=\(Self.quotedString(identifier))") }
-            if let containerName = Self.nonEmpty(annotation?.containerName) {
+            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName: \(containerName)")
             }
         case .list:
             parts = ["list"]
-            if let containerName = Self.nonEmpty(annotation?.containerName) {
+            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName: \(containerName)")
             }
         case .landmark:
             parts = ["landmark"]
-            if let containerName = Self.nonEmpty(annotation?.containerName) {
+            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName: \(containerName)")
             }
         case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
-            if let containerName = Self.nonEmpty(annotation?.containerName) {
+            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName: \(containerName)")
             }
         case .tabBar:
             parts = ["tab_bar"]
-            if let containerName = Self.nonEmpty(annotation?.containerName) {
+            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName: \(containerName)")
             }
         case .scrollable(let contentSize):
             let frame = container.frame
             var lines = ["scrollable"]
-            if let containerName = Self.nonEmpty(annotation?.containerName) {
+            if let containerName = Self.nonEmpty(annotation?.containerName?.rawValue) {
                 lines.append("  containerName: \(containerName)")
             }
             lines.append("  viewport: \(Int(frame.size.width))x\(Int(frame.size.height))")

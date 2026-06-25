@@ -15,7 +15,15 @@ enum SessionTokenSource: Sendable {
     }
 
     var invalidTokenMessage: String {
-        "Invalid token. Retry with the configured token."
+        "Invalid token. \(configuredTokenRecoveryHint)"
+    }
+
+    var emptyTokenMessage: String {
+        "Token is required. \(configuredTokenRecoveryHint)"
+    }
+
+    var configuredTokenRecoveryHint: String {
+        "Retry with the configured token."
     }
 
     func effectiveDriverId(driverId: String?) -> String {

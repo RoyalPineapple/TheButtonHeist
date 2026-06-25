@@ -14,8 +14,21 @@ struct TheMuscleSession {
     }
 
     enum Acquisition {
-        case accepted(notifyActiveChanged: Bool, releaseTimerAction: ReleaseTimerAction)
+        case accepted(AcceptanceEffect)
         case rejected(SessionLease.SessionLockDiagnostic)
+    }
+
+    struct AcceptanceEffect {
+        let leaseEffect: SessionLease.AcquisitionEffect
+
+        var releaseTimerAction: ReleaseTimerAction {
+            switch leaseEffect {
+            case .claimedSession:
+                return .none
+            case .rejoinedDuringGracePeriod:
+                return .cancel
+            }
+        }
     }
 
     private var lease: SessionLease
@@ -46,16 +59,14 @@ struct TheMuscleSession {
 
     mutating func acquire(driverIdentity: String, clientId: Int) -> Acquisition {
         switch lease.acquire(driverIdentity: driverIdentity, clientId: clientId) {
-        case .accepted(let notifyActiveChanged, let shouldCancelReleaseTimer):
-            if notifyActiveChanged {
+        case .accepted(let effect):
+            switch effect {
+            case .claimedSession:
                 sessionLogger.info("Session claimed by client \(clientId)")
-            } else {
+            case .rejoinedDuringGracePeriod:
                 sessionLogger.info("Client \(clientId) rejoined session during grace period")
             }
-            return .accepted(
-                notifyActiveChanged: notifyActiveChanged,
-                releaseTimerAction: shouldCancelReleaseTimer ? .cancel : .none
-            )
+            return .accepted(AcceptanceEffect(leaseEffect: effect))
 
         case .rejected(let diagnostic):
             return .rejected(diagnostic)
@@ -63,9 +74,11 @@ struct TheMuscleSession {
     }
 
     mutating func release() -> ReleaseTimerAction {
-        let hadSession = lease.release()
-        if hadSession {
+        switch lease.release() {
+        case .releasedSession:
             sessionLogger.info("Session released")
+        case .noActiveSession:
+            break
         }
         return .cancel
     }

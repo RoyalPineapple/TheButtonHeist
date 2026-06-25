@@ -83,7 +83,7 @@ public struct ContainerMatcher: Codable, Sendable, Equatable {
 extension ContainerMatcher: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("containerMatcher", [
-            ScoreDescription.stringField("containerName", containerName),
+            ScoreDescription.stringField("containerName", containerName?.rawValue),
             ScoreDescription.valueField("type", type),
             ScoreDescription.stringField("label", label),
             ScoreDescription.stringField("value", value),

@@ -7,13 +7,13 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
 
     public let matching: ElementPredicate
     public let limit: Int
-    public let parameter: String
+    public let parameter: HeistReferenceName
     public let body: [HeistStep]
 
     public init(
         matching: ElementPredicate,
         limit: Int,
-        parameter: String,
+        parameter: HeistReferenceName,
         body: [HeistStep]
     ) throws {
         guard matching.hasPredicates else {
@@ -25,9 +25,10 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
         guard !body.isEmpty else {
             throw HeistPlanError.emptyForEachSteps
         }
+        let parameter = try HeistParameterName.normalized(parameter.rawValue)
         self.matching = matching
         self.limit = limit
-        self.parameter = parameter
+        self.parameter = HeistReferenceName(rawValue: parameter)
         self.body = body
     }
 
@@ -37,7 +38,7 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
         try self.init(
             matching: try container.decode(ElementPredicate.self, forKey: .matching),
             limit: try container.decode(Int.self, forKey: .limit),
-            parameter: try container.decode(String.self, forKey: .parameter),
+            parameter: try HeistReferenceName.decode(from: container, forKey: .parameter, type: "for_each_element parameter"),
             body: try container.decode([HeistStep].self, forKey: .body)
         )
     }
@@ -49,12 +50,12 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
     }
 
     public let values: [String]
-    public let parameter: String
+    public let parameter: HeistReferenceName
     public let body: [HeistStep]
 
     public init(
         values: [String],
-        parameter: String,
+        parameter: HeistReferenceName,
         body: [HeistStep]
     ) throws {
         guard !values.isEmpty else {
@@ -63,8 +64,9 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
         guard !body.isEmpty else {
             throw HeistPlanError.emptyForEachSteps
         }
+        let parameter = try HeistParameterName.normalized(parameter.rawValue)
         self.values = values
-        self.parameter = parameter
+        self.parameter = HeistReferenceName(rawValue: parameter)
         self.body = body
     }
 
@@ -73,7 +75,7 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
             values: try container.decode([String].self, forKey: .values),
-            parameter: try container.decode(String.self, forKey: .parameter),
+            parameter: try HeistReferenceName.decode(from: container, forKey: .parameter, type: "for_each_string parameter"),
             body: try container.decode([HeistStep].self, forKey: .body)
         )
     }

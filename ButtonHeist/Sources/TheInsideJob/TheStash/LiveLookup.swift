@@ -167,7 +167,7 @@ struct LiveLookup {
                 let pathView = capture.scrollableContainerViewsByPath[item.path]?.view
                 let containerObject = capture.containerRefsByPath[item.path]?.object
                 let objectType = containerObject.map { String(describing: type(of: $0)) } ?? "<nil>"
-                return "path=\(item.path.indices) name=\(containerName ?? "<nil>") "
+                return "path=\(item.path.indices) name=\(containerName?.rawValue ?? "<nil>") "
                     + "liveScroll=\(hasLiveScrollView) pathView=\(pathView != nil) "
                     + "object=\(objectType)"
             }

@@ -81,7 +81,10 @@ final class DeviceConnectionTLSTests: XCTestCase {
     }
 
     func testExplicitTokenAuthFailureHintDoesNotSuggestUIApproval() {
-        let reason = DisconnectReason.authFailed("Invalid token. Retry with the configured token.")
+        let reason = DisconnectReason.authFailed(
+            "Invalid token. Retry with the configured token.",
+            hint: "Retry with the configured token."
+        )
 
         XCTAssertEqual(reason.hint, "Retry with the configured token.")
         XCTAssertTrue(reason.connectionFailureMessage.contains("Retry with the configured token."))

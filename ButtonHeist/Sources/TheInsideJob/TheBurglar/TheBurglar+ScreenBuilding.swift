@@ -75,7 +75,7 @@ extension TheBurglar {
             return (object as? UIView)?.isFirstResponder == true
         }
         if firstResponders.count > 1 {
-            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
+            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map { $0.1.description }.joined(separator: ", "))")
         }
 
         let scrollableViewRefs = result.scrollViews.mapValues { Screen.ScrollableViewRef(view: $0) }
@@ -233,7 +233,7 @@ extension TheBurglar {
         node: AccessibilityHierarchy,
         path: TreePath
     ) -> ContainerName {
-        "\(readableName)-\(containerHash(node: node, path: path))"
+        ContainerName(rawValue: "\(readableName.rawValue)-\(containerHash(node: node, path: path))")
     }
 
     private static func containerHash(node: AccessibilityHierarchy, path: TreePath) -> String {

@@ -522,14 +522,14 @@ final class WaitForIntegrationTests: XCTestCase {
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        let visibleHeistId = "wait_change_visible_anchor_staticText"
+        let visibleHeistId: HeistId = "wait_change_visible_anchor_staticText"
 
         let offViewportElement = AccessibilityElement.make(
             label: "WaitForChange-KnownMemory-OffViewport",
             traits: .button,
             respondsToUserInteraction: false
         )
-        let offViewportHeistId = "wait_change_known_offviewport_button"
+        let offViewportHeistId: HeistId = "wait_change_known_offviewport_button"
         let baseline = Screen.makeForTests(
             elements: [(visibleBefore, visibleHeistId)],
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]

@@ -50,7 +50,7 @@ public struct Heist: Sendable {
     @MainActor
     public init<Content: HeistContent>(
         _ input: String,
-        parameter: String = "input",
+        parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: (StringExpr) throws -> Content
     ) async throws {
         let plan = try Self.plan(parameter: .string(name: parameter)) {
@@ -66,7 +66,7 @@ public struct Heist: Sendable {
     @MainActor
     init<Content: HeistContent>(
         _ input: String,
-        parameter: String = "input",
+        parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
         @HeistBuilder _ content: (StringExpr) throws -> Content
     ) async throws {
@@ -84,7 +84,7 @@ public struct Heist: Sendable {
     @MainActor
     public init<Content: HeistContent>(
         _ input: ElementTarget,
-        parameter: String = "input",
+        parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
     ) async throws {
         try await self.init(
@@ -98,7 +98,7 @@ public struct Heist: Sendable {
     @MainActor
     init<Content: HeistContent>(
         _ input: ElementTarget,
-        parameter: String = "input",
+        parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
         @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
     ) async throws {
@@ -113,7 +113,7 @@ public struct Heist: Sendable {
     @MainActor
     public init<Content: HeistContent>(
         _ input: ElementTargetExpr,
-        parameter: String = "input",
+        parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
     ) async throws {
         try await self.init(
@@ -127,7 +127,7 @@ public struct Heist: Sendable {
     @MainActor
     init<Content: HeistContent>(
         _ input: ElementTargetExpr,
-        parameter: String = "input",
+        parameter: HeistReferenceName = "input",
         runtime: InAppHeistRuntime,
         @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
     ) async throws {
@@ -145,7 +145,7 @@ public struct Heist: Sendable {
     @MainActor
     public init<Content: HeistContent>(
         _ values: [String],
-        parameter: String = "item",
+        parameter: HeistReferenceName = "item",
         @HeistBuilder _ content: (StringExpr) throws -> Content
     ) async throws {
         let plan = try HeistPlan {
@@ -157,7 +157,7 @@ public struct Heist: Sendable {
     @MainActor
     init<Content: HeistContent>(
         _ values: [String],
-        parameter: String = "item",
+        parameter: HeistReferenceName = "item",
         runtime: InAppHeistRuntime,
         @HeistBuilder _ content: (StringExpr) throws -> Content
     ) async throws {
@@ -229,7 +229,7 @@ func RunHeist<Content: HeistContent>(
 public func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: String,
-    parameter: String = "input",
+    parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: (StringExpr) throws -> Content
 ) async throws -> Heist {
     try await RunHeist(name, argument: input, parameter: parameter, runtime: .shared, content)
@@ -239,7 +239,7 @@ public func RunHeist<Content: HeistContent>(
 func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: String,
-    parameter: String = "input",
+    parameter: HeistReferenceName = "input",
     runtime: InAppHeistRuntime,
     @HeistBuilder _ content: (StringExpr) throws -> Content
 ) async throws -> Heist {
@@ -252,7 +252,7 @@ func RunHeist<Content: HeistContent>(
 public func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: ElementTarget,
-    parameter: String = "input",
+    parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
 ) async throws -> Heist {
     try await RunHeist(name, argument: .target(input), parameter: parameter, runtime: .shared, content)
@@ -263,7 +263,7 @@ public func RunHeist<Content: HeistContent>(
 func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: ElementTarget,
-    parameter: String = "input",
+    parameter: HeistReferenceName = "input",
     runtime: InAppHeistRuntime,
     @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
 ) async throws -> Heist {
@@ -275,7 +275,7 @@ func RunHeist<Content: HeistContent>(
 public func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: ElementTargetExpr,
-    parameter: String = "input",
+    parameter: HeistReferenceName = "input",
     @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
 ) async throws -> Heist {
     try await RunHeist(name, argument: input, parameter: parameter, runtime: .shared, content)
@@ -285,7 +285,7 @@ public func RunHeist<Content: HeistContent>(
 func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: ElementTargetExpr,
-    parameter: String = "input",
+    parameter: HeistReferenceName = "input",
     runtime: InAppHeistRuntime,
     @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
 ) async throws -> Heist {

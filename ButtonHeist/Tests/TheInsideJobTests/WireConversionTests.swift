@@ -138,7 +138,7 @@ final class WireConverterTests: XCTestCase {
 
     private enum TestInterfaceNode {
         case element(Screen.ScreenElement)
-        case container(String, AccessibilityContainer, children: [TestInterfaceNode])
+        case container(ContainerName, AccessibilityContainer, children: [TestInterfaceNode])
     }
 
     /// Build a test tree node from a ScreenElement leaf.

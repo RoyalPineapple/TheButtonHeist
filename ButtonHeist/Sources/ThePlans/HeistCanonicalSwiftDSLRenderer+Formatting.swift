@@ -16,6 +16,10 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
+    func validateParameter(_ parameter: HeistReferenceName) throws {
+        try validateParameter(parameter.rawValue)
+    }
+
     func line(_ text: String, _ indent: Int) -> String {
         "\(String(repeating: "    ", count: indent))\(text)"
     }
@@ -26,6 +30,10 @@ extension HeistCanonicalSwiftDSLRenderer {
             return encoded
         }
         return "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+    }
+
+    func quote(_ value: HeistReferenceName) -> String {
+        quote(value.rawValue)
     }
 
     func decimal(_ value: Double) -> String {

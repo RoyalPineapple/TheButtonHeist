@@ -83,7 +83,7 @@ extension HeistPlanSourceParser {
         if consumeSymbol(",") {
             try expectIdentifier("parameter")
             try expectSymbol(":")
-            let parameterName = try parseStringLiteral()
+            let parameterName = try parseReferenceNameLiteral(role: "parameter")
             switch parameterKind {
             case .none:
                 throw error(previous, "HeistDef<Void> must not declare parameter:")
@@ -260,11 +260,11 @@ extension HeistPlanSourceParser {
     mutating func parseRootHeistParameter() throws -> HeistParameter {
         if consumeIdentifier("parameter") != nil {
             try expectSymbol(":")
-            return .string(name: try parseStringLiteral())
+            return .string(name: try parseReferenceNameLiteral(role: "parameter"))
         }
         if consumeIdentifier("targetParameter") != nil {
             try expectSymbol(":")
-            return .elementTarget(name: try parseStringLiteral())
+            return .elementTarget(name: try parseReferenceNameLiteral(role: "targetParameter"))
         }
         throw error(currentToken, "expected parameter: or targetParameter:")
     }

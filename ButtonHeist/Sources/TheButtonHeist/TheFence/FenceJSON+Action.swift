@@ -427,11 +427,9 @@ struct PublicHeistWaitEvidence: Encodable {
 }
 
 struct PublicHeistCaseSelectionEvidence: Encodable {
-    let selectedCaseIndex: Int?
+    let outcome: HeistCaseSelectionOutcome
     let elapsedMs: Int
     let timeout: Double?
-    let timedOut: Bool
-    let elseRan: Bool
     let lastObservedSummary: String?
     let caseCount: Int
     let cases: [PublicHeistCaseMatchResult]?
@@ -439,11 +437,9 @@ struct PublicHeistCaseSelectionEvidence: Encodable {
 
     init(evidence: HeistCaseSelectionEvidence) {
         let selection = evidence.selection
-        self.selectedCaseIndex = selection.selectedCaseIndex
+        self.outcome = selection.outcome
         self.elapsedMs = selection.elapsedMs
         self.timeout = selection.timeout
-        self.timedOut = selection.timedOut
-        self.elseRan = selection.elseRan
         self.lastObservedSummary = selection.lastObservedSummary
         self.caseCount = selection.cases.count
         let visibleCases = Array(selection.cases.prefix(PublicHeistProjectionLimits.caseResults))
@@ -473,7 +469,7 @@ struct PublicHeistCaseMatchResult: Encodable {
 }
 
 struct PublicHeistForEachStringEvidence: Encodable {
-    let parameter: String
+    let parameter: HeistReferenceName
     let count: Int
     let iterationCount: Int
     let iterationOrdinal: Int?
@@ -491,7 +487,7 @@ struct PublicHeistForEachStringEvidence: Encodable {
 }
 
 struct PublicHeistForEachElementEvidence: Encodable {
-    let parameter: String
+    let parameter: HeistReferenceName
     let matching: ElementPredicate
     let limit: Int
     let matchedCount: Int

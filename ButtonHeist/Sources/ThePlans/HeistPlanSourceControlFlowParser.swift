@@ -166,11 +166,11 @@ extension HeistPlanSourceParser {
 
     mutating func parseClosureParameterBlock(
         binding: HeistPlanSourceBinding
-    ) throws -> (referenceName: String, body: [HeistStep]) {
+    ) throws -> (referenceName: HeistReferenceName, body: [HeistStep]) {
         try expectSymbol("{")
         let localName = try parseIdentifier()
         try expectIdentifier("in")
-        let referenceName = localName
+        let referenceName = HeistReferenceName(rawValue: localName)
         let previousScope = currentScope()
         defer { restoreScope(previousScope) }
         bindScopedReference(binding, localName: localName, referenceName: referenceName)

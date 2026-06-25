@@ -11,14 +11,24 @@ struct SessionLease {
     }
 
     enum Acquisition {
-        case accepted(notifyActiveChanged: Bool, cancelReleaseTimer: Bool)
+        case accepted(AcquisitionEffect)
         case rejected(SessionLockDiagnostic)
+    }
+
+    enum AcquisitionEffect: Equatable, Sendable {
+        case claimedSession
+        case rejoinedDuringGracePeriod
     }
 
     enum ConnectionRemoval {
         case unchanged
         case active
         case draining(releaseDeadline: Date)
+    }
+
+    enum ReleaseEffect: Equatable, Sendable {
+        case releasedSession
+        case noActiveSession
     }
 
     struct SessionLockDiagnostic: Equatable, Sendable {
@@ -79,7 +89,7 @@ struct SessionLease {
         switch phase {
         case .idle:
             phase = .active(driverId: driverIdentity, clientId: clientId)
-            return .accepted(notifyActiveChanged: true, cancelReleaseTimer: false)
+            return .accepted(.claimedSession)
 
         case .active(let activeId, _) where driverIdentity == activeId:
             return .rejected(diagnostic(
@@ -90,7 +100,7 @@ struct SessionLease {
 
         case .draining(let activeId, _) where driverIdentity == activeId:
             phase = .active(driverId: activeId, clientId: clientId)
-            return .accepted(notifyActiveChanged: false, cancelReleaseTimer: true)
+            return .accepted(.rejoinedDuringGracePeriod)
 
         case .active(let driverId, _):
             return .rejected(diagnostic(ownerDriverId: driverId, activeConnections: 1))
@@ -104,10 +114,10 @@ struct SessionLease {
         }
     }
 
-    mutating func release() -> Bool {
+    mutating func release() -> ReleaseEffect {
         let hadSession = isSessionActive
         phase = .idle
-        return hadSession
+        return hadSession ? .releasedSession : .noActiveSession
     }
 
     mutating func removeConnection(_ clientId: Int) -> ConnectionRemoval {

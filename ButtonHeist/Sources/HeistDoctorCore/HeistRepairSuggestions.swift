@@ -1,3 +1,5 @@
+import TheScore
+
 // MARK: - Heist Repair Suggester
 
 public enum HeistRepairSuggester {
@@ -17,12 +19,13 @@ public enum HeistRepairSuggester {
         }
 
         let actionFamily = RepairActionFamily(
+            actionIdentity: request.currentFailure.actionIdentity ?? request.lastSuccess.actionIdentity,
             actionKind: request.currentFailure.actionKind,
             method: request.currentFailure.result.method ?? request.lastSuccess.result.method
         )
         let currentResolution = currentScreen.resolve(request.lastSuccess.target)
         let failureKind: HeistRepairFailureKind
-        let preferredCandidates: Set<String>
+        let preferredCandidates: Set<PredicateSelectionElementId>
 
         switch currentResolution {
         case .resolved(let element, _):

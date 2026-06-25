@@ -22,6 +22,28 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     try raw.validatedForRuntimeSafety()
 }
 
+private func invalidForEachElementJSON(parameter: String) throws -> Data {
+    try JSONSerialization.data(withJSONObject: [
+        "version": HeistPlan.currentVersion,
+        "body": [
+            [
+                "type": "for_each_element",
+                "for_each_element": [
+                    "matching": ["label": "Delete"],
+                    "limit": 1,
+                    "parameter": parameter,
+                    "body": [
+                        [
+                            "type": "warn",
+                            "warn": ["message": "body"],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ])
+}
+
 @Test
 func actionStepExpectationWaiverRoundTrips() throws {
     let step = try ActionStep(
@@ -144,7 +166,7 @@ func lintReportsEmptyBranches() throws {
 }
 
 @Test
-func runtimeSafetyRejectsInvalidLoopParameters() throws {
+func admissionDecodingRejectsInvalidLoopParameters() throws {
     let invalidParameters = [
         "",
         " ",
@@ -157,19 +179,11 @@ func runtimeSafetyRejectsInvalidLoopParameters() throws {
     ]
 
     for parameter in invalidParameters {
-        let raw = HeistPlanAdmissionCandidate(body: [
-            .forEachElement(try ForEachElementStep(
-                matching: .label("Delete"),
-                limit: 1,
-                parameter: parameter,
-                body: [.warn(WarnStep(message: "body"))]
-            )),
-        ])
+        let data = try invalidForEachElementJSON(parameter: parameter)
 
-        let failures = runtimeSafetyFailures(for: raw)
-
-        #expect(failures.contains { $0.path == "$.body[0].for_each_element.parameter" })
-        #expect(failures.contains { $0.contract.contains("Swift-style identifier") })
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: data)
+        }
     }
 }
 
@@ -218,7 +232,7 @@ func runtimeSafetyRejectsInvalidRefs() throws {
         ),
         (
             "long target ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(tooLong))))]),
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(HeistReferenceName(rawValue: tooLong)))))]),
             "max parameter/ref length"
         ),
     ]
@@ -433,22 +447,14 @@ func runtimeSafetyRejectsStandardDefinitionCapByDefault() throws {
 }
 
 @Test
-func runtimeSafetyDiagnosticsIncludePathRoleAndObservedValue() throws {
-    let raw = HeistPlanAdmissionCandidate(body: [
-        .forEachString(try ForEachStringStep(
+func typedLoopStepInitializersRejectNonCanonicalSwiftParameters() throws {
+    #expect(throws: HeistPlanError.self) {
+        _ = try ForEachStringStep(
             values: ["Milk"],
             parameter: "bad name",
             body: [.warn(WarnStep(message: "body"))]
-        )),
-    ])
-
-    let failures = runtimeSafetyFailures(for: raw)
-
-    #expect(failures.contains {
-        $0.path == "$.body[0].for_each_string.parameter"
-            && $0.contract == "for_each_string parameter must be a Swift-style identifier"
-            && $0.observed == #""bad name""#
-    }, "\(failures)")
+        )
+    }
 }
 
 @Test

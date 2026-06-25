@@ -81,7 +81,7 @@ extension FenceResponse {
         _ container: InterfaceDiscoveryOmittedContainer
     ) -> String {
         var parts = [container.type]
-        if let containerName = nonEmpty(container.containerName) {
+        if let containerName = nonEmpty(container.containerName?.rawValue) {
             parts.append("containerName=\(quotedString(containerName))")
         }
         if let scrollAxis = container.scrollAxis {
@@ -277,33 +277,33 @@ extension FenceResponse {
             if let label = nonEmpty(label) { parts.append("label=\(quotedString(label))") }
             if let value = nonEmpty(value) { parts.append("value=\(quotedString(value))") }
             if let identifier = nonEmpty(identifier) { parts.append("id=\(quotedString(identifier))") }
-            if let containerName = nonEmpty(annotation?.containerName) {
+            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName=\(quotedString(containerName))")
             }
         case .list:
             parts = ["list"]
-            if let containerName = nonEmpty(annotation?.containerName) {
+            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName=\(quotedString(containerName))")
             }
         case .landmark:
             parts = ["landmark"]
-            if let containerName = nonEmpty(annotation?.containerName) {
+            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName=\(quotedString(containerName))")
             }
         case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
-            if let containerName = nonEmpty(annotation?.containerName) {
+            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName=\(quotedString(containerName))")
             }
         case .tabBar:
             parts = ["tab_bar"]
-            if let containerName = nonEmpty(annotation?.containerName) {
+            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName=\(quotedString(containerName))")
             }
         case .scrollable(let contentSize):
             let frame = container.frame
             parts = ["scrollable"]
-            if let containerName = nonEmpty(annotation?.containerName) {
+            if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
                 parts.append("containerName=\(quotedString(containerName))")
             }
             parts.append("viewport=\(Int(frame.size.width))x\(Int(frame.size.height))")

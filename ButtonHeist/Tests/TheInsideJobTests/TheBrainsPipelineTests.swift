@@ -128,7 +128,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             activationPoint: CGPoint(x: 888, y: 372),
             respondsToUserInteraction: true
         )
-        let screen = Screen.makeForTests(elements: [(element, "inert_option")])
+        let screen = Screen.makeForTests(elements: [(element, HeistId(rawValue: "inert_option"))])
         brains.stash.installScreenForTesting(screen)
         let before = brains.postActionObservation.captureSemanticState()
 
@@ -186,7 +186,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             activationPoint: CGPoint(x: 888, y: 372),
             respondsToUserInteraction: true
         )
-        let screen = Screen.makeForTests(elements: [(element, "tap_activated_option")])
+        let screen = Screen.makeForTests(elements: [(element, HeistId(rawValue: "tap_activated_option"))])
         brains.stash.installScreenForTesting(screen)
         let before = brains.postActionObservation.captureSemanticState()
         let activationTrace = ActivationTrace(
@@ -356,11 +356,11 @@ final class TheBrainsPipelineTests: XCTestCase {
                 label: "Controls Demo",
                 traits: .header,
                 respondsToUserInteraction: false
-            ), "controls_demo")],
+                ), HeistId(rawValue: "controls_demo"))],
             offViewport: [
                 Screen.OffViewportEntry(
                     discoveredOnly,
-                    heistId: "buttonheist_demo",
+                    heistId: HeistId(rawValue: "buttonheist_demo"),
                     contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainer: "root_scroll"
                 ),
@@ -472,7 +472,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let matchedScreen = Screen.makeForTests(elements: [
-            (makeElement(label: "Home"), "home"),
+            (makeElement(label: "Home"), HeistId(rawValue: "home")),
         ])
 
         let receiptTask = Task { @MainActor in
@@ -512,11 +512,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let beforeScreen = Screen.makeForTests(elements: [
-            (makeElement(label: "Before"), "before"),
+            (makeElement(label: "Before"), HeistId(rawValue: "before")),
         ])
         let matchedScreen = Screen.makeForTests(elements: [
-            (makeElement(label: "Before"), "before"),
-            (makeElement(label: "Loaded"), "loaded"),
+            (makeElement(label: "Before"), HeistId(rawValue: "before")),
+            (makeElement(label: "Loaded"), HeistId(rawValue: "loaded")),
         ])
 
         let receiptTask = Task { @MainActor in
@@ -546,7 +546,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
         let observedScreen = Screen.makeForTests(elements: [
-            (makeElement(label: "Known"), "known"),
+            (makeElement(label: "Known"), HeistId(rawValue: "known")),
         ])
 
         let receiptTask = Task { @MainActor in
@@ -636,8 +636,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(visible, "button_visible")],
-            offViewport: [.init(offViewport, heistId: "button_below_fold")]
+            elements: [(visible, HeistId(rawValue: "button_visible"))],
+            offViewport: [.init(offViewport, heistId: HeistId(rawValue: "button_below_fold"))]
         ))
         let state = brains.postActionObservation.captureSemanticState()
 
@@ -664,7 +664,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             activationPoint: CGPoint(x: 100, y: 22),
             respondsToUserInteraction: false
         )
-        brains.stash.installScreenForTesting(.makeForTests(elements: [(beforeElement, "chicken_tikka_button")]))
+        brains.stash.installScreenForTesting(.makeForTests(
+            elements: [(beforeElement, HeistId(rawValue: "chicken_tikka_button"))]
+        ))
         let baseline = brains.postActionObservation.captureSemanticState()
 
         let afterElement = AccessibilityElement.make(
@@ -674,7 +676,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             activationPoint: CGPoint(x: 100, y: -278),
             respondsToUserInteraction: false
         )
-        brains.stash.installScreenForTesting(.makeForTests(elements: [(afterElement, "chicken_tikka_button")]))
+        brains.stash.installScreenForTesting(.makeForTests(
+            elements: [(afterElement, HeistId(rawValue: "chicken_tikka_button"))]
+        ))
         let current = brains.postActionObservation.captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
@@ -698,7 +702,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        brains.stash.installScreenForTesting(.makeForTests(elements: [(beforeElement, "total_staticText")]))
+        brains.stash.installScreenForTesting(.makeForTests(
+            elements: [(beforeElement, HeistId(rawValue: "total_staticText"))]
+        ))
         let baseline = brains.postActionObservation.captureSemanticState()
 
         let afterElement = AccessibilityElement.make(
@@ -707,7 +713,9 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        brains.stash.installScreenForTesting(.makeForTests(elements: [(afterElement, "total_staticText")]))
+        brains.stash.installScreenForTesting(.makeForTests(
+            elements: [(afterElement, HeistId(rawValue: "total_staticText"))]
+        ))
         let current = brains.postActionObservation.captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
@@ -779,10 +787,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         var exploration = Navigation.SemanticExploration(
-            baseline: .makeForTests(elements: [(before, "total_staticText")])
+            baseline: Screen.makeForTests(elements: [(before, HeistId(rawValue: "total_staticText"))])
         )
 
-        exploration.absorb(.makeForTests(elements: [(after, "total_staticText")]))
+        exploration.absorb(Screen.makeForTests(elements: [(after, HeistId(rawValue: "total_staticText"))]))
 
         XCTAssertEqual(
             exploration.screen.findElement(heistId: "total_staticText")?.element.value,
@@ -915,7 +923,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     private func makeScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) -> Screen {
-        let pairs: [(AccessibilityElement, String)] = elements.map { entry in
+        let pairs: [(AccessibilityElement, HeistId)] = elements.map { entry in
             let element = AccessibilityElement.make(
                 label: entry.label,
                 traits: entry.traits,

@@ -920,7 +920,7 @@ final class TheStashResolutionTests: XCTestCase {
         let sourceContext = PredicateSelectionContext(
             elements: sourceScreen.orderedElements.map {
                 PredicateSelectionContext.Element(
-                    id: $0.heistId,
+                    id: $0.heistId.predicateSelectionElementId,
                     element: TheStash.WireConversion.convert($0.element)
                 )
             },
@@ -929,7 +929,7 @@ final class TheStashResolutionTests: XCTestCase {
             scope: .visible
         )
         let executableTarget = try XCTUnwrap(
-            minimumUniquePredicate(for: sourceScreenElement.heistId, in: sourceContext)
+            minimumUniquePredicate(for: sourceScreenElement.heistId.predicateSelectionElementId, in: sourceContext)
         ).target
 
         guard case .predicate(let matcher, let ordinal) = executableTarget else {
@@ -1472,7 +1472,7 @@ final class TheStashResolutionTests: XCTestCase {
             element(label: "Item", value: "\(index)")
         }
         for (index, element) in elements.enumerated() {
-            register(element, heistId: "item_\(index)", index: index)
+            register(element, heistId: HeistId(rawValue: "item_\(index)"), index: index)
         }
 
         let limit3 = bagman.latestObservedLiveHierarchy.matches(ElementPredicate(label: "Item"), limit: 3)

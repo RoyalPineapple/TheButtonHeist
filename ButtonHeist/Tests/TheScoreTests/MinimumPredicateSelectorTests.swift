@@ -66,7 +66,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("other", other),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: "save", in: context))
+        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("save"), in: context))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(identifier: "saveButton")))
         XCTAssertEqual(selection.candidate.tier, .identityOnly)
@@ -80,7 +80,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("cancel", cancel),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: "save", in: context))
+        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("save"), in: context))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Save")))
     }
@@ -96,8 +96,8 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("duplicate", makeElement(label: "Save", traits: [.button])),
         ])
 
-        let initial = try XCTUnwrap(minimumUniquePredicate(for: "save", in: initialContext))
-        let duplicate = try XCTUnwrap(minimumUniquePredicate(for: "save", in: duplicateContext))
+        let initial = try XCTUnwrap(minimumUniquePredicate(for: id("save"), in: initialContext))
+        let duplicate = try XCTUnwrap(minimumUniquePredicate(for: id("save"), in: duplicateContext))
 
         XCTAssertEqual(initial.target, .predicate(ElementPredicate(label: "Save")))
         XCTAssertEqual(duplicate.target, .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 0))
@@ -111,7 +111,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("text", staticText),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: "button", in: context))
+        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("button"), in: context))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button])))
         XCTAssertEqual(selection.candidate.tier, .identityOnly)
@@ -125,7 +125,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("cash", cash),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: "visa", in: context))
+        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("visa"), in: context))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(label: "Payment Method", value: "Visa")))
         XCTAssertEqual(selection.candidate.tier, .identityWithState)
@@ -139,7 +139,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("notSelected", notSelected),
         ])
 
-        let selection = try XCTUnwrap(minimumUniquePredicate(for: "selected", in: context))
+        let selection = try XCTUnwrap(minimumUniquePredicate(for: id("selected"), in: context))
 
         XCTAssertEqual(selection.target, .predicate(ElementPredicate(traits: [.selected])))
         XCTAssertEqual(selection.candidate.tier, .stateOnly)
@@ -153,8 +153,8 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("second", second),
         ])
 
-        let firstSelection = try XCTUnwrap(minimumUniquePredicate(for: "first", in: context))
-        let secondSelection = try XCTUnwrap(minimumUniquePredicate(for: "second", in: context))
+        let firstSelection = try XCTUnwrap(minimumUniquePredicate(for: id("first"), in: context))
+        let secondSelection = try XCTUnwrap(minimumUniquePredicate(for: id("second"), in: context))
 
         XCTAssertEqual(firstSelection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button]), ordinal: 0))
         XCTAssertEqual(firstSelection.candidate.tier, .ordinalDisambiguation)
@@ -175,7 +175,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
         ])
 
         XCTAssertTrue(predicateCandidates(for: makeElement()).isEmpty)
-        XCTAssertNil(minimumUniquePredicate(for: "anonymous", in: context))
+        XCTAssertNil(minimumUniquePredicate(for: id("anonymous"), in: context))
     }
 
     func testContextMembershipIsRequiredForSelection() {
@@ -183,7 +183,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
             ("save", makeElement(label: "Save")),
         ])
 
-        XCTAssertNil(minimumUniquePredicate(for: "missing", in: context))
+        XCTAssertNil(minimumUniquePredicate(for: id("missing"), in: context))
     }
 
     private func makeContext(
@@ -191,12 +191,16 @@ final class MinimumPredicateSelectorTests: XCTestCase {
     ) -> PredicateSelectionContext {
         PredicateSelectionContext(
             elements: elements.map {
-                PredicateSelectionContext.Element(id: $0.id, element: $0.element)
+                PredicateSelectionContext.Element(id: id($0.id), element: $0.element)
             },
             screenId: "test_screen",
             semanticHash: "sha256:test",
             scope: .discovery
         )
+    }
+
+    private func id(_ rawValue: String) -> PredicateSelectionElementId {
+        PredicateSelectionElementId(rawValue: rawValue)
     }
 
     private func makeElement(

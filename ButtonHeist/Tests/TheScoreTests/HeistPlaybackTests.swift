@@ -331,7 +331,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testForEachElementStepStoresRefBackedBodyAST() throws {
         let matching = ElementPredicate(label: "Cell", traits: [.button])
-        let target = try ElementTargetExpr(ref: "target")
+        let target = try ElementTargetExpr(ref: HeistReferenceName(rawValue: "target"))
         let step = try ForEachElementStep(
             matching: matching,
             limit: 5,
@@ -370,7 +370,9 @@ final class HeistPlanTests: XCTestCase {
                 matching: matching,
                 limit: 5,
                 parameter: "target",
-                body: [.action(try ActionStep(command: .activate(try ElementTargetExpr(ref: "target"))))]
+                body: [.action(try ActionStep(
+                    command: .activate(try ElementTargetExpr(ref: HeistReferenceName(rawValue: "target")))
+                ))]
             )),
         ])
 

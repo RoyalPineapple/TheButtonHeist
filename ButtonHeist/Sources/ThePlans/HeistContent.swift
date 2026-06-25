@@ -24,40 +24,44 @@ public extension HeistPlan {
     }
 
     init(
-        parameter: String,
+        parameter: HeistReferenceName,
         @HeistBuilder _ content: (StringExpr) throws -> some HeistContent
     ) throws {
-        try self.init(dslName: nil, rootParameter: .string(name: parameter)) {
-            try content(try StringExpr(ref: parameter))
+        let reference = try parameter.validated(type: "parameter")
+        try self.init(dslName: nil, rootParameter: .string(name: reference)) {
+            try content(try StringExpr(ref: reference))
         }
     }
 
     init(
         _ name: String,
-        parameter: String,
+        parameter: HeistReferenceName,
         @HeistBuilder _ content: (StringExpr) throws -> some HeistContent
     ) throws {
-        try self.init(dslName: name, rootParameter: .string(name: parameter)) {
-            try content(try StringExpr(ref: parameter))
+        let reference = try parameter.validated(type: "parameter")
+        try self.init(dslName: name, rootParameter: .string(name: reference)) {
+            try content(try StringExpr(ref: reference))
         }
     }
 
     init(
-        targetParameter: String,
+        targetParameter: HeistReferenceName,
         @HeistBuilder _ content: (ElementTargetExpr) throws -> some HeistContent
     ) throws {
-        try self.init(dslName: nil, rootParameter: .elementTarget(name: targetParameter)) {
-            try content(try ElementTargetExpr(ref: targetParameter))
+        let reference = try targetParameter.validated(type: "target")
+        try self.init(dslName: nil, rootParameter: .elementTarget(name: reference)) {
+            try content(try ElementTargetExpr(ref: reference))
         }
     }
 
     init(
         _ name: String,
-        targetParameter: String,
+        targetParameter: HeistReferenceName,
         @HeistBuilder _ content: (ElementTargetExpr) throws -> some HeistContent
     ) throws {
-        try self.init(dslName: name, rootParameter: .elementTarget(name: targetParameter)) {
-            try content(try ElementTargetExpr(ref: targetParameter))
+        let reference = try targetParameter.validated(type: "target")
+        try self.init(dslName: name, rootParameter: .elementTarget(name: reference)) {
+            try content(try ElementTargetExpr(ref: reference))
         }
     }
 }
@@ -246,27 +250,29 @@ public struct HeistDef<Input>: Sendable {
 
     public init<Content: HeistContent>(
         _ path: String,
-        parameter: String = "input",
+        parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: @escaping (StringExpr) throws -> Content
     ) where Input == String {
         let components = Self.pathComponents(path)
+        let reference = parameter
         self.path = components
-        self.parameter = .string(name: parameter)
+        self.parameter = .string(name: reference)
         self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
-            try content(try StringExpr(ref: parameter))
+            try content(try StringExpr(ref: reference))
         }
     }
 
     public init<Content: HeistContent>(
         _ path: String,
-        parameter: String = "input",
+        parameter: HeistReferenceName = "input",
         @HeistBuilder _ content: @escaping (ElementTargetExpr) throws -> Content
     ) where Input == ElementTarget {
         let components = Self.pathComponents(path)
+        let reference = parameter
         self.path = components
-        self.parameter = .elementTarget(name: parameter)
+        self.parameter = .elementTarget(name: reference)
         self.definitionResult = Self.buildDefinition(path: components, parameter: self.parameter) {
-            try content(try ElementTargetExpr(ref: parameter))
+            try content(try ElementTargetExpr(ref: reference))
         }
     }
 
@@ -474,16 +480,17 @@ public struct ForEach<Content: HeistContent>: HeistContent {
 
     public init(
         _ values: [String],
-        parameter: String = "item",
+        parameter: HeistReferenceName = "item",
         @HeistBuilder content: (StringExpr) throws -> Content
     ) {
         do {
-            let parameter = try HeistParameterName.normalized(parameter)
-            let item = try StringExpr(ref: parameter)
+            let parameter = try HeistParameterName.normalized(parameter.rawValue)
+            let reference = HeistReferenceName(rawValue: parameter)
+            let item = try StringExpr(ref: reference)
             let content = try content(item)
             let step = try ForEachStringStep(
                 values: values,
-                parameter: parameter,
+                parameter: reference,
                 body: content.heistSteps
             )
             self.heistSteps = [.forEachString(step)]
@@ -499,17 +506,18 @@ public struct ForEach<Content: HeistContent>: HeistContent {
     public init(
         _ matches: ElementMatches,
         limit: Int = 20,
-        parameter: String = "target",
+        parameter: HeistReferenceName = "target",
         @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
     ) {
         do {
-            let parameter = try HeistParameterName.normalized(parameter)
-            let target = try ElementTargetExpr(ref: parameter)
+            let parameter = try HeistParameterName.normalized(parameter.rawValue)
+            let reference = HeistReferenceName(rawValue: parameter)
+            let target = try ElementTargetExpr(ref: reference)
             let content = try content(target)
             let step = try ForEachElementStep(
                 matching: matches.predicate,
                 limit: limit,
-                parameter: parameter,
+                parameter: reference,
                 body: content.heistSteps
             )
             self.heistSteps = [.forEachElement(step)]

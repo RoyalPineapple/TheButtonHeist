@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
 import AccessibilitySnapshotParser
@@ -221,24 +222,24 @@ extension TheBurglar {
     static func containerName(
         for container: AccessibilityContainer,
         contentFrame: CGRect
-    ) -> String {
+    ) -> ContainerName {
         let frameHash = coarseFrameHash(contentFrame)
         switch container.type {
         case .scrollable:
-            return "scrollable_\(frameHash)"
+            return ContainerName(rawValue: "scrollable_\(frameHash)")
         case .semanticGroup(let label, let value, let identifier):
             let labelSlug = TheScore.slugify(label) ?? "anon"
             let valueSlug = TheScore.slugify(value) ?? ""
             let identifierSlug = identifier ?? ""
-            return "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)"
+            return ContainerName(rawValue: "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)")
         case .list:
-            return "list_\(frameHash)"
+            return ContainerName(rawValue: "list_\(frameHash)")
         case .landmark:
-            return "landmark_\(frameHash)"
+            return ContainerName(rawValue: "landmark_\(frameHash)")
         case .tabBar:
-            return "tabBar_\(frameHash)"
+            return ContainerName(rawValue: "tabBar_\(frameHash)")
         case .dataTable(let rows, let columns):
-            return "table_\(rows)x\(columns)_\(frameHash)"
+            return ContainerName(rawValue: "table_\(rows)x\(columns)_\(frameHash)")
         }
     }
 

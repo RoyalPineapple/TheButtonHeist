@@ -4,14 +4,32 @@ import Foundation
 
 import TheScore
 
-struct SettledSemanticObservation {
+struct SettledSemanticObservation: Sendable {
     let sequence: UInt64
     let scope: SemanticObservationScope
-    let screen: Screen
     let tripwireSignal: TheTripwire.TripwireSignal
+    private let semantic: SemanticScreen
+    private let captureSnapshot: LiveCapture.Snapshot
+
+    var screen: Screen {
+        Screen(semantic: semantic, captureSnapshot: captureSnapshot)
+    }
+
+    init(
+        sequence: UInt64,
+        scope: SemanticObservationScope,
+        screen: Screen,
+        tripwireSignal: TheTripwire.TripwireSignal
+    ) {
+        self.sequence = sequence
+        self.scope = scope
+        self.tripwireSignal = tripwireSignal
+        self.semantic = screen.semantic
+        self.captureSnapshot = screen.liveCapture.snapshot
+    }
 }
 
-struct SettledSemanticObservationEvent {
+struct SettledSemanticObservationEvent: Sendable {
     let sequence: UInt64
     let scope: SemanticObservationScope
     let observation: SettledSemanticObservation

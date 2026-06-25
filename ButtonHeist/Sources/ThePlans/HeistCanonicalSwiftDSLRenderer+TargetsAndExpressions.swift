@@ -11,9 +11,9 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".target(\(renderedPredicate), ordinal: \(ordinal))"
         case .ref(let reference):
             guard environment.targetReferences.contains(reference) else {
-                throw HeistCanonicalSwiftDSLError.unresolvedTargetReference(reference)
+                throw HeistCanonicalSwiftDSLError.unresolvedTargetReference(reference.rawValue)
             }
-            return reference
+            return reference.rawValue
         }
     }
 
@@ -160,9 +160,9 @@ extension HeistCanonicalSwiftDSLRenderer {
             return quote(literal)
         case .ref(let reference):
             guard environment.stringReferences.contains(reference) else {
-                throw HeistCanonicalSwiftDSLError.unresolvedStringReference(reference)
+                throw HeistCanonicalSwiftDSLError.unresolvedStringReference(reference.rawValue)
             }
-            return reference
+            return reference.rawValue
         }
     }
 

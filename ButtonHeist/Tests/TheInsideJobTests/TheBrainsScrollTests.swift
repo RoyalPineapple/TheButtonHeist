@@ -269,8 +269,8 @@ final class TheBrainsScrollTests: XCTestCase {
     /// live hierarchy — simulating an element retained from a previous
     /// exploration commit that has since scrolled off.
     private func makeScreenWithOffViewportEntry(
-        liveHierarchy: [(AccessibilityElement, String)],
-        offViewport: [(AccessibilityElement, String, CGPoint?)]
+        liveHierarchy: [(AccessibilityElement, HeistId)],
+        offViewport: [(AccessibilityElement, HeistId, CGPoint?)]
     ) -> Screen {
         .makeForTests(
             elements: liveHierarchy.map { ($0.0, $0.1) },
@@ -281,8 +281,8 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     private func installScreenWithOffViewportEntry(
-        liveHierarchy: [(AccessibilityElement, String)],
-        offViewport: [(AccessibilityElement, String, CGPoint?)]
+        liveHierarchy: [(AccessibilityElement, HeistId)],
+        offViewport: [(AccessibilityElement, HeistId, CGPoint?)]
     ) {
         brains.stash.installScreenForTesting(makeScreenWithOffViewportEntry(
             liveHierarchy: liveHierarchy,
@@ -291,8 +291,8 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     private func installScreenWithKnownOffscreen(
-        visible: (AccessibilityElement, String),
-        offscreen: (AccessibilityElement, String, CGPoint, UIScrollView),
+        visible: (AccessibilityElement, HeistId),
+        offscreen: (AccessibilityElement, HeistId, CGPoint, UIScrollView),
         includeLiveScrollAncestor: Bool = true
     ) {
         let visibleEntry = Screen.ScreenElement(
@@ -304,7 +304,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: offscreen.3.contentSize,
             frame: offscreen.3.frame
         )
-        let scrollContainerName = "known_offscreen_scroll"
+        let scrollContainerName: ContainerName = "known_offscreen_scroll"
         let offscreenEntry = Screen.ScreenElement(
             heistId: offscreen.1,
             contentSpaceOrigin: offscreen.2,
@@ -358,7 +358,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset = CGPoint(x: 0, y: 800)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        let scrollContainerName = "reused_cell_scroll"
+        let scrollContainerName: ContainerName = "reused_cell_scroll"
         let target = makeElement(label: "Controls Demo", traits: .button)
         let currentlyVisibleReuse = makeElement(label: "Custom Rotors", traits: .button)
         let entry = Screen.ScreenElement(
@@ -447,7 +447,7 @@ final class TheBrainsScrollTests: XCTestCase {
     func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async {
         let visible = makeElement(label: "Visible")
         brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(visible, "visible_element")]
+            elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
@@ -842,7 +842,7 @@ final class TheBrainsScrollTests: XCTestCase {
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
         brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(visible, "visible_element")]
+            elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
@@ -1364,17 +1364,18 @@ final class TheBrainsScrollTests: XCTestCase {
             previousAnchor: 100
         )
         for frameIndex in 0..<23 {
+            let heistId = HeistId(rawValue: "id-\(frameIndex)")
             let step = state.advance(
-                visibleIds: ["id-\(frameIndex)"],
+                visibleIds: [heistId],
                 anchorSignature: 200 + frameIndex,
-                newHeistIds: ["id-\(frameIndex)"]
+                newHeistIds: [heistId]
             )
             XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) churns, should continue")
         }
         let finalStep = state.advance(
-            visibleIds: ["id-final"],
+            visibleIds: [HeistId(rawValue: "id-final")],
             anchorSignature: 999,
-            newHeistIds: ["id-final"]
+            newHeistIds: [HeistId(rawValue: "id-final")]
         )
         XCTAssertEqual(finalStep, .done, "Must exit at maxFrames=24 even if never settles")
         XCTAssertEqual(state.frame, 24)

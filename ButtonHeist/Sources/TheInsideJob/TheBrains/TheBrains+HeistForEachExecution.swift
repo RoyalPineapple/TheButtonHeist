@@ -271,7 +271,7 @@ extension TheBrains {
         index _: Int,
         path: String,
         start: CFAbsoluteTime,
-        parameter: String,
+        parameter: HeistReferenceName,
         matching: ElementPredicate,
         limit: Int
     ) -> HeistExecutionStepResult {
@@ -302,7 +302,7 @@ extension TheBrains {
         index _: Int,
         path: String,
         start: CFAbsoluteTime,
-        parameter: String,
+        parameter: HeistReferenceName,
         matching: ElementPredicate,
         matchedCount: Int,
         limit: Int

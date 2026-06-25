@@ -104,7 +104,7 @@ extension HeistPlanSourceParser {
     mutating func bindScopedReference(
         _ binding: HeistPlanSourceBinding,
         localName: String,
-        referenceName: String
+        referenceName: HeistReferenceName
     ) {
         switch binding {
         case .string:
@@ -126,22 +126,22 @@ struct HeistTryPrefix {
 }
 
 struct HeistPlanSourceScope: Equatable {
-    var stringRefs: [String: String] = [:]
-    var targetRefs: [String: String] = [:]
+    var stringRefs: [String: HeistReferenceName] = [:]
+    var targetRefs: [String: HeistReferenceName] = [:]
 
-    mutating func bindString(localName: String, referenceName: String) {
+    mutating func bindString(localName: String, referenceName: HeistReferenceName) {
         stringRefs[localName] = referenceName
     }
 
-    mutating func bindTarget(localName: String, referenceName: String) {
+    mutating func bindTarget(localName: String, referenceName: HeistReferenceName) {
         targetRefs[localName] = referenceName
     }
 
-    func stringReference(for localName: String) -> String? {
+    func stringReference(for localName: String) -> HeistReferenceName? {
         stringRefs[localName]
     }
 
-    func targetReference(for localName: String) -> String? {
+    func targetReference(for localName: String) -> HeistReferenceName? {
         targetRefs[localName]
     }
 }

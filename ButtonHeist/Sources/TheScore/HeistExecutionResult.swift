@@ -80,8 +80,8 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
     case action(command: String, target: String?)
     case wait(predicate: String, timeout: Double)
     case conditional
-    case forEachString(parameter: String, count: Int)
-    case forEachElement(parameter: String, matching: String, limit: Int)
+    case forEachString(parameter: HeistReferenceName, count: Int)
+    case forEachElement(parameter: HeistReferenceName, matching: String, limit: Int)
     case invoke(path: String, argument: String?)
     case heist(name: String?)
     case warn(message: String)
@@ -145,7 +145,7 @@ public struct HeistCaseSelectionEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
-    public let parameter: String
+    public let parameter: HeistReferenceName
     public let count: Int
     public let iterationCount: Int
     public let iterationOrdinal: Int?
@@ -153,7 +153,7 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
     public let failureReason: String?
 
     public init(
-        parameter: String,
+        parameter: HeistReferenceName,
         count: Int,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
@@ -170,7 +170,7 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
-    public let parameter: String
+    public let parameter: HeistReferenceName
     public let matching: ElementPredicate
     public let limit: Int
     public let matchedCount: Int
@@ -181,7 +181,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
     public let failureReason: String?
 
     public init(
-        parameter: String,
+        parameter: HeistReferenceName,
         matching: ElementPredicate,
         limit: Int,
         matchedCount: Int,
@@ -267,31 +267,153 @@ public enum HeistFailureCategory: String, Codable, Sendable, Equatable {
     case explicitFailure
 }
 
+public enum HeistCaseSelectionMissReason: String, Codable, Sendable, Equatable {
+    case noMatch = "no_match"
+    case timedOut = "timed_out"
+}
+
+public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
+    case matchedCase(index: Int)
+    case elseBranch(reason: HeistCaseSelectionMissReason)
+    case timedOut
+    case noMatch
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case kind
+        case index
+        case reason
+    }
+
+    private enum Kind: String, Codable {
+        case matchedCase = "matched_case"
+        case elseBranch = "else_branch"
+        case timedOut = "timed_out"
+        case noMatch = "no_match"
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist case selection outcome")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .matchedCase:
+            try Self.rejectIfPresent(.reason, in: container, kind: .matchedCase)
+            let index = try container.decode(Int.self, forKey: .index)
+            guard index >= 0 else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .index,
+                    in: container,
+                    debugDescription: "matched_case index must be non-negative"
+                )
+            }
+            self = .matchedCase(index: index)
+        case .elseBranch:
+            try Self.rejectIfPresent(.index, in: container, kind: .elseBranch)
+            self = .elseBranch(
+                reason: try container.decode(HeistCaseSelectionMissReason.self, forKey: .reason)
+            )
+        case .timedOut:
+            try Self.rejectIfPresent(.index, in: container, kind: .timedOut)
+            try Self.rejectIfPresent(.reason, in: container, kind: .timedOut)
+            self = .timedOut
+        case .noMatch:
+            try Self.rejectIfPresent(.index, in: container, kind: .noMatch)
+            try Self.rejectIfPresent(.reason, in: container, kind: .noMatch)
+            self = .noMatch
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .matchedCase(let index):
+            try container.encode(Kind.matchedCase, forKey: .kind)
+            try container.encode(index, forKey: .index)
+        case .elseBranch(let reason):
+            try container.encode(Kind.elseBranch, forKey: .kind)
+            try container.encode(reason, forKey: .reason)
+        case .timedOut:
+            try container.encode(Kind.timedOut, forKey: .kind)
+        case .noMatch:
+            try container.encode(Kind.noMatch, forKey: .kind)
+        }
+    }
+
+    private static func rejectIfPresent(
+        _ key: CodingKeys,
+        in container: KeyedDecodingContainer<CodingKeys>,
+        kind: Kind
+    ) throws {
+        guard container.contains(key) else { return }
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: container,
+            debugDescription: "\(kind.rawValue) outcome must not include \(key.stringValue)"
+        )
+    }
+}
+
 public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     public let cases: [HeistCaseMatchResult]
-    public let selectedCaseIndex: Int?
+    public let outcome: HeistCaseSelectionOutcome
     public let elapsedMs: Int
     public let timeout: Double?
-    public let timedOut: Bool
-    public let elseRan: Bool
     public let lastObservedSummary: String?
 
     public init(
         cases: [HeistCaseMatchResult],
-        selectedCaseIndex: Int?,
+        outcome: HeistCaseSelectionOutcome,
         elapsedMs: Int,
         timeout: Double? = nil,
-        timedOut: Bool = false,
-        elseRan: Bool = false,
         lastObservedSummary: String? = nil
     ) {
         self.cases = cases
-        self.selectedCaseIndex = selectedCaseIndex
+        self.outcome = Self.normalized(outcome: outcome, cases: cases)
         self.elapsedMs = elapsedMs
         self.timeout = timeout
-        self.timedOut = timedOut
-        self.elseRan = elseRan
         self.lastObservedSummary = lastObservedSummary
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case cases
+        case outcome
+        case elapsedMs
+        case timeout
+        case lastObservedSummary
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist case selection result")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let cases = try container.decode([HeistCaseMatchResult].self, forKey: .cases)
+
+        self.init(
+            cases: cases,
+            outcome: try container.decode(HeistCaseSelectionOutcome.self, forKey: .outcome),
+            elapsedMs: try container.decode(Int.self, forKey: .elapsedMs),
+            timeout: try container.decodeIfPresent(Double.self, forKey: .timeout),
+            lastObservedSummary: try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(cases, forKey: .cases)
+        try container.encode(outcome, forKey: .outcome)
+        try container.encode(elapsedMs, forKey: .elapsedMs)
+        try container.encodeIfPresent(timeout, forKey: .timeout)
+        try container.encodeIfPresent(lastObservedSummary, forKey: .lastObservedSummary)
+    }
+
+    private static func normalized(
+        outcome: HeistCaseSelectionOutcome,
+        cases: [HeistCaseMatchResult]
+    ) -> HeistCaseSelectionOutcome {
+        switch outcome {
+        case .matchedCase(let index):
+            return cases.indices.contains(index) ? .matchedCase(index: index) : .noMatch
+        case .elseBranch, .timedOut, .noMatch:
+            return outcome
+        }
     }
 }
 

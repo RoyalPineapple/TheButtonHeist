@@ -34,33 +34,17 @@ extension Error {
 extension FenceError {
     /// The concise message to show when `failureDetails` carries recovery guidance separately.
     public var coreMessage: String {
-        switch self {
-        case .connectionTimeout:
-            return "Connection timed out"
-        case .connectionFailed(let message):
-            return "Connection failed: \(message)"
-        case .connectionFailure(let failure):
-            return failure.message
-        case .sessionLocked(let message):
-            return "Session locked: \(message)"
-        case .authFailed(let message):
-            return "Auth failed: \(message)"
-        case .notConnected:
-            return "Not connected to device."
-        case .actionTimeout:
-            return "Command timed out waiting for a response from the app."
-        case .invalidRequest, .noDeviceFound, .noMatchingDevice, .actionFailed, .serverError:
-            return displayMessage
-        }
+        failureDescriptor.coreMessage
     }
 
     /// Machine-readable metadata for this failure.
     public var failureDetails: FailureDetails {
-        FailureDetails(
-            errorCode: errorCode,
-            phase: phase,
-            retryable: retryable,
-            hint: hint
+        let descriptor = failureDescriptor
+        return FailureDetails(
+            errorCode: descriptor.errorCode,
+            phase: descriptor.phase,
+            retryable: descriptor.retryable,
+            hint: descriptor.hint
         )
     }
 }

@@ -70,13 +70,13 @@ extension Navigation {
             }
             guard !candidates.isEmpty else {
                 return .failed(
-                    "\(commandName) failed: no visible scroll container named \(containerName) " +
+                    "\(commandName) failed: no visible scroll container named \(containerName.rawValue) " +
                         "supports \(Self.axisDescription(axis)); refresh get_interface and use a current containerName"
                 )
             }
             guard candidates.count == 1, let plan = candidates.first else {
                 return .failed(
-                    "\(commandName) ambiguous: multiple visible scroll containers named \(containerName) " +
+                    "\(commandName) ambiguous: multiple visible scroll containers named \(containerName.rawValue) " +
                         "support \(Self.axisDescription(axis)); refresh get_interface and use a current containerName"
                 )
             }

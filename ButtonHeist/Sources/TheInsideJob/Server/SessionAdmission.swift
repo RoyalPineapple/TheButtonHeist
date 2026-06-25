@@ -11,8 +11,13 @@ struct SessionAdmission {
 
     enum TokenDecision: Equatable, Sendable {
         case accepted(driverIdentity: String)
-        case rejected(message: String, attempts: Int, lockedOut: Bool)
+        case rejected(TokenRejection)
         case lockedOut(ServerError)
+    }
+
+    enum TokenRejection: Equatable, Sendable {
+        case invalidToken(error: ServerError, attempts: Int)
+        case lockoutStarted(error: ServerError, attempts: Int)
     }
 
     private let tokenSource: SessionTokenSource
@@ -29,7 +34,8 @@ struct SessionAdmission {
     func emptyTokenError() -> ServerError {
         ServerError(
             kind: .authFailure,
-            message: "Token is required. Retry with the configured token."
+            message: tokenSource.emptyTokenMessage,
+            recoveryHint: tokenSource.configuredTokenRecoveryHint
         )
     }
 
@@ -40,11 +46,15 @@ struct SessionAdmission {
 
         guard constantTimeEqual(token, tokenSource.token) else {
             let attempts = recordFailedAttempt(address: address, now: now)
-            return .rejected(
+            let error = ServerError(
+                kind: .authFailure,
                 message: tokenSource.invalidTokenMessage,
-                attempts: attempts,
-                lockedOut: attempts >= maxFailedAttempts
+                recoveryHint: tokenSource.configuredTokenRecoveryHint
             )
+            if attempts >= maxFailedAttempts {
+                return .rejected(.lockoutStarted(error: error, attempts: attempts))
+            }
+            return .rejected(.invalidToken(error: error, attempts: attempts))
         }
 
         clearFailedAttempts(address: address)

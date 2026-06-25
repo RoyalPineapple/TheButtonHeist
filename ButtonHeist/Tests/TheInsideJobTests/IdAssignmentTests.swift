@@ -28,7 +28,7 @@ final class IdAssignerTests: XCTestCase {
         )
     }
 
-    private func assign(_ elements: [AccessibilityElement]) -> [String] {
+    private func assign(_ elements: [AccessibilityElement]) -> [HeistId] {
         IdAssignment.assign(elements)
     }
 
