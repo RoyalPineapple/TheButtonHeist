@@ -192,15 +192,15 @@ public extension StringMatch where Value == String {
 /// by which fields are set — there is no separate scope or query system.
 public struct ElementPredicate: Sendable, Equatable, Hashable {
     /// Match against element label.
-    public var label: StringMatch<String>?
+    public let label: StringMatch<String>?
     /// Match against accessibility identifier.
-    public var identifier: StringMatch<String>?
+    public let identifier: StringMatch<String>?
     /// Match against element value.
-    public var value: StringMatch<String>?
+    public let value: StringMatch<String>?
     /// All listed traits must be present on the element.
-    public var traits: [HeistTrait]
+    public let traits: [HeistTrait]
     /// None of the listed traits may be present on the element.
-    public var excludeTraits: [HeistTrait]
+    public let excludeTraits: [HeistTrait]
 
     public init(
         label: StringMatch<String>? = nil,
