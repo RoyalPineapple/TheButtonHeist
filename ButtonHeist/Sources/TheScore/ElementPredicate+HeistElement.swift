@@ -22,7 +22,7 @@ extension HeistElement: ElementPredicateSubject {
 
     /// Match this wire element against an `ElementPredicate`.
     public func matches(_ predicate: ElementPredicate) -> Bool {
-        predicate.matches(self, mode: .exact)
+        predicate.matches(self)
     }
 }
 

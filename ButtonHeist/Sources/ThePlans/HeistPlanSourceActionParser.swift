@@ -78,11 +78,11 @@ extension HeistPlanSourceParser {
         case .exact(let string):
             return renderStringCorrection(string)
         case .contains(let string):
-            return "contains: \(renderStringCorrection(string))"
+            return ".contains(\(renderStringCorrection(string)))"
         case .prefix(let string):
-            return "prefix: \(renderStringCorrection(string))"
+            return ".prefix(\(renderStringCorrection(string)))"
         case .suffix(let string):
-            return "suffix: \(renderStringCorrection(string))"
+            return ".suffix(\(renderStringCorrection(string)))"
         }
     }
 

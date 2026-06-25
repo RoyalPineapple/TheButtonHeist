@@ -586,7 +586,7 @@ private extension TheStash.ScreenElement {
     func matches(_ target: ElementTarget) -> Bool {
         switch target {
         case .predicate(let predicate, _):
-            return predicate.matches(element, mode: .exact)
+            return predicate.matches(element)
         }
     }
 }

@@ -12,6 +12,33 @@ import ThePlans
     #expect(plan == expected)
 }
 
+@Test func `runtime parser accepts StringMatch enum cases for all string predicate fields`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    Activate(.label(.exact("Search")))
+    Activate(.identifier(.suffix("field")))
+    WaitFor(.present(.element(label: .prefix("No results"), identifier: .contains("empty_state"), value: .suffix("items"))), timeout: .seconds(2))
+    TypeText("milk", into: .value(.prefix("Search")))
+    """))
+    let expected = try HeistPlan(body: [
+        .action(try ActionStep(command: .activate(.predicate(.label(.exact("Search")))))),
+        .action(try ActionStep(command: .activate(.predicate(.identifier(.suffix("field")))))),
+        .wait(WaitStep(
+            predicate: .present(ElementPredicateTemplate.element(
+                label: .prefix(.literal("No results")),
+                identifier: .contains(.literal("empty_state")),
+                value: .suffix(.literal("items"))
+            )),
+            timeout: 2
+        )),
+        .action(try ActionStep(command: .typeText(
+            text: .literal("milk"),
+            target: .predicate(.value(.prefix("Search")))
+        ))),
+    ])
+
+    #expect(plan == expected)
+}
+
 @Test func `inline plan source chained expectation compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     Activate(.label("Pay")).expect(.changed(.screen()))
@@ -38,6 +65,10 @@ import ThePlans
     let fromTo = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
         .expect(.changed(.updated(.identifier("Quantity"), property: .value, from: "2", to: "3")))
+    """#))
+    let broadFromTo = try HeistPlanSourceCompiler().compile(root(#"""
+    Increment(.identifier("Quantity"))
+        .expect(.changed(.updated(.identifier("Quantity"), property: .value, from: .prefix("cart:"), to: .contains("items"))))
     """#))
 
     let expectedScoped = try HeistPlan(body: [
@@ -73,10 +104,22 @@ import ThePlans
             ))))
         )),
     ])
+    let expectedBroadFromTo = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .increment(.predicate(.identifier("Quantity"))),
+            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+                element: .identifier("Quantity"),
+                property: .value,
+                from: .prefix("cart:"),
+                to: .contains("items")
+            ))))
+        )),
+    ])
 
     #expect(scoped == expectedScoped)
     #expect(unscoped == expectedUnscoped)
     #expect(fromTo == expectedFromTo)
+    #expect(broadFromTo == expectedBroadFromTo)
 }
 
 @Test func `inline plan source unicode string escapes preserve following characters`() throws {
@@ -561,6 +604,9 @@ import ThePlans
         actionOrdinal,
         contains: #"Ordinal belongs to the target. Use Activate(.target(.label("Pay"), ordinal: 0))."#
     )
+
+    let labeledStringMatchMode = compileError(root(#"Activate(.label(contains: "Pay"))"#))
+    expect(labeledStringMatchMode, contains: #"StringMatch modes use enum-case syntax; use `.label(.contains("..."))`"#)
 
     let nativeIf = compileError(root("""
     if true {

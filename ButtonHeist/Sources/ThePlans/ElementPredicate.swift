@@ -18,9 +18,13 @@ extension String: StringMatchPayload {
 /// form: `"label": {"mode":"contains","value":"Send"}`.
 public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashable {
     public enum Mode: String, Codable, CaseIterable, Sendable {
+        /// Exact string match. This is the default for string literals.
         case exact
+        /// Explicit substring match. Authors opt into this broad match mode.
         case contains
+        /// Explicit prefix match.
         case prefix
+        /// Explicit suffix match.
         case suffix
     }
 
@@ -28,6 +32,10 @@ public enum StringMatch<Value: StringMatchPayload>: Sendable, Equatable, Hashabl
     case contains(Value)
     case prefix(Value)
     case suffix(Value)
+
+    public init(_ value: Value) {
+        self = .exact(value)
+    }
 
     public init(mode: Mode, value: Value) {
         switch mode {
@@ -172,9 +180,6 @@ public extension StringMatch where Value == String {
         }
     }
 
-    var containsFallback: StringMatch<String> {
-        .contains(value)
-    }
 }
 
 // MARK: - Element Predicate
@@ -229,21 +234,19 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
 // MARK: - Convenience Constructors
 
 public extension ElementPredicate {
+    /// Match by exact label.
+    static func label(_ label: String) -> ElementPredicate {
+        ElementPredicate(label: StringMatch(label))
+    }
+
     /// Match by label alone.
     static func label(_ label: StringMatch<String>) -> ElementPredicate {
         ElementPredicate(label: label)
     }
 
-    static func label(contains label: String) -> ElementPredicate {
-        ElementPredicate(label: .contains(label))
-    }
-
-    static func label(prefix label: String) -> ElementPredicate {
-        ElementPredicate(label: .prefix(label))
-    }
-
-    static func label(suffix label: String) -> ElementPredicate {
-        ElementPredicate(label: .suffix(label))
+    /// Match by exact accessibility identifier.
+    static func identifier(_ identifier: String) -> ElementPredicate {
+        ElementPredicate(identifier: StringMatch(identifier))
     }
 
     /// Match by accessibility identifier alone.
@@ -251,33 +254,14 @@ public extension ElementPredicate {
         ElementPredicate(identifier: identifier)
     }
 
-    static func identifier(contains identifier: String) -> ElementPredicate {
-        ElementPredicate(identifier: .contains(identifier))
-    }
-
-    static func identifier(prefix identifier: String) -> ElementPredicate {
-        ElementPredicate(identifier: .prefix(identifier))
-    }
-
-    static func identifier(suffix identifier: String) -> ElementPredicate {
-        ElementPredicate(identifier: .suffix(identifier))
+    /// Match by exact value.
+    static func value(_ value: String) -> ElementPredicate {
+        ElementPredicate(value: StringMatch(value))
     }
 
     /// Match by value alone.
     static func value(_ value: StringMatch<String>) -> ElementPredicate {
         ElementPredicate(value: value)
-    }
-
-    static func value(contains value: String) -> ElementPredicate {
-        ElementPredicate(value: .contains(value))
-    }
-
-    static func value(prefix value: String) -> ElementPredicate {
-        ElementPredicate(value: .prefix(value))
-    }
-
-    static func value(suffix value: String) -> ElementPredicate {
-        ElementPredicate(value: .suffix(value))
     }
 
     /// Match by any combination of fields — the canonical multi-field form.
@@ -295,21 +279,6 @@ public extension ElementPredicate {
             traits: traits,
             excludeTraits: excludeTraits
         )
-    }
-}
-
-// MARK: - String Match Mode
-
-public extension ElementPredicate {
-    /// String-comparison strategy for predicate string fields.
-    /// Trait predicates ignore this — they always compare exactly.
-    enum StringMatchMode: Sendable {
-        /// Case-insensitive equality with typography folding. The single
-        /// resolution semantics for each predicate's own match mode.
-        case exact
-        /// Case-insensitive substring with typography folding. Suggestion-only —
-        /// used by diagnostics to surface near misses, never by resolution.
-        case substring
     }
 }
 
@@ -332,16 +301,16 @@ public protocol ElementPredicateSubject {
 
 public extension ElementPredicate {
     /// The single source of truth for predicate evaluation.
-    func matches(_ subject: some ElementPredicateSubject, mode: StringMatchMode = .exact) -> Bool {
+    func matches(_ subject: some ElementPredicateSubject) -> Bool {
         guard hasPredicates else { return false }
         if let label {
-            guard let candidate = subject.predicateLabel, Self.stringMatches(candidate, label, mode: mode) else { return false }
+            guard let candidate = subject.predicateLabel, label.matches(candidate) else { return false }
         }
         if let identifier {
-            guard let candidate = subject.predicateIdentifier, Self.stringMatches(candidate, identifier, mode: mode) else { return false }
+            guard let candidate = subject.predicateIdentifier, identifier.matches(candidate) else { return false }
         }
         if let value {
-            guard let candidate = subject.predicateValue, Self.stringMatches(candidate, value, mode: mode) else { return false }
+            guard let candidate = subject.predicateValue, value.matches(candidate) else { return false }
         }
         if !traits.isEmpty, !subject.satisfiesRequiredTraits(traits) { return false }
         if !excludeTraits.isEmpty, subject.violatesExcludedTraits(excludeTraits) { return false }
@@ -401,8 +370,8 @@ public extension ElementPredicate {
             .localizedCaseInsensitiveCompare(normalizeTypography(pattern)) == .orderedSame
     }
 
-    /// Case-insensitive substring with typography folding. Suggestion-only:
-    /// used by diagnostics to surface near misses, never by resolution.
+    /// Case-insensitive substring with typography folding. Used by explicit
+    /// `.contains` predicates and by diagnostic near-miss search.
     static func stringContains(_ candidate: String, _ pattern: String) -> Bool {
         normalizeTypography(candidate)
             .localizedCaseInsensitiveContains(normalizeTypography(pattern))
@@ -434,14 +403,6 @@ public extension ElementPredicate {
         }
         return result
     }
-
-    internal static func stringMatches(_ candidate: String, _ match: StringMatch<String>, mode: StringMatchMode) -> Bool {
-        switch mode {
-        case .exact: return match.matches(candidate)
-        case .substring: return match.containsFallback.matches(candidate)
-        }
-    }
-
     private static let typographicAsciiFold: [Unicode.Scalar: String] = [
         // Single quotes / apostrophes
         "\u{2018}": "'",

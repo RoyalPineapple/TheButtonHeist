@@ -122,6 +122,14 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         XCTAssertEqual(predicate, .present(ElementPredicate(label: .contains("Pay"))))
     }
 
+    func testPredicateSchemaTreatsUpdateFromAndToAsStringMatchFields() throws {
+        let predicateSpec = try XCTUnwrap(TheFence.Command.wait.descriptor.parameter(named: .predicate))
+        let specsByKey = Dictionary(uniqueKeysWithValues: predicateSpec.objectProperties.map { ($0.key, $0) })
+
+        XCTAssertEqual(specsByKey["from"]?.type, .stringMatch)
+        XCTAssertEqual(specsByKey["to"]?.type, .stringMatch)
+    }
+
     func testPredicateRejectsRawStringMatcherField() throws {
         XCTAssertThrowsError(try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
             "type": .string("present"),

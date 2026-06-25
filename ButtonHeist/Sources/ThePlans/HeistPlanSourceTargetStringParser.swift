@@ -172,44 +172,53 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseStringMatchCallArgument(field: String) throws -> StringMatch<StringExpr> {
-        if let mode = try parseStringMatchModeLabelIfPresent() {
-            let value = try parseStringExpr()
-            return try validatedStringMatch(mode.mode, value: value, field: field, token: mode.token)
+        if let label = stringMatchModeLabelTokenIfPresent() {
+            throw error(label.token, "StringMatch modes use enum-case syntax; use `.\(field)(.\(label.name)(\"...\"))`")
         }
-        return .exact(try parseStringExpr())
+        if startsStringMatchDotCall {
+            return try parseStringMatchDotCall(field: field)
+        }
+        return StringMatch(try parseStringExpr())
     }
 
     mutating func parseStringMatchFieldValue(field: String) throws -> StringMatch<StringExpr> {
-        if startsStringMatchDotCall {
-            let token = currentToken
-            let name = try parseDotCallName(allowedPrefixes: [])
-            guard let mode = stringMatchMode(named: name) else {
-                throw error(token, "unsupported string match '.\(name)'")
-            }
-            try expectSymbol("(")
-            let value = try parseStringExpr()
-            try expectSymbol(")")
-            return try validatedStringMatch(mode, value: value, field: field, token: token)
+        if let label = stringMatchModeLabelTokenIfPresent() {
+            throw error(label.token, "StringMatch modes use enum-case syntax; use `\(field): .\(label.name)(\"...\")`")
         }
-        return .exact(try parseStringExpr())
+        if startsStringMatchDotCall {
+            return try parseStringMatchDotCall(field: field)
+        }
+        return StringMatch(try parseStringExpr())
     }
 
-    mutating func parseStringMatchModeLabelIfPresent() throws -> (mode: StringMatch<StringExpr>.Mode, token: HeistPlanSourceToken)? {
-        for name in ["exact", "contains", "prefix", "suffix"] where lookaheadLabel(name) {
-            let token = currentToken
-            try expectIdentifier(name)
-            try expectSymbol(":")
-            guard let mode = stringMatchMode(named: name) else { return nil }
-            return (mode, token)
+    mutating func parseStringMatchDotCall(field: String) throws -> StringMatch<StringExpr> {
+        let token = currentToken
+        let name = try parseDotCallName(allowedPrefixes: [])
+        guard let mode = stringMatchMode(named: name) else {
+            throw error(token, "unsupported string match '.\(name)'")
+        }
+        try expectSymbol("(")
+        let value = try parseStringExpr()
+        try expectSymbol(")")
+        return try validatedStringMatch(mode, value: value, field: field, token: token)
+    }
+
+    func stringMatchModeLabelTokenIfPresent() -> (name: String, token: HeistPlanSourceToken)? {
+        for name in stringMatchModeNames where lookaheadLabel(name) {
+            return (name, currentToken)
         }
         return nil
     }
 
     var startsStringMatchDotCall: Bool {
         if currentToken.isSymbol(".") {
-            return lookaheadIdentifier(in: ["exact", "contains", "prefix", "suffix"])
+            return lookaheadIdentifier(in: stringMatchModeNames)
         }
         return false
+    }
+
+    var stringMatchModeNames: Set<String> {
+        Set(StringMatch<StringExpr>.Mode.allCases.map(\.rawValue))
     }
 
     func stringMatchMode(named name: String) -> StringMatch<StringExpr>.Mode? {

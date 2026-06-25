@@ -49,26 +49,25 @@ extension AccessibilityElement {
 /// ElementPredicate are resolved to parser trait bitmasks so comparisons
 /// happen at the source data level.
 ///
-/// The product contract is "exact or miss": all predicate resolution paths
-/// (`matchScreenElements`, `hasTarget`, `HeistElement.matches`) use `.exact`.
-/// `.substring` is reserved for the diagnostic / near-miss / suggestion path
-/// — `Diagnostics.findNearMiss` uses it to surface "did you mean X?" hints
-/// when an exact match fails. It must not leak back into the resolution path.
+/// The product contract is exact by default: plain string predicates such as
+/// `.label("Pay")` are exact-or-miss, while authored `StringMatch` modes such
+/// as `.label(.contains("Pay"))` are explicit broad matches. There is no hidden
+/// automatic substring fallback.
 
 extension AccessibilityHierarchy {
     /// Match a single node against a predicate. For leaf elements, returns the match
     /// if the element satisfies the predicate. For containers, returns the first
     /// matching leaf descendant.
-    func matches(_ predicate: ElementPredicate, mode: ElementPredicate.StringMatchMode) -> AccessibilityElement? {
-        [self].firstMatch(predicate, mode: mode)
+    func matches(_ predicate: ElementPredicate) -> AccessibilityElement? {
+        [self].firstMatch(predicate)
     }
 }
 
 extension Array where Element == AccessibilityHierarchy {
 
     /// First leaf element in the tree that satisfies all property predicates.
-    func firstMatch(_ predicate: ElementPredicate, mode: ElementPredicate.StringMatchMode) -> AccessibilityElement? {
-        matches(predicate, mode: mode, limit: 1).first
+    func firstMatch(_ predicate: ElementPredicate) -> AccessibilityElement? {
+        matches(predicate, limit: 1).first
     }
 
     /// Leaf elements matching the predicate, stopping after `limit` results.
@@ -76,18 +75,17 @@ extension Array where Element == AccessibilityHierarchy {
     /// limit 1 for first-match, limit 2 for unique-match, limit N+1 for ordinal N.
     func matches(
         _ predicate: ElementPredicate,
-        mode: ElementPredicate.StringMatchMode,
         limit: Int
     ) -> [AccessibilityElement] {
         guard limit > 0, predicate.hasPredicates else { return [] }
         return compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
-            predicate.matches(element, mode: mode) ? element : nil
+            predicate.matches(element) ? element : nil
         })
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.
-    func hasMatch(_ predicate: ElementPredicate, mode: ElementPredicate.StringMatchMode) -> Bool {
-        !matches(predicate, mode: mode, limit: 1).isEmpty
+    func hasMatch(_ predicate: ElementPredicate) -> Bool {
+        !matches(predicate, limit: 1).isEmpty
     }
 }
 
@@ -128,11 +126,12 @@ extension AccessibilityElement: ThePlans.ElementPredicateSubject {
 extension TheStash {
 
     /// Single entry point for predicate-based element lookup. Returns up to `limit`
-    /// matching ScreenElements using exact-or-miss semantics: case-insensitive
-    /// equality with typography folding on string fields, exact bitmask comparison
-    /// on traits. There is no substring matching path; a miss is a miss, and the agent
-    /// gets structured suggestions through the `.notFound` diagnostic path. Matches
-    /// are returned in the committed screen's semantic order: live hierarchy
+    /// matching ScreenElements using authored predicate semantics: exact
+    /// matching for plain strings, opt-in `contains`/`prefix`/`suffix` matching
+    /// for broad `StringMatch` fields, and exact bitmask comparison on traits.
+    /// There is no automatic substring fallback; a miss gets structured
+    /// suggestions through the `.notFound` diagnostic path. Matches are
+    /// returned in the committed screen's semantic order: live hierarchy
     /// entries first, then known entries retained from exploration. Viewport
     /// reachability is handled by action execution, not by target resolution.
     func matchScreenElements(_ predicate: ElementPredicate, limit: Int) -> [ScreenElement] {
@@ -147,7 +146,7 @@ extension TheStash {
         guard limit > 0, predicate.hasPredicates else { return [] }
         var matches: [ScreenElement] = []
         matches.reserveCapacity(limit)
-        for entry in selectElements(in: screen) where entry.matches(predicate, mode: .exact) {
+        for entry in selectElements(in: screen) where entry.matches(predicate) {
             matches.append(entry)
             if matches.count == limit { break }
         }
@@ -157,8 +156,8 @@ extension TheStash {
 }
 
 private extension Screen.ScreenElement {
-    func matches(_ predicate: ElementPredicate, mode: ElementPredicate.StringMatchMode) -> Bool {
-        predicate.matches(element, mode: mode)
+    func matches(_ predicate: ElementPredicate) -> Bool {
+        predicate.matches(element)
     }
 }
 

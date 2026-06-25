@@ -299,6 +299,18 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertTrue(predicate.validate(against: action).met)
     }
 
+    func testElementUpdatedUsesConfiguredStringMatchForOldAndNewValues() {
+        let delta = makeUpdateDelta(label: "cart", property: .value, old: "cart: empty", new: "3 items")
+        let action = makeResult(success: true, delta: delta)
+        let predicate = AccessibilityPredicate.changed(.updated(ElementUpdatePredicate(
+            property: .value,
+            from: .prefix("cart:"),
+            to: .suffix("items")
+        )))
+
+        XCTAssertTrue(predicate.validate(against: action).met)
+    }
+
     func testElementUpdatedNoFiltersMetWhenAnyUpdatesExist() {
         let delta = makeUpdateDelta(label: "counter", property: .value, old: "a", new: "b")
         let action = makeResult(success: true, delta: delta)

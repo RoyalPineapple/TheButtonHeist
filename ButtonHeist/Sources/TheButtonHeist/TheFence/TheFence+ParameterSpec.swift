@@ -425,8 +425,8 @@ enum FenceParameterBlocks: Sendable {
         predicateType,
         param(.element, .object, objectProperties: matcherFields),
         param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
-        param(.from, .string),
-        param(.to, .string),
+        stringMatchParam(.from),
+        stringMatchParam(.to),
         param(
             .states, .array,
             arrayItemType: .object,

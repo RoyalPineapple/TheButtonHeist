@@ -7,8 +7,9 @@ import Foundation
 /// An element is described by a predicate (label, identifier, value, traits,
 /// excludeTraits); `ordinal` disambiguates among matches. Predicate fields use
 /// `StringMatch` semantics; exact matching is the default.
-/// On miss, the resolver returns structured suggestions; there is no
-/// substring matching path.
+/// Broad string matches such as `.label(.contains(...))` are opt-in; there is no
+/// automatic substring fallback. On miss, the resolver returns structured
+/// suggestions.
 public enum ElementTarget: Sendable, Equatable, Hashable {
     /// Element predicate: label, identifier, value, traits, excludeTraits.
     /// `ordinal` is a 0-based selection index into the list of matches

@@ -1475,7 +1475,7 @@ final class TheStashResolutionTests: XCTestCase {
             register(element, heistId: "item_\(index)", index: index)
         }
 
-        let limit3 = bagman.latestObservedLiveHierarchy.matches(ElementPredicate(label: "Item"), mode: .substring, limit: 3)
+        let limit3 = bagman.latestObservedLiveHierarchy.matches(ElementPredicate(label: "Item"), limit: 3)
         XCTAssertEqual(limit3.count, 3)
         XCTAssertEqual(limit3[0].value, "0")
         XCTAssertEqual(limit3[1].value, "1")
@@ -1488,7 +1488,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(element1, heistId: "save_1", index: 0)
         register(element2, heistId: "save_2", index: 1)
 
-        let results = bagman.latestObservedLiveHierarchy.matches(ElementPredicate(label: "Save"), mode: .substring, limit: 10)
+        let results = bagman.latestObservedLiveHierarchy.matches(ElementPredicate(label: "Save"), limit: 10)
         XCTAssertEqual(results.count, 2)
     }
 
@@ -1496,7 +1496,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
 
-        let results = bagman.latestObservedLiveHierarchy.matches(ElementPredicate(label: "Save"), mode: .substring, limit: 0)
+        let results = bagman.latestObservedLiveHierarchy.matches(ElementPredicate(label: "Save"), limit: 0)
         XCTAssertTrue(results.isEmpty)
     }
 
@@ -1750,12 +1750,10 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(result.resolved)
     }
 
-    // MARK: - Exact-or-Miss Contract (Task 1, Findings 4/5/8)
+    // MARK: - Exact Default and Explicit Broad Matches
 
-    /// A partial label must return `.notFound` with a near-miss suggestion.
-    /// This is the product decision codified in the matcher contract: "exact
-    /// or miss", suggestions on miss.
-    func testSubstringPartialLabelReturnsNotFoundWithSuggestion() {
+    /// A partial label must return `.notFound`; broad matching is explicit.
+    func testSubstringPartialLabelReturnsNotFound() {
         let save = element(label: "Save Draft", traits: .button)
         register(save, heistId: "button_save_draft", index: 0)
 
@@ -1767,9 +1765,22 @@ final class TheStashResolutionTests: XCTestCase {
         let diagnostics = result.diagnostics
         XCTAssertEqual(facts.reason, .noMatches)
         XCTAssertTrue(diagnostics.contains("Save Draft"),
-                      "Near-miss should surface the actual label as a suggestion: \(diagnostics)")
-        XCTAssertTrue(diagnostics.contains("did you mean") || diagnostics.contains("near miss"),
-                      "Diagnostic should look like a suggestion: \(diagnostics)")
+                      "Diagnostic should surface the available interface evidence: \(diagnostics)")
+        XCTAssertFalse(diagnostics.contains("contains-match suggestion"), diagnostics)
+    }
+
+    /// A contains predicate is an authored broad match, useful for migrating
+    /// KIF `usingLabelContaining` call sites without weakening exact literals.
+    func testExplicitContainsLabelResolves() {
+        let save = element(label: "Save Draft", traits: .button)
+        register(save, heistId: "button_save_draft", index: 0)
+
+        let result = bagman.resolveTarget(.predicate(.label(.contains("Save"))))
+        guard let resolved = result.resolved else {
+            XCTFail("Explicit contains predicate should resolve, got \(result)")
+            return
+        }
+        XCTAssertEqual(resolved.element.label, "Save Draft")
     }
 
     /// Exact equality (after case-insensitive comparison) still resolves.
@@ -1829,10 +1840,9 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "Save Draft", value: "x", identifier: "save_btn", traits: .button)
         let matcher = ElementPredicate(label: "Save Draft", traits: [.button])
 
-        // Server-side: AccessibilityElement.matches with mode .exact
-        let serverHit = matcher.matches(element, mode: .exact)
+        let serverHit = matcher.matches(element)
 
-        // Client-side: HeistElement.matches (no mode — exact-or-miss is the only mode).
+        // Client-side: HeistElement.matches uses the same StringMatch configuration.
         let heistElement = HeistElement(
             description: "Save Draft",
             label: "Save Draft",
@@ -1849,7 +1859,7 @@ final class TheStashResolutionTests: XCTestCase {
 
         // Substring partial should miss on BOTH sides now.
         let partial = ElementPredicate(label: "Save")
-        XCTAssertFalse(partial.matches(element, mode: .exact))
+        XCTAssertFalse(partial.matches(element))
         XCTAssertFalse(heistElement.matches(partial))
     }
 
@@ -1868,7 +1878,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         let asciiMatcher = ElementPredicate(label: "Don't skip")
 
-        XCTAssertTrue(asciiMatcher.matches(smart, mode: .exact))
+        XCTAssertTrue(asciiMatcher.matches(smart))
         XCTAssertTrue(heist.matches(asciiMatcher),
                       "Client-side must fold typography just like server-side")
     }

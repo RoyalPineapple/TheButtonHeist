@@ -286,15 +286,15 @@ func runtimeSafetyRejectsStringRefThatLowersToInvalidCommandPayload() throws {
 @Test
 func runtimeSafetyRejectsEmptyBroadConcreteElementTargets() throws {
     let targets: [(String, ElementTarget)] = [
-        ("label contains", .label(contains: "")),
-        ("label prefix", .label(prefix: "")),
-        ("label suffix", .label(suffix: "")),
-        ("identifier contains", .identifier(contains: "")),
-        ("identifier prefix", .identifier(prefix: "")),
-        ("identifier suffix", .identifier(suffix: "")),
-        ("value contains", .value(contains: "")),
-        ("value prefix", .value(prefix: "")),
-        ("value suffix", .value(suffix: "")),
+        ("label contains", .label(.contains(""))),
+        ("label prefix", .label(.prefix(""))),
+        ("label suffix", .label(.suffix(""))),
+        ("identifier contains", .identifier(.contains(""))),
+        ("identifier prefix", .identifier(.prefix(""))),
+        ("identifier suffix", .identifier(.suffix(""))),
+        ("value contains", .value(.contains(""))),
+        ("value prefix", .value(.prefix(""))),
+        ("value suffix", .value(.suffix(""))),
     ]
 
     for (label, target) in targets {

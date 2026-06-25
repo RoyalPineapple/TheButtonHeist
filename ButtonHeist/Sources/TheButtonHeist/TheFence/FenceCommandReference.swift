@@ -140,7 +140,7 @@ public enum FenceCommandReference {
             "",
             "## StringMatch",
             "",
-            "`stringMatch` fields such as `label`, `identifier`, and `value` accept object form " +
+            "`stringMatch` fields such as `label`, `identifier`, `value`, and update `from`/`to` filters accept object form " +
                 "`{ \"mode\": \"exact|contains|prefix|suffix\", \"value\": \"...\" }`. " +
                 "Use `exact` for exact matching; broad modes require a non-empty value.",
         ]

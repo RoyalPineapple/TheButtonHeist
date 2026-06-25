@@ -95,11 +95,11 @@ public struct Activate: HeistActionContent {
     public let expectation: WaitStep?
     public let expectationWaiver: String?
 
-    @_disfavoredOverload
     public init(_ target: ElementTarget) {
         self.init(.target(target))
     }
 
+    @_disfavoredOverload
     public init(_ target: ElementTargetExpr) {
         self.init(command: .activate(target), expectation: nil)
     }
@@ -116,11 +116,11 @@ public struct Increment: HeistActionContent {
     public let expectation: WaitStep?
     public let expectationWaiver: String?
 
-    @_disfavoredOverload
     public init(_ target: ElementTarget) {
         self.init(.target(target))
     }
 
+    @_disfavoredOverload
     public init(_ target: ElementTargetExpr) {
         self.init(command: .increment(target), expectation: nil)
     }
@@ -137,11 +137,11 @@ public struct Decrement: HeistActionContent {
     public let expectation: WaitStep?
     public let expectationWaiver: String?
 
-    @_disfavoredOverload
     public init(_ target: ElementTarget) {
         self.init(.target(target))
     }
 
+    @_disfavoredOverload
     public init(_ target: ElementTargetExpr) {
         self.init(command: .decrement(target), expectation: nil)
     }
@@ -158,20 +158,20 @@ public struct TypeText: HeistActionContent {
     public let expectation: WaitStep?
     public let expectationWaiver: String?
 
-    @_disfavoredOverload
     public init(_ text: String, into target: ElementTarget? = nil) {
         self.init(.literal(text), into: target.map(ElementTargetExpr.target))
     }
 
-    @_disfavoredOverload
     public init(_ text: StringExpr, into target: ElementTarget) {
         self.init(text, into: .target(target))
     }
 
+    @_disfavoredOverload
     public init(_ text: String, into target: ElementTargetExpr) {
         self.init(.literal(text), into: target)
     }
 
+    @_disfavoredOverload
     public init(_ text: StringExpr, into target: ElementTargetExpr? = nil) {
         self.init(command: .typeText(text: text, target: target), expectation: nil)
     }
@@ -188,11 +188,11 @@ public struct CustomAction: HeistActionContent {
     public let expectation: WaitStep?
     public let expectationWaiver: String?
 
-    @_disfavoredOverload
     public init(_ name: String, on target: ElementTarget) {
         self.init(name, on: .target(target))
     }
 
+    @_disfavoredOverload
     public init(_ name: String, on target: ElementTargetExpr) {
         self.init(command: .customAction(name: name, target: target))
     }
@@ -209,11 +209,11 @@ public struct Rotor: HeistActionContent {
     public let expectation: WaitStep?
     public let expectationWaiver: String?
 
-    @_disfavoredOverload
     public init(_ name: String, on target: ElementTarget, direction: RotorDirection = .next) {
         self.init(name, on: .target(target), direction: direction)
     }
 
+    @_disfavoredOverload
     public init(_ name: String, on target: ElementTargetExpr, direction: RotorDirection = .next) {
         self.init(command: .rotor(selection: .named(name), target: target, direction: direction))
     }

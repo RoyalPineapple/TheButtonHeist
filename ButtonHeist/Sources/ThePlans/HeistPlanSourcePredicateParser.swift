@@ -95,8 +95,8 @@ extension HeistPlanSourceParser {
     mutating func parseElementUpdatePredicate() throws -> ElementUpdatePredicateExpr {
         var element: ElementPredicateTemplate?
         var property: ElementProperty?
-        var from: StringExpr?
-        var to: StringExpr?
+        var from: StringMatch<StringExpr>?
+        var to: StringMatch<StringExpr>?
         if currentToken.isSymbol(")") {
             return ElementUpdatePredicateExpr()
         }
@@ -108,11 +108,11 @@ extension HeistPlanSourceParser {
             } else if lookaheadLabel("from") {
                 try expectIdentifier("from")
                 try expectSymbol(":")
-                from = try parseStringExpr()
+                from = try parseStringMatchFieldValue(field: "from")
             } else if lookaheadLabel("to") {
                 try expectIdentifier("to")
                 try expectSymbol(":")
-                to = try parseStringExpr()
+                to = try parseStringMatchFieldValue(field: "to")
             } else if element == nil {
                 element = try parseElementPredicateTemplate()
             } else {

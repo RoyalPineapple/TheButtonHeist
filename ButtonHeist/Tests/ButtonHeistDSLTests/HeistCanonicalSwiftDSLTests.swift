@@ -142,7 +142,7 @@ private func rootStringPlanFixture() throws -> HeistPlan {
         parameter: .string(name: "term"),
         body: [
             .action(try ActionStep(
-                command: .typeText(text: .ref("term"), target: .label(contains: "Search")),
+                command: .typeText(text: .ref("term"), target: .label(.contains("Search"))),
                 expectation: WaitStep(predicate: .present(.value(.ref("term"))), timeout: 2)
             )),
         ]
@@ -195,7 +195,7 @@ private func rootStringPlanFixture() throws -> HeistPlan {
                 parameter: "item",
                 body: [
                     .action(try ActionStep(
-                        command: .typeText(text: .ref("item"), target: .label(contains: "Search")),
+                        command: .typeText(text: .ref("item"), target: .label(.contains("Search"))),
                         expectation: WaitStep(predicate: .present(.label(.ref("item"))), timeout: 2)
                     )),
                 ]
@@ -221,7 +221,7 @@ private func rootStringPlanFixture() throws -> HeistPlan {
 private let rootStringCanonicalSwiftDSL = """
     HeistPlan("RootSearch", parameter: "query") { query in
         HeistDef<String>("Search.enter", parameter: "term") { term in
-            TypeText(term, into: .label(contains: "Search"))
+            TypeText(term, into: .label(.contains("Search")))
                 .expect(.present(.value(term)), timeout: .seconds(2))
         }
 
@@ -242,7 +242,7 @@ private let rootStringCanonicalSwiftDSL = """
         }
 
         ForEach(["Milk", "Eggs"]) { item in
-            TypeText(item, into: .label(contains: "Search"))
+            TypeText(item, into: .label(.contains("Search")))
                 .expect(.present(.label(item)), timeout: .seconds(2))
         }
 

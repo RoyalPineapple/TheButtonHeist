@@ -167,8 +167,8 @@ public extension AccessibilityPredicate.Change {
             let matchingChanges: [PropertyChange]
             if update.from != nil || update.to != nil {
                 matchingChanges = targetChanges.filter { change in
-                    if let from = update.from, change.old != from { return false }
-                    if let to = update.to, change.new != to { return false }
+                    if let from = update.from, !Self.matchesUpdateValue(from, candidate: change.old) { return false }
+                    if let to = update.to, !Self.matchesUpdateValue(to, candidate: change.new) { return false }
                     return true
                 }
                 guard !matchingChanges.isEmpty else { continue }
@@ -185,6 +185,20 @@ public extension AccessibilityPredicate.Change {
             Self.describeUpdate(edit, changes: edit.changes)
         }.joined(separator: "; ")
         return ExpectationResult(met: false, predicate: nil, actual: observed)
+    }
+
+    private static func matchesUpdateValue(_ match: StringMatch<String>, candidate: String?) -> Bool {
+        guard let candidate else { return false }
+        switch match {
+        case .exact(let pattern):
+            return ElementPredicate.stringEquals(candidate, pattern)
+        case .contains(let pattern):
+            return !pattern.isEmpty && ElementPredicate.stringContains(candidate, pattern)
+        case .prefix(let pattern):
+            return !pattern.isEmpty && ElementPredicate.stringHasPrefix(candidate, pattern)
+        case .suffix(let pattern):
+            return !pattern.isEmpty && ElementPredicate.stringHasSuffix(candidate, pattern)
+        }
     }
 
     private static func describeUpdate(_ edit: ElementUpdate, changes: [PropertyChange]) -> String {

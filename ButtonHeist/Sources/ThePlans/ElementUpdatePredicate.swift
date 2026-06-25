@@ -21,15 +21,15 @@ public struct ElementUpdatePredicate: Sendable, Equatable {
     /// Which property changed. `nil` matches any property.
     public let property: ElementProperty?
     /// Required old value. `nil` means the old value does not matter.
-    public let from: String?
+    public let from: StringMatch<String>?
     /// Required new value. `nil` means the new value does not matter.
-    public let to: String?
+    public let to: StringMatch<String>?
 
     public init(
         element: ElementPredicate? = nil,
         property: ElementProperty? = nil,
-        from: String? = nil,
-        to: String? = nil
+        from: StringMatch<String>? = nil,
+        to: StringMatch<String>? = nil
     ) {
         self.element = element
         self.property = property
@@ -52,8 +52,8 @@ extension ElementUpdatePredicate: Codable {
         self.init(
             element: try container.decodeIfPresent(ElementPredicate.self, forKey: .element),
             property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
-            from: try container.decodeIfPresent(String.self, forKey: .from),
-            to: try container.decodeIfPresent(String.self, forKey: .to)
+            from: try container.decodeIfPresent(StringMatch<String>.self, forKey: .from),
+            to: try container.decodeIfPresent(StringMatch<String>.self, forKey: .to)
         )
     }
 
@@ -71,8 +71,8 @@ extension ElementUpdatePredicate: CustomStringConvertible {
         ScoreDescription.call("update", [
             element.map { "element=\($0)" },
             ScoreDescription.valueField("property", property?.rawValue),
-            ScoreDescription.stringField("from", from),
-            ScoreDescription.stringField("to", to),
+            ScoreDescription.stringMatchField("from", from),
+            ScoreDescription.stringMatchField("to", to),
         ].compactMap { $0 })
     }
 }

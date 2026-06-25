@@ -67,6 +67,49 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertTrue(summary.contains("Next:"))
     }
 
+    // MARK: - failureInterfaceSuggestion
+
+    func testFailureInterfaceSuggestionUsesCapturedElementsForContainsSearch() {
+        let element = HeistElement(
+            description: "Save Draft",
+            label: "Save Draft",
+            value: "ready",
+            identifier: "save_draft_button",
+            traits: [.button],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: []
+        )
+
+        let suggestion = Diagnostics.failureInterfaceSuggestion(
+            for: ElementPredicate(label: "Save", traits: [.button]),
+            elements: [element]
+        )
+
+        XCTAssertTrue(suggestion?.contains("captured interface contains-match suggestion") == true, suggestion ?? "")
+        XCTAssertTrue(suggestion?.contains(#"label="Save Draft""#) == true, suggestion ?? "")
+        XCTAssertTrue(suggestion?.contains(#"predicate(label="Save Draft" traits=[button])"#) == true, suggestion ?? "")
+        XCTAssertTrue(suggestion?.contains(#"predicate(label=contains("Save") traits=[button])"#) == true, suggestion ?? "")
+    }
+
+    func testFailureInterfaceSuggestionDoesNotRewriteAlreadyExplicitContainsPredicate() {
+        let element = HeistElement(
+            description: "Save Draft",
+            label: "Save Draft",
+            value: nil,
+            identifier: nil,
+            traits: [.button],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: []
+        )
+
+        let suggestion = Diagnostics.failureInterfaceSuggestion(
+            for: .label(.contains("Save")),
+            elements: [element]
+        )
+
+        XCTAssertNil(suggestion)
+    }
+
     // MARK: - Helpers
 
     private func makeElement(label: String) -> AccessibilityElement {

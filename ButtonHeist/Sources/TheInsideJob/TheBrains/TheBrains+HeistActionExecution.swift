@@ -284,7 +284,7 @@ extension TheBrains {
         return HeistFailureDetail(
             category: result.errorKind == .elementNotFound ? .targetResolution : .action,
             contract: "action dispatch succeeds",
-            observed: actionObserved(result),
+            observed: actionObserved(result, command: command),
             expected: command.reportTarget.map(String.init(describing:))
         )
     }
@@ -315,12 +315,28 @@ extension TheBrains {
         )
     }
 
-    private func actionObserved(_ result: ActionResult) -> String {
+    private func actionObserved(_ result: ActionResult, command: HeistActionCommand) -> String {
         [
             result.message,
             result.errorKind.map { "errorKind=\($0.rawValue)" },
             result.settled.map { "settled=\($0)" },
+            failureInterfaceSuggestion(for: command, result: result),
         ].compactMap { $0 }.joined(separator: "; ")
+    }
+
+    private func failureInterfaceSuggestion(
+        for command: HeistActionCommand,
+        result: ActionResult
+    ) -> String? {
+        guard result.errorKind == .elementNotFound,
+              let target = command.reportTarget,
+              let elements = result.accessibilityTrace?.captures.last?.interface.projectedElements else {
+            return nil
+        }
+        switch target {
+        case .predicate(let predicate, _):
+            return TheStash.Diagnostics.failureInterfaceSuggestion(for: predicate, elements: elements)
+        }
     }
 
     private func expectationObserved(_ receipt: HeistWaitReceipt) -> String {

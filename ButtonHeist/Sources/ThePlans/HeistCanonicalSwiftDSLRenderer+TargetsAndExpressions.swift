@@ -101,11 +101,11 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .exact(let value):
             return quote(value)
         case .contains(let value):
-            return "contains: \(quote(value))"
+            return ".contains(\(quote(value)))"
         case .prefix(let value):
-            return "prefix: \(quote(value))"
+            return ".prefix(\(quote(value)))"
         case .suffix(let value):
-            return "suffix: \(quote(value))"
+            return ".suffix(\(quote(value)))"
         }
     }
 
@@ -130,11 +130,11 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .exact(let value):
             return try render(string: value, environment: environment)
         case .contains(let value):
-            return "contains: \(try render(string: value, environment: environment))"
+            return ".contains(\(try render(string: value, environment: environment)))"
         case .prefix(let value):
-            return "prefix: \(try render(string: value, environment: environment))"
+            return ".prefix(\(try render(string: value, environment: environment)))"
         case .suffix(let value):
-            return "suffix: \(try render(string: value, environment: environment))"
+            return ".suffix(\(try render(string: value, environment: environment)))"
         }
     }
 
