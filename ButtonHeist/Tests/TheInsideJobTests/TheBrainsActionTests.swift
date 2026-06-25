@@ -1589,6 +1589,9 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             execute: { command in
                 executedCommands.append(command)
+                if case .takeScreenshot = command {
+                    return ActionResult(success: true, method: .takeScreenshot)
+                }
                 return ActionResult(success: true, method: .activate)
             }
         )
@@ -1607,12 +1610,14 @@ final class TheBrainsActionTests: XCTestCase {
         let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
 
         XCTAssertFalse(result.success)
-        XCTAssertTrue(executedCommands.isEmpty)
+        XCTAssertEqual(executedCommands, [.takeScreenshot])
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.limit, 1)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertEqual(forEachResult.failureReason, "matched 2 element(s), exceeding for_each_element limit 1")
         XCTAssertTrue(step.children.isEmpty)
+        XCTAssertEqual(heist.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
+        XCTAssertEqual(heist.failureScreenshotStep?.actionEvidence?.command, .takeScreenshot)
     }
 
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
