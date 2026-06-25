@@ -37,18 +37,38 @@ extension TheFence {
                 command: step.reportCommandName ?? step.reportStepName,
                 target: step.reportTarget,
                 timeSeconds: Double(step.durationMs) / 1000,
-                outcome: Self.junitOutcome(for: step)
+                outcome: Self.junitOutcome(for: step, result: result)
             )
         }
     }
 
     // MARK: - Private Helpers
 
-    private static func junitOutcome(for step: HeistExecutionStepResult) -> HeistJUnitReport.Outcome {
+    private static func junitOutcome(
+        for step: HeistExecutionStepResult,
+        result: HeistExecutionResult
+    ) -> HeistJUnitReport.Outcome {
         if let message = step.reportFailureMessage {
-            return .failed(message: message, errorKind: junitErrorKind(for: step))
+            let enriched = step.path == result.failedStepPath
+                ? junitFailureMessage(message, result: result)
+                : message
+            return .failed(message: enriched, errorKind: junitErrorKind(for: step))
         }
         return step.status == .skipped ? .skipped : .passed
+    }
+
+    private static func junitFailureMessage(
+        _ message: String,
+        result: HeistExecutionResult
+    ) -> String {
+        var lines = [message]
+        if let screenshot = result.failureScreenshotSummary {
+            lines.append(screenshot)
+        }
+        if let interfaceDump = result.failureInterfaceDump() {
+            lines.append(interfaceDump)
+        }
+        return lines.joined(separator: "\n")
     }
 
     private static func junitErrorKind(for step: HeistExecutionStepResult) -> HeistJUnitReport.ReportErrorKind? {

@@ -457,6 +457,75 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertNil(errorKind)
     }
 
+    func testJUnitFailureIncludesFailureScreenshotInterfaceDump() async {
+        let elements = (0..<21).map { index in
+            makeReceiptTestElement(
+                label: index == 0 ? "No results found" : "Element \(index)",
+                identifier: index == 0 ? "empty_state" : nil
+            )
+        }
+        let interface = makeReceiptTestInterface(elements)
+        let screenshot = ScreenPayload(
+            pngData: "png",
+            width: 42,
+            height: 24,
+            timestamp: Date(timeIntervalSince1970: 0),
+            interface: interface
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    path: "$.body[0]",
+                    kind: .fail,
+                    status: .failed,
+                    durationMs: 1,
+                    intent: .fail(message: "stop"),
+                    failure: HeistFailureDetail(
+                        category: .explicitFailure,
+                        contract: "Fail(...) aborts the heist",
+                        observed: "stop"
+                    )
+                ),
+                HeistExecutionStepResult(
+                    path: "$.body[0].failure.actions[0]",
+                    kind: .action,
+                    status: .passed,
+                    durationMs: 1,
+                    intent: .action(command: "takeScreenshot", target: nil),
+                    evidence: .action(HeistActionEvidence(
+                        command: .takeScreenshot,
+                        actionResult: ActionResult(
+                            success: true,
+                            method: .takeScreenshot,
+                            payload: .screenshot(screenshot)
+                        )
+                    ))
+                ),
+            ],
+            durationMs: 2,
+            abortedAtPath: "$.body[0]"
+        )
+        let rows = await Task { @ButtonHeistActor in
+            TheFence(configuration: .init()).junitSteps(result: result)
+        }.value
+
+        guard case .failed(let message, let errorKind) = rows.first?.outcome else {
+            return XCTFail("Expected failed JUnit row, got \(String(describing: rows.first?.outcome))")
+        }
+        XCTAssertEqual(errorKind, .commandError)
+        XCTAssertTrue(message.contains("stop"), message)
+        XCTAssertTrue(
+            message.contains("failure screenshot: 42x24 receipt=$.body[0].failure.actions[0] interface=21 elements"),
+            message
+        )
+        XCTAssertTrue(message.contains("failure interface: 21 elements"), message)
+        XCTAssertTrue(message.contains("[0] \"No results found\" staticText id=\"empty_state\""), message)
+        XCTAssertTrue(message.contains("frame=(0,0,100,44) activation=(50,22)"), message)
+        XCTAssertTrue(message.contains("... and 1 more"), message)
+        XCTAssertEqual(result.failureScreenshotPayload, screenshot)
+        XCTAssertEqual(result.failureDiagnosticInterface?.projectedElements.count, 21)
+    }
+
     func testSkippedReceiptNodesDoNotContributeRuntimeEvidence() {
         let result = HeistExecutionResult(
             steps: [

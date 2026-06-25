@@ -326,7 +326,14 @@ public extension Heist {
             if let diagnostic {
                 parts.append("diagnostic=\(diagnostic)")
             }
-            return parts.joined(separator: " ")
+            var text = parts.joined(separator: " ")
+            if let screenshot = result.failureScreenshotSummary {
+                text += "\n\(screenshot)"
+            }
+            if let interfaceDump = result.failureInterfaceDump() {
+                text += "\n\(interfaceDump)"
+            }
+            return text
         }
 
         private static func diagnostic(_ failure: HeistFailureDetail) -> String {

@@ -11,39 +11,11 @@ extension FenceResponse {
         displayIndex: Int? = nil,
         detail: InterfaceDetail = .summary
     ) -> String {
-        var parts: [String] = []
-        if let displayIndex { parts.append("[\(displayIndex)]") }
-
-        var labelValue = quotedString(nonEmpty(element.label) ?? "")
-        if let value = nonEmpty(element.value) {
-            labelValue += ":\(quotedString(value))"
-        }
-        parts.append(labelValue)
-
-        let traits = element.traits.filter { $0.rawValue != "none" }
-        if !traits.isEmpty {
-            parts.append(traits.map(\.rawValue).joined(separator: " | "))
-        }
-
-        let actions = meaningfulActions(element)
-        if !actions.isEmpty {
-            parts.append("{\(actions.map(\.description).joined(separator: ", "))}")
-        }
-        if let rotors = element.rotors?.compactMap({ nonEmpty($0.name) }), !rotors.isEmpty {
-            parts.append("[\(rotors.joined(separator: ", "))]")
-        }
-        if let hint = nonEmpty(element.hint) {
-            parts.append("hint=\(quotedString(hint))")
-        }
-        if let identifier = nonEmpty(element.identifier) {
-            parts.append("id=\(quotedString(identifier))")
-        }
-        if detail == .full {
-            parts.append("frame=(\(Int(element.frameX)),\(Int(element.frameY)),\(Int(element.frameWidth)),\(Int(element.frameHeight)))")
-            parts.append("activation=(\(Int(element.activationPointX)),\(Int(element.activationPointY)))")
-        }
-
-        return parts.joined(separator: " ")
+        HeistFailureDiagnostics.elementLine(
+            element,
+            displayIndex: displayIndex,
+            includeGeometry: detail == .full
+        )
     }
 
     static func nonEmpty(_ value: String?) -> String? {
