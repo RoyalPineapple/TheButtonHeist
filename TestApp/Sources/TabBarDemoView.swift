@@ -16,7 +16,6 @@ struct TabBarDemoView: View {
                     Label("Account", systemImage: "person.circle")
                 }
         }
-        .navigationBarBackButtonHidden(true)
     }
 }
 
