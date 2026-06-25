@@ -398,6 +398,13 @@ final class ElementInflationProductTests: XCTestCase {
         innerScrollView.backgroundColor = .white
         innerScrollView.isAccessibilityElement = false
 
+        let innerAnchor = UILabel(frame: CGRect(x: 20, y: 20, width: 220, height: 44))
+        innerAnchor.text = "Visible Inner Anchor \(identifier)"
+        innerAnchor.accessibilityLabel = innerAnchor.text
+        innerAnchor.accessibilityIdentifier = "visible_inner_anchor_\(identifier)"
+        innerAnchor.isAccessibilityElement = true
+        innerScrollView.addSubview(innerAnchor)
+
         let target = SemanticActivationView(frame: CGRect(x: 20, y: 640, width: 220, height: 44))
         target.accessibilityLabel = label
         target.accessibilityIdentifier = identifier
