@@ -422,6 +422,41 @@ final class CLICommandSyncTests: XCTestCase {
         ]))
     }
 
+    func testSharedRequestBuilderRejectsWaitTimeoutAtOrBelowZeroInJSONLinesMode() {
+        for timeout in ["0", "-1"] {
+            XCTAssertThrowsError(
+                try CLIRequestBuilder.parsedRequest(
+                    from: #"{"command":"wait","predicate":{"type":"screen_changed"},"timeout":\#(timeout)}"#
+                )
+            ) { error in
+                let message = CLIRequestBuilder.diagnosticMessage(for: error)
+                XCTAssertTrue(message.contains("schema validation failed for timeout"), message)
+                XCTAssertTrue(message.contains("expected number > 0"), message)
+            }
+        }
+    }
+
+    func testSharedRequestBuilderRejectsWaitTimeoutAboveThirtyInJSONLinesMode() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(
+                from: #"{"command":"wait","predicate":{"type":"screen_changed"},"timeout":31}"#
+            )
+        ) { error in
+            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            XCTAssertTrue(message.contains("schema validation failed for timeout"), message)
+            XCTAssertTrue(message.contains("expected number in 0...30"), message)
+        }
+    }
+
+    func testSharedRequestBuilderRoutesValidWaitInJSONLinesMode() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"command":"wait","predicate":{"type":"screen_changed"},"timeout":5}"#
+        )
+
+        XCTAssertEqual(parsed.command, .wait)
+        XCTAssertEqual(parsed.argument(.timeout), .int(5))
+    }
+
     func testSharedRequestBuilderRejectsMCPOnlyPerformInJSONLinesMode() {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(
