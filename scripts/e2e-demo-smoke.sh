@@ -564,8 +564,9 @@ printf '%s' "$ROTOR_JSON" | json_expect_ok "rotor Errors"
 # under the action report for the executed step.
 ROTOR_RESULT_LABEL="$(printf '%s' "$ROTOR_JSON" | jq -r '
     .report.nodes[]?
-    | select(.action.commandName == "rotor")
-    | .action.result.rotor.found.label // ""
+    | .evidence.action? as $action
+    | select($action.commandName == "rotor")
+    | $action.result.rotor.found.label // ""
 ' | head -n 1)"
 [[ "$ROTOR_RESULT_LABEL" == "Rotor Result: Missing amount" ]] \
     || fail "expected rotor result label 'Rotor Result: Missing amount', got '$ROTOR_RESULT_LABEL'"
