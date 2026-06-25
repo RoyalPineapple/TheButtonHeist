@@ -184,8 +184,8 @@ actor TheMuscle {
             driverIdentity: authentication.driverIdentity,
             clientId: authentication.clientId
         ) {
-        case .accepted(_, let releaseTimerAction):
-            applySessionReleaseTimerAction(releaseTimerAction)
+        case .accepted(let acceptance):
+            applySessionReleaseTimerAction(acceptance.releaseTimerAction)
             let effect = admission.completeAuthentication(authentication)
             cancelAuthenticationDeadline(for: authentication.clientId)
             await applyAdmissionEffect(effect)

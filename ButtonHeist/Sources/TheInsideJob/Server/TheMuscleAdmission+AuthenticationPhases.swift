@@ -17,16 +17,25 @@ struct MuscleTokenAuthenticationPhase {
             muscleAuthenticationLogger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
             return .handled(.response(.error(error), respond: respond, disconnect: clientId))
 
-        case .rejected(let retryMessage, let attempts, let lockedOut):
-            if lockedOut {
+        case .rejected(let rejection):
+            switch rejection {
+            case .invalidToken(let retryMessage, let attempts):
+                muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
+                return .handled(.response(
+                    .error(ServerError(kind: .authFailure, message: retryMessage)),
+                    respond: respond,
+                    disconnect: clientId
+                ))
+
+            case .lockoutStarted(let retryMessage, let attempts):
                 muscleAuthenticationLogger.warning("Address \(address) locked out after \(attempts) failed attempts")
+                muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
+                return .handled(.response(
+                    .error(ServerError(kind: .authFailure, message: retryMessage)),
+                    respond: respond,
+                    disconnect: clientId
+                ))
             }
-            muscleAuthenticationLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
-            return .handled(.response(
-                .error(ServerError(kind: .authFailure, message: retryMessage)),
-                respond: respond,
-                disconnect: clientId
-            ))
 
         case .accepted(let driverIdentity):
             return .authenticate(MuscleAuthentication(

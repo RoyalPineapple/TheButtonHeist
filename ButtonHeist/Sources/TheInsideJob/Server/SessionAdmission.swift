@@ -11,8 +11,13 @@ struct SessionAdmission {
 
     enum TokenDecision: Equatable, Sendable {
         case accepted(driverIdentity: String)
-        case rejected(message: String, attempts: Int, lockedOut: Bool)
+        case rejected(TokenRejection)
         case lockedOut(ServerError)
+    }
+
+    enum TokenRejection: Equatable, Sendable {
+        case invalidToken(message: String, attempts: Int)
+        case lockoutStarted(message: String, attempts: Int)
     }
 
     private let tokenSource: SessionTokenSource
@@ -40,11 +45,11 @@ struct SessionAdmission {
 
         guard constantTimeEqual(token, tokenSource.token) else {
             let attempts = recordFailedAttempt(address: address, now: now)
-            return .rejected(
-                message: tokenSource.invalidTokenMessage,
-                attempts: attempts,
-                lockedOut: attempts >= maxFailedAttempts
-            )
+            let message = tokenSource.invalidTokenMessage
+            if attempts >= maxFailedAttempts {
+                return .rejected(.lockoutStarted(message: message, attempts: attempts))
+            }
+            return .rejected(.invalidToken(message: message, attempts: attempts))
         }
 
         clearFailedAttempts(address: address)
