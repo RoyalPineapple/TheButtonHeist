@@ -12,10 +12,18 @@ struct RenderEnvironment {
         return copy
     }
 
+    func bindingTargetReference(_ reference: String) -> RenderEnvironment {
+        bindingTargetReference(HeistReferenceName(rawValue: reference))
+    }
+
     func bindingStringReference(_ reference: HeistReferenceName) -> RenderEnvironment {
         var copy = self
         copy.stringReferences.insert(reference)
         return copy
+    }
+
+    func bindingStringReference(_ reference: String) -> RenderEnvironment {
+        bindingStringReference(HeistReferenceName(rawValue: reference))
     }
 
     func binding(parameter: HeistParameter) throws -> RenderEnvironment {

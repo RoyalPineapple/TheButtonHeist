@@ -24,16 +24,18 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
     }
 
     public init(ref: HeistReferenceName) throws {
-        let trimmed = ref.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw HeistExpressionError.emptyReference("target") }
-        self = .ref(trimmed)
+        self = .ref(try ref.validated(type: "target"))
+    }
+
+    public init(ref: String) throws {
+        self = .ref(try HeistReferenceName(validating: ref, type: "target"))
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.ref) {
             try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element target expression")
-            self = try .ref(Self.decodeReference(from: container, key: .ref, type: "target"))
+            self = try .ref(Self.decodeReference(from: container, key: .ref))
             return
         }
         let predicate = try ElementPredicateTemplate.decodeAllowingAdditionalKeys(from: decoder)
@@ -96,7 +98,7 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
             return .predicate(try predicate.resolve(in: environment), ordinal: ordinal)
         case .ref(let reference):
             guard let target = environment.targets[reference] else {
-                throw HeistExpressionError.unresolvedTargetReference(reference)
+                throw HeistExpressionError.unresolvedTargetReference(reference.rawValue)
             }
             return target
         }
@@ -104,19 +106,9 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
 
     private static func decodeReference(
         from container: KeyedDecodingContainer<CodingKeys>,
-        key: CodingKeys,
-        type: String
+        key: CodingKeys
     ) throws -> HeistReferenceName {
-        let reference = try container.decode(String.self, forKey: key)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !reference.isEmpty else {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "\(type) reference must not be empty"
-            )
-        }
-        return reference
+        try HeistReferenceName.decode(from: container, forKey: key)
     }
 }
 
@@ -171,7 +163,7 @@ extension ElementTargetExpr: CustomStringConvertible {
                 ScoreDescription.valueField("ordinal", ordinal),
             ].compactMap { $0 })
         case .ref(let reference):
-            return ScoreDescription.call("targetRef", [ScoreDescription.quoted(reference)])
+            return ScoreDescription.call("targetRef", [ScoreDescription.quoted(reference.rawValue)])
         }
     }
 }

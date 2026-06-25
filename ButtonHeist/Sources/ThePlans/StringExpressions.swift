@@ -15,9 +15,11 @@ public enum StringExpr: Codable, Sendable, Equatable, Hashable {
     }
 
     public init(ref: HeistReferenceName) throws {
-        let trimmed = ref.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw HeistExpressionError.emptyReference("string") }
-        self = .ref(trimmed)
+        self = .ref(try ref.validated(type: "string"))
+    }
+
+    public init(ref: String) throws {
+        self = .ref(try HeistReferenceName(validating: ref, type: "string"))
     }
 
     public init(from decoder: Decoder) throws {
@@ -27,16 +29,7 @@ public enum StringExpr: Codable, Sendable, Equatable, Hashable {
         }
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "string expression")
-        let reference = try container.decode(String.self, forKey: .ref)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !reference.isEmpty else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .ref,
-                in: container,
-                debugDescription: "string reference must not be empty"
-            )
-        }
-        self = .ref(reference)
+        self = .ref(try HeistReferenceName.decode(from: container, forKey: .ref))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -56,7 +49,7 @@ public enum StringExpr: Codable, Sendable, Equatable, Hashable {
             return literal
         case .ref(let reference):
             guard let string = environment.strings[reference] else {
-                throw HeistExpressionError.unresolvedStringReference(reference)
+                throw HeistExpressionError.unresolvedStringReference(reference.rawValue)
             }
             return string
         }
@@ -75,7 +68,7 @@ extension StringExpr: CustomStringConvertible {
         case .literal(let literal):
             return ScoreDescription.quoted(literal)
         case .ref(let reference):
-            return ScoreDescription.call("stringRef", [ScoreDescription.quoted(reference)])
+            return ScoreDescription.call("stringRef", [ScoreDescription.quoted(reference.rawValue)])
         }
     }
 }

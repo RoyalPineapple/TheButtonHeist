@@ -36,7 +36,7 @@ extension HeistPlanSourceParser {
         case .target(let target):
             return renderConcreteTargetCorrection(target)
         case .ref(let reference):
-            return reference
+            return reference.rawValue
         }
     }
 
@@ -104,7 +104,7 @@ extension HeistPlanSourceParser {
         case .literal(let value):
             return quote(value)
         case .ref(let reference):
-            return reference
+            return reference.rawValue
         }
     }
 

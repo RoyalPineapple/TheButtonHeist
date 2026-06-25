@@ -50,14 +50,14 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         case .literal(let value):
             return "\"\(value)\""
         case .ref(let reference):
-            return reference
+            return reference.rawValue
         }
     }
 
     private static func targetArgumentSummary(_ expr: ElementTargetExpr) -> String {
         switch expr {
         case .ref(let reference):
-            return reference
+            return reference.rawValue
         default:
             return expr.description
         }

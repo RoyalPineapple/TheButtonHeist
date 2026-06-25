@@ -66,9 +66,9 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     }
 
     init(container: KeyedDecodingContainer<CodingKeys>) throws {
-        label = try Self.decodeStringMatchExpr(container, literalKey: .label, refKey: .labelRef, field: "label")
-        identifier = try Self.decodeStringMatchExpr(container, literalKey: .identifier, refKey: .identifierRef, field: "identifier")
-        value = try Self.decodeStringMatchExpr(container, literalKey: .value, refKey: .valueRef, field: "value")
+        label = try Self.decodeStringMatchExpr(container, literalKey: .label, refKey: .labelRef)
+        identifier = try Self.decodeStringMatchExpr(container, literalKey: .identifier, refKey: .identifierRef)
+        value = try Self.decodeStringMatchExpr(container, literalKey: .value, refKey: .valueRef)
         traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits) ?? []
         excludeTraits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
     }
@@ -85,24 +85,15 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     private static func decodeStringMatchExpr(
         _ container: KeyedDecodingContainer<CodingKeys>,
         literalKey: CodingKeys,
-        refKey: CodingKeys,
-        field: String
+        refKey: CodingKeys
     ) throws -> StringMatch<StringExpr>? {
         let literal = try container.decodeIfPresent(StringMatch<StringExpr>.self, forKey: literalKey)
-        let reference = try container.decodeIfPresent(String.self, forKey: refKey)
+        let reference = try HeistReferenceName.decodeIfPresent(from: container, forKey: refKey)
         switch (literal, reference) {
         case (.some(let literal), nil):
             return literal
         case (nil, .some(let reference)):
-            let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: refKey,
-                    in: container,
-                    debugDescription: "\(field)_ref must not be empty"
-                )
-            }
-            return .exact(.ref(trimmed))
+            return .exact(.ref(reference))
         case (.some, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: refKey,

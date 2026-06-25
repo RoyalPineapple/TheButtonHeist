@@ -241,16 +241,7 @@ private struct TargetExprPayload: Codable, Sendable, Equatable {
         } else if hasNestedTarget {
             target = try container.decode(ElementTargetExpr.self, forKey: .target)
         } else {
-            let reference = try container.decode(String.self, forKey: .targetRef)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !reference.isEmpty else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .targetRef,
-                    in: container,
-                    debugDescription: "target_ref must not be empty"
-                )
-            }
-            target = .ref(reference)
+            target = .ref(try HeistReferenceName.decode(from: container, forKey: .targetRef))
         }
     }
 
@@ -378,7 +369,7 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
         try rejectUnknownTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let literal = try container.decodeIfPresent(String.self, forKey: .text)
-        let reference = try container.decodeIfPresent(String.self, forKey: .textRef)
+        let reference = try HeistReferenceName.decodeIfPresent(from: container, forKey: .textRef)
         switch (literal, reference) {
         case (.some(let literal), nil):
             guard !literal.isEmpty else {
@@ -390,15 +381,7 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
             }
             text = .literal(literal)
         case (nil, .some(let reference)):
-            let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .textRef,
-                    in: container,
-                    debugDescription: "text_ref must not be empty"
-                )
-            }
-            text = .ref(trimmed)
+            text = .ref(reference)
         case (.some, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: .textRef,
@@ -473,16 +456,7 @@ private extension TargetExprPayload {
             return try container.decode(ElementTargetExpr.self, forKey: nestedKey)
         }
         if hasTargetRef {
-            let reference = try container.decode(String.self, forKey: refKey)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !reference.isEmpty else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: refKey,
-                    in: container,
-                    debugDescription: "\(refKey.stringValue) must not be empty"
-                )
-            }
-            return .ref(reference)
+            return .ref(try HeistReferenceName.decode(from: container, forKey: refKey))
         }
         return nil
     }

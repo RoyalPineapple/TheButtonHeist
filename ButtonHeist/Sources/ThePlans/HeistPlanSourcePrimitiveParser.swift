@@ -74,6 +74,15 @@ extension HeistPlanSourceParser {
         return value
     }
 
+    mutating func parseReferenceNameLiteral(role: String) throws -> HeistReferenceName {
+        let token = currentToken
+        let value = try parseStringLiteral()
+        guard let reference = HeistReferenceName.normalized(value) else {
+            throw error(token, "\(role) must not be empty")
+        }
+        return reference
+    }
+
     mutating func parseEnumCase<T: RawRepresentable>(
         _ type: T.Type,
         role: String

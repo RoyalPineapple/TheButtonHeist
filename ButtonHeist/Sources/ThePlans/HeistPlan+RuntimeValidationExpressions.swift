@@ -106,13 +106,18 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func validateReference(_ reference: String, path: String, role: String) {
-        addParameterString(reference, path: path, role: role)
-        if !HeistParameterName.isValid(reference) {
+    mutating func validateParameter(_ parameter: HeistReferenceName, path: String, role: String) {
+        validateParameter(parameter.rawValue, path: path, role: role)
+    }
+
+    mutating func validateReference(_ reference: HeistReferenceName, path: String, role: String) {
+        let value = reference.rawValue
+        addParameterString(value, path: path, role: role)
+        if !HeistParameterName.isValid(value) {
             fail(
                 path: path,
                 contract: "\(role) must be a Swift-style identifier",
-                observed: "\"\(escaped(reference))\"",
+                observed: "\"\(escaped(value))\"",
                 correction: "Use a ref matching the loop parameter exactly."
             )
         }

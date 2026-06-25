@@ -50,8 +50,8 @@ public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
         self.init(
             element: try container.decodeIfPresent(ElementPredicateTemplate.self, forKey: .element),
             property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
-            from: try Self.decodeStringMatchExpr(container, literalKey: .from, refKey: .fromRef, field: "from"),
-            to: try Self.decodeStringMatchExpr(container, literalKey: .to, refKey: .toRef, field: "to")
+            from: try Self.decodeStringMatchExpr(container, literalKey: .from, refKey: .fromRef),
+            to: try Self.decodeStringMatchExpr(container, literalKey: .to, refKey: .toRef)
         )
     }
 
@@ -66,24 +66,15 @@ public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
     private static func decodeStringMatchExpr(
         _ container: KeyedDecodingContainer<CodingKeys>,
         literalKey: CodingKeys,
-        refKey: CodingKeys,
-        field: String
+        refKey: CodingKeys
     ) throws -> StringMatch<StringExpr>? {
         let literal = try container.decodeIfPresent(StringMatch<StringExpr>.self, forKey: literalKey)
-        let reference = try container.decodeIfPresent(String.self, forKey: refKey)
+        let reference = try HeistReferenceName.decodeIfPresent(from: container, forKey: refKey)
         switch (literal, reference) {
         case (.some(let literal), nil):
             return literal
         case (nil, .some(let reference)):
-            let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: refKey,
-                    in: container,
-                    debugDescription: "\(field)_ref must not be empty"
-                )
-            }
-            return .exact(.ref(trimmed))
+            return .exact(.ref(reference))
         case (.some, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: refKey,

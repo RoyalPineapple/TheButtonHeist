@@ -109,16 +109,7 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
         if hasTarget {
             return targetState(try container.decode(ElementTargetExpr.self, forKey: .target))
         }
-        let reference = try container.decode(String.self, forKey: .targetRef)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !reference.isEmpty else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .targetRef,
-                in: container,
-                debugDescription: "target_ref must not be empty"
-            )
-        }
-        return targetState(.ref(reference))
+        return targetState(.ref(try HeistReferenceName.decode(from: container, forKey: .targetRef)))
     }
 
     private static func encode(
