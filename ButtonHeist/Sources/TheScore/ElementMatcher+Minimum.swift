@@ -30,6 +30,27 @@ public struct MatcherAtom: Sendable, Equatable {
     }
 }
 
+private struct MatcherAtomSortKey: Sendable, Equatable, Comparable {
+    let priority: Int
+    let predicateDescription: String
+
+    static func < (lhs: MatcherAtomSortKey, rhs: MatcherAtomSortKey) -> Bool {
+        if lhs.priority != rhs.priority {
+            return lhs.priority < rhs.priority
+        }
+        return lhs.predicateDescription < rhs.predicateDescription
+    }
+}
+
+private extension MatcherAtom {
+    var sortKey: MatcherAtomSortKey {
+        MatcherAtomSortKey(
+            priority: priority,
+            predicateDescription: predicate.description
+        )
+    }
+}
+
 public struct PredicateCandidate: Sendable, Equatable {
     public let predicate: ElementPredicate
     public let atoms: [MatcherAtom]
@@ -43,6 +64,66 @@ public struct PredicateCandidate: Sendable, Equatable {
         self.predicate = predicate
         self.atoms = atoms
         self.tier = tier
+    }
+}
+
+extension PredicateCandidate {
+    struct Rank: Sendable, Equatable, Comparable {
+        let tier: CandidateTier
+        let atomCount: Int
+        let atomPriorities: [Int]
+        let predicateDescription: String
+
+        static func < (lhs: Rank, rhs: Rank) -> Bool {
+            if lhs.tier != rhs.tier {
+                return lhs.tier < rhs.tier
+            }
+            if lhs.atomCount != rhs.atomCount {
+                return lhs.atomCount < rhs.atomCount
+            }
+            if lhs.atomPriorities != rhs.atomPriorities {
+                return lhs.atomPriorities.lexicographicallyPrecedes(rhs.atomPriorities)
+            }
+            return lhs.predicateDescription < rhs.predicateDescription
+        }
+    }
+
+    struct OrdinalBaseRank: Sendable, Equatable, Comparable {
+        let matchCount: Int
+        let tier: CandidateTier
+        let atomCount: Int
+        let predicateDescription: String
+
+        static func < (lhs: OrdinalBaseRank, rhs: OrdinalBaseRank) -> Bool {
+            if lhs.matchCount != rhs.matchCount {
+                return lhs.matchCount < rhs.matchCount
+            }
+            if lhs.tier != rhs.tier {
+                return lhs.tier < rhs.tier
+            }
+            if lhs.atomCount != rhs.atomCount {
+                return lhs.atomCount > rhs.atomCount
+            }
+            return lhs.predicateDescription < rhs.predicateDescription
+        }
+    }
+
+    var rank: Rank {
+        Rank(
+            tier: tier,
+            atomCount: atoms.count,
+            atomPriorities: atoms.map(\.priority),
+            predicateDescription: predicate.description
+        )
+    }
+
+    func ordinalBaseRank(matchCount: Int) -> OrdinalBaseRank {
+        OrdinalBaseRank(
+            matchCount: matchCount,
+            tier: tier,
+            atomCount: atoms.count,
+            predicateDescription: predicate.description
+        )
     }
 }
 
@@ -128,7 +209,7 @@ public enum MinimumPredicateSelector {
             ))
         }
 
-        return candidates.sorted(by: candidatePrecedes)
+        return candidates.sorted { $0.rank < $1.rank }
     }
 
     public static func minimumUniquePredicate(
@@ -141,7 +222,7 @@ public enum MinimumPredicateSelector {
 
         let candidates = predicateCandidates(for: targetElement.element)
         var bestAmbiguousCandidate: PredicateCandidate?
-        var bestAmbiguousMatchCount: Int?
+        var bestAmbiguousRank: PredicateCandidate.OrdinalBaseRank?
 
         for candidate in candidates {
             let matches = context.elements.filter { $0.element.matches(candidate.predicate) }
@@ -153,14 +234,10 @@ public enum MinimumPredicateSelector {
                     candidate: candidate
                 )
             }
-            if isBetterOrdinalBase(
-                candidate,
-                matchCount: matches.count,
-                than: bestAmbiguousCandidate,
-                matchCount: bestAmbiguousMatchCount
-            ) {
+            let ordinalBaseRank = candidate.ordinalBaseRank(matchCount: matches.count)
+            if bestAmbiguousRank.map({ ordinalBaseRank < $0 }) ?? true {
                 bestAmbiguousCandidate = candidate
-                bestAmbiguousMatchCount = matches.count
+                bestAmbiguousRank = ordinalBaseRank
             }
         }
 
@@ -196,7 +273,7 @@ public enum MinimumPredicateSelector {
             ))
         }
 
-        return atoms.sorted(by: atomPrecedes)
+        return atoms.sorted { $0.sortKey < $1.sortKey }
     }
 
     private static func predicate(for fact: AccessibilityMatcherFact) -> ElementPredicate? {
@@ -252,47 +329,6 @@ public enum MinimumPredicateSelector {
         case (false, false):
             return .ordinalDisambiguation
         }
-    }
-
-    private static func atomPrecedes(_ lhs: MatcherAtom, _ rhs: MatcherAtom) -> Bool {
-        if lhs.priority != rhs.priority {
-            return lhs.priority < rhs.priority
-        }
-        return lhs.predicate.description < rhs.predicate.description
-    }
-
-    private static func isBetterOrdinalBase(
-        _ candidate: PredicateCandidate,
-        matchCount: Int,
-        than existing: PredicateCandidate?,
-        matchCount existingMatchCount: Int?
-    ) -> Bool {
-        guard let existing, let existingMatchCount else { return true }
-        if matchCount != existingMatchCount {
-            return matchCount < existingMatchCount
-        }
-        if candidate.tier != existing.tier {
-            return candidate.tier < existing.tier
-        }
-        if candidate.atoms.count != existing.atoms.count {
-            return candidate.atoms.count > existing.atoms.count
-        }
-        return candidate.predicate.description < existing.predicate.description
-    }
-
-    private static func candidatePrecedes(_ lhs: PredicateCandidate, _ rhs: PredicateCandidate) -> Bool {
-        if lhs.tier != rhs.tier {
-            return lhs.tier < rhs.tier
-        }
-        if lhs.atoms.count != rhs.atoms.count {
-            return lhs.atoms.count < rhs.atoms.count
-        }
-        let leftPriority = lhs.atoms.map(\.priority)
-        let rightPriority = rhs.atoms.map(\.priority)
-        if leftPriority != rightPriority {
-            return leftPriority.lexicographicallyPrecedes(rightPriority)
-        }
-        return lhs.predicate.description < rhs.predicate.description
     }
 
     private static func unique(_ traits: [HeistTrait]) -> [HeistTrait] {
