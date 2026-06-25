@@ -52,7 +52,7 @@ struct PublicActionResponse: FencePublicJSONResponse {
         case .rotor(let rotor):
             self.value = nil
             self.rotor = PublicRotorResult(result: rotor)
-        case .heistExecution, .none:
+        case .screenshot, .heistExecution, .none:
             self.value = nil
             self.rotor = nil
         }
@@ -567,7 +567,7 @@ struct PublicHeistReportActionResult: Encodable {
         case .rotor(let rotor):
             self.value = nil
             self.rotor = PublicRotorResult(result: rotor)
-        case .heistExecution, .none:
+        case .screenshot, .heistExecution, .none:
             self.value = nil
             self.rotor = nil
         }

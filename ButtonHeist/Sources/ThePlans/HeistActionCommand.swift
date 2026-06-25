@@ -3,7 +3,7 @@ import Foundation
 public enum HeistActionCommandType: String, Codable, Sendable, CaseIterable, Equatable, CustomStringConvertible {
     case activate, increment, decrement, performCustomAction, rotor
     case oneFingerTap, longPress, swipe, drag
-    case typeText, editAction, setPasteboard
+    case typeText, editAction, setPasteboard, takeScreenshot
     case scroll, scrollToVisible, scrollToEdge, resignFirstResponder
 
     public var description: String { rawValue }
@@ -25,6 +25,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
     case viewportScrollToEdge(ScrollToEdgeTarget)
     case editAction(EditActionTarget)
     case setPasteboard(SetPasteboardTarget)
+    case takeScreenshot
     case dismissKeyboard
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -48,6 +49,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         case .viewportScrollToEdge: return .scrollToEdge
         case .editAction: return .editAction
         case .setPasteboard: return .setPasteboard
+        case .takeScreenshot: return .takeScreenshot
         case .dismissKeyboard: return .resignFirstResponder
         }
     }
@@ -95,7 +97,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             try roundTrip(target)
         case .setPasteboard(let target):
             try roundTrip(target)
-        case .dismissKeyboard:
+        case .takeScreenshot, .dismissKeyboard:
             break
         }
     }
@@ -158,6 +160,14 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             self = .editAction(try EditActionTarget(from: try payload()))
         case .setPasteboard:
             self = .setPasteboard(try SetPasteboardTarget(from: try payload()))
+        case .takeScreenshot:
+            if let payloadDecoder {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: payloadDecoder.codingPath,
+                    debugDescription: "\(type.rawValue) must not include a payload"
+                ))
+            }
+            self = .takeScreenshot
         case .resignFirstResponder:
             if let payloadDecoder {
                 throw DecodingError.dataCorrupted(.init(
@@ -197,7 +207,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             try target.encode(to: container.superEncoder(forKey: .payload))
         case .setPasteboard(let target):
             try target.encode(to: container.superEncoder(forKey: .payload))
-        case .dismissKeyboard:
+        case .takeScreenshot, .dismissKeyboard:
             break
         }
     }

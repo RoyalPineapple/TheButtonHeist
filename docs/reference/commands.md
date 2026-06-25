@@ -14,7 +14,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `edit_action` | `semanticAction` | `edit_action` | - | Perform an edit action on the current first responder. |
 | `get_interface` | `observation` | `get_interface` | direct | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `observation` | `get_pasteboard` | direct | Read text from the general pasteboard. |
-| `get_screen` | `observation` | `get_screen` | direct | Capture a PNG screenshot with optional inline data and interface state. |
+| `get_screen` | `observation` | `get_screen` | direct | Capture a PNG screenshot with visible interface state. |
 | `get_session_state` | `session` | `get_session_state` | direct | Inspect connection, device, and last-action session state. |
 | `list_devices` | `session` | `list_devices` | - | List discovered iOS devices and configured connection targets. |
 | `list_heists` | `heistRuntime` | `list_heists` | direct | List the root entry and reusable heists in a plan. Use `detail: "detailed"` when composing against available capabilities. |
@@ -30,7 +30,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | - | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | `semanticAction` | `set_pasteboard` | - | Write text to the general pasteboard from within the app. |
 | `swipe` | `spatialAction` | `swipe` | - | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
-| `type_text` | `semanticAction` | `type_text` | - | Type non-empty text, optionally after inflating a semantic target. |
+| `type_text` | `semanticAction` | `type_text` | - | Type non-empty text. With an element target, Button Heist resolves and reveals the field before focusing it. |
 | `wait` | `assertion` | `wait` | - | Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state. |
 
 ## StringMatch
@@ -191,7 +191,7 @@ _None._
 
 ### `get_screen`
 
-Capture a PNG screenshot with optional inline data and interface state.
+Capture a PNG screenshot with visible interface state.
 
 - Family: `observation`
 - CLI: direct command `get_screen`
@@ -204,7 +204,6 @@ Parameters:
 |-----------|------|----------|---------|--------|
 | `output` | `string` | no | - | - |
 | `inlineData` | `boolean` | no | - | - |
-| `includeInterface` | `boolean` | no | - | - |
 
 ### `get_session_state`
 
@@ -498,7 +497,7 @@ Parameters:
 
 ### `type_text`
 
-Type non-empty text, optionally after inflating a semantic target.
+Type non-empty text. With an element target, Button Heist resolves and reveals the field before focusing it.
 
 - Family: `semanticAction`
 - CLI: direct command `type_text`

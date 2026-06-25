@@ -228,6 +228,13 @@ private let actionCommandContractCases: [ActionCommandContractCase] = [
         canonicalLine: #"SetPasteboard("milk")"#
     ),
     ActionCommandContractCase(
+        wireType: .takeScreenshot,
+        command: .takeScreenshot,
+        durabilityFailure: nil,
+        reportTarget: nil,
+        canonicalLine: "TakeScreenshot()"
+    ),
+    ActionCommandContractCase(
         wireType: .scroll,
         command: .viewportScroll(ScrollTarget(selection: .element(.label("Scrollable List")), direction: .down)),
         durabilityFailure: "scroll is a viewport debug command, not a durable heist action",

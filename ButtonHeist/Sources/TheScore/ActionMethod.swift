@@ -18,6 +18,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case resignFirstResponder
     case setPasteboard
     case getPasteboard
+    case takeScreenshot
     case rotor
     case heistPlan
     case scroll

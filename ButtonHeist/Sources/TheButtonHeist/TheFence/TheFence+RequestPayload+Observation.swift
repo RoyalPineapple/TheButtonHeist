@@ -14,7 +14,6 @@ extension TheFence {
         let outputPath: String?
         let requestId: String
         let inlineData: Bool
-        let includeInterface: Bool
     }
 
     static func decodeGetInterfaceRequest(
@@ -80,8 +79,7 @@ extension TheFence {
         return ScreenRequest(
             outputPath: outputPath,
             requestId: requestId,
-            inlineData: inlineData,
-            includeInterface: try arguments.schemaBoolean("includeInterface") ?? false
+            inlineData: inlineData
         )
     }
 

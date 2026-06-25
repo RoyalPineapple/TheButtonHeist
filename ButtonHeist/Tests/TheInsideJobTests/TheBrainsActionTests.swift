@@ -661,6 +661,7 @@ final class TheBrainsActionTests: XCTestCase {
             .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             .editAction(EditActionTarget(action: .paste)),
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),
+            .takeScreenshot,
             .dismissKeyboard,
         ]
         var dispatchedTypes: [RuntimeActionType] = []
@@ -679,6 +680,51 @@ final class TheBrainsActionTests: XCTestCase {
         }
         XCTAssertEqual(heist.steps.count, commands.count)
         XCTAssertTrue(heist.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
+    }
+
+    func testHeistFailureRecordsScreenshotAsActionEvidence() async throws {
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let screenshot = ScreenPayload(
+            pngData: "png",
+            width: 10,
+            height: 20,
+            timestamp: Date(timeIntervalSince1970: 0),
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        )
+        var dispatchedTypes: [RuntimeActionType] = []
+        let runtime = heistRuntime(observations: []) { command in
+            dispatchedTypes.append(command.runtimeType)
+            if case .takeScreenshot = command {
+                return ActionResult(success: true, method: .takeScreenshot, payload: .screenshot(screenshot))
+            }
+            return ActionResult(
+                success: false,
+                method: .activate,
+                message: "activate failed",
+                errorKind: .actionFailed
+            )
+        }
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.target(target)))),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(dispatchedTypes, [.activate, .takeScreenshot])
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        XCTAssertEqual(heist.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(heist.executedTopLevelStepCount, 1)
+        XCTAssertEqual(heist.outputReceiptNodes.count, 2)
+        XCTAssertEqual(heist.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
+        let screenshotStep = try XCTUnwrap(heist.steps.last)
+        XCTAssertEqual(screenshotStep.kind, .action)
+        XCTAssertEqual(screenshotStep.status, .passed)
+        XCTAssertEqual(screenshotStep.actionEvidence?.command, .takeScreenshot)
+        guard case .screenshot(let payload) = screenshotStep.actionEvidence?.actionResult?.payload else {
+            return XCTFail("Expected screenshot action payload")
+        }
+        XCTAssertEqual(payload, screenshot)
     }
 
     func testHeistConditionalSelectsFirstMatchingCaseOnce() async throws {
@@ -1543,6 +1589,9 @@ final class TheBrainsActionTests: XCTestCase {
             ],
             execute: { command in
                 executedCommands.append(command)
+                if case .takeScreenshot = command {
+                    return ActionResult(success: true, method: .takeScreenshot)
+                }
                 return ActionResult(success: true, method: .activate)
             }
         )
@@ -1561,12 +1610,14 @@ final class TheBrainsActionTests: XCTestCase {
         let forEachResult = try XCTUnwrap(step.forEachElementEvidence)
 
         XCTAssertFalse(result.success)
-        XCTAssertTrue(executedCommands.isEmpty)
+        XCTAssertEqual(executedCommands, [.takeScreenshot])
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.limit, 1)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertEqual(forEachResult.failureReason, "matched 2 element(s), exceeding for_each_element limit 1")
         XCTAssertTrue(step.children.isEmpty)
+        XCTAssertEqual(heist.steps.map(\.path), ["$.body[0]", "$.body[0].failure.actions[0]"])
+        XCTAssertEqual(heist.failureScreenshotStep?.actionEvidence?.command, .takeScreenshot)
     }
 
     func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {

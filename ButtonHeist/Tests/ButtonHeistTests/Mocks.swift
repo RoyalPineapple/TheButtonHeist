@@ -559,6 +559,7 @@ final class MockConnection: TransportReachabilityConnecting {
         case .rotor: return .rotor
         case .editAction: return .editAction
         case .setPasteboard: return .setPasteboard
+        case .takeScreenshot: return .takeScreenshot
         case .resignFirstResponder: return .resignFirstResponder
         case .oneFingerTap: return .syntheticTap
         case .longPress: return .syntheticLongPress

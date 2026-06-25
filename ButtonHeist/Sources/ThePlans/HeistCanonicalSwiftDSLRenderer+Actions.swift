@@ -59,6 +59,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return "Edit(.\(target.action.rawValue))"
         case .setPasteboard(let target):
             return "SetPasteboard(\(quote(target.text)))"
+        case .takeScreenshot:
+            return "TakeScreenshot()"
         case .dismissKeyboard:
             return "DismissKeyboard()"
         }

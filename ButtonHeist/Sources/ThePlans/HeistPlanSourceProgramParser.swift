@@ -189,6 +189,8 @@ extension HeistPlanSourceParser {
             return [try parseActionStep(command: parseRotorAction())]
         case ["SetPasteboard"]:
             return [try parseActionStep(command: parseSetPasteboardAction())]
+        case ["TakeScreenshot"]:
+            return [try parseActionStep(command: parseTakeScreenshotAction())]
         case ["Edit"]:
             return [try parseActionStep(command: parseEditAction())]
         case ["DismissKeyboard"]:

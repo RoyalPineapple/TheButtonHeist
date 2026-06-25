@@ -529,6 +529,8 @@ private extension HeistActionCommand {
             return .editAction
         case .setPasteboard:
             return .setPasteboard
+        case .takeScreenshot:
+            return .getScreen
         case .viewportScroll:
             return .scroll
         case .viewportScrollToVisible:

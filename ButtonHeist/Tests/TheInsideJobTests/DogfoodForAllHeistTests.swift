@@ -568,15 +568,17 @@ final class DogfoodForAllHeistTests: XCTestCase {
             XCTAssertEqual(failure.failedStepKind, .fail)
             XCTAssertEqual(failure.message, "intentional dogfood failure")
             XCTAssertEqual(failure.result.abortedAtPath, "$.body[2]")
-            XCTAssertEqual(failure.result.steps.map(\.kind), [.wait, .warn, .fail, .warn])
-            XCTAssertEqual(failure.result.steps.map(\.status), [.passed, .passed, .failed, .skipped])
+            XCTAssertEqual(failure.result.steps.map(\.kind), [.wait, .warn, .fail, .warn, .action])
+            XCTAssertEqual(failure.result.steps.map(\.status), [.passed, .passed, .failed, .skipped, .passed])
             XCTAssertEqual(failure.result.executedTopLevelStepCount, 3)
-            XCTAssertEqual(failure.result.executedNodeCount, 3)
-            XCTAssertEqual(failure.result.outputReceiptNodes.map(\.kind), [.wait, .warn, .fail, .warn])
+            XCTAssertEqual(failure.result.executedNodeCount, 4)
+            XCTAssertEqual(failure.result.outputReceiptNodes.map(\.kind), [.wait, .warn, .fail, .warn, .action])
             XCTAssertEqual(
                 failure.result.outputReceiptNodes.map(\.path),
-                ["$.body[0]", "$.body[1]", "$.body[2]", "$.body[3]"]
+                ["$.body[0]", "$.body[1]", "$.body[2]", "$.body[3]", "$.body[2].failure.actions[0]"]
             )
+            XCTAssertEqual(failure.result.failureScreenshotStep?.path, "$.body[2].failure.actions[0]")
+            XCTAssertEqual(failure.result.failureScreenshotStep?.actionEvidence?.command, .takeScreenshot)
             XCTAssertEqual(failure.result.expectationsChecked, 1)
             XCTAssertEqual(failure.result.expectationsMet, 1)
             XCTAssertEqual(failure.result.warnings, [

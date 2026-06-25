@@ -39,9 +39,9 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .observation,
                 requestDecoder: TheFence.decodeGetScreenRequest,
-                parameters: [param(.output, .string), param(.inlineData, .boolean), param(.includeInterface, .boolean)],
+                parameters: [param(.output, .string), param(.inlineData, .boolean)],
                 projection: .cliAndMCP(
-                    "Capture a PNG screenshot with optional inline data and interface state.",
+                    "Capture a PNG screenshot with visible interface state.",
                     mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
                 )
             )

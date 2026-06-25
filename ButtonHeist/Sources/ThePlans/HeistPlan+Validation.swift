@@ -74,6 +74,8 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
             if action.expectation == nil, action.expectationWaiver == nil, mode.requiresExpectationFinding {
                 findings.append(ambientExpectationFinding(path: context.path))
             }
+        case .observation:
+            break
         }
     }
 
@@ -165,6 +167,7 @@ private enum HeistCommandAuthoringLintKind: Equatable {
     case mechanical
     case viewport
     case ambient
+    case observation
 }
 
 private extension HeistActionCommand {
@@ -180,6 +183,8 @@ private extension HeistActionCommand {
             return .viewport
         case .editAction, .setPasteboard, .dismissKeyboard:
             return .ambient
+        case .takeScreenshot:
+            return .observation
         }
     }
 }

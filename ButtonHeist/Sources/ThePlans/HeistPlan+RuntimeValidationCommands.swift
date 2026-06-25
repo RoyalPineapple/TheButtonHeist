@@ -51,7 +51,7 @@ extension HeistPlanRuntimeSafetyValidator {
                     correction: "Use non-empty text for SetPasteboard."
                 )
             }
-        case .editAction, .dismissKeyboard:
+        case .editAction, .takeScreenshot, .dismissKeyboard:
             break
         }
     }

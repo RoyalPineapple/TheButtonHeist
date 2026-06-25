@@ -272,7 +272,7 @@ public extension Array where Element == HeistExecutionStepResult {
 public extension HeistExecutionResult {
     /// Top-level heist body steps that actually began execution/evaluation.
     var executedTopLevelStepCount: Int {
-        steps.count { $0.status != .skipped }
+        steps.count { $0.status != .skipped && $0.isRootBodyStep }
     }
 
     /// All executed receipt nodes in the tree, including nested structural
@@ -354,6 +354,14 @@ public extension HeistExecutionResult {
 }
 
 private extension HeistExecutionStepResult {
+    var isRootBodyStep: Bool {
+        let prefix = "$.body["
+        guard path.hasPrefix(prefix) else { return false }
+        let suffix = path.dropFirst(prefix.count)
+        guard let closeBracket = suffix.firstIndex(of: "]") else { return false }
+        return suffix.index(after: closeBracket) == suffix.endIndex
+    }
+
     var dispatchedActionResults: [ActionResult] {
         (dispatchedActionResult.map { [$0] } ?? [])
             + children.flatMap(\.dispatchedActionResults)

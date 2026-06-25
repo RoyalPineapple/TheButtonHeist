@@ -168,8 +168,76 @@ final class HeistReceiptTests: XCTestCase {
             XCTAssertEqual(failure.failedStepPath, "$.body[0]")
             XCTAssertEqual(failure.failedStepKind, .fail)
             XCTAssertEqual(failure.message, "stop")
-            XCTAssertEqual(failure.result.steps.map(\.kind), [.fail])
+            XCTAssertEqual(failure.result.steps.first?.kind, .fail)
+            XCTAssertEqual(failure.result.failureScreenshotStep?.kind, .action)
         }
+    }
+
+    func testFailureDescriptionIncludesScreenshotInterfaceDump() {
+        let element = AccessibilityElement.make(
+            label: "Actual Empty State",
+            identifier: "empty_state",
+            traits: .staticText,
+            frame: CGRect(x: 10, y: 20, width: 100, height: 44),
+            respondsToUserInteraction: false
+        )
+        let interface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [.element(element, traversalIndex: 0)]
+        )
+        let screenshot = ScreenPayload(
+            pngData: "png",
+            width: 12,
+            height: 34,
+            timestamp: Date(timeIntervalSince1970: 0),
+            interface: interface
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    path: "$.body[0]",
+                    kind: .fail,
+                    status: .failed,
+                    durationMs: 1,
+                    intent: .fail(message: "stop"),
+                    failure: HeistFailureDetail(
+                        category: .explicitFailure,
+                        contract: "Fail(...) aborts the heist",
+                        observed: "stop"
+                    )
+                ),
+                HeistExecutionStepResult(
+                    path: "$.body[0].failure.actions[0]",
+                    kind: .action,
+                    status: .passed,
+                    durationMs: 1,
+                    intent: .action(command: "takeScreenshot", target: nil),
+                    evidence: .action(HeistActionEvidence(
+                        command: .takeScreenshot,
+                        actionResult: ActionResult(
+                            success: true,
+                            method: .takeScreenshot,
+                            payload: .screenshot(screenshot)
+                        )
+                    ))
+                ),
+            ],
+            durationMs: 2,
+            abortedAtPath: "$.body[0]"
+        )
+
+        let description = Heist.Failure(result).description
+
+        XCTAssertTrue(description.contains("Heist failed path=$.body[0] kind=fail message=stop"), description)
+        XCTAssertTrue(
+            description.contains("failure screenshot: 12x34 receipt=$.body[0].failure.actions[0] interface=1 elements"),
+            description
+        )
+        XCTAssertTrue(description.contains("failure interface: 1 elements"), description)
+        XCTAssertTrue(description.contains("\"Actual Empty State\" staticText id=\"empty_state\""), description)
+        XCTAssertTrue(description.contains("frame=(10,20,100,44) activation=(60,42)"), description)
+        XCTAssertEqual(result.failureScreenshotPayload, screenshot)
+        XCTAssertEqual(result.failureDiagnosticInterface?.projectedElements.first?.label, "Actual Empty State")
     }
 
     func testFailureAbortsAtFirstFailedStepAndRestoresRuntime() async throws {
@@ -185,9 +253,10 @@ final class HeistReceiptTests: XCTestCase {
         } catch let failure as Heist.Failure {
             XCTAssertEqual(failure.failedStepPath, "$.body[1]")
             XCTAssertEqual(failure.result.abortedAtPath, "$.body[1]")
-            XCTAssertEqual(failure.result.steps.map(\.kind), [.warn, .fail, .warn])
-            XCTAssertEqual(failure.result.steps.map(\.status), [.passed, .failed, .skipped])
-            let skipped = try XCTUnwrap(failure.result.steps.last)
+            XCTAssertEqual(Array(failure.result.steps.prefix(3)).map(\.kind), [.warn, .fail, .warn])
+            XCTAssertEqual(Array(failure.result.steps.prefix(3)).map(\.status), [.passed, .failed, .skipped])
+            XCTAssertEqual(failure.result.failureScreenshotStep?.kind, .action)
+            let skipped = try XCTUnwrap(failure.result.steps.dropFirst(2).first)
             XCTAssertEqual(skipped.path, "$.body[2]")
             XCTAssertEqual(skipped.kind, .warn)
             XCTAssertNil(skipped.intent)
