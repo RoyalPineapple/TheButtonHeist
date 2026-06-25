@@ -368,6 +368,11 @@ symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14SwipeDirectionO4downyA2CmF	swift
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14SwipeDirectionO4leftyA2CmF	swift.enum.case	public	SwipeDirection.left	SwipeDirection.left	case left
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14SwipeDirectionO5rightyA2CmF	swift.enum.case	public	SwipeDirection.right	SwipeDirection.right	case right
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14SwipeDirectionO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	SwipeDirection.init(rawValue:)	init?(rawValue: String)
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14TakeScreenshotV	swift.struct	public	TakeScreenshot	TakeScreenshot	struct TakeScreenshot
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14TakeScreenshotV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	TakeScreenshot.expectation	let expectation: WaitStep?
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14TakeScreenshotV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	TakeScreenshot.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14TakeScreenshotV7commandAA18HeistActionCommandOvp	swift.property	public	command	TakeScreenshot.command	let command: HeistActionCommand
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14TakeScreenshotVACycfc	swift.init	public	init()	TakeScreenshot.init()	init()
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14TypeTextTargetV	swift.struct	public	TypeTextTarget	TypeTextTarget	struct TypeTextTarget
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14TypeTextTargetV010validatingD007elementE0ACSS_AA07ElementE0OSgtKcfc	swift.init	public	init(validatingText:elementTarget:)	TypeTextTarget.init(validatingText:elementTarget:)	init(validatingText text: String, elementTarget: ElementTarget? = nil) throws
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14TypeTextTargetV07elementE0AA07ElementE0OSgvp	swift.property	public	elementTarget	TypeTextTarget.elementTarget	let elementTarget: ElementTarget?
@@ -593,6 +598,7 @@ symbol	ButtonHeistDSL.symbols.json	s:8ThePlans18HeistActionCommandO12reportTarge
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans18HeistActionCommandO13mechanicalTapyAcA0G6TargetVcACmF	swift.enum.case	public	HeistActionCommand.mechanicalTap(_:)	HeistActionCommand.mechanicalTap(_:)	case mechanicalTap(TapTarget)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans18HeistActionCommandO13setPasteboardyAcA03SetG6TargetVcACmF	swift.enum.case	public	HeistActionCommand.setPasteboard(_:)	HeistActionCommand.setPasteboard(_:)	case setPasteboard(SetPasteboardTarget)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans18HeistActionCommandO14mechanicalDragyAcA0G6TargetVcACmF	swift.enum.case	public	HeistActionCommand.mechanicalDrag(_:)	HeistActionCommand.mechanicalDrag(_:)	case mechanicalDrag(DragTarget)
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans18HeistActionCommandO14takeScreenshotyA2CmF	swift.enum.case	public	HeistActionCommand.takeScreenshot	HeistActionCommand.takeScreenshot	case takeScreenshot
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans18HeistActionCommandO14viewportScrollyAcA0G6TargetVcACmF	swift.enum.case	public	HeistActionCommand.viewportScroll(_:)	HeistActionCommand.viewportScroll(_:)	case viewportScroll(ScrollTarget)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans18HeistActionCommandO15dismissKeyboardyA2CmF	swift.enum.case	public	HeistActionCommand.dismissKeyboard	HeistActionCommand.dismissKeyboard	case dismissKeyboard
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans18HeistActionCommandO15mechanicalSwipeyAcA0G6TargetVcACmF	swift.enum.case	public	HeistActionCommand.mechanicalSwipe(_:)	HeistActionCommand.mechanicalSwipe(_:)	case mechanicalSwipe(SwipeTarget)
@@ -853,6 +859,7 @@ symbol	ButtonHeistDSL.symbols.json	s:8ThePlans22HeistActionCommandTypeO11descrip
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans22HeistActionCommandTypeO12oneFingerTapyA2CmF	swift.enum.case	public	HeistActionCommandType.oneFingerTap	HeistActionCommandType.oneFingerTap	case oneFingerTap
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans22HeistActionCommandTypeO12scrollToEdgeyA2CmF	swift.enum.case	public	HeistActionCommandType.scrollToEdge	HeistActionCommandType.scrollToEdge	case scrollToEdge
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans22HeistActionCommandTypeO13setPasteboardyA2CmF	swift.enum.case	public	HeistActionCommandType.setPasteboard	HeistActionCommandType.setPasteboard	case setPasteboard
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans22HeistActionCommandTypeO14takeScreenshotyA2CmF	swift.enum.case	public	HeistActionCommandType.takeScreenshot	HeistActionCommandType.takeScreenshot	case takeScreenshot
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans22HeistActionCommandTypeO15scrollToVisibleyA2CmF	swift.enum.case	public	HeistActionCommandType.scrollToVisible	HeistActionCommandType.scrollToVisible	case scrollToVisible
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans22HeistActionCommandTypeO20resignFirstResponderyA2CmF	swift.enum.case	public	HeistActionCommandType.resignFirstResponder	HeistActionCommandType.resignFirstResponder	case resignFirstResponder
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans22HeistActionCommandTypeO4dragyA2CmF	swift.enum.case	public	HeistActionCommandType.drag	HeistActionCommandType.drag	case drag
@@ -1362,6 +1369,8 @@ relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:SY	SwipeDirection	Swift.R
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:Se	SwipeDirection	Swift.Decodable
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:s12CaseIterableP	SwipeDirection	Swift.CaseIterable
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:s8SendableP	SwipeDirection	Swift.Sendable
+relationship	conformsTo	s:8ThePlans14TakeScreenshotV	s:8ThePlans12HeistContentP	TakeScreenshot	HeistContent
+relationship	conformsTo	s:8ThePlans14TakeScreenshotV	s:8ThePlans18HeistActionContentP	TakeScreenshot	HeistActionContent
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:SE	TypeTextTarget	Swift.Encodable
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:SQ	TypeTextTarget	Swift.Equatable
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:Se	TypeTextTarget	Swift.Decodable

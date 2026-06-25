@@ -321,7 +321,7 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist24PublicAdapterInputLimitsO18maxT
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist24PublicJSONInputPreflightO	swift.enum	public	PublicJSONInputPreflight	PublicJSONInputPreflight	enum PublicJSONInputPreflight
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist24PublicJSONInputPreflightO14validateObject_7context8maxBytes0I12NestingDepth0i5TotalG4KeysySS_SSS3itKFZ	swift.type.method	public	validateObject(_:context:maxBytes:maxNestingDepth:maxTotalObjectKeys:)	PublicJSONInputPreflight.validateObject(_:context:maxBytes:maxNestingDepth:maxTotalObjectKeys:)	static func validateObject(_ input: String, context: String = "Public JSON request", maxBytes: Int = PublicAdapterInputLimits.maxRequestBytes, maxNestingDepth: Int = PublicAdapterInputLimits.maxNestingDepth, maxTotalObjectKeys: Int = PublicAdapterInputLimits.maxTotalObjectKeys) throws
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist25ScreenshotResponseOptionsV	swift.struct	public	ScreenshotResponseOptions	ScreenshotResponseOptions	struct ScreenshotResponseOptions
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist25ScreenshotResponseOptionsV16includeInterfaceACSb_tcfc	swift.init	public	init(includeInterface:)	ScreenshotResponseOptions.init(includeInterface:)	init(includeInterface: Bool = false)
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist25ScreenshotResponseOptionsV16includeInterfaceACSb_tcfc	swift.init	public	init(includeInterface:)	ScreenshotResponseOptions.init(includeInterface:)	init(includeInterface: Bool = true)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist25ScreenshotResponseOptionsV16includeInterfaceSbvp	swift.property	public	includeInterface	ScreenshotResponseOptions.includeInterface	let includeInterface: Bool
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist26FenceOperationRoutingErrorV	swift.struct	public	FenceOperationRoutingError	FenceOperationRoutingError	struct FenceOperationRoutingError
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist26FenceOperationRoutingErrorV16errorDescriptionSSSgvp	swift.property	public	errorDescription	FenceOperationRoutingError.errorDescription	var errorDescription: String? { get }
@@ -739,6 +739,11 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO4downyA2CmF	swift.en
 symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO4leftyA2CmF	swift.enum.case	public	SwipeDirection.left	SwipeDirection.left	case left
 symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO5rightyA2CmF	swift.enum.case	public	SwipeDirection.right	SwipeDirection.right	case right
 symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	SwipeDirection.init(rawValue:)	init?(rawValue: String)
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV	swift.struct	public	TakeScreenshot	TakeScreenshot	struct TakeScreenshot
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	TakeScreenshot.expectation	let expectation: WaitStep?
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	TakeScreenshot.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV7commandAA18HeistActionCommandOvp	swift.property	public	command	TakeScreenshot.command	let command: HeistActionCommand
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotVACycfc	swift.init	public	init()	TakeScreenshot.init()	init()
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV	swift.struct	public	TypeTextTarget	TypeTextTarget	struct TypeTextTarget
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV010validatingD007elementE0ACSS_AA07ElementE0OSgtKcfc	swift.init	public	init(validatingText:elementTarget:)	TypeTextTarget.init(validatingText:elementTarget:)	init(validatingText text: String, elementTarget: ElementTarget? = nil) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV07elementE0AA07ElementE0OSgvp	swift.property	public	elementTarget	TypeTextTarget.elementTarget	let elementTarget: ElementTarget?
@@ -965,6 +970,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO12reportTargetAA
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO13mechanicalTapyAcA0G6TargetVcACmF	swift.enum.case	public	HeistActionCommand.mechanicalTap(_:)	HeistActionCommand.mechanicalTap(_:)	case mechanicalTap(TapTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO13setPasteboardyAcA03SetG6TargetVcACmF	swift.enum.case	public	HeistActionCommand.setPasteboard(_:)	HeistActionCommand.setPasteboard(_:)	case setPasteboard(SetPasteboardTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO14mechanicalDragyAcA0G6TargetVcACmF	swift.enum.case	public	HeistActionCommand.mechanicalDrag(_:)	HeistActionCommand.mechanicalDrag(_:)	case mechanicalDrag(DragTarget)
+symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO14takeScreenshotyA2CmF	swift.enum.case	public	HeistActionCommand.takeScreenshot	HeistActionCommand.takeScreenshot	case takeScreenshot
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO14viewportScrollyAcA0G6TargetVcACmF	swift.enum.case	public	HeistActionCommand.viewportScroll(_:)	HeistActionCommand.viewportScroll(_:)	case viewportScroll(ScrollTarget)
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO15dismissKeyboardyA2CmF	swift.enum.case	public	HeistActionCommand.dismissKeyboard	HeistActionCommand.dismissKeyboard	case dismissKeyboard
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO15mechanicalSwipeyAcA0G6TargetVcACmF	swift.enum.case	public	HeistActionCommand.mechanicalSwipe(_:)	HeistActionCommand.mechanicalSwipe(_:)	case mechanicalSwipe(SwipeTarget)
@@ -1230,6 +1236,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans22HeistActionCommandTypeO11descriptio
 symbol	ButtonHeist.symbols.json	s:8ThePlans22HeistActionCommandTypeO12oneFingerTapyA2CmF	swift.enum.case	public	HeistActionCommandType.oneFingerTap	HeistActionCommandType.oneFingerTap	case oneFingerTap
 symbol	ButtonHeist.symbols.json	s:8ThePlans22HeistActionCommandTypeO12scrollToEdgeyA2CmF	swift.enum.case	public	HeistActionCommandType.scrollToEdge	HeistActionCommandType.scrollToEdge	case scrollToEdge
 symbol	ButtonHeist.symbols.json	s:8ThePlans22HeistActionCommandTypeO13setPasteboardyA2CmF	swift.enum.case	public	HeistActionCommandType.setPasteboard	HeistActionCommandType.setPasteboard	case setPasteboard
+symbol	ButtonHeist.symbols.json	s:8ThePlans22HeistActionCommandTypeO14takeScreenshotyA2CmF	swift.enum.case	public	HeistActionCommandType.takeScreenshot	HeistActionCommandType.takeScreenshot	case takeScreenshot
 symbol	ButtonHeist.symbols.json	s:8ThePlans22HeistActionCommandTypeO15scrollToVisibleyA2CmF	swift.enum.case	public	HeistActionCommandType.scrollToVisible	HeistActionCommandType.scrollToVisible	case scrollToVisible
 symbol	ButtonHeist.symbols.json	s:8ThePlans22HeistActionCommandTypeO20resignFirstResponderyA2CmF	swift.enum.case	public	HeistActionCommandType.resignFirstResponder	HeistActionCommandType.resignFirstResponder	case resignFirstResponder
 symbol	ButtonHeist.symbols.json	s:8ThePlans22HeistActionCommandTypeO4dragyA2CmF	swift.enum.case	public	HeistActionCommandType.drag	HeistActionCommandType.drag	case drag
@@ -1637,6 +1644,7 @@ symbol	ButtonHeist.symbols.json	s:8TheScore12ActionMethodO13getPasteboardyA2CmF	
 symbol	ButtonHeist.symbols.json	s:8TheScore12ActionMethodO13setPasteboardyA2CmF	swift.enum.case	public	ActionMethod.setPasteboard	ActionMethod.setPasteboard	case setPasteboard
 symbol	ButtonHeist.symbols.json	s:8TheScore12ActionMethodO13syntheticDragyA2CmF	swift.enum.case	public	ActionMethod.syntheticDrag	ActionMethod.syntheticDrag	case syntheticDrag
 symbol	ButtonHeist.symbols.json	s:8TheScore12ActionMethodO14syntheticSwipeyA2CmF	swift.enum.case	public	ActionMethod.syntheticSwipe	ActionMethod.syntheticSwipe	case syntheticSwipe
+symbol	ButtonHeist.symbols.json	s:8TheScore12ActionMethodO14takeScreenshotyA2CmF	swift.enum.case	public	ActionMethod.takeScreenshot	ActionMethod.takeScreenshot	case takeScreenshot
 symbol	ButtonHeist.symbols.json	s:8TheScore12ActionMethodO15scrollToVisibleyA2CmF	swift.enum.case	public	ActionMethod.scrollToVisible	ActionMethod.scrollToVisible	case scrollToVisible
 symbol	ButtonHeist.symbols.json	s:8TheScore12ActionMethodO18syntheticLongPressyA2CmF	swift.enum.case	public	ActionMethod.syntheticLongPress	ActionMethod.syntheticLongPress	case syntheticLongPress
 symbol	ButtonHeist.symbols.json	s:8TheScore12ActionMethodO20resignFirstResponderyA2CmF	swift.enum.case	public	ActionMethod.resignFirstResponder	ActionMethod.resignFirstResponder	case resignFirstResponder
@@ -1742,6 +1750,7 @@ symbol	ButtonHeist.symbols.json	s:8TheScore13ElementUpdateV7changesSayAA14Proper
 symbol	ButtonHeist.symbols.json	s:8TheScore13ElementUpdateV7element7changesAcA05HeistC0V_SayAA14PropertyChangeVGtcfc	swift.init	public	init(element:changes:)	ElementUpdate.init(element:changes:)	init(element: HeistElement, changes: [PropertyChange])
 symbol	ButtonHeist.symbols.json	s:8TheScore13ElementUpdateV7elementAA05HeistC0Vvp	swift.property	public	element	ElementUpdate.element	let element: HeistElement
 symbol	ButtonHeist.symbols.json	s:8TheScore13ResultPayloadO	swift.enum	public	ResultPayload	ResultPayload	enum ResultPayload
+symbol	ButtonHeist.symbols.json	s:8TheScore13ResultPayloadO10screenshotyAcA06ScreenD0VcACmF	swift.enum.case	public	ResultPayload.screenshot(_:)	ResultPayload.screenshot(_:)	case screenshot(ScreenPayload)
 symbol	ButtonHeist.symbols.json	s:8TheScore13ResultPayloadO14heistExecutionyAcA05HeistfC0VcACmF	swift.enum.case	public	ResultPayload.heistExecution(_:)	ResultPayload.heistExecution(_:)	case heistExecution(HeistExecutionResult)
 symbol	ButtonHeist.symbols.json	s:8TheScore13ResultPayloadO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ResultPayload.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8TheScore13ResultPayloadO5rotoryAcA05RotorC0VcACmF	swift.enum.case	public	ResultPayload.rotor(_:)	ResultPayload.rotor(_:)	case rotor(RotorResult)
@@ -2135,9 +2144,15 @@ symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV15firstFailedS
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV17executedNodeCountSivp	swift.property	public	executedNodeCount	HeistExecutionResult.executedNodeCount	var executedNodeCount: Int { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV18outputReceiptNodesSayAA0cd4StepE0VGvp	swift.property	public	outputReceiptNodes	HeistExecutionResult.outputReceiptNodes	var outputReceiptNodes: [HeistExecutionStepResult] { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV19expectationsCheckedSivp	swift.property	public	expectationsChecked	HeistExecutionResult.expectationsChecked	var expectationsChecked: Int { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV20failureInterfaceDump12elementLimitSSSgSi_tF	swift.method	public	failureInterfaceDump(elementLimit:)	HeistExecutionResult.failureInterfaceDump(elementLimit:)	func failureInterfaceDump(elementLimit: Int = HeistFailureDiagnostics.defaultElementLimit) -> String?
+symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV21failureScreenshotStepAA0cdhE0VSgvp	swift.property	public	failureScreenshotStep	HeistExecutionResult.failureScreenshotStep	var failureScreenshotStep: HeistExecutionStepResult? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV21reportedActionResultsSayAA0gE0VGvp	swift.property	public	reportedActionResults	HeistExecutionResult.reportedActionResults	var reportedActionResults: [ActionResult] { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV23dispatchedActionResultsSayAA0gE0VGvp	swift.property	public	dispatchedActionResults	HeistExecutionResult.dispatchedActionResults	var dispatchedActionResults: [ActionResult] { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV24failureScreenshotPayloadAA06ScreenH0VSgvp	swift.property	public	failureScreenshotPayload	HeistExecutionResult.failureScreenshotPayload	var failureScreenshotPayload: ScreenPayload? { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV24failureScreenshotSummarySSSgvp	swift.property	public	failureScreenshotSummary	HeistExecutionResult.failureScreenshotSummary	var failureScreenshotSummary: String? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV25executedTopLevelStepCountSivp	swift.property	public	executedTopLevelStepCount	HeistExecutionResult.executedTopLevelStepCount	var executedTopLevelStepCount: Int { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV25settledInterfaceAtFailureAA0G0VSgvp	swift.property	public	settledInterfaceAtFailure	HeistExecutionResult.settledInterfaceAtFailure	var settledInterfaceAtFailure: Interface? { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV26failureDiagnosticInterfaceAA0H0VSgvp	swift.property	public	failureDiagnosticInterface	HeistExecutionResult.failureDiagnosticInterface	var failureDiagnosticInterface: Interface? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistExecutionResult.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV5steps10durationMs13abortedAtPathACSayAA0cd4StepE0VG_SiSSSgtcfc	swift.init	public	init(steps:durationMs:abortedAtPath:)	HeistExecutionResult.init(steps:durationMs:abortedAtPath:)	init(steps: [HeistExecutionStepResult], durationMs: Int, abortedAtPath: String? = nil)
 symbol	ButtonHeist.symbols.json	s:8TheScore20HeistExecutionResultV5stepsSayAA0cd4StepE0VGvp	swift.property	public	steps	HeistExecutionResult.steps	let steps: [HeistExecutionStepResult]
@@ -2283,6 +2298,14 @@ symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV31singleTri
 symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV35defaultTripwirePulseFramesPerSecondSivpZ	swift.type.property	public	defaultTripwirePulseFramesPerSecond	ButtonHeistRuntimeKnobs.defaultTripwirePulseFramesPerSecond	static let defaultTripwirePulseFramesPerSecond: Int
 symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV7currentACvpZ	swift.type.property	public	current	ButtonHeistRuntimeKnobs.current	static var current: ButtonHeistRuntimeKnobs { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV7resolve11environmentACSDyS2SG_tFZ	swift.type.method	public	resolve(environment:)	ButtonHeistRuntimeKnobs.resolve(environment:)	static func resolve(environment: [String : String] = ProcessInfo.processInfo.environment) -> ButtonHeistRuntimeKnobs
+symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO	swift.enum	public	HeistFailureDiagnostics	HeistFailureDiagnostics	enum HeistFailureDiagnostics
+symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO11elementLine_12displayIndex15includeGeometrySSAA0C7ElementV_SiSgSbtFZ	swift.type.method	public	elementLine(_:displayIndex:includeGeometry:)	HeistFailureDiagnostics.elementLine(_:displayIndex:includeGeometry:)	static func elementLine(_ element: HeistElement, displayIndex: Int? = nil, includeGeometry: Bool = false) -> String
+symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO12quotedStringyS2SFZ	swift.type.method	public	quotedString(_:)	HeistFailureDiagnostics.quotedString(_:)	static func quotedString(_ value: String) -> String
+symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO13interfaceDump_12elementLimitSSAA9InterfaceV_SitFZ	swift.type.method	public	interfaceDump(_:elementLimit:)	HeistFailureDiagnostics.interfaceDump(_:elementLimit:)	static func interfaceDump(_ interface: Interface, elementLimit: Int = defaultElementLimit) -> String
+symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO17screenshotSummary_11receiptPathSSAA13ScreenPayloadV_SSSgtFZ	swift.type.method	public	screenshotSummary(_:receiptPath:)	HeistFailureDiagnostics.screenshotSummary(_:receiptPath:)	static func screenshotSummary(_ screenshot: ScreenPayload, receiptPath: String? = nil) -> String
+symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO19defaultElementLimitSivpZ	swift.type.property	public	defaultElementLimit	HeistFailureDiagnostics.defaultElementLimit	static let defaultElementLimit: Int
+symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO28unavailableScreenshotSummary11receiptPath7messageS2S_SSSgtFZ	swift.type.method	public	unavailableScreenshotSummary(receiptPath:message:)	HeistFailureDiagnostics.unavailableScreenshotSummary(receiptPath:message:)	static func unavailableScreenshotSummary(receiptPath: String, message: String?) -> String
+symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO8nonEmptyySSSgAEFZ	swift.type.method	public	nonEmpty(_:)	HeistFailureDiagnostics.nonEmpty(_:)	static func nonEmpty(_ value: String?) -> String?
 symbol	ButtonHeist.symbols.json	s:8TheScore23HeistInvocationEvidenceV	swift.struct	public	HeistInvocationEvidence	HeistInvocationEvidence	struct HeistInvocationEvidence
 symbol	ButtonHeist.symbols.json	s:8TheScore23HeistInvocationEvidenceV10invocation0A5Plans0cD4StepVSgvp	swift.property	public	invocation	HeistInvocationEvidence.invocation	let invocation: HeistInvocationStep?
 symbol	ButtonHeist.symbols.json	s:8TheScore23HeistInvocationEvidenceV10invocation4name8argument15childFailedPathAC0A5Plans0cD4StepVSg_SSSgA2Ltcfc	swift.init	public	init(invocation:name:argument:childFailedPath:)	HeistInvocationEvidence.init(invocation:name:argument:childFailedPath:)	init(invocation: HeistInvocationStep? = nil, name: String? = nil, argument: String? = nil, childFailedPath: String? = nil)
@@ -2318,6 +2341,7 @@ symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV013traceEv
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV014reportedActionF0AA0hF0VSgvp	swift.property	public	reportedActionResult	HeistExecutionStepResult.reportedActionResult	var reportedActionResult: ActionResult? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV014traceResultsInD5OrderSayAA06ActionF0VGvp	swift.property	public	traceResultsInExecutionOrder	HeistExecutionStepResult.traceResultsInExecutionOrder	var traceResultsInExecutionOrder: [ActionResult] { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV016dispatchedActionF0AA0hF0VSgvp	swift.property	public	dispatchedActionResult	HeistExecutionStepResult.dispatchedActionResult	var dispatchedActionResult: ActionResult? { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV018settledInterfaceAtE0AA0H0VSgvp	swift.property	public	settledInterfaceAtStep	HeistExecutionStepResult.settledInterfaceAtStep	var settledInterfaceAtStep: Interface? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV06reportE4NameSSvp	swift.property	public	reportStepName	HeistExecutionStepResult.reportStepName	var reportStepName: String { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV10durationMsSivp	swift.property	public	durationMs	HeistExecutionStepResult.durationMs	let durationMs: Int
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV12reportStatusAA0cdeH0Ovp	swift.property	public	reportStatus	HeistExecutionStepResult.reportStatus	var reportStatus: HeistExecutionStepStatus { get }
@@ -2331,6 +2355,7 @@ symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV17executed
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV17reportCommandNameSSSgvp	swift.property	public	reportCommandName	HeistExecutionStepResult.reportCommandName	var reportCommandName: String? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV17reportDisplayNameSSvp	swift.property	public	reportDisplayName	HeistExecutionStepResult.reportDisplayName	var reportDisplayName: String { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV17reportExpectationAA0hF0VSgvp	swift.property	public	reportExpectation	HeistExecutionStepResult.reportExpectation	var reportExpectation: ExpectationResult? { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV17screenshotPayloadAA06ScreenH0VSgvp	swift.property	public	screenshotPayload	HeistExecutionStepResult.screenshotPayload	var screenshotPayload: ScreenPayload? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV18abortedAtChildPathSSSgvp	swift.property	public	abortedAtChildPath	HeistExecutionStepResult.abortedAtChildPath	let abortedAtChildPath: String?
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV18invocationEvidenceAA0c10InvocationH0VSgvp	swift.property	public	invocationEvidence	HeistExecutionStepResult.invocationEvidence	var invocationEvidence: HeistInvocationEvidence? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistExecutionStepResultV19expectationsCheckedSivp	swift.property	public	expectationsChecked	HeistExecutionStepResult.expectationsChecked	var expectationsChecked: Int { get }
@@ -2773,6 +2798,8 @@ relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:SY	SwipeDirection	Swift.R
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:Se	SwipeDirection	Swift.Decodable
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:s12CaseIterableP	SwipeDirection	Swift.CaseIterable
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:s8SendableP	SwipeDirection	Swift.Sendable
+relationship	conformsTo	s:8ThePlans14TakeScreenshotV	s:8ThePlans12HeistContentP	TakeScreenshot	HeistContent
+relationship	conformsTo	s:8ThePlans14TakeScreenshotV	s:8ThePlans18HeistActionContentP	TakeScreenshot	HeistActionContent
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:SE	TypeTextTarget	Swift.Encodable
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:SQ	TypeTextTarget	Swift.Equatable
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:Se	TypeTextTarget	Swift.Decodable
@@ -3213,6 +3240,7 @@ relationship	conformsTo	s:8TheScore13ResultPayloadO	s:SQ	ResultPayload	Swift.Equ
 relationship	conformsTo	s:8TheScore13ResultPayloadO	s:Se	ResultPayload	Swift.Decodable
 relationship	conformsTo	s:8TheScore13ResultPayloadO	s:s8SendableP	ResultPayload	Swift.Sendable
 relationship	conformsTo	s:8TheScore13ScreenPayloadV	s:SE	ScreenPayload	Swift.Encodable
+relationship	conformsTo	s:8TheScore13ScreenPayloadV	s:SQ	ScreenPayload	Swift.Equatable
 relationship	conformsTo	s:8TheScore13ScreenPayloadV	s:Se	ScreenPayload	Swift.Decodable
 relationship	conformsTo	s:8TheScore13ScreenPayloadV	s:s8SendableP	ScreenPayload	Swift.Sendable
 relationship	conformsTo	s:8TheScore13ServerMessageO	s:SE	ServerMessage	Swift.Encodable
