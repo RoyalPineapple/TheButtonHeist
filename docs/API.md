@@ -179,9 +179,9 @@ Responses may include compact deltas such as `noChange`, `elementsChanged`, or
 `screenChanged`. Those deltas summarize what changed between trace captures;
 they do not replace the underlying captures.
 
-## Interface Projection Quality
+## Interface Rendering Receipt
 
-Public interface JSON responses include `snapshotQuality` so machine clients can
+Public interface JSON responses include `rendering` so machine clients can
 distinguish complete captures from bounded projections. The state vocabulary is:
 
 | State | Meaning |
@@ -194,7 +194,7 @@ distinguish complete captures from bounded projections. The state vocabulary is:
 
 The current `get_interface` projection emits `full` or `truncated`.
 `filtered`, `sparse`, and `failed` are reserved contract states for scoped or
-degraded projections; they must use the same quality object before they are
+degraded projections; they must use the same rendering object before they are
 exposed. For huge scroll views, Button Heist bounds each scrollable subtree by
 `BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET`
 (default `300`, clamped to `0...1000`). A truncated scroll container keeps its
@@ -212,7 +212,7 @@ Compact output mirrors the same decision with a `subtree truncated` line.
 
 Whole-interface public projection is also capped by `BH_TOTAL_NODE_BUDGET` /
 `BUTTONHEIST_TOTAL_NODE_BUDGET` (default and hard cap `5000`). When this cap is
-hit, top-level `snapshotQuality` reports:
+hit, top-level `rendering` reports:
 
 - `state: "truncated"`
 - `reasonCode: "total-node-budget"`

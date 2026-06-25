@@ -14,17 +14,11 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
     @Flag(name: .long, help: "Write raw PNG bytes to stdout")
     var inline = false
 
-    @Flag(name: .long, help: "Include the captured interface hierarchy in text output")
-    var includeInterface = false
-
     @OptionGroup var connection: ConnectionOptions
 
     func validate() throws {
         if inline && output != nil {
             throw ValidationError("--inline cannot be used with --output")
-        }
-        if inline && includeInterface {
-            throw ValidationError("--include-interface cannot be used with --inline")
         }
     }
 
@@ -36,9 +30,6 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
         }
         if inline {
             request.set(.inlineData, true)
-        }
-        if includeInterface {
-            request.set(.includeInterface, true)
         }
 
         if output != nil || !inline {

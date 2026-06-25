@@ -483,7 +483,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
         XCTAssertNil(json["method"])
         XCTAssertEqual(nodes.first?["kind"] as? String, "action")
-        XCTAssertNotNil(nodes.first?["action"])
+        XCTAssertNil(nodes.first?["action"])
+        let evidence = try XCTUnwrap(nodes.first?["evidence"] as? [String: Any])
+        XCTAssertNotNil(evidence["action"])
     }
 
     @ButtonHeistActor

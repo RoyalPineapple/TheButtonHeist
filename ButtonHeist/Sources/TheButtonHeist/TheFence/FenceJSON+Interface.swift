@@ -17,7 +17,7 @@ struct PublicInterface: Encodable {
     let timestamp: String
     let screenDescription: String
     let screenId: String?
-    let snapshotQuality: PublicSnapshotQuality
+    let rendering: PublicInterfaceRendering
     let diagnostics: InterfaceDiagnostics?
     let navigation: PublicNavigation
     let tree: [PublicTreeNode]
@@ -49,7 +49,7 @@ struct PublicInterface: Encodable {
             elementAnnotations: interface.annotations.elementByPath,
             containerAnnotations: interface.annotations.containerByPath
         )
-        self.snapshotQuality = projectionStats.snapshotQuality(
+        self.rendering = projectionStats.rendering(
             visibleElementBudget: visibleElementBudget,
             totalNodeBudget: totalNodeBudget,
             totalNodeBudgetHit: totalNodeBudgetTracker.wasLimited

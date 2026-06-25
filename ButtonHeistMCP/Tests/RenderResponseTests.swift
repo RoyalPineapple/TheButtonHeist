@@ -75,7 +75,8 @@ struct RenderResponseTests {
         let report = try #require(root["report"]?.objectValue)
         let nodes = try #require(report["nodes"]?.arrayValue)
         let node = try #require(nodes.first?.objectValue)
-        let action = try #require(node["action"]?.objectValue)
+        let evidence = try #require(node["evidence"]?.objectValue)
+        let action = try #require(evidence["action"]?.objectValue)
         let actionResult = try #require(action["result"]?.objectValue)
         let delta = try #require(actionResult["delta"]?.objectValue)
         let edits = try #require(delta["edits"]?.objectValue)
@@ -85,6 +86,7 @@ struct RenderResponseTests {
         let traceOmission = try #require(omitted["accessibilityTrace"]?.objectValue)
 
         #expect(root["status"]?.stringValue == "ok")
+        #expect(node["action"] == nil)
         #expect(actionResult["method"]?.stringValue == "activate")
         #expect(delta["kind"]?.stringValue == "elementsChanged")
         #expect(addedElement["label"]?.stringValue == "Lazy Row")
