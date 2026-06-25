@@ -451,7 +451,7 @@ final class ElementInflationProductTests: XCTestCase {
             target: target,
             identifier: identifier,
             label: label,
-            knownHeistId: "known_\(identifier)",
+            knownHeistId: HeistId(rawValue: "known_\(identifier)"),
             contentOrigin: target.frame.origin
         )
     }
