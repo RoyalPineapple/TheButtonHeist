@@ -298,7 +298,7 @@ struct PublicHeistReportNode: Encodable {
     let message: String?
     let durationMs: Int
     let intent: HeistStepIntent?
-    let evidence: HeistStepEvidence?
+    let evidence: PublicHeistReportEvidence?
     let failure: HeistFailureDetail?
     let abortedAtChildPath: String?
     let action: PublicHeistReportAction?
@@ -313,7 +313,7 @@ struct PublicHeistReportNode: Encodable {
         self.message = step.reportMessage
         self.durationMs = step.durationMs
         self.intent = step.intent
-        self.evidence = step.evidence
+        self.evidence = PublicHeistReportEvidence(step: step)
         self.failure = step.failure
         self.abortedAtChildPath = step.abortedAtChildPath
         self.action = PublicHeistReportAction(step: step)
@@ -327,16 +327,450 @@ struct PublicHeistReportNode: Encodable {
 struct PublicHeistReportAction: Encodable {
     let commandName: String
     let target: ElementTarget?
-    let result: PublicActionResponse?
+    let result: PublicHeistReportActionResult?
 
     init?(step: HeistExecutionStepResult) {
         guard step.kind == .action, let commandName = step.reportCommandName else { return nil }
         self.commandName = commandName
         self.target = step.reportTarget
         self.result = step.reportActionResult.map {
-            PublicActionResponse(method: commandName, result: $0, expectation: nil)
+            PublicHeistReportActionResult(method: commandName, result: $0)
         }
     }
+}
+
+struct PublicHeistReportEvidence: Encodable {
+    let action: PublicHeistActionEvidence?
+    let wait: PublicHeistWaitEvidence?
+    let caseSelection: PublicHeistCaseSelectionEvidence?
+    let forEachString: PublicHeistForEachStringEvidence?
+    let forEachElement: PublicHeistForEachElementEvidence?
+    let invocation: PublicHeistInvocationEvidence?
+    let warning: PublicHeistWarningEvidence?
+
+    init?(
+        step: HeistExecutionStepResult
+    ) {
+        guard let evidence = step.evidence else { return nil }
+        switch evidence {
+        case .action(let evidence):
+            self.init(action: PublicHeistActionEvidence(evidence: evidence))
+        case .wait(let evidence):
+            self.init(wait: PublicHeistWaitEvidence(evidence: evidence))
+        case .caseSelection(let evidence):
+            self.init(caseSelection: PublicHeistCaseSelectionEvidence(evidence: evidence))
+        case .forEachString(let evidence):
+            self.init(forEachString: PublicHeistForEachStringEvidence(evidence: evidence))
+        case .forEachElement(let evidence):
+            self.init(forEachElement: PublicHeistForEachElementEvidence(evidence: evidence))
+        case .invocation(let evidence):
+            self.init(invocation: PublicHeistInvocationEvidence(evidence: evidence))
+        case .warning(let warning):
+            self.init(warning: PublicHeistWarningEvidence(warning: warning))
+        }
+    }
+
+    private init(
+        action: PublicHeistActionEvidence? = nil,
+        wait: PublicHeistWaitEvidence? = nil,
+        caseSelection: PublicHeistCaseSelectionEvidence? = nil,
+        forEachString: PublicHeistForEachStringEvidence? = nil,
+        forEachElement: PublicHeistForEachElementEvidence? = nil,
+        invocation: PublicHeistInvocationEvidence? = nil,
+        warning: PublicHeistWarningEvidence? = nil
+    ) {
+        self.action = action
+        self.wait = wait
+        self.caseSelection = caseSelection
+        self.forEachString = forEachString
+        self.forEachElement = forEachElement
+        self.invocation = invocation
+        self.warning = warning
+    }
+}
+
+struct PublicHeistActionEvidence: Encodable {
+    let commandName: String?
+    let target: ElementTarget?
+    let result: PublicHeistReportActionResult?
+    let expectationResult: PublicHeistReportActionResult?
+    let expectation: PublicExpectationResult?
+
+    init(evidence: HeistActionEvidence) {
+        let commandName = evidence.command?.wireType.rawValue
+        self.commandName = commandName
+        self.target = evidence.command?.reportTarget
+        self.result = evidence.actionResult.map {
+            PublicHeistReportActionResult(method: commandName ?? $0.method.rawValue, result: $0)
+        }
+        self.expectationResult = evidence.expectationActionResult.map {
+            PublicHeistReportActionResult(method: $0.method.rawValue, result: $0)
+        }
+        self.expectation = evidence.expectation.map {
+            PublicExpectationResult(result: $0)
+        }
+    }
+}
+
+struct PublicHeistWaitEvidence: Encodable {
+    let result: PublicHeistReportActionResult
+    let expectation: PublicExpectationResult
+    let baselineSummary: String?
+    let finalSummary: String?
+
+    init(evidence: HeistWaitEvidence) {
+        self.result = PublicHeistReportActionResult(method: evidence.actionResult.method.rawValue, result: evidence.actionResult)
+        self.expectation = PublicExpectationResult(result: evidence.expectation)
+        self.baselineSummary = evidence.baselineSummary
+        self.finalSummary = evidence.finalSummary
+    }
+}
+
+struct PublicHeistCaseSelectionEvidence: Encodable {
+    let selectedCaseIndex: Int?
+    let elapsedMs: Int
+    let timeout: Double?
+    let timedOut: Bool
+    let elseRan: Bool
+    let lastObservedSummary: String?
+    let caseCount: Int
+    let cases: [PublicHeistCaseMatchResult]?
+    let omittedCaseCount: Int?
+
+    init(evidence: HeistCaseSelectionEvidence) {
+        let selection = evidence.selection
+        self.selectedCaseIndex = selection.selectedCaseIndex
+        self.elapsedMs = selection.elapsedMs
+        self.timeout = selection.timeout
+        self.timedOut = selection.timedOut
+        self.elseRan = selection.elseRan
+        self.lastObservedSummary = selection.lastObservedSummary
+        self.caseCount = selection.cases.count
+        let visibleCases = Array(selection.cases.prefix(PublicHeistProjectionLimits.caseResults))
+        self.cases = visibleCases.isEmpty ? nil : visibleCases.map(PublicHeistCaseMatchResult.init(match:))
+        self.omittedCaseCount = Self.omittedCount(
+            total: selection.cases.count,
+            visible: visibleCases.count
+        )
+    }
+
+    private static func omittedCount(total: Int, visible: Int) -> Int? {
+        let omitted = total - visible
+        return omitted > 0 ? omitted : nil
+    }
+}
+
+struct PublicHeistCaseMatchResult: Encodable {
+    let predicate: AccessibilityPredicate
+    let met: Bool
+    let actual: String?
+
+    init(match: HeistCaseMatchResult) {
+        self.predicate = match.predicate
+        self.met = match.result.met
+        self.actual = match.result.actual
+    }
+}
+
+struct PublicHeistForEachStringEvidence: Encodable {
+    let parameter: String
+    let count: Int
+    let iterationCount: Int
+    let iterationOrdinal: Int?
+    let value: String?
+    let failureReason: String?
+
+    init(evidence: HeistForEachStringEvidence) {
+        self.parameter = evidence.parameter
+        self.count = evidence.count
+        self.iterationCount = evidence.iterationCount
+        self.iterationOrdinal = evidence.iterationOrdinal
+        self.value = evidence.value
+        self.failureReason = evidence.failureReason
+    }
+}
+
+struct PublicHeistForEachElementEvidence: Encodable {
+    let parameter: String
+    let matching: ElementPredicate
+    let limit: Int
+    let matchedCount: Int
+    let iterationCount: Int
+    let iterationOrdinal: Int?
+    let targetOrdinal: Int?
+    let targetSummary: String?
+    let failureReason: String?
+
+    init(evidence: HeistForEachElementEvidence) {
+        self.parameter = evidence.parameter
+        self.matching = evidence.matching
+        self.limit = evidence.limit
+        self.matchedCount = evidence.matchedCount
+        self.iterationCount = evidence.iterationCount
+        self.iterationOrdinal = evidence.iterationOrdinal
+        self.targetOrdinal = evidence.targetOrdinal
+        self.targetSummary = evidence.targetSummary
+        self.failureReason = evidence.failureReason
+    }
+}
+
+struct PublicHeistInvocationEvidence: Encodable {
+    let capability: String?
+    let name: String?
+    let argument: String?
+    let childFailedPath: String?
+
+    init(evidence: HeistInvocationEvidence) {
+        self.capability = evidence.invocation?.capabilityName
+        self.name = evidence.name
+        self.argument = evidence.argument
+        self.childFailedPath = evidence.childFailedPath
+    }
+}
+
+struct PublicHeistWarningEvidence: Encodable {
+    let path: String
+    let message: String
+
+    init(warning: HeistExecutionWarning) {
+        self.path = warning.path
+        self.message = warning.message
+    }
+}
+
+struct PublicHeistReportActionResult: Encodable {
+    let status: PublicStatus
+    let method: String
+    let message: String?
+    let value: String?
+    let rotor: PublicRotorResult?
+    let delta: PublicHeistDelta?
+    let screenName: String?
+    let screenId: String?
+    let errorClass: String?
+    let errorCode: String?
+    let phase: String?
+    let retryable: Bool?
+    let hint: String?
+    let activationTrace: ActivationTrace?
+    let timing: ActionPerformanceTiming?
+    let omitted: PublicHeistActionResultOmissions?
+
+    init(method: String, result: ActionResult) {
+        self.status = PublicStatus(result.publicStatus(expectation: nil))
+        self.method = method
+        self.message = result.message
+        switch result.payload {
+        case .value(let value):
+            self.value = value
+            self.rotor = nil
+        case .rotor(let rotor):
+            self.value = nil
+            self.rotor = PublicRotorResult(result: rotor)
+        case .heistExecution, .none:
+            self.value = nil
+            self.rotor = nil
+        }
+        self.delta = result.accessibilityTrace?.endpointDelta.map(PublicHeistDelta.init(delta:))
+        self.screenName = result.accessibilityTrace?.endpointScreenName
+        self.screenId = result.accessibilityTrace?.endpointScreenId
+        self.errorClass = result.publicErrorClass
+        let details = result.publicFailureDetails
+        self.errorCode = details?.errorCode
+        self.phase = details?.phase.rawValue
+        self.retryable = details?.retryable
+        self.hint = details?.hint
+        self.activationTrace = result.activationTrace
+        self.timing = result.timing
+        let omissions = PublicHeistActionResultOmissions(result: result)
+        self.omitted = omissions.isEmpty ? nil : omissions
+    }
+}
+
+struct PublicHeistActionResultOmissions: Encodable {
+    let accessibilityTrace: PublicProjectionOmission?
+    let subjectEvidence: PublicProjectionOmission?
+
+    var isEmpty: Bool {
+        accessibilityTrace == nil && subjectEvidence == nil
+    }
+
+    init(result: ActionResult) {
+        self.accessibilityTrace = result.accessibilityTrace.map {
+            PublicProjectionOmission(
+                reason: "raw accessibility trace omitted from public heist report",
+                projectedAs: "delta",
+                omittedCount: $0.captures.count
+            )
+        }
+        self.subjectEvidence = result.subjectEvidence.map { _ in
+            PublicProjectionOmission(
+                reason: "raw subject evidence omitted from public heist report",
+                projectedAs: nil,
+                omittedCount: nil
+            )
+        }
+    }
+}
+
+struct PublicProjectionOmission: Encodable {
+    let reason: String
+    let projectedAs: String?
+    let omittedCount: Int?
+}
+
+struct PublicHeistDelta: Encodable {
+    let kind: String
+    let elementCount: Int
+    let captureEdge: AccessibilityTrace.CaptureEdge?
+    let transient: [PublicElement]?
+    let edits: PublicHeistElementEdits?
+    let screen: PublicHeistScreenProjection?
+    let omitted: PublicHeistDeltaOmissions?
+
+    init(delta: AccessibilityTrace.Delta) {
+        switch delta {
+        case .noChange(let payload):
+            let transient = Self.elements(payload.transient)
+            let omittedTransientCount = Self.omittedCount(
+                total: payload.transient.count,
+                visible: transient.count
+            )
+            self.kind = AccessibilityTrace.DeltaKind.noChange.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = transient.isEmpty ? nil : transient
+            self.edits = nil
+            self.screen = nil
+            let omitted = PublicHeistDeltaOmissions(transient: omittedTransientCount)
+            self.omitted = omitted.isEmpty ? nil : omitted
+
+        case .elementsChanged(let payload):
+            let transient = Self.elements(payload.transient)
+            let omittedTransientCount = Self.omittedCount(
+                total: payload.transient.count,
+                visible: transient.count
+            )
+            let edits = PublicHeistElementEdits(edits: payload.edits)
+            self.kind = AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = transient.isEmpty ? nil : transient
+            self.edits = edits.isEmpty ? nil : edits
+            self.screen = nil
+            let omitted = PublicHeistDeltaOmissions(transient: omittedTransientCount)
+            self.omitted = omitted.isEmpty ? nil : omitted
+
+        case .screenChanged(let payload):
+            let transient = Self.elements(payload.transient)
+            let omittedTransientCount = Self.omittedCount(
+                total: payload.transient.count,
+                visible: transient.count
+            )
+            self.kind = AccessibilityTrace.DeltaKind.screenChanged.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = transient.isEmpty ? nil : transient
+            self.edits = nil
+            self.screen = PublicHeistScreenProjection(interface: payload.newInterface)
+            let omitted = PublicHeistDeltaOmissions(transient: omittedTransientCount)
+            self.omitted = omitted.isEmpty ? nil : omitted
+        }
+    }
+
+    private static func elements(_ elements: [HeistElement]) -> [PublicElement] {
+        elements.prefix(PublicHeistProjectionLimits.deltaElementsPerBucket).map {
+            PublicElement(element: $0, detail: .summary)
+        }
+    }
+
+    private static func omittedCount(total: Int, visible: Int) -> Int? {
+        let omitted = total - visible
+        return omitted > 0 ? omitted : nil
+    }
+}
+
+struct PublicHeistElementEdits: Encodable {
+    let added: [PublicElement]?
+    let removed: [PublicElement]?
+    let updated: [PublicElementUpdate]?
+    let omitted: PublicHeistElementEditOmissions?
+
+    var isEmpty: Bool {
+        added == nil && removed == nil && updated == nil && omitted == nil
+    }
+
+    init(edits: ElementEdits) {
+        let added = Self.elements(edits.added)
+        let removed = Self.elements(edits.removed)
+        let meaningfulUpdates = edits.updated.compactMap { PublicElementUpdate(update: $0) }
+        let updated = Array(meaningfulUpdates.prefix(PublicHeistProjectionLimits.deltaElementsPerBucket))
+        self.added = added.isEmpty ? nil : added
+        self.removed = removed.isEmpty ? nil : removed
+        self.updated = updated.isEmpty ? nil : updated
+        let omitted = PublicHeistElementEditOmissions(
+            added: Self.omittedCount(total: edits.added.count, visible: added.count),
+            removed: Self.omittedCount(total: edits.removed.count, visible: removed.count),
+            updated: Self.omittedCount(total: meaningfulUpdates.count, visible: updated.count)
+        )
+        self.omitted = omitted.isEmpty ? nil : omitted
+    }
+
+    private static func elements(_ elements: [HeistElement]) -> [PublicElement] {
+        elements.prefix(PublicHeistProjectionLimits.deltaElementsPerBucket).map {
+            PublicElement(element: $0, detail: .summary)
+        }
+    }
+
+    private static func omittedCount(total: Int, visible: Int) -> Int? {
+        let omitted = total - visible
+        return omitted > 0 ? omitted : nil
+    }
+}
+
+struct PublicHeistElementEditOmissions: Encodable {
+    let added: Int?
+    let removed: Int?
+    let updated: Int?
+
+    var isEmpty: Bool {
+        added == nil && removed == nil && updated == nil
+    }
+}
+
+struct PublicHeistDeltaOmissions: Encodable {
+    let transient: Int?
+
+    var isEmpty: Bool {
+        transient == nil
+    }
+}
+
+struct PublicHeistScreenProjection: Encodable {
+    let screenDescription: String
+    let screenId: String?
+    let elementCount: Int
+    let elements: [PublicElement]?
+    let omittedElementCount: Int?
+
+    init(interface: Interface) {
+        let elements = interface.projectedElements
+        let visible = Array(elements.prefix(PublicHeistProjectionLimits.screenPreviewElements))
+        self.screenDescription = InterfaceSummary.screenDescription(for: interface)
+        self.screenId = InterfaceSummary.screenId(for: interface)
+        self.elementCount = elements.count
+        self.elements = visible.isEmpty
+            ? nil
+            : visible.map { PublicElement(element: $0, detail: .summary) }
+        let omitted = elements.count - visible.count
+        self.omittedElementCount = omitted > 0 ? omitted : nil
+    }
+}
+
+private enum PublicHeistProjectionLimits {
+    static let deltaElementsPerBucket = 5
+    static let screenPreviewElements = 5
+    static let caseResults = 10
 }
 
 struct PublicHeistExpectations: Encodable {

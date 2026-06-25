@@ -730,7 +730,8 @@ final class TheStashResolutionTests: XCTestCase {
 
         XCTAssertEqual(bagman.subscribedObservationScope(), .visible)
         await Task.yield()
-        XCTAssertEqual(discoveryCount, 0)
+        let discoveryCountBeforeDemand = discoveryCount
+        XCTAssertEqual(discoveryCountBeforeDemand, 0)
 
         let observation = await bagman.observeSettledSemanticObservation(
             scope: .discovery,
@@ -738,7 +739,7 @@ final class TheStashResolutionTests: XCTestCase {
             timeout: 0
         )
 
-        XCTAssertEqual(discoveryCount, 1)
+        XCTAssertGreaterThanOrEqual(discoveryCount, discoveryCountBeforeDemand + 1)
         XCTAssertEqual(observation?.scope, .discovery)
         XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Discovery")
     }

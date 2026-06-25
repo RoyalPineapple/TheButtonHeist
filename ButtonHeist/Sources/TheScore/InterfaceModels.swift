@@ -164,6 +164,103 @@ public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+public struct InterfaceDiagnostics: Codable, Equatable, Sendable {
+    public let discovery: InterfaceDiscoveryDiagnostics?
+
+    public init(discovery: InterfaceDiscoveryDiagnostics? = nil) {
+        self.discovery = discovery
+    }
+}
+
+public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
+    public let state: String
+    public let reasonCodes: [String]
+    public let includedElementCount: Int
+    public let scrollAttempts: Int
+    public let maxScrollsPerDiscovery: Int
+    public let maxScrollsPerContainer: Int
+    public let exploredScrollableContainerCount: Int
+    public let omittedScrollableContainerCount: Int
+    public let omittedContainers: [InterfaceDiscoveryOmittedContainer]
+    public let nextAction: String?
+
+    public init(
+        state: String,
+        reasonCodes: [String] = [],
+        includedElementCount: Int,
+        scrollAttempts: Int,
+        maxScrollsPerDiscovery: Int,
+        maxScrollsPerContainer: Int,
+        exploredScrollableContainerCount: Int,
+        omittedScrollableContainerCount: Int,
+        omittedContainers: [InterfaceDiscoveryOmittedContainer] = [],
+        nextAction: String? = nil
+    ) {
+        self.state = state
+        self.reasonCodes = reasonCodes
+        self.includedElementCount = includedElementCount
+        self.scrollAttempts = scrollAttempts
+        self.maxScrollsPerDiscovery = maxScrollsPerDiscovery
+        self.maxScrollsPerContainer = maxScrollsPerContainer
+        self.exploredScrollableContainerCount = exploredScrollableContainerCount
+        self.omittedScrollableContainerCount = omittedScrollableContainerCount
+        self.omittedContainers = omittedContainers
+        self.nextAction = nextAction
+    }
+}
+
+public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, Sendable {
+    public let containerName: ContainerName?
+    public let type: String
+    public let reasonCodes: [String]
+    public let scrollAxis: ScrollContainerAxis?
+    public let viewportWidth: Double?
+    public let viewportHeight: Double?
+    public let contentWidth: Double?
+    public let contentHeight: Double?
+
+    public init(
+        containerName: ContainerName? = nil,
+        type: String,
+        reasonCodes: [String],
+        scrollAxis: ScrollContainerAxis? = nil,
+        viewportWidth: Double? = nil,
+        viewportHeight: Double? = nil,
+        contentWidth: Double? = nil,
+        contentHeight: Double? = nil
+    ) {
+        self.containerName = containerName
+        self.type = type
+        self.reasonCodes = reasonCodes
+        self.scrollAxis = scrollAxis
+        self.viewportWidth = viewportWidth
+        self.viewportHeight = viewportHeight
+        self.contentWidth = contentWidth
+        self.contentHeight = contentHeight
+    }
+
+}
+
+extension InterfaceDiscoveryOmittedContainer: Comparable {
+    public static func < (
+        left: InterfaceDiscoveryOmittedContainer,
+        right: InterfaceDiscoveryOmittedContainer
+    ) -> Bool {
+        let leftName = left.containerName ?? ""
+        let rightName = right.containerName ?? ""
+        if leftName != rightName { return leftName < rightName }
+        if left.type != right.type { return left.type < right.type }
+
+        let leftViewportWidth = left.viewportWidth ?? 0
+        let rightViewportWidth = right.viewportWidth ?? 0
+        if leftViewportWidth != rightViewportWidth {
+            return leftViewportWidth < rightViewportWidth
+        }
+
+        return (left.viewportHeight ?? 0) < (right.viewportHeight ?? 0)
+    }
+}
+
 /// A snapshot of the current accessibility interface returned by the server.
 ///
 /// The wire shape carries the parser's full-fidelity `AccessibilityHierarchy`
@@ -173,6 +270,7 @@ public struct Interface: Codable, Equatable, Sendable {
     public let timestamp: Date
     public let tree: [AccessibilityHierarchy]
     public let annotations: InterfaceAnnotations
+    public let diagnostics: InterfaceDiagnostics?
 
     /// Button Heist element projection in VoiceOver traversal order.
     public var projectedElements: [HeistElement] {
@@ -188,11 +286,22 @@ public struct Interface: Codable, Equatable, Sendable {
     public init(
         timestamp: Date,
         tree: [AccessibilityHierarchy],
-        annotations: InterfaceAnnotations = .empty
+        annotations: InterfaceAnnotations = .empty,
+        diagnostics: InterfaceDiagnostics? = nil
     ) {
         self.timestamp = timestamp
         self.tree = tree
         self.annotations = annotations
+        self.diagnostics = diagnostics
+    }
+
+    public func withDiagnostics(_ diagnostics: InterfaceDiagnostics?) -> Interface {
+        Interface(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            diagnostics: diagnostics
+        )
     }
 
     public func annotations(

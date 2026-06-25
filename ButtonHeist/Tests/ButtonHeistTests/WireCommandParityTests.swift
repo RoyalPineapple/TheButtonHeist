@@ -187,17 +187,21 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryHeistPrimitiveCommandLowersToTheSameRuntimeActionAsSingleCommand() async throws {
+    func testEveryExecutableSingleCommandLowersToTheSameRuntimeActionAsSingleStepPlan() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in TheFence.Command.heistPrimitiveCases {
+        for command in TheFence.Command.allCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
-            let singleMessages = try fence.executableRuntimeActions(for: singleRequest)
-            XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
+            let singleStepPlan = try fence.singleStepHeistPlan(for: singleRequest)
 
-            let heistStep = try fence.heistStep(for: singleRequest)
-            let heistMessages = runtimeActions(for: heistStep)
+            guard let singleMessages = singleRequest.runtimeActionMessages, !singleMessages.isEmpty else {
+                XCTAssertNil(singleStepPlan, command.rawValue)
+                continue
+            }
+
+            let plan = try XCTUnwrap(singleStepPlan, command.rawValue)
+            let heistMessages = plan.body.flatMap(runtimeActions(for:))
 
             XCTAssertEqual(
                 String(reflecting: heistMessages),
@@ -208,28 +212,7 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryHeistStepLowersToTheSameRuntimeActionAsSingleCommand() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        for command in TheFence.Command.heistPrimitiveCases {
-            let arguments = sampleArguments(for: command)
-            let singleRequest = try fence.parseRequest(command: command, values: arguments)
-            let singleMessages = try fence.executableRuntimeActions(for: singleRequest)
-            XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
-
-            let sourceStep = try fence.heistStep(for: singleRequest)
-            let heistMessages = [sourceStep].flatMap(runtimeActions(for:))
-
-            XCTAssertEqual(
-                String(reflecting: heistMessages),
-                String(reflecting: singleMessages),
-                command.rawValue
-            )
-        }
-    }
-
-    @ButtonHeistActor
-    func testViewportDebugCommandsAreCLIDirectOnlyAndRejectedByHeistGate() async throws {
+    func testViewportDebugCommandsAreCLIDirectOnlyAndRouteThroughSingleStepPlan() async throws {
         let (fence, _) = makeConnectedFence()
 
         for command in [TheFence.Command.scroll, .scrollToVisible, .scrollToEdge] {
@@ -243,10 +226,12 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertNil(command.payloadCheckedHeistPrimitiveCommand, command.rawValue)
 
             let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
-            XCTAssertFalse(try fence.executableRuntimeActions(for: request).isEmpty, command.rawValue)
-            XCTAssertThrowsError(try fence.heistStep(for: request), command.rawValue) { error in
-                XCTAssertTrue("\(error)".contains("not a heist primitive"), "\(error)")
-            }
+            let singleMessages = try fence.executableRuntimeActions(for: request)
+            XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
+
+            let plan = try XCTUnwrap(fence.singleStepHeistPlan(for: request), command.rawValue)
+            let heistMessages = plan.body.flatMap(runtimeActions(for:))
+            XCTAssertEqual(String(reflecting: heistMessages), String(reflecting: singleMessages), command.rawValue)
         }
     }
 

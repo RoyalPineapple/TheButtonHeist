@@ -18,6 +18,7 @@ struct PublicInterface: Encodable {
     let screenDescription: String
     let screenId: String?
     let snapshotQuality: PublicSnapshotQuality
+    let diagnostics: InterfaceDiagnostics?
     let navigation: PublicNavigation
     let tree: [PublicTreeNode]
 
@@ -31,6 +32,7 @@ struct PublicInterface: Encodable {
         self.timestamp = formatter.string(from: interface.timestamp)
         self.screenDescription = InterfaceSummary.screenDescription(for: interface)
         self.screenId = InterfaceSummary.screenId(for: interface)
+        self.diagnostics = interface.diagnostics
         self.navigation = PublicNavigation(interface: interface)
         let counter = PublicIndexCounter()
         let projectionStats = PublicInterfaceProjectionStats(

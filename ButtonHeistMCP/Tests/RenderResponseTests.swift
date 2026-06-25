@@ -31,8 +31,8 @@ struct RenderResponseTests {
         #expect(text.contains(#"group label="Actions" id="actions" containerName="semantic_actions__actions" frame=(0,40,200,100)"#))
     }
 
-    @Test("heist render attaches full structured receipt")
-    func heistRenderAttachesFullStructuredReceipt() throws {
+    @Test("heist render attaches bounded structured report")
+    func heistRenderAttachesBoundedStructuredReport() throws {
         let row = Self.staticText(label: "Row 0", identifier: "row_0")
         let lazyRow = Self.staticText(
             label: "Lazy Row",
@@ -81,6 +81,8 @@ struct RenderResponseTests {
         let edits = try #require(delta["edits"]?.objectValue)
         let added = try #require(edits["added"]?.arrayValue)
         let addedElement = try #require(added.first?.objectValue)
+        let omitted = try #require(actionResult["omitted"]?.objectValue)
+        let traceOmission = try #require(omitted["accessibilityTrace"]?.objectValue)
 
         #expect(root["status"]?.stringValue == "ok")
         #expect(actionResult["method"]?.stringValue == "activate")
@@ -88,6 +90,9 @@ struct RenderResponseTests {
         #expect(addedElement["label"]?.stringValue == "Lazy Row")
         #expect(addedElement["value"]?.stringValue == "Loaded by scroll")
         #expect(addedElement["identifier"]?.stringValue == "lazy_row")
+        #expect(traceOmission["projectedAs"]?.stringValue == "delta")
+        #expect(traceOmission["omittedCount"] == .int(2))
+        #expect(!String(describing: result.structuredContent).contains("captures"))
         guard case .text(let text, _, _)? = result.content.first else {
             Issue.record("expected compact text content")
             return

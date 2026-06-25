@@ -32,11 +32,20 @@ public extension TheFence.Command {
         _ arguments: TheFence.CommandArgumentEnvelope,
         context: String
     ) -> Result<(command: Self, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
-        routeCanonicalStep(
+        let routed = routeCanonicalStep(
             arguments,
             context: context,
             isExecutable: { $0.descriptor.projection.cliExposure == .directCommand }
         )
+        guard case .success(let value) = routed else { return routed }
+        do {
+            try value.command.descriptor.validatePublicRequestArguments(value.arguments)
+            return .success(value)
+        } catch let error as SchemaValidationError {
+            return .failure(FenceOperationRoutingError(message: error.message))
+        } catch {
+            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
+        }
     }
 
 }

@@ -19,9 +19,18 @@ public struct FenceParameterSpec: Sendable, Equatable {
     public let required: Bool
     public let enumValues: [String]?
     public let defaultValue: HeistValue?
+    let minimum: Double?
+    let maximum: Double?
+    let exclusiveMinimum: Double?
+    let minLength: Int?
+    let minItems: Int?
+    let maxItems: Int?
     public let jsonSchemaProperty: HeistValue
     public let objectProperties: [FenceParameterSpec]
+    let objectAdditionalProperties: Bool
+    let arrayItemType: ParamType?
     public let arrayItemProperties: [FenceParameterSpec]
+    let arrayItemAdditionalProperties: Bool
 
 }
 
@@ -101,6 +110,7 @@ func param(
     defaultValue: HeistValue? = nil,
     minimum: Double? = nil,
     maximum: Double? = nil,
+    exclusiveMinimum: Double? = nil,
     minLength: Int? = nil,
     minItems: Int? = nil,
     maxItems: Int? = nil,
@@ -115,6 +125,7 @@ func param(
     if let defaultValue { schema["default"] = defaultValue }
     if let minimum { schema["minimum"] = jsonSchemaNumber(minimum) }
     if let maximum { schema["maximum"] = jsonSchemaNumber(maximum) }
+    if let exclusiveMinimum { schema["exclusiveMinimum"] = jsonSchemaNumber(exclusiveMinimum) }
     if let minLength { schema["minLength"] = .int(minLength) }
     if let minItems { schema["minItems"] = .int(minItems) }
     if let maxItems { schema["maxItems"] = .int(maxItems) }
@@ -146,9 +157,18 @@ func param(
         required: required,
         enumValues: enumValues,
         defaultValue: defaultValue,
+        minimum: minimum,
+        maximum: maximum,
+        exclusiveMinimum: exclusiveMinimum,
+        minLength: minLength,
+        minItems: minItems,
+        maxItems: maxItems,
         jsonSchemaProperty: .object(schema),
         objectProperties: objectProperties,
-        arrayItemProperties: arrayItemProperties
+        objectAdditionalProperties: objectAdditionalProperties,
+        arrayItemType: arrayItemType,
+        arrayItemProperties: arrayItemProperties,
+        arrayItemAdditionalProperties: arrayItemAdditionalProperties
     )
 }
 
@@ -426,7 +446,7 @@ enum FenceParameterBlocks: Sendable {
         objectProperties: accessibilityPredicateProperties
     )
 
-    static let expectationTimeout = param(.timeout, .number, maximum: 30)
+    static let expectationTimeout = param(.timeout, .number, maximum: 30, exclusiveMinimum: 0)
     static let expectation: [FenceParameterSpec] = [expect, expectationTimeout]
 
     /// Parameters for the unified `wait` command: a predicate plus a timeout.
@@ -438,7 +458,8 @@ enum FenceParameterBlocks: Sendable {
     static let screenPoint: [FenceParameterSpec] = unitPoint
     static let gestureDuration = param(
         .duration, .number,
-        maximum: GestureDuration.maximumSeconds
+        maximum: GestureDuration.maximumSeconds,
+        exclusiveMinimum: 0
     )
 
     private static func stringMatchParam(_ key: FenceParameterKey) -> FenceParameterSpec {
@@ -467,9 +488,18 @@ enum FenceParameterBlocks: Sendable {
             required: false,
             enumValues: nil,
             defaultValue: nil,
+            minimum: nil,
+            maximum: nil,
+            exclusiveMinimum: nil,
+            minLength: nil,
+            minItems: nil,
+            maxItems: nil,
             jsonSchemaProperty: .object(schema),
             objectProperties: [],
-            arrayItemProperties: []
+            objectAdditionalProperties: false,
+            arrayItemType: nil,
+            arrayItemProperties: [],
+            arrayItemAdditionalProperties: false
         )
     }
 

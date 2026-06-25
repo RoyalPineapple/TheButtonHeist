@@ -73,20 +73,6 @@ SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
 xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
-### Known Issue: Resource Bundle
-
-Tuist doesn't copy `AccessibilitySnapshot_AccessibilitySnapshotParser.bundle` into the app. If it crashes at launch with a `Bundle.module` assertion:
-
-```bash
-INSTALLED=$(xcrun simctl get_app_container "$SIM_UDID" com.buttonheist.testapp)
-BUNDLE=$(find ~/Library/Developer/Xcode/DerivedData -name "AccessibilitySnapshot_AccessibilitySnapshotParser.bundle" -path "*/Debug-iphonesimulator/*" | head -1)
-cp -R "$BUNDLE" "$INSTALLED/Frameworks/"
-SIMCTL_CHILD_INSIDEJOB_PORT="$INSIDEJOB_PORT" \
-SIMCTL_CHILD_INSIDEJOB_TOKEN="$TASK_SLUG" \
-SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
-xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
-```
-
 ### Verify
 
 ```bash

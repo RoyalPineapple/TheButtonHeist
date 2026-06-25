@@ -28,6 +28,8 @@ extension FenceResponse {
                 detailLines = Self.compactHeistFailureDeltaLines(delta, step: step)
             } else if step.status == .skipped {
                 line += " -> skipped"
+            } else if let warning = step.warningEvidence {
+                line += " -> warning: \(warning.message)"
             } else if let delta {
                 if let summary = Self.compactHeistDeltaSummary(delta, step: step) {
                     line += " -> \(summary)"

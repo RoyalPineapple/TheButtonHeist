@@ -102,6 +102,86 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         XCTAssertEqual(decoded.projectedElements, [element])
     }
 
+    func testInterfaceDiagnosticsRoundTripThroughCanonicalWireShape() throws {
+        let diagnostics = InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
+            state: "limited",
+            reasonCodes: ["scroll-attempt-budget"],
+            includedElementCount: 3,
+            scrollAttempts: 5,
+            maxScrollsPerDiscovery: 5,
+            maxScrollsPerContainer: 3,
+            exploredScrollableContainerCount: 1,
+            omittedScrollableContainerCount: 1,
+            omittedContainers: [
+                InterfaceDiscoveryOmittedContainer(
+                    containerName: "main_scroll",
+                    type: "scrollable",
+                    reasonCodes: ["scroll-attempt-budget"],
+                    scrollAxis: .vertical,
+                    viewportWidth: 320,
+                    viewportHeight: 400,
+                    contentWidth: 320,
+                    contentHeight: 1_200
+                ),
+            ],
+            nextAction: "Retry get_interface with a higher maxScrollsPerDiscovery."
+        ))
+        let original = makeTestInterface(elements: [sampleElement(label: "Row")])
+            .withDiagnostics(diagnostics)
+
+        let payload = try encodeInterfacePayload(original)
+        let encodedDiagnostics = try XCTUnwrap(payload["diagnostics"] as? [String: Any])
+        let encodedDiscovery = try XCTUnwrap(encodedDiagnostics["discovery"] as? [String: Any])
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(Interface.self, from: data)
+
+        XCTAssertEqual(encodedDiscovery["state"] as? String, "limited")
+        XCTAssertEqual(encodedDiscovery["reasonCodes"] as? [String], ["scroll-attempt-budget"])
+        XCTAssertEqual(decoded, original)
+    }
+
+    func testOmittedContainerDiagnosticsUseCanonicalSortOrder() {
+        let unnamed = InterfaceDiscoveryOmittedContainer(
+            type: "scrollable",
+            reasonCodes: [],
+            viewportWidth: 320,
+            viewportHeight: 400
+        )
+        let namedList = InterfaceDiscoveryOmittedContainer(
+            containerName: "main",
+            type: "list",
+            reasonCodes: [],
+            viewportWidth: 500,
+            viewportHeight: 400
+        )
+        let namedScrollableNarrow = InterfaceDiscoveryOmittedContainer(
+            containerName: "main",
+            type: "scrollable",
+            reasonCodes: [],
+            viewportWidth: 320,
+            viewportHeight: 400
+        )
+        let namedScrollableWide = InterfaceDiscoveryOmittedContainer(
+            containerName: "main",
+            type: "scrollable",
+            reasonCodes: [],
+            viewportWidth: 500,
+            viewportHeight: 400
+        )
+        let laterName = InterfaceDiscoveryOmittedContainer(
+            containerName: "secondary",
+            type: "scrollable",
+            reasonCodes: [],
+            viewportWidth: 100,
+            viewportHeight: 100
+        )
+
+        XCTAssertEqual(
+            [namedScrollableWide, laterName, namedScrollableNarrow, unnamed, namedList].sorted(),
+            [unnamed, namedList, namedScrollableNarrow, namedScrollableWide, laterName]
+        )
+    }
+
     private func encodeInterfacePayload(_ interface: Interface) throws -> [String: Any] {
         let envelope = ResponseEnvelope(message: .interface(interface))
         let data = try encoder.encode(envelope)

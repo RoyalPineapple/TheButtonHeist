@@ -15,12 +15,14 @@ extension Navigation {
     ) async -> Bool {
         while !exploration.manifest.pendingContainers.isEmpty {
             guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
+                exploration.manifest.discoveryLimitHit = true
                 return false
             }
             let batch = sortedPendingContainers(in: exploration)
 
             for container in batch {
                 guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
+                    exploration.manifest.discoveryLimitHit = true
                     return false
                 }
                 guard let containerExploration = await prepareContainerExploration(
@@ -180,21 +182,33 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> Bool {
         let savedVisualOrigin = containerExploration.savedVisualOrigin
-        await moveToLeadingEdge(containerExploration, exploration: &exploration)
+        let leadingEdgeResult = await moveToLeadingEdge(containerExploration, exploration: &exploration)
+        if case .omitted(let reason) = leadingEdgeResult {
+            await restoreContainerPosition(
+                containerExploration,
+                savedVisualOrigin: savedVisualOrigin,
+                exploration: &exploration
+            )
+            await restoreAncestorPositions(containerExploration, exploration: &exploration)
+            exploration.manifest.markOmitted(containerExploration.container, reason: reason)
+            exploration.addDiscoveredContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
+            return false
+        }
+
         if let target, hasVisibleTerminalExplorationResolution(target) {
             exploration.markExplored(containerExploration.container)
             return true
         }
 
         var scan = preparePageScan(in: containerExploration)
-        let foundTarget = await scanForwardPages(
+        let scanResult = await scanForwardPages(
             containerExploration,
             target: target,
             scan: &scan,
             exploration: &exploration
         )
 
-        if foundTarget {
+        if scanResult == .foundTarget {
             exploration.markExplored(containerExploration.container)
             return true
         }
@@ -205,7 +219,11 @@ extension Navigation {
             exploration: &exploration
         )
         await restoreAncestorPositions(containerExploration, exploration: &exploration)
-        exploration.markExplored(containerExploration.container)
+        if case .omitted(let reason) = scanResult {
+            exploration.manifest.markOmitted(containerExploration.container, reason: reason)
+        } else {
+            exploration.markExplored(containerExploration.container)
+        }
 
         exploration.addDiscoveredContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
         return false
@@ -225,10 +243,10 @@ extension Navigation {
         target: ElementTarget?,
         scan: inout ContainerScan,
         exploration: inout SemanticExploration
-    ) async -> Bool {
+    ) async -> ContainerScanResult {
         for _ in 0..<exploration.manifest.maxScrollsPerContainer {
-            guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
-                return false
+            if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.container) {
+                return .omitted(reason)
             }
             let proof = await scrollOnePageAndSettle(
                 containerExploration.scrollTarget,
@@ -236,14 +254,13 @@ extension Navigation {
                 animated: false,
                 commitViewportMoves: false
             )
-            guard proof.result == .moved else { return false }
-            exploration.manifest.scrollCount += 1
+            guard proof.result == .moved else { return .completed }
 
-            guard absorbVisiblePage(in: &exploration) else { return false }
+            guard absorbVisiblePage(in: &exploration) else { return .completed }
             scan.originByElement = buildOriginIndex()
 
             if let target, hasVisibleTerminalExplorationResolution(target) {
-                return true
+                return .foundTarget
             }
 
             let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
@@ -251,24 +268,34 @@ extension Navigation {
             // Targeted discovery must keep going: the current page may have
             // been known from the starting viewport while the target is still
             // between here and the edge.
-            guard target != nil || !result.inserted.isEmpty else { return false }
+            guard target != nil || !result.inserted.isEmpty else { return .completed }
         }
-        return false
+        if exploration.manifest.scrollCount >= exploration.manifest.maxScrollsPerDiscovery {
+            return .omitted(.discoveryScrollLimit)
+        }
+        return .omitted(.containerScrollLimit)
     }
 
     private func moveToLeadingEdge(
         _ containerExploration: ContainerExploration,
         exploration: inout SemanticExploration
-    ) async {
+    ) async -> ContainerScanResult {
         switch containerExploration.scrollTarget {
         case .uiScrollView(let scrollView):
+            if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.container) {
+                return .omitted(reason)
+            }
             if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 absorbExplorationPage(in: &exploration)
             }
+            return .completed
         case .swipeable:
             let toLeading = Self.edgeDirection(for: containerExploration.leadingEdge)
             for _ in 0..<50 {
+                if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.container) {
+                    return .omitted(reason)
+                }
                 let proof = await scrollOnePageAndSettle(
                     containerExploration.scrollTarget,
                     direction: toLeading,
@@ -279,9 +306,10 @@ extension Navigation {
                     _ = absorbVisiblePage(in: &exploration)
                 }
                 if proof.result == .unchanged || stash.visibleIds == proof.previousVisibleIds {
-                    break
+                    return .completed
                 }
             }
+            return .omitted(.leadingEdgeResetLimit)
         }
     }
 

@@ -2,6 +2,7 @@
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+import TheScore
 
 @MainActor
 final class ScreenManifestTests: XCTestCase {
@@ -39,6 +40,21 @@ final class ScreenManifestTests: XCTestCase {
         XCTAssertEqual(manifest.maxScrollsPerDiscovery, 40)
     }
 
+    func testRecordScrollAttemptCountsAttemptsAndFlagsDiscoveryCap() {
+        var manifest = Navigation.ScreenManifest(
+            maxScrollsPerContainer: 10,
+            maxScrollsPerDiscovery: 2
+        )
+        let container = makeScrollableContainer()
+
+        XCTAssertNil(manifest.recordScrollAttempt(in: container))
+        XCTAssertNil(manifest.recordScrollAttempt(in: container))
+        XCTAssertEqual(manifest.recordScrollAttempt(in: container), .discoveryScrollLimit)
+
+        XCTAssertEqual(manifest.scrollCount, 2)
+        XCTAssertTrue(manifest.discoveryLimitHit)
+    }
+
     // MARK: - markExplored
 
     func testMarkExploredMovesFromPendingToExplored() {
@@ -73,6 +89,46 @@ final class ScreenManifestTests: XCTestCase {
         manifest.addPendingContainers([containerA, containerB])
 
         XCTAssertEqual(manifest.pendingContainers.count, 2)
+    }
+
+    // MARK: - Diagnostics
+
+    func testDiscoveryDiagnosticsReportOmittedContainersAndNextAction() throws {
+        var manifest = Navigation.ScreenManifest(
+            maxScrollsPerContainer: 3,
+            maxScrollsPerDiscovery: 5
+        )
+        let container = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 2_000),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let screen = Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerNames: [container: "main_scroll"],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        manifest.markOmitted(container, reason: .discoveryScrollLimit)
+
+        let diagnostics = try XCTUnwrap(
+            manifest.interfaceDiagnostics(for: screen, includedElementCount: 12).discovery
+        )
+        let omitted = try XCTUnwrap(diagnostics.omittedContainers.first)
+
+        XCTAssertEqual(diagnostics.state, "limited")
+        XCTAssertEqual(diagnostics.reasonCodes, ["scroll-attempt-budget"])
+        XCTAssertEqual(diagnostics.includedElementCount, 12)
+        XCTAssertEqual(diagnostics.maxScrollsPerDiscovery, 5)
+        XCTAssertEqual(diagnostics.maxScrollsPerContainer, 3)
+        XCTAssertEqual(diagnostics.omittedScrollableContainerCount, 1)
+        XCTAssertEqual(omitted.containerName, "main_scroll")
+        XCTAssertEqual(omitted.reasonCodes, ["scroll-attempt-budget"])
+        XCTAssertEqual(omitted.scrollAxis, .vertical)
+        XCTAssertEqual(omitted.contentHeight, 2_000)
+        XCTAssertTrue(diagnostics.nextAction?.contains("maxScrollsPerDiscovery") == true)
     }
 
     // MARK: - maxScrollsPerContainer

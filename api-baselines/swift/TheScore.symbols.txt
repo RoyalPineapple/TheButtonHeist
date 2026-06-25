@@ -602,6 +602,10 @@ symbol	TheScore.symbols.json	s:8TheScore20InterfaceAnnotationsV4fromACs7Decoder_
 symbol	TheScore.symbols.json	s:8TheScore20InterfaceAnnotationsV5emptyACvpZ	swift.type.property	public	empty	InterfaceAnnotations.empty	static let empty: InterfaceAnnotations
 symbol	TheScore.symbols.json	s:8TheScore20InterfaceAnnotationsV8elements10containersACSayAA0C17ElementAnnotationVG_SayAA0c9ContainerH0VGtcfc	swift.init	public	init(elements:containers:)	InterfaceAnnotations.init(elements:containers:)	init(elements: [InterfaceElementAnnotation] = [], containers: [InterfaceContainerAnnotation] = [])
 symbol	TheScore.symbols.json	s:8TheScore20InterfaceAnnotationsV8elementsSayAA0C17ElementAnnotationVGvp	swift.property	public	elements	InterfaceAnnotations.elements	let elements: [InterfaceElementAnnotation]
+symbol	TheScore.symbols.json	s:8TheScore20InterfaceDiagnosticsV	swift.struct	public	InterfaceDiagnostics	InterfaceDiagnostics	struct InterfaceDiagnostics
+symbol	TheScore.symbols.json	s:8TheScore20InterfaceDiagnosticsV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	InterfaceDiagnostics.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore20InterfaceDiagnosticsV9discoveryAA0c9DiscoveryD0VSgvp	swift.property	public	discovery	InterfaceDiagnostics.discovery	let discovery: InterfaceDiscoveryDiagnostics?
+symbol	TheScore.symbols.json	s:8TheScore20InterfaceDiagnosticsV9discoveryAcA0c9DiscoveryD0VSg_tcfc	swift.init	public	init(discovery:)	InterfaceDiagnostics.init(discovery:)	init(discovery: InterfaceDiscoveryDiagnostics? = nil)
 symbol	TheScore.symbols.json	s:8TheScore20SessionLockedPayloadV	swift.struct	public	SessionLockedPayload	SessionLockedPayload	struct SessionLockedPayload
 symbol	TheScore.symbols.json	s:8TheScore20SessionLockedPayloadV17activeConnectionsSivp	swift.property	public	activeConnections	SessionLockedPayload.activeConnections	let activeConnections: Int
 symbol	TheScore.symbols.json	s:8TheScore20SessionLockedPayloadV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	SessionLockedPayload.init(from:)	init(from decoder: any Decoder) throws
@@ -866,12 +870,37 @@ symbol	TheScore.symbols.json	s:8TheScore28InterfaceContainerAnnotationV13contain
 symbol	TheScore.symbols.json	s:8TheScore28InterfaceContainerAnnotationV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	InterfaceContainerAnnotation.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore28InterfaceContainerAnnotationV4path13containerNameAcA8TreePathV_SSSgtcfc	swift.init	public	init(path:containerName:)	InterfaceContainerAnnotation.init(path:containerName:)	init(path: TreePath, containerName: ContainerName?)
 symbol	TheScore.symbols.json	s:8TheScore28InterfaceContainerAnnotationV4pathAA8TreePathVvp	swift.property	public	path	InterfaceContainerAnnotation.path	let path: TreePath
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV	swift.struct	public	InterfaceDiscoveryDiagnostics	InterfaceDiscoveryDiagnostics	struct InterfaceDiscoveryDiagnostics
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV013maxScrollsPerD0Sivp	swift.property	public	maxScrollsPerDiscovery	InterfaceDiscoveryDiagnostics.maxScrollsPerDiscovery	let maxScrollsPerDiscovery: Int
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV10nextActionSSSgvp	swift.property	public	nextAction	InterfaceDiscoveryDiagnostics.nextAction	let nextAction: String?
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV11reasonCodesSaySSGvp	swift.property	public	reasonCodes	InterfaceDiscoveryDiagnostics.reasonCodes	let reasonCodes: [String]
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV14scrollAttemptsSivp	swift.property	public	scrollAttempts	InterfaceDiscoveryDiagnostics.scrollAttempts	let scrollAttempts: Int
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV17omittedContainersSayAA0cD16OmittedContainerVGvp	swift.property	public	omittedContainers	InterfaceDiscoveryDiagnostics.omittedContainers	let omittedContainers: [InterfaceDiscoveryOmittedContainer]
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV20includedElementCountSivp	swift.property	public	includedElementCount	InterfaceDiscoveryDiagnostics.includedElementCount	let includedElementCount: Int
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV22maxScrollsPerContainerSivp	swift.property	public	maxScrollsPerContainer	InterfaceDiscoveryDiagnostics.maxScrollsPerContainer	let maxScrollsPerContainer: Int
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV31omittedScrollableContainerCountSivp	swift.property	public	omittedScrollableContainerCount	InterfaceDiscoveryDiagnostics.omittedScrollableContainerCount	let omittedScrollableContainerCount: Int
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV32exploredScrollableContainerCountSivp	swift.property	public	exploredScrollableContainerCount	InterfaceDiscoveryDiagnostics.exploredScrollableContainerCount	let exploredScrollableContainerCount: Int
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	InterfaceDiscoveryDiagnostics.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV5state11reasonCodes20includedElementCount14scrollAttempts013maxScrollsPerD00noP9Container018exploredScrollableqK007omittedsqK00T10Containers10nextActionACSS_SaySSGS6iSayAA0cd7OmittedQ0VGSSSgtcfc	swift.init	public	init(state:reasonCodes:includedElementCount:scrollAttempts:maxScrollsPerDiscovery:maxScrollsPerContainer:exploredScrollableContainerCount:omittedScrollableContainerCount:omittedContainers:nextAction:)	InterfaceDiscoveryDiagnostics.init(state:reasonCodes:includedElementCount:scrollAttempts:maxScrollsPerDiscovery:maxScrollsPerContainer:exploredScrollableContainerCount:omittedScrollableContainerCount:omittedContainers:nextAction:)	init(state: String, reasonCodes: [String] = [], includedElementCount: Int, scrollAttempts: Int, maxScrollsPerDiscovery: Int, maxScrollsPerContainer: Int, exploredScrollableContainerCount: Int, omittedScrollableContainerCount: Int, omittedContainers: [InterfaceDiscoveryOmittedContainer] = [], nextAction: String? = nil)
+symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV5stateSSvp	swift.property	public	state	InterfaceDiscoveryDiagnostics.state	let state: String
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV	swift.struct	public	HeistReceiptRecordingConfiguration	HeistReceiptRecordingConfiguration	struct HeistReceiptRecordingConfiguration
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV11environmentACSgvpZ	swift.type.property	public	environment	HeistReceiptRecordingConfiguration.environment	static var environment: HeistReceiptRecordingConfiguration? { get }
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV13rootDirectory10Foundation3URLVvp	swift.property	public	rootDirectory	HeistReceiptRecordingConfiguration.rootDirectory	let rootDirectory: URL
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV13rootDirectory4modeAC10Foundation3URLV_AA0cdE4ModeOtcfc	swift.init	public	init(rootDirectory:mode:)	HeistReceiptRecordingConfiguration.init(rootDirectory:mode:)	init(rootDirectory: URL, mode: HeistReceiptRecordingMode = .failures)
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV30processTemporaryDirectoryValueSSvpZ	swift.type.property	public	processTemporaryDirectoryValue	HeistReceiptRecordingConfiguration.processTemporaryDirectoryValue	static let processTemporaryDirectoryValue: String
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV4modeAA0cdE4ModeOvp	swift.property	public	mode	HeistReceiptRecordingConfiguration.mode	let mode: HeistReceiptRecordingMode
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV	swift.struct	public	InterfaceDiscoveryOmittedContainer	InterfaceDiscoveryOmittedContainer	struct InterfaceDiscoveryOmittedContainer
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV10scrollAxisAA06ScrollfH0OSgvp	swift.property	public	scrollAxis	InterfaceDiscoveryOmittedContainer.scrollAxis	let scrollAxis: ScrollContainerAxis?
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV11reasonCodesSaySSGvp	swift.property	public	reasonCodes	InterfaceDiscoveryOmittedContainer.reasonCodes	let reasonCodes: [String]
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV12contentWidthSdSgvp	swift.property	public	contentWidth	InterfaceDiscoveryOmittedContainer.contentWidth	let contentWidth: Double?
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV13containerName4type11reasonCodes10scrollAxis13viewportWidth0N6Height07contentO00qP0ACSSSg_SSSaySSGAA06ScrollfM0OSgSdSgA3Qtcfc	swift.init	public	init(containerName:type:reasonCodes:scrollAxis:viewportWidth:viewportHeight:contentWidth:contentHeight:)	InterfaceDiscoveryOmittedContainer.init(containerName:type:reasonCodes:scrollAxis:viewportWidth:viewportHeight:contentWidth:contentHeight:)	init(containerName: ContainerName? = nil, type: String, reasonCodes: [String], scrollAxis: ScrollContainerAxis? = nil, viewportWidth: Double? = nil, viewportHeight: Double? = nil, contentWidth: Double? = nil, contentHeight: Double? = nil)
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV13containerNameSSSgvp	swift.property	public	containerName	InterfaceDiscoveryOmittedContainer.containerName	let containerName: ContainerName?
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV13contentHeightSdSgvp	swift.property	public	contentHeight	InterfaceDiscoveryOmittedContainer.contentHeight	let contentHeight: Double?
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV13viewportWidthSdSgvp	swift.property	public	viewportWidth	InterfaceDiscoveryOmittedContainer.viewportWidth	let viewportWidth: Double?
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV14viewportHeightSdSgvp	swift.property	public	viewportHeight	InterfaceDiscoveryOmittedContainer.viewportHeight	let viewportHeight: Double?
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV1loiySbAC_ACtFZ	swift.func.op	public	<(_:_:)	InterfaceDiscoveryOmittedContainer.<(_:_:)	static func < (left: InterfaceDiscoveryOmittedContainer, right: InterfaceDiscoveryOmittedContainer) -> Bool
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	InterfaceDiscoveryOmittedContainer.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore34InterfaceDiscoveryOmittedContainerV4typeSSvp	swift.property	public	type	InterfaceDiscoveryOmittedContainer.type	let type: String
 symbol	TheScore.symbols.json	s:8TheScore7slugifyySSSgACF	swift.func	public	slugify(_:)	slugify(_:)	func slugify(_ text: String?) -> String?
 symbol	TheScore.symbols.json	s:8TheScore8TreePathV	swift.struct	public	TreePath	TreePath	struct TreePath
 symbol	TheScore.symbols.json	s:8TheScore8TreePathV1loiySbAC_ACtFZ	swift.func.op	public	<(_:_:)	TreePath.<(_:_:)	static func < (lhs: TreePath, rhs: TreePath) -> Bool
@@ -891,12 +920,14 @@ symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO8rawValueACSgSS_tcfc	swift.in
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV	swift.struct	public	Interface	Interface	struct Interface
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV11annotations10forSubtree12originalPath04rootH0AA0C11AnnotationsV26AccessibilitySnapshotModel0K9HierarchyO_AA04TreeH0VANtF	swift.method	public	annotations(forSubtree:originalPath:rootPath:)	Interface.annotations(forSubtree:originalPath:rootPath:)	func annotations(forSubtree node: AccessibilityHierarchy, originalPath: TreePath, rootPath: TreePath) -> InterfaceAnnotations
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV11annotationsAA0C11AnnotationsVvp	swift.property	public	annotations	Interface.annotations	let annotations: InterfaceAnnotations
+symbol	TheScore.symbols.json	s:8TheScore9InterfaceV11diagnosticsAA0C11DiagnosticsVSgvp	swift.property	public	diagnostics	Interface.diagnostics	let diagnostics: InterfaceDiagnostics?
+symbol	TheScore.symbols.json	s:8TheScore9InterfaceV15withDiagnosticsyAcA0cE0VSgF	swift.method	public	withDiagnostics(_:)	Interface.withDiagnostics(_:)	func withDiagnostics(_ diagnostics: InterfaceDiagnostics?) -> Interface
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV17projectedElementsSayAA12HeistElementVGvp	swift.property	public	projectedElements	Interface.projectedElements	var projectedElements: [HeistElement] { get }
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	Interface.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV4treeSay26AccessibilitySnapshotModel0E9HierarchyOGvp	swift.property	public	tree	Interface.tree	let tree: [AccessibilityHierarchy]
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	Interface.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV9timestamp10Foundation4DateVvp	swift.property	public	timestamp	Interface.timestamp	let timestamp: Date
-symbol	TheScore.symbols.json	s:8TheScore9InterfaceV9timestamp4tree11annotationsAC10Foundation4DateV_Say26AccessibilitySnapshotModel0I9HierarchyOGAA0C11AnnotationsVtcfc	swift.init	public	init(timestamp:tree:annotations:)	Interface.init(timestamp:tree:annotations:)	init(timestamp: Date, tree: [AccessibilityHierarchy], annotations: InterfaceAnnotations = .empty)
+symbol	TheScore.symbols.json	s:8TheScore9InterfaceV9timestamp4tree11annotations11diagnosticsAC10Foundation4DateV_Say26AccessibilitySnapshotModel0J9HierarchyOGAA0C11AnnotationsVAA0C11DiagnosticsVSgtcfc	swift.init	public	init(timestamp:tree:annotations:diagnostics:)	Interface.init(timestamp:tree:annotations:diagnostics:)	init(timestamp: Date, tree: [AccessibilityHierarchy], annotations: InterfaceAnnotations = .empty, diagnostics: InterfaceDiagnostics? = nil)
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A6TraitsV8TheScoreE05heistD0Say0E5Plans10HeistTraitOGvp	swift.property	public	heistTraits	AccessibilityTraits.heistTraits	var heistTraits: [HeistTrait] { get }
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A6TraitsV8TheScoreE15heistTraitNamesSaySSGvp	swift.property	public	heistTraitNames	AccessibilityTraits.heistTraitNames	var heistTraitNames: [String] { get }
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A6TraitsV8TheScoreE15knownTraitNamesShySSGvpZ	swift.type.property	public	knownTraitNames	AccessibilityTraits.knownTraitNames	static var knownTraitNames: Set<String> { get }
@@ -1173,6 +1204,10 @@ relationship	conformsTo	s:8TheScore20InterfaceAnnotationsV	s:SH	InterfaceAnnotat
 relationship	conformsTo	s:8TheScore20InterfaceAnnotationsV	s:SQ	InterfaceAnnotations	Swift.Equatable
 relationship	conformsTo	s:8TheScore20InterfaceAnnotationsV	s:Se	InterfaceAnnotations	Swift.Decodable
 relationship	conformsTo	s:8TheScore20InterfaceAnnotationsV	s:s8SendableP	InterfaceAnnotations	Swift.Sendable
+relationship	conformsTo	s:8TheScore20InterfaceDiagnosticsV	s:SE	InterfaceDiagnostics	Swift.Encodable
+relationship	conformsTo	s:8TheScore20InterfaceDiagnosticsV	s:SQ	InterfaceDiagnostics	Swift.Equatable
+relationship	conformsTo	s:8TheScore20InterfaceDiagnosticsV	s:Se	InterfaceDiagnostics	Swift.Decodable
+relationship	conformsTo	s:8TheScore20InterfaceDiagnosticsV	s:s8SendableP	InterfaceDiagnostics	Swift.Sendable
 relationship	conformsTo	s:8TheScore20SessionLockedPayloadV	s:SE	SessionLockedPayload	Swift.Encodable
 relationship	conformsTo	s:8TheScore20SessionLockedPayloadV	s:Se	SessionLockedPayload	Swift.Decodable
 relationship	conformsTo	s:8TheScore20SessionLockedPayloadV	s:s8SendableP	SessionLockedPayload	Swift.Sendable
@@ -1304,8 +1339,18 @@ relationship	conformsTo	s:8TheScore28InterfaceContainerAnnotationV	s:SH	Interfac
 relationship	conformsTo	s:8TheScore28InterfaceContainerAnnotationV	s:SQ	InterfaceContainerAnnotation	Swift.Equatable
 relationship	conformsTo	s:8TheScore28InterfaceContainerAnnotationV	s:Se	InterfaceContainerAnnotation	Swift.Decodable
 relationship	conformsTo	s:8TheScore28InterfaceContainerAnnotationV	s:s8SendableP	InterfaceContainerAnnotation	Swift.Sendable
+relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:SE	InterfaceDiscoveryDiagnostics	Swift.Encodable
+relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:SQ	InterfaceDiscoveryDiagnostics	Swift.Equatable
+relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:Se	InterfaceDiscoveryDiagnostics	Swift.Decodable
+relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:s8SendableP	InterfaceDiscoveryDiagnostics	Swift.Sendable
 relationship	conformsTo	s:8TheScore34HeistReceiptRecordingConfigurationV	s:SQ	HeistReceiptRecordingConfiguration	Swift.Equatable
 relationship	conformsTo	s:8TheScore34HeistReceiptRecordingConfigurationV	s:s8SendableP	HeistReceiptRecordingConfiguration	Swift.Sendable
+relationship	conformsTo	s:8TheScore34InterfaceDiscoveryOmittedContainerV	s:SE	InterfaceDiscoveryOmittedContainer	Swift.Encodable
+relationship	conformsTo	s:8TheScore34InterfaceDiscoveryOmittedContainerV	s:SH	InterfaceDiscoveryOmittedContainer	Swift.Hashable
+relationship	conformsTo	s:8TheScore34InterfaceDiscoveryOmittedContainerV	s:SL	InterfaceDiscoveryOmittedContainer	Swift.Comparable
+relationship	conformsTo	s:8TheScore34InterfaceDiscoveryOmittedContainerV	s:SQ	InterfaceDiscoveryOmittedContainer	Swift.Equatable
+relationship	conformsTo	s:8TheScore34InterfaceDiscoveryOmittedContainerV	s:Se	InterfaceDiscoveryOmittedContainer	Swift.Decodable
+relationship	conformsTo	s:8TheScore34InterfaceDiscoveryOmittedContainerV	s:s8SendableP	InterfaceDiscoveryOmittedContainer	Swift.Sendable
 relationship	conformsTo	s:8TheScore8TreePathV	s:SE	TreePath	Swift.Encodable
 relationship	conformsTo	s:8TheScore8TreePathV	s:SH	TreePath	Swift.Hashable
 relationship	conformsTo	s:8TheScore8TreePathV	s:SL	TreePath	Swift.Comparable

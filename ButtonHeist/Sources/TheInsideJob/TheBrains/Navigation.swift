@@ -195,21 +195,42 @@ final class Navigation {
         static let vertical   = ScrollAxis(rawValue: 1 << 1)
     }
 
+    enum ExplorationOmissionReason: String, Hashable {
+        case discoveryScrollLimit = "scroll-attempt-budget"
+        case containerScrollLimit = "container-scroll-budget"
+        case leadingEdgeResetLimit = "leading-edge-reset-budget"
+        case notExplored = "not-explored"
+    }
+
     /// Bookkeeping for a single exploration pass.
     ///
     /// Only fields that are actually consumed by explore-loop control flow live
     /// here. Anything that was "tracked for future use" was removed — add fields
     /// back when they have a real consumer.
     struct ScreenManifest {
-
         /// Containers that have been fully explored.
         var exploredContainers = Set<AccessibilityContainer>()
 
         /// Containers discovered but not yet explored.
         var pendingContainers = Set<AccessibilityContainer>()
 
-        /// Total scrollByPage calls during exploration.
+        /// Total scroll attempts during exploration, including edge resets.
         var scrollCount = 0
+
+        /// Per-container scroll attempts during exploration, including edge resets.
+        var scrollCountByContainer: [AccessibilityContainer: Int] = [:]
+
+        /// Containers that may have omitted content because exploration stopped early.
+        var omittedContainers: [AccessibilityContainer: Set<ExplorationOmissionReason>] = [:]
+
+        /// Whether the total discovery scroll-attempt cap stopped exploration.
+        var discoveryLimitHit = false
+
+        /// Whether a per-container scroll-attempt cap stopped exploration.
+        var containerLimitHit = false
+
+        /// Whether the swipeable leading-edge reset hard cap stopped exploration.
+        var leadingEdgeResetLimitHit = false
 
         /// Wall-clock time spent exploring, in seconds.
         var explorationTime: TimeInterval = 0
@@ -240,14 +261,150 @@ final class Navigation {
 
         // MARK: - Building
 
+        mutating func recordScrollAttempt(
+            in container: AccessibilityContainer
+        ) -> ExplorationOmissionReason? {
+            guard scrollCount < maxScrollsPerDiscovery else {
+                discoveryLimitHit = true
+                return .discoveryScrollLimit
+            }
+            let containerScrollCount = scrollCountByContainer[container, default: 0]
+            guard containerScrollCount < maxScrollsPerContainer else {
+                containerLimitHit = true
+                return .containerScrollLimit
+            }
+            scrollCountByContainer[container] = containerScrollCount + 1
+            scrollCount += 1
+            return nil
+        }
+
         mutating func markExplored(_ container: AccessibilityContainer) {
             exploredContainers.insert(container)
             pendingContainers.remove(container)
+            omittedContainers.removeValue(forKey: container)
         }
 
         mutating func addPendingContainers(_ containers: [AccessibilityContainer]) {
             pendingContainers.formUnion(containers.filter { !exploredContainers.contains($0) })
         }
+
+        mutating func markOmitted(
+            _ container: AccessibilityContainer,
+            reason: ExplorationOmissionReason
+        ) {
+            pendingContainers.insert(container)
+            omittedContainers[container, default: []].insert(reason)
+            switch reason {
+            case .discoveryScrollLimit:
+                discoveryLimitHit = true
+            case .containerScrollLimit:
+                containerLimitHit = true
+            case .leadingEdgeResetLimit:
+                leadingEdgeResetLimitHit = true
+            case .notExplored:
+                break
+            }
+        }
+
+        func interfaceDiagnostics(
+            for screen: Screen,
+            includedElementCount: Int
+        ) -> InterfaceDiagnostics {
+            let omittedContainerDetails = omittedContainerDiagnostics(in: screen)
+            let reasonCodes = discoveryReasonCodes(omittedContainerDetails)
+            let isLimited = !reasonCodes.isEmpty || !omittedContainerDetails.isEmpty
+            return InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
+                state: isLimited ? "limited" : "complete",
+                reasonCodes: reasonCodes,
+                includedElementCount: includedElementCount,
+                scrollAttempts: scrollCount,
+                maxScrollsPerDiscovery: maxScrollsPerDiscovery,
+                maxScrollsPerContainer: maxScrollsPerContainer,
+                exploredScrollableContainerCount: exploredContainers.count,
+                omittedScrollableContainerCount: omittedContainerDetails.count,
+                omittedContainers: omittedContainerDetails,
+                nextAction: isLimited ? nextAction(for: reasonCodes) : nil
+            ))
+        }
+
+        private func discoveryReasonCodes(
+            _ omittedContainerDetails: [InterfaceDiscoveryOmittedContainer]
+        ) -> [String] {
+            var reasons = Set(omittedContainerDetails.flatMap(\.reasonCodes))
+            if discoveryLimitHit { reasons.insert(ExplorationOmissionReason.discoveryScrollLimit.rawValue) }
+            if containerLimitHit { reasons.insert(ExplorationOmissionReason.containerScrollLimit.rawValue) }
+            if leadingEdgeResetLimitHit { reasons.insert(ExplorationOmissionReason.leadingEdgeResetLimit.rawValue) }
+            return reasons.sorted()
+        }
+
+        private func nextAction(for reasonCodes: [String]) -> String {
+            if reasonCodes.contains(ExplorationOmissionReason.discoveryScrollLimit.rawValue) {
+                return """
+                    Retry get_interface with a higher maxScrollsPerDiscovery or narrow the query to a smaller subtree.
+                    """
+            }
+            if reasonCodes.contains(ExplorationOmissionReason.containerScrollLimit.rawValue)
+                || reasonCodes.contains(ExplorationOmissionReason.leadingEdgeResetLimit.rawValue) {
+                return """
+                    Retry get_interface with a higher maxScrollsPerContainer or request a smaller scroll container subtree.
+                    """
+            }
+            return "Retry get_interface with a narrower subtree or after manually scrolling the omitted container."
+        }
+
+        private func omittedContainerDiagnostics(in screen: Screen) -> [InterfaceDiscoveryOmittedContainer] {
+            var containers = omittedContainers
+            let pendingReason: ExplorationOmissionReason = discoveryLimitHit ? .discoveryScrollLimit : .notExplored
+            for container in pendingContainers where !exploredContainers.contains(container) {
+                containers[container, default: []].insert(pendingReason)
+            }
+
+            let diagnostics: [InterfaceDiscoveryOmittedContainer] = containers.map { entry in
+                let (container, reasons) = entry
+                return omittedContainerDiagnostic(container, reasons: reasons, screen: screen)
+            }
+
+            return diagnostics.sorted()
+        }
+
+        private func omittedContainerDiagnostic(
+            _ container: AccessibilityContainer,
+            reasons: Set<ExplorationOmissionReason>,
+            screen: Screen
+        ) -> InterfaceDiscoveryOmittedContainer {
+            let frame = container.frame
+            let reasonCodes = reasons.map(\.rawValue).sorted()
+            let containerName = screen.liveCapture.containerNames[container]
+                ?? screen.orderedContainers.first { $0.container == container }?.containerName
+
+            guard case .scrollable(let contentSize) = container.type else {
+                return InterfaceDiscoveryOmittedContainer(
+                    containerName: containerName,
+                    type: container.typeName.rawValue,
+                    reasonCodes: reasonCodes,
+                    viewportWidth: Double(frame.size.width),
+                    viewportHeight: Double(frame.size.height)
+                )
+            }
+
+            let scrollAxis = ScrollContainerMetrics.axis(
+                contentWidth: Double(contentSize.width),
+                contentHeight: Double(contentSize.height),
+                viewportWidth: Double(frame.size.width),
+                viewportHeight: Double(frame.size.height)
+            )
+            return InterfaceDiscoveryOmittedContainer(
+                containerName: containerName,
+                type: container.typeName.rawValue,
+                reasonCodes: reasonCodes,
+                scrollAxis: scrollAxis,
+                viewportWidth: Double(frame.size.width),
+                viewportHeight: Double(frame.size.height),
+                contentWidth: Double(contentSize.width),
+                contentHeight: Double(contentSize.height)
+            )
+        }
+
     }
 
     // MARK: - Clear

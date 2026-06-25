@@ -248,34 +248,6 @@ struct Screen: Equatable {
         )
     }
 
-    /// Apply a fresh visible parse. If it refreshes known visible state, keep
-    /// previously explored offscreen memory and replace only the visible live
-    /// view.
-    /// Elements that were visible in the prior parse and disappear in the fresh
-    /// parse are dropped; scroll position alone is not semantic retention.
-    func refreshingVisibleState(with visibleRefresh: Screen) -> Screen {
-        guard !visibleRefresh.visibleIds.isEmpty else {
-            return visibleRefresh
-        }
-        let previousVisibleIds = visibleIds
-        let knownOnlyIds = knownIds.subtracting(previousVisibleIds)
-        let refreshesKnownViewport = !previousVisibleIds.isDisjoint(with: visibleRefresh.visibleIds)
-            || (!knownOnlyIds.isEmpty && previousVisibleIds.isEmpty)
-        guard refreshesKnownViewport else { return visibleRefresh }
-        let disappearedVisibleIds = previousVisibleIds.subtracting(visibleRefresh.visibleIds)
-        guard !disappearedVisibleIds.isEmpty else {
-            return merging(visibleRefresh)
-        }
-        let refreshed = merging(visibleRefresh)
-        return Screen(
-            semantic: SemanticScreen(
-                elements: refreshed.semantic.elements.filter { !disappearedVisibleIds.contains($0.key) },
-                containers: refreshed.semantic.containers
-            ),
-            liveCapture: refreshed.liveCapture
-        )
-    }
-
     private static func semanticContainers(from liveCapture: LiveCapture) -> [TreePath: SemanticScreen.Container] {
         Dictionary(
             uniqueKeysWithValues: liveCapture.hierarchy.containerPaths.map { item in

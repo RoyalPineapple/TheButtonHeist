@@ -175,19 +175,6 @@ jobs:
           echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
           echo "Built: $APP_PATH (${APP_SIZE_KB}KB)"
 
-      - name: Collect TheInsideJob frameworks
-        run: |
-          PRODUCTS_DIR=$(dirname "$APP_PATH")
-          mkdir -p dist/ButtonHeistFrameworks
-          FRAMEWORKS=(
-            TheInsideJob TheScore
-            AccessibilitySnapshotParser AccessibilitySnapshotParser_ObjC
-          )
-          for fw in "${FRAMEWORKS[@]}"; do
-            cp -R "${PRODUCTS_DIR}/${fw}.framework" dist/ButtonHeistFrameworks/
-          done
-          echo "Collected $(ls dist/ButtonHeistFrameworks | wc -l | tr -d ' ') frameworks"
-
       - name: Package binaries and scripts
         run: |
           source scripts/release-contract.sh
@@ -197,7 +184,7 @@ jobs:
           DEMO_ARCHIVE=$(buttonheist_demo_archive_name "$VERSION")
           mkdir -p dist
 
-          # CLI + frameworks
+          # CLI + compiler artifacts
           cp ButtonHeistCLI/.build/buttonheist dist/
           cp ButtonHeist/.build/arm64-apple-macosx/release/heist-plan dist/
           mkdir -p dist/ThePlans/arm64-apple-macosx/release/Modules
@@ -210,7 +197,7 @@ jobs:
             dist/ThePlans/arm64-apple-macosx/release/Modules/
           cp ButtonHeist/.build/arm64-apple-macosx/release/description.json \
             dist/ThePlans/arm64-apple-macosx/release/
-          tar -czf "dist/${CLI_ARCHIVE}" -C dist buttonheist heist-plan ButtonHeistFrameworks ThePlans
+          tar -czf "dist/${CLI_ARCHIVE}" -C dist buttonheist heist-plan ThePlans
           rm dist/buttonheist
           rm dist/heist-plan
           rm -rf dist/ThePlans

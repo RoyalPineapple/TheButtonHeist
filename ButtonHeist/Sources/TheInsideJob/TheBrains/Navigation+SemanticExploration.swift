@@ -20,6 +20,12 @@ extension Navigation {
         var originByElement: [AccessibilityElement: CGPoint?]
     }
 
+    enum ContainerScanResult: Equatable {
+        case foundTarget
+        case completed
+        case omitted(ExplorationOmissionReason)
+    }
+
     struct ContainerExploration {
         let container: AccessibilityContainer
         let scrollTarget: ScrollableTarget
