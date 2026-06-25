@@ -233,7 +233,7 @@ extension TheBurglar {
         node: AccessibilityHierarchy,
         path: TreePath
     ) -> ContainerName {
-        "\(readableName)-\(containerHash(node: node, path: path))"
+        ContainerName(rawValue: "\(readableName.rawValue)-\(containerHash(node: node, path: path))")
     }
 
     private static func containerHash(node: AccessibilityHierarchy, path: TreePath) -> String {

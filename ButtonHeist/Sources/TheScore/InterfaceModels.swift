@@ -246,8 +246,8 @@ extension InterfaceDiscoveryOmittedContainer: Comparable {
         left: InterfaceDiscoveryOmittedContainer,
         right: InterfaceDiscoveryOmittedContainer
     ) -> Bool {
-        let leftName = left.containerName ?? ""
-        let rightName = right.containerName ?? ""
+        let leftName = left.containerName?.rawValue ?? ""
+        let rightName = right.containerName?.rawValue ?? ""
         if leftName != rightName { return leftName < rightName }
         if left.type != right.type { return left.type < right.type }
 

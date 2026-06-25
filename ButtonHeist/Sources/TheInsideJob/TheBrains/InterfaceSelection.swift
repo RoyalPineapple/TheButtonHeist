@@ -205,7 +205,7 @@ private extension AccessibilityContainer {
         [
             "container",
             subtreeSummaryRequiredField("type", typeName.rawValue),
-            subtreeSummaryField("containerName", annotation?.containerName),
+            subtreeSummaryField("containerName", annotation?.containerName?.rawValue),
             subtreeSummaryField("identifier", containerIdentifier),
             subtreeSummaryField("label", containerLabel),
             subtreeSummaryField("value", containerValue),

@@ -18,7 +18,7 @@ public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertib
             return target.description
         case .container(let containerName):
             return ScoreDescription.call("container", [
-                "containerName=\(ScoreDescription.quoted(containerName))",
+                "containerName=\(ScoreDescription.quoted(containerName.rawValue))",
             ])
         }
     }
@@ -93,13 +93,6 @@ extension ScrollTarget: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        if let containerName, containerName.isEmpty {
-            throw DecodingError.dataCorruptedError(
-                forKey: .container,
-                in: container,
-                debugDescription: "container name must be non-empty"
-            )
-        }
         if containerName != nil, elementTarget != nil {
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
@@ -237,13 +230,6 @@ extension ScrollToEdgeTarget: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let containerName = try container.decodeIfPresent(ContainerName.self, forKey: .container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        if let containerName, containerName.isEmpty {
-            throw DecodingError.dataCorruptedError(
-                forKey: .container,
-                in: container,
-                debugDescription: "container name must be non-empty"
-            )
-        }
         if containerName != nil, elementTarget != nil {
             throw DecodingError.dataCorruptedError(
                 forKey: .container,

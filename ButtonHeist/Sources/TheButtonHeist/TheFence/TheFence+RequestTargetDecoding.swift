@@ -31,7 +31,7 @@ extension TheFence.CommandArgumentEnvelope {
 
     @ButtonHeistActor
     func scrollContainerSelection() throws -> ScrollContainerSelection {
-        if let containerName = try optionalNonEmptyString("container") {
+        if let containerName = try optionalContainerName("container") {
             if try decodedElementTarget() != nil {
                 throw SchemaValidationError(
                     field: field("container"),
@@ -45,6 +45,18 @@ extension TheFence.CommandArgumentEnvelope {
             return .element(elementTarget)
         }
         return .visibleContainer
+    }
+
+    func optionalContainerName(_ key: String) throws -> ContainerName? {
+        guard let value = try schemaString(key) else { return nil }
+        guard let containerName = ContainerName(parsing: value) else {
+            throw SchemaValidationError(
+                field: field(key),
+                observed: value.isEmpty ? "string \"\"" : "blank string",
+                expected: "non-empty container name"
+            )
+        }
+        return containerName
     }
 
     func nonEmptyString(_ key: String) throws -> String {

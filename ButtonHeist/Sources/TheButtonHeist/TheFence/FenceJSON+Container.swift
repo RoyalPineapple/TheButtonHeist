@@ -52,7 +52,7 @@ struct PublicContainer: Encodable {
         self.observedElementCount = fields.observedElementCount
         self.truncation = truncation
         self.isModalBoundary = container.isModalBoundary ? true : nil
-        self.containerName = annotation?.containerName
+        self.containerName = annotation?.containerName?.rawValue
         self.children = children
         guard detail == .full else {
             self.frameX = nil

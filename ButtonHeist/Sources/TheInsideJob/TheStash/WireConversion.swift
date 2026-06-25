@@ -287,7 +287,7 @@ private struct DiscoveryChildren {
                 sortKey: SortKey(
                     y: location.origin.y,
                     x: location.origin.x,
-                    stableName: containerName
+                    stableName: containerName.rawValue
                 ),
                 kind: .container(entry)
             ))
