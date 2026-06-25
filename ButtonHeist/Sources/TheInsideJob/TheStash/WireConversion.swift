@@ -273,7 +273,7 @@ private struct DiscoveryChildren {
                 sortKey: SortKey(
                     y: location.origin.y,
                     x: location.origin.x,
-                    stableName: entry.heistId
+                    stableName: entry.heistId.rawValue
                 ),
                 kind: .element(entry)
             ))

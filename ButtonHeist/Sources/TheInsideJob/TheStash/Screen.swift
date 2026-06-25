@@ -214,7 +214,7 @@ struct Screen: Equatable {
     /// Elements in deterministic matcher/diagnostic order: live hierarchy
     /// order first, followed by known-only entries sorted by heistId.
     var orderedElements: [ScreenElement] {
-        var seen = Set<String>()
+        var seen = Set<HeistId>()
         var ordered: [ScreenElement] = []
         ordered.reserveCapacity(semantic.elements.count)
         for (element, _) in liveCapture.hierarchy.elements {

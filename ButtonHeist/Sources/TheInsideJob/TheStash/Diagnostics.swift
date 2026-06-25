@@ -19,7 +19,7 @@ import AccessibilitySnapshotParser
 private struct Relaxation {
     let field: String
     let relaxed: ElementPredicate
-    let actual: (AccessibilityElement) -> HeistId
+    let actual: (AccessibilityElement) -> String
 }
 
 extension TheStash {
