@@ -232,9 +232,6 @@ stage_release_archives() {
     cp "$cli_unpack/heist-plan" "$PREFIX/bin/"
     cp "$mcp_unpack/buttonheist-mcp" "$PREFIX/bin/"
     chmod +x "$PREFIX/bin/buttonheist" "$PREFIX/bin/heist-plan" "$PREFIX/bin/buttonheist-mcp"
-    if [[ -e "$cli_unpack/ButtonHeistFrameworks" ]]; then
-        cp -R "$cli_unpack/ButtonHeistFrameworks" "$PREFIX/bin/"
-    fi
     cp -R "$cli_unpack/ThePlans" "$PREFIX/lib/"
 }
 

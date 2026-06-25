@@ -25,4 +25,20 @@ final class ConstantsTests: XCTestCase {
             "Server-to-client buffering intentionally preserves the larger legacy client cap."
         )
     }
+
+    func testEnvironmentKeyRawValues() {
+        XCTAssertEqual(EnvironmentKey.buttonheistDevice.rawValue, "BUTTONHEIST_DEVICE")
+        XCTAssertEqual(EnvironmentKey.buttonheistToken.rawValue, "BUTTONHEIST_TOKEN")
+        XCTAssertEqual(EnvironmentKey.buttonheistDriverId.rawValue, "BUTTONHEIST_DRIVER_ID")
+        XCTAssertEqual(EnvironmentKey.buttonheistReceiptsDir.rawValue, "BUTTONHEIST_RECEIPTS_DIR")
+        XCTAssertEqual(EnvironmentKey.buttonheistReceiptsMode.rawValue, "BUTTONHEIST_RECEIPTS_MODE")
+        XCTAssertEqual(EnvironmentKey.buttonheistSessionTimeout.rawValue, "BUTTONHEIST_SESSION_TIMEOUT")
+        XCTAssertEqual(EnvironmentKey.buttonheistConnectionTimeout.rawValue, "BUTTONHEIST_CONNECTION_TIMEOUT")
+        XCTAssertEqual(EnvironmentKey.insideJobToken.rawValue, "INSIDEJOB_TOKEN")
+        XCTAssertEqual(EnvironmentKey.insideJobPort.rawValue, "INSIDEJOB_PORT")
+        XCTAssertEqual(EnvironmentKey.insideJobDisable.rawValue, "INSIDEJOB_DISABLE")
+        XCTAssertEqual(EnvironmentKey.insideJobId.rawValue, "INSIDEJOB_ID")
+        XCTAssertEqual(EnvironmentKey.insideJobScope.rawValue, "INSIDEJOB_SCOPE")
+        XCTAssertEqual(EnvironmentKey.insideJobSessionTimeout.rawValue, "INSIDEJOB_SESSION_TIMEOUT")
+    }
 }
