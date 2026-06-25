@@ -439,11 +439,30 @@ struct PublicHeistCaseSelectionEvidence: Encodable {
 
     init(evidence: HeistCaseSelectionEvidence) {
         let selection = evidence.selection
-        self.selectedCaseIndex = selection.selectedCaseIndex
+        switch selection.outcome {
+        case .matchedCase(let index):
+            self.selectedCaseIndex = index
+            self.timedOut = false
+            self.elseRan = false
+        case .elseBranch(reason: .timedOut):
+            self.selectedCaseIndex = nil
+            self.timedOut = true
+            self.elseRan = true
+        case .elseBranch(reason: .noMatch):
+            self.selectedCaseIndex = nil
+            self.timedOut = false
+            self.elseRan = true
+        case .timedOut:
+            self.selectedCaseIndex = nil
+            self.timedOut = true
+            self.elseRan = false
+        case .noMatch:
+            self.selectedCaseIndex = nil
+            self.timedOut = false
+            self.elseRan = false
+        }
         self.elapsedMs = selection.elapsedMs
         self.timeout = selection.timeout
-        self.timedOut = selection.timedOut
-        self.elseRan = selection.elseRan
         self.lastObservedSummary = selection.lastObservedSummary
         self.caseCount = selection.cases.count
         let visibleCases = Array(selection.cases.prefix(PublicHeistProjectionLimits.caseResults))

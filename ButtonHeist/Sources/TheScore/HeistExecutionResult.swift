@@ -267,14 +267,102 @@ public enum HeistFailureCategory: String, Codable, Sendable, Equatable {
     case explicitFailure
 }
 
+public enum HeistCaseSelectionMissReason: String, Codable, Sendable, Equatable {
+    case noMatch = "no_match"
+    case timedOut = "timed_out"
+}
+
+public enum HeistCaseSelectionOutcome: Codable, Sendable, Equatable {
+    case matchedCase(index: Int)
+    case elseBranch(reason: HeistCaseSelectionMissReason)
+    case timedOut
+    case noMatch
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case index
+        case reason
+    }
+
+    private enum Kind: String, Codable {
+        case matchedCase = "matched_case"
+        case elseBranch = "else_branch"
+        case timedOut = "timed_out"
+        case noMatch = "no_match"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .matchedCase:
+            self = .matchedCase(index: try container.decode(Int.self, forKey: .index))
+        case .elseBranch:
+            self = .elseBranch(
+                reason: try container.decodeIfPresent(HeistCaseSelectionMissReason.self, forKey: .reason) ?? .noMatch
+            )
+        case .timedOut:
+            self = .timedOut
+        case .noMatch:
+            self = .noMatch
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .matchedCase(let index):
+            try container.encode(Kind.matchedCase, forKey: .kind)
+            try container.encode(index, forKey: .index)
+        case .elseBranch(let reason):
+            try container.encode(Kind.elseBranch, forKey: .kind)
+            try container.encode(reason, forKey: .reason)
+        case .timedOut:
+            try container.encode(Kind.timedOut, forKey: .kind)
+        case .noMatch:
+            try container.encode(Kind.noMatch, forKey: .kind)
+        }
+    }
+}
+
 public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
     public let cases: [HeistCaseMatchResult]
-    public let selectedCaseIndex: Int?
+    public let outcome: HeistCaseSelectionOutcome
     public let elapsedMs: Int
     public let timeout: Double?
-    public let timedOut: Bool
-    public let elseRan: Bool
     public let lastObservedSummary: String?
+
+    public var selectedCaseIndex: Int? {
+        guard case .matchedCase(let index) = outcome else { return nil }
+        return index
+    }
+
+    public var timedOut: Bool {
+        switch outcome {
+        case .timedOut, .elseBranch(reason: .timedOut):
+            return true
+        case .matchedCase, .elseBranch(reason: .noMatch), .noMatch:
+            return false
+        }
+    }
+
+    public var elseRan: Bool {
+        guard case .elseBranch = outcome else { return false }
+        return true
+    }
+
+    public init(
+        cases: [HeistCaseMatchResult],
+        outcome: HeistCaseSelectionOutcome,
+        elapsedMs: Int,
+        timeout: Double? = nil,
+        lastObservedSummary: String? = nil
+    ) {
+        self.cases = cases
+        self.outcome = Self.normalized(outcome: outcome, cases: cases)
+        self.elapsedMs = elapsedMs
+        self.timeout = timeout
+        self.lastObservedSummary = lastObservedSummary
+    }
 
     public init(
         cases: [HeistCaseMatchResult],
@@ -285,13 +373,84 @@ public struct HeistCaseSelectionResult: Codable, Sendable, Equatable {
         elseRan: Bool = false,
         lastObservedSummary: String? = nil
     ) {
-        self.cases = cases
-        self.selectedCaseIndex = selectedCaseIndex
-        self.elapsedMs = elapsedMs
-        self.timeout = timeout
-        self.timedOut = timedOut
-        self.elseRan = elseRan
-        self.lastObservedSummary = lastObservedSummary
+        self.init(
+            cases: cases,
+            outcome: Self.legacyOutcome(
+                selectedCaseIndex: selectedCaseIndex,
+                timedOut: timedOut,
+                elseRan: elseRan
+            ),
+            elapsedMs: elapsedMs,
+            timeout: timeout,
+            lastObservedSummary: lastObservedSummary
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case cases
+        case outcome
+        case selectedCaseIndex
+        case elapsedMs
+        case timeout
+        case timedOut
+        case elseRan
+        case lastObservedSummary
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let cases = try container.decode([HeistCaseMatchResult].self, forKey: .cases)
+        let decodedOutcome = try container.decodeIfPresent(HeistCaseSelectionOutcome.self, forKey: .outcome)
+        let legacyOutcome = try Self.legacyOutcome(
+            selectedCaseIndex: container.decodeIfPresent(Int.self, forKey: .selectedCaseIndex),
+            timedOut: container.decodeIfPresent(Bool.self, forKey: .timedOut) ?? false,
+            elseRan: container.decodeIfPresent(Bool.self, forKey: .elseRan) ?? false
+        )
+
+        self.init(
+            cases: cases,
+            outcome: decodedOutcome ?? legacyOutcome,
+            elapsedMs: try container.decode(Int.self, forKey: .elapsedMs),
+            timeout: try container.decodeIfPresent(Double.self, forKey: .timeout),
+            lastObservedSummary: try container.decodeIfPresent(String.self, forKey: .lastObservedSummary)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(cases, forKey: .cases)
+        try container.encodeIfPresent(selectedCaseIndex, forKey: .selectedCaseIndex)
+        try container.encode(elapsedMs, forKey: .elapsedMs)
+        try container.encodeIfPresent(timeout, forKey: .timeout)
+        try container.encode(timedOut, forKey: .timedOut)
+        try container.encode(elseRan, forKey: .elseRan)
+        try container.encodeIfPresent(lastObservedSummary, forKey: .lastObservedSummary)
+    }
+
+    private static func legacyOutcome(
+        selectedCaseIndex: Int?,
+        timedOut: Bool,
+        elseRan: Bool
+    ) -> HeistCaseSelectionOutcome {
+        if let selectedCaseIndex {
+            return .matchedCase(index: selectedCaseIndex)
+        }
+        if elseRan {
+            return .elseBranch(reason: timedOut ? .timedOut : .noMatch)
+        }
+        return timedOut ? .timedOut : .noMatch
+    }
+
+    private static func normalized(
+        outcome: HeistCaseSelectionOutcome,
+        cases: [HeistCaseMatchResult]
+    ) -> HeistCaseSelectionOutcome {
+        switch outcome {
+        case .matchedCase(let index):
+            return cases.indices.contains(index) ? .matchedCase(index: index) : .noMatch
+        case .elseBranch, .timedOut, .noMatch:
+            return outcome
+        }
     }
 }
 

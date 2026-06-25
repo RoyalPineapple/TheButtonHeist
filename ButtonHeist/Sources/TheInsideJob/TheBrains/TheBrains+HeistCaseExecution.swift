@@ -48,7 +48,8 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        if let selectedCaseIndex = dispatch.selection.selectedCaseIndex {
+        switch dispatch.selection.outcome {
+        case .matchedCase(let selectedCaseIndex):
             let children = await executeHeistSteps(
                 dispatch.cases[selectedCaseIndex].body,
                 runtime: runtime,
@@ -57,10 +58,21 @@ extension TheBrains {
                 path: "\(dispatch.path).\(dispatch.pathSegment).cases[\(selectedCaseIndex)].body"
             )
             return caseNode(dispatch, selection: dispatch.selection, children: children)
-        }
 
-        if let elseBody = dispatch.elseBody {
-            let selection = dispatch.selection.markingElseRan()
+        case .elseBranch, .timedOut, .noMatch:
+            guard let elseBody = dispatch.elseBody else {
+                return HeistExecutionStepResult(
+                    path: dispatch.path,
+                    kind: dispatch.kind,
+                    status: .passed,
+                    durationMs: elapsedMilliseconds(since: dispatch.start),
+                    intent: dispatch.intent,
+                    evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
+                    failure: nil
+                )
+            }
+
+            let selection = dispatch.selection.selectingElseBranch()
             let children = await executeHeistSteps(
                 elseBody,
                 runtime: runtime,
@@ -70,16 +82,6 @@ extension TheBrains {
             )
             return caseNode(dispatch, selection: selection, children: children)
         }
-
-        return HeistExecutionStepResult(
-            path: dispatch.path,
-            kind: dispatch.kind,
-            status: .passed,
-            durationMs: elapsedMilliseconds(since: dispatch.start),
-            intent: dispatch.intent,
-            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: dispatch.selection)),
-            failure: nil
-        )
     }
 
     private func caseNode(
@@ -144,16 +146,23 @@ private struct PredicateCaseDispatch {
 }
 
 private extension HeistCaseSelectionResult {
-    func markingElseRan() -> HeistCaseSelectionResult {
+    func selectingElseBranch() -> HeistCaseSelectionResult {
         HeistCaseSelectionResult(
             cases: cases,
-            selectedCaseIndex: selectedCaseIndex,
+            outcome: .elseBranch(reason: elseBranchReason),
             elapsedMs: elapsedMs,
             timeout: timeout,
-            timedOut: timedOut,
-            elseRan: true,
             lastObservedSummary: lastObservedSummary
         )
+    }
+
+    var elseBranchReason: HeistCaseSelectionMissReason {
+        switch outcome {
+        case .timedOut, .elseBranch(reason: .timedOut):
+            return .timedOut
+        case .matchedCase, .elseBranch(reason: .noMatch), .noMatch:
+            return .noMatch
+        }
     }
 }
 

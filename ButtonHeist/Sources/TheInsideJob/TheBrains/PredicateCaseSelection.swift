@@ -74,7 +74,7 @@ struct PredicateCaseSelection {
         if let selectedCaseIndex = lastSelection.selectedCaseIndex {
             return HeistCaseSelectionResult(
                 cases: lastSelection.cases,
-                selectedCaseIndex: selectedCaseIndex,
+                outcome: .matchedCase(index: selectedCaseIndex),
                 elapsedMs: pollResult.elapsedMs,
                 timeout: rawTimeout,
                 lastObservedSummary: pollResult.lastObservation?.summary
@@ -83,10 +83,9 @@ struct PredicateCaseSelection {
 
         return HeistCaseSelectionResult(
             cases: lastSelection.cases,
-            selectedCaseIndex: nil,
+            outcome: PredicateWait.clampedWaitTimeout(rawTimeout) > 0 ? .timedOut : .noMatch,
             elapsedMs: pollResult.elapsedMs,
             timeout: rawTimeout,
-            timedOut: true,
             lastObservedSummary: pollResult.lastObservation?.summary
         )
     }

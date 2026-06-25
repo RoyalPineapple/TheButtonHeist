@@ -121,16 +121,18 @@ public extension HeistExecutionStepResult {
             return warning.message
         }
         if let caseSelection = caseSelectionEvidence?.selection {
-            if let selected = caseSelection.selectedCaseIndex {
+            switch caseSelection.outcome {
+            case .matchedCase(let selected):
                 return "matched case \(selected)"
-            }
-            if caseSelection.elseRan {
-                return caseSelection.timedOut ? "timed out; else ran" : "no case matched; else ran"
-            }
-            if caseSelection.timedOut {
+            case .elseBranch(reason: .timedOut):
+                return "timed out; else ran"
+            case .elseBranch(reason: .noMatch):
+                return "no case matched; else ran"
+            case .timedOut:
                 return "timed out"
+            case .noMatch:
+                return "no case matched"
             }
-            return "no case matched"
         }
         if let forEach = forEachStringEvidence {
             if let failureReason = forEach.failureReason {
