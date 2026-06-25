@@ -877,7 +877,11 @@ final class TheStashResolutionTests: XCTestCase {
 
         XCTAssertEqual(
             bagman.minimumUniqueTarget(for: screenElement),
-            .predicate(ElementPredicate(label: "Mode", value: "A", traits: [.button]))
+            .predicate(ElementPredicate([
+                .label("Mode"),
+                .traits([.button]),
+                .value("A"),
+            ]))
         )
     }
 
