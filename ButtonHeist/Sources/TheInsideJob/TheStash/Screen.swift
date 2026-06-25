@@ -113,6 +113,16 @@ struct Screen: Equatable {
         self.liveCapture = liveCapture
     }
 
+    init(
+        semantic: SemanticScreen,
+        captureSnapshot: LiveCapture.Snapshot
+    ) {
+        self.init(
+            semantic: semantic,
+            liveCapture: LiveCapture(snapshot: captureSnapshot)
+        )
+    }
+
     // MARK: - Derived Properties
 
     var knownInterface: KnownInterface {

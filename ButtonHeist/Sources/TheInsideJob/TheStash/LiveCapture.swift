@@ -19,18 +19,53 @@ import AccessibilitySnapshotParser
 /// **never** unioned across exploration pages and must never be treated as
 /// stable identity. See `docs/DATA-OWNERSHIP.md`.
 struct LiveCapture: Equatable {
-    let hierarchy: [AccessibilityHierarchy]
-    let containerNames: [AccessibilityContainer: ContainerName]
-    let containerNamesByPath: [TreePath: ContainerName]
-    let heistIdByElement: [AccessibilityElement: HeistId]
-    let elementRefs: [HeistId: ElementRef]
-    let containerRefsByPath: [TreePath: ContainerRef]
-    let containerContentFramesByPath: [TreePath: CGRect]
-    let containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation]
-    let firstResponderHeistId: HeistId?
-    let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
-    let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
+    let snapshot: Snapshot
+    let dispatchReferences: DispatchReferences
     private let scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]
+
+    var hierarchy: [AccessibilityHierarchy] {
+        snapshot.hierarchy
+    }
+
+    var containerNames: [AccessibilityContainer: ContainerName] {
+        snapshot.containerNames
+    }
+
+    var containerNamesByPath: [TreePath: ContainerName] {
+        snapshot.containerNamesByPath
+    }
+
+    var heistIdByElement: [AccessibilityElement: HeistId] {
+        snapshot.heistIdByElement
+    }
+
+    var elementRefs: [HeistId: ElementRef] {
+        dispatchReferences.elementRefs
+    }
+
+    var containerRefsByPath: [TreePath: ContainerRef] {
+        dispatchReferences.containerRefsByPath
+    }
+
+    var containerContentFramesByPath: [TreePath: CGRect] {
+        snapshot.containerContentFramesByPath
+    }
+
+    var containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] {
+        snapshot.containerScrollContentLocationsByPath
+    }
+
+    var firstResponderHeistId: HeistId? {
+        dispatchReferences.firstResponderHeistId
+    }
+
+    var scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef] {
+        dispatchReferences.scrollableContainerViews
+    }
+
+    var scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] {
+        dispatchReferences.scrollableContainerViewsByPath
+    }
 
     init(
         hierarchy: [AccessibilityHierarchy],
@@ -46,53 +81,57 @@ struct LiveCapture: Equatable {
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:],
         scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]? = nil
     ) {
-        self.hierarchy = hierarchy
-        self.containerNames = containerNames
-        self.containerNamesByPath = containerNamesByPath
-        self.heistIdByElement = heistIdByElement
-        self.elementRefs = elementRefs
-        self.containerRefsByPath = containerRefsByPath
-        self.containerContentFramesByPath = containerContentFramesByPath
-        self.containerScrollContentLocationsByPath = containerScrollContentLocationsByPath
-        self.firstResponderHeistId = firstResponderHeistId
-        self.scrollableContainerViews = scrollableContainerViews
-        self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
-        self.scrollableViewsByContainerName = scrollableViewsByContainerName ?? Self.scrollableViewsByContainerName(
+        let snapshot = Snapshot(
             hierarchy: hierarchy,
             containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
+            heistIdByElement: heistIdByElement,
+            containerContentFramesByPath: containerContentFramesByPath,
+            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath
+        )
+        let dispatchReferences = DispatchReferences(
+            elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
+            firstResponderHeistId: firstResponderHeistId,
             scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
+        self.init(
+            snapshot: snapshot,
+            dispatchReferences: dispatchReferences,
+            scrollableViewsByContainerName: scrollableViewsByContainerName
+        )
     }
 
-    static let empty = LiveCapture(
-        hierarchy: [],
-        containerNames: [:],
-        heistIdByElement: [:],
-        elementRefs: [:],
-        containerRefsByPath: [:],
-        containerContentFramesByPath: [:],
-        containerScrollContentLocationsByPath: [:],
-        firstResponderHeistId: nil,
-        scrollableContainerViews: [:]
-    )
+    init(
+        snapshot: Snapshot,
+        dispatchReferences: DispatchReferences = .empty,
+        scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]? = nil
+    ) {
+        self.snapshot = snapshot
+        self.dispatchReferences = dispatchReferences
+        self.scrollableViewsByContainerName = scrollableViewsByContainerName ?? Self.scrollableViewsByContainerName(
+            snapshot: snapshot,
+            dispatchReferences: dispatchReferences
+        )
+    }
+
+    static let empty = LiveCapture(snapshot: .empty)
 
     var heistIds: Set<HeistId> {
-        Set(heistIdByElement.values)
+        snapshot.heistIds
     }
 
     func contains(heistId: HeistId) -> Bool {
-        heistIds.contains(heistId)
+        snapshot.contains(heistId: heistId)
     }
 
     func heistId(for element: AccessibilityElement) -> HeistId? {
-        heistIdByElement[element]
+        snapshot.heistId(for: element)
     }
 
     func element(for heistId: HeistId) -> AccessibilityElement? {
-        heistIdByElement.first { $0.value == heistId }?.key
+        snapshot.element(for: heistId)
     }
 
     func object(for heistId: HeistId) -> NSObject? {
@@ -121,11 +160,11 @@ struct LiveCapture: Equatable {
     }
 
     func containerContentFrame(forPath path: TreePath) -> CGRect? {
-        containerContentFramesByPath[path]
+        snapshot.containerContentFrame(forPath: path)
     }
 
     func containerScrollContentLocation(forPath path: TreePath) -> SemanticScreen.ScrollContentLocation? {
-        containerScrollContentLocationsByPath[path]
+        snapshot.containerScrollContentLocation(forPath: path)
     }
 
     func scrollView(for element: SemanticScreen.Element) -> UIScrollView? {
@@ -137,31 +176,100 @@ struct LiveCapture: Equatable {
             ?? namedScrollView
     }
 
-    /// Value-only copy for settled semantic projection. It preserves the parsed
-    /// hierarchy and id maps but drops UIKit refs and dispatch views.
-    func strippingDispatchReferences() -> LiveCapture {
-        LiveCapture(
-            hierarchy: hierarchy,
-            containerNames: containerNames,
-            containerNamesByPath: containerNamesByPath,
-            heistIdByElement: heistIdByElement,
-            elementRefs: [:],
-            containerRefsByPath: [:],
-            containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:],
-            scrollableContainerViewsByPath: [:],
-            scrollableViewsByContainerName: [:]
+    // MARK: - Snapshot
+
+    /// Value-only capture metadata retained by settled semantic storage.
+    ///
+    /// This preserves parser hierarchy, ids, container names, and
+    /// content-space evidence without carrying weak UIKit refs or live dispatch
+    /// lookup tables.
+    struct Snapshot: Equatable {
+        let hierarchy: [AccessibilityHierarchy]
+        let containerNames: [AccessibilityContainer: ContainerName]
+        let containerNamesByPath: [TreePath: ContainerName]
+        let heistIdByElement: [AccessibilityElement: HeistId]
+        let containerContentFramesByPath: [TreePath: CGRect]
+        let containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation]
+
+        init(
+            hierarchy: [AccessibilityHierarchy],
+            containerNames: [AccessibilityContainer: ContainerName],
+            containerNamesByPath: [TreePath: ContainerName] = [:],
+            heistIdByElement: [AccessibilityElement: HeistId],
+            containerContentFramesByPath: [TreePath: CGRect] = [:],
+            containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] = [:]
+        ) {
+            self.hierarchy = hierarchy
+            self.containerNames = containerNames
+            self.containerNamesByPath = containerNamesByPath
+            self.heistIdByElement = heistIdByElement
+            self.containerContentFramesByPath = containerContentFramesByPath
+            self.containerScrollContentLocationsByPath = containerScrollContentLocationsByPath
+        }
+
+        static let empty = Snapshot(
+            hierarchy: [],
+            containerNames: [:],
+            heistIdByElement: [:]
         )
+
+        var heistIds: Set<HeistId> {
+            Set(heistIdByElement.values)
+        }
+
+        func contains(heistId: HeistId) -> Bool {
+            heistIds.contains(heistId)
+        }
+
+        func heistId(for element: AccessibilityElement) -> HeistId? {
+            heistIdByElement[element]
+        }
+
+        func element(for heistId: HeistId) -> AccessibilityElement? {
+            heistIdByElement.first { $0.value == heistId }?.key
+        }
+
+        func containerContentFrame(forPath path: TreePath) -> CGRect? {
+            containerContentFramesByPath[path]
+        }
+
+        func containerScrollContentLocation(forPath path: TreePath) -> SemanticScreen.ScrollContentLocation? {
+            containerScrollContentLocationsByPath[path]
+        }
     }
 
-    // MARK: - Refs
+    // MARK: - Dispatch References
 
-    // `@unchecked Sendable` rationale: UIView is non-Sendable but the wrapper
-    // is only touched on `@MainActor`.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct ScrollableViewRef: @unchecked Sendable, Equatable {
+    /// Live UIKit references used for action dispatch and scroll lookup.
+    ///
+    /// These are viewport-local weak refs. They are only accessed through the
+    /// existing main-actor stash/live-lookup path and are intentionally absent
+    /// from settled semantic storage.
+    struct DispatchReferences: Equatable {
+        let elementRefs: [HeistId: ElementRef]
+        let containerRefsByPath: [TreePath: ContainerRef]
+        let firstResponderHeistId: HeistId?
+        let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+        let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
+
+        init(
+            elementRefs: [HeistId: ElementRef] = [:],
+            containerRefsByPath: [TreePath: ContainerRef] = [:],
+            firstResponderHeistId: HeistId? = nil,
+            scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef] = [:],
+            scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
+        ) {
+            self.elementRefs = elementRefs
+            self.containerRefsByPath = containerRefsByPath
+            self.firstResponderHeistId = firstResponderHeistId
+            self.scrollableContainerViews = scrollableContainerViews
+            self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
+        }
+
+        static let empty = DispatchReferences()
+    }
+
+    struct ScrollableViewRef: Equatable {
         weak var view: UIView?
 
         static func == (lhs: ScrollableViewRef, rhs: ScrollableViewRef) -> Bool {
@@ -176,10 +284,7 @@ struct LiveCapture: Equatable {
         }
     }
 
-    // `@unchecked Sendable` rationale: weak UIKit refs are only observed
-    // behind TheStash on the main actor.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct ElementRef: @unchecked Sendable, Equatable {
+    struct ElementRef: Equatable {
         /// Live UIKit object for action dispatch. Weak — nils on reuse.
         weak var object: NSObject?
         /// Nearest live scroll view for coordinate conversion.
@@ -190,10 +295,7 @@ struct LiveCapture: Equatable {
         }
     }
 
-    // `@unchecked Sendable` rationale: weak UIKit refs are only observed
-    // behind TheStash on the main actor.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct ContainerRef: @unchecked Sendable, Equatable {
+    struct ContainerRef: Equatable {
         weak var object: NSObject?
 
         static func == (lhs: ContainerRef, rhs: ContainerRef) -> Bool {
@@ -202,22 +304,20 @@ struct LiveCapture: Equatable {
     }
 
     private static func scrollableViewsByContainerName(
-        hierarchy: [AccessibilityHierarchy],
-        containerNames: [AccessibilityContainer: ContainerName],
-        containerNamesByPath: [TreePath: ContainerName],
-        containerRefsByPath: [TreePath: ContainerRef],
-        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
-        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
+        snapshot: Snapshot,
+        dispatchReferences: DispatchReferences
     ) -> [ContainerName: ScrollableViewRef] {
         var result: [ContainerName: ScrollableViewRef] = [:]
         var ambiguousNames = Set<ContainerName>()
 
-        for (container, path) in hierarchy.containerPaths {
-            guard let ref = scrollableContainerViewsByPath[path]
-                ?? scrollableContainerViews[container]
-                ?? scrollableContainerRefFromContainerObject(containerRefsByPath[path])
+        for (container, path) in snapshot.hierarchy.containerPaths {
+            guard let ref = dispatchReferences.scrollableContainerViewsByPath[path]
+                ?? dispatchReferences.scrollableContainerViews[container]
+                ?? scrollableContainerRefFromContainerObject(dispatchReferences.containerRefsByPath[path])
             else { continue }
-            guard let containerName = containerNamesByPath[path] ?? containerNames[container] else { continue }
+            guard let containerName = snapshot.containerNamesByPath[path] ?? snapshot.containerNames[container] else {
+                continue
+            }
             guard !ambiguousNames.contains(containerName) else { continue }
             if result[containerName] != nil {
                 result[containerName] = nil

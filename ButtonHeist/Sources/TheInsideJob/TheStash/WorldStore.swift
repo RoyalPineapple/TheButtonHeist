@@ -5,15 +5,15 @@ import TheScore
 /// Settled semantic world storage and commit adaptation.
 ///
 /// `WorldStore` owns the durable semantic truth, the value-only settled
-/// projection used for reads/traces, and the viewport metadata needed to apply
-/// visible refresh semantics. Live capture remains owned by `TheStash`.
+/// capture snapshot used for reads/traces, and the viewport metadata needed to
+/// apply visible refresh semantics. Live capture remains owned by `TheStash`.
 struct WorldStore {
     private var semanticWorld: SemanticScreen = .empty
-    private var settledVisibleCapture: LiveCapture = .empty
+    private var settledVisibleSnapshot: LiveCapture.Snapshot = .empty
     private var settledVisibleIds: Set<HeistId> = []
 
     var screen: Screen {
-        Screen(semantic: semanticWorld, liveCapture: settledVisibleCapture)
+        Screen(semantic: semanticWorld, captureSnapshot: settledVisibleSnapshot)
     }
 
     var heistIds: Set<HeistId> {
@@ -51,7 +51,7 @@ struct WorldStore {
 
     mutating func reset() {
         semanticWorld = .empty
-        settledVisibleCapture = .empty
+        settledVisibleSnapshot = .empty
         settledVisibleIds = []
     }
 
@@ -102,7 +102,7 @@ struct WorldStore {
 
     private mutating func commit(_ screen: Screen) -> CommitResult {
         semanticWorld = screen.semantic
-        settledVisibleCapture = screen.liveCapture.strippingDispatchReferences()
+        settledVisibleSnapshot = screen.liveCapture.snapshot
         settledVisibleIds = screen.visibleIds
         return CommitResult(
             observedEvidence: screen,
