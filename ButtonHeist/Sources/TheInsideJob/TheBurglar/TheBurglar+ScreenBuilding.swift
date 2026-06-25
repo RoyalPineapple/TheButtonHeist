@@ -75,7 +75,7 @@ extension TheBurglar {
             return (object as? UIView)?.isFirstResponder == true
         }
         if firstResponders.count > 1 {
-            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
+            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map { $0.1.description }.joined(separator: ", "))")
         }
 
         let scrollableViewRefs = result.scrollViews.mapValues { Screen.ScrollableViewRef(view: $0) }

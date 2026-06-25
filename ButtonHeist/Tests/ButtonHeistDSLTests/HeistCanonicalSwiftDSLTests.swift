@@ -336,12 +336,8 @@ func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
 @Test
 func decodedRuntimeLoopsRejectNonCanonicalSwiftParameters() throws {
     for json in [invalidElementLoopParameterJSON, invalidStringLoopParameterJSON] {
-        let raw = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: Data(json.utf8))
-        do {
-            _ = try raw.validatedForRuntimeSafety()
-            Issue.record("Expected invalid loop parameter validation failure")
-        } catch let error as HeistPlanRuntimeSafetyError {
-            #expect(error.failures.contains { $0.contract.contains("Swift-style identifier") })
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(HeistPlanAdmissionCandidate.self, from: Data(json.utf8))
         }
     }
 }

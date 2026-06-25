@@ -32,13 +32,17 @@ enum EvidenceMinimumMatcher {
         guard let index = contextIndex(for: evidence, in: elements) else { return nil }
         let context = PredicateSelectionContext(
             elements: elements.enumerated().map { offset, element in
-                PredicateSelectionContext.Element(id: "\(offset)", element: element)
+                PredicateSelectionContext.Element(id: contextElementId(forOffset: offset), element: element)
             },
             screenId: before.context.screenId,
             semanticHash: before.hash,
             scope: .visible
         )
-        return minimumUniquePredicate(for: "\(index)", in: context)?.target
+        return minimumUniquePredicate(for: contextElementId(forOffset: index), in: context)?.target
+    }
+
+    private static func contextElementId(forOffset offset: Int) -> PredicateSelectionElementId {
+        PredicateSelectionElementId(rawValue: String(offset))
     }
 
     private static func contextIndex(

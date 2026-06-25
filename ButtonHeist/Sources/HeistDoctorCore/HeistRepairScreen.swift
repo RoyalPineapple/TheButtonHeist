@@ -5,7 +5,7 @@ import TheScore
 
 struct RepairScreen {
     struct Element: Sendable, Equatable {
-        let id: String
+        let id: PredicateSelectionElementId
         let element: HeistElement
         let path: TreePath
         let traversalIndex: Int
@@ -35,7 +35,7 @@ struct RepairScreen {
         let annotationsByPath = interface.annotations.elementByPath
         let indexed = interface.tree.pathIndexedElements.enumerated().map { ordinal, item in
             ElementCore(
-                id: "element-\(ordinal)",
+                id: PredicateSelectionElementId(rawValue: "element-\(ordinal)"),
                 element: HeistElement(
                     accessibilityElement: item.element,
                     annotation: annotationsByPath[item.path]
@@ -103,7 +103,7 @@ struct RepairScreen {
 }
 
 private struct ElementCore {
-    let id: String
+    let id: PredicateSelectionElementId
     let element: HeistElement
     let path: TreePath
     let traversalIndex: Int

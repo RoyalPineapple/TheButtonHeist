@@ -2,6 +2,7 @@
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+import ThePlans
 import TheScore
 
 /// Direct tests for `TheBurglar.buildContainerIdentityContext` — the
@@ -200,7 +201,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         XCTAssertEqual(containerNames.count, 2)
         XCTAssertEqual(Set(containerNames).count, 2)
-        XCTAssertTrue(containerNames.allSatisfy { $0.hasPrefix(repeatedFramePrefix) })
+        XCTAssertTrue(containerNames.allSatisfy { $0.rawValue.hasPrefix(repeatedFramePrefix) })
         XCTAssertTrue(screen.liveCapture.scrollView(forContainer: containerNames[0]) === firstScrollView)
         XCTAssertTrue(screen.liveCapture.scrollView(forContainer: containerNames[1]) === secondScrollView)
     }
@@ -221,7 +222,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             path: TreePath([0])
         )
 
-        XCTAssertTrue(containerName.hasPrefix("list_0_0_0_50-"))
+        XCTAssertTrue(containerName.rawValue.hasPrefix("list_0_0_0_50-"))
         XCTAssertEqual(
             containerName,
             TheBurglar.captureLocalContainerId(
@@ -284,8 +285,8 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let interface = TheStash.WireConversion.toInterface(from: screen)
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
         let repeatedFramePrefix = "scrollable_\(TheBurglar.coarseFrameHash(frame))-"
-        let pagerName = "scrollable_\(TheBurglar.coarseFrameHash(pagerFrame))"
-        let repeatedFrameIds = containerNames.filter { $0.hasPrefix(repeatedFramePrefix) }
+        let pagerName = ContainerName(rawValue: "scrollable_\(TheBurglar.coarseFrameHash(pagerFrame))")
+        let repeatedFrameIds = containerNames.filter { $0.rawValue.hasPrefix(repeatedFramePrefix) }
 
         XCTAssertEqual(containerNames.count, 4)
         XCTAssertEqual(repeatedFrameIds.count, 3)
@@ -313,7 +314,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         XCTAssertEqual(
             interface.annotations.containers.first?.containerName,
-            "list_\(TheBurglar.coarseFrameHash(container.frame.cgRect))"
+            ContainerName(rawValue: "list_\(TheBurglar.coarseFrameHash(container.frame.cgRect))")
         )
     }
 }

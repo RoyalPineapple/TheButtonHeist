@@ -268,14 +268,14 @@ final class TheStashRotorTests: XCTestCase {
             return
         }
 
-        let cachedHeistId = "cached_virtual_result"
+        let cachedHeistId = HeistId(rawValue: "cached_virtual_result")
         var elements = screen.semantic.elements
         elements[cachedHeistId] = Screen.ScreenElement(
             heistId: cachedHeistId,
             contentSpaceOrigin: nil,
             element: AccessibilityElement.make(
                 label: "Cached virtual result",
-                identifier: cachedHeistId,
+                identifier: cachedHeistId.rawValue,
                 traits: .button,
                 frame: CGRect(x: 20, y: 120, width: 280, height: 44)
             )

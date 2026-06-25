@@ -39,6 +39,10 @@ struct HeistId: RawRepresentable, Hashable, Sendable, Codable, Comparable, Custo
         var container = encoder.singleValueContainer()
         try container.encode(rawValue)
     }
+
+    var predicateSelectionElementId: PredicateSelectionElementId {
+        PredicateSelectionElementId(rawValue: rawValue)
+    }
 }
 
 // MARK: - HeistId Assignment

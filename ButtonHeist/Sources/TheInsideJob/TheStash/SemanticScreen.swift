@@ -16,7 +16,7 @@ import AccessibilitySnapshotParser
 /// reveal evidence. It must not hold UIKit objects, viewport geometry as live
 /// authority, activation points, or weak refs. Live action geometry is acquired
 /// from `LiveCapture` for each operation.
-struct SemanticScreen: Equatable {
+struct SemanticScreen: Sendable, Equatable {
     let elements: [HeistId: Element]
     let containers: [TreePath: Container]
 
@@ -67,10 +67,7 @@ struct SemanticScreen: Equatable {
         let scrollContainer: ContainerName
     }
 
-    // `@unchecked Sendable` rationale: contains `AccessibilityElement`, whose
-    // parser model is used only behind the main-actor stash at runtime.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct Element: @unchecked Sendable, Equatable {
+    struct Element: Sendable, Equatable {
         let heistId: HeistId
         let scrollContentLocation: ScrollContentLocation?
         /// Parsed accessibility identity/value retained in the settled world.
@@ -121,7 +118,7 @@ struct SemanticScreen: Equatable {
     /// The path and content frame are capture-local semantic evidence used to
     /// derive a reveal plan. UIKit object refs and live activation geometry
     /// remain in `LiveCapture` and are acquired only at dispatch time.
-    struct Container: Equatable {
+    struct Container: Sendable, Equatable {
         let container: AccessibilityContainer
         let path: TreePath
         let containerName: ContainerName?

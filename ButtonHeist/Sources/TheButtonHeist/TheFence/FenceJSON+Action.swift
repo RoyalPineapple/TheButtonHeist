@@ -469,7 +469,7 @@ struct PublicHeistCaseMatchResult: Encodable {
 }
 
 struct PublicHeistForEachStringEvidence: Encodable {
-    let parameter: String
+    let parameter: HeistReferenceName
     let count: Int
     let iterationCount: Int
     let iterationOrdinal: Int?
@@ -487,7 +487,7 @@ struct PublicHeistForEachStringEvidence: Encodable {
 }
 
 struct PublicHeistForEachElementEvidence: Encodable {
-    let parameter: String
+    let parameter: HeistReferenceName
     let matching: ElementPredicate
     let limit: Int
     let matchedCount: Int

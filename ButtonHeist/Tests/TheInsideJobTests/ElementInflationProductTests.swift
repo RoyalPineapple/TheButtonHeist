@@ -131,7 +131,7 @@ final class ElementInflationProductTests: XCTestCase {
         seedKnownUnreachableDuplicate(
             label: fixture.label,
             identifier: "stale_\(fixture.identifier)",
-            heistId: "stale_\(fixture.knownHeistId)"
+            heistId: HeistId(rawValue: "stale_\(fixture.knownHeistId.rawValue)")
         )
 
         let result = await brains.executeRuntimeAction(.activate(
@@ -336,7 +336,7 @@ final class ElementInflationProductTests: XCTestCase {
             target: target,
             identifier: identifier,
             label: label,
-            knownHeistId: "known_\(identifier)",
+            knownHeistId: HeistId(rawValue: "known_\(identifier)"),
             contentOrigin: contentOrigin
         )
     }
@@ -432,7 +432,7 @@ final class ElementInflationProductTests: XCTestCase {
             target: target,
             identifier: identifier,
             label: label,
-            knownHeistId: "known_\(identifier)",
+            knownHeistId: HeistId(rawValue: "known_\(identifier)"),
             innerContainerPath: TreePath([9_001]),
             innerContentOrigin: innerScrollView.frame.origin,
             targetContentOrigin: target.frame.origin

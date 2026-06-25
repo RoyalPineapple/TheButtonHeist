@@ -166,7 +166,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseClosureParameterBlock(
         binding: HeistPlanSourceBinding
-    ) throws -> (referenceName: String, body: [HeistStep]) {
+    ) throws -> (referenceName: HeistReferenceName, body: [HeistStep]) {
         try expectSymbol("{")
         let localName = try parseIdentifier()
         try expectIdentifier("in")
@@ -175,7 +175,7 @@ extension HeistPlanSourceParser {
         defer { restoreScope(previousScope) }
         bindScopedReference(binding, localName: localName, referenceName: referenceName)
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
-        return (referenceName.rawValue, body.steps)
+        return (referenceName, body.steps)
     }
 
     mutating func parseStringArrayTail() throws -> [String] {

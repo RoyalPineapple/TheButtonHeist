@@ -168,7 +168,7 @@ import AccessibilitySnapshotParser
     private static func formatFirstResponder(stash: TheStash) -> String {
         guard let heistId = stash.firstResponderHeistId else { return "none" }
         guard let element = stash.firstResponderScreenElement() else {
-            return "focused element \(quote(heistId)) liveObject=unknown"
+            return "focused element \(quote(heistId.description)) liveObject=unknown"
         }
         return formatElement(element)
     }

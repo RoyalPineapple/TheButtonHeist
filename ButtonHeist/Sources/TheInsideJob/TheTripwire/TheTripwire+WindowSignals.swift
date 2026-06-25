@@ -7,7 +7,7 @@ extension TheTripwire {
     /// Cheap UIKit-side identity used to decide whether to re-check the
     /// accessibility tree. A changed Tripwire signal means "parse and check";
     /// it does not guarantee the parsed interface changed.
-    struct TripwireSignal: Equatable {
+    struct TripwireSignal: Sendable, Equatable {
         static let empty = TripwireSignal(
             topmostVC: nil,
             navigation: .empty,
@@ -22,7 +22,7 @@ extension TheTripwire {
     /// Public UIKit navigation state sampled from the topmost controller. This
     /// catches SwiftUI NavigationStack-style changes that remain inside one
     /// hosting controller, without walking SwiftUI's private view tree.
-    struct NavigationSignal: Equatable {
+    struct NavigationSignal: Sendable, Equatable {
         static let empty = NavigationSignal(
             navigationDepth: nil,
             title: nil,
@@ -40,13 +40,13 @@ extension TheTripwire {
 
     /// Ordered visible window identity. Key-window status is deliberately part
     /// of the Tripwire signal, not an accessibility-scope filter.
-    struct WindowStackSignal: Equatable {
+    struct WindowStackSignal: Sendable, Equatable {
         static let empty = WindowStackSignal(windows: [])
 
         let windows: [WindowSignal]
     }
 
-    struct WindowSignal: Equatable {
+    struct WindowSignal: Sendable, Equatable {
         let id: ObjectIdentifier
         let level: CGFloat
         let isKeyWindow: Bool

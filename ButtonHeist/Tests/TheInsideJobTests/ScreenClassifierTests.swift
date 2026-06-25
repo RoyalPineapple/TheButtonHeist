@@ -214,7 +214,7 @@ final class ScreenClassifierTests: XCTestCase {
     ) -> Screen {
         Screen.makeForTests(
             elements: elements.enumerated().map { index, element in
-                (element: element, heistId: "element_\(index)")
+                (element: element, heistId: HeistId(rawValue: "element_\(index)"))
             },
             firstResponderHeistId: firstResponderHeistId
         )
@@ -224,10 +224,11 @@ final class ScreenClassifierTests: XCTestCase {
         let elements = hierarchy.sortedElements
         return Screen(
             elements: Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, element in
-                (
-                    "element_\(index)",
+                let heistId = HeistId(rawValue: "element_\(index)")
+                return (
+                    heistId,
                     Screen.ScreenElement(
-                        heistId: "element_\(index)",
+                        heistId: heistId,
                         contentSpaceOrigin: nil,
                         element: element
                     )
@@ -236,7 +237,7 @@ final class ScreenClassifierTests: XCTestCase {
             hierarchy: hierarchy,
             containerNames: [:],
             heistIdByElement: Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, element in
-                (element, "element_\(index)")
+                (element, HeistId(rawValue: "element_\(index)"))
             }),
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]

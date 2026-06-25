@@ -114,18 +114,10 @@ public struct HeistExecutionEnvironment: Sendable, Equatable {
         return HeistExecutionEnvironment(targets: targets, strings: strings)
     }
 
-    public func binding(target: ElementTarget, to parameter: String) -> HeistExecutionEnvironment {
-        binding(target: target, to: HeistReferenceName(rawValue: parameter))
-    }
-
     public func binding(string: String, to parameter: HeistReferenceName) -> HeistExecutionEnvironment {
         var strings = self.strings
         strings[parameter] = string
         return HeistExecutionEnvironment(targets: targets, strings: strings)
-    }
-
-    public func binding(string: String, to parameter: String) -> HeistExecutionEnvironment {
-        binding(string: string, to: HeistReferenceName(rawValue: parameter))
     }
 }
 

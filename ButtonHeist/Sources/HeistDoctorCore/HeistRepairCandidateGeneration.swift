@@ -5,7 +5,7 @@ enum RepairCandidateGenerator {
     static func rankedSuccessorCandidates(
         oldResolved: RepairScreen.Element,
         currentScreen: RepairScreen,
-        preferredCandidates: Set<String>,
+        preferredCandidates: Set<PredicateSelectionElementId>,
         failureKind: HeistRepairFailureKind,
         actionFamily: RepairActionFamily,
         lastSuccess: HeistStepRepairEvidence,

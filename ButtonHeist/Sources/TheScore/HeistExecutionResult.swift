@@ -80,8 +80,8 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
     case action(command: String, target: String?)
     case wait(predicate: String, timeout: Double)
     case conditional
-    case forEachString(parameter: String, count: Int)
-    case forEachElement(parameter: String, matching: String, limit: Int)
+    case forEachString(parameter: HeistReferenceName, count: Int)
+    case forEachElement(parameter: HeistReferenceName, matching: String, limit: Int)
     case invoke(path: String, argument: String?)
     case heist(name: String?)
     case warn(message: String)
@@ -145,7 +145,7 @@ public struct HeistCaseSelectionEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
-    public let parameter: String
+    public let parameter: HeistReferenceName
     public let count: Int
     public let iterationCount: Int
     public let iterationOrdinal: Int?
@@ -153,7 +153,7 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
     public let failureReason: String?
 
     public init(
-        parameter: String,
+        parameter: HeistReferenceName,
         count: Int,
         iterationCount: Int,
         iterationOrdinal: Int? = nil,
@@ -170,7 +170,7 @@ public struct HeistForEachStringEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
-    public let parameter: String
+    public let parameter: HeistReferenceName
     public let matching: ElementPredicate
     public let limit: Int
     public let matchedCount: Int
@@ -181,7 +181,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
     public let failureReason: String?
 
     public init(
-        parameter: String,
+        parameter: HeistReferenceName,
         matching: ElementPredicate,
         limit: Int,
         matchedCount: Int,

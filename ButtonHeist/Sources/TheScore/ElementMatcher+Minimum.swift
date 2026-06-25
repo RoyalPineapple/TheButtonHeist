@@ -127,12 +127,28 @@ extension PredicateCandidate {
     }
 }
 
+public struct PredicateSelectionElementId: RawRepresentable, Hashable, Sendable, Comparable, CustomStringConvertible {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public var description: String {
+        rawValue
+    }
+
+    public static func < (lhs: PredicateSelectionElementId, rhs: PredicateSelectionElementId) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
 public struct PredicateSelectionContext: Sendable, Equatable {
     public struct Element: Sendable, Equatable {
-        public let id: String
+        public let id: PredicateSelectionElementId
         public let element: HeistElement
 
-        public init(id: String, element: HeistElement) {
+        public init(id: PredicateSelectionElementId, element: HeistElement) {
             self.id = id
             self.element = element
         }
@@ -162,12 +178,12 @@ public struct PredicateSelectionContext: Sendable, Equatable {
 }
 
 public struct MinimumPredicateSelection: Sendable, Equatable {
-    public let contextElementId: String
+    public let contextElementId: PredicateSelectionElementId
     public let target: ElementTarget
     public let candidate: PredicateCandidate
 
     public init(
-        contextElementId: String,
+        contextElementId: PredicateSelectionElementId,
         target: ElementTarget,
         candidate: PredicateCandidate
     ) {
@@ -182,7 +198,7 @@ public func predicateCandidates(for element: HeistElement) -> [PredicateCandidat
 }
 
 public func minimumUniquePredicate(
-    for contextElementId: String,
+    for contextElementId: PredicateSelectionElementId,
     in context: PredicateSelectionContext
 ) -> MinimumPredicateSelection? {
     MinimumPredicateSelector.minimumUniquePredicate(for: contextElementId, in: context)
@@ -213,7 +229,7 @@ public enum MinimumPredicateSelector {
     }
 
     public static func minimumUniquePredicate(
-        for contextElementId: String,
+        for contextElementId: PredicateSelectionElementId,
         in context: PredicateSelectionContext
     ) -> MinimumPredicateSelection? {
         guard let targetElement = context.elements.first(where: { $0.id == contextElementId }) else {

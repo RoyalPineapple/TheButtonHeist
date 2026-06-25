@@ -116,7 +116,9 @@ struct LiveCapture: Equatable {
         )
     }
 
-    static let empty = LiveCapture(snapshot: .empty)
+    static var empty: LiveCapture {
+        LiveCapture(snapshot: .empty)
+    }
 
     var heistIds: Set<HeistId> {
         snapshot.heistIds
@@ -183,7 +185,7 @@ struct LiveCapture: Equatable {
     /// This preserves parser hierarchy, ids, container names, and
     /// content-space evidence without carrying weak UIKit refs or live dispatch
     /// lookup tables.
-    struct Snapshot: Equatable {
+    struct Snapshot: Sendable, Equatable {
         let hierarchy: [AccessibilityHierarchy]
         let containerNames: [AccessibilityContainer: ContainerName]
         let containerNamesByPath: [TreePath: ContainerName]
@@ -266,7 +268,9 @@ struct LiveCapture: Equatable {
             self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
         }
 
-        static let empty = DispatchReferences()
+        static var empty: DispatchReferences {
+            DispatchReferences()
+        }
     }
 
     struct ScrollableViewRef: Equatable {

@@ -28,7 +28,7 @@ final class ScreenTests: XCTestCase {
             heistId: heistId,
             contentSpaceOrigin: contentSpaceOrigin,
             scrollContainerName: contentSpaceOrigin.map { _ in "test_scroll" },
-            element: makeElement(label: label ?? heistId)
+            element: makeElement(label: label ?? heistId.description)
         )
     }
 

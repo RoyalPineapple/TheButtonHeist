@@ -208,7 +208,7 @@ struct CandidateScoringContext: Sendable, Equatable {
     let expectationEvidence: Set<String>
     let compatibleCandidateCount: Int
     let currentElementCount: Int
-    let preferredCandidates: Set<String>
+    let preferredCandidates: Set<PredicateSelectionElementId>
     let failureKind: HeistRepairFailureKind
     let actionFamily: RepairActionFamily
 }

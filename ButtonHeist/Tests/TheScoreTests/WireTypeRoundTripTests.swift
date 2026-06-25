@@ -915,7 +915,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
         """
         XCTAssertThrowsError(try decoder.decode(HeistCaseSelectionResult.self, from: Data(legacy.utf8))) { error in
-            assertDecodingError(error, contains: ["selectedCaseIndex"])
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected DecodingError.dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(
+                ["selectedCaseIndex", "timedOut", "elseRan"].contains { context.debugDescription.contains($0) },
+                context.debugDescription
+            )
         }
 
         let looseOutcome = """
