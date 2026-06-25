@@ -1723,15 +1723,15 @@ final class TheBrainsScrollTests: XCTestCase {
         }
     }
 
-    private final class AccessibilityRevealingScrollView: UIScrollView {
-        enum RevealMode {
-            case atOrAbove
-            case atOrBelow
-        }
+    private enum AccessibilityRevealMode {
+        case atOrAbove
+        case atOrBelow
+    }
 
+    private final class AccessibilityRevealingScrollView: UIScrollView {
         var revealedElements: [UIView] = []
         var revealThreshold: CGFloat = 500
-        var revealMode: RevealMode = .atOrBelow
+        var revealMode: AccessibilityRevealMode = .atOrBelow
 
         override var contentOffset: CGPoint {
             didSet {
