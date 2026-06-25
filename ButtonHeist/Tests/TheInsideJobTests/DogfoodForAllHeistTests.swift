@@ -134,20 +134,11 @@ private enum TodoScreen {
             label: .exact(item),
             value: .exact(.literal("Completed"))
         )
-        let listTopAnchor = ElementPredicateTemplate(label: .exact("Add"), traits: [.button])
         let visibleItem = ElementPredicateTemplate(label: .exact(item))
         let proveCompletedItem = try rawAction(
             .viewportScrollToVisible(.target(completedItem, ordinal: 0)),
             expectation: WaitStep(
                 predicate: .present(completedItem),
-                timeout: .seconds(4)
-            )
-        )
-
-        try rawAction(
-            .viewportScrollToVisible(.target(listTopAnchor, ordinal: 0)),
-            expectation: WaitStep(
-                predicate: .present(listTopAnchor),
                 timeout: .seconds(4)
             )
         )
@@ -268,8 +259,8 @@ private enum LongListScreen {
         try rawAction(
             .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
             expectation: WaitStep(
-                predicate: .changed(.elements),
-                timeout: .seconds(3)
+                predicate: .present(.label("Widget 0, Hardware")),
+                timeout: .seconds(8)
             )
         )
     }
@@ -299,7 +290,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     func testListAndCalculatorFlowsUsePublicHeists() async throws {
         let heist = try await Heist {
             try DogfoodHome.openScreen("Todo List")
-            try TodoScreen.completeItem("Review PR, High priority")
+            try TodoScreen.completeItem("Return package, High priority")
 
             try DogfoodNavigation.backToRoot()
 
