@@ -299,6 +299,106 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(added.first?["identifier"] as? String, "lazy_row")
     }
 
+    func testPublicHeistJSONBoundsActionDeltaAndReportsOmissions() throws {
+        let addedRows = (0..<8).map { index in
+            makeReceiptTestElement(
+                label: "Lazy Row \(index)",
+                value: "Loaded \(index)",
+                identifier: "lazy_row_\(index)",
+                traits: [.staticText]
+            )
+        }
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface([]),
+            after: makeReceiptTestInterface(addedRows)
+        )
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Load More"))))
+        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
+        let response = FenceResponse.heistExecution(
+            plan: plan,
+            result: HeistExecutionResult(
+                steps: [
+                    actionReceiptStep(
+                        command: command,
+                        result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+                    ),
+                ],
+                durationMs: 8
+            )
+        )
+
+        let json = publicJSONObject(response)
+        let report = try XCTUnwrap(json["report"] as? [String: Any])
+        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let action = try XCTUnwrap(nodes.first?["action"] as? [String: Any])
+        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
+        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
+        let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
+        let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
+        let editOmissions = try XCTUnwrap(edits["omitted"] as? [String: Any])
+        let resultOmissions = try XCTUnwrap(actionResult["omitted"] as? [String: Any])
+        let traceOmission = try XCTUnwrap(resultOmissions["accessibilityTrace"] as? [String: Any])
+        let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
+
+        XCTAssertEqual(added.count, 5)
+        XCTAssertTrue(added.allSatisfy { ($0["label"] as? String)?.hasPrefix("Lazy Row ") == true }, "\(added)")
+        XCTAssertEqual(editOmissions["added"] as? Int, 3)
+        XCTAssertEqual(traceOmission["projectedAs"] as? String, "delta")
+        XCTAssertEqual(traceOmission["omittedCount"] as? Int, 2)
+        XCTAssertFalse(encoded.contains(#""captures""#), encoded)
+        XCTAssertFalse(encoded.contains(#""newInterface""#), encoded)
+    }
+
+    func testPublicHeistJSONUsesBoundedScreenProjectionForActionDelta() throws {
+        let afterRows = (0..<8).map { index in
+            makeReceiptTestElement(
+                label: "Checkout Row \(index)",
+                identifier: "checkout_row_\(index)",
+                traits: [.staticText]
+            )
+        }
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface([]),
+            after: makeReceiptTestInterface(afterRows),
+            beforeScreenId: "before",
+            afterScreenId: "checkout"
+        )
+        let command = HeistActionCommand.activate(.target(.predicate(ElementPredicate(label: "Checkout"))))
+        let plan = try HeistPlan(body: [.action(ActionStep(command: command))])
+        let response = FenceResponse.heistExecution(
+            plan: plan,
+            result: HeistExecutionResult(
+                steps: [
+                    actionReceiptStep(
+                        command: command,
+                        result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+                    ),
+                ],
+                durationMs: 8
+            )
+        )
+
+        let json = publicJSONObject(response)
+        let report = try XCTUnwrap(json["report"] as? [String: Any])
+        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let action = try XCTUnwrap(nodes.first?["action"] as? [String: Any])
+        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
+        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
+        let screen = try XCTUnwrap(delta["screen"] as? [String: Any])
+        let elements = try XCTUnwrap(screen["elements"] as? [[String: Any]])
+        let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
+
+        XCTAssertEqual(delta["kind"] as? String, "screenChanged")
+        XCTAssertNil(delta["newInterface"])
+        XCTAssertEqual(actionResult["screenId"] as? String, "checkout")
+        XCTAssertEqual(screen["elementCount"] as? Int, 8)
+        XCTAssertEqual(elements.count, 5)
+        XCTAssertEqual(elements.last?["label"] as? String, "Checkout Row 4")
+        XCTAssertEqual(screen["omittedElementCount"] as? Int, 3)
+        XCTAssertFalse(encoded.contains(#""tree""#), encoded)
+        XCTAssertFalse(encoded.contains(#""captures""#), encoded)
+    }
+
     func testFailedHeistActionCompactOutputIncludesConcreteElementDeltaEvidence() throws {
         let unchanged = (0..<3).map { index in
             makeReceiptTestElement(label: "Row \(index)", identifier: "row_\(index)")
@@ -565,6 +665,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(nodes.map { $0["path"] as? String }, ["$.body[0]", "$.body[1]", "$.body[2]"])
         XCTAssertEqual(nodes.map { $0["status"] as? String }, ["passed", "failed", "skipped"])
         XCTAssertTrue(compact.contains("heist: 2 top-level steps"), compact)
+        XCTAssertTrue(compact.contains("[0] warn -> warning: before"), compact)
         XCTAssertTrue(compact.contains("[2] warn -> skipped"), compact)
         XCTAssertFalse(compact.contains("after"), compact)
         XCTAssertTrue(
