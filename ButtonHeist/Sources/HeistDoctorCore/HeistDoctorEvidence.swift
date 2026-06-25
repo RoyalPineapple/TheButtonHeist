@@ -1,3 +1,4 @@
+import ThePlans
 import TheScore
 
 extension HeistDoctor {
@@ -19,7 +20,7 @@ extension HeistDoctor {
         else {
             throw HeistDoctorError.missingTrace(path: step.path)
         }
-        guard let commandName = step.reportCommandName else {
+        guard let command = actionEvidence.command else {
             throw HeistDoctorError.missingActionEvidence(path: step.path)
         }
 
@@ -36,7 +37,8 @@ extension HeistDoctor {
 
         return HeistStepRepairEvidence(
             stepPath: step.path,
-            actionKind: commandName,
+            actionIdentity: HeistRepairActionIdentity(command: command),
+            actionKind: command.wireType.rawValue,
             target: target,
             beforeSnapshot: before,
             afterDelta: trace.meaningfulEndpointDelta,

@@ -4,9 +4,30 @@ import TheScore
 
 // MARK: - Heist Repair Evidence
 
+public struct HeistRepairActionIdentity: Codable, Sendable, Equatable {
+    public let commandType: HeistActionCommandType
+    public let customActionName: String?
+
+    public init(commandType: HeistActionCommandType, customActionName: String? = nil) {
+        self.commandType = commandType
+        self.customActionName = customActionName
+    }
+
+    public init(command: HeistActionCommand) {
+        let customActionName: String?
+        if case .customAction(let name, _) = command {
+            customActionName = name
+        } else {
+            customActionName = nil
+        }
+        self.init(commandType: command.wireType, customActionName: customActionName)
+    }
+}
+
 public struct HeistStepRepairEvidence: Codable, Sendable, Equatable {
     public let heistFingerprint: String?
     public let stepPath: String
+    public let actionIdentity: HeistRepairActionIdentity?
     public let actionKind: String
     public let target: ElementTarget
     /// Parsed Interface hierarchy captured before the action. This is the
@@ -22,6 +43,7 @@ public struct HeistStepRepairEvidence: Codable, Sendable, Equatable {
     public init(
         heistFingerprint: String? = nil,
         stepPath: String,
+        actionIdentity: HeistRepairActionIdentity? = nil,
         actionKind: String,
         target: ElementTarget,
         beforeSnapshot: Interface,
@@ -31,6 +53,7 @@ public struct HeistStepRepairEvidence: Codable, Sendable, Equatable {
     ) {
         self.heistFingerprint = heistFingerprint
         self.stepPath = stepPath
+        self.actionIdentity = actionIdentity
         self.actionKind = actionKind
         self.target = target
         self.beforeSnapshot = beforeSnapshot
