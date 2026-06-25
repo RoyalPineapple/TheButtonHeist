@@ -704,7 +704,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .conditional)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -727,7 +727,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(heist.steps.map(\.kind), [.conditional, .warn])
-        XCTAssertEqual(heist.steps.first?.caseSelectionEvidence?.selection.selectedCaseIndex, nil)
+        XCTAssertEqual(heist.steps.first?.caseSelectionEvidence?.selection.outcome, .noMatch)
     }
 
     func testHeistWaitForTimeoutWithoutElseFails() async throws {
@@ -796,7 +796,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .conditional)
-        XCTAssertEqual(step.caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
@@ -823,7 +823,7 @@ final class TheBrainsActionTests: XCTestCase {
         let selection = try XCTUnwrap(step.caseSelectionEvidence?.selection)
 
         XCTAssertTrue(result.success)
-        XCTAssertNil(selection.selectedCaseIndex)
+        XCTAssertEqual(selection.outcome, .elseBranch(reason: .noMatch))
         XCTAssertEqual(
             selection.cases.first?.result.actual,
             "change predicate requires future settled observation after baseline"
@@ -852,7 +852,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertNil(step.caseSelectionEvidence?.selection.selectedCaseIndex)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .noMatch)
         XCTAssertEqual(step.children.map(\.kind), [])
     }
 
@@ -1494,7 +1494,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertNil(step.caseSelectionEvidence?.selection.selectedCaseIndex)
+        XCTAssertEqual(step.caseSelectionEvidence?.selection.outcome, .noMatch)
         XCTAssertEqual(step.caseSelectionEvidence?.selection.cases.first?.result.met, false)
     }
 

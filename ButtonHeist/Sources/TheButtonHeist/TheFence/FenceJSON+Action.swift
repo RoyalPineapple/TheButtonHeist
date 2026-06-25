@@ -427,11 +427,9 @@ struct PublicHeistWaitEvidence: Encodable {
 }
 
 struct PublicHeistCaseSelectionEvidence: Encodable {
-    let selectedCaseIndex: Int?
+    let outcome: HeistCaseSelectionOutcome
     let elapsedMs: Int
     let timeout: Double?
-    let timedOut: Bool
-    let elseRan: Bool
     let lastObservedSummary: String?
     let caseCount: Int
     let cases: [PublicHeistCaseMatchResult]?
@@ -439,28 +437,7 @@ struct PublicHeistCaseSelectionEvidence: Encodable {
 
     init(evidence: HeistCaseSelectionEvidence) {
         let selection = evidence.selection
-        switch selection.outcome {
-        case .matchedCase(let index):
-            self.selectedCaseIndex = index
-            self.timedOut = false
-            self.elseRan = false
-        case .elseBranch(reason: .timedOut):
-            self.selectedCaseIndex = nil
-            self.timedOut = true
-            self.elseRan = true
-        case .elseBranch(reason: .noMatch):
-            self.selectedCaseIndex = nil
-            self.timedOut = false
-            self.elseRan = true
-        case .timedOut:
-            self.selectedCaseIndex = nil
-            self.timedOut = true
-            self.elseRan = false
-        case .noMatch:
-            self.selectedCaseIndex = nil
-            self.timedOut = false
-            self.elseRan = false
-        }
+        self.outcome = selection.outcome
         self.elapsedMs = selection.elapsedMs
         self.timeout = selection.timeout
         self.lastObservedSummary = selection.lastObservedSummary

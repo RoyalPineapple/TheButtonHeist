@@ -179,7 +179,19 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             steps: [
                 caseStep(
                     kind: .conditional,
-                    selection: HeistCaseSelectionResult(cases: [], selectedCaseIndex: 0, elapsedMs: 1),
+                    selection: HeistCaseSelectionResult(
+                        cases: [
+                            HeistCaseMatchResult(
+                                predicate: .state(.present(ElementPredicate(label: "Selected"))),
+                                result: ExpectationResult(
+                                    met: true,
+                                    predicate: .state(.present(ElementPredicate(label: "Selected")))
+                                )
+                            ),
+                        ],
+                        outcome: .matchedCase(index: 0),
+                        elapsedMs: 1
+                    ),
                     children: [
                         actionStep(
                             path: "$.body[0].conditional.cases[0].body[0]",

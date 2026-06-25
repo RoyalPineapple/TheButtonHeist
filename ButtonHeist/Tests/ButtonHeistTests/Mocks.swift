@@ -402,7 +402,7 @@ final class MockConnection: TransportReachabilityConnecting {
             intent: .conditional,
             evidence: .caseSelection(HeistCaseSelectionEvidence(selection: HeistCaseSelectionResult(
                 cases: mockCaseResults(for: conditional.cases),
-                selectedCaseIndex: nil,
+                outcome: .noMatch,
                 elapsedMs: heistStepDurationMs
             )))
         )

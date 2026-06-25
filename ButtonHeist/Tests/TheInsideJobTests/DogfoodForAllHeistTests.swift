@@ -446,7 +446,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             .forEachElement,
             .invoke,
         ])
-        XCTAssertEqual(heist.result.steps[1].caseSelectionEvidence?.selection.selectedCaseIndex, 0)
+        XCTAssertEqual(heist.result.steps[1].caseSelectionEvidence?.selection.outcome, .matchedCase(index: 0))
         XCTAssertEqual(heist.result.steps[2].waitEvidence?.expectation.met, true)
         XCTAssertEqual(heist.result.steps[4].forEachElementEvidence?.matchedCount, 1)
         XCTAssertEqual(heist.result.steps[4].forEachElementEvidence?.iterationCount, 1)
