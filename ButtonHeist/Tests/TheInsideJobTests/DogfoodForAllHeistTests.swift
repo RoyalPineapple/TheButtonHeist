@@ -79,8 +79,12 @@ private enum DogfoodNavigation {
     }
 
     static let backTo = HeistDef<String>("DogfoodNavigation.backTo", parameter: "title") { title in
+        let destinationTitle = ElementPredicateTemplate(label: .exact(title), traits: [.header])
+
         Activate(.predicate(ElementPredicateTemplate(label: .exact(title), traits: [.backButton])))
-            .expect(.changed(.screen(where: .present(.label(title)))), timeout: .seconds(8))
+            .withoutExpectation("Back navigation is proven by the destination title wait")
+
+        WaitFor(.present(destinationTitle), timeout: .seconds(8))
     }
 }
 
@@ -130,11 +134,20 @@ private enum TodoScreen {
             label: .exact(item),
             value: .exact(.literal("Completed"))
         )
+        let listTopAnchor = ElementPredicateTemplate(label: .exact("Add"), traits: [.button])
         let visibleItem = ElementPredicateTemplate(label: .exact(item))
         let proveCompletedItem = try rawAction(
             .viewportScrollToVisible(.target(completedItem, ordinal: 0)),
             expectation: WaitStep(
                 predicate: .present(completedItem),
+                timeout: .seconds(4)
+            )
+        )
+
+        try rawAction(
+            .viewportScrollToVisible(.target(listTopAnchor, ordinal: 0)),
+            expectation: WaitStep(
+                predicate: .present(listTopAnchor),
                 timeout: .seconds(4)
             )
         )

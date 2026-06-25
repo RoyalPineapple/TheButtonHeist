@@ -7,6 +7,7 @@ extension Interface {
         case timestamp
         case tree
         case annotations
+        case diagnostics
     }
 
     public init(from decoder: Decoder) throws {
@@ -16,6 +17,7 @@ extension Interface {
             .decode([InterfaceTreeWireNode].self, forKey: .tree)
             .map { $0.hierarchy }
         annotations = try container.decode(InterfaceAnnotations.self, forKey: .annotations)
+        diagnostics = try container.decodeIfPresent(InterfaceDiagnostics.self, forKey: .diagnostics)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -23,6 +25,7 @@ extension Interface {
         try container.encode(timestamp, forKey: .timestamp)
         try container.encode(tree.map(InterfaceTreeWireNode.init), forKey: .tree)
         try container.encode(annotations, forKey: .annotations)
+        try container.encodeIfPresent(diagnostics, forKey: .diagnostics)
     }
 }
 

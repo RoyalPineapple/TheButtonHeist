@@ -130,7 +130,8 @@ struct InterfaceSelector {
         Interface(
             timestamp: interface.timestamp,
             tree: [candidate.node],
-            annotations: annotations(for: candidate)
+            annotations: annotations(for: candidate),
+            diagnostics: interface.diagnostics
         )
     }
 
@@ -155,7 +156,8 @@ struct InterfaceSelector {
         return Interface(
             timestamp: interface.timestamp,
             tree: tree,
-            annotations: InterfaceAnnotations(elements: elementAnnotations)
+            annotations: InterfaceAnnotations(elements: elementAnnotations),
+            diagnostics: interface.diagnostics
         )
     }
 }

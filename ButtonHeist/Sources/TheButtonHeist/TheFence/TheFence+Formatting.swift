@@ -156,6 +156,10 @@ extension FenceResponse {
         formatter.timeStyle = .medium
 
         var output = "\(interface.projectedElements.count) elements (\(formatter.string(from: interface.timestamp)))\n"
+        if let discovery = interface.diagnostics?.discovery {
+            output += formatDiscoveryDiagnostics(discovery).joined(separator: "\n")
+            output += "\n"
+        }
         output += String(repeating: "-", count: 60) + "\n"
 
         if interface.projectedElements.isEmpty {
@@ -166,6 +170,22 @@ extension FenceResponse {
         }
         output += String(repeating: "-", count: 60)
         return output
+    }
+
+    private func formatDiscoveryDiagnostics(_ diagnostics: InterfaceDiscoveryDiagnostics) -> [String] {
+        let reason = diagnostics.reasonCodes.isEmpty ? "" : " [\(diagnostics.reasonCodes.joined(separator: ", "))]"
+        var lines = [
+            """
+            discovery: \(diagnostics.state)\(reason), included elements: \(diagnostics.includedElementCount), \
+            scroll attempts: \(diagnostics.scrollAttempts)/\(diagnostics.maxScrollsPerDiscovery), \
+            explored containers: \(diagnostics.exploredScrollableContainerCount), \
+            omitted containers: \(diagnostics.omittedScrollableContainerCount)
+            """,
+        ]
+        if let nextAction = diagnostics.nextAction {
+            lines.append("next: \(nextAction)")
+        }
+        return lines
     }
 
     private final class HumanLineIndexCounter {

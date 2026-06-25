@@ -134,7 +134,11 @@ final class TheBrains {
 
         do {
             let interface = try InterfaceSelector(interface: stash.discoveryInterface()).select(query)
-            return .success(interface)
+            let diagnostics = exploration.manifest.interfaceDiagnostics(
+                for: exploration.screen,
+                includedElementCount: interface.projectedElements.count
+            )
+            return .success(interface.withDiagnostics(diagnostics))
         } catch {
             return .failure(.selection(error))
         }

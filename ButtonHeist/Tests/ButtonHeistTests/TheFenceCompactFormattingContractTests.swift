@@ -1160,6 +1160,73 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertNil(scrollContainer["truncation"])
     }
 
+    func testPublicInterfaceOutputIncludesDiscoveryLimitDiagnostics() throws {
+        let diagnostics = InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
+            state: "limited",
+            reasonCodes: ["scroll-attempt-budget"],
+            includedElementCount: 2,
+            scrollAttempts: 5,
+            maxScrollsPerDiscovery: 5,
+            maxScrollsPerContainer: 3,
+            exploredScrollableContainerCount: 1,
+            omittedScrollableContainerCount: 1,
+            omittedContainers: [
+                InterfaceDiscoveryOmittedContainer(
+                    containerName: "main_scroll",
+                    type: "scrollable",
+                    reasonCodes: ["scroll-attempt-budget"],
+                    scrollAxis: .vertical,
+                    viewportWidth: 390,
+                    viewportHeight: 400,
+                    contentWidth: 390,
+                    contentHeight: 1_200
+                ),
+            ],
+            nextAction: "Retry get_interface with a higher maxScrollsPerDiscovery."
+        ))
+        let interface = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestScrollableContainer(
+                    contentWidth: 390,
+                    contentHeight: 1_200,
+                    frameWidth: 390,
+                    frameHeight: 400
+                ),
+                containerName: "main_scroll",
+                children: [
+                    .element(makeReceiptTestElement(label: "Top")),
+                    .element(makeReceiptTestElement(label: "Bottom")),
+                ]
+            ),
+        ]).withDiagnostics(diagnostics)
+
+        let compact = FenceResponse.compactInterface(interface, detail: .summary)
+        let json = try publicInterfaceJSONObject(PublicInterface(interface: interface, detail: .summary))
+        let encodedDiagnostics = try XCTUnwrap(json["diagnostics"] as? [String: Any])
+        let discovery = try XCTUnwrap(encodedDiagnostics["discovery"] as? [String: Any])
+        let omittedContainers = try XCTUnwrap(discovery["omittedContainers"] as? [[String: Any]])
+        let omitted = try XCTUnwrap(omittedContainers.first)
+
+        XCTAssertTrue(
+            compact.contains(
+                "discovery: limited[scroll-attempt-budget] includedElements=2 scrollAttempts=5/5"
+            ),
+            compact
+        )
+        XCTAssertTrue(compact.contains(#"omitted: scrollable containerName="main_scroll""#), compact)
+        XCTAssertTrue(compact.contains("next: Retry get_interface"), compact)
+        XCTAssertEqual(discovery["state"] as? String, "limited")
+        XCTAssertEqual(discovery["reasonCodes"] as? [String], ["scroll-attempt-budget"])
+        XCTAssertEqual((discovery["includedElementCount"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual((discovery["scrollAttempts"] as? NSNumber)?.intValue, 5)
+        XCTAssertEqual((discovery["maxScrollsPerDiscovery"] as? NSNumber)?.intValue, 5)
+        XCTAssertEqual((discovery["maxScrollsPerContainer"] as? NSNumber)?.intValue, 3)
+        XCTAssertEqual((discovery["omittedScrollableContainerCount"] as? NSNumber)?.intValue, 1)
+        XCTAssertEqual(omitted["containerName"] as? String, "main_scroll")
+        XCTAssertEqual(omitted["scrollAxis"] as? String, "vertical")
+        XCTAssertEqual(omitted["reasonCodes"] as? [String], ["scroll-attempt-budget"])
+    }
+
     func testPublicInterfaceJSONTruncatesScrollableSubtreeAtVisibleElementBudget() throws {
         let rows = (0..<4).map { index in
             ReceiptTestInterfaceNode.element(makeReceiptTestElement(label: "Row \(index)"))

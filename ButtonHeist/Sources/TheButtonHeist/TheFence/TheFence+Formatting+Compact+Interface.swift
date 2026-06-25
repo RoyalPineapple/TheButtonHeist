@@ -68,6 +68,7 @@ extension FenceResponse {
         totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
     ) -> String {
         var lines: [String] = ["\(interface.projectedElements.count) elements"]
+        lines.append(contentsOf: compactDiscoveryDiagnostics(interface.diagnostics?.discovery))
         lines.append(contentsOf: compactTreeLines(
             interface,
             detail: detail,
@@ -75,6 +76,57 @@ extension FenceResponse {
             totalNodeBudget: totalNodeBudget
         ))
         return lines.joined(separator: "\n")
+    }
+
+    private static func compactDiscoveryDiagnostics(
+        _ diagnostics: InterfaceDiscoveryDiagnostics?
+    ) -> [String] {
+        guard let diagnostics else { return [] }
+        let reason = diagnostics.reasonCodes.isEmpty ? "" : "[\(diagnostics.reasonCodes.joined(separator: ","))]"
+        var lines = [
+            """
+            discovery: \(diagnostics.state)\(reason) includedElements=\(diagnostics.includedElementCount) \
+            scrollAttempts=\(diagnostics.scrollAttempts)/\(diagnostics.maxScrollsPerDiscovery) \
+            maxScrollsPerContainer=\(diagnostics.maxScrollsPerContainer) \
+            exploredContainers=\(diagnostics.exploredScrollableContainerCount) \
+            omittedContainers=\(diagnostics.omittedScrollableContainerCount)
+            """,
+        ]
+        for omittedContainer in diagnostics.omittedContainers.prefix(3) {
+            lines.append("  omitted: \(compactDiscoveryOmittedContainer(omittedContainer))")
+        }
+        let omittedRemainder = diagnostics.omittedContainers.count - 3
+        if omittedRemainder > 0 {
+            lines.append("  omitted: \(omittedRemainder) more")
+        }
+        if let nextAction = nonEmpty(diagnostics.nextAction) {
+            lines.append("  next: \(nextAction)")
+        }
+        return lines
+    }
+
+    private static func compactDiscoveryOmittedContainer(
+        _ container: InterfaceDiscoveryOmittedContainer
+    ) -> String {
+        var parts = [container.type]
+        if let containerName = nonEmpty(container.containerName) {
+            parts.append("containerName=\(quotedString(containerName))")
+        }
+        if let scrollAxis = container.scrollAxis {
+            parts.append("scrollAxis=\(scrollAxis.rawValue)")
+        }
+        if let viewportWidth = container.viewportWidth,
+           let viewportHeight = container.viewportHeight {
+            parts.append("viewport=\(Int(viewportWidth))x\(Int(viewportHeight))")
+        }
+        if let contentWidth = container.contentWidth,
+           let contentHeight = container.contentHeight {
+            parts.append("content=\(Int(contentWidth))x\(Int(contentHeight))")
+        }
+        if !container.reasonCodes.isEmpty {
+            parts.append("reason=\(container.reasonCodes.joined(separator: ","))")
+        }
+        return parts.joined(separator: " ")
     }
 
     static func compactTreeLines(
