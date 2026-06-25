@@ -27,10 +27,6 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
         self = .ref(try ref.validated(type: "target"))
     }
 
-    public init(ref: String) throws {
-        self = .ref(try HeistReferenceName(validating: ref, type: "target"))
-    }
-
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.ref) {

@@ -18,10 +18,6 @@ public enum StringExpr: Codable, Sendable, Equatable, Hashable {
         self = .ref(try ref.validated(type: "string"))
     }
 
-    public init(ref: String) throws {
-        self = .ref(try HeistReferenceName(validating: ref, type: "string"))
-    }
-
     public init(from decoder: Decoder) throws {
         if let literal = try? decoder.singleValueContainer().decode(String.self) {
             self = .literal(literal)

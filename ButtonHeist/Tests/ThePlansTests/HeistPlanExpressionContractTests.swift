@@ -5,11 +5,11 @@ import ThePlans
 @Test
 func `unresolved expression refs throw typed errors`() throws {
     expectExpressionError(.unresolvedStringReference("missing")) {
-        try StringExpr(ref: "missing").resolve(in: .empty)
+        try StringExpr(ref: HeistReferenceName(rawValue: "missing")).resolve(in: .empty)
     }
 
     expectExpressionError(.unresolvedTargetReference("missing")) {
-        try ElementTargetExpr(ref: "missing").resolve(in: .empty)
+        try ElementTargetExpr(ref: HeistReferenceName(rawValue: "missing")).resolve(in: .empty)
     }
 
     let predicate = ElementPredicateTemplate(label: .exact(.ref("label")))
@@ -21,11 +21,11 @@ func `unresolved expression refs throw typed errors`() throws {
 @Test
 func `empty refs are rejected at expression boundaries`() throws {
     expectExpressionError(.emptyReference("string")) {
-        try StringExpr(ref: "  \n ")
+        try StringExpr(ref: HeistReferenceName(rawValue: "  \n "))
     }
 
     expectExpressionError(.emptyReference("target")) {
-        try ElementTargetExpr(ref: "  \n ")
+        try ElementTargetExpr(ref: HeistReferenceName(rawValue: "  \n "))
     }
 
     expectDecodingError(StringExpr.self, #"{"ref":"   "}"#, contains: "string reference must not be empty")
