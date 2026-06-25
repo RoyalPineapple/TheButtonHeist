@@ -10,7 +10,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
             lockoutDuration: 30
         )
 
-        guard case .rejected(let firstMessage, let firstAttempts, let firstLockedOut) = admission.decideToken(
+        guard case .rejected(.invalidToken(let firstMessage, let firstAttempts)) = admission.decideToken(
             "bad-token",
             driverId: nil,
             address: "127.0.0.1"
@@ -19,9 +19,8 @@ final class TheMuscleStateMachineTests: XCTestCase {
         }
         XCTAssertEqual(firstMessage, "Invalid token. Retry with the configured token.")
         XCTAssertEqual(firstAttempts, 1)
-        XCTAssertFalse(firstLockedOut)
 
-        guard case .rejected(_, let secondAttempts, let secondLockedOut) = admission.decideToken(
+        guard case .rejected(.lockoutStarted(_, let secondAttempts)) = admission.decideToken(
             "bad-token",
             driverId: nil,
             address: "127.0.0.1"
@@ -29,7 +28,6 @@ final class TheMuscleStateMachineTests: XCTestCase {
             return XCTFail("Expected the second bad token to be rejected")
         }
         XCTAssertEqual(secondAttempts, 2)
-        XCTAssertTrue(secondLockedOut)
 
         guard case .lockedOut(let error) = admission.decideToken(
             "good-token",
@@ -44,10 +42,9 @@ final class TheMuscleStateMachineTests: XCTestCase {
     func testSessionLeaseDrainingRejectionUsesOneStructuredDiagnostic() {
         var lease = SessionLease(releaseTimeout: 30)
 
-        guard case .accepted(let claimed, _) = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
+        guard case .accepted(.claimedSession) = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
             return XCTFail("Expected first driver to claim the session")
         }
-        XCTAssertTrue(claimed)
 
         guard case .draining = lease.removeConnection(1) else {
             return XCTFail("Expected final connection removal to start draining")

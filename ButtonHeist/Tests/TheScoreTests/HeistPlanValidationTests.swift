@@ -218,7 +218,7 @@ func runtimeSafetyRejectsInvalidRefs() throws {
         ),
         (
             "long target ref",
-            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(tooLong))))]),
+            HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: .activate(.ref(HeistReferenceName(rawValue: tooLong)))))]),
             "max parameter/ref length"
         ),
     ]
