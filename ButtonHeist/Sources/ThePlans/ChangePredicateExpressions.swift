@@ -5,14 +5,14 @@ import Foundation
 public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
     public let element: ElementPredicateTemplate?
     public let property: ElementProperty?
-    public let from: StringExpr?
-    public let to: StringExpr?
+    public let from: StringMatch<StringExpr>?
+    public let to: StringMatch<StringExpr>?
 
     public init(
         element: ElementPredicateTemplate? = nil,
         property: ElementProperty? = nil,
-        from: StringExpr? = nil,
-        to: StringExpr? = nil
+        from: StringMatch<StringExpr>? = nil,
+        to: StringMatch<StringExpr>? = nil
     ) {
         self.element = element
         self.property = property
@@ -24,8 +24,8 @@ public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
         self.init(
             element: update.element.map(ElementPredicateTemplate.init),
             property: update.property,
-            from: update.from.map(StringExpr.literal),
-            to: update.to.map(StringExpr.literal)
+            from: update.from.map { $0.map(StringExpr.literal) },
+            to: update.to.map { $0.map(StringExpr.literal) }
         )
     }
 
@@ -50,8 +50,8 @@ public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
         self.init(
             element: try container.decodeIfPresent(ElementPredicateTemplate.self, forKey: .element),
             property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
-            from: try Self.decodeStringExpr(container, literalKey: .from, refKey: .fromRef, field: "from"),
-            to: try Self.decodeStringExpr(container, literalKey: .to, refKey: .toRef, field: "to")
+            from: try Self.decodeStringMatchExpr(container, literalKey: .from, refKey: .fromRef, field: "from"),
+            to: try Self.decodeStringMatchExpr(container, literalKey: .to, refKey: .toRef, field: "to")
         )
     }
 
@@ -63,17 +63,17 @@ public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
         try Self.encode(to, literalKey: .to, refKey: .toRef, into: &container)
     }
 
-    private static func decodeStringExpr(
+    private static func decodeStringMatchExpr(
         _ container: KeyedDecodingContainer<CodingKeys>,
         literalKey: CodingKeys,
         refKey: CodingKeys,
         field: String
-    ) throws -> StringExpr? {
-        let literal = try container.decodeIfPresent(String.self, forKey: literalKey)
+    ) throws -> StringMatch<StringExpr>? {
+        let literal = try container.decodeIfPresent(StringMatch<StringExpr>.self, forKey: literalKey)
         let reference = try container.decodeIfPresent(String.self, forKey: refKey)
         switch (literal, reference) {
         case (.some(let literal), nil):
-            return .literal(literal)
+            return literal
         case (nil, .some(let reference)):
             let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else {
@@ -83,7 +83,7 @@ public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
                     debugDescription: "\(field)_ref must not be empty"
                 )
             }
-            return .ref(trimmed)
+            return .exact(.ref(trimmed))
         case (.some, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: refKey,
@@ -96,17 +96,17 @@ public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
     }
 
     private static func encode(
-        _ expression: StringExpr?,
+        _ expression: StringMatch<StringExpr>?,
         literalKey: CodingKeys,
         refKey: CodingKeys,
         into container: inout KeyedEncodingContainer<CodingKeys>
     ) throws {
         switch expression {
-        case .literal(let literal):
-            try container.encode(literal, forKey: literalKey)
-        case .ref(let reference):
+        case .some(.exact(.ref(let reference))):
             try container.encode(reference, forKey: refKey)
-        case nil:
+        case .some(let match):
+            try container.encode(match, forKey: literalKey)
+        case .none:
             break
         }
     }

@@ -83,8 +83,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         let fields = [
             update.element.map { render(predicate: $0) },
             update.property.map { "property: .\($0.rawValue)" },
-            update.from.map { "from: \(quote($0))" },
-            update.to.map { "to: \(quote($0))" },
+            update.from.map { "from: \(renderFieldArgument($0))" },
+            update.to.map { "to: \(renderFieldArgument($0))" },
         ].compactMap { $0 }
         return fields.joined(separator: ", ")
     }
@@ -93,8 +93,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         let fields = try [
             update.element.map { try render(predicate: $0, environment: environment) },
             update.property.map { "property: .\($0.rawValue)" },
-            update.from.map { "from: \(try render(string: $0, environment: environment))" },
-            update.to.map { "to: \(try render(string: $0, environment: environment))" },
+            update.from.map { "from: \(try renderFieldArgument($0, environment: environment))" },
+            update.to.map { "to: \(try renderFieldArgument($0, environment: environment))" },
         ].compactMap { $0 }
         return fields.joined(separator: ", ")
     }

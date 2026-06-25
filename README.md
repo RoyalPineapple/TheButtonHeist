@@ -129,6 +129,17 @@ and assertion evidence, not durable target identity. For durable heists, the
 best target is the smallest accessibility predicate that names the intended
 control in its screen context.
 
+String predicates are exact by default. Every element string field accepts
+explicit non-exact `StringMatch` modes: `.contains(...)`, `.prefix(...)`, or
+`.suffix(...)` on `.label(...)`, `.identifier(...)`, `.value(...)`, or the
+corresponding `.element(label: ..., identifier: ..., value: ...)` fields.
+Property-update `from` and `to` filters use the same exact-by-default matching
+model. For KIF migrations that previously used a selector such as
+`usingLabelContaining("Search")`, write the looseness explicitly with
+`.label(.contains("Search"))` or `.element(label: .contains("Search"))`;
+prefer an exact label, identifier, value, or trait when one names the intended
+control clearly.
+
 The difference shows up in what the next step can trust. Coordinate-first tools
 often give the agent a raw translated accessibility object plus geometry. This
 simplified example shows the kind of object the caller must still turn into an

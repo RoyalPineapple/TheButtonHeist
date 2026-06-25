@@ -163,11 +163,36 @@ Rotor("Headings", on: .label("Article"), direction: .next)
     .withoutExpectation("Navigation cursor only")
 ```
 
+String predicates are exact by default. `Activate(.label("Search"))` matches
+the label `Search` with case and typography folding; it does not match
+`Search results`. This applies to every element string predicate field:
+`label`, `identifier`, and `value`. Prefer exact labels, identifiers, values,
+and traits when they name the intended control clearly.
+
+When migrating a KIF selector such as `usingLabelContaining("Search")`, use an
+explicit broad match so the looseness stays visible in review:
+
+```swift
+Activate(.label(.contains("Search")))
+
+WaitFor(.present(.element(
+    label: .contains("No results"),
+    identifier: .contains("empty_state"),
+    value: .contains("0 items")
+)), timeout: .seconds(2))
+```
+
+`StringMatch` cases `.contains`, `.prefix`, and `.suffix` work on all element string predicate fields
+and require non-empty strings. They are opt-in matching modes, not a fallback
+for failed exact predicates.
+
 Use `.changed(.updated(...))` for explicit property-delta assertions. The
 optional first argument scopes the update to an element predicate; omitting it
 matches any updated element in the observed delta. `from` and `to` are optional
-string filters. This remains an observed-change predicate and does not infer the
-action's target from hidden context.
+string filters with the same exact-by-default `StringMatch` modes, so
+`to: "3"` is exact and `to: .contains("items")` is explicitly broad. This
+remains an observed-change predicate and does not infer the action's target from
+hidden context.
 
 Do not write `.expect(.updated(...))` today. A future target-relative shorthand
 would need to derive a durable anchor at DSL-build time and lower immediately to

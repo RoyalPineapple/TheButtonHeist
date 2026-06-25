@@ -46,6 +46,11 @@ func `broad string matches reject refs that resolve empty`() throws {
     expectExpressionError(.invalidStringMatch(mode: "prefix")) {
         try state.resolve(in: HeistExecutionEnvironment(strings: ["prefix": ""]))
     }
+
+    let update = ElementUpdatePredicateExpr(property: .value, from: .contains(.ref("fromPart")))
+    expectExpressionError(.invalidStringMatch(mode: "contains")) {
+        try update.resolve(in: HeistExecutionEnvironment(strings: ["fromPart": ""]))
+    }
 }
 
 @Test
@@ -118,6 +123,16 @@ func `expression codable shapes remain stable`() throws {
         to: .literal("new")
     ))
     #expect(try sortedJSON(change) == #"{"element":{"label_ref":"item"},"from_ref":"old","property":"value","to":"new","type":"element_updated"}"#)
+
+    let broadChange = ChangePredicateExpr.updated(ElementUpdatePredicateExpr(
+        property: .value,
+        from: .prefix(.literal("cart:")),
+        to: .contains(.ref("count"))
+    ))
+    #expect(
+        try sortedJSON(broadChange) ==
+            #"{"from":{"mode":"prefix","value":"cart:"},"property":"value","to":{"mode":"contains","value":{"ref":"count"}},"type":"element_updated"}"#
+    )
 }
 
 @Test

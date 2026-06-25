@@ -163,15 +163,19 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertNil(predicate.nonEmpty, "All-empty-string predicate should be nonEmpty == nil")
     }
 
-    // MARK: - Exact-or-Miss Matching
+    // MARK: - String Matching
     //
-    // Client-side HeistElement.matches uses the same exact-or-miss semantics
-    // as server-side resolution: case-insensitive equality with typography
-    // folding on label, identifier, and value. No substring fallback.
+    // Client-side HeistElement.matches uses the same semantics as server-side
+    // resolution: exact by default, explicit broad StringMatch modes when
+    // authored, case-insensitive with typography folding.
 
     func testExactLabelMatches() {
         let element = HeistElement.stub(label: "Save")
         XCTAssertTrue(element.matches(ElementPredicate(label: "Save")))
+    }
+
+    func testStringMatchUnlabeledInitializerDefaultsToExact() {
+        XCTAssertEqual(StringMatch<String>("Save"), .exact("Save"))
     }
 
     func testCaseInsensitiveLabelMatches() {
@@ -194,6 +198,30 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertFalse(element.matches(ElementPredicate(label: "Save")))
         // The full label still matches.
         XCTAssertTrue(element.matches(ElementPredicate(label: "Save Draft")))
+    }
+
+    func testExplicitBroadStringMatchesLabelIdentifierAndValue() {
+        let element = HeistElement(
+            description: "No results found",
+            label: "No results found",
+            value: "0 results",
+            identifier: "empty_search_results_message",
+            traits: [.staticText],
+            frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
+            actions: []
+        )
+
+        XCTAssertTrue(element.matches(ElementPredicate(label: .contains("results"))))
+        XCTAssertTrue(element.matches(ElementPredicate(label: .prefix("No results"))))
+        XCTAssertTrue(element.matches(ElementPredicate(label: .suffix("found"))))
+        XCTAssertTrue(element.matches(ElementPredicate(identifier: .contains("search_results"))))
+        XCTAssertTrue(element.matches(ElementPredicate(identifier: .prefix("empty"))))
+        XCTAssertTrue(element.matches(ElementPredicate(identifier: .suffix("message"))))
+        XCTAssertTrue(element.matches(ElementPredicate(value: .contains("0 result"))))
+        XCTAssertTrue(element.matches(ElementPredicate(value: .prefix("0"))))
+        XCTAssertTrue(element.matches(ElementPredicate(value: .suffix("results"))))
+        XCTAssertFalse(element.matches(ElementPredicate(label: "results")))
+        XCTAssertFalse(element.matches(ElementPredicate(value: "0 result")))
     }
 
     func testTypographyFoldingOnLabel() {
@@ -289,8 +317,7 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertTrue(ElementPredicate.stringEquals("Loading\u{2026}", "Loading..."))
     }
 
-    func testStringContainsForSuggestions() {
-        // The suggestion-only substring helper — used by diagnostics, never by resolution.
+    func testStringContainsForExplicitMatchesAndSuggestions() {
         XCTAssertTrue(ElementPredicate.stringContains("Save Draft", "Save"))
         XCTAssertTrue(ElementPredicate.stringContains("Save Draft", "Draft"))
         XCTAssertTrue(ElementPredicate.stringContains("Don\u{2019}t skip", "Don't"))

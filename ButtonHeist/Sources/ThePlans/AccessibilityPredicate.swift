@@ -104,8 +104,8 @@ extension AccessibilityPredicate: Codable {
             self = .changed(.updated(ElementUpdatePredicate(
                 element: try container.decodeIfPresent(ElementPredicate.self, forKey: .element),
                 property: try Self.decodeProperty(container),
-                from: try container.decodeIfPresent(String.self, forKey: .from),
-                to: try container.decodeIfPresent(String.self, forKey: .to)
+                from: try container.decodeIfPresent(StringMatch<String>.self, forKey: .from),
+                to: try container.decodeIfPresent(StringMatch<String>.self, forKey: .to)
             )))
         }
     }

@@ -92,6 +92,14 @@ extension StringExpr: StringMatchPayload {
 }
 
 extension StringMatch where Value == StringExpr {
+    public static func literal(_ value: String) -> StringMatch<StringExpr> {
+        .exact(.literal(value))
+    }
+
+    public static func ref(_ reference: HeistReferenceName) -> StringMatch<StringExpr> {
+        .exact(.ref(reference))
+    }
+
     func resolve(in environment: HeistExecutionEnvironment) throws -> StringMatch<String> {
         let resolved = try map { try $0.resolve(in: environment) }
         if resolved.hasInvalidEmptyBroadLiteral {

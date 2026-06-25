@@ -118,13 +118,10 @@ extension TheStash {
     /// to drift — e.g. slider moved), then traits, label, identifier.
     /// Only considers relaxations that still have at least one remaining predicate —
     /// dropping the only predicate matches everything, which isn't a useful near-miss.
-    /// Returns a diagnostic line listing up to three near-miss candidates (so an
-    /// agent who typed a partial label sees the actual labels they could have
-    /// meant), or nil if no near-miss was found.
-    ///
-    /// The relaxed predicate is matched with `.substring` semantics deliberately —
-    /// the suggestion path is the only place where substring matching is allowed.
-    /// Resolution itself is exact-or-miss.
+    /// Returns a diagnostic line listing up to three near-miss candidates, or
+    /// nil if no near-miss was found. This path preserves the authored
+    /// predicate exactly for remaining fields; derived substring searches live
+    /// in the separate failure-capture diagnostic pipeline.
     static func findNearMiss(
         for predicate: ElementPredicate,
         in screenElements: [Screen.ScreenElement],
@@ -179,7 +176,7 @@ extension TheStash {
         let suggestionCap = 3
         for relaxation in relaxations {
             guard relaxation.relaxed.hasPredicates else { continue }
-            let hits = matchCandidates(relaxation.relaxed, in: screenElements, mode: .substring, limit: suggestionCap + 1)
+            let hits = matchCandidates(relaxation.relaxed, in: screenElements, limit: suggestionCap + 1)
             guard !hits.isEmpty else { continue }
             let deduped = dedupedPreservingOrder(hits.map {
                 suggestionValue(
@@ -194,29 +191,66 @@ extension TheStash {
             let suffix = deduped.count > suggestionCap ? ", ..." : ""
             return "near miss: matched all fields except \(relaxation.field) — did you mean \(suggestion)\(suffix)?"
         }
-
-        // Single-predicate diagnostic pass: when every relaxation removes all
-        // predicates, run the original matcher with substring semantics so the
-        // agent who typed a partial still gets concrete suggestions. This is
-        // the only place where substring search reaches user-visible output;
-        // resolution itself remains strictly exact-or-miss.
-        for relaxation in relaxations where !relaxation.relaxed.hasPredicates {
-            let substringHits = matchCandidates(predicate, in: screenElements, mode: .substring, limit: suggestionCap + 1)
-            guard !substringHits.isEmpty else { continue }
-            let deduped = dedupedPreservingOrder(substringHits.map {
-                suggestionValue(
-                    field: relaxation.field,
-                    actual: relaxation.actual($0.element),
-                    candidate: $0,
-                    visibleHeistIds: visibleHeistIds
-                )
-            })
-            let candidates = deduped.prefix(suggestionCap)
-            let suggestion = candidates.joined(separator: ", ")
-            let suffix = deduped.count > suggestionCap ? ", ..." : ""
-            return "near miss: \(relaxation.field) matched as substring only — did you mean \(suggestion)\(suffix)?"
-        }
         return nil
+    }
+
+    static func failureInterfaceSuggestion(
+        for predicate: ElementPredicate,
+        elements: [HeistElement],
+        limit: Int = 3
+    ) -> String? {
+        guard limit > 0, let diagnosticPredicate = diagnosticContainsPredicate(from: predicate) else { return nil }
+        let hits = elements.filter { diagnosticPredicate.matches($0) }.prefix(limit + 1)
+        guard !hits.isEmpty else { return nil }
+        let deduped = dedupedPreservingOrder(hits.map {
+            failureInterfaceSuggestionValue(
+                failedPredicate: predicate,
+                diagnosticPredicate: diagnosticPredicate,
+                element: $0
+            )
+        })
+        let suggestions = deduped.prefix(limit).joined(separator: "; ")
+        let suffix = deduped.count > limit ? "; ..." : ""
+        return "captured interface contains-match suggestion: \(suggestions)\(suffix)"
+    }
+
+    private static func diagnosticContainsPredicate(from predicate: ElementPredicate) -> ElementPredicate? {
+        let diagnostic = ElementPredicate(
+            label: predicate.label.map { .contains($0.value) },
+            identifier: predicate.identifier.map { .contains($0.value) },
+            value: predicate.value.map { .contains($0.value) },
+            traits: predicate.traits,
+            excludeTraits: predicate.excludeTraits
+        )
+        return diagnostic == predicate ? nil : diagnostic
+    }
+
+    private static func failureInterfaceSuggestionValue(
+        failedPredicate: ElementPredicate,
+        diagnosticPredicate: ElementPredicate,
+        element: HeistElement
+    ) -> String {
+        var observed: [String] = []
+        if failedPredicate.label != nil, let label = element.label, !label.isEmpty {
+            observed.append("label=\"\(label)\"")
+        }
+        if failedPredicate.identifier != nil, let identifier = element.identifier, !identifier.isEmpty {
+            observed.append("id=\"\(identifier)\"")
+        }
+        if failedPredicate.value != nil, let value = element.value, !value.isEmpty {
+            observed.append("value=\"\(value)\"")
+        }
+        return "\(observed.joined(separator: " ")) — try \(exactPredicateDescription(failedPredicate, element: element)) or \(diagnosticPredicate)"
+    }
+
+    private static func exactPredicateDescription(_ failedPredicate: ElementPredicate, element: HeistElement) -> String {
+        ElementPredicate(
+            label: failedPredicate.label != nil ? element.label.map(StringMatch.exact) : nil,
+            identifier: failedPredicate.identifier != nil ? element.identifier.map(StringMatch.exact) : nil,
+            value: failedPredicate.value != nil ? element.value.map(StringMatch.exact) : nil,
+            traits: failedPredicate.traits,
+            excludeTraits: failedPredicate.excludeTraits
+        ).description
     }
 
     /// Compact summary of known elements for total-miss diagnostics.
@@ -261,13 +295,12 @@ extension TheStash {
     private static func matchCandidates(
         _ predicate: ElementPredicate,
         in screenElements: [Screen.ScreenElement],
-        mode: ElementPredicate.StringMatchMode,
         limit: Int
     ) -> [Screen.ScreenElement] {
         guard limit > 0 else { return [] }
         var hits: [Screen.ScreenElement] = []
         hits.reserveCapacity(limit)
-        for entry in screenElements where predicate.matches(entry.element, mode: mode) {
+        for entry in screenElements where predicate.matches(entry.element) {
             hits.append(entry)
             if hits.count == limit { break }
         }
@@ -304,7 +337,8 @@ extension TheStash {
         var seen: Set<String> = []
         return values.filter { seen.insert($0).inserted }
     }
-    }
+}
+
 }
 
 #endif // DEBUG

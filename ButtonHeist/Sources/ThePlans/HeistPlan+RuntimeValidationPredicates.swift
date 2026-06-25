@@ -36,8 +36,8 @@ extension HeistPlanRuntimeSafetyValidator {
                 if let element = update.element {
                     validateElementPredicate(element, path: "\(path).element")
                 }
-                addString(update.from, path: "\(path).from", role: "change predicate from value")
-                addString(update.to, path: "\(path).to", role: "change predicate to value")
+                validateString(update.from, path: "\(path).from", role: "change predicate from value")
+                validateString(update.to, path: "\(path).to", role: "change predicate to value")
             case .elements:
                 break
             }
