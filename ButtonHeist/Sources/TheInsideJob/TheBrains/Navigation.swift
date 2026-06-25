@@ -314,7 +314,7 @@ final class Navigation {
             let reasonCodes = discoveryReasonCodes(omittedContainerDetails)
             let isLimited = !reasonCodes.isEmpty || !omittedContainerDetails.isEmpty
             return InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
-                state: isLimited ? "limited" : "complete",
+                state: isLimited ? .limited : .complete,
                 reasonCodes: reasonCodes,
                 includedElementCount: includedElementCount,
                 scrollAttempts: scrollCount,
@@ -329,22 +329,22 @@ final class Navigation {
 
         private func discoveryReasonCodes(
             _ omittedContainerDetails: [InterfaceDiscoveryOmittedContainer]
-        ) -> [String] {
+        ) -> [InterfaceDiscoveryReasonCode] {
             var reasons = Set(omittedContainerDetails.flatMap(\.reasonCodes))
-            if discoveryLimitHit { reasons.insert(ExplorationOmissionReason.discoveryScrollLimit.rawValue) }
-            if containerLimitHit { reasons.insert(ExplorationOmissionReason.containerScrollLimit.rawValue) }
-            if leadingEdgeResetLimitHit { reasons.insert(ExplorationOmissionReason.leadingEdgeResetLimit.rawValue) }
+            if discoveryLimitHit { reasons.insert(.discoveryScrollLimit) }
+            if containerLimitHit { reasons.insert(.containerScrollLimit) }
+            if leadingEdgeResetLimitHit { reasons.insert(.leadingEdgeResetLimit) }
             return reasons.sorted()
         }
 
-        private func nextAction(for reasonCodes: [String]) -> String {
-            if reasonCodes.contains(ExplorationOmissionReason.discoveryScrollLimit.rawValue) {
+        private func nextAction(for reasonCodes: [InterfaceDiscoveryReasonCode]) -> String {
+            if reasonCodes.contains(.discoveryScrollLimit) {
                 return """
                     Retry get_interface with a higher maxScrollsPerDiscovery or narrow the query to a smaller subtree.
                     """
             }
-            if reasonCodes.contains(ExplorationOmissionReason.containerScrollLimit.rawValue)
-                || reasonCodes.contains(ExplorationOmissionReason.leadingEdgeResetLimit.rawValue) {
+            if reasonCodes.contains(.containerScrollLimit)
+                || reasonCodes.contains(.leadingEdgeResetLimit) {
                 return """
                     Retry get_interface with a higher maxScrollsPerContainer or request a smaller scroll container subtree.
                     """
@@ -373,7 +373,6 @@ final class Navigation {
             screen: Screen
         ) -> InterfaceDiscoveryOmittedContainer {
             let frame = container.frame
-            let reasonCodes = reasons.map(\.rawValue).sorted()
             let containerName = screen.liveCapture.containerNames[container]
                 ?? screen.orderedContainers.first { $0.container == container }?.containerName
 
@@ -381,7 +380,7 @@ final class Navigation {
                 return InterfaceDiscoveryOmittedContainer(
                     containerName: containerName,
                     type: container.typeName.rawValue,
-                    reasonCodes: reasonCodes,
+                    reasonCodes: reasons.interfaceDiscoveryReasonCodes,
                     viewportWidth: Double(frame.size.width),
                     viewportHeight: Double(frame.size.height)
                 )
@@ -396,7 +395,7 @@ final class Navigation {
             return InterfaceDiscoveryOmittedContainer(
                 containerName: containerName,
                 type: container.typeName.rawValue,
-                reasonCodes: reasonCodes,
+                reasonCodes: reasons.interfaceDiscoveryReasonCodes,
                 scrollAxis: scrollAxis,
                 viewportWidth: Double(frame.size.width),
                 viewportHeight: Double(frame.size.height),
@@ -411,6 +410,27 @@ final class Navigation {
 
     func clearCache() {
         lastSwipeDirectionByTarget.removeAll()
+    }
+}
+
+private extension Set where Element == Navigation.ExplorationOmissionReason {
+    var interfaceDiscoveryReasonCodes: [InterfaceDiscoveryReasonCode] {
+        map(\.interfaceDiscoveryReasonCode).sorted()
+    }
+}
+
+private extension Navigation.ExplorationOmissionReason {
+    var interfaceDiscoveryReasonCode: InterfaceDiscoveryReasonCode {
+        switch self {
+        case .discoveryScrollLimit:
+            .discoveryScrollLimit
+        case .containerScrollLimit:
+            .containerScrollLimit
+        case .leadingEdgeResetLimit:
+            .leadingEdgeResetLimit
+        case .notExplored:
+            .notExplored
+        }
     }
 }
 

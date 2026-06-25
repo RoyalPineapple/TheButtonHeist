@@ -71,7 +71,7 @@ public extension FenceParameterKey {
     static let elementDirection = Self("elementDirection"), elementToPoint = Self("elementToPoint")
     static let elementUnitPoints = Self("elementUnitPoints")
     static let expect = Self("expect"), from = Self("from"), heistId = Self("heistId")
-    static let heist = Self("heist"), identifier = Self("identifier"), includeInterface = Self("includeInterface")
+    static let heist = Self("heist"), identifier = Self("identifier")
     static let inlineData = Self("inlineData"), path = Self("path"), isModalBoundary = Self("isModalBoundary")
     static let label = Self("label"), matcher = Self("matcher")
     static let maxScrollsPerContainer = Self("maxScrollsPerContainer")

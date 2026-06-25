@@ -301,7 +301,6 @@ struct PublicHeistReportNode: Encodable {
     let evidence: PublicHeistReportEvidence?
     let failure: HeistFailureDetail?
     let abortedAtChildPath: String?
-    let action: PublicHeistReportAction?
     let expectation: PublicExpectationResult?
     let children: [PublicHeistReportNode]
 
@@ -316,26 +315,10 @@ struct PublicHeistReportNode: Encodable {
         self.evidence = PublicHeistReportEvidence(step: step)
         self.failure = step.failure
         self.abortedAtChildPath = step.abortedAtChildPath
-        self.action = PublicHeistReportAction(step: step)
         self.expectation = step.reportExpectation.map {
             PublicExpectationResult(result: $0)
         }
         self.children = step.children.map(PublicHeistReportNode.init(step:))
-    }
-}
-
-struct PublicHeistReportAction: Encodable {
-    let commandName: String
-    let target: ElementTarget?
-    let result: PublicHeistReportActionResult?
-
-    init?(step: HeistExecutionStepResult) {
-        guard step.kind == .action, let commandName = step.reportCommandName else { return nil }
-        self.commandName = commandName
-        self.target = step.reportTarget
-        self.result = step.reportActionResult.map {
-            PublicHeistReportActionResult(method: commandName, result: $0)
-        }
     }
 }
 

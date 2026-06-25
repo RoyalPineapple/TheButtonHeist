@@ -104,8 +104,8 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
     func testInterfaceDiagnosticsRoundTripThroughCanonicalWireShape() throws {
         let diagnostics = InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
-            state: "limited",
-            reasonCodes: ["scroll-attempt-budget"],
+            state: .limited,
+            reasonCodes: [.discoveryScrollLimit],
             includedElementCount: 3,
             scrollAttempts: 5,
             maxScrollsPerDiscovery: 5,
@@ -116,7 +116,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
                 InterfaceDiscoveryOmittedContainer(
                     containerName: "main_scroll",
                     type: "scrollable",
-                    reasonCodes: ["scroll-attempt-budget"],
+                    reasonCodes: [.discoveryScrollLimit],
                     scrollAxis: .vertical,
                     viewportWidth: 320,
                     viewportHeight: 400,

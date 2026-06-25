@@ -173,10 +173,11 @@ extension FenceResponse {
     }
 
     private func formatDiscoveryDiagnostics(_ diagnostics: InterfaceDiscoveryDiagnostics) -> [String] {
-        let reason = diagnostics.reasonCodes.isEmpty ? "" : " [\(diagnostics.reasonCodes.joined(separator: ", "))]"
+        let reasonCodes = diagnostics.reasonCodes.map(\.rawValue)
+        let reason = reasonCodes.isEmpty ? "" : " [\(reasonCodes.joined(separator: ", "))]"
         var lines = [
             """
-            discovery: \(diagnostics.state)\(reason), included elements: \(diagnostics.includedElementCount), \
+            discovery: \(diagnostics.state.rawValue)\(reason), included elements: \(diagnostics.includedElementCount), \
             scroll attempts: \(diagnostics.scrollAttempts)/\(diagnostics.maxScrollsPerDiscovery), \
             explored containers: \(diagnostics.exploredScrollableContainerCount), \
             omitted containers: \(diagnostics.omittedScrollableContainerCount)

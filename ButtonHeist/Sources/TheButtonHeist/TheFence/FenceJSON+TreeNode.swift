@@ -7,7 +7,7 @@ final class PublicIndexCounter {
     var value = 0
 }
 
-struct PublicSnapshotQuality: Encodable {
+struct PublicInterfaceRendering: Encodable {
     let state: String
     let reasonCode: String?
     let observedElementCount: Int
@@ -34,14 +34,14 @@ final class PublicInterfaceProjectionStats {
         truncatedScrollContainerCount += 1
     }
 
-    func snapshotQuality(
+    func rendering(
         visibleElementBudget: Int,
         totalNodeBudget: Int,
         totalNodeBudgetHit: Bool
-    ) -> PublicSnapshotQuality {
+    ) -> PublicInterfaceRendering {
         let omittedElementCount = max(0, observedElementCount - renderedElementCount)
         guard truncatedScrollContainerCount > 0 || omittedElementCount > 0 || totalNodeBudgetHit else {
-            return PublicSnapshotQuality(
+            return PublicInterfaceRendering(
                 state: "full",
                 reasonCode: nil,
                 observedElementCount: observedElementCount,
@@ -52,7 +52,7 @@ final class PublicInterfaceProjectionStats {
             )
         }
 
-        return PublicSnapshotQuality(
+        return PublicInterfaceRendering(
             state: "truncated",
             reasonCode: totalNodeBudgetHit ? "total-node-budget" : "scroll-subtree-element-budget",
             observedElementCount: observedElementCount,

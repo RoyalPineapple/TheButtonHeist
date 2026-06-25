@@ -54,10 +54,11 @@ extension FenceResponse {
         _ diagnostics: InterfaceDiscoveryDiagnostics?
     ) -> [String] {
         guard let diagnostics else { return [] }
-        let reason = diagnostics.reasonCodes.isEmpty ? "" : "[\(diagnostics.reasonCodes.joined(separator: ","))]"
+        let reasonCodes = diagnostics.reasonCodes.map(\.rawValue)
+        let reason = reasonCodes.isEmpty ? "" : "[\(reasonCodes.joined(separator: ","))]"
         var lines = [
             """
-            discovery: \(diagnostics.state)\(reason) includedElements=\(diagnostics.includedElementCount) \
+            discovery: \(diagnostics.state.rawValue)\(reason) includedElements=\(diagnostics.includedElementCount) \
             scrollAttempts=\(diagnostics.scrollAttempts)/\(diagnostics.maxScrollsPerDiscovery) \
             maxScrollsPerContainer=\(diagnostics.maxScrollsPerContainer) \
             exploredContainers=\(diagnostics.exploredScrollableContainerCount) \
@@ -96,7 +97,7 @@ extension FenceResponse {
             parts.append("content=\(Int(contentWidth))x\(Int(contentHeight))")
         }
         if !container.reasonCodes.isEmpty {
-            parts.append("reason=\(container.reasonCodes.joined(separator: ","))")
+            parts.append("reason=\(container.reasonCodes.map(\.rawValue).joined(separator: ","))")
         }
         return parts.joined(separator: " ")
     }

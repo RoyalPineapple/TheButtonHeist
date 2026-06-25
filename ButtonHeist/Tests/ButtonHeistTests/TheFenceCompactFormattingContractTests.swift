@@ -285,12 +285,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let json = publicJSONObject(response)
         let report = try XCTUnwrap(json["report"] as? [String: Any])
         let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let action = try XCTUnwrap(nodes.first?["action"] as? [String: Any])
+        let node = try XCTUnwrap(nodes.first)
+        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
+        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
         let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
         let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
         let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
         let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
 
+        XCTAssertNil(node["action"])
         XCTAssertTrue(compact.contains("-> elements changed"), compact)
         XCTAssertFalse(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
         XCTAssertEqual(delta["kind"] as? String, "elementsChanged")
@@ -330,7 +333,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let json = publicJSONObject(response)
         let report = try XCTUnwrap(json["report"] as? [String: Any])
         let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let action = try XCTUnwrap(nodes.first?["action"] as? [String: Any])
+        let node = try XCTUnwrap(nodes.first)
+        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
+        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
         let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
         let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
         let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
@@ -340,6 +345,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let traceOmission = try XCTUnwrap(resultOmissions["accessibilityTrace"] as? [String: Any])
         let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
 
+        XCTAssertNil(node["action"])
         XCTAssertEqual(added.count, 5)
         XCTAssertTrue(added.allSatisfy { ($0["label"] as? String)?.hasPrefix("Lazy Row ") == true }, "\(added)")
         XCTAssertEqual(editOmissions["added"] as? Int, 3)
@@ -381,13 +387,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let json = publicJSONObject(response)
         let report = try XCTUnwrap(json["report"] as? [String: Any])
         let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let action = try XCTUnwrap(nodes.first?["action"] as? [String: Any])
+        let node = try XCTUnwrap(nodes.first)
+        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
+        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
         let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
         let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
         let screen = try XCTUnwrap(delta["screen"] as? [String: Any])
         let elements = try XCTUnwrap(screen["elements"] as? [[String: Any]])
         let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
 
+        XCTAssertNil(node["action"])
         XCTAssertEqual(delta["kind"] as? String, "screenChanged")
         XCTAssertNil(delta["newInterface"])
         XCTAssertEqual(actionResult["screenId"] as? String, "checkout")
@@ -734,7 +743,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let child = try XCTUnwrap(children.first)
         let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
         let caseSelection = try XCTUnwrap(evidence["caseSelection"] as? [String: Any])
-        let action = try XCTUnwrap(child["action"] as? [String: Any])
+        let childEvidence = try XCTUnwrap(child["evidence"] as? [String: Any])
+        let action = try XCTUnwrap(childEvidence["action"] as? [String: Any])
         let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
 
         XCTAssertNil(json["results"])
@@ -748,6 +758,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(child["path"] as? String, "$.body[0].conditional.cases[0].body[0]")
         XCTAssertEqual(child["kind"] as? String, "action")
         XCTAssertEqual(child["status"] as? String, "failed")
+        XCTAssertNil(child["action"])
         XCTAssertEqual(action["commandName"] as? String, "activate")
         XCTAssertEqual(actionResult["status"] as? String, "error")
         XCTAssertEqual(actionResult["message"] as? String, "nested button failed")
@@ -1143,17 +1154,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         let json = publicJSONObject(response)
         let interface = try XCTUnwrap(json["interface"] as? [String: Any])
-        let snapshotQuality = try XCTUnwrap(interface["snapshotQuality"] as? [String: Any])
+        let rendering = try XCTUnwrap(interface["rendering"] as? [String: Any])
         let tree = try XCTUnwrap(interface["tree"] as? [[String: Any]])
         let scrollContainer = try XCTUnwrap(tree[1]["container"] as? [String: Any])
 
-        XCTAssertEqual(snapshotQuality["state"] as? String, "full")
-        XCTAssertNil(snapshotQuality["reasonCode"])
-        XCTAssertEqual((snapshotQuality["observedElementCount"] as? NSNumber)?.intValue, 4)
-        XCTAssertEqual((snapshotQuality["renderedElementCount"] as? NSNumber)?.intValue, 4)
-        XCTAssertEqual((snapshotQuality["omittedElementCount"] as? NSNumber)?.intValue, 0)
-        XCTAssertNil(snapshotQuality["visibleElementBudget"])
-        XCTAssertNil(snapshotQuality["totalNodeBudget"])
+        XCTAssertEqual(rendering["state"] as? String, "full")
+        XCTAssertNil(rendering["reasonCode"])
+        XCTAssertEqual((rendering["observedElementCount"] as? NSNumber)?.intValue, 4)
+        XCTAssertEqual((rendering["renderedElementCount"] as? NSNumber)?.intValue, 4)
+        XCTAssertEqual((rendering["omittedElementCount"] as? NSNumber)?.intValue, 0)
+        XCTAssertNil(rendering["visibleElementBudget"])
+        XCTAssertNil(rendering["totalNodeBudget"])
         XCTAssertEqual(scrollContainer["type"] as? String, "scrollable")
         XCTAssertEqual((scrollContainer["contentWidth"] as? NSNumber)?.doubleValue, 390)
         XCTAssertEqual((scrollContainer["contentHeight"] as? NSNumber)?.doubleValue, 1200)
@@ -1166,8 +1177,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testPublicInterfaceOutputIncludesDiscoveryLimitDiagnostics() throws {
         let diagnostics = InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
-            state: "limited",
-            reasonCodes: ["scroll-attempt-budget"],
+            state: .limited,
+            reasonCodes: [.discoveryScrollLimit],
             includedElementCount: 2,
             scrollAttempts: 5,
             maxScrollsPerDiscovery: 5,
@@ -1178,7 +1189,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 InterfaceDiscoveryOmittedContainer(
                     containerName: "main_scroll",
                     type: "scrollable",
-                    reasonCodes: ["scroll-attempt-budget"],
+                    reasonCodes: [.discoveryScrollLimit],
                     scrollAxis: .vertical,
                     viewportWidth: 390,
                     viewportHeight: 400,
@@ -1252,20 +1263,20 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let json = try publicInterfaceJSONObject(
             PublicInterface(interface: interface, detail: .summary, visibleElementBudget: 2)
         )
-        let snapshotQuality = try XCTUnwrap(json["snapshotQuality"] as? [String: Any])
+        let rendering = try XCTUnwrap(json["rendering"] as? [String: Any])
         let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
         let scrollContainer = try XCTUnwrap(tree[0]["container"] as? [String: Any])
         let scrollChildren = try XCTUnwrap(scrollContainer["children"] as? [[String: Any]])
         let truncation = try XCTUnwrap(scrollContainer["truncation"] as? [String: Any])
         let after = try XCTUnwrap(tree[1]["element"] as? [String: Any])
 
-        XCTAssertEqual(snapshotQuality["state"] as? String, "truncated")
-        XCTAssertEqual(snapshotQuality["reasonCode"] as? String, "scroll-subtree-element-budget")
-        XCTAssertEqual((snapshotQuality["observedElementCount"] as? NSNumber)?.intValue, 5)
-        XCTAssertEqual((snapshotQuality["renderedElementCount"] as? NSNumber)?.intValue, 3)
-        XCTAssertEqual((snapshotQuality["omittedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertEqual((snapshotQuality["visibleElementBudget"] as? NSNumber)?.intValue, 2)
-        XCTAssertNil(snapshotQuality["totalNodeBudget"])
+        XCTAssertEqual(rendering["state"] as? String, "truncated")
+        XCTAssertEqual(rendering["reasonCode"] as? String, "scroll-subtree-element-budget")
+        XCTAssertEqual((rendering["observedElementCount"] as? NSNumber)?.intValue, 5)
+        XCTAssertEqual((rendering["renderedElementCount"] as? NSNumber)?.intValue, 3)
+        XCTAssertEqual((rendering["omittedElementCount"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual((rendering["visibleElementBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertNil(rendering["totalNodeBudget"])
         XCTAssertEqual(scrollChildren.count, 2)
         XCTAssertEqual((scrollContainer["observedElementCount"] as? NSNumber)?.intValue, 4)
         XCTAssertEqual(truncation["state"] as? String, "truncated")
@@ -1292,16 +1303,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 totalNodeBudget: 2
             )
         )
-        let snapshotQuality = try XCTUnwrap(json["snapshotQuality"] as? [String: Any])
+        let rendering = try XCTUnwrap(json["rendering"] as? [String: Any])
         let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
 
-        XCTAssertEqual(snapshotQuality["state"] as? String, "truncated")
-        XCTAssertEqual(snapshotQuality["reasonCode"] as? String, "total-node-budget")
-        XCTAssertEqual((snapshotQuality["observedElementCount"] as? NSNumber)?.intValue, 4)
-        XCTAssertEqual((snapshotQuality["renderedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertEqual((snapshotQuality["omittedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertNil(snapshotQuality["visibleElementBudget"])
-        XCTAssertEqual((snapshotQuality["totalNodeBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual(rendering["state"] as? String, "truncated")
+        XCTAssertEqual(rendering["reasonCode"] as? String, "total-node-budget")
+        XCTAssertEqual((rendering["observedElementCount"] as? NSNumber)?.intValue, 4)
+        XCTAssertEqual((rendering["renderedElementCount"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual((rendering["omittedElementCount"] as? NSNumber)?.intValue, 2)
+        XCTAssertNil(rendering["visibleElementBudget"])
+        XCTAssertEqual((rendering["totalNodeBudget"] as? NSNumber)?.intValue, 2)
         XCTAssertEqual(tree.count, 2)
     }
 
@@ -1328,18 +1339,18 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 totalNodeBudget: 2
             )
         )
-        let snapshotQuality = try XCTUnwrap(json["snapshotQuality"] as? [String: Any])
+        let rendering = try XCTUnwrap(json["rendering"] as? [String: Any])
         let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
         let outer = try XCTUnwrap(tree[0]["container"] as? [String: Any])
         let children = try XCTUnwrap(outer["children"] as? [[String: Any]])
         let empty = try XCTUnwrap(children[0]["container"] as? [String: Any])
 
-        XCTAssertEqual(snapshotQuality["state"] as? String, "truncated")
-        XCTAssertEqual(snapshotQuality["reasonCode"] as? String, "total-node-budget")
-        XCTAssertEqual((snapshotQuality["observedElementCount"] as? NSNumber)?.intValue, 1)
-        XCTAssertEqual((snapshotQuality["renderedElementCount"] as? NSNumber)?.intValue, 0)
-        XCTAssertEqual((snapshotQuality["omittedElementCount"] as? NSNumber)?.intValue, 1)
-        XCTAssertEqual((snapshotQuality["totalNodeBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual(rendering["state"] as? String, "truncated")
+        XCTAssertEqual(rendering["reasonCode"] as? String, "total-node-budget")
+        XCTAssertEqual((rendering["observedElementCount"] as? NSNumber)?.intValue, 1)
+        XCTAssertEqual((rendering["renderedElementCount"] as? NSNumber)?.intValue, 0)
+        XCTAssertEqual((rendering["omittedElementCount"] as? NSNumber)?.intValue, 1)
+        XCTAssertEqual((rendering["totalNodeBudget"] as? NSNumber)?.intValue, 2)
         XCTAssertEqual(tree.count, 1)
         XCTAssertEqual(outer["containerName"] as? String, "outer")
         XCTAssertEqual(children.count, 1)
@@ -1371,13 +1382,13 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 totalNodeBudget: 2
             )
         )
-        let snapshotQuality = try XCTUnwrap(json["snapshotQuality"] as? [String: Any])
+        let rendering = try XCTUnwrap(json["rendering"] as? [String: Any])
         let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
         let scrollContainer = try XCTUnwrap(tree[0]["container"] as? [String: Any])
 
-        XCTAssertEqual(snapshotQuality["reasonCode"] as? String, "total-node-budget")
-        XCTAssertNil(snapshotQuality["visibleElementBudget"])
-        XCTAssertEqual((snapshotQuality["totalNodeBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual(rendering["reasonCode"] as? String, "total-node-budget")
+        XCTAssertNil(rendering["visibleElementBudget"])
+        XCTAssertEqual((rendering["totalNodeBudget"] as? NSNumber)?.intValue, 2)
         XCTAssertNil(scrollContainer["truncation"])
     }
 

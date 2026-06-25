@@ -3,13 +3,11 @@ import XCTest
 
 final class ScreenshotCommandTests: XCTestCase {
 
-    func testIncludeInterfaceFlagParses() throws {
-        let command = try ScreenshotCommand.parse(["--include-interface"])
-
-        XCTAssertTrue(command.includeInterface)
+    func testIncludeInterfaceFlagIsNotACommandSurface() {
+        XCTAssertThrowsError(try ScreenshotCommand.parse(["--include-interface"]))
     }
 
-    func testIncludeInterfaceRejectsRawInlinePngOutput() throws {
-        XCTAssertThrowsError(try ScreenshotCommand.parse(["--inline", "--include-interface"]))
+    func testInlineRejectsOutputPath() {
+        XCTAssertThrowsError(try ScreenshotCommand.parse(["--inline", "--output", "/tmp/screen.png"]))
     }
 }

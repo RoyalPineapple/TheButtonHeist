@@ -172,9 +172,28 @@ public struct InterfaceDiagnostics: Codable, Equatable, Sendable {
     }
 }
 
+public enum InterfaceDiscoveryStatus: String, Codable, Equatable, Sendable, CaseIterable {
+    case complete
+    case limited
+}
+
+public enum InterfaceDiscoveryReasonCode: String, Codable, Equatable, Hashable, Sendable, CaseIterable, Comparable {
+    case discoveryScrollLimit = "scroll-attempt-budget"
+    case containerScrollLimit = "container-scroll-budget"
+    case leadingEdgeResetLimit = "leading-edge-reset-budget"
+    case notExplored = "not-explored"
+
+    public static func < (
+        lhs: InterfaceDiscoveryReasonCode,
+        rhs: InterfaceDiscoveryReasonCode
+    ) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
 public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
-    public let state: String
-    public let reasonCodes: [String]
+    public let state: InterfaceDiscoveryStatus
+    public let reasonCodes: [InterfaceDiscoveryReasonCode]
     public let includedElementCount: Int
     public let scrollAttempts: Int
     public let maxScrollsPerDiscovery: Int
@@ -185,8 +204,8 @@ public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
     public let nextAction: String?
 
     public init(
-        state: String,
-        reasonCodes: [String] = [],
+        state: InterfaceDiscoveryStatus,
+        reasonCodes: [InterfaceDiscoveryReasonCode] = [],
         includedElementCount: Int,
         scrollAttempts: Int,
         maxScrollsPerDiscovery: Int,
@@ -212,7 +231,7 @@ public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
 public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, Sendable {
     public let containerName: ContainerName?
     public let type: String
-    public let reasonCodes: [String]
+    public let reasonCodes: [InterfaceDiscoveryReasonCode]
     public let scrollAxis: ScrollContainerAxis?
     public let viewportWidth: Double?
     public let viewportHeight: Double?
@@ -222,7 +241,7 @@ public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, 
     public init(
         containerName: ContainerName? = nil,
         type: String,
-        reasonCodes: [String],
+        reasonCodes: [InterfaceDiscoveryReasonCode],
         scrollAxis: ScrollContainerAxis? = nil,
         viewportWidth: Double? = nil,
         viewportHeight: Double? = nil,
