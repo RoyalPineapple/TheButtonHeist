@@ -560,7 +560,7 @@ private struct HeistSemanticSurfaceBuilder {
             appendTargetPredicate(target)
         case .rotor(_, let target, _):
             appendTargetPredicate(target)
-        case .typeText(_, let target):
+        case .typeText(_, let target, _):
             if let target { appendTargetPredicate(target) }
         case .mechanicalTap(let target):
             appendTargetPredicate(target.selection)

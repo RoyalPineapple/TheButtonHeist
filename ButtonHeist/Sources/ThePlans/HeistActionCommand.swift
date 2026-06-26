@@ -15,7 +15,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
     case decrement(ElementTargetExpr)
     case customAction(name: String, target: ElementTargetExpr)
     case rotor(selection: RotorSelection, target: ElementTargetExpr, direction: RotorDirection)
-    case typeText(text: StringExpr, target: ElementTargetExpr?)
+    case typeText(text: StringExpr, target: ElementTargetExpr?, replacingExisting: Bool = false)
     case mechanicalTap(TapTarget)
     case mechanicalLongPress(LongPressTarget)
     case mechanicalSwipe(SwipeTarget)
@@ -73,11 +73,12 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
                 selection: selection,
                 direction: direction
             ))
-        case .typeText(let text, let target):
+        case .typeText(let text, let target, let replacingExisting):
             let resolvedText = try text.resolve(in: environment)
             try roundTrip(TypeTextTarget(
                 validatingText: resolvedText,
-                elementTarget: try target?.resolve(in: environment)
+                elementTarget: try target?.resolve(in: environment),
+                replacingExisting: replacingExisting
             ))
         case .mechanicalTap(let target):
             try roundTrip(target)
@@ -141,7 +142,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             self = .rotor(selection: payload.selection, target: payload.target, direction: payload.direction)
         case .typeText:
             let payload = try TypeTextExprPayload(from: try payload())
-            self = .typeText(text: payload.text, target: payload.target)
+            self = .typeText(text: payload.text, target: payload.target, replacingExisting: payload.replacingExisting)
         case .oneFingerTap:
             self = .mechanicalTap(try TapTarget(from: try payload()))
         case .longPress:
@@ -189,8 +190,9 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             try CustomActionExprPayload(actionName: name, target: target).encode(to: container.superEncoder(forKey: .payload))
         case .rotor(let selection, let target, let direction):
             try RotorExprPayload(selection: selection, target: target, direction: direction).encode(to: container.superEncoder(forKey: .payload))
-        case .typeText(let text, let target):
-            try TypeTextExprPayload(text: text, target: target).encode(to: container.superEncoder(forKey: .payload))
+        case .typeText(let text, let target, let replacingExisting):
+            try TypeTextExprPayload(text: text, target: target, replacingExisting: replacingExisting)
+                .encode(to: container.superEncoder(forKey: .payload))
         case .mechanicalTap(let target):
             try target.encode(to: container.superEncoder(forKey: .payload))
         case .mechanicalLongPress(let target):
@@ -362,31 +364,35 @@ private struct RotorExprPayload: Codable, Sendable, Equatable {
 private struct TypeTextExprPayload: Codable, Sendable, Equatable {
     let text: StringExpr
     let target: ElementTargetExpr?
+    let replacingExisting: Bool
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case text
         case textRef = "text_ref"
         case target
         case targetRef = "target_ref"
+        case replacingExisting
     }
 
-    init(text: StringExpr, target: ElementTargetExpr?) {
+    init(text: StringExpr, target: ElementTargetExpr?, replacingExisting: Bool = false) {
         self.text = text
         self.target = target
+        self.replacingExisting = replacingExisting
     }
 
     init(from decoder: Decoder) throws {
         try rejectUnknownTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        replacingExisting = try container.decodeIfPresent(Bool.self, forKey: .replacingExisting) ?? false
         let literal = try container.decodeIfPresent(String.self, forKey: .text)
         let reference = try HeistReferenceName.decodeIfPresent(from: container, forKey: .textRef)
         switch (literal, reference) {
         case (.some(let literal), nil):
-            guard !literal.isEmpty else {
+            guard replacingExisting || !literal.isEmpty else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .text,
                     in: container,
-                    debugDescription: "text must be non-empty"
+                    debugDescription: "text must be non-empty unless replacingExisting is true"
                 )
             }
             text = .literal(literal)
@@ -418,6 +424,9 @@ private struct TypeTextExprPayload: Codable, Sendable, Equatable {
         }
         if let target {
             try TargetExprPayload.encode(target, into: &container, nestedKey: .target, refKey: .targetRef)
+        }
+        if replacingExisting {
+            try container.encode(replacingExisting, forKey: .replacingExisting)
         }
     }
 }

@@ -30,7 +30,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | - | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | `semanticAction` | `set_pasteboard` | - | Write text to the general pasteboard from within the app. |
 | `swipe` | `spatialAction` | `swipe` | - | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
-| `type_text` | `semanticAction` | `type_text` | - | Type non-empty text. With an element target, Button Heist resolves and reveals the field before focusing it. |
+| `type_text` | `semanticAction` | `type_text` | - | Type text. With replacingExisting=true, Button Heist clears the focused field before typing. |
 | `wait` | `assertion` | `wait` | - | Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state. |
 
 ## StringMatch
@@ -502,7 +502,7 @@ Parameters:
 
 ### `type_text`
 
-Type non-empty text. With an element target, Button Heist resolves and reveals the field before focusing it.
+Type text. With replacingExisting=true, Button Heist clears the focused field before typing.
 
 - Family: `semanticAction`
 - CLI: direct command `type_text`
@@ -515,6 +515,7 @@ Parameters:
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
 | `text` | `string` | yes | - | - |
+| `replacingExisting` | `boolean` | no | `false` | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 

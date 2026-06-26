@@ -39,7 +39,7 @@ public extension HeistActionCommand {
             return target.reportTarget
         case .customAction(_, let target), .rotor(_, let target, _):
             return target.reportTarget
-        case .typeText(_, let target):
+        case .typeText(_, let target, _):
             return target?.reportTarget
         case .mechanicalTap(let target):
             return target.selection.reportTarget

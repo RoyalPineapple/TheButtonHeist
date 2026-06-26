@@ -225,21 +225,84 @@ public struct TypeText: HeistActionContent {
     public let expectationWaiver: String?
 
     public init(_ text: String, into target: ElementTarget? = nil) {
-        self.init(.literal(text), into: target.map(ElementTargetExpr.target))
+        self.init(text, into: target, replacingExisting: false)
+    }
+
+    public init(
+        _ text: String,
+        into target: ElementTarget? = nil,
+        replacingExisting: Bool
+    ) {
+        self.init(.literal(text), into: target.map(ElementTargetExpr.target), replacingExisting: replacingExisting)
     }
 
     public init(_ text: StringExpr, into target: ElementTarget) {
-        self.init(text, into: .target(target))
+        self.init(text, into: target, replacingExisting: false)
+    }
+
+    public init(
+        _ text: StringExpr,
+        into target: ElementTarget,
+        replacingExisting: Bool
+    ) {
+        self.init(text, into: .target(target), replacingExisting: replacingExisting)
     }
 
     @_disfavoredOverload
     public init(_ text: String, into target: ElementTargetExpr) {
-        self.init(.literal(text), into: target)
+        self.init(text, into: target, replacingExisting: false)
+    }
+
+    @_disfavoredOverload
+    public init(
+        _ text: String,
+        into target: ElementTargetExpr,
+        replacingExisting: Bool
+    ) {
+        self.init(.literal(text), into: target, replacingExisting: replacingExisting)
     }
 
     @_disfavoredOverload
     public init(_ text: StringExpr, into target: ElementTargetExpr? = nil) {
-        self.init(command: .typeText(text: text, target: target), expectation: nil)
+        self.init(text, into: target, replacingExisting: false)
+    }
+
+    @_disfavoredOverload
+    public init(
+        _ text: StringExpr,
+        into target: ElementTargetExpr? = nil,
+        replacingExisting: Bool
+    ) {
+        self.init(command: .typeText(
+            text: text,
+            target: target,
+            replacingExisting: replacingExisting
+        ), expectation: nil)
+    }
+
+    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        self.command = command
+        self.expectation = expectation
+        self.expectationWaiver = expectationWaiver
+    }
+}
+
+public struct ClearText: HeistActionContent {
+    public let command: HeistActionCommand
+    public let expectation: WaitStep?
+    public let expectationWaiver: String?
+
+    public init(_ target: ElementTarget) {
+        self.init(.target(target))
+    }
+
+    @_disfavoredOverload
+    public init(_ target: ElementTargetExpr) {
+        self.init(command: .typeText(
+            text: .literal(""),
+            target: target,
+            replacingExisting: true
+        ), expectation: nil)
     }
 
     init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {

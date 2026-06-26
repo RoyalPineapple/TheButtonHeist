@@ -44,11 +44,17 @@ extension HeistCanonicalSwiftDSLRenderer {
                 throw HeistCanonicalSwiftDSLError.unsupportedAction(command.durableHeistActionFailure ?? "rotor selection \(selection)")
             }
             return "Rotor(\(quote(name)), on: \(try render(target: target, environment: environment)), direction: .\(direction.rawValue))"
-        case .typeText(let text, let target):
-            if let target {
-                return "TypeText(\(try render(string: text, environment: environment)), into: \(try render(target: target, environment: environment)))"
+        case .typeText(let text, let target, let replacingExisting):
+            if replacingExisting,
+               case .literal("") = text,
+               let target {
+                return "ClearText(\(try render(target: target, environment: environment)))"
             }
-            return "TypeText(\(try render(string: text, environment: environment)))"
+            let suffix = replacingExisting ? ", replacingExisting: true" : ""
+            if let target {
+                return "TypeText(\(try render(string: text, environment: environment)), into: \(try render(target: target, environment: environment))\(suffix))"
+            }
+            return "TypeText(\(try render(string: text, environment: environment))\(suffix))"
         case .mechanicalTap(let target):
             return try render(mechanicalTap: target)
         case .mechanicalLongPress(let target):

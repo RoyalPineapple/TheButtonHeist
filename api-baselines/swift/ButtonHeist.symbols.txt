@@ -131,6 +131,7 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV14pointDirect
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV15isModalBoundaryACvpZ	swift.type.property	public	isModalBoundary	FenceParameterKey.isModalBoundary	static let isModalBoundary: FenceParameterKey
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV16elementDirectionACvpZ	swift.type.property	public	elementDirection	FenceParameterKey.elementDirection	static let elementDirection: FenceParameterKey
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV17elementUnitPointsACvpZ	swift.type.property	public	elementUnitPoints	FenceParameterKey.elementUnitPoints	static let elementUnitPoints: FenceParameterKey
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV17replacingExistingACvpZ	swift.type.property	public	replacingExisting	FenceParameterKey.replacingExisting	static let replacingExisting: FenceParameterKey
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV1xACvpZ	swift.type.property	public	x	FenceParameterKey.x	static let x: FenceParameterKey
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV1yACvpZ	swift.type.property	public	y	FenceParameterKey.y	static let y: FenceParameterKey
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV22maxScrollsPerContainerACvpZ	swift.type.property	public	maxScrollsPerContainer	FenceParameterKey.maxScrollsPerContainer	static let maxScrollsPerContainer: FenceParameterKey
@@ -789,13 +790,17 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV17expectationWaiverS
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV7commandAA18HeistActionCommandOvp	swift.property	public	command	TakeScreenshot.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotVACycfc	swift.init	public	init()	TakeScreenshot.init()	init()
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV	swift.struct	public	TypeTextTarget	TypeTextTarget	struct TypeTextTarget
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV010validatingD007elementE017replacingExistingACSS_AA07ElementE0OSgSbtKcfc	swift.init	public	init(validatingText:elementTarget:replacingExisting:)	TypeTextTarget.init(validatingText:elementTarget:replacingExisting:)	init(validatingText text: String, elementTarget: ElementTarget? = nil, replacingExisting: Bool) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV010validatingD007elementE0ACSS_AA07ElementE0OSgtKcfc	swift.init	public	init(validatingText:elementTarget:)	TypeTextTarget.init(validatingText:elementTarget:)	init(validatingText text: String, elementTarget: ElementTarget? = nil) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV07elementE0AA07ElementE0OSgvp	swift.property	public	elementTarget	TypeTextTarget.elementTarget	let elementTarget: ElementTarget?
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV11descriptionSSvp	swift.property	public	description	TypeTextTarget.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV17replacingExistingSbvp	swift.property	public	replacingExisting	TypeTextTarget.replacingExisting	let replacingExisting: Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	TypeTextTarget.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV4text07elementE017replacingExistingACSS_AA07ElementE0OSgSbtcfc	swift.init	public	init(text:elementTarget:replacingExisting:)	TypeTextTarget.init(text:elementTarget:replacingExisting:)	init(text: String, elementTarget: ElementTarget? = nil, replacingExisting: Bool)
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV4text07elementE0ACSS_AA07ElementE0OSgtcfc	swift.init	public	init(text:elementTarget:)	TypeTextTarget.init(text:elementTarget:)	init(text: String, elementTarget: ElementTarget? = nil)
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV4textSSvp	swift.property	public	text	TypeTextTarget.text	let text: String
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	TypeTextTarget.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV8validate_17replacingExistingySS_SbtKFZ	swift.type.method	public	validate(_:replacingExisting:)	TypeTextTarget.validate(_:replacingExisting:)	static func validate(_ text: String, replacingExisting: Bool) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV8validateyySSKFZ	swift.type.method	public	validate(_:)	TypeTextTarget.validate(_:)	static func validate(_ text: String) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans15ConditionalStepV	swift.struct	public	ConditionalStep	ConditionalStep	struct ConditionalStep
 symbol	ButtonHeist.symbols.json	s:8ThePlans15ConditionalStepV11descriptionSSvp	swift.property	public	description	ConditionalStep.description	var description: String { get }
@@ -1027,7 +1032,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO4fromACs7Decoder
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO5rotoryAcA14RotorSelectionO_AA17ElementTargetExprOAA0G9DirectionOtcACmF	swift.enum.case	public	HeistActionCommand.rotor(selection:target:direction:)	HeistActionCommand.rotor(selection:target:direction:)	case rotor(selection: RotorSelection, target: ElementTargetExpr, direction: RotorDirection)
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	HeistActionCommand.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO8activateyAcA17ElementTargetExprOcACmF	swift.enum.case	public	HeistActionCommand.activate(_:)	HeistActionCommand.activate(_:)	case activate(ElementTargetExpr)
-symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO8typeTextyAcA10StringExprO_AA013ElementTargetI0OSgtcACmF	swift.enum.case	public	HeistActionCommand.typeText(text:target:)	HeistActionCommand.typeText(text:target:)	case typeText(text: StringExpr, target: ElementTargetExpr?)
+symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO8typeTextyAcA10StringExprO_AA013ElementTargetI0OSgSbtcACmF	swift.enum.case	public	HeistActionCommand.typeText(text:target:replacingExisting:)	HeistActionCommand.typeText(text:target:replacingExisting:)	case typeText(text: StringExpr, target: ElementTargetExpr?, replacingExisting: Bool = false)
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO8wireTypeAA0cdeG0Ovp	swift.property	public	wireType	HeistActionCommand.wireType	var wireType: HeistActionCommandType { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO9decrementyAcA17ElementTargetExprOcACmF	swift.enum.case	public	HeistActionCommand.decrement(_:)	HeistActionCommand.decrement(_:)	case decrement(ElementTargetExpr)
 symbol	ButtonHeist.symbols.json	s:8ThePlans18HeistActionCommandO9incrementyAcA17ElementTargetExprOcACmF	swift.enum.case	public	HeistActionCommand.increment(_:)	HeistActionCommand.increment(_:)	case increment(ElementTargetExpr)
@@ -1611,6 +1616,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV	swift.struct	public	TypeTe
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	TypeText.expectation	let expectation: WaitStep?
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	TypeText.expectationWaiver	let expectationWaiver: String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV7commandAA18HeistActionCommandOvp	swift.property	public	command	TypeText.command	let command: HeistActionCommand
+symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4into17replacingExistingACSS_AA13ElementTargetOSgSbtcfc	swift.init	public	init(_:into:replacingExisting:)	TypeText.init(_:into:replacingExisting:)	init(_ text: String, into target: ElementTarget? = nil, replacingExisting: Bool)
+symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4into17replacingExistingACSS_AA17ElementTargetExprOSbtcfc	swift.init	public	init(_:into:replacingExisting:)	TypeText.init(_:into:replacingExisting:)	init(_ text: String, into target: ElementTargetExpr, replacingExisting: Bool)
+symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4into17replacingExistingAcA10StringExprO_AA013ElementTargetI0OSgSbtcfc	swift.init	public	init(_:into:replacingExisting:)	TypeText.init(_:into:replacingExisting:)	init(_ text: StringExpr, into target: ElementTargetExpr? = nil, replacingExisting: Bool)
+symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4into17replacingExistingAcA10StringExprO_AA13ElementTargetOSbtcfc	swift.init	public	init(_:into:replacingExisting:)	TypeText.init(_:into:replacingExisting:)	init(_ text: StringExpr, into target: ElementTarget, replacingExisting: Bool)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4intoACSS_AA13ElementTargetOSgtcfc	swift.init	public	init(_:into:)	TypeText.init(_:into:)	init(_ text: String, into target: ElementTarget? = nil)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4intoACSS_AA17ElementTargetExprOtcfc	swift.init	public	init(_:into:)	TypeText.init(_:into:)	init(_ text: String, into target: ElementTargetExpr)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8TypeTextV_4intoAcA10StringExprO_AA013ElementTargetG0OSgtcfc	swift.init	public	init(_:into:)	TypeText.init(_:into:)	init(_ text: StringExpr, into target: ElementTargetExpr? = nil)
@@ -1630,6 +1639,12 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans8WarnStepV11descriptionSSvp	swift.pro
 symbol	ButtonHeist.symbols.json	s:8ThePlans8WarnStepV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	WarnStep.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans8WarnStepV7messageACSS_tcfc	swift.init	public	init(message:)	WarnStep.init(message:)	init(message: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans8WarnStepV7messageSSvp	swift.property	public	message	WarnStep.message	let message: String
+symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV	swift.struct	public	ClearText	ClearText	struct ClearText
+symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	ClearText.expectation	let expectation: WaitStep?
+symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	ClearText.expectationWaiver	let expectationWaiver: String?
+symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextV7commandAA18HeistActionCommandOvp	swift.property	public	command	ClearText.command	let command: HeistActionCommand
+symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextVyAcA13ElementTargetOcfc	swift.init	public	init(_:)	ClearText.init(_:)	init(_ target: ElementTarget)
+symbol	ButtonHeist.symbols.json	s:8ThePlans9ClearTextVyAcA17ElementTargetExprOcfc	swift.init	public	init(_:)	ClearText.init(_:)	init(_ target: ElementTargetExpr)
 symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementV	swift.struct	public	Decrement	Decrement	struct Decrement
 symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	Decrement.expectation	let expectation: WaitStep?
 symbol	ButtonHeist.symbols.json	s:8ThePlans9DecrementV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	Decrement.expectationWaiver	let expectationWaiver: String?
@@ -3384,6 +3399,8 @@ relationship	conformsTo	s:8ThePlans8WarnStepV	s:SQ	WarnStep	Swift.Equatable
 relationship	conformsTo	s:8ThePlans8WarnStepV	s:Se	WarnStep	Swift.Decodable
 relationship	conformsTo	s:8ThePlans8WarnStepV	s:s23CustomStringConvertibleP	WarnStep	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans8WarnStepV	s:s8SendableP	WarnStep	Swift.Sendable
+relationship	conformsTo	s:8ThePlans9ClearTextV	s:8ThePlans12HeistContentP	ClearText	HeistContent
+relationship	conformsTo	s:8ThePlans9ClearTextV	s:8ThePlans18HeistActionContentP	ClearText	HeistActionContent
 relationship	conformsTo	s:8ThePlans9DecrementV	s:8ThePlans12HeistContentP	Decrement	HeistContent
 relationship	conformsTo	s:8ThePlans9DecrementV	s:8ThePlans18HeistActionContentP	Decrement	HeistActionContent
 relationship	conformsTo	s:8ThePlans9HeistPlanV	s:8ThePlans12HeistContentP	HeistPlan	HeistContent

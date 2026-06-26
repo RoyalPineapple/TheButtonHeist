@@ -22,7 +22,8 @@ import ThePlans
         case .typeText(let target):
             self = .typeText(
                 text: .literal(target.text),
-                target: target.elementTarget.map(ElementTargetExpr.target)
+                target: target.elementTarget.map(ElementTargetExpr.target),
+                replacingExisting: target.replacingExisting
             )
         case .oneFingerTap(let target):
             self = .mechanicalTap(target)
@@ -92,11 +93,12 @@ import ThePlans
                 selection: selection,
                 direction: direction
             ))
-        case .typeText(let text, let target):
+        case .typeText(let text, let target, let replacingExisting):
             let resolvedText = try text.resolve(in: environment)
             return .typeText(try TypeTextTarget(
                 validatingText: resolvedText,
-                elementTarget: try target?.resolve(in: environment)
+                elementTarget: try target?.resolve(in: environment),
+                replacingExisting: replacingExisting
             ))
         case .mechanicalTap(let target):
             return .oneFingerTap(target)

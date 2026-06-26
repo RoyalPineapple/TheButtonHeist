@@ -175,7 +175,7 @@ private extension HeistActionCommand {
         switch self {
         case .activate, .increment, .decrement, .customAction, .rotor:
             return .semantic
-        case .typeText(_, let target):
+        case .typeText(_, let target, _):
             return target == nil ? .typeTextWithoutTarget : .semantic
         case .mechanicalTap, .mechanicalLongPress, .mechanicalSwipe, .mechanicalDrag:
             return .mechanical
