@@ -603,6 +603,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans12HeistContentP16heistDefinitionsSayA
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HeistContentP21heistBuildDiagnosticsSaySSGvp	swift.property	public	heistBuildDiagnostics	HeistContent.heistBuildDiagnostics	var heistBuildDiagnostics: [String] { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HeistContentPAAE16heistDefinitionsSayAA0C4PlanVGvp	swift.property	public	heistDefinitions	HeistContent.heistDefinitions	var heistDefinitions: [HeistPlan] { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans12HeistContentPAAE21heistBuildDiagnosticsSaySSGvp	swift.property	public	heistBuildDiagnostics	HeistContent.heistBuildDiagnostics	var heistBuildDiagnostics: [String] { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO	swift.enum	public	HintProperty	HintProperty	enum HintProperty
+symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO11ExprCheckera	swift.typealias	public	HintProperty.ExprChecker	HintProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO7Checkera	swift.typealias	public	HintProperty.Checker	HintProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans12HintPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	HintProperty.property	static let property: ElementProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans12ScrollTargetV	swift.struct	public	ScrollTarget	ScrollTarget	struct ScrollTarget
 symbol	ButtonHeist.symbols.json	s:8ThePlans12ScrollTargetV07elementD09directionAcA07ElementD0O_AA0C9DirectionOtcfc	swift.init	public	init(elementTarget:direction:)	ScrollTarget.init(elementTarget:direction:)	init(elementTarget: ElementTarget, direction: ScrollDirection = .down)
 symbol	ButtonHeist.symbols.json	s:8ThePlans12ScrollTargetV11descriptionSSvp	swift.property	public	description	ScrollTarget.description	var description: String { get }
@@ -681,6 +685,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans13ElementTargetO6traitsyACSayAA10Heis
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ElementTargetO7element5label10identifier5value6traits13excludeTraitsAcA11StringMatchOySSGSg_A2MSayAA10HeistTraitOGAPtFZ	swift.type.method	public	element(label:identifier:value:traits:excludeTraits:)	ElementTarget.element(label:identifier:value:traits:excludeTraits:)	static func element(label: StringMatch<String>? = nil, identifier: StringMatch<String>? = nil, value: StringMatch<String>? = nil, traits: [HeistTrait] = [], excludeTraits: [HeistTrait] = []) -> ElementTarget
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ElementTargetO7element_6traits13excludeTraitsAcA0C14PredicateCheckOySSGd_SayAA10HeistTraitOGALtFZ	swift.type.method	public	element(_:traits:excludeTraits:)	ElementTarget.element(_:traits:excludeTraits:)	static func element(_ checks: ElementPredicateCheck<String>..., traits: [HeistTrait] = [], excludeTraits: [HeistTrait] = []) -> ElementTarget
 symbol	ButtonHeist.symbols.json	s:8ThePlans13ElementTargetO9predicateyAcA0C9PredicateV_SiSgtcACmF	swift.enum.case	public	ElementTarget.predicate(_:ordinal:)	ElementTarget.predicate(_:ordinal:)	case predicate(ElementPredicate, ordinal: Int? = nil)
+symbol	ButtonHeist.symbols.json	s:8ThePlans13FramePropertyO	swift.enum	public	FrameProperty	FrameProperty	enum FrameProperty
+symbol	ButtonHeist.symbols.json	s:8ThePlans13FramePropertyO11ExprCheckera	swift.typealias	public	FrameProperty.ExprChecker	FrameProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ButtonHeist.symbols.json	s:8ThePlans13FramePropertyO7Checkera	swift.typealias	public	FrameProperty.Checker	FrameProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans13FramePropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	FrameProperty.property	static let property: ElementProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans13HeistArgumentO	swift.enum	public	HeistArgument	HeistArgument	enum HeistArgument
 symbol	ButtonHeist.symbols.json	s:8ThePlans13HeistArgumentO13elementTargetyAcA07ElementF4ExprOcACmF	swift.enum.case	public	HeistArgument.elementTarget(_:)	HeistArgument.elementTarget(_:)	case elementTarget(ElementTargetExpr)
 symbol	ButtonHeist.symbols.json	s:8ThePlans13HeistArgumentO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistArgument.init(from:)	init(from decoder: any Decoder) throws
@@ -722,6 +730,19 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardV11expectationAA8WaitS
 symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	SetPasteboard.expectationWaiver	let expectationWaiver: String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardV7commandAA18HeistActionCommandOvp	swift.property	public	command	SetPasteboard.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans13SetPasteboardVyACSScfc	swift.init	public	init(_:)	SetPasteboard.init(_:)	init(_ text: String)
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV	swift.struct	public	TraitSetMatch	TraitSetMatch	struct TraitSetMatch
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV11descriptionSSvp	swift.property	public	description	TraitSetMatch.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	TraitSetMatch.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV5match7include7excludeACSayAA05HeistC0OG_AItFZ	swift.type.method	public	match(include:exclude:)	TraitSetMatch.match(include:exclude:)	static func match(include: [HeistTrait] = [], exclude: [HeistTrait] = []) -> TraitSetMatch
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV7excludeSayAA05HeistC0OGvp	swift.property	public	exclude	TraitSetMatch.exclude	let exclude: [HeistTrait]
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV7excludeyACSayAA05HeistC0OGFZ	swift.type.method	public	exclude(_:)	TraitSetMatch.exclude(_:)	static func exclude(_ traits: [HeistTrait]) -> TraitSetMatch
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV7include7excludeACSayAA05HeistC0OG_AHtcfc	swift.init	public	init(include:exclude:)	TraitSetMatch.init(include:exclude:)	init(include: [HeistTrait] = [], exclude: [HeistTrait] = [])
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV7includeSayAA05HeistC0OGvp	swift.property	public	include	TraitSetMatch.include	let include: [HeistTrait]
+symbol	ButtonHeist.symbols.json	s:8ThePlans13TraitSetMatchV7includeyACSayAA05HeistC0OGFZ	swift.type.method	public	include(_:)	TraitSetMatch.include(_:)	static func include(_ traits: [HeistTrait]) -> TraitSetMatch
+symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO	swift.enum	public	ValueProperty	ValueProperty	enum ValueProperty
+symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO11ExprCheckera	swift.typealias	public	ValueProperty.ExprChecker	ValueProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO7Checkera	swift.typealias	public	ValueProperty.Checker	ValueProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans13ValuePropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	ValueProperty.property	static let property: ElementProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans14ElementMatchesV	swift.struct	public	ElementMatches	ElementMatches	struct ElementMatches
 symbol	ButtonHeist.symbols.json	s:8ThePlans14ElementMatchesV8matchingyAcA0C9PredicateVFZ	swift.type.method	public	matching(_:)	ElementMatches.matching(_:)	static func matching(_ predicate: ElementPredicate) -> ElementMatches
 symbol	ButtonHeist.symbols.json	s:8ThePlans14ElementMatchesV9predicateAA0C9PredicateVvp	swift.property	public	predicate	ElementMatches.predicate	let predicate: ElementPredicate
@@ -775,6 +796,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans14RotorSelectionO5indexyACSicACmF	swi
 symbol	ButtonHeist.symbols.json	s:8ThePlans14RotorSelectionO5namedyACSScACmF	swift.enum.case	public	RotorSelection.named(_:)	RotorSelection.named(_:)	case named(String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans14RotorSelectionO9automaticyA2CmF	swift.enum.case	public	RotorSelection.automatic	RotorSelection.automatic	case automatic
 symbol	ButtonHeist.symbols.json	s:8ThePlans14RotorSelectionO9rotorNameSSSgvp	swift.property	public	rotorName	RotorSelection.rotorName	var rotorName: String? { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans14RotorsPropertyO	swift.enum	public	RotorsProperty	RotorsProperty	enum RotorsProperty
+symbol	ButtonHeist.symbols.json	s:8ThePlans14RotorsPropertyO11ExprCheckera	swift.typealias	public	RotorsProperty.ExprChecker	RotorsProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ButtonHeist.symbols.json	s:8ThePlans14RotorsPropertyO7Checkera	swift.typealias	public	RotorsProperty.Checker	RotorsProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans14RotorsPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	RotorsProperty.property	static let property: ElementProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO	swift.enum	public	SwipeDirection	SwipeDirection	enum SwipeDirection
 symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO10defaultEndAA9UnitPointVvp	swift.property	public	defaultEnd	SwipeDirection.defaultEnd	var defaultEnd: UnitPoint { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans14SwipeDirectionO12defaultStartAA9UnitPointVvp	swift.property	public	defaultStart	SwipeDirection.defaultStart	var defaultStart: UnitPoint { get }
@@ -788,6 +813,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV11expectationAA8Wait
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV17expectationWaiverSSSgvp	swift.property	public	expectationWaiver	TakeScreenshot.expectationWaiver	let expectationWaiver: String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotV7commandAA18HeistActionCommandOvp	swift.property	public	command	TakeScreenshot.command	let command: HeistActionCommand
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TakeScreenshotVACycfc	swift.init	public	init()	TakeScreenshot.init()	init()
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TraitsPropertyO	swift.enum	public	TraitsProperty	TraitsProperty	enum TraitsProperty
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TraitsPropertyO11ExprCheckera	swift.typealias	public	TraitsProperty.ExprChecker	TraitsProperty.ExprChecker	typealias ExprChecker = TraitSetMatch
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TraitsPropertyO7Checkera	swift.typealias	public	TraitsProperty.Checker	TraitsProperty.Checker	typealias Checker = TraitSetMatch
+symbol	ButtonHeist.symbols.json	s:8ThePlans14TraitsPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	TraitsProperty.property	static let property: ElementProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV	swift.struct	public	TypeTextTarget	TypeTextTarget	struct TypeTextTarget
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV010validatingD007elementE0ACSS_AA07ElementE0OSgtKcfc	swift.init	public	init(validatingText:elementTarget:)	TypeTextTarget.init(validatingText:elementTarget:)	init(validatingText text: String, elementTarget: ElementTarget? = nil) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV07elementE0AA07ElementE0OSgvp	swift.property	public	elementTarget	TypeTextTarget.elementTarget	let elementTarget: ElementTarget?
@@ -797,6 +826,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV4text07elementE0ACSS
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV4textSSvp	swift.property	public	text	TypeTextTarget.text	let text: String
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	TypeTextTarget.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans14TypeTextTargetV8validateyySSKFZ	swift.type.method	public	validate(_:)	TypeTextTarget.validate(_:)	static func validate(_ text: String) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans15ActionsPropertyO	swift.enum	public	ActionsProperty	ActionsProperty	enum ActionsProperty
+symbol	ButtonHeist.symbols.json	s:8ThePlans15ActionsPropertyO11ExprCheckera	swift.typealias	public	ActionsProperty.ExprChecker	ActionsProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ButtonHeist.symbols.json	s:8ThePlans15ActionsPropertyO7Checkera	swift.typealias	public	ActionsProperty.Checker	ActionsProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans15ActionsPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	ActionsProperty.property	static let property: ElementProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans15ConditionalStepV	swift.struct	public	ConditionalStep	ConditionalStep	struct ConditionalStep
 symbol	ButtonHeist.symbols.json	s:8ThePlans15ConditionalStepV11descriptionSSvp	swift.property	public	description	ConditionalStep.description	var description: String { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans15ConditionalStepV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ConditionalStep.init(from:)	init(from decoder: any Decoder) throws
@@ -926,6 +959,26 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO7decimalySSSdFZ	sw
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO8nonEmptyySSSgAEFZ	swift.type.method	public	nonEmpty(_:)	ScoreDescription.nonEmpty(_:)	static func nonEmpty(_ value: String?) -> String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO9listFieldySSSgSS_SayxGSgtlFZ	swift.type.method	public	listField(_:_:)	ScoreDescription.listField(_:_:)	static func listField<T>(_ name: String, _ values: [T]?) -> String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans16immediateTimeoutSdvp	swift.var	public	immediateTimeout	immediateTimeout	let immediateTimeout: Double
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO	swift.enum	public	AnyPropertyChange	AnyPropertyChange	enum AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO11descriptionSSvp	swift.property	public	description	AnyPropertyChange.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO13customContent6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	customContent(before:after:)	AnyPropertyChange.customContent(before:after:)	static func customContent(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO13customContentyAcA07ElementdE0VyAA06CustomgD0OGcACmF	swift.enum.case	public	AnyPropertyChange.customContent(_:)	AnyPropertyChange.customContent(_:)	case customContent(ElementPropertyChange<CustomContentProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO15activationPoint6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	activationPoint(before:after:)	AnyPropertyChange.activationPoint(before:after:)	static func activationPoint(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO15activationPointyAcA07ElementdE0VyAA010ActivationgD0OGcACmF	swift.enum.case	public	AnyPropertyChange.activationPoint(_:)	AnyPropertyChange.activationPoint(_:)	case activationPoint(ElementPropertyChange<ActivationPointProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	AnyPropertyChange.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO4hint6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	hint(before:after:)	AnyPropertyChange.hint(before:after:)	static func hint(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO4hintyAcA07ElementdE0VyAA04HintD0OGcACmF	swift.enum.case	public	AnyPropertyChange.hint(_:)	AnyPropertyChange.hint(_:)	case hint(ElementPropertyChange<HintProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO5frame6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	frame(before:after:)	AnyPropertyChange.frame(before:after:)	static func frame(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO5frameyAcA07ElementdE0VyAA05FrameD0OGcACmF	swift.enum.case	public	AnyPropertyChange.frame(_:)	AnyPropertyChange.frame(_:)	case frame(ElementPropertyChange<FrameProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO5value6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	value(before:after:)	AnyPropertyChange.value(before:after:)	static func value(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO5valueyAcA07ElementdE0VyAA05ValueD0OGcACmF	swift.enum.case	public	AnyPropertyChange.value(_:)	AnyPropertyChange.value(_:)	case value(ElementPropertyChange<ValueProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO6rotors6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	rotors(before:after:)	AnyPropertyChange.rotors(before:after:)	static func rotors(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO6rotorsyAcA07ElementdE0VyAA06RotorsD0OGcACmF	swift.enum.case	public	AnyPropertyChange.rotors(_:)	AnyPropertyChange.rotors(_:)	case rotors(ElementPropertyChange<RotorsProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO6traits6before5afterAcA13TraitSetMatchVSg_AItFZ	swift.type.method	public	traits(before:after:)	AnyPropertyChange.traits(before:after:)	static func traits(before: TraitSetMatch? = nil, after: TraitSetMatch? = nil) -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO6traitsyAcA07ElementdE0VyAA06TraitsD0OGcACmF	swift.enum.case	public	AnyPropertyChange.traits(_:)	AnyPropertyChange.traits(_:)	case traits(ElementPropertyChange<TraitsProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO7actions6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	actions(before:after:)	AnyPropertyChange.actions(before:after:)	static func actions(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO7actionsyAcA07ElementdE0VyAA07ActionsD0OGcACmF	swift.enum.case	public	AnyPropertyChange.actions(_:)	AnyPropertyChange.actions(_:)	case actions(ElementPropertyChange<ActionsProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO8propertyAA07ElementD0Ovp	swift.property	public	property	AnyPropertyChange.property	var property: ElementProperty { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans17ElementTargetExprO	swift.enum	public	ElementTargetExpr	ElementTargetExpr	enum ElementTargetExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans17ElementTargetExprO10identifieryACSSFZ	swift.type.method	public	identifier(_:)	ElementTargetExpr.identifier(_:)	static func identifier(_ identifier: String) -> ElementTargetExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans17ElementTargetExprO10identifieryAcA06StringE0OFZ	swift.type.method	public	identifier(_:)	ElementTargetExpr.identifier(_:)	static func identifier(_ identifier: StringExpr) -> ElementTargetExpr
@@ -1123,6 +1176,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans18TextRangeReferenceV9endOffsetSivp	s
 symbol	ButtonHeist.symbols.json	s:8ThePlans18defaultWaitTimeoutSdvp	swift.var	public	defaultWaitTimeout	defaultWaitTimeout	let defaultWaitTimeout: Double
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO	swift.enum	public	ChangePredicateExpr	ChangePredicateExpr	enum ChangePredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO11descriptionSSvp	swift.property	public	description	ChangePredicateExpr.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO11disappearedyAcA07ElementD8TemplateVFZ	swift.type.method	public	disappeared(_:)	ChangePredicateExpr.disappeared(_:)	static func disappeared(_ predicate: ElementPredicateTemplate) -> ChangePredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO11screenScopeyACSayAA05StatedE0OGcACmF	swift.enum.case	public	ChangePredicateExpr.screenScope(_:)	ChangePredicateExpr.screenScope(_:)	case screenScope([StatePredicateExpr] = [])
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO13elementsScopeyACSayAA012ElementDeltadE0OGcACmF	swift.enum.case	public	ChangePredicateExpr.elementsScope(_:)	ChangePredicateExpr.elementsScope(_:)	case elementsScope([ElementDeltaPredicateExpr] = [])
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO3allyA2Cd_tFZ	swift.type.method	public	all(_:)	ChangePredicateExpr.all(_:)	static func all(_ changes: ChangePredicateExpr...) -> ChangePredicateExpr
@@ -1132,10 +1186,18 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO6encode2toys7En
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO6screenACyFZ	swift.type.method	public	screen()	ChangePredicateExpr.screen()	static func screen() -> ChangePredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO6screenyAcA05StatedE0O_AFdtFZ	swift.type.method	public	screen(_:_:)	ChangePredicateExpr.screen(_:_:)	static func screen(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangePredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO7resolve2inAA013AccessibilityD0O0C0OAA25HeistExecutionEnvironmentV_tKF	swift.method	public	resolve(in:)	ChangePredicateExpr.resolve(in:)	func resolve(in environment: HeistExecutionEnvironment) throws -> AccessibilityPredicate.Change
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO7updated7element_AcA07ElementD8TemplateV_AA011AnyPropertycE0OSgtFZ	swift.type.method	public	updated(element:_:)	ChangePredicateExpr.updated(element:_:)	static func updated(element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr? = nil) -> ChangePredicateExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO7updatedACyFZ	swift.type.method	public	updated()	ChangePredicateExpr.updated()	static func updated() -> ChangePredicateExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO7updatedyAcA011AnyPropertycE0OFZ	swift.type.method	public	updated(_:)	ChangePredicateExpr.updated(_:)	static func updated(_ change: AnyPropertyChangeExpr) -> ChangePredicateExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO8appearedyAcA07ElementD8TemplateVFZ	swift.type.method	public	appeared(_:)	ChangePredicateExpr.appeared(_:)	static func appeared(_ predicate: ElementPredicateTemplate) -> ChangePredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO8elementsACyFZ	swift.type.method	public	elements()	ChangePredicateExpr.elements()	static func elements() -> ChangePredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO8elementsyAcA012ElementDeltadE0O_AFdtFZ	swift.type.method	public	elements(_:_:)	ChangePredicateExpr.elements(_:_:)	static func elements(_ first: ElementDeltaPredicateExpr, _ rest: ElementDeltaPredicateExpr...) -> ChangePredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprO9allScopesyACSayACGcACmF	swift.enum.case	public	ChangePredicateExpr.allScopes(_:)	ChangePredicateExpr.allScopes(_:)	case allScopes([ChangePredicateExpr])
 symbol	ButtonHeist.symbols.json	s:8ThePlans19ChangePredicateExprOyAcA013AccessibilityD0O0C0Ocfc	swift.init	public	init(_:)	ChangePredicateExpr.init(_:)	init(_ change: AccessibilityPredicate.Change)
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ElementPropertyKindP	swift.protocol	public	ElementPropertyKind	ElementPropertyKind	protocol ElementPropertyKind : Sendable
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ElementPropertyKindP11ExprCheckerQa	swift.associatedtype	public	ExprChecker	ElementPropertyKind.ExprChecker	associatedtype ExprChecker : Decodable, Encodable, Equatable, Sendable
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ElementPropertyKindP7CheckerQa	swift.associatedtype	public	Checker	ElementPropertyKind.Checker	associatedtype Checker : Decodable, Encodable, Equatable, Sendable
+symbol	ButtonHeist.symbols.json	s:8ThePlans19ElementPropertyKindP8propertyAA0cD0OvpZ	swift.type.property	public	property	ElementPropertyKind.property	static var property: ElementProperty { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans19HeistInvocationStepV	swift.struct	public	HeistInvocationStep	HeistInvocationStep	struct HeistInvocationStep
 symbol	ButtonHeist.symbols.json	s:8ThePlans19HeistInvocationStepV03runC7SummarySSvp	swift.property	public	runHeistSummary	HeistInvocationStep.runHeistSummary	var runHeistSummary: String { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans19HeistInvocationStepV11descriptionSSvp	swift.property	public	description	HeistInvocationStep.description	var description: String { get }
@@ -1193,6 +1255,32 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans20HeistSemanticSurfaceV16semanticSurf
 symbol	ButtonHeist.symbols.json	s:8ThePlans20HeistSemanticSurfaceV16targetPredicatesSaySSGvp	swift.property	public	targetPredicates	HeistSemanticSurface.targetPredicates	let targetPredicates: [String]
 symbol	ButtonHeist.symbols.json	s:8ThePlans20HeistSemanticSurfaceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistSemanticSurface.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans20HeistSemanticSurfaceV5waitsSaySSGvp	swift.property	public	waits	HeistSemanticSurface.waits	let waits: [String]
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO	swift.enum	public	AnyPropertyChangeExpr	AnyPropertyChangeExpr	enum AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO11descriptionSSvp	swift.property	public	description	AnyPropertyChangeExpr.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO13customContent6before5afterAcA11StringMatchOyAA0kF0OGSg_ALtFZ	swift.type.method	public	customContent(before:after:)	AnyPropertyChangeExpr.customContent(before:after:)	static func customContent(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO13customContentyAcA07ElementdeF0VyAA06CustomhD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.customContent(_:)	AnyPropertyChangeExpr.customContent(_:)	case customContent(ElementPropertyChangeExpr<CustomContentProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO15activationPoint6before5afterAcA11StringMatchOyAA0kF0OGSg_ALtFZ	swift.type.method	public	activationPoint(before:after:)	AnyPropertyChangeExpr.activationPoint(before:after:)	static func activationPoint(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO15activationPointyAcA07ElementdeF0VyAA010ActivationhD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.activationPoint(_:)	AnyPropertyChangeExpr.activationPoint(_:)	case activationPoint(ElementPropertyChangeExpr<ActivationPointProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	AnyPropertyChangeExpr.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO4hint6before5afterAcA11StringMatchOyAA0jF0OGSg_ALtFZ	swift.type.method	public	hint(before:after:)	AnyPropertyChangeExpr.hint(before:after:)	static func hint(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO4hintyAcA07ElementdeF0VyAA04HintD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.hint(_:)	AnyPropertyChangeExpr.hint(_:)	case hint(ElementPropertyChangeExpr<HintProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5frame6before5afterAcA11StringMatchOyAA0jF0OGSg_ALtFZ	swift.type.method	public	frame(before:after:)	AnyPropertyChangeExpr.frame(before:after:)	static func frame(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5frameyAcA07ElementdeF0VyAA05FrameD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.frame(_:)	AnyPropertyChangeExpr.frame(_:)	case frame(ElementPropertyChangeExpr<FrameProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5value6before5afterAcA11StringMatchOyAA0jF0OGSg_ALtFZ	swift.type.method	public	value(before:after:)	AnyPropertyChangeExpr.value(before:after:)	static func value(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5valueyAcA07ElementdeF0VyAA05ValueD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.value(_:)	AnyPropertyChangeExpr.value(_:)	case value(ElementPropertyChangeExpr<ValueProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO6rotors6before5afterAcA11StringMatchOyAA0jF0OGSg_ALtFZ	swift.type.method	public	rotors(before:after:)	AnyPropertyChangeExpr.rotors(before:after:)	static func rotors(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO6rotorsyAcA07ElementdeF0VyAA06RotorsD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.rotors(_:)	AnyPropertyChangeExpr.rotors(_:)	case rotors(ElementPropertyChangeExpr<RotorsProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO6traits6before5afterAcA13TraitSetMatchVSg_AItFZ	swift.type.method	public	traits(before:after:)	AnyPropertyChangeExpr.traits(before:after:)	static func traits(before: TraitSetMatch? = nil, after: TraitSetMatch? = nil) -> AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO6traitsyAcA07ElementdeF0VyAA06TraitsD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.traits(_:)	AnyPropertyChangeExpr.traits(_:)	case traits(ElementPropertyChangeExpr<TraitsProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO7actions6before5afterAcA11StringMatchOyAA0jF0OGSg_ALtFZ	swift.type.method	public	actions(before:after:)	AnyPropertyChangeExpr.actions(before:after:)	static func actions(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO7actionsyAcA07ElementdeF0VyAA07ActionsD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.actions(_:)	AnyPropertyChangeExpr.actions(_:)	case actions(ElementPropertyChangeExpr<ActionsProperty>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO7resolve2inAA0cdE0OAA25HeistExecutionEnvironmentV_tKF	swift.method	public	resolve(in:)	AnyPropertyChangeExpr.resolve(in:)	func resolve(in environment: HeistExecutionEnvironment) throws -> AnyPropertyChange
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprO8propertyAA07ElementD0Ovp	swift.property	public	property	AnyPropertyChangeExpr.property	var property: ElementProperty { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans21AnyPropertyChangeExprOyAcA0cdE0Ocfc	swift.init	public	init(_:)	AnyPropertyChangeExpr.init(_:)	init(_ change: AnyPropertyChange)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21CustomContentPropertyO	swift.enum	public	CustomContentProperty	CustomContentProperty	enum CustomContentProperty
+symbol	ButtonHeist.symbols.json	s:8ThePlans21CustomContentPropertyO11ExprCheckera	swift.typealias	public	CustomContentProperty.ExprChecker	CustomContentProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ButtonHeist.symbols.json	s:8ThePlans21CustomContentPropertyO7Checkera	swift.typealias	public	CustomContentProperty.Checker	CustomContentProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans21CustomContentPropertyO8propertyAA07ElementE0OvpZ	swift.type.property	public	property	CustomContentProperty.property	static let property: ElementProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO	swift.enum	public	ElementDeltaPredicate	ElementDeltaPredicate	enum ElementDeltaPredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO011disappearedC0yAcA0cE0VcACmF	swift.enum.case	public	ElementDeltaPredicate.disappearedElement(_:)	ElementDeltaPredicate.disappearedElement(_:)	case disappearedElement(ElementPredicate)
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO07updatedC0yAcA0c6UpdateE0VcACmF	swift.enum.case	public	ElementDeltaPredicate.updatedElement(_:)	ElementDeltaPredicate.updatedElement(_:)	case updatedElement(ElementUpdatePredicate)
@@ -1201,7 +1289,9 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO11description
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO11disappearedyAcA0cE0VFZ	swift.type.method	public	disappeared(_:)	ElementDeltaPredicate.disappeared(_:)	static func disappeared(_ predicate: ElementPredicate) -> ElementDeltaPredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementDeltaPredicate.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ElementDeltaPredicate.encode(to:)	func encode(to encoder: any Encoder) throws
-symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO7updated6before5after8propertyAcA0cE0VSg_AjA0C8PropertyOSgtFZ	swift.type.method	public	updated(before:after:property:)	ElementDeltaPredicate.updated(before:after:property:)	static func updated(before: ElementPredicate? = nil, after: ElementPredicate? = nil, property: ElementProperty? = nil) -> ElementDeltaPredicate
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO7updated7element_AcA0cE0V_AA17AnyPropertyChangeOSgtFZ	swift.type.method	public	updated(element:_:)	ElementDeltaPredicate.updated(element:_:)	static func updated(element: ElementPredicate, _ change: AnyPropertyChange? = nil) -> ElementDeltaPredicate
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO7updatedACyFZ	swift.type.method	public	updated()	ElementDeltaPredicate.updated()	static func updated() -> ElementDeltaPredicate
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO7updatedyAcA17AnyPropertyChangeOFZ	swift.type.method	public	updated(_:)	ElementDeltaPredicate.updated(_:)	static func updated(_ change: AnyPropertyChange) -> ElementDeltaPredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementDeltaPredicateO8appearedyAcA0cE0VFZ	swift.type.method	public	appeared(_:)	ElementDeltaPredicate.appeared(_:)	static func appeared(_ predicate: ElementPredicate) -> ElementDeltaPredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckO	swift.enum	public	ElementPredicateCheck	ElementPredicateCheck	enum ElementPredicateCheck<Value> where Value : StringMatchPayload
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckO03hasD7LiteralSbvp	swift.property	public	hasPredicateLiteral	ElementPredicateCheck.hasPredicateLiteral	var hasPredicateLiteral: Bool { get }
@@ -1214,6 +1304,12 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckO6traitsyACyxG
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckOAASSRszrlE7matchesySbqd__AA0cD7SubjectRd__lF	swift.method	public	matches(_:)	ElementPredicateCheck.matches(_:)	func matches(_ subject: some ElementPredicateSubject) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckOAASeRzSERzrlE4fromACyxGs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementPredicateCheck.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckOAASeRzSERzrlE6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ElementPredicateCheck.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPropertyChangeV	swift.struct	public	ElementPropertyChange	ElementPropertyChange	struct ElementPropertyChange<P> where P : ElementPropertyKind
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPropertyChangeV4fromACyxGs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementPropertyChange.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPropertyChangeV5after7CheckerQzSgvp	swift.property	public	after	ElementPropertyChange.after	let after: P.Checker?
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPropertyChangeV6before5afterACyxG7CheckerQzSg_AItcfc	swift.init	public	init(before:after:)	ElementPropertyChange.init(before:after:)	init(before: P.Checker? = nil, after: P.Checker? = nil)
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPropertyChangeV6before7CheckerQzSgvp	swift.property	public	before	ElementPropertyChange.before	let before: P.Checker?
+symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPropertyChangeV8propertyAA0cD0Ovp	swift.property	public	property	ElementPropertyChange.property	var property: ElementProperty { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans21GesturePointSelectionO	swift.enum	public	GesturePointSelection	GesturePointSelection	enum GesturePointSelection
 symbol	ButtonHeist.symbols.json	s:8ThePlans21GesturePointSelectionO011elementUnitD0yAcA13ElementTargetO_AA0gD0VtcACmF	swift.enum.case	public	GesturePointSelection.elementUnitPoint(_:_:)	GesturePointSelection.elementUnitPoint(_:_:)	case elementUnitPoint(ElementTarget, UnitPoint)
 symbol	ButtonHeist.symbols.json	s:8ThePlans21GesturePointSelectionO10coordinateyAcA06ScreenD0VcACmF	swift.enum.case	public	GesturePointSelection.coordinate(_:)	GesturePointSelection.coordinate(_:)	case coordinate(ScreenPoint)
@@ -1291,6 +1387,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO	swi
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO0A5ScoreE8evaluate16accumulatedDeltaAF17ExpectationResultVAF0C5TraceV011AccumulatedI0VSg_tF	swift.method	public	evaluate(accumulatedDelta:)	AccessibilityPredicate.Change.evaluate(accumulatedDelta:)	func evaluate(accumulatedDelta: AccessibilityTrace.AccumulatedDelta?) -> ExpectationResult
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO0A5ScoreE8evaluate5deltaAF17ExpectationResultVAF0C5TraceV5DeltaOSg_tF	swift.method	public	evaluate(delta:)	AccessibilityPredicate.Change.evaluate(delta:)	func evaluate(delta: AccessibilityTrace.Delta?) -> ExpectationResult
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO11descriptionSSvp	swift.property	public	description	AccessibilityPredicate.Change.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO11disappearedyAeA07ElementD0VFZ	swift.type.method	public	disappeared(_:)	AccessibilityPredicate.Change.disappeared(_:)	static func disappeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.Change
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO11screenScopeyAESayAC5StateOGcAEmF	swift.enum.case	public	AccessibilityPredicate.Change.screenScope(_:)	AccessibilityPredicate.Change.screenScope(_:)	case screenScope([AccessibilityPredicate.State] = [])
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO13elementsScopeyAESayAA012ElementDeltaD0OGcAEmF	swift.enum.case	public	AccessibilityPredicate.Change.elementsScope(_:)	AccessibilityPredicate.Change.elementsScope(_:)	case elementsScope([ElementDeltaPredicate] = [])
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO3allyA2Ed_tFZ	swift.type.method	public	all(_:)	AccessibilityPredicate.Change.all(_:)	static func all(_ changes: AccessibilityPredicate.Change...) -> AccessibilityPredicate.Change
@@ -1299,6 +1396,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO4fro
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	AccessibilityPredicate.Change.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO6screenAEyFZ	swift.type.method	public	screen()	AccessibilityPredicate.Change.screen()	static func screen() -> AccessibilityPredicate.Change
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO6screenyAeC5StateO_AHdtFZ	swift.type.method	public	screen(_:_:)	AccessibilityPredicate.Change.screen(_:_:)	static func screen(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.Change
+symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO7updated7element_AeA07ElementD0V_AA011AnyPropertyE0OSgtFZ	swift.type.method	public	updated(element:_:)	AccessibilityPredicate.Change.updated(element:_:)	static func updated(element: ElementPredicate, _ change: AnyPropertyChange? = nil) -> AccessibilityPredicate.Change
+symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO7updatedAEyFZ	swift.type.method	public	updated()	AccessibilityPredicate.Change.updated()	static func updated() -> AccessibilityPredicate.Change
+symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO7updatedyAeA011AnyPropertyE0OFZ	swift.type.method	public	updated(_:)	AccessibilityPredicate.Change.updated(_:)	static func updated(_ change: AnyPropertyChange) -> AccessibilityPredicate.Change
+symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO8appearedyAeA07ElementD0VFZ	swift.type.method	public	appeared(_:)	AccessibilityPredicate.Change.appeared(_:)	static func appeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.Change
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO8elementsAEyFZ	swift.type.method	public	elements()	AccessibilityPredicate.Change.elements()	static func elements() -> AccessibilityPredicate.Change
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO8elementsyAeA012ElementDeltaD0O_AHdtFZ	swift.type.method	public	elements(_:_:)	AccessibilityPredicate.Change.elements(_:_:)	static func elements(_ first: ElementDeltaPredicate, _ rest: ElementDeltaPredicate...) -> AccessibilityPredicate.Change
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO6ChangeO9allScopesyAESayAEGcAEmF	swift.enum.case	public	AccessibilityPredicate.Change.allScopes(_:)	AccessibilityPredicate.Change.allScopes(_:)	case allScopes([AccessibilityPredicate.Change])
@@ -1313,11 +1414,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV	swift.struc
 symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV11descriptionSSvp	swift.property	public	description	ElementUpdatePredicate.description	var description: String { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV3anyACvpZ	swift.type.property	public	any	ElementUpdatePredicate.any	static let any: ElementUpdatePredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementUpdatePredicate.init(from:)	init(from decoder: any Decoder) throws
-symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV5afterAA0cE0VSgvp	swift.property	public	after	ElementUpdatePredicate.after	let after: ElementPredicate?
-symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV6before5after8propertyAcA0cE0VSg_AiA0C8PropertyOSgtcfc	swift.init	public	init(before:after:property:)	ElementUpdatePredicate.init(before:after:property:)	init(before: ElementPredicate? = nil, after: ElementPredicate? = nil, property: ElementProperty? = nil)
-symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV6beforeAA0cE0VSgvp	swift.property	public	before	ElementUpdatePredicate.before	let before: ElementPredicate?
+symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV6changeAA17AnyPropertyChangeOSgvp	swift.property	public	change	ElementUpdatePredicate.change	let change: AnyPropertyChange?
 symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ElementUpdatePredicate.encode(to:)	func encode(to encoder: any Encoder) throws
-symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV8propertyAA0C8PropertyOSgvp	swift.property	public	property	ElementUpdatePredicate.property	let property: ElementProperty?
+symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV7element6changeAcA0cE0VSg_AA17AnyPropertyChangeOSgtcfc	swift.init	public	init(element:change:)	ElementUpdatePredicate.init(element:change:)	init(element: ElementPredicate? = nil, change: AnyPropertyChange? = nil)
+symbol	ButtonHeist.symbols.json	s:8ThePlans22ElementUpdatePredicateV7elementAA0cE0VSgvp	swift.property	public	element	ElementUpdatePredicate.element	let element: ElementPredicate?
 symbol	ButtonHeist.symbols.json	s:8ThePlans22GestureProjectionErrorO	swift.enum	public	GestureProjectionError	GestureProjectionError	enum GestureProjectionError
 symbol	ButtonHeist.symbols.json	s:8ThePlans22GestureProjectionErrorO05mixedC6IntentyACSS_tcACmF	swift.enum.case	public	GestureProjectionError.mixedGestureIntent(kind:)	GestureProjectionError.mixedGestureIntent(kind:)	case mixedGestureIntent(kind: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans22GestureProjectionErrorO07missingC5PointyACSS_tcACmF	swift.enum.case	public	GestureProjectionError.missingGesturePoint(field:)	GestureProjectionError.missingGesturePoint(field:)	case missingGesturePoint(field: String)
@@ -1360,6 +1460,10 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans22PredicateBranchBuilderO10buildBlock
 symbol	ButtonHeist.symbols.json	s:8ThePlans22PredicateBranchBuilderO15buildExpressionySayAA0cD0OGAA4CaseVFZ	swift.type.method	public	buildExpression(_:)	PredicateBranchBuilder.buildExpression(_:)	static func buildExpression(_ expression: Case) -> [PredicateBranch]
 symbol	ButtonHeist.symbols.json	s:8ThePlans22PredicateBranchBuilderO15buildExpressionySayAA0cD0OGAA4ElseVFZ	swift.type.method	public	buildExpression(_:)	PredicateBranchBuilder.buildExpression(_:)	static func buildExpression(_ expression: Else) -> [PredicateBranch]
 symbol	ButtonHeist.symbols.json	s:8ThePlans22PredicateBranchBuilderO16buildFinalResultyAA0C8BranchesVSayAA0cD0OGFZ	swift.type.method	public	buildFinalResult(_:)	PredicateBranchBuilder.buildFinalResult(_:)	static func buildFinalResult(_ branches: [PredicateBranch]) -> PredicateBranches
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO	swift.enum	public	ActivationPointProperty	ActivationPointProperty	enum ActivationPointProperty
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO11ExprCheckera	swift.typealias	public	ActivationPointProperty.ExprChecker	ActivationPointProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO7Checkera	swift.typealias	public	ActivationPointProperty.Checker	ActivationPointProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO8propertyAA07ElementE0OvpZ	swift.type.property	public	property	ActivationPointProperty.property	static let property: ElementProperty
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP	swift.protocol	public	ElementPredicateSubject	ElementPredicateSubject	protocol ElementPredicateSubject
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP14predicateLabelSSSgvp	swift.property	public	predicateLabel	ElementPredicateSubject.predicateLabel	var predicateLabel: String? { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP14predicateValueSSSgvp	swift.property	public	predicateValue	ElementPredicateSubject.predicateValue	var predicateValue: String? { get }
@@ -1447,9 +1551,17 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO11disappe
 symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementDeltaPredicateExpr.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ElementDeltaPredicateExpr.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO7resolve2inAA0cdE0OAA25HeistExecutionEnvironmentV_tKF	swift.method	public	resolve(in:)	ElementDeltaPredicateExpr.resolve(in:)	func resolve(in environment: HeistExecutionEnvironment) throws -> ElementDeltaPredicate
-symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO7updated6before5after8propertyAcA0cE8TemplateVSg_AjA0C8PropertyOSgtFZ	swift.type.method	public	updated(before:after:property:)	ElementDeltaPredicateExpr.updated(before:after:property:)	static func updated(before: ElementPredicateTemplate? = nil, after: ElementPredicateTemplate? = nil, property: ElementProperty? = nil) -> ElementDeltaPredicateExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO7updated7element_AcA0cE8TemplateV_AA017AnyPropertyChangeF0OSgtFZ	swift.type.method	public	updated(element:_:)	ElementDeltaPredicateExpr.updated(element:_:)	static func updated(element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr? = nil) -> ElementDeltaPredicateExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO7updatedACyFZ	swift.type.method	public	updated()	ElementDeltaPredicateExpr.updated()	static func updated() -> ElementDeltaPredicateExpr
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO7updatedyAcA017AnyPropertyChangeF0OFZ	swift.type.method	public	updated(_:)	ElementDeltaPredicateExpr.updated(_:)	static func updated(_ change: AnyPropertyChangeExpr) -> ElementDeltaPredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprO8appearedyAcA0cE8TemplateVFZ	swift.type.method	public	appeared(_:)	ElementDeltaPredicateExpr.appeared(_:)	static func appeared(_ predicate: ElementPredicateTemplate) -> ElementDeltaPredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementDeltaPredicateExprOyAcA0cdE0Ocfc	swift.init	public	init(_:)	ElementDeltaPredicateExpr.init(_:)	init(_ predicate: ElementDeltaPredicate)
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementPropertyChangeExprV	swift.struct	public	ElementPropertyChangeExpr	ElementPropertyChangeExpr	struct ElementPropertyChangeExpr<P> where P : ElementPropertyKind
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementPropertyChangeExprV4fromACyxGs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementPropertyChangeExpr.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementPropertyChangeExprV5after0F7CheckerQzSgvp	swift.property	public	after	ElementPropertyChangeExpr.after	let after: P.ExprChecker?
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementPropertyChangeExprV6before0F7CheckerQzSgvp	swift.property	public	before	ElementPropertyChangeExpr.before	let before: P.ExprChecker?
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementPropertyChangeExprV6before5afterACyxG0F7CheckerQzSg_AItcfc	swift.init	public	init(before:after:)	ElementPropertyChangeExpr.init(before:after:)	init(before: P.ExprChecker? = nil, after: P.ExprChecker? = nil)
+symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementPropertyChangeExprV8propertyAA0cD0Ovp	swift.property	public	property	ElementPropertyChangeExpr.property	var property: ElementProperty { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementTargetGrammarErrorO	swift.enum	public	ElementTargetGrammarError	ElementTargetGrammarError	enum ElementTargetGrammarError
 symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementTargetGrammarErrorO07missingD0yA2CmF	swift.enum.case	public	ElementTargetGrammarError.missingTarget	ElementTargetGrammarError.missingTarget	case missingTarget
 symbol	ButtonHeist.symbols.json	s:8ThePlans25ElementTargetGrammarErrorO14emptyPredicateyA2CmF	swift.enum.case	public	ElementTargetGrammarError.emptyPredicate	ElementTargetGrammarError.emptyPredicate	case emptyPredicate
@@ -1488,12 +1600,11 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans26AccessibilityPredicateExprOyAcA0cD0
 symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV	swift.struct	public	ElementUpdatePredicateExpr	ElementUpdatePredicateExpr	struct ElementUpdatePredicateExpr
 symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV11descriptionSSvp	swift.property	public	description	ElementUpdatePredicateExpr.description	var description: String { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementUpdatePredicateExpr.init(from:)	init(from decoder: any Decoder) throws
-symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV5afterAA0cE8TemplateVSgvp	swift.property	public	after	ElementUpdatePredicateExpr.after	let after: ElementPredicateTemplate?
-symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV6before5after8propertyAcA0cE8TemplateVSg_AiA0C8PropertyOSgtcfc	swift.init	public	init(before:after:property:)	ElementUpdatePredicateExpr.init(before:after:property:)	init(before: ElementPredicateTemplate? = nil, after: ElementPredicateTemplate? = nil, property: ElementProperty? = nil)
-symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV6beforeAA0cE8TemplateVSgvp	swift.property	public	before	ElementUpdatePredicateExpr.before	let before: ElementPredicateTemplate?
+symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV6changeAA017AnyPropertyChangeF0OSgvp	swift.property	public	change	ElementUpdatePredicateExpr.change	let change: AnyPropertyChangeExpr?
 symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ElementUpdatePredicateExpr.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV7element6changeAcA0cE8TemplateVSg_AA017AnyPropertyChangeF0OSgtcfc	swift.init	public	init(element:change:)	ElementUpdatePredicateExpr.init(element:change:)	init(element: ElementPredicateTemplate? = nil, change: AnyPropertyChangeExpr? = nil)
+symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV7elementAA0cE8TemplateVSgvp	swift.property	public	element	ElementUpdatePredicateExpr.element	let element: ElementPredicateTemplate?
 symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV7resolve2inAA0cdE0VAA25HeistExecutionEnvironmentV_tKF	swift.method	public	resolve(in:)	ElementUpdatePredicateExpr.resolve(in:)	func resolve(in environment: HeistExecutionEnvironment) throws -> ElementUpdatePredicate
-symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV8propertyAA0C8PropertyOSgvp	swift.property	public	property	ElementUpdatePredicateExpr.property	let property: ElementProperty?
 symbol	ButtonHeist.symbols.json	s:8ThePlans26ElementUpdatePredicateExprVyAcA0cdE0Vcfc	swift.init	public	init(_:)	ElementUpdatePredicateExpr.init(_:)	init(_ update: ElementUpdatePredicate)
 symbol	ButtonHeist.symbols.json	s:8ThePlans26HeistCompilationDiagnosticV	swift.struct	public	HeistCompilationDiagnostic	HeistCompilationDiagnostic	struct HeistCompilationDiagnostic
 symbol	ButtonHeist.symbols.json	s:8ThePlans26HeistCompilationDiagnosticV11descriptionSSvp	swift.property	public	description	HeistCompilationDiagnostic.description	var description: String { get }
@@ -2916,6 +3027,8 @@ relationship	conformsTo	s:8ThePlans12HeistCatalogV	s:SE	HeistCatalog	Swift.Encod
 relationship	conformsTo	s:8ThePlans12HeistCatalogV	s:SQ	HeistCatalog	Swift.Equatable
 relationship	conformsTo	s:8ThePlans12HeistCatalogV	s:Se	HeistCatalog	Swift.Decodable
 relationship	conformsTo	s:8ThePlans12HeistCatalogV	s:s8SendableP	HeistCatalog	Swift.Sendable
+relationship	conformsTo	s:8ThePlans12HintPropertyO	s:8ThePlans19ElementPropertyKindP	HintProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans12HintPropertyO	s:s8SendableP	HintProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans12ScrollTargetV	s:SE	ScrollTarget	Swift.Encodable
 relationship	conformsTo	s:8ThePlans12ScrollTargetV	s:SQ	ScrollTarget	Swift.Equatable
 relationship	conformsTo	s:8ThePlans12ScrollTargetV	s:Se	ScrollTarget	Swift.Decodable
@@ -2958,6 +3071,8 @@ relationship	conformsTo	s:8ThePlans13ElementTargetO11SchemaFieldV	s:s8SendableP	
 relationship	conformsTo	s:8ThePlans13ElementTargetO15SchemaFieldKindO	s:SH	ElementTarget.SchemaFieldKind	Swift.Hashable
 relationship	conformsTo	s:8ThePlans13ElementTargetO15SchemaFieldKindO	s:SQ	ElementTarget.SchemaFieldKind	Swift.Equatable
 relationship	conformsTo	s:8ThePlans13ElementTargetO15SchemaFieldKindO	s:s8SendableP	ElementTarget.SchemaFieldKind	Swift.Sendable
+relationship	conformsTo	s:8ThePlans13FramePropertyO	s:8ThePlans19ElementPropertyKindP	FrameProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans13FramePropertyO	s:s8SendableP	FrameProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans13HeistArgumentO	s:SE	HeistArgument	Swift.Encodable
 relationship	conformsTo	s:8ThePlans13HeistArgumentO	s:SQ	HeistArgument	Swift.Equatable
 relationship	conformsTo	s:8ThePlans13HeistArgumentO	s:Se	HeistArgument	Swift.Decodable
@@ -2975,6 +3090,13 @@ relationship	conformsTo	s:8ThePlans13PredicateCaseV	s:s23CustomStringConvertible
 relationship	conformsTo	s:8ThePlans13PredicateCaseV	s:s8SendableP	PredicateCase	Swift.Sendable
 relationship	conformsTo	s:8ThePlans13SetPasteboardV	s:8ThePlans12HeistContentP	SetPasteboard	HeistContent
 relationship	conformsTo	s:8ThePlans13SetPasteboardV	s:8ThePlans18HeistActionContentP	SetPasteboard	HeistActionContent
+relationship	conformsTo	s:8ThePlans13TraitSetMatchV	s:SE	TraitSetMatch	Swift.Encodable
+relationship	conformsTo	s:8ThePlans13TraitSetMatchV	s:SQ	TraitSetMatch	Swift.Equatable
+relationship	conformsTo	s:8ThePlans13TraitSetMatchV	s:Se	TraitSetMatch	Swift.Decodable
+relationship	conformsTo	s:8ThePlans13TraitSetMatchV	s:s23CustomStringConvertibleP	TraitSetMatch	Swift.CustomStringConvertible
+relationship	conformsTo	s:8ThePlans13TraitSetMatchV	s:s8SendableP	TraitSetMatch	Swift.Sendable
+relationship	conformsTo	s:8ThePlans13ValuePropertyO	s:8ThePlans19ElementPropertyKindP	ValueProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans13ValuePropertyO	s:s8SendableP	ValueProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans14ElementMatchesV	s:SQ	ElementMatches	Swift.Equatable
 relationship	conformsTo	s:8ThePlans14ElementMatchesV	s:s8SendableP	ElementMatches	Swift.Sendable
 relationship	conformsTo	s:8ThePlans14HeistCallGraphV	s:SQ	HeistCallGraph	Swift.Equatable
@@ -3003,6 +3125,8 @@ relationship	conformsTo	s:8ThePlans14RotorSelectionO	s:SH	RotorSelection	Swift.H
 relationship	conformsTo	s:8ThePlans14RotorSelectionO	s:SQ	RotorSelection	Swift.Equatable
 relationship	conformsTo	s:8ThePlans14RotorSelectionO	s:s23CustomStringConvertibleP	RotorSelection	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans14RotorSelectionO	s:s8SendableP	RotorSelection	Swift.Sendable
+relationship	conformsTo	s:8ThePlans14RotorsPropertyO	s:8ThePlans19ElementPropertyKindP	RotorsProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans14RotorsPropertyO	s:s8SendableP	RotorsProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:SE	SwipeDirection	Swift.Encodable
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:SH	SwipeDirection	Swift.Hashable
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:SQ	SwipeDirection	Swift.Equatable
@@ -3012,11 +3136,15 @@ relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:s12CaseIterableP	SwipeDir
 relationship	conformsTo	s:8ThePlans14SwipeDirectionO	s:s8SendableP	SwipeDirection	Swift.Sendable
 relationship	conformsTo	s:8ThePlans14TakeScreenshotV	s:8ThePlans12HeistContentP	TakeScreenshot	HeistContent
 relationship	conformsTo	s:8ThePlans14TakeScreenshotV	s:8ThePlans18HeistActionContentP	TakeScreenshot	HeistActionContent
+relationship	conformsTo	s:8ThePlans14TraitsPropertyO	s:8ThePlans19ElementPropertyKindP	TraitsProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans14TraitsPropertyO	s:s8SendableP	TraitsProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:SE	TypeTextTarget	Swift.Encodable
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:SQ	TypeTextTarget	Swift.Equatable
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:Se	TypeTextTarget	Swift.Decodable
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:s23CustomStringConvertibleP	TypeTextTarget	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans14TypeTextTargetV	s:s8SendableP	TypeTextTarget	Swift.Sendable
+relationship	conformsTo	s:8ThePlans15ActionsPropertyO	s:8ThePlans19ElementPropertyKindP	ActionsProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans15ActionsPropertyO	s:s8SendableP	ActionsProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans15ConditionalStepV	s:SE	ConditionalStep	Swift.Encodable
 relationship	conformsTo	s:8ThePlans15ConditionalStepV	s:SQ	ConditionalStep	Swift.Equatable
 relationship	conformsTo	s:8ThePlans15ConditionalStepV	s:Se	ConditionalStep	Swift.Decodable
@@ -3076,6 +3204,11 @@ relationship	conformsTo	s:8ThePlans16HeistDescriptionV	s:Se	HeistDescription	Swi
 relationship	conformsTo	s:8ThePlans16HeistDescriptionV	s:s8SendableP	HeistDescription	Swift.Sendable
 relationship	conformsTo	s:8ThePlans16ResolvedWaitStepV	s:SQ	ResolvedWaitStep	Swift.Equatable
 relationship	conformsTo	s:8ThePlans16ResolvedWaitStepV	s:s8SendableP	ResolvedWaitStep	Swift.Sendable
+relationship	conformsTo	s:8ThePlans17AnyPropertyChangeO	s:SE	AnyPropertyChange	Swift.Encodable
+relationship	conformsTo	s:8ThePlans17AnyPropertyChangeO	s:SQ	AnyPropertyChange	Swift.Equatable
+relationship	conformsTo	s:8ThePlans17AnyPropertyChangeO	s:Se	AnyPropertyChange	Swift.Decodable
+relationship	conformsTo	s:8ThePlans17AnyPropertyChangeO	s:s23CustomStringConvertibleP	AnyPropertyChange	Swift.CustomStringConvertible
+relationship	conformsTo	s:8ThePlans17AnyPropertyChangeO	s:s8SendableP	AnyPropertyChange	Swift.Sendable
 relationship	conformsTo	s:8ThePlans17ElementTargetExprO	s:SE	ElementTargetExpr	Swift.Encodable
 relationship	conformsTo	s:8ThePlans17ElementTargetExprO	s:SH	ElementTargetExpr	Swift.Hashable
 relationship	conformsTo	s:8ThePlans17ElementTargetExprO	s:SQ	ElementTargetExpr	Swift.Equatable
@@ -3169,6 +3302,7 @@ relationship	conformsTo	s:8ThePlans19ChangePredicateExprO	s:SQ	ChangePredicateEx
 relationship	conformsTo	s:8ThePlans19ChangePredicateExprO	s:Se	ChangePredicateExpr	Swift.Decodable
 relationship	conformsTo	s:8ThePlans19ChangePredicateExprO	s:s23CustomStringConvertibleP	ChangePredicateExpr	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans19ChangePredicateExprO	s:s8SendableP	ChangePredicateExpr	Swift.Sendable
+relationship	conformsTo	s:8ThePlans19ElementPropertyKindP	s:s8SendableP	ElementPropertyKind	Swift.Sendable
 relationship	conformsTo	s:8ThePlans19HeistInvocationStepV	s:SE	HeistInvocationStep	Swift.Encodable
 relationship	conformsTo	s:8ThePlans19HeistInvocationStepV	s:SQ	HeistInvocationStep	Swift.Equatable
 relationship	conformsTo	s:8ThePlans19HeistInvocationStepV	s:Se	HeistInvocationStep	Swift.Decodable
@@ -3205,6 +3339,13 @@ relationship	conformsTo	s:8ThePlans20HeistSemanticSurfaceV	s:SE	HeistSemanticSur
 relationship	conformsTo	s:8ThePlans20HeistSemanticSurfaceV	s:SQ	HeistSemanticSurface	Swift.Equatable
 relationship	conformsTo	s:8ThePlans20HeistSemanticSurfaceV	s:Se	HeistSemanticSurface	Swift.Decodable
 relationship	conformsTo	s:8ThePlans20HeistSemanticSurfaceV	s:s8SendableP	HeistSemanticSurface	Swift.Sendable
+relationship	conformsTo	s:8ThePlans21AnyPropertyChangeExprO	s:SE	AnyPropertyChangeExpr	Swift.Encodable
+relationship	conformsTo	s:8ThePlans21AnyPropertyChangeExprO	s:SQ	AnyPropertyChangeExpr	Swift.Equatable
+relationship	conformsTo	s:8ThePlans21AnyPropertyChangeExprO	s:Se	AnyPropertyChangeExpr	Swift.Decodable
+relationship	conformsTo	s:8ThePlans21AnyPropertyChangeExprO	s:s23CustomStringConvertibleP	AnyPropertyChangeExpr	Swift.CustomStringConvertible
+relationship	conformsTo	s:8ThePlans21AnyPropertyChangeExprO	s:s8SendableP	AnyPropertyChangeExpr	Swift.Sendable
+relationship	conformsTo	s:8ThePlans21CustomContentPropertyO	s:8ThePlans19ElementPropertyKindP	CustomContentProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans21CustomContentPropertyO	s:s8SendableP	CustomContentProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans21ElementDeltaPredicateO	s:SE	ElementDeltaPredicate	Swift.Encodable
 relationship	conformsTo	s:8ThePlans21ElementDeltaPredicateO	s:SQ	ElementDeltaPredicate	Swift.Equatable
 relationship	conformsTo	s:8ThePlans21ElementDeltaPredicateO	s:Se	ElementDeltaPredicate	Swift.Decodable
@@ -3215,6 +3356,10 @@ relationship	conformsTo	s:8ThePlans21ElementPredicateCheckO	s:SH	ElementPredicat
 relationship	conformsTo	s:8ThePlans21ElementPredicateCheckO	s:SQ	ElementPredicateCheck	Swift.Equatable
 relationship	conformsTo	s:8ThePlans21ElementPredicateCheckO	s:Se	ElementPredicateCheck	Swift.Decodable
 relationship	conformsTo	s:8ThePlans21ElementPredicateCheckO	s:s8SendableP	ElementPredicateCheck	Swift.Sendable
+relationship	conformsTo	s:8ThePlans21ElementPropertyChangeV	s:SE	ElementPropertyChange	Swift.Encodable
+relationship	conformsTo	s:8ThePlans21ElementPropertyChangeV	s:SQ	ElementPropertyChange	Swift.Equatable
+relationship	conformsTo	s:8ThePlans21ElementPropertyChangeV	s:Se	ElementPropertyChange	Swift.Decodable
+relationship	conformsTo	s:8ThePlans21ElementPropertyChangeV	s:s8SendableP	ElementPropertyChange	Swift.Sendable
 relationship	conformsTo	s:8ThePlans21GesturePointSelectionO	s:SE	GesturePointSelection	Swift.Encodable
 relationship	conformsTo	s:8ThePlans21GesturePointSelectionO	s:SQ	GesturePointSelection	Swift.Equatable
 relationship	conformsTo	s:8ThePlans21GesturePointSelectionO	s:Se	GesturePointSelection	Swift.Decodable
@@ -3287,6 +3432,8 @@ relationship	conformsTo	s:8ThePlans22HeistActionCommandTypeO	s:s8SendableP	Heist
 relationship	conformsTo	s:8ThePlans22HeistCompilationResultO	s:s8SendableP	HeistCompilationResult	Swift.Sendable
 relationship	conformsTo	s:8ThePlans22HeistPlanSourceRequestV	s:SQ	HeistPlanSourceRequest	Swift.Equatable
 relationship	conformsTo	s:8ThePlans22HeistPlanSourceRequestV	s:s8SendableP	HeistPlanSourceRequest	Swift.Sendable
+relationship	conformsTo	s:8ThePlans23ActivationPointPropertyO	s:8ThePlans19ElementPropertyKindP	ActivationPointProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans23ActivationPointPropertyO	s:s8SendableP	ActivationPointProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:10Foundation14LocalizedErrorP	HeistArtifactCodecError	Foundation.LocalizedError
 relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:s23CustomStringConvertibleP	HeistArtifactCodecError	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:s5ErrorP	HeistArtifactCodecError	Swift.Error
@@ -3314,6 +3461,10 @@ relationship	conformsTo	s:8ThePlans25ElementDeltaPredicateExprO	s:SQ	ElementDelt
 relationship	conformsTo	s:8ThePlans25ElementDeltaPredicateExprO	s:Se	ElementDeltaPredicateExpr	Swift.Decodable
 relationship	conformsTo	s:8ThePlans25ElementDeltaPredicateExprO	s:s23CustomStringConvertibleP	ElementDeltaPredicateExpr	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans25ElementDeltaPredicateExprO	s:s8SendableP	ElementDeltaPredicateExpr	Swift.Sendable
+relationship	conformsTo	s:8ThePlans25ElementPropertyChangeExprV	s:SE	ElementPropertyChangeExpr	Swift.Encodable
+relationship	conformsTo	s:8ThePlans25ElementPropertyChangeExprV	s:SQ	ElementPropertyChangeExpr	Swift.Equatable
+relationship	conformsTo	s:8ThePlans25ElementPropertyChangeExprV	s:Se	ElementPropertyChangeExpr	Swift.Decodable
+relationship	conformsTo	s:8ThePlans25ElementPropertyChangeExprV	s:s8SendableP	ElementPropertyChangeExpr	Swift.Sendable
 relationship	conformsTo	s:8ThePlans25ElementTargetGrammarErrorO	s:SQ	ElementTargetGrammarError	Swift.Equatable
 relationship	conformsTo	s:8ThePlans25ElementTargetGrammarErrorO	s:s5ErrorP	ElementTargetGrammarError	Swift.Error
 relationship	conformsTo	s:8ThePlans25ElementTargetGrammarErrorO	s:s8SendableP	ElementTargetGrammarError	Swift.Sendable
@@ -3900,6 +4051,9 @@ relationship	requirementOf	s:8ThePlans18HeistActionContentP17expectationWaiverSS
 relationship	requirementOf	s:8ThePlans18HeistActionContentP28expectationValidationFailureSSSgvp	s:8ThePlans18HeistActionContentP	expectationValidationFailure	HeistActionContent
 relationship	requirementOf	s:8ThePlans18HeistActionContentP7commandAA0cD7CommandOvp	s:8ThePlans18HeistActionContentP	command	HeistActionContent
 relationship	requirementOf	s:8ThePlans18StringMatchPayloadP06stringD14LiteralIsEmptySbSgvp	s:8ThePlans18StringMatchPayloadP	stringMatchLiteralIsEmpty	StringMatchPayload
+relationship	requirementOf	s:8ThePlans19ElementPropertyKindP11ExprCheckerQa	s:8ThePlans19ElementPropertyKindP	ExprChecker	ElementPropertyKind
+relationship	requirementOf	s:8ThePlans19ElementPropertyKindP7CheckerQa	s:8ThePlans19ElementPropertyKindP	Checker	ElementPropertyKind
+relationship	requirementOf	s:8ThePlans19ElementPropertyKindP8propertyAA0cD0OvpZ	s:8ThePlans19ElementPropertyKindP	property	ElementPropertyKind
 relationship	requirementOf	s:8ThePlans23ElementPredicateSubjectP14predicateLabelSSSgvp	s:8ThePlans23ElementPredicateSubjectP	predicateLabel	ElementPredicateSubject
 relationship	requirementOf	s:8ThePlans23ElementPredicateSubjectP14predicateValueSSSgvp	s:8ThePlans23ElementPredicateSubjectP	predicateValue	ElementPredicateSubject
 relationship	requirementOf	s:8ThePlans23ElementPredicateSubjectP19predicateIdentifierSSSgvp	s:8ThePlans23ElementPredicateSubjectP	predicateIdentifier	ElementPredicateSubject
