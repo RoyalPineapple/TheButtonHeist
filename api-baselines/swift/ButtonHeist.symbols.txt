@@ -722,6 +722,21 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans14ElementMatchesV	swift.struct	public
 symbol	ButtonHeist.symbols.json	s:8ThePlans14ElementMatchesV8matchingyAcA0C9PredicateVFZ	swift.type.method	public	matching(_:)	ElementMatches.matching(_:)	static func matching(_ predicate: ElementPredicate) -> ElementMatches
 symbol	ButtonHeist.symbols.json	s:8ThePlans14ElementMatchesV9predicateAA0C9PredicateVvp	swift.property	public	predicate	ElementMatches.predicate	let predicate: ElementPredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans14ElementMatchesV9predicateAcA0C9PredicateV_tcfc	swift.init	public	init(predicate:)	ElementMatches.init(predicate:)	init(predicate: ElementPredicate)
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV	swift.struct	public	HeistCallGraph	HeistCallGraph	struct HeistCallGraph
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV16topologicalOrders6ResultOySaySSGAC5CycleVGyF	swift.method	public	topologicalOrder()	HeistCallGraph.topologicalOrder()	func topologicalOrder() -> Result<[String], HeistCallGraph.Cycle>
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV4EdgeV	swift.struct	public	HeistCallGraph.Edge	HeistCallGraph.Edge	struct Edge
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV4EdgeV6calleeSSvp	swift.property	public	callee	HeistCallGraph.Edge.callee	let callee: String
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV4EdgeV6caller6calleeAESS_SStcfc	swift.init	public	init(caller:callee:)	HeistCallGraph.Edge.init(caller:callee:)	init(caller: String, callee: String)
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV4EdgeV6callerSSvp	swift.property	public	caller	HeistCallGraph.Edge.caller	let caller: String
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV4planAcA0C4PlanV_tcfc	swift.init	public	init(plan:)	HeistCallGraph.init(plan:)	init(plan: HeistPlan)
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV	swift.struct	public	HeistCallGraph.Cycle	HeistCallGraph.Cycle	struct Cycle
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV11displayPathSSvp	swift.property	public	displayPath	HeistCallGraph.Cycle.displayPath	var displayPath: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV4pathAESaySSG_tcfc	swift.init	public	init(path:)	HeistCallGraph.Cycle.init(path:)	init(path: [String])
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV4pathSaySSGvp	swift.property	public	path	HeistCallGraph.Cycle.path	let path: [String]
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5edgesShyAC4EdgeVGvp	swift.property	public	edges	HeistCallGraph.edges	let edges: Set<HeistCallGraph.Edge>
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5nodes5edgesACShySSG_ShyAC4EdgeVGtcfc	swift.init	public	init(nodes:edges:)	HeistCallGraph.init(nodes:edges:)	init(nodes: Set<String>, edges: Set<HeistCallGraph.Edge>)
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5nodesShySSGvp	swift.property	public	nodes	HeistCallGraph.nodes	let nodes: Set<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV9isAcyclicSbvp	swift.property	public	isAcyclic	HeistCallGraph.isAcyclic	var isAcyclic: Bool { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistParameterO	swift.enum	public	HeistParameter	HeistParameter	enum HeistParameter
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistParameterO13elementTargetyAcA0C13ReferenceNameV_tcACmF	swift.enum.case	public	HeistParameter.elementTarget(name:)	HeistParameter.elementTarget(name:)	case elementTarget(name: HeistReferenceName)
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistParameterO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistParameter.init(from:)	init(from decoder: any Decoder) throws
@@ -2958,6 +2973,14 @@ relationship	conformsTo	s:8ThePlans13SetPasteboardV	s:8ThePlans12HeistContentP	S
 relationship	conformsTo	s:8ThePlans13SetPasteboardV	s:8ThePlans18HeistActionContentP	SetPasteboard	HeistActionContent
 relationship	conformsTo	s:8ThePlans14ElementMatchesV	s:SQ	ElementMatches	Swift.Equatable
 relationship	conformsTo	s:8ThePlans14ElementMatchesV	s:s8SendableP	ElementMatches	Swift.Sendable
+relationship	conformsTo	s:8ThePlans14HeistCallGraphV	s:SQ	HeistCallGraph	Swift.Equatable
+relationship	conformsTo	s:8ThePlans14HeistCallGraphV	s:s8SendableP	HeistCallGraph	Swift.Sendable
+relationship	conformsTo	s:8ThePlans14HeistCallGraphV4EdgeV	s:SH	HeistCallGraph.Edge	Swift.Hashable
+relationship	conformsTo	s:8ThePlans14HeistCallGraphV4EdgeV	s:SQ	HeistCallGraph.Edge	Swift.Equatable
+relationship	conformsTo	s:8ThePlans14HeistCallGraphV4EdgeV	s:s8SendableP	HeistCallGraph.Edge	Swift.Sendable
+relationship	conformsTo	s:8ThePlans14HeistCallGraphV5CycleV	s:SQ	HeistCallGraph.Cycle	Swift.Equatable
+relationship	conformsTo	s:8ThePlans14HeistCallGraphV5CycleV	s:s5ErrorP	HeistCallGraph.Cycle	Swift.Error
+relationship	conformsTo	s:8ThePlans14HeistCallGraphV5CycleV	s:s8SendableP	HeistCallGraph.Cycle	Swift.Sendable
 relationship	conformsTo	s:8ThePlans14HeistParameterO	s:SE	HeistParameter	Swift.Encodable
 relationship	conformsTo	s:8ThePlans14HeistParameterO	s:SQ	HeistParameter	Swift.Equatable
 relationship	conformsTo	s:8ThePlans14HeistParameterO	s:Se	HeistParameter	Swift.Decodable

@@ -534,7 +534,7 @@ private struct HeistSemanticSurfaceBuilder {
         case .invoke(let invocation):
             guard let resolved = definitionScope.resolve(path: invocation.path) else { return }
             appendUnique(resolved.qualifiedName, to: &nestedRunHeists)
-            guard !invocationStack.contains(resolved.qualifiedName),
+            guard HeistCallGraph.cycle(closing: resolved.qualifiedName, in: invocationStack) == nil,
                   let nestedEnvironment = try? environment.binding(
                     argument: invocation.argument,
                     to: resolved.definition.parameter

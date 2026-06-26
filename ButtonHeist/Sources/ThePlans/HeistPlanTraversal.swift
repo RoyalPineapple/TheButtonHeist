@@ -10,6 +10,7 @@ struct HeistTraversalContext {
     let environment: HeistExecutionEnvironment
     let definitionScope: HeistDefinitionScope
     let invocationStack: [String]
+    let callGraph: HeistCallGraph?
 }
 
 protocol HeistPlanTraversalVisitor {
@@ -51,10 +52,17 @@ extension HeistPlanTraversalVisitor {
 }
 
 struct HeistPlanTraversal {
+    let callGraph: HeistCallGraph?
+
+    init(callGraph: HeistCallGraph? = nil) {
+        self.callGraph = callGraph
+    }
+
     func walk<V: HeistPlanTraversalVisitor>(
         _ plan: HeistPlan,
         visitor: inout V
     ) {
+        let callGraph = callGraph ?? HeistCallGraph(plan: plan)
         let rootScope = HeistReferenceScope.empty.binding(parameter: plan.parameter)
         let rootEnvironment = HeistExecutionEnvironment.runtimeSafetyPlaceholder(for: plan.parameter)
         let context = HeistTraversalContext(
@@ -66,7 +74,8 @@ struct HeistPlanTraversal {
             scope: rootScope,
             environment: rootEnvironment,
             definitionScope: HeistDefinitionScope(definitions: plan.definitions),
-            invocationStack: []
+            invocationStack: [],
+            callGraph: callGraph
         )
         visitor.visitPlan(plan, context: context)
         walkDefinitions(
@@ -86,6 +95,7 @@ struct HeistPlanTraversal {
             environment: rootEnvironment,
             definitionScope: context.definitionScope,
             invocationStack: [],
+            callGraph: callGraph,
             visitor: &visitor
         )
     }
@@ -99,6 +109,7 @@ struct HeistPlanTraversal {
         environment: HeistExecutionEnvironment,
         definitionScope: HeistDefinitionScope,
         invocationStack: [String] = [],
+        callGraph: HeistCallGraph? = nil,
         visitor: inout V
     ) {
         for (index, step) in steps.enumerated() {
@@ -111,7 +122,8 @@ struct HeistPlanTraversal {
                 scope: scope,
                 environment: environment,
                 definitionScope: definitionScope,
-                invocationStack: invocationStack
+                invocationStack: invocationStack,
+                callGraph: callGraph
             )
             walk(step: step, context: context, visitor: &visitor)
         }
@@ -183,6 +195,7 @@ struct HeistPlanTraversal {
             environment: context.environment,
             definitionScope: context.definitionScope,
             invocationStack: context.invocationStack,
+            callGraph: context.callGraph,
             visitor: &visitor
         )
     }
@@ -203,6 +216,7 @@ struct HeistPlanTraversal {
             environment: context.environment.binding(target: .predicate(forEach.matching), to: forEach.parameter),
             definitionScope: context.definitionScope,
             invocationStack: context.invocationStack,
+            callGraph: context.callGraph,
             visitor: &visitor
         )
     }
@@ -223,6 +237,7 @@ struct HeistPlanTraversal {
             environment: context.environment.binding(string: forEach.values.first ?? "", to: forEach.parameter),
             definitionScope: context.definitionScope,
             invocationStack: context.invocationStack,
+            callGraph: context.callGraph,
             visitor: &visitor
         )
     }
@@ -247,6 +262,7 @@ struct HeistPlanTraversal {
             environment: context.environment,
             definitionScope: context.definitionScope,
             invocationStack: context.invocationStack,
+            callGraph: context.callGraph,
             visitor: &visitor
         )
         guard let elseBody = repeatUntil.elseBody else { return }
@@ -261,6 +277,7 @@ struct HeistPlanTraversal {
             environment: context.environment,
             definitionScope: context.definitionScope,
             invocationStack: context.invocationStack,
+            callGraph: context.callGraph,
             visitor: &visitor
         )
     }
@@ -292,6 +309,7 @@ struct HeistPlanTraversal {
             environment: context.environment,
             definitionScope: heistContext.definitionScope,
             invocationStack: context.invocationStack,
+            callGraph: context.callGraph,
             visitor: &visitor
         )
     }
@@ -305,7 +323,7 @@ struct HeistPlanTraversal {
         visitor.visitInvoke(invoke, context: invokeContext)
         guard let resolved = context.definitionScope.resolve(path: invoke.path) else { return }
         let resolvedName = resolved.qualifiedName
-        guard !context.invocationStack.contains(resolvedName),
+        guard context.callGraphCycle(closing: resolvedName) == nil,
               let environment = try? context.environment.binding(argument: invoke.argument, to: resolved.definition.parameter)
         else { return }
         walk(
@@ -317,6 +335,7 @@ struct HeistPlanTraversal {
             environment: environment,
             definitionScope: HeistDefinitionScope(definitions: resolved.definition.definitions, pathPrefix: resolved.namePath),
             invocationStack: context.invocationStack + [resolvedName],
+            callGraph: context.callGraph,
             visitor: &visitor
         )
     }
@@ -339,6 +358,7 @@ struct HeistPlanTraversal {
                 environment: branchContext.environment,
                 definitionScope: branchContext.definitionScope,
                 invocationStack: branchContext.invocationStack,
+                callGraph: branchContext.callGraph,
                 visitor: &visitor
             )
         }
@@ -354,6 +374,7 @@ struct HeistPlanTraversal {
                 environment: branchContext.environment,
                 definitionScope: branchContext.definitionScope,
                 invocationStack: branchContext.invocationStack,
+                callGraph: branchContext.callGraph,
                 visitor: &visitor
             )
         }
@@ -393,7 +414,8 @@ struct HeistPlanTraversal {
                 scope: scope,
                 environment: environment,
                 definitionScope: definitionScope,
-                invocationStack: []
+                invocationStack: [],
+                callGraph: parentContext.callGraph
             )
             visitor.visitDefinition(definition, context: definitionContext)
             walkDefinitions(
@@ -413,6 +435,7 @@ struct HeistPlanTraversal {
                 environment: environment,
                 definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: currentDefinitionPath),
                 invocationStack: [currentDefinitionName],
+                callGraph: parentContext.callGraph,
                 visitor: &visitor
             )
         }
@@ -434,7 +457,8 @@ extension HeistTraversalContext {
             scope: scope,
             environment: environment,
             definitionScope: definitionScope ?? self.definitionScope,
-            invocationStack: invocationStack
+            invocationStack: invocationStack,
+            callGraph: callGraph
         )
     }
 
@@ -448,8 +472,16 @@ extension HeistTraversalContext {
             scope: scope,
             environment: environment,
             definitionScope: definitionScope,
-            invocationStack: invocationStack
+            invocationStack: invocationStack,
+            callGraph: callGraph
         )
+    }
+
+    func callGraphCycle(closing resolvedName: String) -> HeistCallGraph.Cycle? {
+        if let cycle = callGraph?.cycle(closing: resolvedName, in: invocationStack) {
+            return cycle
+        }
+        return HeistCallGraph.cycle(closing: resolvedName, in: invocationStack)
     }
 }
 
