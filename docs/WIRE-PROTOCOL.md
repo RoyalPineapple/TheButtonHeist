@@ -271,7 +271,7 @@ media only through explicit, size-bounded opt-ins.
 ### Wait
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"screen_changed"},"timeout":30}}]},"argument":{"type":"none"}}}
+{"buttonHeistVersion":"<semver>","type":"heistPlan","payload":{"plan":{"version":1,"parameter":{"type":"none"},"body":[{"type":"wait","wait":{"predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":30}}]},"argument":{"type":"none"}}}
 ```
 
 The host evaluates the predicate against the current settled accessibility

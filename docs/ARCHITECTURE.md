@@ -94,6 +94,68 @@ flowchart LR
     Stash --> Burglar["TheBurglar<br/>hierarchy parse/apply"]
 ```
 
+## Execution and Predicate Pipeline
+
+Button Heist has one source of truth: the accessibility tree, a snapshot of
+that tree, or a diff between snapshots. Targets, searches, waits, expectations,
+and repeat-loop stop conditions all evaluate through the same predicate model.
+
+```mermaid
+flowchart TD
+    Author["Authoring surface<br/>Swift DSL or runtime ButtonHeist source"] --> Compile["Compile / build HeistPlan<br/>ThePlans parser + builders"]
+    Compile --> Validate["Runtime validation<br/>finite steps, valid predicates, valid targets"]
+    Validate --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
+    FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
+    HandoffSocket --> Executor["TheBrains executor"]
+
+    Executor --> StepKind{"Step kind"}
+
+    StepKind -->|WaitFor| WaitForPath["PredicateWait.wait<br/>baseline = snapshot now<br/>timeout default 30s"]
+
+    StepKind -->|Action + expect| PreAction["Capture pre-action trace"]
+    PreAction --> Invoke["Invoke action"]
+    Invoke --> ExpectPath["PredicateWait.wait<br/>baseline = pre-action trace<br/>timeout default 1s"]
+
+    StepKind -->|Action.until / RepeatUntil| InitialStop["Initial stop check<br/>PredicateWait.wait timeout 0"]
+    InitialStop --> StopMet{"stop met?"}
+    StopMet -->|yes| Done["success"]
+    StopMet -->|no| RunBody["Run body action"]
+    RunBody --> ProgressGate["Progress gate<br/>PredicateWait.wait(.change(), 1s)"]
+    ProgressGate --> ProgressObserved{"progress observed?"}
+    ProgressObserved -->|no| Fail["fail / timeout"]
+    ProgressObserved -->|yes| EvaluateStop["Evaluate stop predicate<br/>against accumulated trace"]
+    EvaluateStop --> StopMet
+
+    WaitForPath --> Poll["Shared polling loop"]
+    ExpectPath --> Poll
+    ProgressGate --> Poll
+
+    Poll --> Observe["Observe settled semantic tree"]
+    Observe --> Append["Append semantic capture<br/>skip duplicate no-change frames<br/>record noChange proof"]
+    Append --> Accumulate["Build accumulated delta<br/>screen + elements over window"]
+    Accumulate --> Evaluate["Evaluate predicate<br/>exists / missing / change / noChange"]
+    Evaluate --> Matched{"matched?"}
+    Matched -->|yes| Success["ActionResult success<br/>trace + expectation"]
+    Matched -->|no, timeout not elapsed| Observe
+    Matched -->|no, timeout elapsed| Timeout["ActionResult timeout<br/>diagnostics + last delta"]
+```
+
+The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
+`PredicateWait.wait(...)`. The caller chooses the baseline:
+
+- `WaitFor(...)`: baseline is the first snapshot taken inside the wait.
+- `Action(...).expect(...)`: baseline is the pre-action snapshot.
+- `RepeatUntil(...)` and action `.until(...)`: the stop predicate is checked
+  immediately first; after each body, Button Heist waits up to one second for
+  `.change()`, then evaluates the stop predicate against the accumulated trace.
+
+The public predicate layer is intentionally one tree language:
+
+- State predicates: `.exists(...)`, `.missing(...)`.
+- Change predicates: `.change(.screen(...), .elements(...))`, `.noChange`.
+- Element delta assertions: `.appeared(...)`, `.disappeared(...)`,
+  `.updated(...)`.
+
 ## Core Flows
 
 ### Read
@@ -118,8 +180,9 @@ flowchart LR
 
 `wait` is a one-step heist. TheInsideJob checks the current settled state first,
 then watches later settled captures until the requested accessibility predicate
-matches or the timeout expires. `absent` means current absence; it is not proof
-of a prior removal event.
+matches or the timeout expires. `.missing(...)` means current absence; it is not
+proof of a prior removal event. Use `.missing(...)` for current absence and
+`.change(.elements(.disappeared(...)))` when the removal itself matters.
 
 ### Replay
 

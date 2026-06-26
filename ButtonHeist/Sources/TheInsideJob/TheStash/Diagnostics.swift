@@ -31,10 +31,10 @@ extension TheStash {
         let target: ElementTarget
         let absent: Bool
         switch predicate {
-        case .state(.present(let elementPredicate)):
+        case .state(.exists(let elementPredicate)):
             target = .predicate(elementPredicate, ordinal: 0)
             absent = false
-        case .state(.absent(let elementPredicate)):
+        case .state(.missing(let elementPredicate)):
             target = .predicate(elementPredicate, ordinal: 0)
             absent = true
         default:

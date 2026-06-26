@@ -16,8 +16,10 @@ extension AccessibilityPredicate {
         switch self {
         case .state(let state):
             return state.observationScope
-        case .changed(let change):
+        case .changePredicate(let change):
             return change.observationScope
+        case .noChangePredicate:
+            return .visible
         }
     }
 }
@@ -25,7 +27,7 @@ extension AccessibilityPredicate {
 private extension AccessibilityPredicate.State {
     var observationScope: SemanticObservationScope {
         switch self {
-        case .present, .absent, .presentTarget, .absentTarget:
+        case .exists, .missing, .existsTarget, .missingTarget:
             return .visible
         case .all(let states):
             return states
@@ -38,10 +40,14 @@ private extension AccessibilityPredicate.State {
 private extension AccessibilityPredicate.Change {
     var observationScope: SemanticObservationScope {
         switch self {
-        case .screen(let state):
-            return state?.observationScope ?? .visible
-        case .elements, .updated:
+        case .any:
             return .visible
+        case .screenScope(let states):
+            return states.map(\.observationScope).max() ?? .visible
+        case .elementsScope:
+            return .visible
+        case .allScopes(let changes):
+            return changes.map(\.observationScope).max() ?? .visible
         }
     }
 }

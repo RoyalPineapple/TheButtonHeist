@@ -460,7 +460,7 @@ final class MockConnection: TransportReachabilityConnecting {
         path: String
     ) -> HeistExecutionStepResult {
         let predicate = (try? repeatUntil.predicate.resolve(in: .empty))
-            ?? .state(.present(ElementPredicate(label: "unresolved")))
+            ?? .state(.exists(ElementPredicate(label: "unresolved")))
         return HeistExecutionStepResult(
             path: path,
             kind: .repeatUntil,
@@ -479,7 +479,7 @@ final class MockConnection: TransportReachabilityConnecting {
     private func mockCaseResults(for cases: [PredicateCase]) -> [HeistCaseMatchResult] {
         cases.map {
             let predicate = (try? $0.predicate.resolve(in: .empty))
-                ?? .state(.present(ElementPredicate(label: "unresolved")))
+                ?? .state(.exists(ElementPredicate(label: "unresolved")))
             return HeistCaseMatchResult(
                 predicate: predicate,
                 result: ExpectationResult(met: false, predicate: predicate)
@@ -503,7 +503,7 @@ final class MockConnection: TransportReachabilityConnecting {
                 result,
                 ExpectationResult(
                     met: false,
-                    predicate: .state(.present(ElementPredicate(label: "unresolved"))),
+                    predicate: .state(.exists(ElementPredicate(label: "unresolved"))),
                     actual: result.message
                 )
             )

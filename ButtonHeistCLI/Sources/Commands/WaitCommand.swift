@@ -8,16 +8,16 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
         commandName: Self.cliCommandName,
         abstract: "Wait until an accessibility predicate is satisfied",
         discussion: """
-            Waits until an accessibility predicate becomes true. `--present`/`--absent` \
+            Waits until an accessibility predicate becomes true. `--exists`/`--missing` \
             poll the current interface for an element matching the supplied element \
-            fields; `--changed` rides settled UI transitions. Uses settle-event \
+            fields; `--change` rides settled UI transitions. Uses settle-event \
             polling, not busy-waiting. Timeout is capped at 30 seconds.
 
             Examples:
-              buttonheist wait --present -l "Welcome"
-              buttonheist wait --absent -l "Loading" -t 5
-              buttonheist wait --changed screen_changed
-              buttonheist wait --predicate '{"type":"present","element":{"label":"Done"}}'
+              buttonheist wait --exists -l "Welcome"
+              buttonheist wait --missing -l "Loading" -t 5
+              buttonheist wait --change screen
+              buttonheist wait --predicate '{"type":"exists","element":{"label":"Done"}}'
             """
     )
 
@@ -29,31 +29,30 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .shortAndLong, help: "Maximum wait time in seconds (default: 10, max: 30)")
     var timeout: Double = 10.0
 
-    @Flag(name: .long, help: "Wait for an element matching the element fields to be present")
-    var present: Bool = false
+    @Flag(name: .long, help: "Wait for an element matching the element fields to exist")
+    var exists: Bool = false
 
-    @Flag(name: .long, help: "Wait for an element matching the element fields to be absent")
-    var absent: Bool = false
+    @Flag(name: .long, help: "Wait for an element matching the element fields to be missing")
+    var missing: Bool = false
 
     @Option(
         name: .long,
         help: ArgumentHelp(
-            "Wait for a change: a discriminator (screen_changed, elements_changed, "
-                + "element_updated)"
+            "Wait for a change: a discriminator (screen, elements, updated)"
         )
     )
-    var changed: String?
+    var change: String?
 
-    @Option(name: .long, help: "Full predicate as a JSON object (overrides --present/--absent/--changed)")
+    @Option(name: .long, help: "Full predicate as a JSON object (overrides --exists/--missing/--change)")
     var predicate: String?
 
     func validate() throws {
         guard timeout > 0 && timeout <= 30 else {
             throw ValidationError("timeout must be greater than 0 and at most 30 seconds, got \(timeout)")
         }
-        let modes = [present, absent, changed != nil, predicate != nil].filter { $0 }.count
+        let modes = [exists, missing, change != nil, predicate != nil].filter { $0 }.count
         guard modes == 1 else {
-            throw ValidationError("Specify exactly one of --present, --absent, --changed, or --predicate")
+            throw ValidationError("Specify exactly one of --exists, --missing, --change, or --predicate")
         }
     }
 
@@ -82,26 +81,25 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
     }
 
     private func buildPredicate() throws -> AccessibilityPredicate {
-        if present || absent {
+        if exists || missing {
             guard let elementPredicate = try element.parsedMatcher() else {
-                throw ValidationError("--present/--absent require element fields (e.g. -l, --identifier)")
+                throw ValidationError("--exists/--missing require element fields (e.g. -l, --identifier)")
             }
-            return present ? .state(.present(elementPredicate)) : .state(.absent(elementPredicate))
+            return exists ? .state(.exists(elementPredicate)) : .state(.missing(elementPredicate))
         }
-        guard let changed else {
-            throw ValidationError("Specify exactly one of --present, --absent, --changed, or --predicate")
+        guard let change else {
+            throw ValidationError("Specify exactly one of --exists, --missing, --change, or --predicate")
         }
-        switch changed {
-        case "screen_changed":
-            return .changed(.screen())
-        case "elements_changed":
-            return .changed(.elements)
-        case "element_updated":
-            return .changed(.updated(ElementUpdatePredicate(element: try element.parsedMatcher())))
+        switch change {
+        case "screen":
+            return .change(.screen())
+        case "elements":
+            return .change(.elements())
+        case "updated":
+            return .change(.elements(.updatedElement(ElementUpdatePredicate(element: try element.parsedMatcher()))))
         default:
             throw ValidationError(
-                "Unknown --changed value \"\(changed)\". Valid: "
-                    + AccessibilityPredicate.wireTypeValues.joined(separator: ", ")
+                "Unknown --change value \"\(change)\". Valid: screen, elements, updated"
             )
         }
     }

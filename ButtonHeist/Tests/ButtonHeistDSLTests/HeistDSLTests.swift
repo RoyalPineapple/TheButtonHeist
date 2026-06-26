@@ -49,13 +49,34 @@ func actionTargetSupportsRepeatedStringChecksForOneProperty() throws {
 func actionExpectationAttachesWaitStep() throws {
     let heist = try HeistPlan {
         Activate(.label("Sign In"))
-            .expect(.present(.label("Home")), timeout: .seconds(5))
+            .expect(.exists(.label("Home")), timeout: .seconds(5))
     }
 
     #expect(try heist == HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Sign In")),
-            expectation: WaitStep(predicate: .present(.label("Home")), timeout: 5)
+            expectation: WaitStep(predicate: .exists(.label("Home")), timeout: 5)
+        )),
+    ]))
+}
+
+@Test
+func actionUntilBuildsRepeatUntilWithDefaultProgressExpectation() throws {
+    let heist = try HeistPlan {
+        Increment(.label("Volume"))
+            .until(.exists(.element(label: "Volume", value: "100")))
+    }
+
+    #expect(try heist == HeistPlan(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .exists(.element(label: "Volume", value: "100")),
+            timeout: defaultWaitTimeout,
+            body: [
+                .action(try ActionStep(
+                    command: .increment(.predicate(.label("Volume"))),
+                    expectation: WaitStep(predicate: .change(), timeout: 1)
+                )),
+            ]
         )),
     ]))
 }
@@ -64,11 +85,11 @@ func actionExpectationAttachesWaitStep() throws {
 func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
     let heist = try HeistPlan {
         TypeText("Bruschetta", into: .identifier("Search"))
-            .expect(.changed(.updated(
+            .expect(.change(.elements(.updated(
                 .identifier("Search"),
                 property: .value,
                 to: "Bruschetta"
-            )))
+            ))))
     }
 
     #expect(try heist == HeistPlan(body: [
@@ -77,11 +98,11 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
                 text: .literal("Bruschetta"),
                 target: .predicate(.identifier("Search"))
             ),
-            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Search"),
                 property: .value,
                 to: "Bruschetta"
-            ))), timeout: 1)
+            )))), timeout: 1)
         )),
     ]))
 }
@@ -90,19 +111,19 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
 func `chained screen and state expectations compose into one action expectation`() throws {
     let forward = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.changed(.screen()))
-            .expect(.present(.label("Results")), timeout: .seconds(5))
+            .expect(.change(.screen()))
+            .expect(.exists(.label("Results")), timeout: .seconds(5))
     }
     let reversed = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.present(.label("Results")), timeout: .seconds(5))
-            .expect(.changed(.screen()))
+            .expect(.exists(.label("Results")), timeout: .seconds(5))
+            .expect(.change(.screen()))
     }
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Search")),
             expectation: WaitStep(
-                predicate: .changed(.screen(where: .present(.label("Results")))),
+                predicate: .change(.screen(.exists(.label("Results")))),
                 timeout: 5
             )
         )),
@@ -117,16 +138,16 @@ func `chained screen and state expectations compose into one action expectation`
 func `chained state expectations compose with all`() throws {
     let heist = try HeistPlan {
         Activate(.label("Save"))
-            .expect(.present(.label("A")))
-            .expect(.present(.label("B")))
+            .expect(.exists(.label("A")))
+            .expect(.exists(.label("B")))
     }
 
     #expect(try heist == HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Save")),
             expectation: WaitStep(predicate: .state(.all([
-                .present(.label("A")),
-                .present(.label("B")),
+                .exists(.label("A")),
+                .exists(.label("B")),
             ])), timeout: 1)
         )),
     ]))
@@ -136,21 +157,21 @@ func `chained state expectations compose with all`() throws {
 func `chained state expectation joins existing screen where clause`() throws {
     let forward = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.changed(.screen(where: .present(.label("Results")))))
-            .expect(.present(.label("Filter")))
+            .expect(.change(.screen(.exists(.label("Results")))))
+            .expect(.exists(.label("Filter")))
     }
     let reversed = try HeistPlan {
         Activate(.label("Search"))
-            .expect(.present(.label("Filter")))
-            .expect(.changed(.screen(where: .present(.label("Results")))))
+            .expect(.exists(.label("Filter")))
+            .expect(.change(.screen(.exists(.label("Results")))))
     }
 
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Search")),
-            expectation: WaitStep(predicate: .changed(.screen(where: .all([
-                .present(.label("Results")),
-                .present(.label("Filter")),
+            expectation: WaitStep(predicate: .change(.screen(.all([
+                .exists(.label("Results")),
+                .exists(.label("Filter")),
             ]))), timeout: 1)
         )),
     ])
@@ -164,8 +185,8 @@ func `different explicit chained expectation timeouts fail validation`() throws 
     #expect(throws: HeistPlanRuntimeSafetyError.self) {
         try HeistPlan {
             Activate(.label("Save"))
-                .expect(.present(.label("A")), timeout: .seconds(1))
-                .expect(.present(.label("B")), timeout: .seconds(2))
+                .expect(.exists(.label("A")), timeout: .seconds(1))
+                .expect(.exists(.label("B")), timeout: .seconds(2))
         }
     }
 }
@@ -174,20 +195,20 @@ func `different explicit chained expectation timeouts fail validation`() throws 
 func `unsupported chained change expectations fail validation without replacement`() throws {
     let step = try ActionStep(
         command: .activate(.label("Save")),
-        expectation: WaitStep(predicate: .changed(.elements), timeout: 1),
-        expectationValidationFailure: "unsupported expectation composition: changed(elements_changed) + changed(screen_changed)"
+        expectation: WaitStep(predicate: .change(.elements()), timeout: 1),
+        expectationValidationFailure: "unsupported expectation composition: change(elements) + change(screen)"
     )
     #expect(throws: HeistPlanRuntimeSafetyError.self) {
         try HeistPlan {
             Activate(.label("Save"))
-                .expect(.changed(.elements))
-                .expect(.changed(.screen()))
+                .expect(.change(.elements()))
+                .expect(.change(.screen()))
         }
     }
     #expect(try step == ActionStep(
         command: .activate(.label("Save")),
-        expectation: WaitStep(predicate: .changed(.elements), timeout: 1),
-        expectationValidationFailure: "unsupported expectation composition: changed(elements_changed) + changed(screen_changed)"
+        expectation: WaitStep(predicate: .change(.elements()), timeout: 1),
+        expectationValidationFailure: "unsupported expectation composition: change(elements) + change(screen)"
     ))
 }
 @Test
@@ -195,11 +216,11 @@ func `string heist search flow preserves query ref in composed post activation e
     enum SearchScreen {
         static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
-                .expect(.present(.value(query)), timeout: .seconds(1))
+                .expect(.exists(.value(query)), timeout: .seconds(1))
 
             Activate(.label("Search"))
-                .expect(.changed(.screen()))
-                .expect(.present(.label(query)), timeout: .seconds(5))
+                .expect(.change(.screen()))
+                .expect(.exists(.label(query)), timeout: .seconds(5))
         }
     }
 
@@ -211,12 +232,12 @@ func `string heist search flow preserves query ref in composed post activation e
     #expect(searchDefinition.body == [
         .action(try ActionStep(
             command: .typeText(text: .ref("query"), target: .target(.label("Search"))),
-            expectation: WaitStep(predicate: .present(.value(.ref("query"))), timeout: 1)
+            expectation: WaitStep(predicate: .exists(.value(.ref("query"))), timeout: 1)
         )),
         .action(try ActionStep(
             command: .activate(.target(.label("Search"))),
             expectation: WaitStep(
-                predicate: .changed(.screen(where: .present(.label(.ref("query"))))),
+                predicate: .change(.screen(.exists(.label(.ref("query"))))),
                 timeout: 5
             )
         )),
@@ -286,7 +307,7 @@ func mechanicalNamespaceBuildsExplicitEscapeHatches() throws {
 func customActionAndRotorBuildSemanticActionSteps() throws {
     let heist = try HeistPlan {
         CustomAction("Archive", on: .label("Message"))
-            .expect(.changed(.elements), timeout: .seconds(1))
+            .expect(.change(.elements()), timeout: .seconds(1))
         Rotor("Headings", on: .label("Article"), direction: .next)
             .withoutExpectation("Navigation cursor only")
     }
@@ -294,7 +315,7 @@ func customActionAndRotorBuildSemanticActionSteps() throws {
     #expect(heist.body == [
         .action(try ActionStep(
             command: .customAction(name: "Archive", target: .label("Message")),
-            expectation: WaitStep(predicate: .changed(.elements), timeout: 1)
+            expectation: WaitStep(predicate: .change(.elements()), timeout: 1)
         )),
         .action(try ActionStep(
             command: .rotor(selection: .named("Headings"), target: .label("Article"), direction: .next),
@@ -306,11 +327,11 @@ func customActionAndRotorBuildSemanticActionSteps() throws {
 @Test
 func waitForBuildsWaitStep() throws {
     let heist = try HeistPlan {
-        WaitFor(.present(.label("Home")), timeout: .seconds(5))
+        WaitFor(.exists(.label("Home")), timeout: .seconds(5))
     }
 
     #expect(try heist == HeistPlan(body: [
-        .wait(WaitStep(predicate: .present(.label("Home")), timeout: 5)),
+        .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 5)),
     ]))
 }
 
@@ -318,7 +339,7 @@ func waitForBuildsWaitStep() throws {
 func singleIfBuildsConditionalStep() throws {
     let heist = try HeistPlan {
         If {
-            Case(.present(.label("Allow"))) {
+            Case(.exists(.label("Allow"))) {
                 Activate(.label("Allow"))
             }
         }
@@ -327,7 +348,7 @@ func singleIfBuildsConditionalStep() throws {
     #expect(try heist == HeistPlan(body: [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(
-                predicate: .present(.label("Allow")),
+                predicate: .exists(.label("Allow")),
                 body: [.action(try ActionStep(command: .activate(.label("Allow"))))]
             ),
         ])),
@@ -356,7 +377,7 @@ func invalidForEachInsideIfCaseFailsPlanBuild() {
     expectBuildFailure(contains: "ForEach string loop is invalid") {
         _ = try HeistPlan {
             If {
-                Case(.present(.label("Ready"))) {
+                Case(.exists(.label("Ready"))) {
                     ForEach(["Milk"], parameter: "bad name") { _ in
                         Warn("never")
                     }
@@ -376,7 +397,7 @@ func invalidForEachInsideIfCaseFailsPlanBuild() {
 func invalidForEachInsideWaitForElseFailsPlanBuild() {
     expectBuildFailure(contains: "ForEach element loop is invalid") {
         _ = try HeistPlan {
-            WaitFor(.present(.label("Ready")), timeout: .seconds(1))
+            WaitFor(.exists(.label("Ready")), timeout: .seconds(1))
                 .else {
                     ForEach(.matching(.label("Row")), parameter: "bad name") { target in
                         Activate(target)
@@ -393,7 +414,7 @@ func invalidForEachInsideElseFailsPlanBuild() {
     expectBuildFailure(contains: "ForEach string loop is invalid") {
         _ = try HeistPlan {
             If {
-                Case(.present(.label("Ready"))) {
+                Case(.exists(.label("Ready"))) {
                     Warn("ready")
                 }
 
@@ -414,9 +435,9 @@ func invalidForEachInsideNestedBranchBodyFailsPlanBuild() {
     expectBuildFailure(contains: "ForEach string loop is invalid") {
         _ = try HeistPlan {
             If {
-                Case(.present(.label("Outer"))) {
+                Case(.exists(.label("Outer"))) {
                     If {
-                        Case(.present(.label("Inner"))) {
+                        Case(.exists(.label("Inner"))) {
                             ForEach(["Milk"], parameter: "bad name") { _ in
                                 Warn("never")
                             }
@@ -442,11 +463,11 @@ func invalidForEachInsideNestedBranchBodyFailsPlanBuild() {
 func multiCaseIfBuildsConditionalStep() throws {
     let heist = try HeistPlan {
         If {
-            Case(.present(.label("Home"))) {
+            Case(.exists(.label("Home"))) {
                 Warn("home")
             }
 
-            Case(.present(.label("Login"))) {
+            Case(.exists(.label("Login"))) {
                 Warn("login")
             }
 
@@ -459,8 +480,8 @@ func multiCaseIfBuildsConditionalStep() throws {
     #expect(try heist == HeistPlan(body: [
         .conditional(try ConditionalStep(
             cases: [
-                PredicateCase(predicate: .present(.label("Home")), body: [.warn(WarnStep(message: "home"))]),
-                PredicateCase(predicate: .present(.label("Login")), body: [.warn(WarnStep(message: "login"))]),
+                PredicateCase(predicate: .exists(.label("Home")), body: [.warn(WarnStep(message: "home"))]),
+                PredicateCase(predicate: .exists(.label("Login")), body: [.warn(WarnStep(message: "login"))]),
             ],
             elseBody: [.fail(FailStep(message: "unknown"))]
         )),
@@ -470,7 +491,7 @@ func multiCaseIfBuildsConditionalStep() throws {
 @Test
 func waitForElseBuildsWaitStepWithElseBody() throws {
     let heist = try HeistPlan {
-        WaitFor(.present(.label("Home")), timeout: .seconds(8))
+        WaitFor(.exists(.label("Home")), timeout: .seconds(8))
             .else {
                 Fail("no known result")
             }
@@ -478,7 +499,7 @@ func waitForElseBuildsWaitStepWithElseBody() throws {
 
     #expect(try heist == HeistPlan(body: [
         .wait(WaitStep(
-            predicate: .present(.label("Home")),
+            predicate: .exists(.label("Home")),
             timeout: 8,
             elseBody: [.fail(FailStep(message: "no known result"))]
         )),
@@ -489,12 +510,12 @@ func waitForElseBuildsWaitStepWithElseBody() throws {
 func canonicalProductDemoCompilesAsAccessibilityContractProgram() throws {
     let heist = try HeistPlan("searchFlow") {
         TypeText("milk", into: .label("Search"))
-            .expect(.present(ElementPredicate.element(label: "Search", value: "milk")), timeout: .seconds(2))
+            .expect(.exists(ElementPredicate.element(label: "Search", value: "milk")), timeout: .seconds(2))
 
         Activate(.label("Search"))
-            .expect(.changed(.screen()), timeout: .seconds(5))
+            .expect(.change(.screen()), timeout: .seconds(5))
 
-        WaitFor(.present(.label("Results")), timeout: .seconds(5))
+        WaitFor(.exists(.label("Results")), timeout: .seconds(5))
             .else {
                 Fail("Search did not settle")
             }
@@ -530,7 +551,7 @@ func helperFunctionsFlattenIntoParentPlan() throws {
         .action(try ActionStep(command: .typeText(text: "secret", target: .identifier("password")))),
         .action(try ActionStep(
             command: .activate(.label("Sign In")),
-            expectation: WaitStep(predicate: .present(.label("Home")), timeout: 5)
+            expectation: WaitStep(predicate: .exists(.label("Home")), timeout: 5)
         )),
         .action(try ActionStep(command: .activate(.label("Checkout")))),
     ])
@@ -542,7 +563,7 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
         static let addToCart = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
             Activate(.label(item))
             Activate(.label("Add to Cart"))
-                .expect(.present(.label(item)), timeout: .seconds(2))
+                .expect(.exists(.label(item)), timeout: .seconds(2))
         }
     }
 
@@ -571,7 +592,7 @@ func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
                     .action(try ActionStep(command: .activate(.label(.ref("item"))))),
                     .action(try ActionStep(
                         command: .activate(.target(.label("Add to Cart"))),
-                        expectation: WaitStep(predicate: .present(.label(.ref("item"))), timeout: 2)
+                        expectation: WaitStep(predicate: .exists(.label(.ref("item"))), timeout: 2)
                     )),
                 ]
             ),
@@ -608,7 +629,7 @@ func `string heist definitions default parameter to input`() throws {
 func `element target heist definitions default parameter to input`() throws {
     let delete = HeistDef<ElementTarget>("Rows.delete") { row in
         Activate(row)
-            .expect(.absent(row), timeout: .seconds(2))
+            .expect(.missing(row), timeout: .seconds(2))
     }
 
     let heist = try HeistPlan {
@@ -623,7 +644,7 @@ func `element target heist definitions default parameter to input`() throws {
                 body: [
                     .action(try ActionStep(
                         command: .activate(.ref("input")),
-                        expectation: WaitStep(predicate: .absent(.ref("input")), timeout: 2)
+                        expectation: WaitStep(predicate: .missing(.ref("input")), timeout: 2)
                     )),
                 ]
             ),
@@ -765,7 +786,7 @@ func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
     enum CartScreen {
         static let deleteItem = HeistDef<ElementTarget>("CartScreen.deleteItem", parameter: "target") { target in
             Activate(target)
-                .expect(.absent(target), timeout: .seconds(2))
+                .expect(.missing(target), timeout: .seconds(2))
         }
     }
 
@@ -809,7 +830,7 @@ func stringForEachBuildsRuntimeStringLoop() throws {
     let heist = try HeistPlan {
         ForEach(["Milk", "Eggs"]) { item in
             TypeText(item, into: .label("Add item"))
-                .expect(.present(.label(item)), timeout: .seconds(2))
+                .expect(.exists(.label(item)), timeout: .seconds(2))
         }
     }
 
@@ -821,7 +842,7 @@ func stringForEachBuildsRuntimeStringLoop() throws {
                 .action(try ActionStep(
                     command: .typeText(text: .ref("item"), target: .target(.label("Add item"))),
                     expectation: WaitStep(
-                        predicate: .present(.label(.ref("item"))),
+                        predicate: .exists(.label(.ref("item"))),
                         timeout: 2
                     )
                 )),
@@ -833,7 +854,7 @@ func stringForEachBuildsRuntimeStringLoop() throws {
 @Test
 func repeatUntilBuildsRuntimeLoopWithElseBody() throws {
     let heist = try HeistPlan {
-        RepeatUntil(.present(.value("2")), timeout: .seconds(3)) {
+        RepeatUntil(.exists(.value("2")), timeout: .seconds(3)) {
             Increment(.identifier("Quantity"))
         }.else {
             Fail("quantity did not reach 2")
@@ -842,7 +863,7 @@ func repeatUntilBuildsRuntimeLoopWithElseBody() throws {
 
     #expect(heist.body == [
         .repeatUntil(try RepeatUntilStep(
-            predicate: .present(.value("2")),
+            predicate: .exists(.value("2")),
             timeout: 3,
             body: [
                 .action(try ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
@@ -858,7 +879,7 @@ func repeatUntilBuildsRuntimeLoopWithElseBody() throws {
 func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
     let heist = try HeistPlan("Search", parameter: "query") { query in
         TypeText(query, into: .label("Search"))
-            .expect(.present(.value(query)), timeout: .seconds(2))
+            .expect(.exists(.value(query)), timeout: .seconds(2))
     }
 
     #expect(heist.parameter == .string(name: "query"))
@@ -866,7 +887,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
         .action(try ActionStep(
             command: .typeText(text: .ref("query"), target: .target(.label("Search"))),
             expectation: WaitStep(
-                predicate: .present(.value(.ref("query"))),
+                predicate: .exists(.value(.ref("query"))),
                 timeout: 2
             )
         )),
@@ -874,7 +895,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
     #expect(try heist.canonicalSwiftDSL() == """
     HeistPlan("Search", parameter: "query") { query in
         TypeText(query, into: .label("Search"))
-            .expect(.present(.value(query)), timeout: .seconds(2))
+            .expect(.exists(.value(query)), timeout: .seconds(2))
     }
     """)
 }
@@ -885,7 +906,7 @@ func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     let heist = try HeistPlan {
         ForEach(.matching(matching), limit: 20) { element in
             Activate(element)
-                .expect(.absent(element), timeout: .seconds(2))
+                .expect(.missing(element), timeout: .seconds(2))
         }
     }
 
@@ -901,7 +922,7 @@ func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
         .action(try ActionStep(
             command: .activate(.ref("target")),
             expectation: WaitStep(
-                predicate: .absent(.ref("target")),
+                predicate: .missing(.ref("target")),
                 timeout: 2
             )
         )),
@@ -915,7 +936,7 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
 
         ForEach(["Milk", "Eggs"]) { item in
             TypeText(item, into: .label("Add item"))
-                .expect(.present(.label(item)), timeout: .seconds(2))
+                .expect(.exists(.label(item)), timeout: .seconds(2))
         }
     }
 
@@ -968,6 +989,6 @@ private func loginFlow(email: String, password: String) throws -> some HeistCont
         TypeText(password, into: .identifier("password"))
 
         Activate(.label("Sign In"))
-            .expect(.present(.label("Home")), timeout: .seconds(5))
+            .expect(.exists(.label("Home")), timeout: .seconds(5))
     }
 }

@@ -130,7 +130,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testWaitWarnAndFailRoundTrip() throws {
         let plan = try HeistPlan(body: [
-            .wait(WaitStep(predicate: .state(.present(ElementPredicate(label: "Ready"))), timeout: 1.5)),
+            .wait(WaitStep(predicate: .state(.exists(ElementPredicate(label: "Ready"))), timeout: 1.5)),
             .warn(WarnStep(message: "optional branch skipped")),
             .fail(FailStep(message: "unexpected state")),
         ])
@@ -143,7 +143,7 @@ final class HeistPlanTests: XCTestCase {
 
     func testConditionalAndWaitRoundTrip() throws {
         let conditionCase = PredicateCase(
-            predicate: .state(.present(ElementPredicate(label: "Home"))),
+            predicate: .state(.exists(ElementPredicate(label: "Home"))),
             body: [.warn(WarnStep(message: "home"))]
         )
         let plan = try HeistPlan(body: [
@@ -152,7 +152,7 @@ final class HeistPlanTests: XCTestCase {
                 elseBody: [.warn(WarnStep(message: "not home"))]
             )),
             .wait(WaitStep(
-                predicate: .state(.present(ElementPredicate(label: "Done"))),
+                predicate: .state(.exists(ElementPredicate(label: "Done"))),
                 timeout: 2,
                 elseBody: [.fail(FailStep(message: "no known state"))]
             )),
@@ -170,7 +170,7 @@ final class HeistPlanTests: XCTestCase {
           "type": "conditional",
           "conditional": {
             "cases": [{
-              "predicate": {"type": "present", "element": {"label": "Home"}},
+              "predicate": {"type": "exists", "element": {"label": "Home"}},
               "body": [{"type": "warn", "warn": {"message": "home"}}]
             }],
             "elseSteps": [{"type": "warn", "warn": {"message": "not home"}}]
@@ -190,7 +190,7 @@ final class HeistPlanTests: XCTestCase {
           "wait_for_cases": {
             "timeout": 1,
             "cases": [{
-              "predicate": {"type": "present", "element": {"label": "Home"}},
+              "predicate": {"type": "exists", "element": {"label": "Home"}},
               "body": [{"type": "warn", "warn": {"message": "home"}}]
             }],
             "elseSteps": [{"type": "warn", "warn": {"message": "not home"}}]
@@ -238,7 +238,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "wait",
           "wait": {
-            "predicate": {"type": "present", "element": {"label": "Home"}},
+            "predicate": {"type": "exists", "element": {"label": "Home"}},
             "timeout": -1
           }
         }
@@ -254,7 +254,7 @@ final class HeistPlanTests: XCTestCase {
         {
           "type": "wait",
           "waitForCases": {
-            "predicate": {"type": "present", "element": {"label": "Home"}},
+            "predicate": {"type": "exists", "element": {"label": "Home"}},
             "timeout": 1
           }
         }
@@ -314,12 +314,12 @@ final class HeistPlanTests: XCTestCase {
     func testActionStepDescriptionComposesCommandAndExpectation() throws {
         let step = try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Save")), traits: [.button]))),
-            expectation: WaitStep(predicate: .changed(.screen()), timeout: 2)
+            expectation: WaitStep(predicate: .change(.screen()), timeout: 2)
         )
 
         XCTAssertEqual(
             step.description,
-            #"action(command=activate expect=wait(changed(screen_changed) timeout=2))"#
+            #"action(command=activate expect=wait(change(screen(*)) timeout=2))"#
         )
     }
 
@@ -344,7 +344,7 @@ final class HeistPlanTests: XCTestCase {
                 .action(try ActionStep(
                     command: .activate(target),
                     expectation: WaitStep(
-                        predicate: .state(.absentTarget(target)),
+                        predicate: .state(.missingTarget(target)),
                         timeout: 2
                     )
                 )),
@@ -358,7 +358,7 @@ final class HeistPlanTests: XCTestCase {
                 .action(try ActionStep(
                     command: .activate(target),
                     expectation: WaitStep(
-                        predicate: .state(.absentTarget(target)),
+                        predicate: .state(.missingTarget(target)),
                         timeout: 2
                     )
                 )),

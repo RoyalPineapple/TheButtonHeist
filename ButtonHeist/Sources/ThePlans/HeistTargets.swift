@@ -174,22 +174,37 @@ public extension ElementTargetExpr {
 }
 
 public extension AccessibilityPredicate {
-    static func present(_ predicate: ElementPredicate) -> AccessibilityPredicate {
-        .state(.present(predicate))
+    static func change(_ changes: AccessibilityPredicate.Change...) -> AccessibilityPredicate {
+        switch changes.count {
+        case 0:
+            return .changePredicate(.any)
+        case 1:
+            return .changePredicate(changes[0])
+        default:
+            return .changePredicate(.allScopes(changes))
+        }
+    }
+
+    static var noChange: AccessibilityPredicate {
+        .noChangePredicate
+    }
+
+    static func exists(_ predicate: ElementPredicate) -> AccessibilityPredicate {
+        .state(.exists(predicate))
     }
 
     @_disfavoredOverload
-    static func present(_ target: ElementTarget) -> AccessibilityPredicate {
-        .state(.presentTarget(target))
+    static func exists(_ target: ElementTarget) -> AccessibilityPredicate {
+        .state(.existsTarget(target))
     }
 
-    static func absent(_ predicate: ElementPredicate) -> AccessibilityPredicate {
-        .state(.absent(predicate))
+    static func missing(_ predicate: ElementPredicate) -> AccessibilityPredicate {
+        .state(.missing(predicate))
     }
 
     @_disfavoredOverload
-    static func absent(_ target: ElementTarget) -> AccessibilityPredicate {
-        .state(.absentTarget(target))
+    static func missing(_ target: ElementTarget) -> AccessibilityPredicate {
+        .state(.missingTarget(target))
     }
 
     static func all(_ states: [AccessibilityPredicate.State]) -> AccessibilityPredicate {
@@ -198,22 +213,37 @@ public extension AccessibilityPredicate {
 }
 
 public extension AccessibilityPredicateExpr {
-    static func present(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
-        .state(.present(predicate))
+    static func exists(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
+        .state(.exists(predicate))
     }
 
     @_disfavoredOverload
-    static func present(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
-        .state(.presentTarget(target))
+    static func exists(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
+        .state(.existsTarget(target))
     }
 
-    static func absent(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
-        .state(.absent(predicate))
+    static func missing(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
+        .state(.missing(predicate))
     }
 
     @_disfavoredOverload
-    static func absent(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
-        .state(.absentTarget(target))
+    static func missing(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
+        .state(.missingTarget(target))
+    }
+
+    static func change(_ changes: ChangePredicateExpr...) -> AccessibilityPredicateExpr {
+        switch changes.count {
+        case 0:
+            return .changePredicate(.any)
+        case 1:
+            return .changePredicate(changes[0])
+        default:
+            return .changePredicate(.allScopes(changes))
+        }
+    }
+
+    static var noChange: AccessibilityPredicateExpr {
+        .noChangePredicate
     }
 
     static func all(_ states: [StatePredicateExpr]) -> AccessibilityPredicateExpr {
@@ -223,67 +253,127 @@ public extension AccessibilityPredicateExpr {
 
 public extension StatePredicateExpr {
     @_disfavoredOverload
-    static func present(_ target: ElementTargetExpr) -> StatePredicateExpr {
-        .presentTarget(target)
+    static func exists(_ target: ElementTargetExpr) -> StatePredicateExpr {
+        .existsTarget(target)
     }
 
     @_disfavoredOverload
-    static func absent(_ target: ElementTargetExpr) -> StatePredicateExpr {
-        .absentTarget(target)
+    static func missing(_ target: ElementTargetExpr) -> StatePredicateExpr {
+        .missingTarget(target)
     }
 }
 
 public extension ChangePredicateExpr {
-    static func updated(
-        _ element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringMatch<StringExpr>? = nil,
-        to: StringMatch<StringExpr>? = nil
-    ) -> ChangePredicateExpr {
-        .updated(ElementUpdatePredicateExpr(
-            element: element,
-            property: property,
-            from: from,
-            to: to
-        ))
+    static func screen() -> ChangePredicateExpr {
+        .screenScope([])
     }
 
-    static func updated(
-        _ element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringExpr,
-        to: StringMatch<StringExpr>? = nil
-    ) -> ChangePredicateExpr {
-        .updated(element, property: property, from: StringMatch(from), to: to)
+    static func screen(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> ChangePredicateExpr {
+        .screenScope([first] + rest)
     }
 
-    static func updated(
-        _ element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringMatch<StringExpr>? = nil,
-        to: StringExpr
-    ) -> ChangePredicateExpr {
-        .updated(element, property: property, from: from, to: StringMatch(to))
+    static func elements() -> ChangePredicateExpr {
+        .elementsScope([])
     }
 
-    static func updated(
-        _ element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringExpr,
-        to: StringExpr
-    ) -> ChangePredicateExpr {
-        .updated(element, property: property, from: StringMatch(from), to: StringMatch(to))
+    static func elements(_ first: ElementDeltaPredicateExpr, _ rest: ElementDeltaPredicateExpr...) -> ChangePredicateExpr {
+        .elementsScope([first] + rest)
+    }
+
+    static func all(_ changes: ChangePredicateExpr...) -> ChangePredicateExpr {
+        .allScopes(changes)
     }
 }
 
 public extension AccessibilityPredicate.Change {
+    static func screen() -> AccessibilityPredicate.Change {
+        .screenScope([])
+    }
+
+    static func screen(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate.Change {
+        .screenScope([first] + rest)
+    }
+
+    static func elements() -> AccessibilityPredicate.Change {
+        .elementsScope([])
+    }
+
+    static func elements(_ first: ElementDeltaPredicate, _ rest: ElementDeltaPredicate...) -> AccessibilityPredicate.Change {
+        .elementsScope([first] + rest)
+    }
+
+    static func all(_ changes: AccessibilityPredicate.Change...) -> AccessibilityPredicate.Change {
+        .allScopes(changes)
+    }
+}
+
+public extension ElementDeltaPredicateExpr {
+    static func appeared(_ predicate: ElementPredicateTemplate) -> ElementDeltaPredicateExpr {
+        .appearedElement(predicate)
+    }
+
+    static func disappeared(_ predicate: ElementPredicateTemplate) -> ElementDeltaPredicateExpr {
+        .disappearedElement(predicate)
+    }
+
+    static func updated(
+        _ element: ElementPredicateTemplate? = nil,
+        property: ElementProperty? = nil,
+        from: StringMatch<StringExpr>? = nil,
+        to: StringMatch<StringExpr>? = nil
+    ) -> ElementDeltaPredicateExpr {
+        .updatedElement(ElementUpdatePredicateExpr(
+            element: element,
+            property: property,
+            from: from,
+            to: to
+        ))
+    }
+
+    static func updated(
+        _ element: ElementPredicateTemplate? = nil,
+        property: ElementProperty? = nil,
+        from: StringExpr,
+        to: StringMatch<StringExpr>? = nil
+    ) -> ElementDeltaPredicateExpr {
+        .updated(element, property: property, from: StringMatch(from), to: to)
+    }
+
+    static func updated(
+        _ element: ElementPredicateTemplate? = nil,
+        property: ElementProperty? = nil,
+        from: StringMatch<StringExpr>? = nil,
+        to: StringExpr
+    ) -> ElementDeltaPredicateExpr {
+        .updated(element, property: property, from: from, to: StringMatch(to))
+    }
+
+    static func updated(
+        _ element: ElementPredicateTemplate? = nil,
+        property: ElementProperty? = nil,
+        from: StringExpr,
+        to: StringExpr
+    ) -> ElementDeltaPredicateExpr {
+        .updated(element, property: property, from: StringMatch(from), to: StringMatch(to))
+    }
+}
+
+public extension ElementDeltaPredicate {
+    static func appeared(_ predicate: ElementPredicate) -> ElementDeltaPredicate {
+        .appearedElement(predicate)
+    }
+
+    static func disappeared(_ predicate: ElementPredicate) -> ElementDeltaPredicate {
+        .disappearedElement(predicate)
+    }
+
     static func updated(
         _ element: ElementPredicate? = nil,
         property: ElementProperty? = nil,
         from: StringMatch<String>? = nil,
         to: StringMatch<String>? = nil
-    ) -> AccessibilityPredicate.Change {
-        .updated(ElementUpdatePredicate(
+    ) -> ElementDeltaPredicate {
+        .updatedElement(ElementUpdatePredicate(
             element: element,
             property: property,
             from: from,
@@ -296,7 +386,7 @@ public extension AccessibilityPredicate.Change {
         property: ElementProperty? = nil,
         from: String,
         to: StringMatch<String>? = nil
-    ) -> AccessibilityPredicate.Change {
+    ) -> ElementDeltaPredicate {
         .updated(element, property: property, from: StringMatch(from), to: to)
     }
 
@@ -305,7 +395,7 @@ public extension AccessibilityPredicate.Change {
         property: ElementProperty? = nil,
         from: StringMatch<String>? = nil,
         to: String
-    ) -> AccessibilityPredicate.Change {
+    ) -> ElementDeltaPredicate {
         .updated(element, property: property, from: from, to: StringMatch(to))
     }
 
@@ -314,7 +404,7 @@ public extension AccessibilityPredicate.Change {
         property: ElementProperty? = nil,
         from: String,
         to: String
-    ) -> AccessibilityPredicate.Change {
+    ) -> ElementDeltaPredicate {
         .updated(element, property: property, from: StringMatch(from), to: StringMatch(to))
     }
 }

@@ -16,7 +16,7 @@
             "element" : {
               "label" : "Text Input"
             },
-            "type" : "present"
+            "type" : "exists"
           },
           "timeout" : 15
         }
@@ -39,7 +39,7 @@
             "element" : {
               "label" : "Apple Accessibility"
             },
-            "type" : "present"
+            "type" : "exists"
           },
           "timeout" : 15
         }

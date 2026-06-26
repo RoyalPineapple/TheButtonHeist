@@ -51,7 +51,7 @@ let heist = try HeistPlan("purchaseFlow") {
         Activate(.label(item))
 
         Activate(.label("Add to Cart"))
-            .expect(.present(.label("Cart")))
+            .expect(.exists(.label("Cart")))
     }
 
     RunHeist("LibraryScreen.addToCart", "Milk")
@@ -89,7 +89,7 @@ host-language runner boundary is:
 try await RunHeist("addToCart", argument: "Milk") { item in
     Activate(.label(item))
     Activate(.label("Add to Cart"))
-        .expect(.present(.label("Cart")))
+        .expect(.exists(.label("Cart")))
 }
 ```
 
@@ -112,10 +112,10 @@ Semantic actions should describe user intent and expected semantic outcome:
 ```swift
 HeistPlan {
     TypeText("milk", into: .label("Search"))
-        .expect(.present(.element(.label("Search"), .value("milk"))))
+        .expect(.exists(.element(.label("Search"), .value("milk"))))
 
     Activate(.label("Delete"))
-        .expect(.absent(.label("Delete")))
+        .expect(.missing(.label("Delete")))
 }
 ```
 
@@ -151,13 +151,16 @@ reveal, element inflation, and live geometry through the runtime pipeline.
 
 ```swift
 CustomAction("Archive", on: .label("Message"))
-    .expect(.changed(.elements))
+    .expect(.change(.elements()))
 
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.changed(.updated(.identifier("Search"), property: .value, to: "Bruschetta")))
+    .expect(.change(.elements(.updated(.identifier("Search"), property: .value, to: "Bruschetta"))))
 
 Increment(.label("Quantity"))
-    .expect(.changed(.updated(property: .value, from: "2", to: "3")))
+    .expect(.change(.elements(.updated(property: .value, from: "2", to: "3"))))
+
+Increment(.label("Volume"))
+    .until(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(5))
 
 Rotor("Headings", on: .label("Article"), direction: .next)
     .withoutExpectation("Navigation cursor only")
@@ -175,7 +178,7 @@ explicit broad match so the looseness stays visible in review:
 ```swift
 Activate(.label(.contains("Search")))
 
-WaitFor(.present(.element(
+WaitFor(.exists(.element(
     label: .contains("No results"),
     identifier: .contains("empty_state"),
     value: .contains("0 items")
@@ -201,7 +204,7 @@ Activate(.element(
 All checks must pass in order. Contradictory checks are valid source but cannot
 match any element in practice.
 
-Use `.changed(.updated(...))` for explicit property-delta assertions. The
+Use `.change(.elements(.updated(...)))` for explicit property-delta assertions. The
 optional first argument scopes the update to an element predicate; omitting it
 matches any updated element in the observed delta. `from` and `to` are optional
 string filters with the same exact-by-default `StringMatch` modes, so
@@ -211,7 +214,7 @@ hidden context.
 
 Do not write `.expect(.updated(...))` today. A future target-relative shorthand
 would need to derive a durable anchor at DSL-build time and lower immediately to
-the explicit `.changed(.updated(target, ...))` predicate.
+the explicit `.change(.elements(.updated(target, ...)))` predicate.
 
 Do not assert label or identifier changes as property updates. The current diff
 model uses those fields for element identity, so a label or identifier change is
@@ -222,12 +225,12 @@ not a safe `.updated(property:)` contract.
 ```swift
 ForEach(.matching(.label("Delete")), limit: 20) { target in
     Activate(target)
-        .expect(.absent(target), timeout: .seconds(2))
+        .expect(.missing(target), timeout: .seconds(2))
 }
 
 ForEach(["Milk", "Eggs"]) { item in
     TypeText(item, into: .label("Add item"))
-        .expect(.present(.label(item)), timeout: .seconds(2))
+        .expect(.exists(.label(item)), timeout: .seconds(2))
 }
 ```
 
@@ -285,9 +288,9 @@ statement snippets are not a supported authored surface.
 
 Canonical sugar may elide an implied wrapper when the remaining spelling is the
 same DSL concept: `Activate(.label("Pay"))` is shorthand for a target built from
-the `.label("Pay")` predicate, and `WaitFor(.present(.label("Pay")))` is
-shorthand for a state predicate. Sugar must not create a second spelling for the
-same idea; write `.changed(.screen())`, not a renamed predicate alias.
+the `.label("Pay")` predicate, and `WaitFor(.exists(.label("Pay")))` is
+a state predicate over the current tree. Sugar must not create a second spelling
+for the same idea; write `.change(.screen())`, not a renamed predicate alias.
 
 There is no runtime Swift execution and no hidden fallback: a local Swift file
 either compiles to an admissible `HeistPlan` ahead of time or the command fails.

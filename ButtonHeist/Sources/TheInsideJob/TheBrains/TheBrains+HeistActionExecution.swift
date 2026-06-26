@@ -100,7 +100,7 @@ extension TheBrains {
             )
         }
 
-        let receipt = await runtime.wait(resolvedWait, actionResult?.accessibilityTrace)
+        let receipt = await runtime.wait(resolvedWait, actionResult?.accessibilityTrace, nil)
         if let command {
             let failure = expectationFailure(
                 wait: wait,

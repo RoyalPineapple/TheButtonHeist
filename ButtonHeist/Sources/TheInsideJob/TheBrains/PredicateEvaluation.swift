@@ -8,17 +8,17 @@ enum PredicateEvaluation {
         _ predicate: AccessibilityPredicate,
         currentElements: [HeistElement],
         delta: AccessibilityTrace.Delta?,
-        observedSequence: UInt64? = nil,
-        changeBaselineSequence: UInt64? = nil
+        observedSequence: SettledObservationSequence? = nil,
+        changeBaselineSequence: SettledObservationSequence? = nil
     ) -> ExpectationResult {
-        if predicate.requiresFutureSettledBaseline,
+        if predicate.requiresChangeBaseline,
            let observedSequence,
            let changeBaselineSequence,
            observedSequence <= changeBaselineSequence {
             return ExpectationResult(
                 met: false,
                 predicate: predicate,
-                actual: "change predicate requires future settled observation after baseline"
+                actual: PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
             )
         }
         return predicate.evaluate(
@@ -29,8 +29,19 @@ enum PredicateEvaluation {
 
     static func evaluate(
         _ predicate: AccessibilityPredicate,
+        currentElements: [HeistElement],
+        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+    ) -> ExpectationResult {
+        predicate.evaluate(
+            currentElements: currentElements,
+            accumulatedDelta: accumulatedDelta
+        )
+    }
+
+    static func evaluate(
+        _ predicate: AccessibilityPredicate,
         in observation: HeistSemanticObservation,
-        changeBaselineSequence: UInt64? = nil
+        changeBaselineSequence: SettledObservationSequence? = nil
     ) -> ExpectationResult {
         evaluate(
             predicate,
@@ -55,7 +66,7 @@ enum PredicateEvaluation {
     static func caseMatch(
         _ predicateCase: ResolvedPredicateCase,
         in observation: HeistSemanticObservation,
-        changeBaselineSequence: UInt64? = nil
+        changeBaselineSequence: SettledObservationSequence? = nil
     ) -> HeistCaseMatchResult {
         HeistCaseMatchResult(
             predicate: predicateCase.predicate,
@@ -69,9 +80,13 @@ enum PredicateEvaluation {
 }
 
 extension AccessibilityPredicate {
-    var requiresFutureSettledBaseline: Bool {
-        if case .changed = self { return true }
-        return false
+    var requiresChangeBaseline: Bool {
+        switch self {
+        case .changePredicate, .noChangePredicate:
+            return true
+        case .state:
+            return false
+        }
     }
 }
 

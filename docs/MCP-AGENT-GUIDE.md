@@ -19,10 +19,11 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 Allowed `perform(step:)` statements are one action or one simple wait:
 
 ```swift
-Activate(.label("Pay")).expect(.changed(.screen()))
+Activate(.label("Pay")).expect(.change(.screen()))
 TypeText("milk", into: .label("Search"))
-    .expect(.changed(.updated(.label("Search"), property: .value, to: "milk")))
+    .expect(.change(.elements(.updated(.label("Search"), property: .value, to: "milk"))))
 Increment(.label("Quantity"))
+    .until(.exists(.element(label: "Quantity", value: "10")), timeout: .seconds(5))
 Decrement(.label("Quantity"))
 CustomAction("Archive", on: .label("Message"))
 Rotor("Headings", on: .label("Article"))
@@ -35,7 +36,7 @@ Mechanical.LongPress(.label("Message"))
 Mechanical.Swipe(.label("Carousel"), .left)
 Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 
-WaitFor(.present(.label("Checkout")), timeout: .seconds(5))
+WaitFor(.exists(.label("Checkout")), timeout: .seconds(5))
 ```
 
 `perform(step:)` rejects program-shaped source: multiple statements, `HeistPlan`, `HeistDef`, `RunHeist`, `If`, `WaitFor(...).else { ... }`, `ForEach`, `Warn`, and `Fail`. Use `run_heist(plan:)` for those.
@@ -66,22 +67,22 @@ Activate(.label("Pay"), ordinal: 0)
 **Waiting**: use `perform(step:)` with simple `WaitFor(...)` when the UI is updating asynchronously — network requests, timers, animations completing. The predicate should name the specific outcome:
 
 ```swift
-WaitFor(.changed(.screen()), timeout: .seconds(10))
-WaitFor(.present(.label("Receipt")), timeout: .seconds(5))
-WaitFor(.absent(.label("Loading")), timeout: .seconds(10))
+WaitFor(.change(.screen()), timeout: .seconds(10))
+WaitFor(.exists(.label("Receipt")), timeout: .seconds(5))
+WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
 ```
 
-For `.absent(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
+For `.missing(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
 
 Use explicit property-delta expectations when the action should update a known
 element value:
 
 ```swift
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.changed(.updated(.identifier("Search"), property: .value, to: "Bruschetta")))
+    .expect(.change(.elements(.updated(.identifier("Search"), property: .value, to: "Bruschetta"))))
 
 Increment(.label("Quantity"))
-    .expect(.changed(.updated(property: .value, from: "2", to: "3")))
+    .expect(.change(.elements(.updated(property: .value, from: "2", to: "3"))))
 ```
 
 The element argument is optional. Omit it to match any updated element in the
@@ -90,17 +91,17 @@ observed delta. Property updates support `value`, `traits`, `hint`, `actions`,
 label or identifier changes because those fields are used for diff identity.
 Do not shorten this to `.expect(.updated(...))`: expectations do not infer the
 action target. If target-relative sugar is added later, it must lower to an
-explicit `.changed(.updated(target, ...))` predicate before runtime evaluation.
+explicit `.change(.elements(.updated(target, ...)))` predicate before runtime evaluation.
 
 **Composing**: `run_heist` for typed multi-step plans in a single call. Prefer the `plan` field with canonical ButtonHeist source when authoring compact heists as an agent:
 
 ```swift
 HeistPlan {
     Activate(.label("Pay"))
-        .expect(.changed(.screen()))
+        .expect(.change(.screen()))
 
     TypeText("milk", into: .label("Search"))
-        .expect(.changed(.updated(.label("Search"), property: .value, to: "milk")))
+        .expect(.change(.elements(.updated(.label("Search"), property: .value, to: "milk"))))
 }
 ```
 
@@ -110,16 +111,16 @@ Use `run_heist(plan:)` for definitions, composition, branching, waits with bodie
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search"))
-            .expect(.changed(.updated(.label("Search"), property: .value, to: item)))
+            .expect(.change(.elements(.updated(.label("Search"), property: .value, to: item))))
         Activate(.label("Add"))
-            .expect(.present(.label("Added")))
+            .expect(.exists(.label("Added")))
     }
 
     RunHeist("Cart.addItem", "Milk")
 
-    If(.present(.label("Pay"))) {
+    If(.exists(.label("Pay"))) {
         Activate(.label("Pay"))
-            .expect(.changed(.screen()))
+            .expect(.change(.screen()))
     }.else {
         Warn("Pay button unavailable")
     }
@@ -161,6 +162,10 @@ MCP tool arguments are preflighted before Button Heist converts them into comman
 ## Trace Semantics
 
 Screen changes create full baselines. Same-screen changes are patches on top of the current baseline.
+
+For the full execution pipeline, including how `WaitFor`, `.expect(...)`, and
+`.until(...)` share the same polling waiter and accumulated-delta evaluation,
+see [Execution and Predicate Pipeline](ARCHITECTURE.md#execution-and-predicate-pipeline).
 
 Actions can refresh off-screen state by exploring scroll views before or after the interaction, but that exploration is not a screen boundary by itself. It only broadens Button Heist's current-screen knowledge. If the app stays on the same screen, the action result is still an elements-changed patch; if Button Heist detects a real screen change, the trace starts a new full baseline.
 
@@ -240,9 +245,9 @@ For operations that take time, keep using the DSL:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.changed(.screen()))
+    .expect(.change(.screen()))
 
-WaitFor(.present(.label("Receipt")), timeout: .seconds(10))
+WaitFor(.exists(.label("Receipt")), timeout: .seconds(10))
 ```
 
 If the action receipt shows a spinner or loading overlay instead of the final state,
@@ -257,13 +262,13 @@ know what should change:
 
 ```swift
 Activate(.label("Continue"))
-    .expect(.changed(.screen()))
+    .expect(.change(.screen()))
 
 TypeText("milk", into: .label("Search"))
-    .expect(.present(.element(.label("Search"), .value("milk"))))
+    .expect(.exists(.element(.label("Search"), .value("milk"))))
 
 Activate(.label("Delete"))
-    .expect(.absent(.label("Delete")))
+    .expect(.missing(.label("Delete")))
 ```
 
 Before you act, ask what should be true afterward. A nav button changes the

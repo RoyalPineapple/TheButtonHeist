@@ -280,7 +280,10 @@ final class WireCommandParityTests: XCTestCase {
             return ["target": target]
         case .wait:
             return [
-                "predicate": .object(["type": .string("elements_changed")]),
+                "predicate": .object([
+                    "type": .string("change"),
+                    "scopes": .array([.object(["type": .string("elements")])]),
+                ]),
                 "timeout": .double(10),
             ]
         case .scrollToEdge:

@@ -32,7 +32,7 @@ to one-step or composed `HeistPlan`s before crossing the device wire.
 | Surface | Public status | Entry points | Contract source | Compatibility policy |
 |---------|---------------|--------------|-----------------|----------------------|
 | SwiftPM products and modules | Public integration surface | `TheInsideJob`, `ButtonHeist`, `ButtonHeistDSL`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, `api-baselines/swift/*.symbols.txt`, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. Use matching package, CLI, MCP, and embedded app builds. |
-| SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor` | [Heist Doctor](HEIST-DOCTOR.md) | Suggestion-only receipt analysis. Not installed by Homebrew and not a major-version stability contract. |
+| SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor`, `buttonheist-docgen` | [Heist Doctor](HEIST-DOCTOR.md), generated references | Suggestion-only receipt analysis and repo reference generation. Not installed by Homebrew and not a major-version stability contract. |
 | Homebrew release | Public install surface | `buttonheist`, `buttonheist-mcp`, `heist-plan`, installed `ThePlans` compiler artifacts | `Formula/buttonheist.rb` and `scripts/release-contract.sh` | Formula and release archives use SemVer `MAJOR.MINOR.PATCH`. Experimental `heist-doctor` is intentionally excluded. |
 | CLI commands | Public command surface | `buttonheist <command>` | Generated [Command Reference](reference/commands.md) | Command names, CLI exposure, and parameters are descriptor-owned. Regenerate references after command changes. |
 | JSON-lines input | Public CLI session surface | `buttonheist json_lines` | Generated [Command Reference](reference/commands.md) and `TheFence.Command` descriptors | Each line is a JSON object using CLI-exposed Fence commands. MCP-only tools are excluded. Raw plan IR fields are not the public `run_heist` input shape. |
@@ -258,7 +258,9 @@ coordination through TheHandoff, typed responses, heist planning, expectations,
 receipts, and replay integration.
 
 Use the generated [Command Reference](reference/commands.md) for command names
-and parameters.
+and parameters. After command descriptor or schema changes, regenerate it with
+`swift run --package-path ButtonHeist buttonheist-docgen --output-dir docs/reference`;
+use `--check` to validate committed references without writing.
 
 ### Command Invariants
 
@@ -388,8 +390,8 @@ available.
 ### Expectations
 
 Expectations use object form with a `type` discriminator, for example
-`{"type":"screen_changed"}` or
-`{"type":"present","element":{"label":{"mode":"exact","value":"Success"}}}`.
+`{"type":"change","scopes":[{"type":"screen"}]}` or
+`{"type":"exists","element":{"label":{"mode":"exact","value":"Success"}}}`.
 
 Expectations use the current object grammar at every public boundary. Element
 expectations select subjects with predicate fields, not `heistId`.

@@ -706,8 +706,10 @@ private struct HeistSemanticSurfaceBuilder {
             appendPredicateTargets(predicate)
         case .state(let state):
             appendPredicateTargets(state)
-        case .changed(let change):
+        case .changePredicate(let change):
             appendPredicateTargets(change)
+        case .noChangePredicate:
+            break
         }
     }
 
@@ -715,16 +717,18 @@ private struct HeistSemanticSurfaceBuilder {
         switch predicate {
         case .state(let state):
             appendPredicateTargets(state)
-        case .changed(let change):
+        case .changePredicate(let change):
             appendPredicateTargets(change)
+        case .noChangePredicate:
+            break
         }
     }
 
     mutating func appendPredicateTargets(_ state: AccessibilityPredicate.State) {
         switch state {
-        case .present(let predicate), .absent(let predicate):
+        case .exists(let predicate), .missing(let predicate):
             appendTargetPredicate(predicate)
-        case .presentTarget(let target), .absentTarget(let target):
+        case .existsTarget(let target), .missingTarget(let target):
             appendTargetPredicate(target)
         case .all(let states):
             for state in states {
@@ -735,10 +739,10 @@ private struct HeistSemanticSurfaceBuilder {
 
     mutating func appendPredicateTargets(_ state: StatePredicateExpr) {
         switch state {
-        case .present(let predicate), .absent(let predicate):
+        case .exists(let predicate), .missing(let predicate):
             appendUnique(predicate.description, to: &targetPredicates)
             appendSemanticSurfaces(predicate)
-        case .presentTarget(let target), .absentTarget(let target):
+        case .existsTarget(let target), .missingTarget(let target):
             appendTargetPredicate(target)
         case .all(let states):
             for state in states {
@@ -749,24 +753,59 @@ private struct HeistSemanticSurfaceBuilder {
 
     mutating func appendPredicateTargets(_ change: AccessibilityPredicate.Change) {
         switch change {
-        case .screen(let state):
-            if let state { appendPredicateTargets(state) }
-        case .elements:
+        case .any:
             break
-        case .updated(let update):
-            if let element = update.element {
-                appendTargetPredicate(element)
+        case .screenScope(let states):
+            for state in states {
+                appendPredicateTargets(state)
+            }
+        case .elementsScope(let assertions):
+            for assertion in assertions {
+                appendPredicateTargets(assertion)
+            }
+        case .allScopes(let changes):
+            for change in changes {
+                appendPredicateTargets(change)
             }
         }
     }
 
     mutating func appendPredicateTargets(_ change: ChangePredicateExpr) {
         switch change {
-        case .screen(let state):
-            if let state { appendPredicateTargets(state) }
-        case .elements:
+        case .any:
             break
-        case .updated(let update):
+        case .screenScope(let states):
+            for state in states {
+                appendPredicateTargets(state)
+            }
+        case .elementsScope(let assertions):
+            for assertion in assertions {
+                appendPredicateTargets(assertion)
+            }
+        case .allScopes(let changes):
+            for change in changes {
+                appendPredicateTargets(change)
+            }
+        }
+    }
+
+    mutating func appendPredicateTargets(_ predicate: ElementDeltaPredicate) {
+        switch predicate {
+        case .appearedElement(let element), .disappearedElement(let element):
+            appendTargetPredicate(element)
+        case .updatedElement(let update):
+            if let element = update.element {
+                appendTargetPredicate(element)
+            }
+        }
+    }
+
+    mutating func appendPredicateTargets(_ predicate: ElementDeltaPredicateExpr) {
+        switch predicate {
+        case .appearedElement(let element), .disappearedElement(let element):
+            appendUnique(element.description, to: &targetPredicates)
+            appendSemanticSurfaces(element)
+        case .updatedElement(let update):
             if let element = update.element {
                 appendUnique(element.description, to: &targetPredicates)
                 appendSemanticSurfaces(element)

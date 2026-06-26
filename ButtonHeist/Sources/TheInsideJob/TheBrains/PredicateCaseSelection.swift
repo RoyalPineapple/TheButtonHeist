@@ -30,7 +30,7 @@ struct PredicateCaseSelection {
     static func evaluate(
         _ cases: [ResolvedPredicateCase],
         observation: HeistSemanticObservation,
-        changeBaselineSequence: UInt64? = nil
+        changeBaselineSequence: SettledObservationSequence? = nil
     ) -> PredicateCaseSelection {
         let evaluatedCases = cases.map {
             PredicateEvaluation.caseMatch(
@@ -52,7 +52,7 @@ struct PredicateCaseSelection {
     ) async -> HeistCaseSelectionResult {
         let start = CFAbsoluteTimeGetCurrent()
         let scope = cases.observationScope
-        let requiresChangeBaseline = cases.contains { $0.predicate.requiresFutureSettledBaseline }
+        let requiresChangeBaseline = cases.contains { $0.predicate.requiresChangeBaseline }
         let pollResult = await PredicatePollingEngine<PredicateCaseSelection>(
             observeSemanticState: observeSemanticState
         ).poll(

@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "ButtonHeistDSL", targets: ["ButtonHeistDSL"]),
         .executable(name: "heist-plan", targets: ["HeistPlanTool"]),
         .executable(name: "heist-doctor", targets: ["HeistDoctorTool"]),
+        .executable(name: "buttonheist-docgen", targets: ["ButtonHeistDocGen"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
@@ -72,6 +73,15 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             path: "ButtonHeist/Sources/HeistDoctorTool",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .executableTarget(
+            name: "ButtonHeistDocGen",
+            dependencies: [
+                "ButtonHeist",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "ButtonHeist/Sources/ButtonHeistDocGen",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // Swift implementation of TheInsideJob

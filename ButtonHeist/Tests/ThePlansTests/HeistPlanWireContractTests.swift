@@ -97,7 +97,7 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
         ("wait step", #"Unknown wait step field "unexpected""#, {
             _ = try JSONDecoder().decode(WaitStep.self, from: Data("""
             {
-              "predicate": { "type": "present", "element": { "label": "Home" } },
+              "predicate": { "type" : "exists", "element": { "label": "Home" } },
               "timeout": 0,
               "unexpected": true
             }
@@ -108,7 +108,7 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
             {
               "cases": [
                 {
-                  "predicate": { "type": "present", "element": { "label": "Promo" } },
+                  "predicate": { "type" : "exists", "element": { "label": "Promo" } },
                   "body": [ { "type": "warn", "warn": { "message": "promo" } } ]
                 }
               ],
@@ -119,7 +119,7 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
         ("predicate case", #"Unknown predicate case field "unexpected""#, {
             _ = try JSONDecoder().decode(PredicateCase.self, from: Data("""
             {
-              "predicate": { "type": "present", "element": { "label": "Promo" } },
+              "predicate": { "type" : "exists", "element": { "label": "Promo" } },
               "body": [ { "type": "warn", "warn": { "message": "promo" } } ],
               "unexpected": true
             }
@@ -149,7 +149,7 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
         ("repeat until step", #"Unknown repeat_until step field "unexpected""#, {
             _ = try JSONDecoder().decode(RepeatUntilStep.self, from: Data("""
             {
-              "predicate": { "type": "present", "element": { "label": "Ready" } },
+              "predicate": { "type" : "exists", "element": { "label": "Ready" } },
               "timeout": 1,
               "body": [ { "type": "warn", "warn": { "message": "retry" } } ],
               "unexpected": true
@@ -192,12 +192,12 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
         body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+                expectation: WaitStep(predicate: .change(.screen()), timeout: 0)
             )),
-            .wait(WaitStep(predicate: .present(.label("Home")), timeout: 1)),
+            .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
             .conditional(try ConditionalStep(
                 cases: [
-                    PredicateCase(predicate: .present(.label("Promo")), body: [
+                    PredicateCase(predicate: .exists(.label("Promo")), body: [
                         .warn(WarnStep(message: "promo visible")),
                     ]),
                 ],
@@ -212,7 +212,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 body: [
                     .action(try ActionStep(
                         command: .activate(.ref("row")),
-                        expectation: WaitStep(predicate: .absent(.ref("row")), timeout: 2)
+                        expectation: WaitStep(predicate: .missing(.ref("row")), timeout: 2)
                     )),
                 ]
             )),
@@ -227,7 +227,7 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                 ]
             )),
             .repeatUntil(try RepeatUntilStep(
-                predicate: .present(.label("Ready")),
+                predicate: .exists(.label("Ready")),
                 timeout: 2,
                 body: [
                     .warn(WarnStep(message: "retry")),
@@ -310,7 +310,12 @@ private let expectedAllStepKindsPlanJSON = """
         },
         "expectation" : {
           "predicate" : {
-            "type" : "screen_changed"
+            "scopes" : [
+              {
+                "type" : "screen"
+              }
+            ],
+            "type" : "change"
           },
           "timeout" : 0
         }
@@ -329,7 +334,7 @@ private let expectedAllStepKindsPlanJSON = """
               }
             ]
           },
-          "type" : "present"
+          "type" : "exists"
         },
         "timeout" : 1
       }
@@ -355,7 +360,7 @@ private let expectedAllStepKindsPlanJSON = """
                   }
                 ]
               },
-              "type" : "present"
+              "type" : "exists"
             }
           }
         ],
@@ -384,7 +389,7 @@ private let expectedAllStepKindsPlanJSON = """
               "expectation" : {
                 "predicate" : {
                   "target_ref" : "row",
-                  "type" : "absent"
+                  "type" : "missing"
                 },
                 "timeout" : 2
               }
@@ -469,7 +474,7 @@ private let expectedAllStepKindsPlanJSON = """
               }
             ]
           },
-          "type" : "present"
+          "type" : "exists"
         },
         "timeout" : 2
       },

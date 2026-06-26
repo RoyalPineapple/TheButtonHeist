@@ -115,7 +115,7 @@ final class WaitForIntegrationTests: XCTestCase {
         absent: Bool = false,
         timeout: Double? = nil
     ) async -> ActionResult? {
-        let state: AccessibilityPredicate.State = absent ? .absent(target) : .present(target)
+        let state: AccessibilityPredicate.State = absent ? .missing(target) : .exists(target)
         let waitTarget = WaitTarget(predicate: .state(state), timeout: timeout)
         return await insideJob.brains.performWait(target: waitTarget)
     }
@@ -383,7 +383,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .present(ElementPredicate(label: "WaitForChange-AlreadyPresent")),
+            expectation: .exists(ElementPredicate(label: "WaitForChange-AlreadyPresent")),
             timeout: 0.2
         )
 
@@ -397,7 +397,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
     func testWaitForStateAbsentAlreadyAbsentSucceedsFromCurrentState() async throws {
         let result = await changedWait(
-            expectation: .absent(ElementPredicate(label: "WaitForChange-NeverExisted")),
+            expectation: .missing(ElementPredicate(label: "WaitForChange-NeverExisted")),
             timeout: 0.2
         )
 
@@ -425,7 +425,7 @@ final class WaitForIntegrationTests: XCTestCase {
         }
 
         let result = await changedWait(
-            expectation: .present(ElementPredicate(label: "WaitForChange-Delayed")),
+            expectation: .exists(ElementPredicate(label: "WaitForChange-Delayed")),
             timeout: 5.0
         )
         delayedLabel = await addTask.value
@@ -450,7 +450,7 @@ final class WaitForIntegrationTests: XCTestCase {
         }
 
         let result = await changedWait(
-            expectation: .absent(ElementPredicate(label: "WaitForChange-Removed")),
+            expectation: .missing(ElementPredicate(label: "WaitForChange-Removed")),
             timeout: 5.0
         )
         await removeTask.value
@@ -470,14 +470,14 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(didObserveBaseline)
 
         let result = await changedWait(
-            expectation: .changed(.elements),
+            expectation: .change(.elements()),
             timeout: 0.2
         )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("expected: changed(elements_changed)") == true)
+        XCTAssertTrue(result.message?.contains("expected: change(elements(*))") == true)
     }
 
     func testWaitForChangeTimeoutZeroPerformsOneBoundedSettledCheck() async throws {
@@ -488,7 +488,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let start = CFAbsoluteTimeGetCurrent()
         let result = await changedWait(
-            expectation: .present(ElementPredicate(label: "WaitForChange-TimeoutZeroMissing")),
+            expectation: .exists(ElementPredicate(label: "WaitForChange-TimeoutZeroMissing")),
             timeout: 0
         )
         let elapsed = CFAbsoluteTimeGetCurrent() - start
@@ -539,7 +539,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let waitTask = Task { @MainActor in
             await self.changedWait(
-                expectation: .changed(.elements),
+                expectation: .change(.elements()),
                 timeout: 5.0
             )
         }
@@ -562,7 +562,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .absent(ElementPredicate(label: "WaitForChange-StillPresent")),
+            expectation: .missing(ElementPredicate(label: "WaitForChange-StillPresent")),
             timeout: 0.2
         )
 
@@ -580,7 +580,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .changed(.screen()),
+            expectation: .change(.screen()),
             timeout: 0.2
         )
         let message = try XCTUnwrap(result.message)
@@ -588,7 +588,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(message.contains("expected: changed(screen_changed)"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("expected: change(screen(*))"), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("last observed:"), "Unexpected message: \(message)")
     }
 
@@ -597,7 +597,7 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .changed(.elements),
+            expectation: .change(.elements()),
             timeout: 0.2
         )
         let message = try XCTUnwrap(result.message)
@@ -605,8 +605,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(message.contains("expected: changed(elements_changed)"), "Unexpected message: \(message)")
-        XCTAssertFalse(message.contains("predicate: {\"type\": \"elements_changed\"}"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("expected: change(elements(*))"), "Unexpected message: \(message)")
     }
 
     func testWaitForChangeElementUpdatedWithOldValueRequiresObservedUpdate() async throws {
@@ -615,12 +614,12 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         let result = await changedWait(
-            expectation: .changed(.updated(ElementUpdatePredicate(
+            expectation: .change(.elements(.updatedElement(ElementUpdatePredicate(
                 element: nil,
                 property: .value,
                 from: "Loading",
                 to: "Ready"
-            ))),
+            )))),
             timeout: 0.2
         )
 

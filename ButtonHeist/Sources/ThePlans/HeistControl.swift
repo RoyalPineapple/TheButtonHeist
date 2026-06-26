@@ -15,7 +15,7 @@ public struct WaitFor: HeistContent {
 
     public init(
         _ predicate: AccessibilityPredicateExpr,
-        timeout: Double = 0
+        timeout: Double = defaultWaitTimeout
     ) {
         self.init(predicate: predicate, timeout: timeout, elseBody: nil, definitions: [], diagnostics: [])
     }
@@ -23,16 +23,16 @@ public struct WaitFor: HeistContent {
     @_disfavoredOverload
     public init(
         _ predicate: AccessibilityPredicate,
-        timeout: Double = 0
+        timeout: Double = defaultWaitTimeout
     ) {
         self.init(.predicate(predicate), timeout: timeout)
     }
 
     public init(
         _ predicate: ElementPredicateTemplate,
-        timeout: Double = 0
+        timeout: Double = defaultWaitTimeout
     ) {
-        self.init(.present(predicate), timeout: timeout)
+        self.init(.exists(predicate), timeout: timeout)
     }
 
     public func `else`(
@@ -103,7 +103,7 @@ public struct RepeatUntil: HeistContent {
         timeout: Double,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
-        self.init(.present(predicate), timeout: timeout, content)
+        self.init(.exists(predicate), timeout: timeout, content)
     }
 
     public func `else`(

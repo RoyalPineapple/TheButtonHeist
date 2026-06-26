@@ -41,7 +41,7 @@ final class PostActionObservation {
         let tripwireSignal: TheTripwire.TripwireSignal
         let screenSnapshot: ScreenClassifier.Snapshot
         let screenId: String?
-        let settledObservationSequence: UInt64?
+        let settledObservationSequence: SettledObservationSequence?
     }
 
     struct SettleEvidence {
@@ -154,7 +154,7 @@ final class PostActionObservation {
     func captureSemanticState(
         from screen: Screen,
         tripwireSignal: TheTripwire.TripwireSignal,
-        settledObservationSequence: UInt64?
+        settledObservationSequence: SettledObservationSequence?
     ) -> BeforeState {
         let snapshot = stash.selectElements(in: screen)
         let (interface, interfaceHash) = stash.semanticInterfaceWithHash(for: screen)

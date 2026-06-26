@@ -477,7 +477,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .state(.present(ElementPredicate(label: "Home"))),
+                predicate: .state(.exists(ElementPredicate(label: "Home"))),
                 timeout: 1
             ))
         }
@@ -498,7 +498,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         defer { isolatedBrains.stopSemanticObservation() }
 
         let receipt = await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-            predicate: .state(.present(ElementPredicate(label: "Home"))),
+            predicate: .state(.exists(ElementPredicate(label: "Home"))),
             timeout: 0.01
         ))
 
@@ -521,7 +521,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .present(ElementPredicate(label: "Loaded")),
+                predicate: .exists(ElementPredicate(label: "Loaded")),
                 timeout: 1
             ))
         }
@@ -551,7 +551,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receiptTask = Task { @MainActor in
             await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
-                predicate: .present(ElementPredicate(label: "Missing")),
+                predicate: .exists(ElementPredicate(label: "Missing")),
                 timeout: 0.05
             ))
         }
@@ -937,7 +937,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     private func activationSubjectEvidence(
         target: ElementTarget,
         element: AccessibilityElement,
-        settledObservationSequence: UInt64?
+        settledObservationSequence: SettledObservationSequence?
     ) -> ActionSubjectEvidence {
         ActionSubjectEvidence(
             source: .resolvedSemanticTarget,

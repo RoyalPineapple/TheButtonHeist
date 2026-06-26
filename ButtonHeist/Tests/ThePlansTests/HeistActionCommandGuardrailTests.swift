@@ -39,51 +39,51 @@ import Testing
         (
             "WaitFor default",
             try HeistPlan {
-                WaitFor(.present(.label("Home")))
+                WaitFor(.exists(.label("Home")))
             },
-            WaitStep(predicate: .present(.label("Home")), timeout: 0)
+            WaitStep(predicate: .exists(.label("Home")), timeout: defaultWaitTimeout)
         ),
         (
             "WaitFor explicit",
             try HeistPlan {
-                WaitFor(.present(.label("Home")), timeout: .seconds(5))
+                WaitFor(.exists(.label("Home")), timeout: .seconds(5))
             },
-            WaitStep(predicate: .present(.label("Home")), timeout: 5)
+            WaitStep(predicate: .exists(.label("Home")), timeout: 5)
         ),
         (
             "WaitFor over cap",
             try HeistPlan {
-                WaitFor(.present(.label("Home")), timeout: .seconds(45))
+                WaitFor(.exists(.label("Home")), timeout: .seconds(45))
             },
-            WaitStep(predicate: .present(.label("Home")), timeout: 45)
+            WaitStep(predicate: .exists(.label("Home")), timeout: 45)
         ),
         (
             "expect default predicate",
             try HeistPlan {
                 Activate(.label("Pay")).expect()
             },
-            WaitStep(predicate: .changed(.elements), timeout: 1)
+            WaitStep(predicate: .change(.elements()), timeout: 1)
         ),
         (
             "expect default timeout",
             try HeistPlan {
-                Activate(.label("Pay")).expect(.present(.label("Receipt")))
+                Activate(.label("Pay")).expect(.exists(.label("Receipt")))
             },
-            WaitStep(predicate: .present(.label("Receipt")), timeout: 1)
+            WaitStep(predicate: .exists(.label("Receipt")), timeout: 1)
         ),
         (
             "expect explicit timeout",
             try HeistPlan {
-                Activate(.label("Pay")).expect(.present(.label("Receipt")), timeout: .seconds(3))
+                Activate(.label("Pay")).expect(.exists(.label("Receipt")), timeout: .seconds(3))
             },
-            WaitStep(predicate: .present(.label("Receipt")), timeout: 3)
+            WaitStep(predicate: .exists(.label("Receipt")), timeout: 3)
         ),
         (
             "expect over cap",
             try HeistPlan {
-                Activate(.label("Pay")).expect(.present(.label("Receipt")), timeout: .seconds(45))
+                Activate(.label("Pay")).expect(.exists(.label("Receipt")), timeout: .seconds(45))
             },
-            WaitStep(predicate: .present(.label("Receipt")), timeout: 45)
+            WaitStep(predicate: .exists(.label("Receipt")), timeout: 45)
         ),
     ]
 
@@ -92,11 +92,11 @@ import Testing
         #expect(actualWait == expectedWait, "\(name)")
     }
 
-    let predicate = AccessibilityPredicate.present(.label("Home"))
+    let predicate = AccessibilityPredicate.exists(.label("Home"))
     let waitTargetCases: [(String, WaitTarget, Double?, Double)] = [
-        ("default runtime timeout", WaitTarget(predicate: predicate), nil, 10),
+        ("default runtime timeout", WaitTarget(predicate: predicate), nil, defaultWaitTimeout),
         ("explicit runtime timeout", WaitTarget(predicate: predicate, timeout: 12), 12, 12),
-        ("over cap runtime timeout", WaitTarget(predicate: predicate, timeout: 45), 45, 30),
+        ("over cap runtime timeout", WaitTarget(predicate: predicate, timeout: 45), 45, defaultWaitTimeout),
         // Low-level WaitTarget currently does not validate negatives; executable WaitStep plans do.
         ("negative runtime payload gap", WaitTarget(predicate: predicate, timeout: -1), -1, -1),
     ]
@@ -110,20 +110,20 @@ import Testing
 @Test func `negative wait timeouts are rejected at executable plan boundaries`() {
     #expect(throws: HeistPlanRuntimeSafetyError.self) {
         _ = try HeistPlan {
-            WaitFor(.present(.label("Home")), timeout: .seconds(-1))
+            WaitFor(.exists(.label("Home")), timeout: .seconds(-1))
         }
     }
 
     #expect(throws: HeistPlanRuntimeSafetyError.self) {
         _ = try HeistPlan {
-            Activate(.label("Pay")).expect(.present(.label("Receipt")), timeout: .seconds(-1))
+            Activate(.label("Pay")).expect(.exists(.label("Receipt")), timeout: .seconds(-1))
         }
     }
 
     #expect(throws: DecodingError.self) {
         _ = try JSONDecoder().decode(WaitStep.self, from: Data("""
         {
-          "predicate": { "type": "present", "element": { "label": "Home" } },
+          "predicate": { "type": "exists", "element": { "label": "Home" } },
           "timeout": -1
         }
         """.utf8))

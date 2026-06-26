@@ -4,7 +4,7 @@ extension HeistPlanSourceParser {
     mutating func parseWaitFor() throws -> HeistStep {
         try expectSymbol("(")
         let predicate = try parseAccessibilityPredicateExpr()
-        let timeout = try parseTrailingTimeout(defaultValue: 0) ?? 0
+        let timeout = try parseTrailingTimeout(defaultValue: defaultWaitTimeout) ?? defaultWaitTimeout
         try expectSymbol(")")
         return .wait(WaitStep(
             predicate: predicate,

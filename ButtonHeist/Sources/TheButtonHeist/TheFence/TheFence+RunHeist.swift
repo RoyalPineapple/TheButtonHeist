@@ -65,7 +65,7 @@ extension TheFence {
         }
 
         let expectationStep = parsed.expectationPayload.expectation.map {
-            WaitStep(predicate: $0, timeout: min(parsed.expectationPayload.timeout ?? 10, 30))
+            WaitStep(predicate: $0, timeout: min(parsed.expectationPayload.timeout ?? defaultActionExpectationTimeout, defaultWaitTimeout))
         }
 
         var steps: [HeistStep] = []
@@ -102,12 +102,12 @@ extension TheFence {
         guard parsed.expectationPayload.expectation != nil else {
             return max(actionBudget, explicitSingleActionTimeout(for: parsed) ?? actionBudget)
         }
-        let expectationTimeout = min(parsed.expectationPayload.timeout ?? 10, 30)
+        let expectationTimeout = min(parsed.expectationPayload.timeout ?? defaultActionExpectationTimeout, defaultWaitTimeout)
         return actionBudget + expectationTimeout + config.postActionExpectationTimeoutBuffer
     }
 
     private func explicitSingleActionTimeout(for parsed: ParsedRequest) -> TimeInterval? {
-        parsed.expectationPayload.timeout.map { min($0, 30) }
+        parsed.expectationPayload.timeout.map { min($0, defaultWaitTimeout) }
     }
 
     private func performTimeout(for step: PerformableHeistStep) -> TimeInterval {
@@ -123,7 +123,7 @@ extension TheFence {
                 actionBudget = Timeouts.actionSeconds
             }
             guard let expectation = action.expectation else { return actionBudget }
-            return actionBudget + min(expectation.timeout, 30) + config.postActionExpectationTimeoutBuffer
+            return actionBudget + min(expectation.timeout, defaultWaitTimeout) + config.postActionExpectationTimeoutBuffer
         }
     }
 

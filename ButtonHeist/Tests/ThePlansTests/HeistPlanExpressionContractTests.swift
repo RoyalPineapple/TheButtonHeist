@@ -31,7 +31,7 @@ func `empty refs are rejected at expression boundaries`() throws {
     expectDecodingError(StringExpr.self, #"{"ref":"   "}"#, contains: "string reference must not be empty")
     expectDecodingError(ElementTargetExpr.self, #"{"ref":"   "}"#, contains: "target reference must not be empty")
     expectDecodingError(ElementPredicateTemplate.self, #"{"label_ref":"   "}"#, contains: "label_ref must not be empty")
-    expectDecodingError(StatePredicateExpr.self, #"{"type":"present","target_ref":"   "}"#, contains: "target_ref must not be empty")
+    expectDecodingError(StatePredicateExpr.self, #"{"type": "exists","target_ref":"   "}"#, contains: "target_ref must not be empty")
     expectDecodingError(ElementUpdatePredicateExpr.self, #"{"from_ref":"   "}"#, contains: "from_ref must not be empty")
 }
 
@@ -42,7 +42,7 @@ func `broad string matches reject refs that resolve empty`() throws {
         try labelPredicate.resolve(in: HeistExecutionEnvironment(strings: ["needle": ""]))
     }
 
-    let state = StatePredicateExpr.present(ElementPredicateTemplate(identifier: .prefix(.ref("prefix"))))
+    let state = StatePredicateExpr.exists(ElementPredicateTemplate(identifier: .prefix(.ref("prefix"))))
     expectExpressionError(.invalidStringMatch(mode: "prefix")) {
         try state.resolve(in: HeistExecutionEnvironment(strings: ["prefix": ""]))
     }
@@ -81,10 +81,10 @@ func `parameter binding resolves arguments in current scope and returns nested s
 @Test
 func `nested predicate resolution preserves state and change semantics`() throws {
     let target = ElementTarget.predicate(ElementPredicate(identifier: "cta"), ordinal: 0)
-    let expression = AccessibilityPredicateExpr.changed(.screen(where: .all([
-        .present(ElementPredicateTemplate(label: .exact(.ref("title")))),
-        .absentTarget(.ref("ctaTarget")),
-        .present(ElementPredicateTemplate(value: .contains(.ref("valuePart")))),
+    let expression = AccessibilityPredicateExpr.change(.screen(.all([
+        .exists(ElementPredicateTemplate(label: .exact(.ref("title")))),
+        .missingTarget(.ref("ctaTarget")),
+        .exists(ElementPredicateTemplate(value: .contains(.ref("valuePart")))),
     ])))
 
     let environment = HeistExecutionEnvironment(
@@ -93,10 +93,10 @@ func `nested predicate resolution preserves state and change semantics`() throws
     )
 
     let resolved = try expression.resolve(in: environment)
-    let expected = AccessibilityPredicate.changed(.screen(where: .all([
-        .present(ElementPredicate(label: "Dashboard")),
-        .absentTarget(target),
-        .present(ElementPredicate(value: .contains("Ready"))),
+    let expected = AccessibilityPredicate.change(.screen(.all([
+        .exists(ElementPredicate(label: "Dashboard")),
+        .missingTarget(target),
+        .exists(ElementPredicate(value: .contains("Ready"))),
     ])))
 
     #expect(resolved == expected)
@@ -119,28 +119,30 @@ func `expression codable shapes remain stable`() throws {
         """
     #expect(try sortedJSON(template) == expectedTemplateJSON)
 
-    #expect(try sortedJSON(StatePredicateExpr.presentTarget(.ref("target"))) == #"{"target_ref":"target","type":"present"}"#)
+    #expect(try sortedJSON(StatePredicateExpr.existsTarget(.ref("target"))) == #"{"target_ref":"target","type":"exists"}"#)
 
-    let change = ChangePredicateExpr.updated(ElementUpdatePredicateExpr(
+    let change = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(
         element: ElementPredicateTemplate(label: .exact(.ref("item"))),
         property: .value,
         from: .ref("old"),
         to: .literal("new")
-    ))
+    )))
     let expectedChangeJSON = """
-        {"element":{"checks":[{"kind":"label","match":{"ref":"item"}}]},\
-        "from_ref":"old","property":"value","to":"new","type":"element_updated"}
+        {"scopes":[{"assertions":[{"element":{"checks":[{"kind":"label","match":{"ref":"item"}}]},\
+        "from_ref":"old","property":"value","to":"new","type":"updated"}],"type":"elements"}],"type":"change"}
         """
     #expect(try sortedJSON(change) == expectedChangeJSON)
 
-    let broadChange = ChangePredicateExpr.updated(ElementUpdatePredicateExpr(
+    let broadChange = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(
         property: .value,
         from: .prefix(.literal("cart:")),
         to: .contains(.ref("count"))
-    ))
+    )))
+    let expectedBroadChangeJSON =
+        #"{"scopes":[{"assertions":[{"from":{"mode":"prefix","value":"cart:"},"property":"value","# +
+        #""to":{"mode":"contains","value":{"ref":"count"}},"type":"updated"}],"type":"elements"}],"type":"change"}"#
     #expect(
-        try sortedJSON(broadChange) ==
-            #"{"from":{"mode":"prefix","value":"cart:"},"property":"value","to":{"mode":"contains","value":{"ref":"count"}},"type":"element_updated"}"#
+        try sortedJSON(broadChange) == expectedBroadChangeJSON
     )
 }
 
@@ -156,8 +158,8 @@ func `target backed predicates equal predicate templates`() throws {
     #expect(Set([targetBacked, templateBacked]).count == 1)
     #expect(targetBacked != .predicate(ElementPredicateTemplate(label: .exact(.literal("Save"))), ordinal: 2))
 
-    let predicateBacked = AccessibilityPredicateExpr.predicate(.state(.present(ElementPredicate(label: "Save"))))
-    let stateTemplate = AccessibilityPredicateExpr.state(.present(ElementPredicateTemplate(label: .exact("Save"))))
+    let predicateBacked = AccessibilityPredicateExpr.predicate(.state(.exists(ElementPredicate(label: "Save"))))
+    let stateTemplate = AccessibilityPredicateExpr.state(.exists(ElementPredicateTemplate(label: .exact("Save"))))
 
     #expect(predicateBacked == stateTemplate)
 }

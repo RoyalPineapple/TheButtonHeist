@@ -5,7 +5,7 @@ import Foundation
 import TheScore
 
 struct SettledSemanticObservation: Sendable {
-    let sequence: UInt64
+    let sequence: SettledObservationSequence
     let scope: SemanticObservationScope
     let tripwireSignal: TheTripwire.TripwireSignal
     private let semantic: SemanticScreen
@@ -16,7 +16,7 @@ struct SettledSemanticObservation: Sendable {
     }
 
     init(
-        sequence: UInt64,
+        sequence: SettledObservationSequence,
         scope: SemanticObservationScope,
         screen: Screen,
         tripwireSignal: TheTripwire.TripwireSignal
@@ -30,7 +30,7 @@ struct SettledSemanticObservation: Sendable {
 }
 
 struct SettledSemanticObservationEvent: Sendable {
-    let sequence: UInt64
+    let sequence: SettledObservationSequence
     let scope: SemanticObservationScope
     let observation: SettledSemanticObservation
     let previous: SettledSemanticObservation?
@@ -45,7 +45,7 @@ struct SettledSemanticObservationEvent: Sendable {
 struct VisibleSemanticObservationEvidence {
     let screen: Screen
     let tripwireSignal: TheTripwire.TripwireSignal
-    let settledObservationSequence: UInt64?
+    let settledObservationSequence: SettledObservationSequence?
     let settleOutcome: SettleOutcome
 }
 
@@ -67,7 +67,7 @@ final class SemanticObservationStream {
 
     // MARK: - Subscriber-Facing Settled Observation History
 
-    private var settledSequence: UInt64 = 0
+    private var settledSequence: SettledObservationSequence = 0
     private(set) var latestEvent: SettledSemanticObservationEvent?
     /// Invalidates only `latestEvent` as a clean waiter result. Settled
     /// semantic truth remains in `TheStash` until the next explicit commit.
@@ -150,7 +150,7 @@ final class SemanticObservationStream {
 
     func settledEvent(
         scope: SemanticObservationScope,
-        after sequence: UInt64?,
+        after sequence: SettledObservationSequence?,
         timeout: Double?
     ) async -> SettledSemanticObservationEvent? {
         let subscription = subscribe(scope: scope)
@@ -373,7 +373,7 @@ final class SemanticObservationStream {
 
     private func waitForNextSettledEvent(
         scope: SemanticObservationScope = .visible,
-        after sequence: UInt64?,
+        after sequence: SettledObservationSequence?,
         timeout: Double?
     ) async -> SettledSemanticObservationEvent? {
         let requiredSequence = baselineSequence(for: scope, after: sequence)
@@ -397,8 +397,8 @@ final class SemanticObservationStream {
 
     private func baselineSequence(
         for scope: SemanticObservationScope,
-        after sequence: UInt64?
-    ) -> UInt64? {
+        after sequence: SettledObservationSequence?
+    ) -> SettledObservationSequence? {
         let currentSequence = latestEvent?.sequence
         if scope == .discovery {
             let baseline = sequence ?? currentSequence
@@ -412,7 +412,7 @@ final class SemanticObservationStream {
 
     private func cleanEvent(
         scope: SemanticObservationScope,
-        after sequence: UInt64?
+        after sequence: SettledObservationSequence?
     ) -> SettledSemanticObservationEvent? {
         guard !latestSettledObservationInvalidated,
               let latest = latestEvent,

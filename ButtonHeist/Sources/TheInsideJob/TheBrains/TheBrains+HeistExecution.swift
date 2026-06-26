@@ -15,9 +15,9 @@ extension TheBrains {
 
     struct HeistExecutionRuntime {
         let execute: @MainActor (RuntimeActionMessage) async -> ActionResult
-        let wait: @MainActor (ResolvedWaitStep, AccessibilityTrace?) async -> HeistWaitReceipt
+        let wait: @MainActor (ResolvedWaitStep, AccessibilityTrace?, SettledObservationSequence?) async -> HeistWaitReceipt
         let selectPredicateCase: @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult
-        let observeSemanticState: @MainActor (SemanticObservationScope, UInt64?, Double?) async -> HeistSemanticObservation?
+        let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
 
         @MainActor
         static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
@@ -25,8 +25,12 @@ extension TheBrains {
                 execute: { command in
                     await brains.executeRuntimeAction(command)
                 },
-                wait: { waitStep, initialTrace in
-                    await brains.interactionObservation.waitForPredicate(waitStep, initialTrace: initialTrace)
+                wait: { waitStep, initialTrace, afterSequence in
+                    await brains.interactionObservation.waitForPredicate(
+                        waitStep,
+                        initialTrace: initialTrace,
+                        after: afterSequence
+                    )
                 },
                 selectPredicateCase: { cases, timeout in
                     await brains.interactionObservation.waitForPredicateCases(cases, timeout: timeout)

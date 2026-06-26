@@ -679,7 +679,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let plan = try HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Settings")), traits: [.button]), ordinal: 1)),
-                    expectation: WaitStep(predicate: .changed(.screen()), timeout: 2.5)
+                    expectation: WaitStep(predicate: .change(.screen()), timeout: 2.5)
                 )),
                 .action(try ActionStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready"))
@@ -707,7 +707,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(checks[0]["match"] as? String, "Settings")
         XCTAssertEqual(checks[1]["kind"] as? String, "traits")
         XCTAssertEqual(checks[1]["values"] as? [String], ["button"])
-        XCTAssertEqual(((action["expectation"] as? [String: Any])?["predicate"] as? [String: Any])?["type"] as? String, "screen_changed")
+        let predicate = try XCTUnwrap((action["expectation"] as? [String: Any])?["predicate"] as? [String: Any])
+        XCTAssertEqual(predicate["type"] as? String, "change")
+        let scopes = try XCTUnwrap(predicate["scopes"] as? [[String: Any]])
+        XCTAssertEqual(scopes.first?["type"] as? String, "screen")
         XCTAssertEqual((action["expectation"] as? [String: Any])?["timeout"] as? Double, 2.5)
         XCTAssertEqual((body[2]["warn"] as? [String: Any])?["message"] as? String, "optional step skipped")
         XCTAssertEqual((body[3]["fail"] as? [String: Any])?["message"] as? String, "unexpected state")
@@ -851,7 +854,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildren() throws {
-        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
         let child = HeistExecutionStepResult(
             path: "$.body[0].conditional.cases[0].body[0]",
             kind: .action,
@@ -1104,28 +1107,28 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testWaitTargetRoundTrip() throws {
         let target = WaitTarget(
-            predicate: .state(.absent(ElementPredicate(label: "loading"))),
+            predicate: .state(.missing(ElementPredicate(label: "loading"))),
             timeout: 15
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(WaitTarget.self, from: data)
-        XCTAssertEqual(decoded.predicate, .state(.absent(ElementPredicate(label: "loading"))))
+        XCTAssertEqual(decoded.predicate, .state(.missing(ElementPredicate(label: "loading"))))
         XCTAssertEqual(decoded.timeout, 15)
     }
 
     func testWaitTargetResolvedDefaults() {
-        let target = WaitTarget(predicate: .state(.present(ElementPredicate(label: "x"))))
-        XCTAssertEqual(target.resolvedTimeout, 10)
+        let target = WaitTarget(predicate: .state(.exists(ElementPredicate(label: "x"))))
+        XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
     }
 
     func testWaitTargetTimeoutCapsAt30() {
-        let target = WaitTarget(predicate: .state(.present(ElementPredicate(label: "x"))), timeout: 60)
-        XCTAssertEqual(target.resolvedTimeout, 30)
+        let target = WaitTarget(predicate: .state(.exists(ElementPredicate(label: "x"))), timeout: 60)
+        XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
     }
 
     func testWaitTargetChangedResolvedDefaults() {
-        let target = WaitTarget(predicate: .changed(.elements))
-        XCTAssertEqual(target.resolvedTimeout, 10)
+        let target = WaitTarget(predicate: .change(.elements()))
+        XCTAssertEqual(target.resolvedTimeout, defaultWaitTimeout)
     }
 
     private func assertDecodingError(

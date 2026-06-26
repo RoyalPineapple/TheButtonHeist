@@ -260,6 +260,67 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.endpointScreenId, "settings_context")
     }
 
+    func testAccumulatedDeltaPreservesIntermediateElementUpdates() throws {
+        let baseline = makeInterface(label: "Counter", saveValue: "0")
+        let halfway = makeInterface(label: "Counter", saveValue: "50")
+        let final = makeInterface(label: "Counter", saveValue: "100")
+        let trace = AccessibilityTrace(first: baseline)
+            .appending(halfway)
+            .appending(final)
+
+        let accumulated = try XCTUnwrap(trace.accumulatedDelta)
+        let updates = try XCTUnwrap(accumulated.elementsChanged?.edits.updated)
+        let valueChanges = updates.flatMap(\.changes).filter { $0.property == .value }
+
+        XCTAssertTrue(valueChanges.contains(PropertyChange(property: .value, old: "0", new: "50")))
+        XCTAssertTrue(valueChanges.contains(PropertyChange(property: .value, old: "50", new: "100")))
+
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            element: .label("Save"),
+            property: .value,
+            from: "0",
+            to: "50"
+        ))))
+        let result = predicate.evaluate(
+            currentElements: final.projectedElements,
+            accumulatedDelta: accumulated
+        )
+
+        XCTAssertTrue(result.met, result.actual ?? "predicate did not match")
+    }
+
+    func testAccumulatedDeltaAllowsElementAndScreenAssertionsInOneWaitWindow() throws {
+        let baseline = makeInterface(label: "Menu", saveValue: "0")
+        let updated = makeInterface(label: "Menu", saveValue: "50")
+        let final = makeInterface(label: "Settings", saveValue: "50")
+        let trace = AccessibilityTrace(first: baseline)
+            .appending(updated)
+            .appending(
+                final,
+                transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+            )
+
+        let accumulated = try XCTUnwrap(trace.accumulatedDelta)
+        XCTAssertNotNil(accumulated.elementsChanged)
+        XCTAssertNotNil(accumulated.screenChanged)
+
+        let predicate = AccessibilityPredicate.change(
+            .elements(.updatedElement(ElementUpdatePredicate(
+                element: .label("Save"),
+                property: .value,
+                from: "0",
+                to: "50"
+            ))),
+            .screen(.exists(ElementPredicate(label: "Settings")))
+        )
+        let result = predicate.evaluate(
+            currentElements: final.projectedElements,
+            accumulatedDelta: accumulated
+        )
+
+        XCTAssertTrue(result.met, result.actual ?? "predicate did not match")
+    }
+
     func testTraceConstructionNormalizesToSingleLinkedList() throws {
         let first = AccessibilityTrace.Capture(
             sequence: 99,
