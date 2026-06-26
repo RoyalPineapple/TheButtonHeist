@@ -395,6 +395,9 @@ Expectations use object form with a `type` discriminator, for example
 
 Expectations use the current object grammar at every public boundary. Element
 expectations select subjects with predicate fields, not `heistId`.
+Element update predicates use `before` and `after` matcher objects for the old
+and new element state; raw `from`/`to` string fields are not part of the public
+grammar.
 
 ## Minimal Integration
 

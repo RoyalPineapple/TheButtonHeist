@@ -1035,17 +1035,25 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testElementUpdateRoundTrip() throws {
-        // The carried element's heistId is excluded from the wire (decodes to ""),
-        // so build the expectation with an empty heistId for round-trip equality.
+        let before = HeistElement(
+            description: "Button",
+            label: "Button",
+            value: "A",
+            identifier: nil,
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: []
+        )
+        let after = HeistElement(
+            description: "Button",
+            label: "Button",
+            value: "B",
+            identifier: nil,
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: []
+        )
         let update = ElementUpdate(
-            element: HeistElement(
-                description: "Button",
-                label: "Button",
-                value: nil,
-                identifier: nil,
-                frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-                actions: []
-            ),
+            before: before,
+            after: after,
             changes: [
                 PropertyChange(property: .value, old: "A", new: "B"),
                 PropertyChange(property: .value, old: nil, new: "active"),

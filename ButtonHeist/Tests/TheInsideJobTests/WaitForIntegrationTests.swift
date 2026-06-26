@@ -615,10 +615,9 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let result = await changedWait(
             expectation: .change(.elements(.updatedElement(ElementUpdatePredicate(
-                element: nil,
+                before: .value("Loading"),
+                after: .value("Ready"),
                 property: .value,
-                from: "Loading",
-                to: "Ready"
             )))),
             timeout: 0.2
         )

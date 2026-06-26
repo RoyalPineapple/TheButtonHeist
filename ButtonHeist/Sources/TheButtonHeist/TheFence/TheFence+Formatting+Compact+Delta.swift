@@ -55,7 +55,7 @@ extension FenceResponse {
         }
         // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise.
         for update in edits.updated {
-            let name = nonEmptyDescription(update.element)
+            let name = nonEmptyDescription(update.after)
             for change in update.changes where !change.property.isGeometry {
                 lines.append("  ~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
             }

@@ -278,8 +278,11 @@ public extension AccessibilityPredicate.Change {
             return ExpectationResult(met: false, predicate: nil, actual: "no element updates")
         }
         for edit in updates {
-            if let elementPredicate = update.element {
-                guard elementPredicate.matches(edit.element) else { continue }
+            if let before = update.before {
+                guard before.matches(edit.before) else { continue }
+            }
+            if let after = update.after {
+                guard after.matches(edit.after) else { continue }
             }
             let targetChanges: [PropertyChange]
             if let property = update.property {
@@ -288,21 +291,10 @@ public extension AccessibilityPredicate.Change {
             } else {
                 targetChanges = edit.changes
             }
-            let matchingChanges: [PropertyChange]
-            if update.from != nil || update.to != nil {
-                matchingChanges = targetChanges.filter { change in
-                    if let from = update.from, !Self.matchesUpdateValue(from, candidate: change.old) { return false }
-                    if let to = update.to, !Self.matchesUpdateValue(to, candidate: change.new) { return false }
-                    return true
-                }
-                guard !matchingChanges.isEmpty else { continue }
-            } else {
-                matchingChanges = targetChanges
-            }
             return ExpectationResult(
                 met: true,
                 predicate: nil,
-                actual: Self.describeUpdate(edit, changes: matchingChanges)
+                actual: Self.describeUpdate(edit, changes: targetChanges)
             )
         }
         let observed = updates.map { edit in
@@ -311,23 +303,9 @@ public extension AccessibilityPredicate.Change {
         return ExpectationResult(met: false, predicate: nil, actual: observed)
     }
 
-    private static func matchesUpdateValue(_ match: StringMatch<String>, candidate: String?) -> Bool {
-        guard let candidate else { return false }
-        switch match {
-        case .exact(let pattern):
-            return ElementPredicate.stringEquals(candidate, pattern)
-        case .contains(let pattern):
-            return !pattern.isEmpty && ElementPredicate.stringContains(candidate, pattern)
-        case .prefix(let pattern):
-            return !pattern.isEmpty && ElementPredicate.stringHasPrefix(candidate, pattern)
-        case .suffix(let pattern):
-            return !pattern.isEmpty && ElementPredicate.stringHasSuffix(candidate, pattern)
-        }
-    }
-
     private static func describeUpdate(_ edit: ElementUpdate, changes: [PropertyChange]) -> String {
         let properties = changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
-        let name = edit.element.label ?? edit.element.description
+        let name = edit.after.label ?? edit.before.label ?? edit.after.description
         return "\(name): \(properties.joined(separator: ", "))"
     }
 }

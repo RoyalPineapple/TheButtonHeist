@@ -176,9 +176,10 @@ symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO8wireTypeAA0c4WiredF0Ovp
 symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO9heistPlanyAcA05HeistF3RunVcACmF	swift.enum.case	public	ClientMessage.heistPlan(_:)	ClientMessage.heistPlan(_:)	case heistPlan(HeistPlanRun)
 symbol	TheScore.symbols.json	s:8TheScore13ElementUpdateV	swift.struct	public	ElementUpdate	ElementUpdate	struct ElementUpdate
 symbol	TheScore.symbols.json	s:8TheScore13ElementUpdateV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementUpdate.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore13ElementUpdateV5afterAA05HeistC0Vvp	swift.property	public	after	ElementUpdate.after	let after: HeistElement
+symbol	TheScore.symbols.json	s:8TheScore13ElementUpdateV6before5after7changesAcA05HeistC0V_AHSayAA14PropertyChangeVGtcfc	swift.init	public	init(before:after:changes:)	ElementUpdate.init(before:after:changes:)	init(before: HeistElement, after: HeistElement, changes: [PropertyChange])
+symbol	TheScore.symbols.json	s:8TheScore13ElementUpdateV6beforeAA05HeistC0Vvp	swift.property	public	before	ElementUpdate.before	let before: HeistElement
 symbol	TheScore.symbols.json	s:8TheScore13ElementUpdateV7changesSayAA14PropertyChangeVGvp	swift.property	public	changes	ElementUpdate.changes	let changes: [PropertyChange]
-symbol	TheScore.symbols.json	s:8TheScore13ElementUpdateV7element7changesAcA05HeistC0V_SayAA14PropertyChangeVGtcfc	swift.init	public	init(element:changes:)	ElementUpdate.init(element:changes:)	init(element: HeistElement, changes: [PropertyChange])
-symbol	TheScore.symbols.json	s:8TheScore13ElementUpdateV7elementAA05HeistC0Vvp	swift.property	public	element	ElementUpdate.element	let element: HeistElement
 symbol	TheScore.symbols.json	s:8TheScore13ResultPayloadO	swift.enum	public	ResultPayload	ResultPayload	enum ResultPayload
 symbol	TheScore.symbols.json	s:8TheScore13ResultPayloadO10screenshotyAcA06ScreenD0VcACmF	swift.enum.case	public	ResultPayload.screenshot(_:)	ResultPayload.screenshot(_:)	case screenshot(ScreenPayload)
 symbol	TheScore.symbols.json	s:8TheScore13ResultPayloadO14heistExecutionyAcA05HeistfC0VcACmF	swift.enum.case	public	ResultPayload.heistExecution(_:)	ResultPayload.heistExecution(_:)	case heistExecution(HeistExecutionResult)

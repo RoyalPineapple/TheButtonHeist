@@ -62,6 +62,8 @@ public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
 public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
     static let argument = Self("argument")
+    static let after = Self("after")
+    static let before = Self("before")
     static let checks = Self("checks")
     static let command = Self("command")
     static let container = Self("container")
@@ -427,8 +429,8 @@ enum FenceParameterBlocks: Sendable {
         param(.target, .object, objectProperties: inlineElementTargetFields),
         param(.targetRef, .string),
         param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
-        stringMatchParam(.from),
-        stringMatchParam(.to),
+        param(.before, .object, objectProperties: matcherFields),
+        param(.after, .object, objectProperties: matcherFields),
         param(.states, .array, arrayItemType: .object, arrayItemProperties: [], arrayItemAdditionalProperties: true),
     ]
 
@@ -460,8 +462,8 @@ enum FenceParameterBlocks: Sendable {
         param(.target, .object, objectProperties: inlineElementTargetFields),
         param(.targetRef, .string),
         param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
-        stringMatchParam(.from),
-        stringMatchParam(.to),
+        param(.before, .object, objectProperties: matcherFields),
+        param(.after, .object, objectProperties: matcherFields),
         param(
             .states, .array,
             arrayItemType: .object,

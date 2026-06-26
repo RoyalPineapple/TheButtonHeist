@@ -23,6 +23,14 @@ public extension ElementTarget {
         .predicate(.value(value))
     }
 
+    static func traits(_ traits: [HeistTrait]) -> ElementTarget {
+        .predicate(.traits(traits))
+    }
+
+    static func excludeTraits(_ traits: [HeistTrait]) -> ElementTarget {
+        .predicate(.excludeTraits(traits))
+    }
+
     static func element(
         label: StringMatch<String>? = nil,
         identifier: StringMatch<String>? = nil,
@@ -92,6 +100,14 @@ public extension ElementPredicateTemplate {
         .value(.literal(value))
     }
 
+    static func traits(_ traits: [HeistTrait]) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(traits: traits)
+    }
+
+    static func excludeTraits(_ traits: [HeistTrait]) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(excludeTraits: traits)
+    }
+
     static func element(
         label: StringMatch<StringExpr>? = nil,
         identifier: StringMatch<StringExpr>? = nil,
@@ -158,6 +174,14 @@ public extension ElementTargetExpr {
     @_disfavoredOverload
     static func value(_ value: String) -> ElementTargetExpr {
         .predicate(.value(value))
+    }
+
+    static func traits(_ traits: [HeistTrait]) -> ElementTargetExpr {
+        .predicate(.traits(traits))
+    }
+
+    static func excludeTraits(_ traits: [HeistTrait]) -> ElementTargetExpr {
+        .predicate(.excludeTraits(traits))
     }
 
     static func element(
@@ -317,44 +341,15 @@ public extension ElementDeltaPredicateExpr {
     }
 
     static func updated(
-        _ element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringMatch<StringExpr>? = nil,
-        to: StringMatch<StringExpr>? = nil
+        before: ElementPredicateTemplate? = nil,
+        after: ElementPredicateTemplate? = nil,
+        property: ElementProperty? = nil
     ) -> ElementDeltaPredicateExpr {
         .updatedElement(ElementUpdatePredicateExpr(
-            element: element,
-            property: property,
-            from: from,
-            to: to
+            before: before,
+            after: after,
+            property: property
         ))
-    }
-
-    static func updated(
-        _ element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringExpr,
-        to: StringMatch<StringExpr>? = nil
-    ) -> ElementDeltaPredicateExpr {
-        .updated(element, property: property, from: StringMatch(from), to: to)
-    }
-
-    static func updated(
-        _ element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringMatch<StringExpr>? = nil,
-        to: StringExpr
-    ) -> ElementDeltaPredicateExpr {
-        .updated(element, property: property, from: from, to: StringMatch(to))
-    }
-
-    static func updated(
-        _ element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringExpr,
-        to: StringExpr
-    ) -> ElementDeltaPredicateExpr {
-        .updated(element, property: property, from: StringMatch(from), to: StringMatch(to))
     }
 }
 
@@ -368,43 +363,14 @@ public extension ElementDeltaPredicate {
     }
 
     static func updated(
-        _ element: ElementPredicate? = nil,
-        property: ElementProperty? = nil,
-        from: StringMatch<String>? = nil,
-        to: StringMatch<String>? = nil
+        before: ElementPredicate? = nil,
+        after: ElementPredicate? = nil,
+        property: ElementProperty? = nil
     ) -> ElementDeltaPredicate {
         .updatedElement(ElementUpdatePredicate(
-            element: element,
-            property: property,
-            from: from,
-            to: to
+            before: before,
+            after: after,
+            property: property
         ))
-    }
-
-    static func updated(
-        _ element: ElementPredicate? = nil,
-        property: ElementProperty? = nil,
-        from: String,
-        to: StringMatch<String>? = nil
-    ) -> ElementDeltaPredicate {
-        .updated(element, property: property, from: StringMatch(from), to: to)
-    }
-
-    static func updated(
-        _ element: ElementPredicate? = nil,
-        property: ElementProperty? = nil,
-        from: StringMatch<String>? = nil,
-        to: String
-    ) -> ElementDeltaPredicate {
-        .updated(element, property: property, from: from, to: StringMatch(to))
-    }
-
-    static func updated(
-        _ element: ElementPredicate? = nil,
-        property: ElementProperty? = nil,
-        from: String,
-        to: String
-    ) -> ElementDeltaPredicate {
-        .updated(element, property: property, from: StringMatch(from), to: StringMatch(to))
     }
 }

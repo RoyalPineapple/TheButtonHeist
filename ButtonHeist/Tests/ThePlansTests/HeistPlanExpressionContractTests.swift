@@ -32,7 +32,7 @@ func `empty refs are rejected at expression boundaries`() throws {
     expectDecodingError(ElementTargetExpr.self, #"{"ref":"   "}"#, contains: "target reference must not be empty")
     expectDecodingError(ElementPredicateTemplate.self, #"{"label_ref":"   "}"#, contains: "label_ref must not be empty")
     expectDecodingError(StatePredicateExpr.self, #"{"type": "exists","target_ref":"   "}"#, contains: "target_ref must not be empty")
-    expectDecodingError(ElementUpdatePredicateExpr.self, #"{"from_ref":"   "}"#, contains: "from_ref must not be empty")
+    expectDecodingError(ElementUpdatePredicateExpr.self, #"{"before":{"value_ref":"   "}}"#, contains: "value_ref must not be empty")
 }
 
 @Test
@@ -47,7 +47,7 @@ func `broad string matches reject refs that resolve empty`() throws {
         try state.resolve(in: HeistExecutionEnvironment(strings: ["prefix": ""]))
     }
 
-    let update = ElementUpdatePredicateExpr(property: .value, from: .contains(.ref("fromPart")))
+    let update = ElementUpdatePredicateExpr(before: ElementPredicateTemplate(value: .contains(.ref("fromPart"))), property: .value)
     expectExpressionError(.invalidStringMatch(mode: "contains")) {
         try update.resolve(in: HeistExecutionEnvironment(strings: ["fromPart": ""]))
     }
@@ -122,25 +122,32 @@ func `expression codable shapes remain stable`() throws {
     #expect(try sortedJSON(StatePredicateExpr.existsTarget(.ref("target"))) == #"{"target_ref":"target","type":"exists"}"#)
 
     let change = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(
-        element: ElementPredicateTemplate(label: .exact(.ref("item"))),
-        property: .value,
-        from: .ref("old"),
-        to: .literal("new")
+        before: ElementPredicateTemplate(
+            label: .exact(.ref("item")),
+            value: .exact(.ref("old"))
+        ),
+        after: ElementPredicateTemplate(
+            label: .exact(.ref("item")),
+            value: .exact(.literal("new"))
+        ),
+        property: .value
     )))
     let expectedChangeJSON = """
-        {"scopes":[{"assertions":[{"element":{"checks":[{"kind":"label","match":{"ref":"item"}}]},\
-        "from_ref":"old","property":"value","to":"new","type":"updated"}],"type":"elements"}],"type":"change"}
+        {"scopes":[{"assertions":[{"after":{"checks":[{"kind":"label","match":{"ref":"item"}},\
+        {"kind":"value","match":"new"}]},"before":{"checks":[{"kind":"label","match":{"ref":"item"}},\
+        {"kind":"value","match":{"ref":"old"}}]},"property":"value","type":"updated"}],"type":"elements"}],"type":"change"}
         """
     #expect(try sortedJSON(change) == expectedChangeJSON)
 
     let broadChange = ChangePredicateExpr.elements(.updatedElement(ElementUpdatePredicateExpr(
-        property: .value,
-        from: .prefix(.literal("cart:")),
-        to: .contains(.ref("count"))
+        before: ElementPredicateTemplate(value: .prefix(.literal("cart:"))),
+        after: ElementPredicateTemplate(value: .contains(.ref("count"))),
+        property: .value
     )))
     let expectedBroadChangeJSON =
-        #"{"scopes":[{"assertions":[{"from":{"mode":"prefix","value":"cart:"},"property":"value","# +
-        #""to":{"mode":"contains","value":{"ref":"count"}},"type":"updated"}],"type":"elements"}],"type":"change"}"#
+        #"{"scopes":[{"assertions":[{"after":{"checks":[{"kind":"value","match":{"mode":"contains","value":{"ref":"count"}}}]},"# +
+        #""before":{"checks":[{"kind":"value","match":{"mode":"prefix","value":"cart:"}}]},"# +
+        #""property":"value","type":"updated"}],"type":"elements"}],"type":"change"}"#
     #expect(
         try sortedJSON(broadChange) == expectedBroadChangeJSON
     )

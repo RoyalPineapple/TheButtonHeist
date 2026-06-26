@@ -819,7 +819,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(delta.testEdits.removedOptional)
         XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
         let update = delta.testEdits.updatedOptional?.first
-        XCTAssertEqual(update?.element.label, "Telescope, Far Light, 3:32")
+        XCTAssertEqual(update?.after.label, "Telescope, Far Light, 3:32")
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
@@ -862,7 +862,7 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
-        let update = delta.testEdits.updatedOptional?.first { $0.element.label == "Favorite" }
+        let update = delta.testEdits.updatedOptional?.first { $0.after.label == "Favorite" }
         XCTAssertNotNil(update)
         XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.old == "0" && $0.new == "1" } == true)
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
@@ -903,7 +903,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(delta.testEdits.removedOptional)
         XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
         let update = delta.testEdits.updatedOptional?.first
-        XCTAssertEqual(update?.element.label, "Telescope, Far Light, 3:32")
+        XCTAssertEqual(update?.after.label, "Telescope, Far Light, 3:32")
         XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 

@@ -435,10 +435,10 @@ extension FenceResponse {
         lines.append(contentsOf: edits.added.map { "+ \(compactElementLine($0))" })
         lines.append(contentsOf: edits.removed.map { "- \(compactElementLine($0))" })
         for update in edits.updated {
-            let name = nonEmpty(update.element.label)
-                ?? nonEmpty(update.element.value)
-                ?? nonEmpty(update.element.identifier)
-                ?? update.element.description
+            let name = nonEmpty(update.after.label)
+                ?? nonEmpty(update.after.value)
+                ?? nonEmpty(update.after.identifier)
+                ?? update.after.description
             for change in update.changes where !change.property.isGeometry {
                 lines.append("~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" -> \"\(change.new ?? "nil")\"")
             }

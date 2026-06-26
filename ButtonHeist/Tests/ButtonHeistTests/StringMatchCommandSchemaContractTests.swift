@@ -315,12 +315,14 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         }
     }
 
-    func testPredicateSchemaTreatsUpdateFromAndToAsStringMatchFields() throws {
+    func testPredicateSchemaTreatsUpdateBeforeAndAfterAsElementMatcherFields() throws {
         let predicateSpec = try XCTUnwrap(TheFence.Command.wait.descriptor.parameter(named: .predicate))
         let specsByKey = Dictionary(uniqueKeysWithValues: predicateSpec.objectProperties.map { ($0.key, $0) })
 
-        XCTAssertEqual(specsByKey["from"]?.type, .stringMatch)
-        XCTAssertEqual(specsByKey["to"]?.type, .stringMatch)
+        XCTAssertEqual(specsByKey["before"]?.type, .object)
+        XCTAssertEqual(specsByKey["after"]?.type, .object)
+        XCTAssertEqual(specsByKey["before"]?.objectProperties.map(\.key).contains("value"), true)
+        XCTAssertEqual(specsByKey["after"]?.objectProperties.map(\.key).contains("traits"), true)
     }
 
     func testPredicateRejectsRawStringMatcherField() throws {
