@@ -5,6 +5,8 @@ public protocol HeistActionContent: HeistContent {
     var expectationValidationFailure: String? { get }
 }
 
+let defaultActionExpectationTimeout: Double = 1
+
 public extension HeistActionContent {
     var expectationValidationFailure: String? { nil }
 
@@ -437,7 +439,7 @@ private func composeExpectationTimeout(
 ) -> ExpectationTimeoutComposition {
     guard let existing else {
         return ExpectationTimeoutComposition(
-            timeout: nextExplicit ?? 0,
+            timeout: nextExplicit ?? defaultActionExpectationTimeout,
             explicitTimeout: nextExplicit,
             failure: nil
         )

@@ -227,7 +227,7 @@ private let rootStringCanonicalSwiftDSL = """
 
         HeistDef<ElementTarget>("Rows.pressRow", parameter: "row") { row in
             Activate(row)
-                .expect(.absent(row), timeout: .seconds(1))
+                .expect(.absent(row))
         }
 
         RunHeist("Search.enter", query)
@@ -292,7 +292,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
     enum SearchScreen {
         static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
-                .expect(.present(.value(query)), timeout: .seconds(1))
+                .expect(.present(.value(query)))
 
             Activate(.label("Search"))
                 .expect(.changed(.screen()))
@@ -308,7 +308,7 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
     HeistPlan("searchFlow") {
         HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
-                .expect(.present(.value(query)), timeout: .seconds(1))
+                .expect(.present(.value(query)))
 
             Activate(.label("Search"))
                 .expect(.changed(.screen(where: .present(.label(query)))), timeout: .seconds(5))

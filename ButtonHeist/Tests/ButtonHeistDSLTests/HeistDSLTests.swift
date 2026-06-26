@@ -81,7 +81,7 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
                 element: .identifier("Search"),
                 property: .value,
                 to: "Bruschetta"
-            ))))
+            ))), timeout: 1)
         )),
     ]))
 }
@@ -127,7 +127,7 @@ func `chained state expectations compose with all`() throws {
             expectation: WaitStep(predicate: .state(.all([
                 .present(.label("A")),
                 .present(.label("B")),
-            ])))
+            ])), timeout: 1)
         )),
     ]))
 }
@@ -151,7 +151,7 @@ func `chained state expectation joins existing screen where clause`() throws {
             expectation: WaitStep(predicate: .changed(.screen(where: .all([
                 .present(.label("Results")),
                 .present(.label("Filter")),
-            ]))))
+            ]))), timeout: 1)
         )),
     ])
 
@@ -174,7 +174,7 @@ func `different explicit chained expectation timeouts fail validation`() throws 
 func `unsupported chained change expectations fail validation without replacement`() throws {
     let step = try ActionStep(
         command: .activate(.label("Save")),
-        expectation: WaitStep(predicate: .changed(.elements)),
+        expectation: WaitStep(predicate: .changed(.elements), timeout: 1),
         expectationValidationFailure: "unsupported expectation composition: changed(elements_changed) + changed(screen_changed)"
     )
     #expect(throws: HeistPlanRuntimeSafetyError.self) {
@@ -186,7 +186,7 @@ func `unsupported chained change expectations fail validation without replacemen
     }
     #expect(try step == ActionStep(
         command: .activate(.label("Save")),
-        expectation: WaitStep(predicate: .changed(.elements)),
+        expectation: WaitStep(predicate: .changed(.elements), timeout: 1),
         expectationValidationFailure: "unsupported expectation composition: changed(elements_changed) + changed(screen_changed)"
     ))
 }

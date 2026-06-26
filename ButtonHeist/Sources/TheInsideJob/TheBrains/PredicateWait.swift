@@ -59,22 +59,17 @@ import TheScore
         let timeout = Self.clampedWaitTimeout(step.timeout)
         var state = WaitPredicateState(predicate: step.predicate)
 
-        if let initialTraceResult = Self.initialTraceResult(
-            for: step,
-            initialTrace: initialTrace,
-            timeout: timeout
-        ) {
-            state.record(
-                initialTraceResult,
-                latestSequence: latestEvent()?.sequence
-            )
-            if initialTraceResult.shouldReturn {
-                return waitReceipt(
-                    for: step,
-                    state: state,
-                    start: start,
-                    success: state.lastEvaluation.met
-                )
+        if let initialTrace {
+            switch await prepareInitialTraceWait(
+                for: step,
+                initialTrace: initialTrace,
+                start: start,
+                timeout: timeout
+            ) {
+            case .polling(let preparedState):
+                state = preparedState
+            case .receipt(let receipt):
+                return receipt
             }
         } else if step.predicate.requiresFutureSettledBaseline {
             guard let baseline = await acquireChangedPredicateBaseline(
@@ -122,6 +117,7 @@ import TheScore
             )
         }
 
+        let changeBaseline = state.changeBaseline
         let pollResult = await PredicatePollingEngine<ExpectationResult>(
             observeSemanticState: observeSemanticState
         ).poll(
@@ -135,7 +131,9 @@ import TheScore
             evaluate: { observation, changeBaselineSequence in
                 PredicateEvaluation.evaluate(
                     step.predicate,
-                    in: observation,
+                    currentElements: observation.state.interface.projectedElements,
+                    delta: changeBaseline?.delta(to: observation) ?? observation.delta,
+                    observedSequence: observation.event.sequence,
                     changeBaselineSequence: changeBaselineSequence
                 )
             },
@@ -144,7 +142,10 @@ import TheScore
 
         if let observation = pollResult.lastObservation,
            let expectation = pollResult.lastEvaluation {
-            state.record((observation, expectation))
+            state.record(
+                (observation, expectation),
+                traceOverride: changeBaseline?.trace(to: observation)
+            )
             if expectation.met {
                 return waitReceipt(for: step, state: state, start: start, success: true)
             }
@@ -156,6 +157,92 @@ import TheScore
             start: start,
             success: false
         )
+    }
+
+    private func prepareInitialTraceWait(
+        for step: ResolvedWaitStep,
+        initialTrace: AccessibilityTrace,
+        start: CFAbsoluteTime,
+        timeout: Double
+    ) async -> InitialTracePreparation {
+        var state = WaitPredicateState(predicate: step.predicate)
+        guard let initialTraceResult = Self.initialTraceResult(
+            for: step,
+            initialTrace: initialTrace
+        ) else {
+            return .receipt(waitReceipt(for: step, state: state, start: start, success: false))
+        }
+
+        // Action traces seed diagnostics and change baselines; nonzero expectations poll like WaitFor.
+        state.record(
+            initialTraceResult,
+            latestSequence: nil
+        )
+        if timeout == 0 {
+            return .receipt(waitReceipt(for: step, state: state, start: start, success: state.lastEvaluation.met))
+        }
+        if step.predicate.requiresFutureSettledBaseline {
+            return await prepareChangedInitialTraceWait(
+                for: step,
+                initialTraceResult: initialTraceResult,
+                state: state,
+                start: start,
+                timeout: timeout
+            )
+        }
+        return await prepareCurrentPredicateInitialTraceWait(
+            for: step,
+            state: state,
+            start: start,
+            timeout: timeout
+        )
+    }
+
+    private func prepareChangedInitialTraceWait(
+        for step: ResolvedWaitStep,
+        initialTraceResult: InitialTraceResult,
+        state: WaitPredicateState,
+        start: CFAbsoluteTime,
+        timeout: Double
+    ) async -> InitialTracePreparation {
+        var state = state
+        if let baseline = Self.initialTraceChangeBaseline(
+            for: initialTraceResult,
+            latest: latestEvent()
+        ) {
+            state.recordActionChangeBaseline(baseline)
+            return .polling(state)
+        }
+        let baseline = await acquireChangedPredicateBaseline(
+            scope: step.predicate.observationScope,
+            timeout: min(timeout, SemanticObservationTiming.defaultTimeout)
+        )
+        guard let baseline else {
+            return .receipt(waitReceipt(for: step, state: state, start: start, success: false))
+        }
+        state.recordChangeBaseline(semanticObservation(baseline))
+        return .polling(state)
+    }
+
+    private func prepareCurrentPredicateInitialTraceWait(
+        for step: ResolvedWaitStep,
+        state: WaitPredicateState,
+        start: CFAbsoluteTime,
+        timeout: Double
+    ) async -> InitialTracePreparation {
+        var state = state
+        if let initial = await nextWaitEvaluation(
+            forCurrentPredicate: step,
+            after: state.observedSequence,
+            waitTimeout: timeout,
+            changeBaselineSequence: state.changeBaseline?.sequence
+        ) {
+            state.record(initial)
+            if state.lastEvaluation.met {
+                return .receipt(waitReceipt(for: step, state: state, start: start, success: true))
+            }
+        }
+        return .polling(state)
     }
 
     private func observeSemanticState(
@@ -232,7 +319,7 @@ import TheScore
         expectation: ExpectationResult,
         start: CFAbsoluteTime,
         success: Bool,
-        changeBaseline: SettledSemanticObservationEvent? = nil,
+        changeBaseline: WaitChangeBaseline? = nil,
         sawFutureObservation: Bool = false
     ) -> HeistWaitReceipt {
         let elapsed = Self.elapsedSeconds(since: start)
@@ -241,7 +328,7 @@ import TheScore
             : presenceTimeoutMessage(step.predicate, elapsed)
         let latest = latestEvent()
         let settledDiagnostics = success ? nil : SettledWaitDiagnostics(
-            baseline: changeBaseline.map(SettledEventSummary.init(event:)),
+            baseline: changeBaseline.map(SettledEventSummary.init(baseline:)),
             last: latest.map(SettledEventSummary.init(event:)),
             lastDelta: trace?.endpointDelta ?? latest?.delta,
             settleFailure: latestSettleFailure(),
@@ -279,11 +366,37 @@ import TheScore
 
     // MARK: - Wait Building
 
+    private enum InitialTracePreparation {
+        case polling(WaitPredicateState)
+        case receipt(HeistWaitReceipt)
+    }
+
     struct InitialTraceResult {
         let trace: AccessibilityTrace
         let summary: String?
         let expectation: ExpectationResult
-        let shouldReturn: Bool
+    }
+
+    static func initialTraceChangeBaseline(
+        for result: InitialTraceResult,
+        latest: SettledSemanticObservationEvent?
+    ) -> WaitChangeBaseline? {
+        guard let baselineCapture = result.trace.captures.first,
+              let latest
+        else { return nil }
+
+        if latest.trace.captures.last?.hash == baselineCapture.hash {
+            return WaitChangeBaseline(sequence: latest.sequence, capture: baselineCapture)
+        }
+        if latest.trace.captures.first?.hash == baselineCapture.hash,
+           let previous = latest.previous {
+            return WaitChangeBaseline(sequence: previous.sequence, capture: baselineCapture)
+        }
+        if result.trace.meaningfulEndpointDelta != nil,
+           let previous = latest.previous {
+            return WaitChangeBaseline(sequence: previous.sequence, capture: baselineCapture)
+        }
+        return nil
     }
 
     struct SettledEventSummary {
@@ -293,6 +406,11 @@ import TheScore
         init(event: SettledSemanticObservationEvent) {
             sequence = event.sequence
             hash = event.latestCaptureRef?.hash
+        }
+
+        init(baseline: WaitChangeBaseline) {
+            sequence = baseline.sequence
+            hash = baseline.hash
         }
 
         var description: String {
@@ -325,16 +443,14 @@ import TheScore
 
     static func initialTraceResult(
         for step: ResolvedWaitStep,
-        initialTrace: AccessibilityTrace?,
-        timeout: Double
+        initialTrace: AccessibilityTrace?
     ) -> InitialTraceResult? {
         guard let initialTrace else { return nil }
         let expectation = PredicateEvaluation.evaluate(step.predicate, in: initialTrace)
         return InitialTraceResult(
             trace: initialTrace,
             summary: traceSummary(initialTrace),
-            expectation: expectation,
-            shouldReturn: expectation.met || timeout == 0
+            expectation: expectation
         )
     }
 
@@ -453,6 +569,36 @@ import TheScore
 
 private typealias WaitEvaluation = (observation: HeistSemanticObservation, expectation: ExpectationResult)
 
+struct WaitChangeBaseline {
+    let sequence: UInt64
+    let capture: AccessibilityTrace.Capture?
+
+    var hash: String? {
+        capture?.hash
+    }
+
+    init(sequence: UInt64, capture: AccessibilityTrace.Capture?) {
+        self.sequence = sequence
+        self.capture = capture
+    }
+
+    init(event: SettledSemanticObservationEvent) {
+        self.sequence = event.sequence
+        self.capture = event.trace.captures.last
+    }
+
+    func trace(to observation: HeistSemanticObservation) -> AccessibilityTrace? {
+        guard let capture,
+              let current = observation.accessibilityTrace.captures.last
+        else { return nil }
+        return AccessibilityTrace(captures: [capture, current])
+    }
+
+    func delta(to observation: HeistSemanticObservation) -> AccessibilityTrace.Delta? {
+        trace(to: observation)?.endpointDelta ?? observation.delta
+    }
+}
+
 struct PredicatePollingResult<Evaluation> {
     let lastObservation: HeistSemanticObservation?
     let lastEvaluation: Evaluation?
@@ -541,7 +687,7 @@ private struct WaitPredicateState {
     var lastTrace: AccessibilityTrace?
     var lastObservationSummary: String?
     var observedSequence: UInt64?
-    var changeBaseline: SettledSemanticObservationEvent?
+    var changeBaseline: WaitChangeBaseline?
     var sawFutureObservation = false
     var lastEvaluation: ExpectationResult
 
@@ -563,8 +709,8 @@ private struct WaitPredicateState {
         observedSequence = latestSequence
     }
 
-    mutating func record(_ evaluation: WaitEvaluation) {
-        lastTrace = evaluation.observation.accessibilityTrace
+    mutating func record(_ evaluation: WaitEvaluation, traceOverride: AccessibilityTrace? = nil) {
+        lastTrace = traceOverride ?? evaluation.observation.accessibilityTrace
         lastObservationSummary = evaluation.observation.summary
         lastEvaluation = evaluation.expectation
         observedSequence = evaluation.observation.event.sequence
@@ -573,10 +719,15 @@ private struct WaitPredicateState {
     }
 
     mutating func recordChangeBaseline(_ observation: HeistSemanticObservation) {
-        changeBaseline = observation.event
+        changeBaseline = WaitChangeBaseline(event: observation.event)
         lastTrace = observation.accessibilityTrace
         lastObservationSummary = observation.summary
         observedSequence = observation.event.sequence
+    }
+
+    mutating func recordActionChangeBaseline(_ baseline: WaitChangeBaseline) {
+        changeBaseline = baseline
+        observedSequence = baseline.sequence
     }
 }
 

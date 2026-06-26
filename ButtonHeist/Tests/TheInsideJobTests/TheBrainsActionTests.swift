@@ -1111,6 +1111,152 @@ final class TheBrainsActionTests: XCTestCase {
         }
     }
 
+    func testActionExpectationWithMatchingInitialTracePollsForSettledMatch() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let beforeScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Menu"), "menu"),
+        ])
+        let firstSettledScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Menu"), "menu"),
+            (makeElement(label: "Grid"), "grid"),
+        ])
+        let catchUpScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Menu"), "menu"),
+            (makeElement(label: "Grid"), "grid"),
+            (makeElement(label: "Ready"), "ready"),
+        ])
+        let traceMatchedScreen = catchUpScreen
+        let beforeEvent = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(firstSettledScreen)
+        let before = isolatedBrains.postActionObservation.captureSemanticState(
+            from: beforeScreen,
+            tripwireSignal: .empty,
+            settledObservationSequence: beforeEvent.sequence
+        )
+        let traceMatched = isolatedBrains.postActionObservation.captureSemanticState(
+            from: traceMatchedScreen,
+            tripwireSignal: .empty,
+            settledObservationSequence: nil
+        )
+        let initialTrace = AccessibilityTrace(captures: [before.capture, traceMatched.capture])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(
+                WaitStep(predicate: .present(ElementPredicate(label: "Ready")), timeout: 1),
+                initialTrace: initialTrace
+            )
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(firstSettledScreen)
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(catchUpScreen)
+        let receipt = await receiptTask.value
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(receipt.actionResult.accessibilityTrace?.captures.last?.interface.projectedElements.map(\.label), [
+            "Menu",
+            "Grid",
+            "Ready",
+        ])
+    }
+
+    func testActionExpectationWithMatchingInitialTraceFailsWithoutSettledPollMatch() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let beforeScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Menu"), "menu"),
+        ])
+        let firstSettledScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Menu"), "menu"),
+            (makeElement(label: "Grid"), "grid"),
+        ])
+        let traceMatchedScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Menu"), "menu"),
+            (makeElement(label: "Grid"), "grid"),
+            (makeElement(label: "Ready"), "ready"),
+        ])
+        let beforeEvent = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(firstSettledScreen)
+        let before = isolatedBrains.postActionObservation.captureSemanticState(
+            from: beforeScreen,
+            tripwireSignal: .empty,
+            settledObservationSequence: beforeEvent.sequence
+        )
+        let traceMatched = isolatedBrains.postActionObservation.captureSemanticState(
+            from: traceMatchedScreen,
+            tripwireSignal: .empty,
+            settledObservationSequence: nil
+        )
+        let initialTrace = AccessibilityTrace(captures: [before.capture, traceMatched.capture])
+
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(
+                WaitStep(predicate: .present(ElementPredicate(label: "Ready")), timeout: 0.05),
+                initialTrace: initialTrace
+            )
+        }
+
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(firstSettledScreen)
+        let receipt = await receiptTask.value
+
+        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertEqual(receipt.expectation.actual, "no element matches predicate(label=\"Ready\")")
+    }
+
+    func testChangedActionExpectationUsesPreActionBaselineForSettledActionResult() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
+        let beforeScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Menu", traits: .header), "menu_header"),
+        ])
+        let afterScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Controls Demo", traits: .header), "controls_demo_header"),
+        ])
+        let beforeEvent = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
+        let afterEvent = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(afterScreen)
+        let before = isolatedBrains.postActionObservation.captureSemanticState(
+            from: beforeScreen,
+            tripwireSignal: .empty,
+            settledObservationSequence: beforeEvent.sequence
+        )
+        let after = isolatedBrains.postActionObservation.captureSemanticState(
+            from: afterScreen,
+            tripwireSignal: .empty,
+            settledObservationSequence: afterEvent.sequence
+        )
+        let detachedBeforeCapture = AccessibilityTrace.Capture(
+            sequence: before.capture.sequence,
+            interface: before.capture.interface,
+            parentHash: before.capture.parentHash,
+            context: AccessibilityTrace.Context(
+                keyboardVisible: !(before.capture.context.keyboardVisible ?? false),
+                screenId: before.capture.context.screenId,
+                windowStack: before.capture.context.windowStack
+            ),
+            transition: before.capture.transition
+        )
+        let initialTrace = AccessibilityTrace(captures: [detachedBeforeCapture, after.capture])
+
+        XCTAssertNotEqual(initialTrace.captures.first?.hash, afterEvent.trace.captures.first?.hash)
+
+        let receipt = await isolatedBrains.interactionObservation.waitForPredicate(
+            WaitStep(
+                predicate: .changed(.screen(where: .present(ElementPredicate(label: "Controls Demo", traits: [.header])))),
+                timeout: 1
+            ),
+            initialTrace: initialTrace
+        )
+
+        XCTAssertTrue(receipt.actionResult.success)
+        guard case .screenChanged? = receipt.actionResult.accessibilityTrace?.endpointDelta else {
+            return XCTFail("Expected screenChanged delta, got \(String(describing: receipt.actionResult.accessibilityTrace?.endpointDelta))")
+        }
+    }
+
     func testWaitReceiptTimeoutDiagnosticUsesFinalSettledObservation() async throws {
         let isolatedBrains = TheBrains(tripwire: TheTripwire())
         defer { isolatedBrains.stopSemanticObservation() }
