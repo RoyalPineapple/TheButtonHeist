@@ -328,6 +328,7 @@ struct PublicHeistReportEvidence: Encodable {
     let caseSelection: PublicHeistCaseSelectionEvidence?
     let forEachString: PublicHeistForEachStringEvidence?
     let forEachElement: PublicHeistForEachElementEvidence?
+    let repeatUntil: PublicHeistRepeatUntilEvidence?
     let invocation: PublicHeistInvocationEvidence?
     let warning: PublicHeistWarningEvidence?
 
@@ -346,6 +347,8 @@ struct PublicHeistReportEvidence: Encodable {
             self.init(forEachString: PublicHeistForEachStringEvidence(evidence: evidence))
         case .forEachElement(let evidence):
             self.init(forEachElement: PublicHeistForEachElementEvidence(evidence: evidence))
+        case .repeatUntil(let evidence):
+            self.init(repeatUntil: PublicHeistRepeatUntilEvidence(evidence: evidence))
         case .invocation(let evidence):
             self.init(invocation: PublicHeistInvocationEvidence(evidence: evidence))
         case .warning(let warning):
@@ -359,6 +362,7 @@ struct PublicHeistReportEvidence: Encodable {
         caseSelection: PublicHeistCaseSelectionEvidence? = nil,
         forEachString: PublicHeistForEachStringEvidence? = nil,
         forEachElement: PublicHeistForEachElementEvidence? = nil,
+        repeatUntil: PublicHeistRepeatUntilEvidence? = nil,
         invocation: PublicHeistInvocationEvidence? = nil,
         warning: PublicHeistWarningEvidence? = nil
     ) {
@@ -367,6 +371,7 @@ struct PublicHeistReportEvidence: Encodable {
         self.caseSelection = caseSelection
         self.forEachString = forEachString
         self.forEachElement = forEachElement
+        self.repeatUntil = repeatUntil
         self.invocation = invocation
         self.warning = warning
     }
@@ -489,6 +494,30 @@ struct PublicHeistForEachElementEvidence: Encodable {
         self.iterationOrdinal = evidence.iterationOrdinal
         self.targetOrdinal = evidence.targetOrdinal
         self.targetSummary = evidence.targetSummary
+        self.failureReason = evidence.failureReason
+    }
+}
+
+struct PublicHeistRepeatUntilEvidence: Encodable {
+    let predicate: AccessibilityPredicate
+    let timeout: Double
+    let iterationCount: Int
+    let iterationOrdinal: Int?
+    let expectation: PublicExpectationResult
+    let result: PublicHeistReportActionResult?
+    let lastObservedSummary: String?
+    let failureReason: String?
+
+    init(evidence: HeistRepeatUntilEvidence) {
+        self.predicate = evidence.predicate
+        self.timeout = evidence.timeout
+        self.iterationCount = evidence.iterationCount
+        self.iterationOrdinal = evidence.iterationOrdinal
+        self.expectation = PublicExpectationResult(result: evidence.expectation)
+        self.result = evidence.actionResult.map {
+            PublicHeistReportActionResult(method: $0.method.rawValue, result: $0)
+        }
+        self.lastObservedSummary = evidence.lastObservedSummary
         self.failureReason = evidence.failureReason
     }
 }

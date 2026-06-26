@@ -831,6 +831,30 @@ func stringForEachBuildsRuntimeStringLoop() throws {
 }
 
 @Test
+func repeatUntilBuildsRuntimeLoopWithElseBody() throws {
+    let heist = try HeistPlan {
+        RepeatUntil(.present(.value("2")), timeout: .seconds(3)) {
+            Increment(.identifier("Quantity"))
+        }.else {
+            Fail("quantity did not reach 2")
+        }
+    }
+
+    #expect(heist.body == [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .present(.value("2")),
+            timeout: 3,
+            body: [
+                .action(try ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
+            ],
+            elseBody: [
+                .fail(FailStep(message: "quantity did not reach 2")),
+            ]
+        )),
+    ])
+}
+
+@Test
 func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
     let heist = try HeistPlan("Search", parameter: "query") { query in
         TypeText(query, into: .label("Search"))

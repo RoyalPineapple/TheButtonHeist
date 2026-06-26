@@ -24,6 +24,7 @@ protocol HeistPlanTraversalVisitor {
     mutating func visitElseBody(_ body: [HeistStep], context: HeistTraversalContext)
     mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext)
     mutating func visitForEachString(_ step: ForEachStringStep, context: HeistTraversalContext)
+    mutating func visitRepeatUntil(_ step: RepeatUntilStep, context: HeistTraversalContext)
     mutating func visitWarn(_ warn: WarnStep, context: HeistTraversalContext)
     mutating func visitFail(_ fail: FailStep, context: HeistTraversalContext)
     mutating func visitHeist(_ plan: HeistPlan, context: HeistTraversalContext)
@@ -42,6 +43,7 @@ extension HeistPlanTraversalVisitor {
     mutating func visitElseBody(_ body: [HeistStep], context: HeistTraversalContext) {}
     mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {}
     mutating func visitForEachString(_ step: ForEachStringStep, context: HeistTraversalContext) {}
+    mutating func visitRepeatUntil(_ step: RepeatUntilStep, context: HeistTraversalContext) {}
     mutating func visitWarn(_ warn: WarnStep, context: HeistTraversalContext) {}
     mutating func visitFail(_ fail: FailStep, context: HeistTraversalContext) {}
     mutating func visitHeist(_ plan: HeistPlan, context: HeistTraversalContext) {}
@@ -139,6 +141,8 @@ struct HeistPlanTraversal {
             walk(forEach, context: context, visitor: &visitor)
         case .forEachString(let forEach):
             walk(forEach, context: context, visitor: &visitor)
+        case .repeatUntil(let repeatUntil):
+            walk(repeatUntil, context: context, visitor: &visitor)
         case .warn(let warn):
             visitor.visitWarn(warn, context: context.child(path: "\(context.path).warn"))
         case .fail(let fail):
@@ -217,6 +221,44 @@ struct HeistPlanTraversal {
             allowsCollectionLoops: false,
             scope: context.scope.bindingString(forEach.parameter),
             environment: context.environment.binding(string: forEach.values.first ?? "", to: forEach.parameter),
+            definitionScope: context.definitionScope,
+            invocationStack: context.invocationStack,
+            visitor: &visitor
+        )
+    }
+
+    private func walk<V: HeistPlanTraversalVisitor>(
+        _ repeatUntil: RepeatUntilStep,
+        context: HeistTraversalContext,
+        visitor: inout V
+    ) {
+        let repeatContext = context.child(path: "\(context.path).repeat_until")
+        visitor.visitRepeatUntil(repeatUntil, context: repeatContext)
+        visitor.visitWait(
+            WaitStep(predicate: repeatUntil.predicate, timeout: repeatUntil.timeout),
+            context: repeatContext.child(path: "\(repeatContext.path).predicate")
+        )
+        walk(
+            steps: repeatUntil.body,
+            path: "\(repeatContext.path).body",
+            depth: context.depth + 1,
+            allowsCollectionLoops: false,
+            scope: context.scope,
+            environment: context.environment,
+            definitionScope: context.definitionScope,
+            invocationStack: context.invocationStack,
+            visitor: &visitor
+        )
+        guard let elseBody = repeatUntil.elseBody else { return }
+        let elseContext = repeatContext.child(path: "\(repeatContext.path).else_body")
+        visitor.visitElseBody(elseBody, context: elseContext)
+        walk(
+            steps: elseBody,
+            path: elseContext.path,
+            depth: context.depth + 1,
+            allowsCollectionLoops: false,
+            scope: context.scope,
+            environment: context.environment,
             definitionScope: context.definitionScope,
             invocationStack: context.invocationStack,
             visitor: &visitor

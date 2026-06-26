@@ -80,3 +80,90 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
         )
     }
 }
+
+public struct RepeatUntilStep: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case predicate, timeout, body
+        case elseBody = "else_body"
+    }
+
+    public let predicate: AccessibilityPredicateExpr
+    /// Seconds. `0` means only the initial predicate evaluation is checked before any else body.
+    public let timeout: Double
+    public let body: [HeistStep]
+    public let elseBody: [HeistStep]?
+
+    public init(
+        predicate: AccessibilityPredicateExpr,
+        timeout: Double,
+        body: [HeistStep],
+        elseBody: [HeistStep]? = nil
+    ) throws {
+        guard timeout >= 0 else {
+            throw HeistPlanError.negativeTimeout(timeout)
+        }
+        guard !body.isEmpty else {
+            throw HeistPlanError.emptyRepeatUntilSteps
+        }
+        self.predicate = predicate
+        self.timeout = timeout
+        self.body = body
+        self.elseBody = elseBody
+    }
+
+    @_disfavoredOverload
+    public init(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        body: [HeistStep],
+        elseBody: [HeistStep]? = nil
+    ) throws {
+        try self.init(
+            predicate: .predicate(predicate),
+            timeout: timeout,
+            body: body,
+            elseBody: elseBody
+        )
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until step")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
+            timeout: try container.decode(Double.self, forKey: .timeout),
+            body: try container.decode([HeistStep].self, forKey: .body),
+            elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
+        )
+    }
+}
+
+public struct ResolvedRepeatUntilStep: Sendable, Equatable {
+    public let predicate: AccessibilityPredicate
+    public let timeout: Double
+    public let body: [HeistStep]
+    public let elseBody: [HeistStep]?
+
+    public init(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        body: [HeistStep],
+        elseBody: [HeistStep]? = nil
+    ) {
+        self.predicate = predicate
+        self.timeout = timeout
+        self.body = body
+        self.elseBody = elseBody
+    }
+}
+
+public extension RepeatUntilStep {
+    func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedRepeatUntilStep {
+        ResolvedRepeatUntilStep(
+            predicate: try predicate.resolve(in: environment),
+            timeout: timeout,
+            body: body,
+            elseBody: elseBody
+        )
+    }
+}

@@ -87,6 +87,14 @@ struct CanonicalHeistSourceRoundTripTests {
                 timeout: 3,
                 elseBody: [.fail(FailStep(message: "screen did not change"))]
             )),
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .present(.value("2")),
+                timeout: 4,
+                body: [
+                    .action(try ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
+                ],
+                elseBody: [.fail(FailStep(message: "quantity did not reach 2"))]
+            )),
             .warn(WarnStep(message: "screen changed")),
             .forEachString(try ForEachStringStep(
                 values: ["Milk", "Eggs"],

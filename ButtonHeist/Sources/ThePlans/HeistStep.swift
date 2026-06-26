@@ -6,6 +6,7 @@ public enum HeistStep: Codable, Sendable, Equatable {
     case conditional(ConditionalStep)
     case forEachElement(ForEachElementStep)
     case forEachString(ForEachStringStep)
+    case repeatUntil(RepeatUntilStep)
     case warn(WarnStep)
     case fail(FailStep)
     indirect case heist(HeistPlan)
@@ -15,6 +16,7 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case type, action, wait, conditional
         case forEachElement = "for_each_element"
         case forEachString = "for_each_string"
+        case repeatUntil = "repeat_until"
         case warn, fail, heist, invoke
     }
 
@@ -24,6 +26,7 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case conditional
         case forEachElement = "for_each_element"
         case forEachString = "for_each_string"
+        case repeatUntil = "repeat_until"
         case warn
         case fail
         case heist
@@ -55,6 +58,12 @@ public enum HeistStep: Codable, Sendable, Equatable {
                 typeName: "for_each_string heist step"
             )
             self = .forEachString(try container.decode(ForEachStringStep.self, forKey: .forEachString))
+        case .repeatUntil:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.repeatUntil.stringValue],
+                typeName: "repeat_until heist step"
+            )
+            self = .repeatUntil(try container.decode(RepeatUntilStep.self, forKey: .repeatUntil))
         case .warn:
             try decoder.rejectUnknownKeys(allowed: ["type", "warn"], typeName: "warn heist step")
             self = .warn(try container.decode(WarnStep.self, forKey: .warn))
@@ -88,6 +97,9 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .forEachString(let step):
             try container.encode(StepType.forEachString, forKey: .type)
             try container.encode(step, forKey: .forEachString)
+        case .repeatUntil(let step):
+            try container.encode(StepType.repeatUntil, forKey: .type)
+            try container.encode(step, forKey: .repeatUntil)
         case .warn(let step):
             try container.encode(StepType.warn, forKey: .type)
             try container.encode(step, forKey: .warn)

@@ -19,6 +19,7 @@ func `all heist step kinds round trip through canonical JSON bytes`() throws {
         "conditional",
         "for_each_element",
         "for_each_string",
+        "repeat_until",
         "warn",
         "fail",
         "heist",
@@ -145,6 +146,16 @@ private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] 
             }
             """.utf8))
         }),
+        ("repeat until step", #"Unknown repeat_until step field "unexpected""#, {
+            _ = try JSONDecoder().decode(RepeatUntilStep.self, from: Data("""
+            {
+              "predicate": { "type": "present", "element": { "label": "Ready" } },
+              "timeout": 1,
+              "body": [ { "type": "warn", "warn": { "message": "retry" } } ],
+              "unexpected": true
+            }
+            """.utf8))
+        }),
         ("warn step", #"Unknown warn step field "unexpected""#, {
             _ = try JSONDecoder().decode(WarnStep.self, from: Data("""
             { "message": "hello", "unexpected": true }
@@ -215,6 +226,16 @@ private func representativeAllStepKindsPlan() throws -> HeistPlan {
                     ))),
                 ]
             )),
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .present(.label("Ready")),
+                timeout: 2,
+                body: [
+                    .warn(WarnStep(message: "retry")),
+                ],
+                elseBody: [
+                    .fail(FailStep(message: "not ready")),
+                ]
+            )),
             .warn(WarnStep(message: "checkpoint")),
             .fail(FailStep(message: "stop here")),
             .heist(try HeistPlan(body: [
@@ -240,6 +261,8 @@ private func stepKind(_ step: HeistStep) -> String {
         return "for_each_element"
     case .forEachString:
         return "for_each_string"
+    case .repeatUntil:
+        return "repeat_until"
     case .warn:
         return "warn"
     case .fail:
@@ -418,6 +441,39 @@ private let expectedAllStepKindsPlanJSON = """
         ]
       },
       "type" : "for_each_string"
+    },
+    {
+      "repeat_until" : {
+        "body" : [
+          {
+            "type" : "warn",
+            "warn" : {
+              "message" : "retry"
+            }
+          }
+        ],
+        "else_body" : [
+          {
+            "fail" : {
+              "message" : "not ready"
+            },
+            "type" : "fail"
+          }
+        ],
+        "predicate" : {
+          "element" : {
+            "checks" : [
+              {
+                "kind" : "label",
+                "match" : "Ready"
+              }
+            ]
+          },
+          "type" : "present"
+        },
+        "timeout" : 2
+      },
+      "type" : "repeat_until"
     },
     {
       "type" : "warn",

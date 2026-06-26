@@ -36,7 +36,6 @@ extension HeistPlanSourceParser {
                 body: closure.body
             ))
         }
-
         let matching = try parseElementMatches()
         var limit = 20
         while consumeSymbol(",") {
@@ -54,6 +53,22 @@ extension HeistPlanSourceParser {
             limit: limit,
             parameter: closure.referenceName,
             body: closure.body
+        ))
+    }
+
+    mutating func parseRepeatUntil() throws -> HeistStep {
+        try expectSymbol("(")
+        let predicate = try parseAccessibilityPredicateExpr()
+        guard let timeout = try parseTrailingTimeout(defaultValue: nil) else {
+            throw error(currentToken, "RepeatUntil requires timeout: .seconds(...)")
+        }
+        try expectSymbol(")")
+        let body = try parseHeistBlock()
+        return .repeatUntil(try RepeatUntilStep(
+            predicate: predicate,
+            timeout: timeout,
+            body: body,
+            elseBody: try parseLowercaseElseChainIfPresent(chainContext: "RepeatUntil")
         ))
     }
 

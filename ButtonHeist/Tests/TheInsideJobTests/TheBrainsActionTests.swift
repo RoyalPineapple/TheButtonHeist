@@ -822,6 +822,81 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
+    func testHeistRepeatUntilRepeatsBodyUntilPredicateMet() async throws {
+        var incrementCount = 0
+        let runtime = heistRuntime(
+            observations: [
+                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+                observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")]),
+            ],
+            execute: { command in
+                if case .increment = command {
+                    incrementCount += 1
+                }
+                return ActionResult(success: true, method: .increment, message: command.runtimeType.rawValue)
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .present(.element(identifier: "quantity", value: "2")),
+                timeout: 1,
+                body: [
+                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                ]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success, result.message ?? "repeat_until failed")
+        XCTAssertEqual(incrementCount, 2)
+        XCTAssertEqual(step.kind, .repeatUntil)
+        XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
+        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
+        XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration, .repeatUntilIteration])
+    }
+
+    func testHeistRepeatUntilTimeoutWithElseRunsElseBodyWithoutBodyWhenTimeoutIsZero() async throws {
+        var incrementCount = 0
+        let runtime = heistRuntime(
+            observations: [
+                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+            ],
+            execute: { command in
+                if case .increment = command {
+                    incrementCount += 1
+                }
+                return ActionResult(success: true, method: .increment, message: command.runtimeType.rawValue)
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .present(.element(identifier: "quantity", value: "2")),
+                timeout: 0,
+                body: [
+                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                ],
+                elseBody: [
+                    .warn(WarnStep(message: "quantity did not reach 2")),
+                ]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success, result.message ?? "repeat_until else failed")
+        XCTAssertEqual(incrementCount, 0)
+        XCTAssertEqual(step.kind, .repeatUntil)
+        XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 0)
+        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
+    }
+
     func testHeistIfSelectsMatchingCaseImmediately() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Home"]),

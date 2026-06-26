@@ -502,6 +502,23 @@ private struct HeistSemanticSurfaceBuilder {
                 invocationStack: invocationStack
             )
 
+        case .repeatUntil(let repeatUntil):
+            collectWait(repeatUntil.predicate)
+            collect(
+                steps: repeatUntil.body,
+                definitionScope: definitionScope,
+                environment: environment,
+                invocationStack: invocationStack
+            )
+            if let elseBody = repeatUntil.elseBody {
+                collect(
+                    steps: elseBody,
+                    definitionScope: definitionScope,
+                    environment: environment,
+                    invocationStack: invocationStack
+                )
+            }
+
         case .warn, .fail:
             break
 

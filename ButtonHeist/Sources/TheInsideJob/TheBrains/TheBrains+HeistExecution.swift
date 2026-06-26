@@ -190,6 +190,9 @@ extension TheBrains {
         case .forEachString:
             kind = .forEachString
             children = []
+        case .repeatUntil:
+            kind = .repeatUntil
+            children = []
         case .warn:
             kind = .warn
             children = []
@@ -275,6 +278,16 @@ extension TheBrains {
         case .forEachString(let forEach):
             return await executeForEachStringStep(
                 forEach,
+                index: index,
+                path: path,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
+        case .repeatUntil(let repeatUntil):
+            return await executeRepeatUntilStep(
+                repeatUntil,
                 index: index,
                 path: path,
                 start: start,

@@ -68,6 +68,90 @@ public struct WaitFor: HeistContent {
     }
 }
 
+public struct RepeatUntil: HeistContent {
+    public let heistSteps: [HeistStep]
+    public let heistDefinitions: [HeistPlan]
+    public let heistBuildDiagnostics: [String]
+
+    public init(
+        _ predicate: AccessibilityPredicateExpr,
+        timeout: Double,
+        @HeistBuilder _ content: () -> some HeistContent
+    ) {
+        let content = content()
+        self.init(
+            predicate: predicate,
+            timeout: timeout,
+            body: content.heistSteps,
+            elseBody: nil,
+            definitions: content.heistDefinitions,
+            diagnostics: content.heistBuildDiagnostics
+        )
+    }
+
+    @_disfavoredOverload
+    public init(
+        _ predicate: AccessibilityPredicate,
+        timeout: Double,
+        @HeistBuilder _ content: () -> some HeistContent
+    ) {
+        self.init(.predicate(predicate), timeout: timeout, content)
+    }
+
+    public init(
+        _ predicate: ElementPredicateTemplate,
+        timeout: Double,
+        @HeistBuilder _ content: () -> some HeistContent
+    ) {
+        self.init(.present(predicate), timeout: timeout, content)
+    }
+
+    public func `else`(
+        @HeistBuilder _ content: () -> some HeistContent
+    ) -> RepeatUntil {
+        guard heistSteps.count == 1,
+              case .repeatUntil(let step) = heistSteps[0] else {
+            preconditionFailure("ButtonHeistDSL RepeatUntil else requires a RepeatUntil(predicate, timeout:) loop")
+        }
+        guard step.elseBody == nil else {
+            preconditionFailure("ButtonHeistDSL RepeatUntil accepts at most one else body")
+        }
+        let content = content()
+        return RepeatUntil(
+            predicate: step.predicate,
+            timeout: step.timeout,
+            body: step.body,
+            elseBody: content.heistSteps,
+            definitions: heistDefinitions + content.heistDefinitions,
+            diagnostics: heistBuildDiagnostics + content.heistBuildDiagnostics
+        )
+    }
+
+    private init(
+        predicate: AccessibilityPredicateExpr,
+        timeout: Double,
+        body: [HeistStep],
+        elseBody: [HeistStep]?,
+        definitions: [HeistPlan],
+        diagnostics: [String]
+    ) {
+        do {
+            heistSteps = [.repeatUntil(try RepeatUntilStep(
+                predicate: predicate,
+                timeout: timeout,
+                body: body,
+                elseBody: elseBody
+            ))]
+            heistDefinitions = definitions
+            heistBuildDiagnostics = diagnostics
+        } catch {
+            heistSteps = []
+            heistDefinitions = []
+            heistBuildDiagnostics = diagnostics + ["RepeatUntil loop is invalid: \(String(describing: error))"]
+        }
+    }
+}
+
 public struct If: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlan]

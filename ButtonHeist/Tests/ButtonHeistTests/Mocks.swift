@@ -244,6 +244,8 @@ final class MockConnection: TransportReachabilityConnecting {
             return heistForEachElementStepResult(for: forEach, index: index, path: path)
         case .forEachString(let forEach):
             return heistForEachStringStepResult(for: forEach, index: index, path: path)
+        case .repeatUntil(let repeatUntil):
+            return heistRepeatUntilStepResult(for: repeatUntil, index: index, path: path)
         case .heist(let plan):
             let children = plan.body.enumerated().map { childIndex, childStep in
                 heistStepResult(
@@ -448,6 +450,28 @@ final class MockConnection: TransportReachabilityConnecting {
                 parameter: forEach.parameter,
                 count: forEach.values.count,
                 iterationCount: forEach.values.count
+            ))
+        )
+    }
+
+    private func heistRepeatUntilStepResult(
+        for repeatUntil: RepeatUntilStep,
+        index _: Int,
+        path: String
+    ) -> HeistExecutionStepResult {
+        let predicate = (try? repeatUntil.predicate.resolve(in: .empty))
+            ?? .state(.present(ElementPredicate(label: "unresolved")))
+        return HeistExecutionStepResult(
+            path: path,
+            kind: .repeatUntil,
+            status: .passed,
+            durationMs: heistStepDurationMs,
+            intent: .repeatUntil(predicate: predicate.description, timeout: repeatUntil.timeout),
+            evidence: .repeatUntil(HeistRepeatUntilEvidence(
+                predicate: predicate,
+                timeout: repeatUntil.timeout,
+                iterationCount: 0,
+                expectation: ExpectationResult(met: true, predicate: predicate)
             ))
         )
     }

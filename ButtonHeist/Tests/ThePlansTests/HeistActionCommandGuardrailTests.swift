@@ -280,7 +280,7 @@ private extension HeistPlan {
             return step
         case .action(let step):
             return step.expectation
-        case .conditional, .forEachElement, .forEachString, .warn, .fail, .heist, .invoke:
+        case .conditional, .forEachElement, .forEachString, .repeatUntil, .warn, .fail, .heist, .invoke:
             return nil
         }
     }
