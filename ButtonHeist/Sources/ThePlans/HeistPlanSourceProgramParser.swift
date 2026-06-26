@@ -183,6 +183,8 @@ extension HeistPlanSourceParser {
             return [try parseActionStep(command: parseElementTargetAction("Decrement", makeCommand: HeistActionCommand.decrement))]
         case ["TypeText"]:
             return [try parseActionStep(command: parseTypeTextAction())]
+        case ["ClearText"]:
+            return [try parseActionStep(command: parseClearTextAction())]
         case ["CustomAction"]:
             return [try parseActionStep(command: parseCustomAction())]
         case ["Rotor"]:

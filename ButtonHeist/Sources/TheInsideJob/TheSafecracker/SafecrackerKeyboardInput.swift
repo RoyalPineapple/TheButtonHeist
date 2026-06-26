@@ -55,6 +55,36 @@ final class SafecrackerKeyboardInput {
         }
     }
 
+    func clearText(
+        existingValue: String?,
+        interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
+    ) async -> KeyboardTextInjectionResult {
+        guard let keyboard = activeKeyboardInput() else {
+            return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
+        }
+
+        if keyboard.selectAllTextIfPossible() {
+            return keyboard.deleteBackward()
+        }
+
+        guard let existingValue else {
+            return .failed(.unavailableClearTextValue(strategy: UIKeyboardImplTextInjection.strategyName))
+        }
+
+        let deleteCount = existingValue.count
+        for index in 0..<deleteCount {
+            let result = keyboard.deleteBackward()
+            if case .failed = result { return result }
+            let isLastCharacter = index == deleteCount - 1
+            if !isLastCharacter {
+                guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else {
+                    return .failed(.cancelled(strategy: UIKeyboardImplTextInjection.strategyName))
+                }
+            }
+        }
+        return .dispatched
+    }
+
     @objc private func keyboardFrameDidChange(_ notification: Notification) {
         guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
             return

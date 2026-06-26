@@ -39,6 +39,43 @@ import ThePlans
     #expect(plan == expected)
 }
 
+@Test func `inline plan source type text replacement and clear compile`() throws {
+    let replacement = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("b", into: .identifier("Field"), replacingExisting: true)
+    """#))
+    let replacementWithArgumentsReordered = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("b", replacingExisting: true, into: .identifier("Field"))
+    """#))
+    let clear = try HeistPlanSourceCompiler().compile(root(#"""
+    ClearText(.identifier("Field"))
+    """#))
+    let emptyReplacement = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("", into: .identifier("Field"), replacingExisting: true)
+    """#))
+
+    let expectedReplacement = try HeistPlan(body: [
+        .action(try ActionStep(command: .typeText(
+            text: .literal("b"),
+            target: .predicate(.identifier("Field")),
+            replacingExisting: true
+        ))),
+    ])
+    let expectedClear = try HeistPlan(body: [
+        .action(try ActionStep(command: .typeText(
+            text: .literal(""),
+            target: .predicate(.identifier("Field")),
+            replacingExisting: true
+        ))),
+    ])
+
+    #expect(replacement == expectedReplacement)
+    #expect(replacementWithArgumentsReordered == expectedReplacement)
+    #expect(clear == expectedClear)
+    #expect(emptyReplacement == expectedClear)
+    try assertCanonicalRoundTrip(replacement)
+    try assertCanonicalRoundTrip(clear)
+}
+
 @Test func `runtime parser accepts repeated string predicate checks for one field`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     Activate(.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")), traits: [.button]))

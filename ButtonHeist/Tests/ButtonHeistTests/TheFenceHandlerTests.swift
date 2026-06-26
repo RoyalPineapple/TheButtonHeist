@@ -2213,6 +2213,17 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTypeTextWithEmptyTextAndReplacingExistingPassesValidation() async {
+        await assertPassesValidation(
+            command: .typeText,
+            arguments: [
+                "text": .string(""),
+                "replacingExisting": .bool(true),
+            ]
+        )
+    }
+
+    @ButtonHeistActor
     func testTypeTextTypedPayloadDispatchesCanonicalWireMessage() async throws {
         let (fence, mockConn) = makeConnectedFence()
 
@@ -2228,6 +2239,27 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(target.text, "hello")
         XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "search_field")))
+        XCTAssertFalse(target.replacingExisting)
+    }
+
+    @ButtonHeistActor
+    func testTypeTextReplacingExistingTypedPayloadDispatchesCanonicalWireMessage() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+
+        let response = try await fence.execute(command: .typeText, values: [
+            "text": .string(""),
+            "target": targetValue(identifier: "search_field"),
+            "replacingExisting": .bool(true),
+        ])
+
+        XCTAssertNotNil(response.leafAction, "Expected single-step action response, got \(response)")
+        guard let message = mockConn.sent.sentPlanMessages.last,
+              case .typeText(let target) = message else {
+            return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
+        }
+        XCTAssertEqual(target.text, "")
+        XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "search_field")))
+        XCTAssertTrue(target.replacingExisting)
     }
 
     @ButtonHeistActor

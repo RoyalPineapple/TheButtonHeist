@@ -150,9 +150,12 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeTypeTextRequest,
-                parameters: FenceParameterBlocks.elementTarget + [param(.text, .string, required: true, minLength: 1)] + FenceParameterBlocks.expectation,
+                parameters: FenceParameterBlocks.elementTarget + [
+                    param(.text, .string, required: true),
+                    param(.replacingExisting, .boolean, defaultValue: .bool(false)),
+                ] + FenceParameterBlocks.expectation,
                 projection: .cliOnly(
-                    "Type non-empty text. With an element target, Button Heist resolves and reveals the field before focusing it."
+                    "Type text. With replacingExisting=true, Button Heist clears the focused field before typing."
                 )
             )
         case .editAction:

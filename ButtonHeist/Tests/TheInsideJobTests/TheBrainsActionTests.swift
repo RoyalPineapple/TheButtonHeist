@@ -25,19 +25,44 @@ private final class RefusingActivationView: UIView {
 
 @MainActor
 private final class ActionTextInputKeyboardImpl: NSObject {
+    @MainActor
     private final class TextInputDelegate: NSObject, UIKeyInput {
-        var hasText: Bool { false }
-        func insertText(_ text: String) {}
-        func deleteBackward() {}
+        private weak var textField: UITextField?
+        private let onInput: @MainActor () -> Void
+
+        init(textField: UITextField, onInput: @escaping @MainActor () -> Void) {
+            self.textField = textField
+            self.onInput = onInput
+        }
+
+        var hasText: Bool { textField?.text?.isEmpty == false }
+
+        func insertText(_ text: String) {
+            updateText((textField?.text ?? "") + text)
+        }
+
+        func deleteBackward() {
+            var value = textField?.text ?? ""
+            guard !value.isEmpty else { return }
+            value.removeLast()
+            updateText(value)
+        }
+
+        private func updateText(_ text: String) {
+            textField?.text = text
+            textField?.accessibilityValue = text
+            onInput()
+        }
     }
 
-    private let inputDelegate = TextInputDelegate()
+    private let inputDelegate: TextInputDelegate
     private weak var textField: UITextField?
     private let onInput: @MainActor () -> Void
 
     init(textField: UITextField, onInput: @escaping @MainActor () -> Void) {
         self.textField = textField
         self.onInput = onInput
+        inputDelegate = TextInputDelegate(textField: textField, onInput: onInput)
     }
 
     @objc(delegate)
@@ -47,10 +72,7 @@ private final class ActionTextInputKeyboardImpl: NSObject {
 
     @objc(addInputString:)
     func addInputString(_ text: NSString) {
-        let nextValue = (textField?.text ?? "") + (text as String)
-        textField?.text = nextValue
-        textField?.accessibilityValue = nextValue
-        onInput()
+        inputDelegate.insertText(text as String)
     }
 
     @objc(taskQueue)
@@ -2358,6 +2380,94 @@ final class TheBrainsActionTests: XCTestCase {
             return
         }
         XCTAssertEqual(value, "hello")
+    }
+
+    func testExecuteTypeTextReplacingExistingReportsReplacementValueFromInteractionAfterState() async throws {
+        brains.tripwire.startPulse()
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+
+        let textField = UITextField(frame: CGRect(x: 48, y: 180, width: 240, height: 44))
+        textField.borderStyle = .roundedRect
+        textField.text = "a"
+        textField.isAccessibilityElement = true
+        textField.accessibilityLabel = "Message"
+        textField.accessibilityIdentifier = "message_field"
+        textField.accessibilityValue = "a"
+        rootView.addSubview(textField)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            brains.stopSemanticObservation()
+            brains.tripwire.stopPulse()
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [stash = brains.stash] in
+            stash.invalidateSettledObservationFromTripwire()
+        }
+        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        await brains.tripwire.yieldFrames(3)
+
+        let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
+            text: "b",
+            elementTarget: .predicate(ElementPredicate(identifier: "message_field")),
+            replacingExisting: true
+        )))
+
+        XCTAssertTrue(result.success, result.message ?? "type_text replacement failed")
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(textField.text, "b")
+        guard case .value(let value) = result.payload else {
+            XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
+            return
+        }
+        XCTAssertEqual(value, "b")
+    }
+
+    func testExecuteTypeTextReplacingExistingWithEmptyTextClearsField() async throws {
+        brains.tripwire.startPulse()
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+
+        let textField = UITextField(frame: CGRect(x: 48, y: 180, width: 240, height: 44))
+        textField.borderStyle = .roundedRect
+        textField.text = "abc"
+        textField.isAccessibilityElement = true
+        textField.accessibilityLabel = "Message"
+        textField.accessibilityIdentifier = "message_field"
+        textField.accessibilityValue = "abc"
+        rootView.addSubview(textField)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            brains.stopSemanticObservation()
+            brains.tripwire.stopPulse()
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [stash = brains.stash] in
+            stash.invalidateSettledObservationFromTripwire()
+        }
+        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        await brains.tripwire.yieldFrames(3)
+
+        let result = await brains.executeRuntimeAction(.typeText(TypeTextTarget(
+            text: "",
+            elementTarget: .predicate(ElementPredicate(identifier: "message_field")),
+            replacingExisting: true
+        )))
+
+        XCTAssertTrue(result.success, result.message ?? "type_text clear failed")
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(textField.text, "")
+        guard case .value(let value) = result.payload else {
+            XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
+            return
+        }
+        XCTAssertEqual(value, "")
     }
 
     func testExecuteTypeTextWithoutActiveInputReportsFocusState() async {

@@ -29,11 +29,17 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        try appInteractionDispatch(
+        let replacingExisting = try input.schemaBoolean("replacingExisting") ?? false
+        let text = try input.requiredSchemaString("text")
+        if text.isEmpty, !replacingExisting {
+            throw SchemaValidationError(field: input.field("text"), observed: "string \"\"", expected: "non-empty string")
+        }
+        return try appInteractionDispatch(
             SemanticActionCommand.typeText,
             [.typeText(TypeTextTarget(
-                text: input.nonEmptyString("text"),
-                elementTarget: input.decodedElementTarget()
+                text: text,
+                elementTarget: input.decodedElementTarget(),
+                replacingExisting: replacingExisting
             ))]
         )
     }

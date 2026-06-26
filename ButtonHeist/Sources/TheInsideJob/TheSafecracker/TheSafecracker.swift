@@ -44,6 +44,13 @@ final class TheSafecracker {
         await keyboardInput.typeText(text, interKeyDelay: interKeyDelay)
     }
 
+    func clearText(
+        existingValue: String?,
+        interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
+    ) async -> KeyboardTextInjectionResult {
+        await keyboardInput.clearText(existingValue: existingValue, interKeyDelay: interKeyDelay)
+    }
+
     func performEditAction(_ action: EditAction) -> Bool {
         editActions.perform(action)
     }

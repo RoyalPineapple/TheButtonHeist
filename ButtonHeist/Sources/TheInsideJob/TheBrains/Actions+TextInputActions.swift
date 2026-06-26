@@ -61,16 +61,25 @@ extension Actions {
     func executeTypeText(
         _ target: TypeTextTarget
     ) async -> TheSafecracker.InteractionResult {
-        guard !target.text.isEmpty else {
+        guard target.replacingExisting || !target.text.isEmpty else {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
         let elementTarget = target.elementTarget
         let focusResult = await focusTextInput(elementTarget)
         if let failure = focusResult.failure { return failure }
 
-        let typingResult = await safecracker.typeText(target.text)
-        if let diagnostic = typingResult.diagnostic {
-            return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic))
+        if target.replacingExisting {
+            let clearResult = await safecracker.clearText(existingValue: focusResult.currentValue)
+            if let diagnostic = clearResult.diagnostic {
+                return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "clearing"))
+            }
+        }
+
+        if !target.text.isEmpty {
+            let typingResult = await safecracker.typeText(target.text)
+            if let diagnostic = typingResult.diagnostic {
+                return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic, operation: "typing"))
+            }
         }
 
         return .success(method: .typeText, subjectEvidence: focusResult.subjectEvidence)
@@ -85,28 +94,32 @@ extension Actions {
             .map(ResultPayload.value)
     }
 
-    private func typeTextInjectionFailureMessage(for diagnostic: KeyboardTextInjectionDiagnostic) -> String {
+    private func typeTextInjectionFailureMessage(
+        for diagnostic: KeyboardTextInjectionDiagnostic,
+        operation: String
+    ) -> String {
         guard diagnostic.reason == .noActiveInput else { return diagnostic.message }
         return "\(diagnostic.message); " + ActionCapabilityDiagnostic.textEntryFailed(
-            operation: "typing",
+            operation: operation,
             stash: stash,
             safecracker: safecracker,
-            suggestion: "focus an editable text field before typing"
+            suggestion: "focus an editable text field before \(operation)"
         )
     }
 
     private struct TextInputFocusResult {
         let failure: TheSafecracker.InteractionResult?
         let subjectEvidence: ActionSubjectEvidence?
+        let currentValue: String?
 
-        static let focused = TextInputFocusResult(failure: nil, subjectEvidence: nil)
+        static let focused = TextInputFocusResult(failure: nil, subjectEvidence: nil, currentValue: nil)
 
-        static func focused(_ evidence: ActionSubjectEvidence) -> TextInputFocusResult {
-            TextInputFocusResult(failure: nil, subjectEvidence: evidence)
+        static func focused(_ evidence: ActionSubjectEvidence, currentValue: String?) -> TextInputFocusResult {
+            TextInputFocusResult(failure: nil, subjectEvidence: evidence, currentValue: currentValue)
         }
 
         static func failed(_ failure: TheSafecracker.InteractionResult) -> TextInputFocusResult {
-            TextInputFocusResult(failure: failure, subjectEvidence: nil)
+            TextInputFocusResult(failure: failure, subjectEvidence: nil, currentValue: nil)
         }
     }
 
@@ -164,7 +177,7 @@ extension Actions {
                 )
             ))
         }
-        return .focused(subjectEvidence)
+        return .focused(subjectEvidence, currentValue: liveTarget.element.value)
     }
 
     private func waitForActiveTextInput() async -> Bool {

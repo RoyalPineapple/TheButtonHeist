@@ -66,6 +66,22 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    func testTypeTextStringRefLoweringAllowsEmptyResolvedTextWhenReplacingExisting() throws {
+        let command = HeistActionCommand.typeText(
+            text: .ref("item"),
+            target: .target(.predicate(ElementPredicate(label: "Add item"))),
+            replacingExisting: true
+        )
+
+        let message = try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))
+
+        guard case .typeText(let target) = message else {
+            return XCTFail("Expected typeText runtime message, got \(message)")
+        }
+        XCTAssertEqual(target.text, "")
+        XCTAssertTrue(target.replacingExisting)
+    }
+
     func testSetPasteboardTargetRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"text":"hello","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(SetPasteboardTarget.self, from: data)) { error in

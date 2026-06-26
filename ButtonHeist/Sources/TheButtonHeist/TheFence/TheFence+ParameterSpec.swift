@@ -84,6 +84,7 @@ public extension FenceParameterKey {
     static let point = Self("point"), pointDirection = Self("pointDirection"), pointToPoint = Self("pointToPoint")
     static let plan = Self("plan"), policy = Self("policy"), predicate = Self("predicate"), property = Self("property")
     static let radius = Self("radius")
+    static let replacingExisting = Self("replacingExisting")
     static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex")
     static let scale = Self("scale"), spread = Self("spread"), start = Self("start")
     static let startOffset = Self("startOffset")

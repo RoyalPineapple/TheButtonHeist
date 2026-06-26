@@ -126,6 +126,19 @@ extension HeistPlanSourceParser {
         return name
     }
 
+    mutating func parseBoolLiteral() throws -> Bool {
+        let token = currentToken
+        let value = try parseIdentifier()
+        switch value {
+        case "true":
+            return true
+        case "false":
+            return false
+        default:
+            throw error(token, "expected boolean literal true or false")
+        }
+    }
+
     mutating func expectIdentifier(_ expected: String) throws {
         let token = currentToken
         let actual = try parseIdentifier()

@@ -17,8 +17,16 @@ extension HeistPlanRuntimeSafetyValidator {
                 addString(name, path: "\(path).payload.rotor", role: "rotor name")
             }
             validateTarget(target, path: "\(path).payload.target", scope: scope)
-        case .typeText(let text, let target):
+        case .typeText(let text, let target, let replacingExisting):
             validateString(text, path: "\(path).payload.text", scope: scope)
+            if case .literal("") = text, !replacingExisting {
+                fail(
+                    path: "\(path).payload.text",
+                    contract: "type_text text must be non-empty unless replacingExisting is true",
+                    observed: "empty string",
+                    correction: "Use TypeText with non-empty text, or pass replacingExisting: true to clear the field."
+                )
+            }
             if let target {
                 validateTarget(target, path: "\(path).payload.target", scope: scope)
             }

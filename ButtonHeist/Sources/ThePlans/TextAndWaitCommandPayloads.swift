@@ -1,10 +1,11 @@
 import Foundation
 
-/// Target for typing non-empty text character-by-character via keyboard key taps.
+/// Target for typing text character-by-character via keyboard key taps.
 public struct TypeTextTarget: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case text
         case elementTarget
+        case replacingExisting
     }
 
     /// Text to type (each character is tapped individually).
@@ -12,19 +13,42 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
     /// Optional element to tap first to bring up keyboard (text field).
     /// Also used to read back the current value after typing.
     public let elementTarget: ElementTarget?
+    /// Whether to clear the focused input before typing `text`.
+    public let replacingExisting: Bool
 
     public init(text: String, elementTarget: ElementTarget? = nil) {
+        self.init(text: text, elementTarget: elementTarget, replacingExisting: false)
+    }
+
+    public init(
+        text: String,
+        elementTarget: ElementTarget? = nil,
+        replacingExisting: Bool
+    ) {
         self.text = text
         self.elementTarget = elementTarget
+        self.replacingExisting = replacingExisting
     }
 
     public init(validatingText text: String, elementTarget: ElementTarget? = nil) throws {
-        try Self.validate(text)
-        self.init(text: text, elementTarget: elementTarget)
+        try self.init(validatingText: text, elementTarget: elementTarget, replacingExisting: false)
+    }
+
+    public init(
+        validatingText text: String,
+        elementTarget: ElementTarget? = nil,
+        replacingExisting: Bool
+    ) throws {
+        try Self.validate(text, replacingExisting: replacingExisting)
+        self.init(text: text, elementTarget: elementTarget, replacingExisting: replacingExisting)
     }
 
     public static func validate(_ text: String) throws {
-        guard !text.isEmpty else {
+        try validate(text, replacingExisting: false)
+    }
+
+    public static func validate(_ text: String, replacingExisting: Bool) throws {
+        guard replacingExisting || !text.isEmpty else {
             throw TypeTextTargetError.emptyText
         }
     }
@@ -33,12 +57,13 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "type text target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         text = try container.decode(String.self, forKey: .text)
+        replacingExisting = try container.decodeIfPresent(Bool.self, forKey: .replacingExisting) ?? false
         do {
-            try Self.validate(text)
+            try Self.validate(text, replacingExisting: replacingExisting)
         } catch {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath + [CodingKeys.text],
-                debugDescription: "text must be non-empty"
+                debugDescription: "text must be non-empty unless replacingExisting is true"
             ))
         }
         elementTarget = try container.decodeIfPresent(ElementTarget.self, forKey: .elementTarget)
@@ -48,6 +73,9 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(text, forKey: .text)
         try container.encodeIfPresent(elementTarget, forKey: .elementTarget)
+        if replacingExisting {
+            try container.encode(replacingExisting, forKey: .replacingExisting)
+        }
     }
 }
 
@@ -57,7 +85,7 @@ public enum TypeTextTargetError: Error, Sendable, Equatable, CustomStringConvert
     public var description: String {
         switch self {
         case .emptyText:
-            return "text must be non-empty"
+            return "text must be non-empty unless replacingExisting is true"
         }
     }
 }
@@ -67,6 +95,7 @@ extension TypeTextTarget: CustomStringConvertible {
         ScoreDescription.call("typeText", [
             ScoreDescription.stringField("text", text),
             elementTarget?.description,
+            replacingExisting ? "replacingExisting=true" : nil,
         ].compactMap { $0 })
     }
 }

@@ -228,12 +228,13 @@ final class ClientMessageTests: XCTestCase {
         guard case .heistPlan(let decodedRun) = decoded.message,
               let step = decodedRun.plan.body.first,
               case .action(let action) = step,
-              case .typeText(let text, let target) = action.command,
+              case .typeText(let text, let target, let replacingExisting) = action.command,
               action.expectation == nil else {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(text, StringExpr.literal("hello"))
         XCTAssertEqual(target, ElementTargetExpr.predicate(ElementPredicateTemplate(identifier: .exact(.literal("nameField")))))
+        XCTAssertFalse(replacingExisting)
     }
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
@@ -315,10 +316,35 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertEqual(decoded.text, "Hello")
         XCTAssertNil(decoded.elementTarget)
+        XCTAssertFalse(decoded.replacingExisting)
     }
 
     func testTypeTextRejectsMissingTextOnDecode() throws {
         let json = #"{}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(TypeTextTarget.self, from: Data(json.utf8)))
+    }
+
+    func testTypeTextReplacingExistingAllowsEmptyText() throws {
+        let target = TypeTextTarget(
+            text: "",
+            elementTarget: .predicate(ElementPredicate(identifier: "nameField")),
+            replacingExisting: true
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
+
+        XCTAssertEqual(decoded.text, "")
+        XCTAssertTrue(decoded.replacingExisting)
+        if case .predicate(let matcher, _) = decoded.elementTarget {
+            XCTAssertEqual(matcher.checks, [.identifier(.exact("nameField"))])
+        } else {
+            XCTFail("Expected .matcher elementTarget")
+        }
+    }
+
+    func testTypeTextRejectsEmptyTextWithoutReplacingExistingOnDecode() throws {
+        let json = #"{"text":""}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(TypeTextTarget.self, from: Data(json.utf8)))
     }

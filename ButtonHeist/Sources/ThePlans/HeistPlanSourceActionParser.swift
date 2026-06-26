@@ -122,13 +122,40 @@ extension HeistPlanSourceParser {
         try expectSymbol("(")
         let text = try parseStringExpr()
         var target: ElementTargetExpr?
-        if consumeSymbol(",") {
-            try expectIdentifier("into")
-            try expectSymbol(":")
-            target = try parseTargetExpr()
+        var replacingExisting = false
+        var sawTarget = false
+        var sawReplacingExisting = false
+        while consumeSymbol(",") {
+            let token = currentToken
+            if lookaheadLabel("into") {
+                try expectIdentifier("into")
+                try expectSymbol(":")
+                guard !sawTarget else {
+                    throw error(token, "TypeText(...) accepts into only once")
+                }
+                target = try parseTargetExpr()
+                sawTarget = true
+            } else if lookaheadLabel("replacingExisting") {
+                try expectIdentifier("replacingExisting")
+                try expectSymbol(":")
+                guard !sawReplacingExisting else {
+                    throw error(token, "TypeText(...) accepts replacingExisting only once")
+                }
+                replacingExisting = try parseBoolLiteral()
+                sawReplacingExisting = true
+            } else {
+                throw error(token, "TypeText(...) accepts labeled arguments into: and replacingExisting:")
+            }
         }
         try expectSymbol(")")
-        return .typeText(text: text, target: target)
+        return .typeText(text: text, target: target, replacingExisting: replacingExisting)
+    }
+
+    mutating func parseClearTextAction() throws -> HeistActionCommand {
+        try expectSymbol("(")
+        let target = try parseTargetExpr()
+        try expectSymbol(")")
+        return .typeText(text: .literal(""), target: target, replacingExisting: true)
     }
 
     mutating func parseCustomAction() throws -> HeistActionCommand {

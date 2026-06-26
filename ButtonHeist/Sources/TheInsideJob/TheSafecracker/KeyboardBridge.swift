@@ -16,6 +16,7 @@ enum KeyboardTextInjectionFailureReason: Equatable {
     case missingSelector(String)
     case unavailableTaskQueue
     case noActiveInput
+    case unavailableClearTextValue
     case cancelled
 }
 
@@ -33,6 +34,8 @@ struct KeyboardTextInjectionDiagnostic: Equatable {
             details = "taskQueue unavailable"
         case .noActiveInput:
             details = "no active UIKeyInput delegate"
+        case .unavailableClearTextValue:
+            details = "cannot clear text because the current value is unavailable"
         case .cancelled:
             details = "cancelled before text dispatch completed"
         }
@@ -70,6 +73,14 @@ struct KeyboardTextInjectionDiagnostic: Equatable {
         KeyboardTextInjectionDiagnostic(
             strategy: strategy,
             reason: .cancelled,
+            character: nil
+        )
+    }
+
+    static func unavailableClearTextValue(strategy: String) -> KeyboardTextInjectionDiagnostic {
+        KeyboardTextInjectionDiagnostic(
+            strategy: strategy,
+            reason: .unavailableClearTextValue,
             character: nil
         )
     }
@@ -162,6 +173,26 @@ final class UIKeyboardImplTextInjection {
     /// pathway with all responder-chain delegate callbacks.
     func type(_ character: Character) -> KeyboardTextInjectionResult {
         textInjection.type(character)
+    }
+
+    func selectAllTextIfPossible() -> Bool {
+        guard let textInput = delegate as? UITextInput,
+              let range = textInput.textRange(
+                from: textInput.beginningOfDocument,
+                to: textInput.endOfDocument
+              ) else {
+            return false
+        }
+        textInput.selectedTextRange = range
+        return true
+    }
+
+    func deleteBackward() -> KeyboardTextInjectionResult {
+        guard let input = delegate as? UIKeyInput else {
+            return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
+        }
+        input.deleteBackward()
+        return textInjection.drainTaskQueue(character: nil)
     }
 
 }
