@@ -21,12 +21,26 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 
 
 BUNDLE_ID = "com.buttonheist.testapp"
 DEFAULT_REPORT = Path(os.environ.get("TMPDIR", "/tmp")) / "buttonheist-lifecycle-report.json"
+
+
+def write_report(path: Path, report: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+
+
+def error_summary(error: BaseException) -> dict[str, Any]:
+    return {
+        "type": type(error).__name__,
+        "message": str(error),
+        "traceback": traceback.format_exception(type(error), error, error.__traceback__),
+    }
 
 
 def run(
@@ -553,29 +567,64 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    report_path = Path(args.report)
     cli = Path(args.cli).resolve()
-    if not cli.exists():
-        raise RuntimeError(f"missing CLI: {cli}")
-    work_dir = Path(args.work_dir)
-    work_dir.mkdir(parents=True, exist_ok=True)
-    sim = choose_simulator(args.sim_udid)
-    boot_simulator(sim)
-    app = prepare_app(sim, args.app, args.demo_zip, work_dir)
-    version = run([str(cli), "--version"]).stdout.strip()
     report = {
         "cli": str(cli),
-        "version": version,
-        "simulator": sim,
-        "demo_app": str(app),
+        "version": "",
+        "simulator": "",
+        "demo_app": "",
+        "status": "starting",
         "scenarios": {},
     }
-    report["scenarios"]["session_lock"] = scenario_session_lock(cli, sim, args.connect_timeout)
-    report["scenarios"]["reconnect"] = scenario_reconnect(cli, sim)
-    report["scenarios"]["background_foreground"] = scenario_background_foreground(cli, sim, args.connect_timeout)
-    report_path = Path(args.report)
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    print(json.dumps(report, indent=2, sort_keys=True))
+
+    try:
+        if not cli.exists():
+            raise RuntimeError(f"missing CLI: {cli}")
+        work_dir = Path(args.work_dir)
+        work_dir.mkdir(parents=True, exist_ok=True)
+        sim = choose_simulator(args.sim_udid)
+        report["simulator"] = sim
+        report["status"] = "booting-simulator"
+        write_report(report_path, report)
+        boot_simulator(sim)
+        app = prepare_app(sim, args.app, args.demo_zip, work_dir)
+        report["demo_app"] = str(app)
+        version = run([str(cli), "--version"]).stdout.strip()
+        report["version"] = version
+        report["status"] = "running"
+        write_report(report_path, report)
+
+        scenarios = [
+            ("session_lock", lambda: scenario_session_lock(cli, sim, args.connect_timeout)),
+            ("reconnect", lambda: scenario_reconnect(cli, sim)),
+            ("background_foreground", lambda: scenario_background_foreground(cli, sim, args.connect_timeout)),
+        ]
+        for name, run_scenario in scenarios:
+            report["current_scenario"] = name
+            write_report(report_path, report)
+            try:
+                report["scenarios"][name] = run_scenario()
+            except Exception as exc:
+                report["status"] = "failed"
+                report["failed_scenario"] = name
+                report["scenarios"][name] = {
+                    "status": "failed",
+                    "error": error_summary(exc),
+                }
+                write_report(report_path, report)
+                raise
+            write_report(report_path, report)
+
+        report.pop("current_scenario", None)
+        report["status"] = "passed"
+        write_report(report_path, report)
+        print(json.dumps(report, indent=2, sort_keys=True))
+    except Exception as exc:
+        report["status"] = "failed"
+        report["error"] = error_summary(exc)
+        write_report(report_path, report)
+        raise
 
 
 if __name__ == "__main__":

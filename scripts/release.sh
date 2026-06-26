@@ -545,7 +545,13 @@ EOF
             echo "  Upgrading Homebrew..."
             brew update --quiet
             brew upgrade royalpineapple/tap/buttonheist
-            echo "  ✓ Homebrew upgraded to $(buttonheist --version)"
+            HOMEBREW_BUTTONHEIST="$(brew --prefix royalpineapple/tap/buttonheist)/bin/buttonheist"
+            HOMEBREW_VERSION="$("$HOMEBREW_BUTTONHEIST" --version)"
+            if [[ "$HOMEBREW_VERSION" != "$NEW_VERSION" ]]; then
+                echo "Error: Homebrew buttonheist reports '$HOMEBREW_VERSION', expected '$NEW_VERSION'"
+                exit 1
+            fi
+            echo "  ✓ Homebrew upgraded to $HOMEBREW_VERSION"
         fi
     else
         echo ""

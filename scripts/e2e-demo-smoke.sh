@@ -331,9 +331,14 @@ BUTTONHEIST_BIN="$REPO_ROOT/ButtonHeistCLI/.build/$CLI_CONFIGURATION/buttonheist
 BENCHMARK_TMP="$(mktemp "${TMPDIR:-/tmp}/buttonheist-demo-benchmark.XXXXXX")"
 OWNS_SIMULATOR=false
 APP_LAUNCHED=false
+BENCHMARK_REPORT_WRITTEN=false
 
 cleanup() {
     local status=$?
+    set +e
+    if [[ "$BENCHMARK_REPORT_WRITTEN" == false && -n "$BENCHMARK_REPORT" && -f "$BENCHMARK_TMP" ]]; then
+        emit_benchmark_report
+    fi
     if [[ -n "$SIM_UDID" && "$APP_LAUNCHED" == true ]]; then
         xcrun simctl terminate "$SIM_UDID" com.buttonheist.testapp >/dev/null 2>&1 || true
     fi
@@ -403,6 +408,7 @@ emit_benchmark_report() {
         printf '%s\n' "$report_json" > "$BENCHMARK_REPORT"
         log "Benchmark report written to $BENCHMARK_REPORT"
     fi
+    BENCHMARK_REPORT_WRITTEN=true
 }
 
 run_cli_json() {

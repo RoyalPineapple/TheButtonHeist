@@ -46,6 +46,7 @@ while IFS= read -r file; do
     receipt_bytes=$((receipt_bytes + size))
 done < <(
     find "$DEST_DIR" \
+        \( -path "$DEST_DIR/diagnostics" -o -path "$DEST_DIR/diagnostics/*" \) -prune -o \
         -type f \
         \( -name '*.json' -o -name '*.json.gz' \) \
         -print \
@@ -73,6 +74,12 @@ fi
     echo "receiptList=receipt-files.txt"
     if [[ -f "$DEST_DIR/collection-diagnostics.txt" ]]; then
         echo "collectionDiagnostics=collection-diagnostics.txt"
+    fi
+    if [[ -f "$DEST_DIR/demo-diagnostics.txt" ]]; then
+        echo "demoDiagnostics=demo-diagnostics.txt"
+    fi
+    if [[ -d "$DEST_DIR/diagnostics" ]]; then
+        echo "diagnosticsDirectory=diagnostics"
     fi
     if [[ "$receipt_count" -eq 0 ]]; then
         echo "diagnosis=no receipt JSON files were found; the artifact is not doctor-ready"

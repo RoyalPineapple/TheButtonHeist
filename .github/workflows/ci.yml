@@ -249,28 +249,8 @@ jobs:
 
       - name: Boot simulator in background
         run: |
-          set -eo pipefail
-          read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
-          import subprocess, json
-          runtimes = json.loads(subprocess.check_output(
-              ["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
-          devices = json.loads(subprocess.check_output(
-              ["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
-          for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
-              if rt["platform"] != "iOS" or not rt["isAvailable"]:
-                  continue
-              for dev in devices.get(rt["identifier"], []):
-                  if dev["name"] == "iPhone 16 Pro" and dev["isAvailable"]:
-                      print(dev["udid"], rt["version"])
-                      raise SystemExit(0)
-          raise SystemExit("No available iPhone 16 Pro simulator found")
-          PYEOF
-          )
-          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
-          echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
-          echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
-          xcrun simctl boot "$SIM_UDID" || true
-          # Boot continues asynchronously — don't wait for bootstatus here
+          python3 scripts/select-ios-ci-simulator.py
+          # Boot continues asynchronously; don't wait for bootstatus here.
 
       - name: Init required submodules
         run: |
@@ -315,7 +295,7 @@ jobs:
           echo "IOS_TEST_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
           trap 'echo "IOS_TEST_RUN_END=$(date +%s)" >> "$GITHUB_ENV"' EXIT
           DEST="platform=iOS Simulator,id=$SIM_UDID,arch=arm64"
-          echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
+          echo "Running tests on $SIM_DEVICE_TYPE (iOS $SIM_OS)"
           scripts/run-with-heist-receipts.sh \
             --ios-sandbox \
             --mode "$BUTTONHEIST_RECEIPTS_MODE" \
@@ -392,28 +372,8 @@ jobs:
 
       - name: Boot simulator in background
         run: |
-          set -eo pipefail
-          read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
-          import subprocess, json
-          runtimes = json.loads(subprocess.check_output(
-              ["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
-          devices = json.loads(subprocess.check_output(
-              ["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
-          for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
-              if rt["platform"] != "iOS" or not rt["isAvailable"]:
-                  continue
-              for dev in devices.get(rt["identifier"], []):
-                  if dev["name"] == "iPhone 16 Pro" and dev["isAvailable"]:
-                      print(dev["udid"], rt["version"])
-                      raise SystemExit(0)
-          raise SystemExit("No available iPhone 16 Pro simulator found")
-          PYEOF
-          )
-          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
-          echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
-          echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
-          xcrun simctl boot "$SIM_UDID" || true
-          # Boot continues asynchronously — don't wait for bootstatus here
+          python3 scripts/select-ios-ci-simulator.py
+          # Boot continues asynchronously; don't wait for bootstatus here.
 
       - name: Init required submodules
         run: |
@@ -506,6 +466,27 @@ jobs:
             --app "$APP" \
             --cli "$PWD/ButtonHeistCLI/.build/debug/buttonheist" \
             --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
+
+      - name: Collect demo diagnostics
+        if: always()
+        run: |
+          mkdir -p "$BUTTONHEIST_RECEIPTS_DIR/diagnostics"
+          {
+            echo "buttonheistDemoDiagnostics=1"
+            echo "runnerTemp=$RUNNER_TEMP"
+          } > "$BUTTONHEIST_RECEIPTS_DIR/demo-diagnostics.txt"
+
+          for report in \
+            "$RUNNER_TEMP/buttonheist-demo-benchmark.json" \
+            "$RUNNER_TEMP/buttonheist-lifecycle-report.json"; do
+            name="$(basename "$report")"
+            if [[ -f "$report" ]]; then
+              cp "$report" "$BUTTONHEIST_RECEIPTS_DIR/diagnostics/$name"
+              echo "$name=diagnostics/$name" >> "$BUTTONHEIST_RECEIPTS_DIR/demo-diagnostics.txt"
+            else
+              echo "$name=missing" >> "$BUTTONHEIST_RECEIPTS_DIR/demo-diagnostics.txt"
+            fi
+          done
 
       - name: Write heist receipt manifest
         if: always()

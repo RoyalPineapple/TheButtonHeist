@@ -90,6 +90,29 @@ if grep -R -n -E 'timeout:[[:space:]]*[0-9]+' "${DOC_EXAMPLE_PATHS[@]}" >/tmp/bu
     cat /tmp/buttonheist-stale-dsl-grep.txt
     fail "docs/examples must use timeout: .seconds(...), not bare numeric timeouts"
 fi
+if grep -R -n -E '\.(present|changed)\(' "${DOC_EXAMPLE_PATHS[@]}" >/tmp/buttonheist-stale-dsl-grep.txt; then
+    cat /tmp/buttonheist-stale-dsl-grep.txt
+    fail "docs/examples must use canonical .exists(...) and .change(...), not .present(...) or .changed(...)"
+fi
+if grep -R -n -E '(Property-update|Element update predicates|Updated element predicates).*`from`.*`to`' "${DOC_EXAMPLE_PATHS[@]}" >/tmp/buttonheist-stale-dsl-grep.txt; then
+    cat /tmp/buttonheist-stale-dsl-grep.txt
+    fail "docs/examples must describe update predicates with before/after wording, not from/to"
+fi
+
+DOC_EXAMPLE_FILES=$(git ls-files -- "${DOC_EXAMPLE_PATHS[@]}")
+if awk '
+    FNR == 1 { update_window = 0 }
+    /\.updated[[:space:]]*\(/ { update_window = 8 }
+    update_window > 0 && /(^|[^[:alnum:]_])(from|to)[[:space:]]*:/ {
+        print FILENAME ":" FNR ":" $0
+        found = 1
+    }
+    update_window > 0 { update_window-- }
+    END { exit found ? 0 : 1 }
+' $DOC_EXAMPLE_FILES >/tmp/buttonheist-stale-dsl-grep.txt; then
+    cat /tmp/buttonheist-stale-dsl-grep.txt
+    fail "docs/examples must use before:/after: in .updated(...) predicates, not from:/to:"
+fi
 
 if grep -Eq 'LabeledContent\([[:space:]]*"Version"' "$BUTTONHEIST_DEMO_VERSION_FILE"; then
     grep -Eq 'LabeledContent\([[:space:]]*"Version"[[:space:]]*,[[:space:]]*value:[[:space:]]*(TheScore\.)?buttonHeistVersion[[:space:]]*\)' "$BUTTONHEIST_DEMO_VERSION_FILE" \
@@ -157,6 +180,53 @@ DUMMY_MCP_SHA="2222222222222222222222222222222222222222222222222222222222222222"
 
 "$SCRIPT_DIR/render-homebrew-formula.sh" "$VERSION_FILE" "$DUMMY_CLI_SHA" "$DUMMY_MCP_SHA" "$TMP_FORMULA"
 
+assert_rendered_url_checksum_pair() {
+    local label="$1"
+    local expected_url="$2"
+    local expected_sha="$3"
+
+    awk -v label="$label" -v expected_url="$expected_url" -v expected_sha="$expected_sha" '
+        /^[[:space:]]*url "[^"]+"/ {
+            if (pending) {
+                print "Error: rendered formula is missing sha256 bound to " label " URL" > "/dev/stderr"
+                failed = 1
+                exit 1
+            }
+            url_value = $0
+            sub(/^[[:space:]]*url "/, "", url_value)
+            sub(/".*$/, "", url_value)
+            pending = (url_value == expected_url)
+            saw_url = saw_url || pending
+            next
+        }
+        pending && /^[[:space:]]*sha256 "[^"]+"/ {
+            sha_value = $0
+            sub(/^[[:space:]]*sha256 "/, "", sha_value)
+            sub(/".*$/, "", sha_value)
+            if (sha_value != expected_sha) {
+                print "Error: rendered formula binds " label " URL to sha256 " sha_value ", expected " expected_sha > "/dev/stderr"
+                failed = 1
+                exit 1
+            }
+            found = 1
+            pending = 0
+        }
+        END {
+            if (failed) {
+                exit 1
+            }
+            if (!saw_url) {
+                print "Error: rendered formula is missing " label " URL" > "/dev/stderr"
+                exit 1
+            }
+            if (!found) {
+                print "Error: rendered formula is missing sha256 bound to " label " URL" > "/dev/stderr"
+                exit 1
+            }
+        }
+    ' "$TMP_FORMULA" || fail "rendered formula does not bind $label checksum to matching URL"
+}
+
 grep -Fq "version \"$VERSION_FILE\"" "$TMP_FORMULA" \
     || fail "rendered formula version does not match $VERSION_FILE"
 grep -Fq "url \"$(buttonheist_release_url "$VERSION_FILE")/$(buttonheist_cli_archive_name "$VERSION_FILE")\"" "$TMP_FORMULA" \
@@ -167,6 +237,8 @@ grep -Fq "sha256 \"$DUMMY_CLI_SHA\"" "$TMP_FORMULA" \
     || fail "rendered formula is missing CLI checksum"
 grep -Fq "sha256 \"$DUMMY_MCP_SHA\"" "$TMP_FORMULA" \
     || fail "rendered formula is missing MCP checksum"
+assert_rendered_url_checksum_pair "CLI" "$(buttonheist_release_url "$VERSION_FILE")/$(buttonheist_cli_archive_name "$VERSION_FILE")" "$DUMMY_CLI_SHA"
+assert_rendered_url_checksum_pair "MCP" "$(buttonheist_release_url "$VERSION_FILE")/$(buttonheist_mcp_archive_name "$VERSION_FILE")" "$DUMMY_MCP_SHA"
 if grep -Fq 'PLACEHOLDER' "$TMP_FORMULA"; then
     fail "rendered formula still contains checksum placeholder"
 fi
