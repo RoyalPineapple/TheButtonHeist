@@ -1,8 +1,10 @@
 import Foundation
 
-// RuntimeSafety owns the bounded executable-plan boundary: finite traversal,
-// non-recursive local heist references, scoped refs, safe control flow, and
-// payloads that lower to runtime command contracts.
+/// RuntimeSafety owns the bounded executable-plan boundary.
+///
+/// Totality rests on three bounds: (a) acyclic call graph
+/// [HeistCallGraph] - structural; (b) bounded ForEach; (c) timeout-floored
+/// RepeatUntil/WaitFor - runtime floors.
 struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     let limits: HeistPlanRuntimeSafetyLimits
 
@@ -101,6 +103,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             scope: context.scope,
             environment: context.environment,
             definitionScope: context.definitionScope,
+            callGraph: context.callGraph,
             allowsCollectionLoops: context.allowsCollectionLoops
         )
     }
@@ -221,11 +224,11 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             return
         }
         let resolvedName = resolved.qualifiedName
-        if context.invocationStack.contains(resolvedName) {
+        if let cycle = context.callGraphCycle(closing: resolvedName) {
             fail(
                 path: "\(context.path).path",
                 contract: "heist runs must not be recursive",
-                observed: (context.invocationStack + [resolvedName]).joined(separator: " -> "),
+                observed: cycle.displayPath,
                 correction: "Remove the recursive heist run cycle."
             )
             return
@@ -389,6 +392,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
         definitionScope: HeistDefinitionScope,
+        callGraph: HeistCallGraph?,
         allowsCollectionLoops: Bool
     ) {
         guard allowsCollectionLoops else {
@@ -421,6 +425,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
                 scope: scope.bindingString(step.parameter),
                 environment: environment.binding(string: value, to: step.parameter),
                 definitionScope: definitionScope,
+                callGraph: callGraph,
                 valuePath: "\(path).values[\(index)]"
             )
         }
@@ -454,6 +459,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
         definitionScope: HeistDefinitionScope,
+        callGraph: HeistCallGraph?,
         valuePath: String
     ) {
         var validator = StringLoopResolvedPayloadValidator(valuePath: valuePath)
@@ -466,6 +472,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             scope: scope,
             environment: environment,
             definitionScope: definitionScope,
+            callGraph: callGraph,
             visitor: &validator
         )
         failures += validator.failures
