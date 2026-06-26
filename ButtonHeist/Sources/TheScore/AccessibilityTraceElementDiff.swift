@@ -37,7 +37,6 @@ enum AccessibilityTraceElementDiff {
 func projectElementStateChange(
     old: HeistElement,
     new: HeistElement,
-    element: HeistElement? = nil,
     includeGeometry: Bool = true
 ) -> ElementUpdate? {
     var changes: [PropertyChange] = []
@@ -92,7 +91,7 @@ func projectElementStateChange(
     }
 
     guard !changes.isEmpty else { return nil }
-    return ElementUpdate(element: element ?? new, changes: changes)
+    return ElementUpdate(before: old, after: new, changes: changes)
 }
 
 private func formatCustomContent(_ content: [HeistCustomContent]?) -> String? {

@@ -352,6 +352,16 @@ public extension ElementPredicate {
         ElementPredicate(value: value)
     }
 
+    /// Match elements that include every listed trait.
+    static func traits(_ traits: [HeistTrait]) -> ElementPredicate {
+        ElementPredicate(traits: traits)
+    }
+
+    /// Match elements that include none of the listed traits.
+    static func excludeTraits(_ traits: [HeistTrait]) -> ElementPredicate {
+        ElementPredicate(excludeTraits: traits)
+    }
+
     /// Match by any combination of fields — the canonical multi-field form.
     static func element(
         label: StringMatch<String>? = nil,

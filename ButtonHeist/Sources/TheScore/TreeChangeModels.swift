@@ -15,14 +15,16 @@ public struct PropertyChange: Codable, Sendable, Equatable {
     }
 }
 
-/// An element whose state changed — carries the element itself (so the change
-/// is self-describing on the wire) and which properties differ.
+/// An element whose state changed — carries both sides of the transition and
+/// which properties differ.
 public struct ElementUpdate: Codable, Sendable, Equatable {
-    public let element: HeistElement
+    public let before: HeistElement
+    public let after: HeistElement
     public let changes: [PropertyChange]
 
-    public init(element: HeistElement, changes: [PropertyChange]) {
-        self.element = element
+    public init(before: HeistElement, after: HeistElement, changes: [PropertyChange]) {
+        self.before = before
+        self.after = after
         self.changes = changes
     }
 }

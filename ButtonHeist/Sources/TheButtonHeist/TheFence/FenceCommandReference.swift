@@ -140,7 +140,7 @@ public enum FenceCommandReference {
             "",
             "## StringMatch",
             "",
-            "`stringMatch` fields such as `label`, `identifier`, `value`, and update `from`/`to` filters accept object form " +
+            "`stringMatch` fields such as `label`, `identifier`, and `value` accept object form " +
                 "`{ \"mode\": \"exact|contains|prefix|suffix\", \"value\": \"...\" }`. " +
                 "Use `exact` for exact matching; broad modes require a non-empty value. " +
                 "Element matcher fields `label`, `identifier`, and `value` may also accept an array of StringMatch objects; " +
@@ -148,7 +148,7 @@ public enum FenceCommandReference {
                 "including repeated string checks and trait checks. A string check item is " +
                 "`{ \"kind\": \"label|identifier|value\", \"match\": { \"mode\": \"...\", \"value\": \"...\" } }`; " +
                 "a trait check item is `{ \"kind\": \"traits|excludeTraits\", \"values\": [\"button\"] }`. " +
-                "Update `from` and `to` filters remain single StringMatch objects.",
+                "Updated element predicates use full `before` and `after` element matcher objects.",
         ]
     }
 

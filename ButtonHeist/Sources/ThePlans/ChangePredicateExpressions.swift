@@ -3,113 +3,64 @@ import Foundation
 // MARK: - Change and Update Predicate Expressions
 
 public struct ElementUpdatePredicateExpr: Codable, Sendable, Equatable {
-    public let element: ElementPredicateTemplate?
+    public let before: ElementPredicateTemplate?
+    public let after: ElementPredicateTemplate?
     public let property: ElementProperty?
-    public let from: StringMatch<StringExpr>?
-    public let to: StringMatch<StringExpr>?
 
     public init(
-        element: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil,
-        from: StringMatch<StringExpr>? = nil,
-        to: StringMatch<StringExpr>? = nil
+        before: ElementPredicateTemplate? = nil,
+        after: ElementPredicateTemplate? = nil,
+        property: ElementProperty? = nil
     ) {
-        self.element = element
+        self.before = before
+        self.after = after
         self.property = property
-        self.from = from
-        self.to = to
     }
 
     public init(_ update: ElementUpdatePredicate) {
         self.init(
-            element: update.element.map(ElementPredicateTemplate.init),
-            property: update.property,
-            from: update.from.map { $0.map(StringExpr.literal) },
-            to: update.to.map { $0.map(StringExpr.literal) }
+            before: update.before.map(ElementPredicateTemplate.init),
+            after: update.after.map(ElementPredicateTemplate.init),
+            property: update.property
         )
     }
 
     public func resolve(in environment: HeistExecutionEnvironment) throws -> ElementUpdatePredicate {
         ElementUpdatePredicate(
-            element: try element?.resolve(in: environment),
-            property: property,
-            from: try from?.resolve(in: environment),
-            to: try to?.resolve(in: environment)
+            before: try before?.resolve(in: environment),
+            after: try after?.resolve(in: environment),
+            property: property
         )
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, element, property
-        case from, fromRef = "from_ref"
-        case to, toRef = "to_ref"
+        case type, before, after, property
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element update predicate expression")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            element: try container.decodeIfPresent(ElementPredicateTemplate.self, forKey: .element),
-            property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
-            from: try Self.decodeStringMatchExpr(container, literalKey: .from, refKey: .fromRef),
-            to: try Self.decodeStringMatchExpr(container, literalKey: .to, refKey: .toRef)
+            before: try container.decodeIfPresent(ElementPredicateTemplate.self, forKey: .before),
+            after: try container.decodeIfPresent(ElementPredicateTemplate.self, forKey: .after),
+            property: try container.decodeIfPresent(ElementProperty.self, forKey: .property)
         )
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(element, forKey: .element)
+        try container.encodeIfPresent(before, forKey: .before)
+        try container.encodeIfPresent(after, forKey: .after)
         try container.encodeIfPresent(property, forKey: .property)
-        try Self.encode(from, literalKey: .from, refKey: .fromRef, into: &container)
-        try Self.encode(to, literalKey: .to, refKey: .toRef, into: &container)
-    }
-
-    private static func decodeStringMatchExpr(
-        _ container: KeyedDecodingContainer<CodingKeys>,
-        literalKey: CodingKeys,
-        refKey: CodingKeys
-    ) throws -> StringMatch<StringExpr>? {
-        let literal = try container.decodeIfPresent(StringMatch<StringExpr>.self, forKey: literalKey)
-        let reference = try HeistReferenceName.decodeIfPresent(from: container, forKey: refKey)
-        switch (literal, reference) {
-        case (.some(let literal), nil):
-            return literal
-        case (nil, .some(let reference)):
-            return .exact(.ref(reference))
-        case (.some, .some):
-            throw DecodingError.dataCorruptedError(
-                forKey: refKey,
-                in: container,
-                debugDescription: "element update predicate accepts either \(literalKey.stringValue) or \(refKey.stringValue), not both"
-            )
-        case (nil, nil):
-            return nil
-        }
-    }
-
-    private static func encode(
-        _ expression: StringMatch<StringExpr>?,
-        literalKey: CodingKeys,
-        refKey: CodingKeys,
-        into container: inout KeyedEncodingContainer<CodingKeys>
-    ) throws {
-        switch expression {
-        case .some(.exact(.ref(let reference))):
-            try container.encode(reference, forKey: refKey)
-        case .some(let match):
-            try container.encode(match, forKey: literalKey)
-        case .none:
-            break
-        }
     }
 }
 
 extension ElementUpdatePredicateExpr: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("update", [
-            element.map { "element=\($0)" },
+            before.map { "before=\($0)" },
+            after.map { "after=\($0)" },
             ScoreDescription.valueField("property", property?.rawValue),
-            from.map { "from=\($0)" },
-            to.map { "to=\($0)" },
         ].compactMap { $0 })
     }
 }
@@ -126,7 +77,7 @@ public enum ElementDeltaPredicateExpr: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, element, property, from, fromRef = "from_ref", to, toRef = "to_ref"
+        case type, element, before, after, property
     }
 
     public init(_ predicate: ElementDeltaPredicate) {

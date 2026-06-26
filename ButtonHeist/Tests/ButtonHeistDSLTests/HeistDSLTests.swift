@@ -86,9 +86,8 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
     let heist = try HeistPlan {
         TypeText("Bruschetta", into: .identifier("Search"))
             .expect(.change(.elements(.updated(
-                .identifier("Search"),
-                property: .value,
-                to: "Bruschetta"
+                after: .element(identifier: "Search", value: "Bruschetta"),
+                property: .value
             ))))
     }
 
@@ -99,9 +98,8 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
                 target: .predicate(.identifier("Search"))
             ),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Search"),
-                property: .value,
-                to: "Bruschetta"
+                after: .element(identifier: "Search", value: "Bruschetta"),
+                property: .value
             )))), timeout: 1)
         )),
     ]))

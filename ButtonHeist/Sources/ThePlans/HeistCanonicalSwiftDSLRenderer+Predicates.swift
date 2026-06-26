@@ -109,20 +109,18 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func render(update: ElementUpdatePredicate) -> String {
         let fields = [
-            update.element.map { render(predicate: $0) },
+            update.before.map { "before: \(render(predicate: $0))" },
+            update.after.map { "after: \(render(predicate: $0))" },
             update.property.map { "property: .\($0.rawValue)" },
-            update.from.map { "from: \(renderFieldArgument($0))" },
-            update.to.map { "to: \(renderFieldArgument($0))" },
         ].compactMap { $0 }
         return fields.joined(separator: ", ")
     }
 
     func render(update: ElementUpdatePredicateExpr, environment: RenderEnvironment) throws -> String {
         let fields = try [
-            update.element.map { try render(predicate: $0, environment: environment) },
+            update.before.map { "before: \(try render(predicate: $0, environment: environment))" },
+            update.after.map { "after: \(try render(predicate: $0, environment: environment))" },
             update.property.map { "property: .\($0.rawValue)" },
-            update.from.map { "from: \(try renderFieldArgument($0, environment: environment))" },
-            update.to.map { "to: \(try renderFieldArgument($0, environment: environment))" },
         ].compactMap { $0 }
         return fields.joined(separator: ", ")
     }

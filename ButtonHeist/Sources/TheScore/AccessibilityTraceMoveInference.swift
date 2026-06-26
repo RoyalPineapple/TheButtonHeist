@@ -30,7 +30,7 @@ enum AccessibilityTraceMoveInference {
         let inferredUpdates = pairs.compactMap { pair -> ElementUpdate? in
             guard let old = removedById[pair.removedId],
                   let new = addedById[pair.insertedId] else { return nil }
-            return projectElementStateChange(old: old, new: new, element: old, includeGeometry: false)
+            return projectElementStateChange(old: old, new: new, includeGeometry: false)
         }
 
         return ElementEdits(

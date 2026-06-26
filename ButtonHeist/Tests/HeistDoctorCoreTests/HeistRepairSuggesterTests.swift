@@ -585,7 +585,7 @@ private let expectedRepairJSONReportJSON = """
             afterDelta: .elementsChanged(AccessibilityTrace.ElementsChanged(
                 elementCount: 1,
                 edits: ElementEdits(updated: [
-                    ElementUpdate(element: changed, changes: [
+                    ElementUpdate(before: element(label: "Quantity", value: "1", traits: [.button]), after: changed, changes: [
                         PropertyChange(property: .value, old: "1", new: "2"),
                     ]),
                 ])

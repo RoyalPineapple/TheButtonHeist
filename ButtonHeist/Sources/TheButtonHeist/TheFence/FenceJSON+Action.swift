@@ -218,13 +218,15 @@ struct PublicElementEdits: Encodable {
 }
 
 struct PublicElementUpdate: Encodable {
-    let element: PublicElement
+    let before: PublicElement
+    let after: PublicElement
     let changes: [PropertyChange]
 
     init?(update: ElementUpdate) {
         let meaningfulChanges = update.changes.filter { !$0.property.isGeometry }
         guard !meaningfulChanges.isEmpty else { return nil }
-        self.element = PublicElement(element: update.element, detail: .summary)
+        self.before = PublicElement(element: update.before, detail: .summary)
+        self.after = PublicElement(element: update.after, detail: .summary)
         self.changes = meaningfulChanges
     }
 }

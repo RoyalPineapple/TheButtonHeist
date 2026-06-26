@@ -52,39 +52,14 @@ private enum TestActionResultTrace {
 
     private static func beforeElements(for edits: ElementEdits, elementCount: Int) -> [HeistElement] {
         var elements = edits.removed
-        elements.append(contentsOf: edits.updated.map { updatedElement($0, useNewValues: false) })
+        elements.append(contentsOf: edits.updated.map(\.before))
         return padded(elements, count: elementCount)
     }
 
     private static func afterElements(for edits: ElementEdits, elementCount: Int) -> [HeistElement] {
         var elements = edits.added
-        elements.append(contentsOf: edits.updated.map { updatedElement($0, useNewValues: true) })
+        elements.append(contentsOf: edits.updated.map(\.after))
         return padded(elements, count: elementCount)
-    }
-
-    private static func updatedElement(_ update: ElementUpdate, useNewValues: Bool) -> HeistElement {
-        let label = update.element.label ?? update.element.description
-        var value: String?
-        let identifier: String? = nil
-        var hint: String?
-        var traits: [HeistTrait] = [.button]
-        for change in update.changes {
-            let selected = useNewValues ? change.new : change.old
-            switch change.property {
-            case .value:
-                value = selected
-            case .hint:
-                hint = selected
-            case .traits:
-                // Keep the base (identity) traits and layer on the changed trait,
-                // so a transient toggle (e.g. selected) reads as an update rather
-                // than a remove+add caused by losing the non-transient trait.
-                traits += (traitsFromDescription(selected) ?? []).filter { !traits.contains($0) }
-            default:
-                value = selected ?? value
-            }
-        }
-        return placeholder(id: update.element.description, label: label, value: value, identifier: identifier, hint: hint, traits: traits)
     }
 
     private static func padded(_ elements: [HeistElement], count: Int) -> [HeistElement] {
@@ -118,14 +93,6 @@ private enum TestActionResultTrace {
             frameHeight: 44,
             actions: [.activate]
         )
-    }
-
-    private static func traitsFromDescription(_ description: String?) -> [HeistTrait]? {
-        guard let description else { return nil }
-        let traits = description
-            .split { $0 == "," || $0 == "|" || $0 == " " }
-            .compactMap { HeistTrait(rawValue: String($0)) }
-        return traits.isEmpty ? nil : traits
     }
 
     private static func makeInterface(elements: [HeistElement]) -> Interface {

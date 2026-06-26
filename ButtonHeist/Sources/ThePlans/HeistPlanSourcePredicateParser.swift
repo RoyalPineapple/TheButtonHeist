@@ -22,7 +22,7 @@ extension HeistPlanSourceParser {
             return .state(try parseExistsMissingState(name: name))
         case "all":
             return .state(try parseAllState())
-        case "label", "identifier", "value", "element":
+        case "label", "identifier", "value", "traits", "excludeTraits", "element":
             return .exists(try parseElementPredicateTemplate(named: name))
         default:
             throw error(previous, "unsupported accessibility predicate '.\(name)'")
@@ -64,7 +64,7 @@ extension HeistPlanSourceParser {
             return try parseExistsMissingState(name: name)
         case "all":
             return try parseAllState()
-        case "label", "identifier", "value", "element":
+        case "label", "identifier", "value", "traits", "excludeTraits", "element":
             return .exists(try parseElementPredicateTemplate(named: name))
         default:
             throw error(previous, "unsupported state predicate '.\(name)'")
@@ -125,10 +125,9 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseElementUpdatePredicate() throws -> ElementUpdatePredicateExpr {
-        var element: ElementPredicateTemplate?
+        var before: ElementPredicateTemplate?
+        var after: ElementPredicateTemplate?
         var property: ElementProperty?
-        var from: StringMatch<StringExpr>?
-        var to: StringMatch<StringExpr>?
         if currentToken.isSymbol(")") {
             return ElementUpdatePredicateExpr()
         }
@@ -137,21 +136,25 @@ extension HeistPlanSourceParser {
                 try expectIdentifier("property")
                 try expectSymbol(":")
                 property = try parseEnumCase(ElementProperty.self, role: "element property")
-            } else if lookaheadLabel("from") {
-                try expectIdentifier("from")
+            } else if lookaheadLabel("before") {
+                try expectIdentifier("before")
                 try expectSymbol(":")
-                from = try parseStringMatchFieldValue(field: "from")
-            } else if lookaheadLabel("to") {
-                try expectIdentifier("to")
+                guard before == nil else {
+                    throw error(previous, "element update predicate accepts before only once")
+                }
+                before = try parseElementPredicateTemplate()
+            } else if lookaheadLabel("after") {
+                try expectIdentifier("after")
                 try expectSymbol(":")
-                to = try parseStringMatchFieldValue(field: "to")
-            } else if element == nil {
-                element = try parseElementPredicateTemplate()
+                guard after == nil else {
+                    throw error(previous, "element update predicate accepts after only once")
+                }
+                after = try parseElementPredicateTemplate()
             } else {
-                throw error(currentToken, "unsupported element update predicate argument")
+                throw error(currentToken, "element update predicate accepts before, after, and property")
             }
             guard consumeSymbol(",") else { break }
         }
-        return ElementUpdatePredicateExpr(element: element, property: property, from: from, to: to)
+        return ElementUpdatePredicateExpr(before: before, after: after, property: property)
     }
 }

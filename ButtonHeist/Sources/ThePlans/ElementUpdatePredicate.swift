@@ -7,34 +7,29 @@ import Foundation
 /// what you don't. The transition's update edits are scanned for any entry that
 /// satisfies all provided fields.
 ///
-/// - `element == nil`: any updated element.
 /// - `property == nil`: any property changed.
-/// - `from == nil`: old value does not matter.
-/// - `to == nil`: new value does not matter.
+/// - `before == nil`: old element state does not matter.
+/// - `after == nil`: new element state does not matter.
 ///
 /// All-nil (`ElementUpdatePredicate.any`) is a first-class predicate meaning
 /// "any tracked element property changed" — narrower than `.change(.elements())`,
 /// which also fires on additions and removals.
 public struct ElementUpdatePredicate: Sendable, Equatable {
-    /// Which element updated. `nil` matches any updated element.
-    public let element: ElementPredicate?
+    /// Required old element state. `nil` means the old element state does not matter.
+    public let before: ElementPredicate?
+    /// Required new element state. `nil` means the new element state does not matter.
+    public let after: ElementPredicate?
     /// Which property changed. `nil` matches any property.
     public let property: ElementProperty?
-    /// Required old value. `nil` means the old value does not matter.
-    public let from: StringMatch<String>?
-    /// Required new value. `nil` means the new value does not matter.
-    public let to: StringMatch<String>?
 
     public init(
-        element: ElementPredicate? = nil,
-        property: ElementProperty? = nil,
-        from: StringMatch<String>? = nil,
-        to: StringMatch<String>? = nil
+        before: ElementPredicate? = nil,
+        after: ElementPredicate? = nil,
+        property: ElementProperty? = nil
     ) {
-        self.element = element
+        self.before = before
+        self.after = after
         self.property = property
-        self.from = from
-        self.to = to
     }
 
     /// Any tracked element property changed (all filters unset).
@@ -61,36 +56,33 @@ public enum ElementDeltaPredicate: Sendable, Equatable {
 
 extension ElementUpdatePredicate: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case element, property, from, to
+        case type, before, after, property
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element update predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            element: try container.decodeIfPresent(ElementPredicate.self, forKey: .element),
-            property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
-            from: try container.decodeIfPresent(StringMatch<String>.self, forKey: .from),
-            to: try container.decodeIfPresent(StringMatch<String>.self, forKey: .to)
+            before: try container.decodeIfPresent(ElementPredicate.self, forKey: .before),
+            after: try container.decodeIfPresent(ElementPredicate.self, forKey: .after),
+            property: try container.decodeIfPresent(ElementProperty.self, forKey: .property)
         )
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(element, forKey: .element)
+        try container.encodeIfPresent(before, forKey: .before)
+        try container.encodeIfPresent(after, forKey: .after)
         try container.encodeIfPresent(property, forKey: .property)
-        try container.encodeIfPresent(from, forKey: .from)
-        try container.encodeIfPresent(to, forKey: .to)
     }
 }
 
 extension ElementUpdatePredicate: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("update", [
-            element.map { "element=\($0)" },
+            before.map { "before=\($0)" },
+            after.map { "after=\($0)" },
             ScoreDescription.valueField("property", property?.rawValue),
-            ScoreDescription.stringMatchField("from", from),
-            ScoreDescription.stringMatchField("to", to),
         ].compactMap { $0 })
     }
 }
@@ -103,7 +95,7 @@ extension ElementDeltaPredicate: Codable {
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, element, property, from, to
+        case type, element, before, after, property
     }
 
     public init(from decoder: Decoder) throws {
@@ -124,13 +116,8 @@ extension ElementDeltaPredicate: Codable {
             try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "disappeared predicate")
             self = .disappearedElement(try container.decode(ElementPredicate.self, forKey: .element))
         case .updated:
-            try decoder.rejectUnknownKeys(allowed: ["type", "element", "property", "from", "to"], typeName: "updated predicate")
-            self = .updatedElement(ElementUpdatePredicate(
-                element: try container.decodeIfPresent(ElementPredicate.self, forKey: .element),
-                property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
-                from: try container.decodeIfPresent(StringMatch<String>.self, forKey: .from),
-                to: try container.decodeIfPresent(StringMatch<String>.self, forKey: .to)
-            ))
+            try decoder.rejectUnknownKeys(allowed: ["type", "before", "after", "property"], typeName: "updated predicate")
+            self = .updatedElement(try ElementUpdatePredicate(from: decoder))
         }
     }
 
@@ -145,10 +132,9 @@ extension ElementDeltaPredicate: Codable {
             try container.encode(element, forKey: .element)
         case .updatedElement(let update):
             try container.encode(WireType.updated.rawValue, forKey: .type)
-            try container.encodeIfPresent(update.element, forKey: .element)
+            try container.encodeIfPresent(update.before, forKey: .before)
+            try container.encodeIfPresent(update.after, forKey: .after)
             try container.encodeIfPresent(update.property, forKey: .property)
-            try container.encodeIfPresent(update.from, forKey: .from)
-            try container.encodeIfPresent(update.to, forKey: .to)
         }
     }
 }

@@ -22,6 +22,16 @@ extension HeistPlanSourceParser {
             let value = try parseStringMatchCallArgument(field: "value")
             try expectSymbol(")")
             return .predicate(ElementPredicateTemplate(value: value))
+        case "traits":
+            try expectSymbol("(")
+            let traits = try parseTraitArray(role: "traits")
+            try expectSymbol(")")
+            return .predicate(ElementPredicateTemplate(traits: traits))
+        case "excludeTraits":
+            try expectSymbol("(")
+            let traits = try parseTraitArray(role: "excludeTraits")
+            try expectSymbol(")")
+            return .predicate(ElementPredicateTemplate(excludeTraits: traits))
         case "element":
             try expectSymbol("(")
             let predicate = try parseElementPredicateTemplateFields()
@@ -63,6 +73,16 @@ extension HeistPlanSourceParser {
             let value = try parseStringMatchCallArgument(field: "value")
             try expectSymbol(")")
             return ElementPredicateTemplate(value: value)
+        case "traits":
+            try expectSymbol("(")
+            let traits = try parseTraitArray(role: "traits")
+            try expectSymbol(")")
+            return ElementPredicateTemplate(traits: traits)
+        case "excludeTraits":
+            try expectSymbol("(")
+            let traits = try parseTraitArray(role: "excludeTraits")
+            try expectSymbol(")")
+            return ElementPredicateTemplate(excludeTraits: traits)
         case "element":
             try expectSymbol("(")
             let predicate = try parseElementPredicateTemplateFields()

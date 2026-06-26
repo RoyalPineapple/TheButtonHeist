@@ -128,11 +128,12 @@ extension HeistPlanRuntimeSafetyValidator {
         case .appearedElement(let element), .disappearedElement(let element):
             validateElementPredicate(element, path: "\(path).element")
         case .updatedElement(let update):
-            if let element = update.element {
-                validateElementPredicate(element, path: "\(path).element")
+            if let before = update.before {
+                validateElementPredicate(before, path: "\(path).before")
             }
-            validateString(update.from, path: "\(path).from", role: "change predicate from value")
-            validateString(update.to, path: "\(path).to", role: "change predicate to value")
+            if let after = update.after {
+                validateElementPredicate(after, path: "\(path).after")
+            }
         }
     }
 
@@ -145,14 +146,11 @@ extension HeistPlanRuntimeSafetyValidator {
         case .appearedElement(let element), .disappearedElement(let element):
             validateElementPredicate(element, path: "\(path).element", scope: scope)
         case .updatedElement(let update):
-            if let element = update.element {
-                validateElementPredicate(element, path: "\(path).element", scope: scope)
+            if let before = update.before {
+                validateElementPredicate(before, path: "\(path).before", scope: scope)
             }
-            if let from = update.from {
-                validateString(from, path: "\(path).from", scope: scope)
-            }
-            if let to = update.to {
-                validateString(to, path: "\(path).to", scope: scope)
+            if let after = update.after {
+                validateElementPredicate(after, path: "\(path).after", scope: scope)
             }
         }
     }

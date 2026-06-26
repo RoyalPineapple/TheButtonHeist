@@ -117,7 +117,8 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             added: [added],
             removed: [removed],
             updated: [ElementUpdate(
-                element: makeElement(label: "Counter"),
+                before: makeElement(label: "Counter", value: "1"),
+                after: makeElement(label: "Counter", value: "2"),
                 changes: [PropertyChange(property: .value, old: "1", new: "2")]
             )]
         )
@@ -133,7 +134,9 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(removedJSON.first?["label"] as? String, "Old")
         XCTAssertNil(removedJSON.first?["heistId"])
         let updatedJSON = try XCTUnwrap(editsJSON["updated"] as? [[String: Any]])
-        XCTAssertNil((updatedJSON.first?["element"] as? [String: Any])?["heistId"])
+        XCTAssertNil(updatedJSON.first?["element"])
+        XCTAssertEqual((updatedJSON.first?["before"] as? [String: Any])?["value"] as? String, "1")
+        XCTAssertEqual((updatedJSON.first?["after"] as? [String: Any])?["value"] as? String, "2")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -142,7 +145,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.elementCount, 14)
         XCTAssertEqual(payload.edits.added.map(\.label), ["New"])
         XCTAssertEqual(payload.edits.removed.map(\.label), ["Old"])
-        XCTAssertEqual(payload.edits.updated.first?.element.label, "Counter")
+        XCTAssertEqual(payload.edits.updated.first?.after.label, "Counter")
         XCTAssertEqual(payload.transient.map(\.label), ["Loading"])
     }
 
@@ -249,11 +252,11 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeElement(label: String) -> HeistElement {
+    private func makeElement(label: String, value: String? = nil) -> HeistElement {
         HeistElement(
             description: label,
             label: label,
-            value: nil,
+            value: value,
             identifier: nil,
             traits: [.button],
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,

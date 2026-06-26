@@ -72,6 +72,12 @@ extension TheFence {
             if let element = object["element"] {
                 try validateElementPredicateStringMatchObjects(element, path: path + ["element"])
             }
+            if let before = object["before"] {
+                try validateElementPredicateStringMatchObjects(before, path: path + ["before"])
+            }
+            if let after = object["after"] {
+                try validateElementPredicateStringMatchObjects(after, path: path + ["after"])
+            }
             if let states = object["states"], case .array(let values) = states {
                 for (index, child) in values.enumerated() {
                     try validatePredicateStringMatchObjects(child, path: path + ["states[\(index)]"])

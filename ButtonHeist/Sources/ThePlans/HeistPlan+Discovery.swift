@@ -794,8 +794,11 @@ private struct HeistSemanticSurfaceBuilder {
         case .appearedElement(let element), .disappearedElement(let element):
             appendTargetPredicate(element)
         case .updatedElement(let update):
-            if let element = update.element {
-                appendTargetPredicate(element)
+            if let before = update.before {
+                appendTargetPredicate(before)
+            }
+            if let after = update.after {
+                appendTargetPredicate(after)
             }
         }
     }
@@ -806,9 +809,13 @@ private struct HeistSemanticSurfaceBuilder {
             appendUnique(element.description, to: &targetPredicates)
             appendSemanticSurfaces(element)
         case .updatedElement(let update):
-            if let element = update.element {
-                appendUnique(element.description, to: &targetPredicates)
-                appendSemanticSurfaces(element)
+            if let before = update.before {
+                appendUnique(before.description, to: &targetPredicates)
+                appendSemanticSurfaces(before)
+            }
+            if let after = update.after {
+                appendUnique(after.description, to: &targetPredicates)
+                appendSemanticSurfaces(after)
             }
         }
     }

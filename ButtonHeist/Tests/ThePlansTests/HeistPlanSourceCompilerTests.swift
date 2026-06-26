@@ -73,19 +73,23 @@ import ThePlans
 @Test func `inline plan source property update expectations compile`() throws {
     let scoped = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))
-        .expect(.change(.elements(.updated(.identifier("Search"), property: .value, to: "Bruschetta"))))
+        .expect(.change(.elements(.updated(after: .element(identifier: "Search", value: "Bruschetta"), property: .value))))
     """#))
     let unscoped = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.change(.elements(.updated(property: .value, to: "3"))))
+        .expect(.change(.elements(.updated(after: .value("3"), property: .value))))
     """#))
     let fromTo = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.change(.elements(.updated(.identifier("Quantity"), property: .value, from: "2", to: "3"))))
+        .expect(.change(.elements(.updated(
+            before: .element(identifier: "Quantity", value: "2"),
+            after: .element(identifier: "Quantity", value: "3"),
+            property: .value
+        ))))
     """#))
     let broadFromTo = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.change(.elements(.updated(.identifier("Quantity"), property: .value, from: .prefix("cart:"), to: .contains("items")))))
+        .expect(.change(.elements(.updated(before: .value(.prefix("cart:")), after: .value(.contains("items")), property: .value))))
     """#))
 
     let expectedScoped = try HeistPlan(body: [
@@ -95,9 +99,8 @@ import ThePlans
                 target: .predicate(.identifier("Search"))
             ),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Search"),
-                property: .value,
-                to: "Bruschetta"
+                after: .element(identifier: "Search", value: "Bruschetta"),
+                property: .value
             )))), timeout: 1)
         )),
     ])
@@ -105,8 +108,8 @@ import ThePlans
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                property: .value,
-                to: "3"
+                after: .value("3"),
+                property: .value
             )))), timeout: 1)
         )),
     ])
@@ -114,10 +117,9 @@ import ThePlans
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Quantity"),
-                property: .value,
-                from: "2",
-                to: "3"
+                before: .element(identifier: "Quantity", value: "2"),
+                after: .element(identifier: "Quantity", value: "3"),
+                property: .value
             )))), timeout: 1)
         )),
     ])
@@ -125,10 +127,9 @@ import ThePlans
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Quantity"),
-                property: .value,
-                from: .prefix("cart:"),
-                to: .contains("items")
+                before: .value(.prefix("cart:")),
+                after: .value(.contains("items")),
+                property: .value
             )))), timeout: 1)
         )),
     ])
@@ -863,6 +864,14 @@ import ThePlans
         (
             root(#"WaitFor(.exists(.label("Pay")), timeout: Double.seconds(1))"#),
             "expected a timeout duration such as .seconds(1)"
+        ),
+        (
+            root(#"WaitFor(.change(.elements(.updated(.label("Search"), property: .value))))"#),
+            "element update predicate accepts before, after, and property"
+        ),
+        (
+            root(#"WaitFor(.change(.elements(.updated(property: .value, to: "3"))))"#),
+            "element update predicate accepts before, after, and property"
         ),
     ]
 

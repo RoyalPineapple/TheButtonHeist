@@ -154,10 +154,10 @@ CustomAction("Archive", on: .label("Message"))
     .expect(.change(.elements()))
 
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.change(.elements(.updated(.identifier("Search"), property: .value, to: "Bruschetta"))))
+    .expect(.change(.elements(.updated(after: .element(identifier: "Search", value: "Bruschetta"), property: .value))))
 
 Increment(.label("Quantity"))
-    .expect(.change(.elements(.updated(property: .value, from: "2", to: "3"))))
+    .expect(.change(.elements(.updated(before: .value("2"), after: .value("3"), property: .value))))
 
 Increment(.label("Volume"))
     .until(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(5))
@@ -204,17 +204,16 @@ Activate(.element(
 All checks must pass in order. Contradictory checks are valid source but cannot
 match any element in practice.
 
-Use `.change(.elements(.updated(...)))` for explicit property-delta assertions. The
-optional first argument scopes the update to an element predicate; omitting it
-matches any updated element in the observed delta. `from` and `to` are optional
-string filters with the same exact-by-default `StringMatch` modes, so
-`to: "3"` is exact and `to: .contains("items")` is explicitly broad. This
-remains an observed-change predicate and does not infer the action's target from
-hidden context.
+Use `.change(.elements(.updated(...)))` for explicit property-delta assertions.
+`before` and `after` are optional element predicates using the same matcher
+grammar as targets and state assertions. For example, `after: .value("3")` is
+exact and `after: .value(.contains("items"))` is explicitly broad. This remains
+an observed-change predicate and does not infer the action's target from hidden
+context.
 
 Do not write `.expect(.updated(...))` today. A future target-relative shorthand
 would need to derive a durable anchor at DSL-build time and lower immediately to
-the explicit `.change(.elements(.updated(target, ...)))` predicate.
+the explicit `.change(.elements(.updated(after: target, ...)))` predicate.
 
 Do not assert label or identifier changes as property updates. The current diff
 model uses those fields for element identity, so a label or identifier change is

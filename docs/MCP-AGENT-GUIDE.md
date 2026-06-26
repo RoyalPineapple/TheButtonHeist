@@ -21,7 +21,7 @@ Allowed `perform(step:)` statements are one action or one simple wait:
 ```swift
 Activate(.label("Pay")).expect(.change(.screen()))
 TypeText("milk", into: .label("Search"))
-    .expect(.change(.elements(.updated(.label("Search"), property: .value, to: "milk"))))
+    .expect(.change(.elements(.updated(after: .element(label: "Search", value: "milk"), property: .value))))
 Increment(.label("Quantity"))
     .until(.exists(.element(label: "Quantity", value: "10")), timeout: .seconds(5))
 Decrement(.label("Quantity"))
@@ -79,19 +79,21 @@ element value:
 
 ```swift
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.change(.elements(.updated(.identifier("Search"), property: .value, to: "Bruschetta"))))
+    .expect(.change(.elements(.updated(after: .element(identifier: "Search", value: "Bruschetta"), property: .value))))
 
 Increment(.label("Quantity"))
-    .expect(.change(.elements(.updated(property: .value, from: "2", to: "3"))))
+    .expect(.change(.elements(.updated(before: .value("2"), after: .value("3"), property: .value))))
 ```
 
-The element argument is optional. Omit it to match any updated element in the
-observed delta. Property updates support `value`, `traits`, `hint`, `actions`,
-`frame`, `activationPoint`, `customContent`, and `rotors`; they do not promise
-label or identifier changes because those fields are used for diff identity.
+`before` and `after` are optional element predicates using the same matcher
+grammar as targets and state assertions. Omit both to match any updated element
+in the observed delta. Property updates support `value`, `traits`, `hint`,
+`actions`, `frame`, `activationPoint`, `customContent`, and `rotors`; they do
+not promise label or identifier changes because those fields are used for diff
+identity.
 Do not shorten this to `.expect(.updated(...))`: expectations do not infer the
 action target. If target-relative sugar is added later, it must lower to an
-explicit `.change(.elements(.updated(target, ...)))` predicate before runtime evaluation.
+explicit `.change(.elements(.updated(after: target, ...)))` predicate before runtime evaluation.
 
 **Composing**: `run_heist` for typed multi-step plans in a single call. Prefer the `plan` field with canonical ButtonHeist source when authoring compact heists as an agent:
 
@@ -101,7 +103,7 @@ HeistPlan {
         .expect(.change(.screen()))
 
     TypeText("milk", into: .label("Search"))
-        .expect(.change(.elements(.updated(.label("Search"), property: .value, to: "milk"))))
+        .expect(.change(.elements(.updated(after: .element(label: "Search", value: "milk"), property: .value))))
 }
 ```
 
@@ -111,7 +113,7 @@ Use `run_heist(plan:)` for definitions, composition, branching, waits with bodie
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search"))
-            .expect(.change(.elements(.updated(.label("Search"), property: .value, to: item))))
+            .expect(.change(.elements(.updated(after: .element(label: "Search", value: item), property: .value))))
         Activate(.label("Add"))
             .expect(.exists(.label("Added")))
     }
