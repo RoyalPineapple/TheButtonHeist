@@ -75,7 +75,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testWaitCommandDefaultTimeoutIsTenSeconds() throws {
-        let command = try WaitCommand.parse(["--changed", "screen_changed"])
+        let command = try WaitCommand.parse(["--change", "screen"])
 
         XCTAssertEqual(command.timeout, 10)
     }
@@ -99,13 +99,14 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testFenceExpectationArgumentContractAcceptsJsonObject() throws {
-        let parsed = try TheFence.parseExpectationArgument(#"{"type":"element_updated","property":"value"}"#)
+        let parsed = try TheFence.parseExpectationArgument(
+            #"{"type":"change","scopes":[{"type":"elements","assertions":[{"type":"updated","property":"value"}]}]}"#
+        )
 
         guard case .object(let object) = parsed else {
             return XCTFail("expected object expectation")
         }
-        XCTAssertEqual(object["type"], .string("element_updated"))
-        XCTAssertEqual(object["property"], .string("value"))
+        XCTAssertEqual(object["type"], .string("change"))
     }
 
     func testFenceExpectationArgumentContractRejectsUnknownString() {
@@ -426,7 +427,7 @@ final class CLICommandSyncTests: XCTestCase {
         for timeout in ["0", "-1"] {
             XCTAssertThrowsError(
                 try CLIRequestBuilder.parsedRequest(
-                    from: #"{"command":"wait","predicate":{"type":"screen_changed"},"timeout":\#(timeout)}"#
+                    from: #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":\#(timeout)}"#
                 )
             ) { error in
                 let message = CLIRequestBuilder.diagnosticMessage(for: error)
@@ -439,7 +440,7 @@ final class CLICommandSyncTests: XCTestCase {
     func testSharedRequestBuilderRejectsWaitTimeoutAboveThirtyInJSONLinesMode() {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(
-                from: #"{"command":"wait","predicate":{"type":"screen_changed"},"timeout":31}"#
+                from: #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":31}"#
             )
         ) { error in
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
@@ -450,7 +451,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderRoutesValidWaitInJSONLinesMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
-            from: #"{"command":"wait","predicate":{"type":"screen_changed"},"timeout":5}"#
+            from: #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":5}"#
         )
 
         XCTAssertEqual(parsed.command, .wait)
