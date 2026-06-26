@@ -2819,7 +2819,8 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testHeistPlanCarriesTypedActionExpectation() async throws {
         let expectation = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            after: ElementPredicate(identifier: "counter", value: "5"), property: .value
+            element: ElementPredicate(identifier: "counter"),
+            change: .value(after: "5")
         ))))
         let sourceStep = HeistStep.action(try ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(identifier: .exact(.literal("counter"))))),
@@ -2852,8 +2853,9 @@ final class TheFenceHandlerTests: XCTestCase {
                 "type": .string("elements"),
                 "assertions": .array([.object([
                     "type": .string("updated"),
-                    "before": targetValue(identifier: "slider", value: "0"),
-                    "after": targetValue(identifier: "slider", value: "50"),
+                    "element": targetValue(identifier: "slider"),
+                    "before": .string("0"),
+                    "after": .string("50"),
                     "property": .string("value"),
                 ])]),
             ])]),
@@ -2861,9 +2863,8 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(
             result,
             .change(.elements(.updatedElement(ElementUpdatePredicate(
-                before: ElementPredicate(identifier: "slider", value: "0"),
-                after: ElementPredicate(identifier: "slider", value: "50"),
-                property: .value
+                element: ElementPredicate(identifier: "slider"),
+                change: .value(before: "0", after: "50")
             ))))
         )
     }

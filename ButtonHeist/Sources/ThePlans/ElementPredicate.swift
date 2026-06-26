@@ -117,7 +117,18 @@ extension StringMatch: Codable where Value: Codable {
         case mode, value
     }
 
+    private enum ExactReferenceCodingKeys: String, CodingKey {
+        case ref
+    }
+
     public init(from decoder: Decoder) throws {
+        if Value.self == StringExpr.self,
+           let referenceContainer = try? decoder.container(keyedBy: ExactReferenceCodingKeys.self),
+           referenceContainer.contains(.ref) {
+            self = .exact(try Value(from: decoder))
+            return
+        }
+
         if let exactValue = try? decoder.singleValueContainer().decode(Value.self) {
             self = .exact(exactValue)
             return

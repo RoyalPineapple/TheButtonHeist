@@ -83,13 +83,13 @@ func actionUntilBuildsRepeatUntilWithDefaultProgressExpectation() throws {
 
 @Test
 func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
-    let heist = try HeistPlan {
-        TypeText("Bruschetta", into: .identifier("Search"))
-            .expect(.change(.elements(.updated(
-                after: .element(identifier: "Search", value: "Bruschetta"),
-                property: .value
-            ))))
-    }
+        let heist = try HeistPlan {
+            TypeText("Bruschetta", into: .identifier("Search"))
+            .expect(.change(.updated(
+                element: .identifier("Search"),
+                .value(after: "Bruschetta")
+            )))
+        }
 
     #expect(try heist == HeistPlan(body: [
         .action(try ActionStep(
@@ -98,8 +98,8 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
                 target: .predicate(.identifier("Search"))
             ),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                after: .element(identifier: "Search", value: "Bruschetta"),
-                property: .value
+                element: .identifier("Search"),
+                change: .value(after: "Bruschetta")
             )))), timeout: 1)
         )),
     ]))

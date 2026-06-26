@@ -276,9 +276,8 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(valueChanges.contains(PropertyChange(property: .value, old: "50", new: "100")))
 
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            before: .element(label: "Save", value: "0"),
-            after: .element(label: "Save", value: "50"),
-            property: .value,
+            element: .label("Save"),
+            change: .value(before: "0", after: "50")
         ))))
         let result = predicate.evaluate(
             currentElements: final.projectedElements,
@@ -305,9 +304,8 @@ final class AccessibilityTraceTests: XCTestCase {
 
         let predicate = AccessibilityPredicate.change(
             .elements(.updatedElement(ElementUpdatePredicate(
-                before: .element(label: "Save", value: "0"),
-                after: .element(label: "Save", value: "50"),
-                property: .value,
+                element: .label("Save"),
+                change: .value(before: "0", after: "50")
             ))),
             .screen(.exists(ElementPredicate(label: "Settings")))
         )

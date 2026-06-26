@@ -110,23 +110,22 @@ import ThePlans
 @Test func `inline plan source property update expectations compile`() throws {
     let scoped = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))
-        .expect(.change(.elements(.updated(after: .element(identifier: "Search", value: "Bruschetta"), property: .value))))
+        .expect(.change(.elements(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))))
     """#))
     let unscoped = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.change(.elements(.updated(after: .value("3"), property: .value))))
+        .expect(.change(.elements(.updated(.value(after: "3")))))
     """#))
-    let fromTo = try HeistPlanSourceCompiler().compile(root(#"""
+    let beforeAfter = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
         .expect(.change(.elements(.updated(
-            before: .element(identifier: "Quantity", value: "2"),
-            after: .element(identifier: "Quantity", value: "3"),
-            property: .value
+            element: .identifier("Quantity"),
+            .value(before: "2", after: "3")
         ))))
     """#))
-    let broadFromTo = try HeistPlanSourceCompiler().compile(root(#"""
+    let broadBeforeAfter = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.change(.elements(.updated(before: .value(.prefix("cart:")), after: .value(.contains("items")), property: .value))))
+        .expect(.change(.elements(.updated(.value(before: .prefix("cart:"), after: .contains("items"))))))
     """#))
 
     let expectedScoped = try HeistPlan(body: [
@@ -136,8 +135,8 @@ import ThePlans
                 target: .predicate(.identifier("Search"))
             ),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                after: .element(identifier: "Search", value: "Bruschetta"),
-                property: .value
+                element: .identifier("Search"),
+                change: .value(after: "Bruschetta")
             )))), timeout: 1)
         )),
     ])
@@ -145,36 +144,121 @@ import ThePlans
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                after: .value("3"),
-                property: .value
+                change: .value(after: "3")
             )))), timeout: 1)
         )),
     ])
-    let expectedFromTo = try HeistPlan(body: [
+    let expectedBeforeAfter = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                before: .element(identifier: "Quantity", value: "2"),
-                after: .element(identifier: "Quantity", value: "3"),
-                property: .value
+                element: .identifier("Quantity"),
+                change: .value(before: "2", after: "3")
             )))), timeout: 1)
         )),
     ])
-    let expectedBroadFromTo = try HeistPlan(body: [
+    let expectedBroadBeforeAfter = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                before: .value(.prefix("cart:")),
-                after: .value(.contains("items")),
-                property: .value
+                change: .value(before: .prefix("cart:"), after: .contains("items"))
             )))), timeout: 1)
         )),
     ])
 
     #expect(scoped == expectedScoped)
     #expect(unscoped == expectedUnscoped)
-    #expect(fromTo == expectedFromTo)
-    #expect(broadFromTo == expectedBroadFromTo)
+    #expect(beforeAfter == expectedBeforeAfter)
+    #expect(broadBeforeAfter == expectedBroadBeforeAfter)
+}
+
+@Test func `inline plan source accepts direct delta change predicates`() throws {
+    let appeared = try HeistPlanSourceCompiler().compile(root(#"""
+    Activate(.label("Add")).expect(.change(.appeared(.label("Back"))))
+    """#))
+    let disappeared = try HeistPlanSourceCompiler().compile(root(#"""
+    Activate(.label("Clear")).expect(.change(.disappeared(.identifier("row-1"))))
+    """#))
+    let updatedElementOnly = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("milk", into: .identifier("Search"))
+        .expect(.change(.updated(element: .identifier("Search"))))
+    """#))
+    let updatedPropertyOnly = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("milk", into: .identifier("Search"))
+        .expect(.change(.updated(.value())))
+    """#))
+    let updatedBeforeAfterOnly = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("milk", into: .identifier("Search"))
+        .expect(.change(.updated(.value(before: "", after: "milk"))))
+    """#))
+    let updatedAllFields = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("milk", into: .identifier("Search"))
+        .expect(.change(.updated(element: .identifier("Search"), .value(before: "", after: "milk"))))
+    """#))
+    let updatedAny = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("milk", into: .identifier("Search"))
+        .expect(.change(.updated()))
+    """#))
+
+    let expectedAppeared = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Add"))),
+            expectation: WaitStep(predicate: .change(.elements(.appearedElement(.label("Back")))), timeout: 1)
+        )),
+    ])
+    let expectedDisappeared = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Clear"))),
+            expectation: WaitStep(predicate: .change(.elements(.disappearedElement(.identifier("row-1")))), timeout: 1)
+        )),
+    ])
+    let expectedUpdatedElementOnly = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                element: .identifier("Search")
+            )))), timeout: 1)
+        )),
+    ])
+    let expectedUpdatedPropertyOnly = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                change: .value()
+            )))), timeout: 1)
+        )),
+    ])
+    let expectedUpdatedBeforeAfterOnly = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                change: .value(before: "", after: "milk")
+            )))), timeout: 1)
+        )),
+    ])
+    let expectedUpdatedAllFields = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                element: .identifier("Search"),
+                change: .value(before: "", after: "milk")
+            )))), timeout: 1)
+        )),
+    ])
+    let expectedUpdatedAny = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(text: "milk", target: .predicate(.identifier("Search"))),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr()))), timeout: 1)
+        )),
+    ])
+
+    #expect(appeared == expectedAppeared)
+    #expect(disappeared == expectedDisappeared)
+    #expect(updatedElementOnly == expectedUpdatedElementOnly)
+    #expect(updatedPropertyOnly == expectedUpdatedPropertyOnly)
+    #expect(updatedBeforeAfterOnly == expectedUpdatedBeforeAfterOnly)
+    #expect(updatedAllFields == expectedUpdatedAllFields)
+    #expect(updatedAny == expectedUpdatedAny)
 }
 
 @Test func `inline plan source unicode string escapes preserve following characters`() throws {
@@ -903,12 +987,8 @@ import ThePlans
             "expected a timeout duration such as .seconds(1)"
         ),
         (
-            root(#"WaitFor(.change(.elements(.updated(.label("Search"), property: .value))))"#),
-            "element update predicate accepts before, after, and property"
-        ),
-        (
-            root(#"WaitFor(.change(.elements(.updated(property: .value, to: "3"))))"#),
-            "element update predicate accepts before, after, and property"
+            root(#"WaitFor(.change(.updated(.title())))"#),
+            "unsupported element update property '.title'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors"
         ),
     ]
 

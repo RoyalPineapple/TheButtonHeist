@@ -96,7 +96,7 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
         case "elements":
             return .change(.elements())
         case "updated":
-            return .change(.elements(.updatedElement(ElementUpdatePredicate(after: try element.parsedMatcher()))))
+            return .change(.elements(.updatedElement(ElementUpdatePredicate(element: try element.parsedMatcher()))))
         default:
             throw ValidationError(
                 "Unknown --change value \"\(change)\". Valid: screen, elements, updated"

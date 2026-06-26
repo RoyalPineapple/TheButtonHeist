@@ -128,12 +128,10 @@ extension HeistPlanRuntimeSafetyValidator {
         case .appearedElement(let element), .disappearedElement(let element):
             validateElementPredicate(element, path: "\(path).element")
         case .updatedElement(let update):
-            if let before = update.before {
-                validateElementPredicate(before, path: "\(path).before")
+            if let element = update.element {
+                validateElementPredicate(element, path: "\(path).element")
             }
-            if let after = update.after {
-                validateElementPredicate(after, path: "\(path).after")
-            }
+            validatePropertyChange(update.change, path: "\(path).change")
         }
     }
 
@@ -146,12 +144,82 @@ extension HeistPlanRuntimeSafetyValidator {
         case .appearedElement(let element), .disappearedElement(let element):
             validateElementPredicate(element, path: "\(path).element", scope: scope)
         case .updatedElement(let update):
-            if let before = update.before {
-                validateElementPredicate(before, path: "\(path).before", scope: scope)
+            if let element = update.element {
+                validateElementPredicate(element, path: "\(path).element", scope: scope)
             }
-            if let after = update.after {
-                validateElementPredicate(after, path: "\(path).after", scope: scope)
-            }
+            validatePropertyChange(update.change, path: "\(path).change", scope: scope)
+        }
+    }
+
+    mutating func validatePropertyChange(
+        _ change: AnyPropertyChange?,
+        path: String
+    ) {
+        guard let change else { return }
+        switch change {
+        case .value(let change):
+            validateStringPropertyChange(change, path: path)
+        case .traits:
+            break
+        case .hint(let change):
+            validateStringPropertyChange(change, path: path)
+        case .actions(let change):
+            validateStringPropertyChange(change, path: path)
+        case .frame(let change):
+            validateStringPropertyChange(change, path: path)
+        case .activationPoint(let change):
+            validateStringPropertyChange(change, path: path)
+        case .customContent(let change):
+            validateStringPropertyChange(change, path: path)
+        case .rotors(let change):
+            validateStringPropertyChange(change, path: path)
+        }
+    }
+
+    mutating func validateStringPropertyChange<P: ElementPropertyKind>(
+        _ change: ElementPropertyChange<P>,
+        path: String
+    ) where P.Checker == StringMatch<String> {
+        validateString(change.before, path: "\(path).before", role: "element update before value")
+        validateString(change.after, path: "\(path).after", role: "element update after value")
+    }
+
+    mutating func validatePropertyChange(
+        _ change: AnyPropertyChangeExpr?,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        guard let change else { return }
+        switch change {
+        case .value(let change):
+            validateStringPropertyChange(change, path: path, scope: scope)
+        case .traits:
+            break
+        case .hint(let change):
+            validateStringPropertyChange(change, path: path, scope: scope)
+        case .actions(let change):
+            validateStringPropertyChange(change, path: path, scope: scope)
+        case .frame(let change):
+            validateStringPropertyChange(change, path: path, scope: scope)
+        case .activationPoint(let change):
+            validateStringPropertyChange(change, path: path, scope: scope)
+        case .customContent(let change):
+            validateStringPropertyChange(change, path: path, scope: scope)
+        case .rotors(let change):
+            validateStringPropertyChange(change, path: path, scope: scope)
+        }
+    }
+
+    mutating func validateStringPropertyChange<P: ElementPropertyKind>(
+        _ change: ElementPropertyChangeExpr<P>,
+        path: String,
+        scope: HeistReferenceScope
+    ) where P.ExprChecker == StringMatch<StringExpr> {
+        if let before = change.before {
+            validateString(before, path: "\(path).before", scope: scope)
+        }
+        if let after = change.after {
+            validateString(after, path: "\(path).after", scope: scope)
         }
     }
 
