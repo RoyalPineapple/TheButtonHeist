@@ -519,6 +519,206 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0, 0])])
     }
 
+    func testDiscoveryInterfaceEmitsDuplicateGraftedHeistIdOnce() throws {
+        let rootContainer = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let recycledCell = makeElement(
+            label: "618F3ADF",
+            traits: [.staticText],
+            frameX: 0,
+            frameY: 724,
+            frameWidth: 393,
+            frameHeight: 64
+        )
+        let screen = Screen(
+            semantic: SemanticScreen(
+                elements: [
+                    "recycled_cell": SemanticScreen.Element(
+                        heistId: "recycled_cell",
+                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
+                            origin: CGPoint(x: 0, y: 724),
+                            scrollContainer: "transactions_list"
+                        ),
+                        element: recycledCell
+                    ),
+                    "stale_recycled_cell_path": SemanticScreen.Element(
+                        heistId: "recycled_cell",
+                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
+                            origin: CGPoint(x: 0, y: 724),
+                            scrollContainer: "transactions_list"
+                        ),
+                        element: recycledCell
+                    ),
+                ],
+                containers: [
+                    TreePath([0]): SemanticScreen.Container(
+                        container: rootContainer,
+                        path: TreePath([0]),
+                        containerName: "transactions_list",
+                        contentFrame: nil
+                    ),
+                ]
+            ),
+            liveCapture: LiveCapture(
+                hierarchy: [.container(rootContainer, children: [])],
+                containerNames: [rootContainer: "transactions_list"],
+                containerNamesByPath: [TreePath([0]): "transactions_list"],
+                heistIdByElement: [:],
+                elementRefs: [:],
+                firstResponderHeistId: nil,
+                scrollableContainerViews: [:]
+            )
+        )
+
+        let interface = WireConversion.toDiscoveryInterface(from: screen)
+
+        guard case .container(_, let children) = interface.tree.first else {
+            return XCTFail("Expected root scroll container")
+        }
+        XCTAssertEqual(children.compactMap(\.testLabel), ["618F3ADF"])
+        XCTAssertEqual(interface.projectedElements.filter { $0.label == "618F3ADF" }.count, 1)
+        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0])])
+        XCTAssertNil(interface.annotations.elementByPath[TreePath([0, 1])])
+    }
+
+    func testDiscoveryInterfacePreservesDistinctDisambiguatedHeistIds() throws {
+        let rootContainer = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let firstCell = makeElement(
+            label: "Repeat",
+            traits: [.button],
+            frameX: 0,
+            frameY: 724,
+            frameWidth: 393,
+            frameHeight: 64
+        )
+        let secondCell = makeElement(
+            label: "Repeat",
+            traits: [.button],
+            frameX: 0,
+            frameY: 788,
+            frameWidth: 393,
+            frameHeight: 64
+        )
+        let screen = Screen(
+            semantic: SemanticScreen(
+                elements: [
+                    "repeat_button": SemanticScreen.Element(
+                        heistId: "repeat_button",
+                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
+                            origin: CGPoint(x: 0, y: 724),
+                            scrollContainer: "transactions_list"
+                        ),
+                        element: firstCell
+                    ),
+                    "repeat_button_1": SemanticScreen.Element(
+                        heistId: "repeat_button_1",
+                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
+                            origin: CGPoint(x: 0, y: 788),
+                            scrollContainer: "transactions_list"
+                        ),
+                        element: secondCell
+                    ),
+                ],
+                containers: [
+                    TreePath([0]): SemanticScreen.Container(
+                        container: rootContainer,
+                        path: TreePath([0]),
+                        containerName: "transactions_list",
+                        contentFrame: nil
+                    ),
+                ]
+            ),
+            liveCapture: LiveCapture(
+                hierarchy: [.container(rootContainer, children: [])],
+                containerNames: [rootContainer: "transactions_list"],
+                containerNamesByPath: [TreePath([0]): "transactions_list"],
+                heistIdByElement: [:],
+                elementRefs: [:],
+                firstResponderHeistId: nil,
+                scrollableContainerViews: [:]
+            )
+        )
+
+        let interface = WireConversion.toDiscoveryInterface(from: screen)
+
+        guard case .container(_, let children) = interface.tree.first else {
+            return XCTFail("Expected root scroll container")
+        }
+        XCTAssertEqual(children.compactMap(\.testLabel), ["Repeat", "Repeat"])
+        XCTAssertEqual(interface.projectedElements.filter { $0.label == "Repeat" }.count, 2)
+        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0])])
+        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 1])])
+    }
+
+    func testDiscoveryInterfaceEmitsDuplicateGraftedContainerNameOnce() throws {
+        let rootContainer = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
+        )
+        let recycledContainer = AccessibilityContainer(
+            type: .semanticGroup(label: "Saved carts", value: nil, identifier: nil),
+            frame: AccessibilityRect(CGRect(x: 0, y: 640, width: 320, height: 120))
+        )
+        let screen = Screen(
+            semantic: SemanticScreen(
+                elements: [:],
+                containers: [
+                    TreePath([0]): SemanticScreen.Container(
+                        container: rootContainer,
+                        path: TreePath([0]),
+                        containerName: "transactions_list",
+                        contentFrame: nil
+                    ),
+                    TreePath([0, 0]): SemanticScreen.Container(
+                        container: recycledContainer,
+                        path: TreePath([0, 0]),
+                        containerName: "saved_carts_group",
+                        contentFrame: nil,
+                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
+                            origin: CGPoint(x: 0, y: 640),
+                            scrollContainer: "transactions_list"
+                        )
+                    ),
+                    TreePath([0, 1]): SemanticScreen.Container(
+                        container: recycledContainer,
+                        path: TreePath([0, 1]),
+                        containerName: "saved_carts_group",
+                        contentFrame: nil,
+                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
+                            origin: CGPoint(x: 0, y: 640),
+                            scrollContainer: "transactions_list"
+                        )
+                    ),
+                ]
+            ),
+            liveCapture: LiveCapture(
+                hierarchy: [.container(rootContainer, children: [])],
+                containerNames: [rootContainer: "transactions_list"],
+                containerNamesByPath: [TreePath([0]): "transactions_list"],
+                heistIdByElement: [:],
+                elementRefs: [:],
+                firstResponderHeistId: nil,
+                scrollableContainerViews: [:]
+            )
+        )
+
+        let interface = WireConversion.toDiscoveryInterface(from: screen)
+
+        guard case .container(_, let children) = interface.tree.first else {
+            return XCTFail("Expected root scroll container")
+        }
+        XCTAssertEqual(children.count, 1)
+        XCTAssertEqual(
+            interface.annotations.containers.filter { $0.containerName == "saved_carts_group" }.count,
+            1
+        )
+    }
+
     // MARK: - Delta: Identical Snapshots
 
     func testIdenticalSnapshotsReturnNoChange() {

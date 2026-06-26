@@ -115,6 +115,8 @@ extension TheStash {
         )
         let liveIds = screen.liveCapture.heistIds
         let liveContainerNames = Set(containerAnnotations.compactMap(\.containerName))
+        var emittedHeistIds = liveIds
+        var emittedContainerNames = liveContainerNames
         var nextTraversalIndex = (screen.liveCapture.hierarchy.pathIndexedElements.map(\.traversalIndex).max() ?? -1) + 1
 
         var childrenByContainerName = DiscoveryChildren(
@@ -129,9 +131,10 @@ extension TheStash {
             path: TreePath
         ) {
             for child in childrenByContainerName.removeChildren(parent: containerName) {
-                let childPath = path.appending(children.count)
                 switch child.kind {
                 case .element(let entry):
+                    guard emittedHeistIds.insert(entry.heistId).inserted else { continue }
+                    let childPath = path.appending(children.count)
                     children.append(.element(entry.element, traversalIndex: nextTraversalIndex))
                     nextTraversalIndex += 1
                     elementAnnotations.append(InterfaceElementAnnotation(
@@ -140,6 +143,11 @@ extension TheStash {
                         contentSpaceOrigin: entry.contentSpaceOrigin.map(AccessibilityPoint.init)
                     ))
                 case .container(let entry):
+                    if let containerName = entry.containerName,
+                       !emittedContainerNames.insert(containerName).inserted {
+                        continue
+                    }
+                    let childPath = path.appending(children.count)
                     var nestedChildren: [AccessibilityHierarchy] = []
                     if let nestedContainerName = entry.containerName {
                         appendDiscoveryChildren(
