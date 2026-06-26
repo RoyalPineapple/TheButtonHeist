@@ -287,6 +287,7 @@ symbol	TheScore.symbols.json	s:8TheScore15ConnectionScopeO8rawValueACSgSS_tcfc	s
 symbol	TheScore.symbols.json	s:8TheScore15ConnectionScopeO9simulatoryA2CmF	swift.enum.case	public	ConnectionScope.simulator	ConnectionScope.simulator	case simulator
 symbol	TheScore.symbols.json	s:8TheScore15HeistStepIntentO	swift.enum	public	HeistStepIntent	HeistStepIntent	enum HeistStepIntent
 symbol	TheScore.symbols.json	s:8TheScore15HeistStepIntentO11conditionalyA2CmF	swift.enum.case	public	HeistStepIntent.conditional	HeistStepIntent.conditional	case conditional
+symbol	TheScore.symbols.json	s:8TheScore15HeistStepIntentO11repeatUntilyACSS_SdtcACmF	swift.enum.case	public	HeistStepIntent.repeatUntil(predicate:timeout:)	HeistStepIntent.repeatUntil(predicate:timeout:)	case repeatUntil(predicate: String, timeout: Double)
 symbol	TheScore.symbols.json	s:8TheScore15HeistStepIntentO13forEachStringyAC0A5Plans0C13ReferenceNameV_SitcACmF	swift.enum.case	public	HeistStepIntent.forEachString(parameter:count:)	HeistStepIntent.forEachString(parameter:count:)	case forEachString(parameter: HeistReferenceName, count: Int)
 symbol	TheScore.symbols.json	s:8TheScore15HeistStepIntentO14forEachElementyAC0A5Plans0C13ReferenceNameV_SSSitcACmF	swift.enum.case	public	HeistStepIntent.forEachElement(parameter:matching:limit:)	HeistStepIntent.forEachElement(parameter:matching:limit:)	case forEachElement(parameter: HeistReferenceName, matching: String, limit: Int)
 symbol	TheScore.symbols.json	s:8TheScore15HeistStepIntentO4failyACSS_tcACmF	swift.enum.case	public	HeistStepIntent.fail(message:)	HeistStepIntent.fail(message:)	case fail(message: String)
@@ -395,6 +396,7 @@ symbol	TheScore.symbols.json	s:8TheScore17HeistReceiptCodecO6decode_6formatAA0C1
 symbol	TheScore.symbols.json	s:8TheScore17HeistReceiptCodecO6encode_6format10Foundation4DataVAA0C15ExecutionResultV_AA0cD6FormatOtKFZ	swift.type.method	public	encode(_:format:)	HeistReceiptCodec.encode(_:format:)	static func encode(_ receipt: HeistExecutionResult, format: HeistReceiptFormat = .json) throws -> Data
 symbol	TheScore.symbols.json	s:8TheScore17HeistStepEvidenceO	swift.enum	public	HeistStepEvidence	HeistStepEvidence	enum HeistStepEvidence
 symbol	TheScore.symbols.json	s:8TheScore17HeistStepEvidenceO10invocationyAcA0c10InvocationE0VcACmF	swift.enum.case	public	HeistStepEvidence.invocation(_:)	HeistStepEvidence.invocation(_:)	case invocation(HeistInvocationEvidence)
+symbol	TheScore.symbols.json	s:8TheScore17HeistStepEvidenceO11repeatUntilyAcA0c6RepeatgE0VcACmF	swift.enum.case	public	HeistStepEvidence.repeatUntil(_:)	HeistStepEvidence.repeatUntil(_:)	case repeatUntil(HeistRepeatUntilEvidence)
 symbol	TheScore.symbols.json	s:8TheScore17HeistStepEvidenceO13caseSelectionyAcA0c4CasegE0VcACmF	swift.enum.case	public	HeistStepEvidence.caseSelection(_:)	HeistStepEvidence.caseSelection(_:)	case caseSelection(HeistCaseSelectionEvidence)
 symbol	TheScore.symbols.json	s:8TheScore17HeistStepEvidenceO13forEachStringyAcA0c3ForghE0VcACmF	swift.enum.case	public	HeistStepEvidence.forEachString(_:)	HeistStepEvidence.forEachString(_:)	case forEachString(HeistForEachStringEvidence)
 symbol	TheScore.symbols.json	s:8TheScore17HeistStepEvidenceO14forEachElementyAcA0c3ForghE0VcACmF	swift.enum.case	public	HeistStepEvidence.forEachElement(_:)	HeistStepEvidence.forEachElement(_:)	case forEachElement(HeistForEachElementEvidence)
@@ -674,9 +676,11 @@ symbol	TheScore.symbols.json	s:8TheScore21ServerWireMessageTypeO8rawValueACSgSS_
 symbol	TheScore.symbols.json	s:8TheScore21ServerWireMessageTypeO9interfaceyA2CmF	swift.enum.case	public	ServerWireMessageType.interface	ServerWireMessageType.interface	case interface
 symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO	swift.enum	public	HeistExecutionStepKind	HeistExecutionStepKind	enum HeistExecutionStepKind
 symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO11conditionalyA2CmF	swift.enum.case	public	HeistExecutionStepKind.conditional	HeistExecutionStepKind.conditional	case conditional
+symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO11repeatUntilyA2CmF	swift.enum.case	public	HeistExecutionStepKind.repeatUntil	HeistExecutionStepKind.repeatUntil	case repeatUntil
 symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO13forEachStringyA2CmF	swift.enum.case	public	HeistExecutionStepKind.forEachString	HeistExecutionStepKind.forEachString	case forEachString
 symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO14forEachElementyA2CmF	swift.enum.case	public	HeistExecutionStepKind.forEachElement	HeistExecutionStepKind.forEachElement	case forEachElement
 symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO16forEachIterationyA2CmF	swift.enum.case	public	HeistExecutionStepKind.forEachIteration	HeistExecutionStepKind.forEachIteration	case forEachIteration
+symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO20repeatUntilIterationyA2CmF	swift.enum.case	public	HeistExecutionStepKind.repeatUntilIteration	HeistExecutionStepKind.repeatUntilIteration	case repeatUntilIteration
 symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO4failyA2CmF	swift.enum.case	public	HeistExecutionStepKind.fail	HeistExecutionStepKind.fail	case fail
 symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO4waityA2CmF	swift.enum.case	public	HeistExecutionStepKind.wait	HeistExecutionStepKind.wait	case wait
 symbol	TheScore.symbols.json	s:8TheScore22HeistExecutionStepKindO4warnyA2CmF	swift.enum.case	public	HeistExecutionStepKind.warn	HeistExecutionStepKind.warn	case warn
@@ -788,6 +792,7 @@ symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV17screenshotP
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV18abortedAtChildPathSSSgvp	swift.property	public	abortedAtChildPath	HeistExecutionStepResult.abortedAtChildPath	let abortedAtChildPath: String?
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV18invocationEvidenceAA0c10InvocationH0VSgvp	swift.property	public	invocationEvidence	HeistExecutionStepResult.invocationEvidence	var invocationEvidence: HeistInvocationEvidence? { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV19expectationsCheckedSivp	swift.property	public	expectationsChecked	HeistExecutionStepResult.expectationsChecked	var expectationsChecked: Int { get }
+symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV19repeatUntilEvidenceAA0c6RepeathI0VSgvp	swift.property	public	repeatUntilEvidence	HeistExecutionStepResult.repeatUntilEvidence	var repeatUntilEvidence: HeistRepeatUntilEvidence? { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV20reportFailureMessageSSSgvp	swift.property	public	reportFailureMessage	HeistExecutionStepResult.reportFailureMessage	var reportFailureMessage: String? { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV21caseSelectionEvidenceAA0c4CasehI0VSgvp	swift.property	public	caseSelectionEvidence	HeistExecutionStepResult.caseSelectionEvidence	var caseSelectionEvidence: HeistCaseSelectionEvidence? { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV21forEachStringEvidenceAA0c3ForhiJ0VSgvp	swift.property	public	forEachStringEvidence	HeistExecutionStepResult.forEachStringEvidence	var forEachStringEvidence: HeistForEachStringEvidence? { get }
@@ -807,6 +812,17 @@ symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepStatusO6failedyA2CmF
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepStatusO6passedyA2CmF	swift.enum.case	public	HeistExecutionStepStatus.passed	HeistExecutionStepStatus.passed	case passed
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepStatusO7skippedyA2CmF	swift.enum.case	public	HeistExecutionStepStatus.skipped	HeistExecutionStepStatus.skipped	case skipped
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepStatusO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	HeistExecutionStepStatus.init(rawValue:)	init?(rawValue: String)
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV	swift.struct	public	HeistRepeatUntilEvidence	HeistRepeatUntilEvidence	struct HeistRepeatUntilEvidence
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV11expectationAA17ExpectationResultVvp	swift.property	public	expectation	HeistRepeatUntilEvidence.expectation	let expectation: ExpectationResult
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV12actionResultAA06ActionH0VSgvp	swift.property	public	actionResult	HeistRepeatUntilEvidence.actionResult	let actionResult: ActionResult?
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV13failureReasonSSSgvp	swift.property	public	failureReason	HeistRepeatUntilEvidence.failureReason	let failureReason: String?
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV14iterationCountSivp	swift.property	public	iterationCount	HeistRepeatUntilEvidence.iterationCount	let iterationCount: Int
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV16iterationOrdinalSiSgvp	swift.property	public	iterationOrdinal	HeistRepeatUntilEvidence.iterationOrdinal	let iterationOrdinal: Int?
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV19lastObservedSummarySSSgvp	swift.property	public	lastObservedSummary	HeistRepeatUntilEvidence.lastObservedSummary	let lastObservedSummary: String?
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistRepeatUntilEvidence.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV7timeoutSdvp	swift.property	public	timeout	HeistRepeatUntilEvidence.timeout	let timeout: Double
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV9predicate0A5Plans22AccessibilityPredicateOvp	swift.property	public	predicate	HeistRepeatUntilEvidence.predicate	let predicate: AccessibilityPredicate
+symbol	TheScore.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV9predicate7timeout14iterationCount0I7Ordinal11expectation12actionResult19lastObservedSummary13failureReasonAC0A5Plans22AccessibilityPredicateO_SdS2iSgAA011ExpectationN0VAA06ActionN0VSgSSSgAUtcfc	swift.init	public	init(predicate:timeout:iterationCount:iterationOrdinal:expectation:actionResult:lastObservedSummary:failureReason:)	HeistRepeatUntilEvidence.init(predicate:timeout:iterationCount:iterationOrdinal:expectation:actionResult:lastObservedSummary:failureReason:)	init(predicate: AccessibilityPredicate, timeout: Double, iterationCount: Int, iterationOrdinal: Int? = nil, expectation: ExpectationResult, actionResult: ActionResult? = nil, lastObservedSummary: String? = nil, failureReason: String? = nil)
 symbol	TheScore.symbols.json	s:8TheScore24InterfaceDiscoveryStatusO	swift.enum	public	InterfaceDiscoveryStatus	InterfaceDiscoveryStatus	enum InterfaceDiscoveryStatus
 symbol	TheScore.symbols.json	s:8TheScore24InterfaceDiscoveryStatusO7limitedyA2CmF	swift.enum.case	public	InterfaceDiscoveryStatus.limited	InterfaceDiscoveryStatus.limited	case limited
 symbol	TheScore.symbols.json	s:8TheScore24InterfaceDiscoveryStatusO8completeyA2CmF	swift.enum.case	public	InterfaceDiscoveryStatus.complete	InterfaceDiscoveryStatus.complete	case complete
@@ -1336,6 +1352,10 @@ relationship	conformsTo	s:8TheScore24HeistExecutionStepStatusO	s:SQ	HeistExecuti
 relationship	conformsTo	s:8TheScore24HeistExecutionStepStatusO	s:SY	HeistExecutionStepStatus	Swift.RawRepresentable
 relationship	conformsTo	s:8TheScore24HeistExecutionStepStatusO	s:Se	HeistExecutionStepStatus	Swift.Decodable
 relationship	conformsTo	s:8TheScore24HeistExecutionStepStatusO	s:s8SendableP	HeistExecutionStepStatus	Swift.Sendable
+relationship	conformsTo	s:8TheScore24HeistRepeatUntilEvidenceV	s:SE	HeistRepeatUntilEvidence	Swift.Encodable
+relationship	conformsTo	s:8TheScore24HeistRepeatUntilEvidenceV	s:SQ	HeistRepeatUntilEvidence	Swift.Equatable
+relationship	conformsTo	s:8TheScore24HeistRepeatUntilEvidenceV	s:Se	HeistRepeatUntilEvidence	Swift.Decodable
+relationship	conformsTo	s:8TheScore24HeistRepeatUntilEvidenceV	s:s8SendableP	HeistRepeatUntilEvidence	Swift.Sendable
 relationship	conformsTo	s:8TheScore24InterfaceDiscoveryStatusO	s:SE	InterfaceDiscoveryStatus	Swift.Encodable
 relationship	conformsTo	s:8TheScore24InterfaceDiscoveryStatusO	s:SH	InterfaceDiscoveryStatus	Swift.Hashable
 relationship	conformsTo	s:8TheScore24InterfaceDiscoveryStatusO	s:SQ	InterfaceDiscoveryStatus	Swift.Equatable

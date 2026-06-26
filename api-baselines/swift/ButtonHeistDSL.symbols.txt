@@ -140,6 +140,14 @@ symbol	ButtonHeistDSL.symbols.json	s:8ThePlans10WaitTargetV6encode2toys7Encoder_
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans10WaitTargetV7timeoutSdSgvp	swift.property	public	timeout	WaitTarget.timeout	let timeout: Double?
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans10WaitTargetV9predicate7timeoutAcA22AccessibilityPredicateO_SdSgtcfc	swift.init	public	init(predicate:timeout:)	WaitTarget.init(predicate:timeout:)	init(predicate: AccessibilityPredicate, timeout: Double? = nil)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans10WaitTargetV9predicateAA22AccessibilityPredicateOvp	swift.property	public	predicate	WaitTarget.predicate	let predicate: AccessibilityPredicate
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RepeatUntilV	swift.struct	public	RepeatUntil	RepeatUntil	struct RepeatUntil
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RepeatUntilV10heistStepsSayAA9HeistStepOGvp	swift.property	public	heistSteps	RepeatUntil.heistSteps	let heistSteps: [HeistStep]
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RepeatUntilV16heistDefinitionsSayAA9HeistPlanVGvp	swift.property	public	heistDefinitions	RepeatUntil.heistDefinitions	let heistDefinitions: [HeistPlan]
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RepeatUntilV21heistBuildDiagnosticsSaySSGvp	swift.property	public	heistBuildDiagnostics	RepeatUntil.heistBuildDiagnostics	let heistBuildDiagnostics: [String]
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RepeatUntilV4elseyACxyXEAA12HeistContentRzlF	swift.method	public	else(_:)	RepeatUntil.else(_:)	func `else`(@HeistBuilder _ content: () -> some HeistContent) -> RepeatUntil
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RepeatUntilV_7timeout_AcA22AccessibilityPredicateO_SdxyXEtcAA12HeistContentRzlufc	swift.init	public	init(_:timeout:_:)	RepeatUntil.init(_:timeout:_:)	init(_ predicate: AccessibilityPredicate, timeout: Double, @HeistBuilder _ content: () -> some HeistContent)
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RepeatUntilV_7timeout_AcA24ElementPredicateTemplateV_SdxyXEtcAA12HeistContentRzlufc	swift.init	public	init(_:timeout:_:)	RepeatUntil.init(_:timeout:_:)	init(_ predicate: ElementPredicateTemplate, timeout: Double, @HeistBuilder _ content: () -> some HeistContent)
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RepeatUntilV_7timeout_AcA26AccessibilityPredicateExprO_SdxyXEtcAA12HeistContentRzlufc	swift.init	public	init(_:timeout:_:)	RepeatUntil.init(_:timeout:_:)	init(_ predicate: AccessibilityPredicateExpr, timeout: Double, @HeistBuilder _ content: () -> some HeistContent)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RotorTargetV	swift.struct	public	RotorTarget	RotorTarget	struct RotorTarget
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RotorTargetV07elementD09selection9directionAcA07ElementD0O_AA0C9SelectionOAA0C9DirectionOtcfc	swift.init	public	init(elementTarget:selection:direction:)	RotorTarget.init(elementTarget:selection:direction:)	init(elementTarget: ElementTarget, selection: RotorSelection = .automatic, direction: RotorDirection = .next)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans11RotorTargetV07elementD0AA07ElementD0Ovp	swift.property	public	elementTarget	RotorTarget.elementTarget	let elementTarget: ElementTarget
@@ -354,6 +362,7 @@ symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14HeistPlanErrorO19emptyPredicateC
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14HeistPlanErrorO19invalidForEachLimityACSicACmF	swift.enum.case	public	HeistPlanError.invalidForEachLimit(_:)	HeistPlanError.invalidForEachLimit(_:)	case invalidForEachLimit(Int)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14HeistPlanErrorO21emptyForEachParameteryA2CmF	swift.enum.case	public	HeistPlanError.emptyForEachParameter	HeistPlanError.emptyForEachParameter	case emptyForEachParameter
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14HeistPlanErrorO21emptyForEachPredicateyA2CmF	swift.enum.case	public	HeistPlanError.emptyForEachPredicate	HeistPlanError.emptyForEachPredicate	case emptyForEachPredicate
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14HeistPlanErrorO21emptyRepeatUntilStepsyA2CmF	swift.enum.case	public	HeistPlanError.emptyRepeatUntilSteps	HeistPlanError.emptyRepeatUntilSteps	case emptyRepeatUntilSteps
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14HeistPlanErrorO22emptyExpectationWaiveryA2CmF	swift.enum.case	public	HeistPlanError.emptyExpectationWaiver	HeistPlanError.emptyExpectationWaiver	case emptyExpectationWaiver
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14HeistPlanErrorO23invalidForEachParameteryACSScACmF	swift.enum.case	public	HeistPlanError.invalidForEachParameter(_:)	HeistPlanError.invalidForEachParameter(_:)	case invalidForEachParameter(String)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans14HeistPlanErrorO24nestedForEachUnsupportedyA2CmF	swift.enum.case	public	HeistPlanError.nestedForEachUnsupported	HeistPlanError.nestedForEachUnsupported	case nestedForEachUnsupported
@@ -438,6 +447,16 @@ symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15LongPressTargetV9selectionAA21Ge
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15PredicateBranchO	swift.enum	public	PredicateBranch	PredicateBranch	enum PredicateBranch
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15PredicateBranchO4caseyAcA0C4CaseV_SayAA9HeistPlanVGSaySSGtcACmF	swift.enum.case	public	PredicateBranch.case(_:definitions:diagnostics:)	PredicateBranch.case(_:definitions:diagnostics:)	case `case`(PredicateCase, definitions: [HeistPlan], diagnostics: [String])
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15PredicateBranchO4elseyACSayAA9HeistStepOG_SayAA0F4PlanVGSaySSGtcACmF	swift.enum.case	public	PredicateBranch.else(_:definitions:diagnostics:)	PredicateBranch.else(_:definitions:diagnostics:)	case `else`([HeistStep], definitions: [HeistPlan], diagnostics: [String])
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV	swift.struct	public	RepeatUntilStep	RepeatUntilStep	struct RepeatUntilStep
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV11descriptionSSvp	swift.property	public	description	RepeatUntilStep.description	var description: String { get }
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV4bodySayAA05HeistE0OGvp	swift.property	public	body	RepeatUntilStep.body	let body: [HeistStep]
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	RepeatUntilStep.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV7resolve2inAA08ResolvedcdE0VAA25HeistExecutionEnvironmentV_tKF	swift.method	public	resolve(in:)	RepeatUntilStep.resolve(in:)	func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedRepeatUntilStep
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV7timeoutSdvp	swift.property	public	timeout	RepeatUntilStep.timeout	let timeout: Double
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV8elseBodySayAA05HeistE0OGSgvp	swift.property	public	elseBody	RepeatUntilStep.elseBody	let elseBody: [HeistStep]?
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV9predicate7timeout4body8elseBodyAcA22AccessibilityPredicateO_SdSayAA05HeistE0OGALSgtKcfc	swift.init	public	init(predicate:timeout:body:elseBody:)	RepeatUntilStep.init(predicate:timeout:body:elseBody:)	init(predicate: AccessibilityPredicate, timeout: Double, body: [HeistStep], elseBody: [HeistStep]? = nil) throws
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV9predicate7timeout4body8elseBodyAcA26AccessibilityPredicateExprO_SdSayAA05HeistE0OGALSgtKcfc	swift.init	public	init(predicate:timeout:body:elseBody:)	RepeatUntilStep.init(predicate:timeout:body:elseBody:)	init(predicate: AccessibilityPredicateExpr, timeout: Double, body: [HeistStep], elseBody: [HeistStep]? = nil) throws
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15RepeatUntilStepV9predicateAA26AccessibilityPredicateExprOvp	swift.property	public	predicate	RepeatUntilStep.predicate	let predicate: AccessibilityPredicateExpr
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15ScrollDirectionO	swift.enum	public	ScrollDirection	ScrollDirection	enum ScrollDirection
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15ScrollDirectionO2upyA2CmF	swift.enum.case	public	ScrollDirection.up	ScrollDirection.up	case up
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans15ScrollDirectionO4downyA2CmF	swift.enum.case	public	ScrollDirection.down	ScrollDirection.down	case down
@@ -942,6 +961,12 @@ symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO26unsupp
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23HeistPlanSourceCompilerV	swift.struct	public	HeistPlanSourceCompiler	HeistPlanSourceCompiler	struct HeistPlanSourceCompiler
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23HeistPlanSourceCompilerV7compile_10sourceNameAA0cD0VSS_SStKF	swift.method	public	compile(_:sourceName:)	HeistPlanSourceCompiler.compile(_:sourceName:)	func compile(_ source: String, sourceName: String = "inline-heist-plan") throws -> HeistPlan
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23HeistPlanSourceCompilerVACycfc	swift.init	public	init()	HeistPlanSourceCompiler.init()	init()
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV	swift.struct	public	ResolvedRepeatUntilStep	ResolvedRepeatUntilStep	struct ResolvedRepeatUntilStep
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV4bodySayAA05HeistF0OGvp	swift.property	public	body	ResolvedRepeatUntilStep.body	let body: [HeistStep]
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV7timeoutSdvp	swift.property	public	timeout	ResolvedRepeatUntilStep.timeout	let timeout: Double
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV8elseBodySayAA05HeistF0OGSgvp	swift.property	public	elseBody	ResolvedRepeatUntilStep.elseBody	let elseBody: [HeistStep]?
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV9predicate7timeout4body8elseBodyAcA22AccessibilityPredicateO_SdSayAA05HeistF0OGALSgtcfc	swift.init	public	init(predicate:timeout:body:elseBody:)	ResolvedRepeatUntilStep.init(predicate:timeout:body:elseBody:)	init(predicate: AccessibilityPredicate, timeout: Double, body: [HeistStep], elseBody: [HeistStep]? = nil)
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV9predicateAA22AccessibilityPredicateOvp	swift.property	public	predicate	ResolvedRepeatUntilStep.predicate	let predicate: AccessibilityPredicate
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans23currentHeistPlanVersionSivp	swift.var	public	currentHeistPlanVersion	currentHeistPlanVersion	let currentHeistPlanVersion: Int
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans24ElementPredicateTemplateV	swift.struct	public	ElementPredicateTemplate	ElementPredicateTemplate	struct ElementPredicateTemplate
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans24ElementPredicateTemplateV10identifieryACSSFZ	swift.type.method	public	identifier(_:)	ElementPredicateTemplate.identifier(_:)	static func identifier(_ identifier: String) -> ElementPredicateTemplate
@@ -1185,6 +1210,7 @@ symbol	ButtonHeistDSL.symbols.json	s:8ThePlans9HeistStepO	swift.enum	public	Heis
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans9HeistStepO10heistStepsSayACGvp	swift.property	public	heistSteps	HeistStep.heistSteps	var heistSteps: [HeistStep] { get }
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans9HeistStepO11conditionalyAcA011ConditionalD0VcACmF	swift.enum.case	public	HeistStep.conditional(_:)	HeistStep.conditional(_:)	case conditional(ConditionalStep)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans9HeistStepO11descriptionSSvp	swift.property	public	description	HeistStep.description	var description: String { get }
+symbol	ButtonHeistDSL.symbols.json	s:8ThePlans9HeistStepO11repeatUntilyAcA06RepeatfD0VcACmF	swift.enum.case	public	HeistStep.repeatUntil(_:)	HeistStep.repeatUntil(_:)	case repeatUntil(RepeatUntilStep)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans9HeistStepO13forEachStringyAcA03ForfgD0VcACmF	swift.enum.case	public	HeistStep.forEachString(_:)	HeistStep.forEachString(_:)	case forEachString(ForEachStringStep)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans9HeistStepO14forEachElementyAcA03ForfgD0VcACmF	swift.enum.case	public	HeistStep.forEachElement(_:)	HeistStep.forEachElement(_:)	case forEachElement(ForEachElementStep)
 symbol	ButtonHeistDSL.symbols.json	s:8ThePlans9HeistStepO4failyAcA04FailD0VcACmF	swift.enum.case	public	HeistStep.fail(_:)	HeistStep.fail(_:)	case fail(FailStep)
@@ -1275,6 +1301,7 @@ relationship	conformsTo	s:8ThePlans10WaitTargetV	s:SQ	WaitTarget	Swift.Equatable
 relationship	conformsTo	s:8ThePlans10WaitTargetV	s:Se	WaitTarget	Swift.Decodable
 relationship	conformsTo	s:8ThePlans10WaitTargetV	s:s23CustomStringConvertibleP	WaitTarget	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans10WaitTargetV	s:s8SendableP	WaitTarget	Swift.Sendable
+relationship	conformsTo	s:8ThePlans11RepeatUntilV	s:8ThePlans12HeistContentP	RepeatUntil	HeistContent
 relationship	conformsTo	s:8ThePlans11RotorTargetV	s:SE	RotorTarget	Swift.Encodable
 relationship	conformsTo	s:8ThePlans11RotorTargetV	s:SQ	RotorTarget	Swift.Equatable
 relationship	conformsTo	s:8ThePlans11RotorTargetV	s:Se	RotorTarget	Swift.Decodable
@@ -1429,6 +1456,11 @@ relationship	conformsTo	s:8ThePlans15LongPressTargetV	s:SQ	LongPressTarget	Swift
 relationship	conformsTo	s:8ThePlans15LongPressTargetV	s:Se	LongPressTarget	Swift.Decodable
 relationship	conformsTo	s:8ThePlans15LongPressTargetV	s:s23CustomStringConvertibleP	LongPressTarget	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans15LongPressTargetV	s:s8SendableP	LongPressTarget	Swift.Sendable
+relationship	conformsTo	s:8ThePlans15RepeatUntilStepV	s:SE	RepeatUntilStep	Swift.Encodable
+relationship	conformsTo	s:8ThePlans15RepeatUntilStepV	s:SQ	RepeatUntilStep	Swift.Equatable
+relationship	conformsTo	s:8ThePlans15RepeatUntilStepV	s:Se	RepeatUntilStep	Swift.Decodable
+relationship	conformsTo	s:8ThePlans15RepeatUntilStepV	s:s23CustomStringConvertibleP	RepeatUntilStep	Swift.CustomStringConvertible
+relationship	conformsTo	s:8ThePlans15RepeatUntilStepV	s:s8SendableP	RepeatUntilStep	Swift.Sendable
 relationship	conformsTo	s:8ThePlans15ScrollDirectionO	s:SE	ScrollDirection	Swift.Encodable
 relationship	conformsTo	s:8ThePlans15ScrollDirectionO	s:SH	ScrollDirection	Swift.Hashable
 relationship	conformsTo	s:8ThePlans15ScrollDirectionO	s:SQ	ScrollDirection	Swift.Equatable
@@ -1668,6 +1700,8 @@ relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:s23CustomStringC
 relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:s5ErrorP	HeistArtifactCodecError	Swift.Error
 relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:s8SendableP	HeistArtifactCodecError	Swift.Sendable
 relationship	conformsTo	s:8ThePlans23HeistPlanSourceCompilerV	s:s8SendableP	HeistPlanSourceCompiler	Swift.Sendable
+relationship	conformsTo	s:8ThePlans23ResolvedRepeatUntilStepV	s:SQ	ResolvedRepeatUntilStep	Swift.Equatable
+relationship	conformsTo	s:8ThePlans23ResolvedRepeatUntilStepV	s:s8SendableP	ResolvedRepeatUntilStep	Swift.Sendable
 relationship	conformsTo	s:8ThePlans24ElementPredicateTemplateV	s:SE	ElementPredicateTemplate	Swift.Encodable
 relationship	conformsTo	s:8ThePlans24ElementPredicateTemplateV	s:SH	ElementPredicateTemplate	Swift.Hashable
 relationship	conformsTo	s:8ThePlans24ElementPredicateTemplateV	s:SQ	ElementPredicateTemplate	Swift.Equatable
