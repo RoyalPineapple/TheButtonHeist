@@ -118,10 +118,16 @@ extension TreePath: Comparable {
 public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
     public let actions: [ElementAction]
+    public let contentSpaceOrigin: AccessibilityPoint?
 
-    public init(path: TreePath, actions: [ElementAction]) {
+    public init(
+        path: TreePath,
+        actions: [ElementAction],
+        contentSpaceOrigin: AccessibilityPoint? = nil
+    ) {
         self.path = path
         self.actions = actions
+        self.contentSpaceOrigin = contentSpaceOrigin
     }
 }
 
@@ -336,7 +342,8 @@ public struct Interface: Codable, Equatable, Sendable {
             guard let annotation = elementsByPath[oldPath] else { return nil }
             return InterfaceElementAnnotation(
                 path: newPath,
-                actions: annotation.actions
+                actions: annotation.actions,
+                contentSpaceOrigin: annotation.contentSpaceOrigin
             )
         }
         let containersByPath = annotations.containerByPath

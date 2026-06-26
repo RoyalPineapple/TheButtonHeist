@@ -381,8 +381,22 @@ final class WireConverterTests: XCTestCase {
     }
 
     func testDiscoveryInterfaceGraftsKnownOffViewportElementsUnderScrollContainer() throws {
-        let visible = makeElement(label: "aardvark", traits: [.staticText])
-        let offViewport = makeElement(label: "zymurgy", traits: [.staticText])
+        let visible = makeElement(
+            label: "aardvark",
+            traits: [.staticText],
+            frameX: 16,
+            frameY: 100,
+            frameWidth: 288,
+            frameHeight: 44
+        )
+        let offViewport = makeElement(
+            label: "zymurgy",
+            traits: [.staticText],
+            frameX: 16,
+            frameY: 100,
+            frameWidth: 288,
+            frameHeight: 44
+        )
         let container = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -422,7 +436,27 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(children.count, 2)
         XCTAssertEqual(children.compactMap(\.testLabel), ["aardvark", "zymurgy"])
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 1])])
-        XCTAssertEqual(interface.projectedElements.compactMap(\.label), ["aardvark", "zymurgy"])
+
+        let projected = interface.projectedElements
+        XCTAssertEqual(projected.compactMap(\.label), ["aardvark", "zymurgy"])
+        let visibleProjection = try XCTUnwrap(projected.first { $0.label == "aardvark" })
+        let offViewportProjection = try XCTUnwrap(projected.first { $0.label == "zymurgy" })
+        XCTAssertEqual(visibleProjection.frameY, 0)
+        XCTAssertEqual(visibleProjection.activationPointY, 22)
+        XCTAssertEqual(offViewportProjection.frameY, 1_600)
+        XCTAssertEqual(offViewportProjection.activationPointY, 1_622)
+        XCTAssertNotEqual(
+            visibleProjection.frameY,
+            offViewportProjection.frameY,
+            "A scroll-discovered element must not inherit the viewport row occupied by an earlier element"
+        )
+
+        let selectedInterface = try InterfaceSelector(interface: interface).select(InterfaceQuery(
+            matcher: ElementPredicate(label: "zymurgy")
+        ))
+        let selectedProjection = try XCTUnwrap(selectedInterface.projectedElements.first)
+        XCTAssertEqual(selectedProjection.frameY, 1_600)
+        XCTAssertEqual(selectedProjection.activationPointY, 1_622)
     }
 
     func testDiscoveryInterfaceGraftsKnownNestedScrollContainers() throws {

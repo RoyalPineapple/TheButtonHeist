@@ -2237,8 +2237,8 @@
 		F0E23FDFBE2AEBCB4B5EAD36 = {
 			isa = PBXGroup;
 			children = (
-				FEA146ADAD433E87A26D764C /* Project */,
 				119B93DA40D0AC511E09A219 /* Products */,
+				FEA146ADAD433E87A26D764C /* Project */,
 			);
 			sourceTree = "<group>";
 		};
@@ -2550,6 +2550,8 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = 3A3C0FC0326E7A58AAD87CE7 /* Build configuration list for PBXProject "ButtonHeist" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -3374,32 +3376,15 @@
 		090A140C031E062EA13B5E6A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/ButtonHeistDSL-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -3411,33 +3396,24 @@
 				);
 				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.dsl;
 				PRODUCT_NAME = ButtonHeistDSL;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Release;
 		};
@@ -3460,6 +3436,10 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.buttonheist;
 				PRODUCT_NAME = ButtonHeist;
 				SDKROOT = macosx;
@@ -3486,6 +3466,10 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.tests;
 				PRODUCT_NAME = ButtonHeistTests;
 				SDKROOT = macosx;
@@ -3501,32 +3485,15 @@
 		3727093C59294BD76A340939 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/TheScore-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -3538,33 +3505,24 @@
 				);
 				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore;
 				PRODUCT_NAME = TheScore;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Release;
 		};
@@ -3579,6 +3537,10 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theplans.tests;
 				PRODUCT_NAME = ThePlansTests;
 				SDKROOT = macosx;
@@ -3602,11 +3564,15 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore.tests;
 				PRODUCT_NAME = TheScoreTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
 			name = Release;
 		};
@@ -3621,6 +3587,10 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.dsl.tests;
 				PRODUCT_NAME = ButtonHeistDSLTests;
 				SDKROOT = macosx;
@@ -3644,6 +3614,10 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore.tests;
 				PRODUCT_NAME = TheScoreTests;
 				SDKROOT = macosx;
@@ -3675,12 +3649,16 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.buttonheist;
 				PRODUCT_NAME = ButtonHeist;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
@@ -3704,12 +3682,16 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+					"-fmodule-map-file=\"$(SRCROOT)/Derived/ModuleMaps/TheInsideJobTests-deps.modulemap\"",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+					"-fmodule-map-file=\"$(SRCROOT)/Derived/ModuleMaps/TheInsideJobTests-deps.modulemap\"",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theinsidejob.tests;
 				PRODUCT_NAME = TheInsideJobTests;
@@ -3718,9 +3700,10 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BHDemo.app/BHDemo";
+				TEST_TARGET_NAME = "BH Demo";
 			};
 			name = Release;
 		};
@@ -3747,12 +3730,16 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+					"-fmodule-map-file=\"$(SRCROOT)/Derived/ModuleMaps/TheInsideJob-deps.modulemap\"",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+					"-fmodule-map-file=\"$(SRCROOT)/Derived/ModuleMaps/TheInsideJob-deps.modulemap\"",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theinsidejob;
 				PRODUCT_NAME = TheInsideJob;
@@ -3762,7 +3749,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -3792,12 +3779,16 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+					"-fmodule-map-file=\"$(SRCROOT)/Derived/ModuleMaps/TheInsideJob-deps.modulemap\"",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+					"-fmodule-map-file=\"$(SRCROOT)/Derived/ModuleMaps/TheInsideJob-deps.modulemap\"",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theinsidejob;
 				PRODUCT_NAME = TheInsideJob;
@@ -3829,43 +3820,30 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theplans.tests;
 				PRODUCT_NAME = ThePlansTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
 			name = Release;
 		};
 		8C7FDDDE85F047F8D5CEA0B9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/ButtonHeistDSL-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -3877,45 +3855,28 @@
 				);
 				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.dsl;
 				PRODUCT_NAME = ButtonHeistDSL;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
 					"$(inherited)",
 					DEBUG,
 				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Debug;
 		};
@@ -3930,43 +3891,30 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.dsl.tests;
 				PRODUCT_NAME = ButtonHeistDSLTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
 			name = Release;
 		};
 		B053953BC4CEE9D5F72E0DED /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/TheScore-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -3978,77 +3926,43 @@
 				);
 				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore;
 				PRODUCT_NAME = TheScore;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
 					"$(inherited)",
 					DEBUG,
 				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Debug;
 		};
 		B47B559AFFC3EB8666C5DD39 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/ThePlans-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -4060,33 +3974,24 @@
 				);
 				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theplans;
 				PRODUCT_NAME = ThePlans;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Release;
 		};
@@ -4219,43 +4124,30 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.tests;
 				PRODUCT_NAME = ButtonHeistTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
 			name = Release;
 		};
 		F441EBC570E8FAB7960E6C63 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/ThePlans-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -4267,45 +4159,28 @@
 				);
 				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theplans;
 				PRODUCT_NAME = ThePlans;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
 					"$(inherited)",
 					DEBUG,
 				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Debug;
 		};
@@ -4327,12 +4202,16 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+					"-fmodule-map-file=\"$(SRCROOT)/Derived/ModuleMaps/TheInsideJobTests-deps.modulemap\"",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+					"-fmodule-map-file=\"$(SRCROOT)/Derived/ModuleMaps/TheInsideJobTests-deps.modulemap\"",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theinsidejob.tests;
 				PRODUCT_NAME = TheInsideJobTests;
@@ -4348,6 +4227,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BHDemo.app/BHDemo";
+				TEST_TARGET_NAME = "BH Demo";
 			};
 			name = Debug;
 		};

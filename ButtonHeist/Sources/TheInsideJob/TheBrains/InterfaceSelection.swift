@@ -150,7 +150,8 @@ struct InterfaceSelector {
             guard let annotation = candidate.annotation else { return nil }
             return InterfaceElementAnnotation(
                 path: TreePath([index]),
-                actions: annotation.actions
+                actions: annotation.actions,
+                contentSpaceOrigin: annotation.contentSpaceOrigin
             )
         }
         return Interface(
