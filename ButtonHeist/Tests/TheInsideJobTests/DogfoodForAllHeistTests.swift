@@ -10,14 +10,14 @@ private enum DogfoodHome {
         let backToRoot = try DogfoodNavigation.backToRootIfNeeded()
 
         If {
-            Case(.present(destinationTitle)) {
-                WaitFor(.present(destinationTitle))
+            Case(.exists(destinationTitle)) {
+                WaitFor(.exists(destinationTitle))
             }
             Else {
                 backToRoot
 
                 Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
-                    .expect(.changed(.screen(where: .present(destinationTitle))), timeout: .seconds(8))
+                    .expect(.change(.screen(.exists(destinationTitle))), timeout: .seconds(8))
             }
         }
     }
@@ -36,9 +36,9 @@ private enum DogfoodNavigation {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
-        WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
-        WaitFor(.absent(rootBackTarget), timeout: .seconds(2))
-        WaitFor(.present(rootTitle), timeout: .seconds(4))
+        WaitFor(.missing(anyBackTarget), timeout: .seconds(2))
+        WaitFor(.missing(rootBackTarget), timeout: .seconds(2))
+        WaitFor(.exists(rootTitle), timeout: .seconds(4))
     }
 
     static let backToRoot = HeistDef<Void>("DogfoodNavigation.backToRoot") {
@@ -48,17 +48,17 @@ private enum DogfoodNavigation {
     private static let backOneLevelIfNeeded = HeistDef<Void>("DogfoodNavigation.backOneLevelIfNeeded") {
         try reanchorLongListIfNeeded()
 
-        WaitFor(.present(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
+        WaitFor(.exists(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
             .else {}
 
         If {
-            Case(.present(rootBackTarget)) {
+            Case(.exists(rootBackTarget)) {
                 Activate(.predicate(rootBackTarget))
-                    .expect(.changed(.screen()), timeout: .seconds(8))
+                    .expect(.change(.screen()), timeout: .seconds(8))
             }
-            Case(.present(anyBackTarget)) {
+            Case(.exists(anyBackTarget)) {
                 Activate(.predicate(anyBackTarget))
-                    .expect(.changed(.screen()), timeout: .seconds(8))
+                    .expect(.change(.screen()), timeout: .seconds(8))
             }
             Else {}
         }
@@ -71,7 +71,7 @@ private enum DogfoodNavigation {
         )
 
         If {
-            Case(.present(longListFirstRow)) {
+            Case(.exists(longListFirstRow)) {
                 reanchorAction
             }
             Else {}
@@ -84,14 +84,14 @@ private enum DogfoodNavigation {
         Activate(.predicate(ElementPredicateTemplate(label: .exact(title), traits: [.backButton])))
             .withoutExpectation("Back navigation is proven by the destination title wait")
 
-        WaitFor(.present(destinationTitle), timeout: .seconds(8))
+        WaitFor(.exists(destinationTitle), timeout: .seconds(8))
     }
 }
 
 private enum ControlsDemoScreen {
     static let openScreen = HeistDef<String>("ControlsDemo.openScreen", parameter: "screen") { screen in
         Activate(.predicate(ElementPredicateTemplate(label: .exact(screen), traits: [.button])))
-            .expect(.changed(.screen(where: .present(.label(screen)))), timeout: .seconds(8))
+            .expect(.change(.screen(.exists(.label(screen)))), timeout: .seconds(8))
     }
 }
 
@@ -101,13 +101,13 @@ private enum TextInputScreen {
 
     static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
         TypeText(name, into: nameField)
-            .expect(.present(.value(name)), timeout: .seconds(2))
+            .expect(.exists(.value(name)), timeout: .seconds(2))
 
         DismissKeyboard()
             .withoutExpectation("Ends the first field edit before focusing the email field")
 
         TypeText("dogfood@example.com", into: emailField)
-            .expect(.present(.value("dogfood@example.com")), timeout: .seconds(4))
+            .expect(.exists(.value("dogfood@example.com")), timeout: .seconds(4))
 
         DismissKeyboard()
             .withoutExpectation("Keyboard dismissal only prepares navigation")
@@ -121,7 +121,7 @@ private enum TextInputScreen {
             .withoutExpectation("Seeds pasteboard for the public Edit(.paste) action")
 
         Edit(.paste)
-            .expect(.present(.value("Dogfood clipboard name")), timeout: .seconds(2))
+            .expect(.exists(.value("Dogfood clipboard name")), timeout: .seconds(2))
 
         DismissKeyboard()
             .withoutExpectation("Keyboard dismissal only prepares navigation")
@@ -138,7 +138,7 @@ private enum TodoScreen {
         let proveCompletedItem = try rawAction(
             .viewportScrollToVisible(.target(completedItem, ordinal: 0)),
             expectation: WaitStep(
-                predicate: .present(completedItem),
+                predicate: .exists(completedItem),
                 timeout: .seconds(4)
             )
         )
@@ -146,14 +146,14 @@ private enum TodoScreen {
         try rawAction(
             .viewportScrollToVisible(.label(item)),
             expectation: WaitStep(
-                predicate: .present(visibleItem),
+                predicate: .exists(visibleItem),
                 timeout: .seconds(4)
             )
         )
 
         If {
-            Case(.present(completedItem)) {
-                WaitFor(.present(completedItem), timeout: .seconds(1))
+            Case(.exists(completedItem)) {
+                WaitFor(.exists(completedItem), timeout: .seconds(1))
             }
             Else {
                 CustomAction("Toggle", on: .label(item))
@@ -168,55 +168,63 @@ private enum TodoScreen {
 private enum CalculatorScreen {
     static let addSevenAndFive = HeistDef<Void>("CalculatorScreen.addSevenAndFive") {
         Activate(.element(label: "all clear", traits: [.button]))
-            .expect(.present(.label("0")), timeout: .seconds(1))
+            .expect(.exists(.label("0")), timeout: .seconds(1))
 
         Activate(.element(label: "7", traits: [.button]))
-            .expect(.present(.label("7")), timeout: .seconds(1))
+            .expect(.exists(.label("7")), timeout: .seconds(1))
 
         Activate(.element(label: "+", traits: [.button]))
-            .expect(.changed(.elements), timeout: .seconds(1))
+            .expect(.change(.elements()), timeout: .seconds(1))
 
         Activate(.element(label: "5", traits: [.button]))
-            .expect(.present(.label("5")), timeout: .seconds(1))
+            .expect(.exists(.label("5")), timeout: .seconds(1))
 
         Activate(.element(label: "equals", traits: [.button]))
-            .expect(.present(.label("12")), timeout: .seconds(1))
+            .expect(.exists(.label("12")), timeout: .seconds(1))
     }
 }
 
 private enum TogglePickerScreen {
     static let subscribe = HeistDef<Void>("TogglePickerScreen.subscribe") {
         Activate(.label("Subscribe to newsletter"))
-            .expect(.present(.label("Last action: Toggle: ON")), timeout: .seconds(2))
+            .expect(.exists(.label("Last action: Toggle: ON")), timeout: .seconds(2))
     }
 }
 
 private enum AlertsScreen {
     static let acceptSimpleAlert = HeistDef<Void>("AlertsScreen.acceptSimpleAlert") {
         Activate(.element(label: "Show Alert", traits: [.button]))
-            .expect(.present(.label("Alert Title")), timeout: .seconds(2))
+            .expect(.exists(.label("Alert Title")), timeout: .seconds(2))
 
         Activate(.element(label: "OK", traits: [.button]))
-            .expect(.absent(.label("Alert Title")), timeout: .seconds(2))
+            .expect(.missing(.label("Alert Title")), timeout: .seconds(2))
 
-        WaitFor(.present(.label("Last action: Alert: OK")), timeout: .seconds(2))
+        WaitFor(.exists(.label("Last action: Alert: OK")), timeout: .seconds(2))
     }
 }
 
 private enum AdjustableControlsScreen {
     static let adjustVolume = HeistDef<Void>("AdjustableControls.adjustVolume") {
         Increment(.label("Volume"))
-            .expect(.present(.value("60")), timeout: .seconds(2))
+            .expect(.exists(.value("60")), timeout: .seconds(2))
 
         Decrement(.label("Volume"))
-            .expect(.present(.value("50")), timeout: .seconds(2))
+            .expect(.exists(.value("50")), timeout: .seconds(2))
+    }
+
+    static let driveVolumeToMaximum = HeistDef<Void>("AdjustableControls.driveVolumeToMaximum") {
+        RepeatUntil(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(8)) {
+            Increment(.label("Volume"))
+        }.else {
+            Fail("volume did not reach 100")
+        }
     }
 }
 
 private enum CustomRotorsScreen {
     static let findFirstError = HeistDef<Void>("CustomRotors.findFirstError") {
         Rotor("Errors", on: .label("Rotor Host"))
-            .expect(.present(.label("Rotor Result: Missing amount")), timeout: .seconds(2))
+            .expect(.exists(.label("Rotor Result: Missing amount")), timeout: .seconds(2))
     }
 }
 
@@ -251,7 +259,7 @@ private enum LongListScreen {
         try rawAction(
             .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             expectation: WaitStep(
-                predicate: .changed(.elements),
+                predicate: .change(.elements()),
                 timeout: .seconds(3)
             )
         )
@@ -259,7 +267,7 @@ private enum LongListScreen {
         try rawAction(
             .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
             expectation: WaitStep(
-                predicate: .present(.label("Widget 0, Hardware")),
+                predicate: .exists(.label("Widget 0, Hardware")),
                 timeout: .seconds(8)
             )
         )
@@ -348,7 +356,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Text Input")
 
             TypeText(name, into: .value("Name"))
-                .expect(.present(.value(name)), timeout: .seconds(2))
+                .expect(.exists(.value(name)), timeout: .seconds(2))
 
             DismissKeyboard()
                 .withoutExpectation("Keyboard dismissal only prepares navigation")
@@ -373,7 +381,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try ControlsDemoScreen.openScreen("Buttons & Actions")
 
             Activate(target)
-                .expect(.present(.label("Tap count: 1")), timeout: .seconds(2))
+                .expect(.exists(.label("Tap count: 1")), timeout: .seconds(2))
 
             try DogfoodNavigation.backTo("Controls Demo")
             try DogfoodNavigation.backToRoot()
@@ -404,7 +412,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
             try DogfoodHome.openScreen("Controls Demo")
 
             If {
-                Case(.present(.label("Controls Demo"))) {
+                Case(.exists(.label("Controls Demo"))) {
                     Warn("conditional matched Controls Demo")
                 }
                 Else {
@@ -423,7 +431,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 ElementMatches.matching(ElementPredicate(label: "Text Input", traits: [.button])),
                 limit: 1
             ) { target in
-                WaitFor(.present(target), timeout: .seconds(1))
+                WaitFor(.exists(target), timeout: .seconds(1))
             }
 
             try DogfoodNavigation.backToRoot()
@@ -445,6 +453,28 @@ final class DogfoodForAllHeistTests: XCTestCase {
             "conditional matched Controls Demo",
             "wait case matched Controls Demo",
         ])
+    }
+
+    func testAdjustableControlsRepeatUntilDrivesVolumeToMaximum() async throws {
+        let heist = try await Heist {
+            try DogfoodHome.openScreen("Controls Demo")
+            try ControlsDemoScreen.openScreen("Adjustable Controls")
+            try AdjustableControlsScreen.driveVolumeToMaximum()
+            try DogfoodNavigation.backTo("Controls Demo")
+            try DogfoodNavigation.backToRoot()
+        }
+
+        XCTAssertEqual(heist.result.steps.map(\.kind), [
+            .invoke,
+            .invoke,
+            .invoke,
+            .invoke,
+            .invoke,
+        ])
+        XCTAssertEqual(heist.result.repeatUntilSteps.count, 1)
+        XCTAssertEqual(heist.result.repeatUntilSteps.first?.repeatUntilEvidence?.iterationCount, 5)
+        XCTAssertEqual(heist.result.repeatUntilSteps.first?.repeatUntilEvidence?.expectation.met, true)
+        XCTAssertTrue(heist.result.actionMethods.contains(.increment))
     }
 
     func testAdvancedRuntimeActionsUsePublicHeistsAgainstDemoApp() async throws {
@@ -548,7 +578,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     func testFailedDogfoodHeistPreservesInspectableRunResult() async throws {
         do {
             _ = try await Heist {
-                WaitFor(.present(.label("ButtonHeist Demo")), timeout: .seconds(2))
+                WaitFor(.exists(.label("ButtonHeist Demo")), timeout: .seconds(2))
                 Warn("before dogfood failure")
                 Fail("intentional dogfood failure")
                 Warn("after dogfood failure")
@@ -598,11 +628,19 @@ private extension HeistExecutionResult {
     var actionMethods: [ActionMethod] {
         steps.flatMap(\.actionMethods)
     }
+
+    var repeatUntilSteps: [HeistExecutionStepResult] {
+        steps.flatMap(\.repeatUntilSteps)
+    }
 }
 
 private extension HeistExecutionStepResult {
     var actionMethods: [ActionMethod] {
         (dispatchedActionResult.map { [$0.method] } ?? []) + children.flatMap(\.actionMethods)
+    }
+
+    var repeatUntilSteps: [HeistExecutionStepResult] {
+        (kind == .repeatUntil ? [self] : []) + children.flatMap(\.repeatUntilSteps)
     }
 }
 

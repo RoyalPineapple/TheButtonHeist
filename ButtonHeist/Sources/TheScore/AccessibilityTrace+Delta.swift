@@ -93,6 +93,78 @@ public extension AccessibilityTrace {
         /// View controller identity changed — a brand new interface tree.
         case screenChanged(ScreenChanged)
     }
+
+    struct AccumulatedDelta: Sendable, Equatable {
+        public let elementCount: Int
+        public let captureEdge: CaptureEdge
+        public let screenChanged: ScreenChanged?
+        public let elementsChanged: ElementsChanged?
+        public let transient: [HeistElement]
+
+        public var isNoChange: Bool {
+            screenChanged == nil && elementsChanged == nil
+        }
+
+        public var isSemanticChange: Bool {
+            !isNoChange
+        }
+
+        public var kindDescription: String {
+            if screenChanged != nil { return DeltaKind.screenChanged.rawValue }
+            if elementsChanged != nil { return DeltaKind.elementsChanged.rawValue }
+            return DeltaKind.noChange.rawValue
+        }
+
+        public init(
+            elementCount: Int,
+            captureEdge: CaptureEdge,
+            screenChanged: ScreenChanged?,
+            elementsChanged: ElementsChanged?,
+            transient: [HeistElement]
+        ) {
+            self.elementCount = elementCount
+            self.captureEdge = captureEdge
+            self.screenChanged = screenChanged
+            self.elementsChanged = elementsChanged
+            self.transient = transient
+        }
+
+        public var projectedDelta: Delta {
+            if let screenChanged { return .screenChanged(screenChanged) }
+            if let elementsChanged { return .elementsChanged(elementsChanged) }
+            return .noChange(NoChange(
+                elementCount: elementCount,
+                captureEdge: captureEdge,
+                transient: transient
+            ))
+        }
+    }
+
+    /// The cumulative change facts across every edge in this trace.
+    ///
+    /// Unlike `endpointDelta`, this can represent screen and element changes
+    /// that happened in the same wait window.
+    var accumulatedDelta: AccumulatedDelta? {
+        guard captures.count >= 2,
+              let first = captures.first,
+              let last = captures.last
+        else { return nil }
+        return AccessibilityTraceAccumulatedDelta.project(
+            captures: captures,
+            first: first,
+            last: last
+        )
+    }
+
+    /// The cumulative delta across every edge in this trace.
+    ///
+    /// `endpointDelta` answers "what differs between the first and last capture".
+    /// This answers "what changed at any point while moving from the first capture
+    /// to the last capture", preserving intermediate element edits that later
+    /// settled away.
+    var accumulatedEndpointDelta: AccessibilityTrace.Delta? {
+        accumulatedDelta?.projectedDelta
+    }
 }
 
 // MARK: - Element Edits
@@ -225,5 +297,72 @@ extension AccessibilityTrace.Delta: Codable {
 
     private static func rejectUnknownDeltaKeys(_ decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "accessibility delta")
+    }
+}
+
+private enum AccessibilityTraceAccumulatedDelta {
+    static func project(
+        captures: [AccessibilityTrace.Capture],
+        first: AccessibilityTrace.Capture,
+        last: AccessibilityTrace.Capture
+    ) -> AccessibilityTrace.AccumulatedDelta {
+        let allDeltas = zip(captures, captures.dropFirst()).map(AccessibilityTrace.Delta.between)
+        let transient = allDeltas.flatMap(\.transientElements)
+        let captureEdge = AccessibilityTrace.CaptureEdge(before: first, after: last)
+
+        let screenChanged = allDeltas.contains(where: \.isScreenChange)
+            ? AccessibilityTrace.ScreenChanged(
+                elementCount: last.interface.projectedElements.count,
+                captureEdge: captureEdge,
+                newInterface: last.interface,
+                transient: transient
+            )
+            : nil
+
+        let elementDeltas = allDeltas.compactMap(\.elementChangePayload)
+        let edits = ElementEdits(
+            added: elementDeltas.flatMap(\.edits.added),
+            removed: elementDeltas.flatMap(\.edits.removed),
+            updated: elementDeltas.flatMap(\.edits.updated)
+        )
+        let elementsChanged = !elementDeltas.isEmpty || !edits.isEmpty
+            ? AccessibilityTrace.ElementsChanged(
+                elementCount: last.interface.projectedElements.count,
+                edits: edits,
+                captureEdge: captureEdge,
+                transient: transient
+            )
+            : nil
+
+        return AccessibilityTrace.AccumulatedDelta(
+            elementCount: last.interface.projectedElements.count,
+            captureEdge: captureEdge,
+            screenChanged: screenChanged,
+            elementsChanged: elementsChanged,
+            transient: transient
+        )
+    }
+}
+
+private extension AccessibilityTrace.Delta {
+    var isScreenChange: Bool {
+        if case .screenChanged = self { return true }
+        return false
+    }
+
+    var elementChangePayload: AccessibilityTrace.ElementsChanged? {
+        if case .elementsChanged(let payload) = self { return payload }
+        return nil
+    }
+
+    var transientElements: [HeistElement] {
+        switch self {
+        case .noChange(let payload):
+            return payload.transient
+        case .elementsChanged(let payload):
+            return payload.transient
+        case .screenChanged(let payload):
+            return payload.transient
+        }
     }
 }

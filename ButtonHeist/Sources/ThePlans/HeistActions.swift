@@ -5,7 +5,7 @@ public protocol HeistActionContent: HeistContent {
     var expectationValidationFailure: String? { get }
 }
 
-let defaultActionExpectationTimeout: Double = 1
+public let defaultActionExpectationTimeout: Double = 1
 
 public extension HeistActionContent {
     var expectationValidationFailure: String? { nil }
@@ -48,7 +48,7 @@ public extension HeistActionContent {
     }
 
     func expect(timeout: Double? = nil) -> ActionContent {
-        expect(.changed(.elements), timeout: timeout)
+        expect(.change(.elements()), timeout: timeout)
     }
 
     @_disfavoredOverload
@@ -67,6 +67,28 @@ public extension HeistActionContent {
             explicitExpectationTimeout: nil,
             expectationValidationFailure: nil
         )
+    }
+
+    func until(
+        _ predicate: AccessibilityPredicateExpr,
+        timeout: Double = defaultWaitTimeout
+    ) -> RepeatActionUntilContent {
+        RepeatActionUntilContent(
+            command: command,
+            expectation: expectation,
+            expectationWaiver: expectationWaiver,
+            expectationValidationFailure: expectationValidationFailure,
+            predicate: predicate,
+            timeout: timeout
+        )
+    }
+
+    @_disfavoredOverload
+    func until(
+        _ predicate: AccessibilityPredicate,
+        timeout: Double = defaultWaitTimeout
+    ) -> RepeatActionUntilContent {
+        until(.predicate(predicate), timeout: timeout)
     }
 }
 
@@ -89,6 +111,48 @@ public struct ActionContent: HeistActionContent {
         self.expectationWaiver = expectationWaiver
         self.explicitExpectationTimeout = explicitExpectationTimeout
         self.expectationValidationFailure = expectationValidationFailure
+    }
+}
+
+public struct RepeatActionUntilContent: HeistContent {
+    public let command: HeistActionCommand
+    public let expectation: WaitStep?
+    public let expectationWaiver: String?
+    public let expectationValidationFailure: String?
+    public let predicate: AccessibilityPredicateExpr
+    public let timeout: Double
+
+    public var heistSteps: [HeistStep] {
+        guard heistBuildDiagnostics.isEmpty else { return [] }
+        let progressExpectation = expectation ?? (expectationWaiver == nil ? WaitStep(
+            predicate: .change(),
+            timeout: defaultActionExpectationTimeout
+        ) : nil)
+        do {
+            return [
+                .repeatUntil(try RepeatUntilStep(
+                    predicate: predicate,
+                    timeout: timeout,
+                    body: [
+                        makeActionStep(
+                            command,
+                            expectation: progressExpectation,
+                            expectationWaiver: expectationWaiver,
+                            expectationValidationFailure: expectationValidationFailure
+                        ),
+                    ]
+                )),
+            ]
+        } catch {
+            preconditionFailure("ButtonHeistDSL constructed unsupported action .until: \(error)")
+        }
+    }
+
+    public var heistBuildDiagnostics: [String] {
+        if timeout < 0 {
+            return ["action until timeout must be non-negative"]
+        }
+        return []
     }
 }
 
@@ -495,12 +559,12 @@ private func composeScreenChangeAndState(
 ) -> AccessibilityPredicateExpr? {
     if let screenChange = screenChangeExpectation(lhs),
        let state = stateExpression(rhs) {
-        return .changed(.screen(where: allState([screenChange.state, state].compactMap { $0 })))
+        return .change(.screen(allState([screenChange.state, state].compactMap { $0 })))
     }
 
     if let state = stateExpression(lhs),
        let screenChange = screenChangeExpectation(rhs) {
-        return .changed(.screen(where: allState([screenChange.state, state].compactMap { $0 })))
+        return .change(.screen(allState([screenChange.state, state].compactMap { $0 })))
     }
 
     return nil
@@ -512,11 +576,11 @@ private struct ScreenChangeExpectation {
 
 private func screenChangeExpectation(_ predicate: AccessibilityPredicateExpr) -> ScreenChangeExpectation? {
     switch predicate {
-    case .changed(.screen(let state)):
-        return ScreenChangeExpectation(state: state)
-    case .predicate(.changed(.screen(let state))):
-        return ScreenChangeExpectation(state: state.map(StatePredicateExpr.init))
-    case .predicate, .state, .changed:
+    case .changePredicate(.screenScope(let states)):
+        return ScreenChangeExpectation(state: allState(states))
+    case .predicate(.changePredicate(.screenScope(let states))):
+        return ScreenChangeExpectation(state: allState(states.map(StatePredicateExpr.init)))
+    case .predicate, .state, .changePredicate, .noChangePredicate:
         return nil
     }
 }
@@ -527,7 +591,7 @@ private func stateExpression(_ predicate: AccessibilityPredicateExpr) -> StatePr
         return state
     case .predicate(.state(let state)):
         return StatePredicateExpr(state)
-    case .predicate, .changed:
+    case .predicate, .changePredicate, .noChangePredicate:
         return nil
     }
 }

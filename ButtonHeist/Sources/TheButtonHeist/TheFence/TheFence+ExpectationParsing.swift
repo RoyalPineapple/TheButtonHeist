@@ -21,7 +21,7 @@ extension TheFence {
         }
 
         var postActionValidationTimeout: Double? {
-            expectation == nil ? nil : timeout
+            expectation == nil ? nil : timeout ?? defaultActionExpectationTimeout
         }
 
         static func parseExpectation(_ value: HeistValue?) throws -> AccessibilityPredicate? {
@@ -47,14 +47,14 @@ extension TheFence {
             guard let type = object["type"] else {
                 throw FenceError.invalidRequest(
                     "Predicate object requires a \"type\" discriminator " +
-                        "(e.g. {\"type\": \"present\", …}). " +
+                        "(e.g. {\"type\": \"exists\", …}). " +
                         "Got keys: \(object.keys.sorted())"
                 )
             }
             guard case .string = type else {
                 throw FenceError.invalidRequest(
                     "Predicate object requires a string \"type\" discriminator " +
-                        "(e.g. {\"type\": \"present\", …}). " +
+                        "(e.g. {\"type\": \"exists\", …}). " +
                         "Got type: \(type.schemaObservedDescription)"
                 )
             }
@@ -77,8 +77,15 @@ extension TheFence {
                     try validatePredicateStringMatchObjects(child, path: path + ["states[\(index)]"])
                 }
             }
-            if let whereValue = object["where"] {
-                try validatePredicateStringMatchObjects(whereValue, path: path + ["where"])
+            if let scopes = object["scopes"], case .array(let values) = scopes {
+                for (index, child) in values.enumerated() {
+                    try validatePredicateStringMatchObjects(child, path: path + ["scopes[\(index)]"])
+                }
+            }
+            if let assertions = object["assertions"], case .array(let values) = assertions {
+                for (index, child) in values.enumerated() {
+                    try validatePredicateStringMatchObjects(child, path: path + ["assertions[\(index)]"])
+                }
             }
         }
 

@@ -12,8 +12,10 @@ extension HeistPlanRuntimeSafetyValidator {
             validatePredicate(predicate, path: path, depth: depth)
         case .state(let state):
             validateStatePredicate(state, path: path, depth: depth, scope: scope)
-        case .changed(let change):
+        case .changePredicate(let change):
             validateChangePredicate(change, path: path, depth: depth, scope: scope)
+        case .noChangePredicate:
+            break
         }
     }
 
@@ -26,21 +28,28 @@ extension HeistPlanRuntimeSafetyValidator {
         switch predicate {
         case .state(let state):
             validateStatePredicate(state, path: path, depth: depth)
-        case .changed(let change):
+        case .changePredicate(let change):
             switch change {
-            case .screen(let state):
-                if let state {
-                    validateStatePredicate(state, path: "\(path).where", depth: depth + 1)
-                }
-            case .updated(let update):
-                if let element = update.element {
-                    validateElementPredicate(element, path: "\(path).element")
-                }
-                validateString(update.from, path: "\(path).from", role: "change predicate from value")
-                validateString(update.to, path: "\(path).to", role: "change predicate to value")
-            case .elements:
+            case .any:
                 break
+            case .screenScope(let states):
+                validateAllChildCount(states.count, path: "\(path).screen")
+                for (index, state) in states.enumerated() {
+                    validateStatePredicate(state, path: "\(path).screen[\(index)]", depth: depth + 1)
+                }
+            case .elementsScope(let assertions):
+                validateAllChildCount(assertions.count, path: "\(path).elements")
+                for (index, assertion) in assertions.enumerated() {
+                    validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]")
+                }
+            case .allScopes(let changes):
+                validateAllChildCount(changes.count, path: "\(path).scopes")
+                for (index, child) in changes.enumerated() {
+                    validatePredicate(.changePredicate(child), path: "\(path).scopes[\(index)]", depth: depth + 1)
+                }
             }
+        case .noChangePredicate:
+            break
         }
     }
 
@@ -51,9 +60,9 @@ extension HeistPlanRuntimeSafetyValidator {
     ) {
         checkPredicateDepth(depth, path: path)
         switch state {
-        case .present(let predicate), .absent(let predicate):
+        case .exists(let predicate), .missing(let predicate):
             validateElementPredicate(predicate, path: "\(path).element")
-        case .presentTarget(let target), .absentTarget(let target):
+        case .existsTarget(let target), .missingTarget(let target):
             validateElementTarget(target, path: "\(path).target")
         case .all(let states):
             validateAllChildCount(states.count, path: "\(path).states")
@@ -71,9 +80,9 @@ extension HeistPlanRuntimeSafetyValidator {
     ) {
         checkPredicateDepth(depth, path: path)
         switch state {
-        case .present(let predicate), .absent(let predicate):
+        case .exists(let predicate), .missing(let predicate):
             validateElementPredicate(predicate, path: "\(path).element", scope: scope)
-        case .presentTarget(let target), .absentTarget(let target):
+        case .existsTarget(let target), .missingTarget(let target):
             validateTarget(target, path: "\(path).target", scope: scope)
         case .all(let states):
             validateAllChildCount(states.count, path: "\(path).states")
@@ -91,11 +100,51 @@ extension HeistPlanRuntimeSafetyValidator {
     ) {
         checkPredicateDepth(depth, path: path)
         switch change {
-        case .screen(let state):
-            if let state {
-                validateStatePredicate(state, path: "\(path).where", depth: depth + 1, scope: scope)
+        case .any:
+            break
+        case .screenScope(let states):
+            validateAllChildCount(states.count, path: "\(path).screen")
+            for (index, state) in states.enumerated() {
+                validateStatePredicate(state, path: "\(path).screen[\(index)]", depth: depth + 1, scope: scope)
             }
-        case .updated(let update):
+        case .elementsScope(let assertions):
+            validateAllChildCount(assertions.count, path: "\(path).elements")
+            for (index, assertion) in assertions.enumerated() {
+                validateElementDeltaPredicate(assertion, path: "\(path).elements[\(index)]", scope: scope)
+            }
+        case .allScopes(let changes):
+            validateAllChildCount(changes.count, path: "\(path).scopes")
+            for (index, child) in changes.enumerated() {
+                validateChangePredicate(child, path: "\(path).scopes[\(index)]", depth: depth + 1, scope: scope)
+            }
+        }
+    }
+
+    mutating func validateElementDeltaPredicate(
+        _ predicate: ElementDeltaPredicate,
+        path: String
+    ) {
+        switch predicate {
+        case .appearedElement(let element), .disappearedElement(let element):
+            validateElementPredicate(element, path: "\(path).element")
+        case .updatedElement(let update):
+            if let element = update.element {
+                validateElementPredicate(element, path: "\(path).element")
+            }
+            validateString(update.from, path: "\(path).from", role: "change predicate from value")
+            validateString(update.to, path: "\(path).to", role: "change predicate to value")
+        }
+    }
+
+    mutating func validateElementDeltaPredicate(
+        _ predicate: ElementDeltaPredicateExpr,
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        switch predicate {
+        case .appearedElement(let element), .disappearedElement(let element):
+            validateElementPredicate(element, path: "\(path).element", scope: scope)
+        case .updatedElement(let update):
             if let element = update.element {
                 validateElementPredicate(element, path: "\(path).element", scope: scope)
             }
@@ -105,8 +154,6 @@ extension HeistPlanRuntimeSafetyValidator {
             if let to = update.to {
                 validateString(to, path: "\(path).to", scope: scope)
             }
-        case .elements:
-            break
         }
     }
 

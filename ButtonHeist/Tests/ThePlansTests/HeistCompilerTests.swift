@@ -211,7 +211,7 @@ struct HeistCompilerTests {
 
             let heist = try HeistPlan("TrustedFrontend") {
                 Activate(.label(payLabel()))
-                    .expect(.changed(.screen()))
+                    .expect(.change(.screen()))
             }
             """
         )
@@ -223,7 +223,7 @@ struct HeistCompilerTests {
         #expect(plan.body == [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .changed(.screen()), timeout: 1)
+                expectation: WaitStep(predicate: .change(.screen()), timeout: 1)
             )),
         ])
     }

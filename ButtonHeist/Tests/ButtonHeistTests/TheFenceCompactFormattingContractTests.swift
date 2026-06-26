@@ -45,7 +45,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testActionFailureWinsOverAttachedExpectationResult() {
         let expectation = ExpectationResult(
             met: false,
-            predicate: .state(.present(ElementPredicate(label: "Done"))),
+            predicate: .state(.exists(ElementPredicate(label: "Done"))),
             actual: "not evaluated"
         )
         let response = FenceResponse.action(
@@ -95,7 +95,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: ActionResult(success: true, method: .activate),
             expectation: ExpectationResult(
                 met: false,
-                predicate: .changed(.screen()),
+                predicate: .change(.screen()),
                 actual: "elementsChanged"
             )
         )
@@ -109,7 +109,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(expectation?["met"] as? Bool, false)
         XCTAssertEqual(expectation?["actual"] as? String, "elementsChanged")
         XCTAssertTrue(compact.contains("[expectation FAILED: got elementsChanged]"), compact)
-        XCTAssertTrue(compact.contains("screen_changed requires a screen-level transition"), compact)
+        XCTAssertTrue(compact.contains(".change(.screen()) requires a screen-level transition"), compact)
         XCTAssertTrue(response.isFailure)
     }
 
@@ -119,7 +119,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: ActionResult(success: true, method: .activate),
             expectation: ExpectationResult(
                 met: false,
-                predicate: .changed(.elements),
+                predicate: .change(.elements()),
                 actual: "noChange"
             )
         )
@@ -137,7 +137,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         XCTAssertTrue(compact.contains("[expectation FAILED: got noChange]"), compact)
         XCTAssertTrue(compact.contains("does not send activation-point tap dispatch"), compact)
-        XCTAssertTrue(human.contains("[expectation FAILED: expected changed(elements_changed), got noChange]"), human)
+        XCTAssertTrue(human.contains("[expectation FAILED: expected change(elements(*)), got noChange]"), human)
         XCTAssertTrue(human.contains("accessibility activation path is inert or mismatched"), human)
         XCTAssertTrue(response.isFailure)
     }
@@ -459,7 +459,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: ActionResult(success: true, method: .activate),
             expectation: ExpectationResult(
                 met: true,
-                predicate: .state(.present(ElementPredicate(label: "Done"))),
+                predicate: .state(.exists(ElementPredicate(label: "Done"))),
                 actual: "matched"
             )
         )
@@ -475,12 +475,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
-        let expected = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let expected = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.predicate(ElementPredicateTemplate(label: .exact(.literal("Submit"))))),
             expectation: WaitStep(predicate: expected, timeout: 1)
         ))
-        let casePredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let casePredicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
@@ -516,7 +516,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testHeistExpectationCountsAgreeAcrossPublicFormats() throws {
-        let expected = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let expected = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let action = try HeistStep.action(ActionStep(
             command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
             expectation: WaitStep(predicate: expected, timeout: 1)
@@ -687,7 +687,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let childAction = try HeistStep.action(ActionStep(
             command: .activate(.target(.predicate(ElementPredicate(label: "Continue"))))
         ))
-        let casePredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Ready")))
+        let casePredicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
         let conditional = try ConditionalStep(cases: [
             PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
@@ -768,7 +768,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let elseStep = try HeistStep.action(ActionStep(
             command: .activate(.target(.predicate(ElementPredicate(label: "Fallback"))))
         ))
-        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(
             cases: [
                 PredicateCase(

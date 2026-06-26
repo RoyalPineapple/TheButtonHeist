@@ -35,10 +35,11 @@ extension TheBrains {
     }
 
     private struct RepeatUntilPostBodyResult {
-        let observation: HeistSemanticObservation?
         let observedSequence: UInt64?
+        let observedTrace: AccessibilityTrace?
         let expectation: ExpectationResult
         let actionResult: ActionResult
+        let lastObservedSummary: String?
     }
 
     private struct RepeatUntilIterationFrame {
@@ -87,28 +88,20 @@ extension TheBrains {
             return repeatUntilResolutionFailure(step, path: path, start: start, error: error)
         }
 
-        guard let initialObservation = await runtime.observeSemanticState(
-            resolved.predicate.observationScope,
+        let initialReceipt = await runtime.wait(
+            ResolvedWaitStep(predicate: resolved.predicate, timeout: immediateTimeout),
             nil,
-            0
-        ) else {
-            let expectation = ExpectationResult(
-                met: false,
-                predicate: resolved.predicate,
-                actual: "no settled semantic observation available"
-            )
+            nil
+        )
+        guard let initialSequence = initialReceipt.observedSequence else {
             let failureReason = "could not observe settled semantic hierarchy before evaluating repeat_until"
             return repeatUntilResult(
                 context: context,
                 step: resolved,
                 outcome: RepeatUntilOutcome(
                     iterationCount: 0,
-                    expectation: expectation,
-                    actionResult: repeatUntilActionResult(
-                        observation: nil,
-                        success: false,
-                        message: failureReason
-                    ),
+                    expectation: initialReceipt.expectation,
+                    actionResult: initialReceipt.actionResult,
                     lastObservedSummary: nil,
                     failureReason: failureReason,
                     iterationNodes: []
@@ -116,7 +109,7 @@ extension TheBrains {
             )
         }
 
-        let initialOutcome = repeatUntilInitialOutcome(step: resolved, observation: initialObservation)
+        let initialOutcome = repeatUntilInitialOutcome(receipt: initialReceipt)
         guard !initialOutcome.expectation.met else {
             return repeatUntilResult(
                 context: context,
@@ -144,33 +137,20 @@ extension TheBrains {
         return await repeatUntilLoopResult(
             context: context,
             step: resolved,
-            initialObservation: initialObservation,
+            initialObservedSequence: initialSequence,
             initialOutcome: initialOutcome,
             timeout: timeout
         )
     }
 
     private func repeatUntilInitialOutcome(
-        step: ResolvedRepeatUntilStep,
-        observation: HeistSemanticObservation
+        receipt: HeistWaitReceipt
     ) -> RepeatUntilOutcome {
-        let changeBaseline = step.predicate.requiresFutureSettledBaseline
-            ? observation.event.sequence
-            : nil
-        let expectation = PredicateEvaluation.evaluate(
-            step.predicate,
-            in: observation,
-            changeBaselineSequence: changeBaseline
-        )
         return RepeatUntilOutcome(
             iterationCount: 0,
-            expectation: expectation,
-            actionResult: repeatUntilActionResult(
-                observation: observation,
-                success: expectation.met,
-                message: expectation.met ? "predicate met before repeat_until body" : expectation.actual
-            ),
-            lastObservedSummary: observation.summary,
+            expectation: receipt.expectation,
+            actionResult: receipt.actionResult,
+            lastObservedSummary: receipt.observationSummary,
             failureReason: nil,
             iterationNodes: []
         )
@@ -179,13 +159,14 @@ extension TheBrains {
     private func repeatUntilLoopResult(
         context: RepeatUntilExecutionContext,
         step: ResolvedRepeatUntilStep,
-        initialObservation: HeistSemanticObservation,
+        initialObservedSequence: UInt64,
         initialOutcome: RepeatUntilOutcome,
         timeout: Double
     ) async -> HeistExecutionStepResult {
         let deadline = context.start + timeout
-        var observedSequence = initialObservation.event.sequence
-        var lastObservation: HeistSemanticObservation? = initialObservation
+        var observedSequence = initialObservedSequence
+        var observedTrace = initialOutcome.actionResult?.accessibilityTrace
+        var lastObservedSummary = initialOutcome.lastObservedSummary
         var lastExpectation = initialOutcome.expectation
         var lastActionResult = initialOutcome.actionResult
         var iterationNodes: [HeistExecutionStepResult] = []
@@ -215,7 +196,7 @@ extension TheBrains {
                     context: context,
                     step: step,
                     frame: frame,
-                    lastObservedSummary: lastObservation?.summary,
+                    lastObservedSummary: lastObservedSummary,
                     abortedAtChildPath: abortedAtChildPath,
                     iterationResults: iterationResults,
                     previousIterationNodes: iterationNodes
@@ -226,14 +207,16 @@ extension TheBrains {
                 context: context,
                 step: step,
                 observedSequence: observedSequence,
+                observedTrace: observedTrace,
                 deadline: deadline
             )
-            if let observation = postBody.observation {
-                lastObservation = observation
-            }
             if let sequence = postBody.observedSequence {
                 observedSequence = sequence
             }
+            if let trace = postBody.observedTrace {
+                observedTrace = trace
+            }
+            lastObservedSummary = postBody.lastObservedSummary ?? lastObservedSummary
             lastExpectation = postBody.expectation
             lastActionResult = postBody.actionResult
 
@@ -241,7 +224,7 @@ extension TheBrains {
                 iterationCount: iterationCount,
                 expectation: lastExpectation,
                 actionResult: lastActionResult,
-                lastObservedSummary: lastObservation?.summary,
+                lastObservedSummary: lastObservedSummary,
                 failureReason: nil,
                 iterationNodes: []
             )
@@ -262,7 +245,10 @@ extension TheBrains {
                     outcome: iterationOutcome.withIterationNodes(iterationNodes)
                 )
             }
-            if postBody.observation == nil {
+            if !postBody.actionResult.success {
+                break
+            }
+            if postBody.observedSequence == nil {
                 break
             }
         }
@@ -274,7 +260,7 @@ extension TheBrains {
                 iterationCount: iterationCount,
                 expectation: lastExpectation,
                 actionResult: lastActionResult,
-                lastObservedSummary: lastObservation?.summary,
+                lastObservedSummary: lastObservedSummary,
                 failureReason: repeatUntilTimeoutReason(step: step, expectation: lastExpectation),
                 iterationNodes: iterationNodes
             )
@@ -330,47 +316,62 @@ extension TheBrains {
         context: RepeatUntilExecutionContext,
         step: ResolvedRepeatUntilStep,
         observedSequence: UInt64,
+        observedTrace: AccessibilityTrace?,
         deadline: CFAbsoluteTime
     ) async -> RepeatUntilPostBodyResult {
-        let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
-        let observation = await context.runtime.observeSemanticState(
-            step.predicate.observationScope,
-            observedSequence,
-            min(remaining, SemanticObservationTiming.defaultTimeout)
-        )
-        guard let observation else {
-            let expectation = ExpectationResult(
-                met: false,
-                predicate: step.predicate,
-                actual: "no settled semantic observation available"
+        let remaining = deadline - CFAbsoluteTimeGetCurrent()
+        guard remaining > 0 else {
+            let expectation = ExpectationResult(met: false, predicate: step.predicate, actual: "repeat_until deadline elapsed")
+            let actionResult = ActionResult(
+                success: false,
+                method: .wait,
+                message: expectation.actual,
+                errorKind: .timeout
             )
             return RepeatUntilPostBodyResult(
-                observation: nil,
                 observedSequence: nil,
+                observedTrace: nil,
                 expectation: expectation,
-                actionResult: repeatUntilActionResult(
-                    observation: nil,
-                    success: false,
-                    message: expectation.actual
-                )
+                actionResult: actionResult,
+                lastObservedSummary: nil
             )
         }
-        let expectation = PredicateEvaluation.evaluate(
+        let progressTimeout = min(defaultActionExpectationTimeout, remaining)
+        let receipt = await context.runtime.wait(
+            ResolvedWaitStep(predicate: .change(), timeout: progressTimeout),
+            observedTrace,
+            observedSequence
+        )
+        let expectation = repeatUntilStopExpectation(
             step.predicate,
-            in: observation,
-            changeBaselineSequence: step.predicate.requiresFutureSettledBaseline
-                ? observedSequence
-                : nil
+            trace: receipt.actionResult.accessibilityTrace,
+            fallback: receipt.expectation.actual
         )
         return RepeatUntilPostBodyResult(
-            observation: observation,
-            observedSequence: observation.event.sequence,
+            observedSequence: receipt.observedSequence,
+            observedTrace: receipt.actionResult.accessibilityTrace,
             expectation: expectation,
-            actionResult: repeatUntilActionResult(
-                observation: observation,
-                success: expectation.met,
-                message: expectation.actual
+            actionResult: receipt.actionResult,
+            lastObservedSummary: receipt.observationSummary
+        )
+    }
+
+    private func repeatUntilStopExpectation(
+        _ predicate: AccessibilityPredicate,
+        trace: AccessibilityTrace?,
+        fallback: String?
+    ) -> ExpectationResult {
+        guard let trace else {
+            return ExpectationResult(
+                met: false,
+                predicate: predicate,
+                actual: fallback ?? "no observed accessibility trace"
             )
+        }
+        return PredicateEvaluation.evaluate(
+            predicate,
+            currentElements: trace.captures.last?.interface.projectedElements ?? [],
+            accumulatedDelta: trace.accumulatedDelta
         )
     }
 
@@ -502,20 +503,6 @@ extension TheBrains {
                 observed: "could not resolve heist repeat_until predicate: \(error)",
                 expected: step.predicate.description
             )
-        )
-    }
-
-    private func repeatUntilActionResult(
-        observation: HeistSemanticObservation?,
-        success: Bool,
-        message: String?
-    ) -> ActionResult {
-        ActionResult(
-            success: success,
-            method: .wait,
-            message: message,
-            errorKind: success ? nil : .timeout,
-            accessibilityTrace: observation?.accessibilityTrace
         )
     }
 

@@ -8,20 +8,20 @@ struct CanonicalHeistSourceRoundTripTests {
         try assertRoundTrip(try HeistPlan(body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+                expectation: WaitStep(predicate: .change(.screen()), timeout: 0)
             )),
             .action(try ActionStep(
                 command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
-                expectation: WaitStep(predicate: .present(.element(label: "Search", value: "milk")), timeout: 2)
+                expectation: WaitStep(predicate: .exists(.element(label: "Search", value: "milk")), timeout: 2)
             )),
             .action(try ActionStep(
                 command: .typeText(text: .literal("Bruschetta"), target: .predicate(.identifier("Search"))),
-                expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+                expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                     element: .identifier("Search"),
                     property: .value,
                     from: "",
                     to: "Bruschetta"
-                ))))
+                )))))
             )),
             .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
             .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"), ordinal: 0)))),
@@ -73,22 +73,22 @@ struct CanonicalHeistSourceRoundTripTests {
     @Test("waits, conditionals, loops, warnings, and failures round trip")
     func controlsWarningsAndFailuresRoundTrip() throws {
         try assertRoundTrip(try HeistPlan(body: [
-            .wait(WaitStep(predicate: .present(.label("Home")), timeout: 1)),
+            .wait(WaitStep(predicate: .exists(.label("Home")), timeout: 1)),
             .conditional(try ConditionalStep(
                 cases: [
-                    PredicateCase(predicate: .present(.label("Pay")), body: [
+                    PredicateCase(predicate: .exists(.label("Pay")), body: [
                         .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
                     ]),
                 ],
                 elseBody: [.fail(FailStep(message: "Pay button missing"))]
             )),
             .wait(WaitStep(
-                predicate: .changed(.screen()),
+                predicate: .change(.screen()),
                 timeout: 3,
                 elseBody: [.fail(FailStep(message: "screen did not change"))]
             )),
             .repeatUntil(try RepeatUntilStep(
-                predicate: .present(.value("2")),
+                predicate: .exists(.value("2")),
                 timeout: 4,
                 body: [
                     .action(try ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
@@ -113,7 +113,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 body: [
                     .action(try ActionStep(
                         command: .activate(.ref("target")),
-                        expectation: WaitStep(predicate: .absent(.ref("target")), timeout: 2)
+                        expectation: WaitStep(predicate: .missing(.ref("target")), timeout: 2)
                     )),
                 ]
             )),
@@ -136,7 +136,7 @@ struct CanonicalHeistSourceRoundTripTests {
             body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(.label(.ref("item")))),
-                    expectation: WaitStep(predicate: .present(.label("Added")), timeout: 2)
+                    expectation: WaitStep(predicate: .exists(.label("Added")), timeout: 2)
                 )),
                 .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
             ]

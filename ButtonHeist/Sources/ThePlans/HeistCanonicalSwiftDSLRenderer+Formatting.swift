@@ -7,7 +7,7 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderTimeout(_ timeout: Double) -> String {
-        timeout == 0 ? "" : ", timeout: .seconds(\(decimal(timeout)))"
+        abs(timeout - defaultWaitTimeout) < 0.000_001 ? "" : ", timeout: .seconds(\(decimal(timeout)))"
     }
 
     func validateParameter(_ parameter: String) throws {

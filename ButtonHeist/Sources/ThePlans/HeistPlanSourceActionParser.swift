@@ -349,16 +349,20 @@ extension HeistPlanSourceParser {
         command: HeistActionCommand
     ) throws -> HeistStep {
         var content: any HeistActionContent = ActionContent(command: command)
+        var repeatedContent: RepeatActionUntilContent?
         while consumeSymbol(".") {
             let chainToken = currentToken
             let chain = try parseIdentifier()
+            guard repeatedContent == nil else {
+                throw error(chainToken, "unsupported action chain after '.until'")
+            }
             switch chain {
             case "expect":
                 try expectSymbol("(")
                 let predicate: AccessibilityPredicateExpr
                 let timeout: Double?
                 if currentToken.isSymbol(")") {
-                    predicate = .changed(.elements)
+                    predicate = .change(.elements())
                     timeout = nil
                 } else {
                     predicate = try parseAccessibilityPredicateExpr()
@@ -371,9 +375,21 @@ extension HeistPlanSourceParser {
                 let reason = try parseStringLiteral()
                 try expectSymbol(")")
                 content = content.withoutExpectation(reason)
+            case "until":
+                try expectSymbol("(")
+                let predicate = try parseAccessibilityPredicateExpr()
+                let timeout = try parseTrailingTimeout(defaultValue: defaultWaitTimeout) ?? defaultWaitTimeout
+                try expectSymbol(")")
+                repeatedContent = content.until(predicate, timeout: timeout)
             default:
                 throw error(chainToken, "unsupported action chain '.\(chain)'")
             }
+        }
+        if let repeatedContent {
+            guard let step = repeatedContent.heistSteps.first, repeatedContent.heistSteps.count == 1 else {
+                throw error(previous, "action .until statement did not produce exactly one step")
+            }
+            return step
         }
         guard let step = content.heistSteps.first, content.heistSteps.count == 1 else {
             throw error(previous, "action statement did not produce exactly one step")

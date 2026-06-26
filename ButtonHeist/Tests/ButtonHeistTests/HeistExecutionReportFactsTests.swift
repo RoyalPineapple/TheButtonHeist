@@ -8,7 +8,7 @@ import TheScore
 final class HeistExecutionReportFactsTests: XCTestCase {
 
     func testActionWithExpectationReportsActionAndExpectation() {
-        let expectationPredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let expectationPredicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let result = HeistExecutionResult(
             steps: [
                 actionStep(
@@ -84,7 +84,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testWaitReportsWaitEvidenceWithoutDispatchedActionResult() {
-        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let result = HeistExecutionResult(
             steps: [
                 waitStep(
@@ -182,10 +182,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     selection: HeistCaseSelectionResult(
                         cases: [
                             HeistCaseMatchResult(
-                                predicate: .state(.present(ElementPredicate(label: "Selected"))),
+                                predicate: .state(.exists(ElementPredicate(label: "Selected"))),
                                 result: ExpectationResult(
                                     met: true,
-                                    predicate: .state(.present(ElementPredicate(label: "Selected")))
+                                    predicate: .state(.exists(ElementPredicate(label: "Selected")))
                                 )
                             ),
                         ],
@@ -210,7 +210,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testWaitForTimeoutWithoutElseReportsWaitFailure() {
-        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let failure = HeistFailureDetail(
             category: .wait,
             contract: "wait predicate is met before timeout",
@@ -237,7 +237,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testWaitForTimeoutWithElseReportsElseChildrenAsHandled() {
-        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Done")))
         let expectation = ExpectationResult(met: false, predicate: predicate, actual: "timed out after 2s")
         let result = HeistExecutionResult(
             steps: [
@@ -435,7 +435,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
     }
 
     func testJUnitExpectationFailureUsesExpectationReceiptFact() async {
-        let predicate = AccessibilityPredicate.changed(.screen())
+        let predicate = AccessibilityPredicate.change(.screen())
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
@@ -611,7 +611,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         actionResult: ActionResult = ActionResult(success: true, method: .wait),
         expectation: ExpectationResult = ExpectationResult(
             met: true,
-            predicate: .state(.present(ElementPredicate(label: "Done")))
+            predicate: .state(.exists(ElementPredicate(label: "Done")))
         ),
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {

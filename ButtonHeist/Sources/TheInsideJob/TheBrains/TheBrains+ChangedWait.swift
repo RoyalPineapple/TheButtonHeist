@@ -20,7 +20,7 @@ extension TheBrains {
         }
         defer { finishChangedWait() }
 
-        let predicate = expectation ?? .changed(.elements)
+        let predicate = expectation ?? .change(.elements())
         let receipt = await interactionObservation.waitForPredicate(WaitStep(predicate: predicate, timeout: timeout))
         return receipt.actionResult
     }

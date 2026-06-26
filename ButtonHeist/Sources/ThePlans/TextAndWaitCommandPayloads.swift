@@ -173,12 +173,12 @@ extension EditActionTarget: CustomStringConvertible {
 }
 
 /// Target for the `wait` command — wait until an accessibility predicate is
-/// satisfied. `present`/`absent` poll the current interface; `changed` rides
-/// through intermediate states until the change predicate is met.
+/// satisfied. State predicates poll the current interface; change predicates
+/// ride through intermediate settled states until the requested change is met.
 public struct WaitTarget: Codable, Sendable, Equatable {
     /// The predicate to wait on.
     public let predicate: AccessibilityPredicate
-    /// Maximum time to wait in seconds (default: 10, max: 30)
+    /// Maximum time to wait in seconds (default: 30, max: 30).
     public let timeout: Double?
 
     public init(predicate: AccessibilityPredicate, timeout: Double? = nil) {
@@ -186,7 +186,7 @@ public struct WaitTarget: Codable, Sendable, Equatable {
         self.timeout = timeout
     }
 
-    public var resolvedTimeout: Double { min(timeout ?? 10, 30) }
+    public var resolvedTimeout: Double { min(timeout ?? defaultWaitTimeout, defaultWaitTimeout) }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case predicate, timeout

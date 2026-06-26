@@ -1,5 +1,8 @@
 import Foundation
 
+public let immediateTimeout: Double = 0
+public let defaultWaitTimeout: Double = 30
+
 public struct WaitStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case predicate, timeout
@@ -13,7 +16,7 @@ public struct WaitStep: Codable, Sendable, Equatable {
 
     public init(
         predicate: AccessibilityPredicateExpr,
-        timeout: Double = 0,
+        timeout: Double = defaultWaitTimeout,
         elseBody: [HeistStep]? = nil
     ) {
         self.predicate = predicate
@@ -24,7 +27,7 @@ public struct WaitStep: Codable, Sendable, Equatable {
     @_disfavoredOverload
     public init(
         predicate: AccessibilityPredicate,
-        timeout: Double = 0,
+        timeout: Double = defaultWaitTimeout,
         elseBody: [HeistStep]? = nil
     ) {
         self.init(predicate: .predicate(predicate), timeout: timeout, elseBody: elseBody)
@@ -60,7 +63,7 @@ public struct ResolvedWaitStep: Sendable, Equatable {
     public let predicate: AccessibilityPredicate
     public let timeout: Double
 
-    public init(predicate: AccessibilityPredicate, timeout: Double = 0) {
+    public init(predicate: AccessibilityPredicate, timeout: Double = defaultWaitTimeout) {
         self.predicate = predicate
         self.timeout = timeout
     }

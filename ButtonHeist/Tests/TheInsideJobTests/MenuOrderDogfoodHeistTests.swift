@@ -17,28 +17,28 @@ private enum DemoHome {
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
         try backOneLevelIfNeeded()
-        WaitFor(.absent(anyBackTarget), timeout: .seconds(2))
-        WaitFor(.absent(rootBackTarget), timeout: .seconds(2))
-        WaitFor(.present(rootTitle), timeout: .seconds(4))
+        WaitFor(.missing(anyBackTarget), timeout: .seconds(2))
+        WaitFor(.missing(rootBackTarget), timeout: .seconds(2))
+        WaitFor(.exists(rootTitle), timeout: .seconds(4))
 
         Activate(.label("Menu"))
-            .expect(.changed(.screen(where: .present(.label("Menu")))), timeout: .seconds(8))
+            .expect(.change(.screen(.exists(.label("Menu")))), timeout: .seconds(8))
     }
 
     private static let backOneLevelIfNeeded = HeistDef<Void>("DemoHome.backOneLevelIfNeeded") {
         try reanchorLongListIfNeeded()
 
-        WaitFor(.present(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
+        WaitFor(.exists(rootBackTarget), timeout: .seconds(backChromeSettleTimeout))
             .else {}
 
         If {
-            Case(.present(rootBackTarget)) {
+            Case(.exists(rootBackTarget)) {
                 Activate(.predicate(rootBackTarget))
-                    .expect(.changed(.screen()), timeout: .seconds(8))
+                    .expect(.change(.screen()), timeout: .seconds(8))
             }
-            Case(.present(anyBackTarget)) {
+            Case(.exists(anyBackTarget)) {
                 Activate(.predicate(anyBackTarget))
-                    .expect(.changed(.screen()), timeout: .seconds(8))
+                    .expect(.change(.screen()), timeout: .seconds(8))
             }
             Else {}
         }
@@ -51,7 +51,7 @@ private enum DemoHome {
         )
 
         If {
-            Case(.present(longListFirstRow)) {
+            Case(.exists(longListFirstRow)) {
                 reanchorAction
             }
             Else {}
@@ -67,17 +67,17 @@ private enum MenuScreen {
         )
 
         CustomAction("Add to Cart", on: .label(item))
-            .expect(.changed(.elements), timeout: .seconds(2))
+            .expect(.change(.elements()), timeout: .seconds(2))
     }
 
     static let checkout = HeistDef<Void>("MenuScreen.checkout") {
         Activate(.label("Checkout"))
-            .expect(.changed(.screen(where: .present(.label("Checkout")))), timeout: .seconds(8))
+            .expect(.change(.screen(.exists(.label("Checkout")))), timeout: .seconds(8))
 
         Activate(.label(DemoOrder.confirmPaymentLabel))
-            .expect(.changed(.screen(where: .present(.label("Processing payment")))), timeout: .seconds(8))
+            .expect(.change(.screen(.exists(.label("Processing payment")))), timeout: .seconds(8))
 
-        WaitFor(.present(.label("Payment Successful")), timeout: .seconds(12))
+        WaitFor(.exists(.label("Payment Successful")), timeout: .seconds(12))
     }
 }
 

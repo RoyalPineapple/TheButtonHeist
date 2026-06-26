@@ -11,19 +11,20 @@ enum PredicateEvaluation {
         observedSequence: UInt64? = nil,
         changeBaselineSequence: UInt64? = nil
     ) -> ExpectationResult {
-        if predicate.requiresFutureSettledBaseline,
-           let observedSequence,
-           let changeBaselineSequence,
-           observedSequence <= changeBaselineSequence {
-            return ExpectationResult(
-                met: false,
-                predicate: predicate,
-                actual: "change predicate requires future settled observation after baseline"
-            )
-        }
         return predicate.evaluate(
             currentElements: currentElements,
             delta: delta
+        )
+    }
+
+    static func evaluate(
+        _ predicate: AccessibilityPredicate,
+        currentElements: [HeistElement],
+        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+    ) -> ExpectationResult {
+        predicate.evaluate(
+            currentElements: currentElements,
+            accumulatedDelta: accumulatedDelta
         )
     }
 
@@ -69,9 +70,13 @@ enum PredicateEvaluation {
 }
 
 extension AccessibilityPredicate {
-    var requiresFutureSettledBaseline: Bool {
-        if case .changed = self { return true }
-        return false
+    var requiresChangeBaseline: Bool {
+        switch self {
+        case .changePredicate, .noChangePredicate:
+            return true
+        case .state:
+            return false
+        }
     }
 }
 

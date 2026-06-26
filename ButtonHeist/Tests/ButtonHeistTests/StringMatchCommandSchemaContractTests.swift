@@ -228,18 +228,18 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
 
     func testPredicateAcceptsStringMatchObjectInElementField() throws {
         let predicate = try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("present"),
+            "type": .string("exists"),
             "element": elementTargetValue([
                 "label": stringMatchValue(mode: "contains", value: "Pay"),
             ]),
         ]))
 
-        XCTAssertEqual(predicate, .present(ElementPredicate(label: .contains("Pay"))))
+        XCTAssertEqual(predicate, .exists(ElementPredicate(label: .contains("Pay"))))
     }
 
     func testPredicateAcceptsStringMatchArrayInElementField() throws {
         let predicate = try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("present"),
+            "type": .string("exists"),
             "element": elementTargetValue([
                 "label": .array([
                     stringMatchValue(mode: "prefix", value: "foo"),
@@ -249,7 +249,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             ]),
         ]))
 
-        XCTAssertEqual(predicate, .present(ElementPredicate.element(
+        XCTAssertEqual(predicate, .exists(ElementPredicate.element(
             .label(.prefix("foo")),
             .label(.contains("bar")),
             .label(.suffix("baz"))
@@ -258,7 +258,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
 
     func testPredicateAcceptsOrderedChecksInElementField() throws {
         let predicate = try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("present"),
+            "type": .string("exists"),
             "element": elementTargetValue([
                 "checks": .array([
                     predicateCheckValue(kind: "label", match: stringMatchValue(mode: "prefix", value: "foo")),
@@ -268,7 +268,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             ]),
         ]))
 
-        XCTAssertEqual(predicate, .present(ElementPredicate.element(
+        XCTAssertEqual(predicate, .exists(ElementPredicate.element(
             .label(.prefix("foo")),
             .label(.contains("bar")),
             .traits([.button])
@@ -277,7 +277,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
 
     func testPredicateRejectsMalformedOrderedElementChecks() throws {
         XCTAssertThrowsError(try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("present"),
+            "type": .string("exists"),
             "element": elementTargetValue([
                 "checks": .array([
                     predicateCheckValue(kind: "label", values: [.string("button")]),
@@ -296,7 +296,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         }
 
         XCTAssertThrowsError(try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("present"),
+            "type": .string("exists"),
             "element": elementTargetValue([
                 "checks": .array([
                     predicateCheckValue(kind: "excludeTraits"),
@@ -325,7 +325,7 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
 
     func testPredicateRejectsRawStringMatcherField() throws {
         XCTAssertThrowsError(try TheFence.ExpectationPayload.parseRequiredPredicate(.object([
-            "type": .string("present"),
+            "type": .string("exists"),
             "element": elementTargetValue([
                 "label": .string("Pay"),
             ]),

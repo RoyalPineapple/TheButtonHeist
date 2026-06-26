@@ -16,14 +16,14 @@ import ThePlans
     let plan = try HeistPlanSourceCompiler().compile(root("""
     Activate(.label(.exact("Search")))
     Activate(.identifier(.suffix("field")))
-    WaitFor(.present(.element(label: .prefix("No results"), identifier: .contains("empty_state"), value: .suffix("items"))), timeout: .seconds(2))
+    WaitFor(.exists(.element(label: .prefix("No results"), identifier: .contains("empty_state"), value: .suffix("items"))), timeout: .seconds(2))
     TypeText("milk", into: .value(.prefix("Search")))
     """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(command: .activate(.predicate(.label(.exact("Search")))))),
         .action(try ActionStep(command: .activate(.predicate(.identifier(.suffix("field")))))),
         .wait(WaitStep(
-            predicate: .present(ElementPredicateTemplate.element(
+            predicate: .exists(ElementPredicateTemplate.element(
                 label: .prefix(.literal("No results")),
                 identifier: .contains(.literal("empty_state")),
                 value: .suffix(.literal("items"))
@@ -58,12 +58,12 @@ import ThePlans
 
 @Test func `inline plan source chained expectation compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    Activate(.label("Pay")).expect(.changed(.screen()))
+    Activate(.label("Pay")).expect(.change(.screen()))
     """))
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .changed(.screen()), timeout: 1)
+            expectation: WaitStep(predicate: .change(.screen()), timeout: 1)
         )),
     ])
 
@@ -73,19 +73,19 @@ import ThePlans
 @Test func `inline plan source property update expectations compile`() throws {
     let scoped = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))
-        .expect(.changed(.updated(.identifier("Search"), property: .value, to: "Bruschetta")))
+        .expect(.change(.elements(.updated(.identifier("Search"), property: .value, to: "Bruschetta"))))
     """#))
     let unscoped = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.changed(.updated(property: .value, to: "3")))
+        .expect(.change(.elements(.updated(property: .value, to: "3"))))
     """#))
     let fromTo = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.changed(.updated(.identifier("Quantity"), property: .value, from: "2", to: "3")))
+        .expect(.change(.elements(.updated(.identifier("Quantity"), property: .value, from: "2", to: "3"))))
     """#))
     let broadFromTo = try HeistPlanSourceCompiler().compile(root(#"""
     Increment(.identifier("Quantity"))
-        .expect(.changed(.updated(.identifier("Quantity"), property: .value, from: .prefix("cart:"), to: .contains("items"))))
+        .expect(.change(.elements(.updated(.identifier("Quantity"), property: .value, from: .prefix("cart:"), to: .contains("items")))))
     """#))
 
     let expectedScoped = try HeistPlan(body: [
@@ -94,42 +94,42 @@ import ThePlans
                 text: .literal("Bruschetta"),
                 target: .predicate(.identifier("Search"))
             ),
-            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Search"),
                 property: .value,
                 to: "Bruschetta"
-            ))), timeout: 1)
+            )))), timeout: 1)
         )),
     ])
     let expectedUnscoped = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 property: .value,
                 to: "3"
-            ))), timeout: 1)
+            )))), timeout: 1)
         )),
     ])
     let expectedFromTo = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Quantity"),
                 property: .value,
                 from: "2",
                 to: "3"
-            ))), timeout: 1)
+            )))), timeout: 1)
         )),
     ])
     let expectedBroadFromTo = try HeistPlan(body: [
         .action(try ActionStep(
             command: .increment(.predicate(.identifier("Quantity"))),
-            expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
                 element: .identifier("Quantity"),
                 property: .value,
                 from: .prefix("cart:"),
                 to: .contains("items")
-            ))), timeout: 1)
+            )))), timeout: 1)
         )),
     ])
 
@@ -179,10 +179,10 @@ import ThePlans
     #expect(plan.body == [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .changed(.elements), timeout: 1)
+            expectation: WaitStep(predicate: .change(.elements()), timeout: 1)
         )),
         .wait(WaitStep(
-            predicate: .present(.label("Receipt")),
+            predicate: .exists(.label("Receipt")),
             timeout: 5,
             elseBody: [.fail(FailStep(message: "Receipt did not appear"))]
         )),
@@ -207,7 +207,7 @@ import ThePlans
     HeistPlan("RuntimeSurface", targetParameter: "rootTarget") { rootTarget in
         HeistDef<String>("Cart.addItem", parameter: "item") { item in
             Activate(.label(item))
-                .expect(.present(.label("Added")))
+                .expect(.exists(.label("Added")))
         }
 
         HeistDef<ElementTarget>("Messages.archive", parameter: "message") { message in
@@ -225,7 +225,7 @@ import ThePlans
         Warn("Receipt appeared")
 
         If {
-            Case(.present(.label("Cart"))) {
+            Case(.exists(.label("Cart"))) {
                 Warn("Cart ready")
             }
             Else {
@@ -233,7 +233,7 @@ import ThePlans
             }
         }
 
-        If(.present(.label("Pay"))) {
+        If(.exists(.label("Pay"))) {
             Warn("Pay visible")
         }.else {
             Warn("Pay missing")
@@ -280,7 +280,7 @@ import ThePlans
 @Test func `inline plan source ForEach string compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     ForEach(["a", "b"]) { item in
-        Activate(.label(item)).expect(.present(.label(item)))
+        Activate(.label(item)).expect(.exists(.label(item)))
     }
     """))
     let expected = try HeistPlan(body: [
@@ -290,7 +290,7 @@ import ThePlans
             body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(.label(.ref("item")))),
-                    expectation: WaitStep(predicate: .state(.present(.label(.ref("item")))), timeout: 1)
+                    expectation: WaitStep(predicate: .state(.exists(.label(.ref("item")))), timeout: 1)
                 )),
             ]
         )),
@@ -301,7 +301,7 @@ import ThePlans
 
 @Test func `inline plan source RepeatUntil compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    RepeatUntil(.present(.value("3")), timeout: .seconds(2)) {
+    RepeatUntil(.exists(.value("3")), timeout: .seconds(2)) {
         Increment(.identifier("Quantity"))
     }.else {
         Fail("quantity did not reach 3")
@@ -309,7 +309,7 @@ import ThePlans
     """))
     let expected = try HeistPlan(body: [
         .repeatUntil(try RepeatUntilStep(
-            predicate: .present(.value("3")),
+            predicate: .exists(.value("3")),
             timeout: 2,
             body: [
                 .action(try ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
@@ -324,19 +324,40 @@ import ThePlans
     try assertCanonicalRoundTrip(plan)
 }
 
+@Test func `inline plan source action until compiles to repeat until`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    Increment(.label("Volume")).until(.exists(.element(label: "Volume", value: "100")))
+    """))
+    let expected = try HeistPlan(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .exists(.element(label: "Volume", value: "100")),
+            timeout: defaultWaitTimeout,
+            body: [
+                .action(try ActionStep(
+                    command: .increment(.predicate(.label("Volume"))),
+                    expectation: WaitStep(predicate: .change(), timeout: 1)
+                )),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `inline plan source WaitFor and If compile`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
-    WaitFor(.present(.label("Home")), timeout: .seconds(1))
+    WaitFor(.exists(.label("Home")), timeout: .seconds(1))
     If {
-        Case(.present(.label("Pay"))) {
+        Case(.exists(.label("Pay"))) {
             Warn("ready")
         }
     }
     """))
     let expected = try HeistPlan(body: [
-        .wait(WaitStep(predicate: .state(.present(.label("Home"))), timeout: 1)),
+        .wait(WaitStep(predicate: .state(.exists(.label("Home"))), timeout: 1)),
         .conditional(try ConditionalStep(cases: [
-            PredicateCase(predicate: .state(.present(.label("Pay"))), body: [.warn(WarnStep(message: "ready"))]),
+            PredicateCase(predicate: .state(.exists(.label("Pay"))), body: [.warn(WarnStep(message: "ready"))]),
         ])),
     ])
 
@@ -346,7 +367,7 @@ import ThePlans
 @Test func `inline plan source ForEach matching compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     ForEach(.matching(.label("Row")), limit: 2) { target in
-        Activate(target).expect(.absent(target))
+        Activate(target).expect(.missing(target))
     }
     """))
     let expected = try HeistPlan(body: [
@@ -357,7 +378,7 @@ import ThePlans
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
-                    expectation: WaitStep(predicate: .state(.absentTarget(.ref("target"))), timeout: 1)
+                    expectation: WaitStep(predicate: .state(.missingTarget(.ref("target"))), timeout: 1)
                 )),
             ]
         )),
@@ -439,11 +460,11 @@ import ThePlans
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+            expectation: WaitStep(predicate: .change(.screen()), timeout: 0)
         )),
         .action(try ActionStep(
             command: .typeText(text: .literal("milk"), target: .predicate(.label("Search"))),
-            expectation: WaitStep(predicate: .present(.value("milk")), timeout: 2)
+            expectation: WaitStep(predicate: .exists(.value("milk")), timeout: 2)
         )),
         .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
         .action(try ActionStep(command: .decrement(.predicate(.identifier("quantity"))))),
@@ -546,14 +567,14 @@ import ThePlans
     try assertCanonicalRoundTrip(try HeistPlan(body: [
         .conditional(try ConditionalStep(
             cases: [
-                PredicateCase(predicate: .present(.label("Pay")), body: [
+                PredicateCase(predicate: .exists(.label("Pay")), body: [
                     .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
                 ]),
             ],
             elseBody: [.fail(FailStep(message: "Pay button missing"))]
         )),
         .wait(WaitStep(
-            predicate: .changed(.screen()),
+            predicate: .change(.screen()),
             timeout: 3,
             elseBody: [.fail(FailStep(message: "screen did not change"))]
         )),
@@ -575,7 +596,7 @@ import ThePlans
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("rowTarget")),
-                    expectation: WaitStep(predicate: .absent(.ref("rowTarget")), timeout: 2)
+                    expectation: WaitStep(predicate: .missing(.ref("rowTarget")), timeout: 2)
                 )),
             ]
         )),
@@ -666,7 +687,7 @@ import ThePlans
     expect(nativeIf, contains: "If { Case(...) { ... } Else { ... } }")
 
     let ifShorthand = try HeistPlanSourceCompiler().compile(root("""
-    If(.present(.label("Pay"))) {
+    If(.exists(.label("Pay"))) {
         Activate(.label("Pay"))
     }.else {
         Fail("missing")
@@ -676,7 +697,7 @@ import ThePlans
         .conditional(try ConditionalStep(
             cases: [
                 PredicateCase(
-                    predicate: .present(.label("Pay")),
+                    predicate: .exists(.label("Pay")),
                     body: [.action(try ActionStep(command: .activate(.predicate(.label("Pay")))))]
                 ),
             ],
@@ -710,20 +731,20 @@ import ThePlans
         Else {
             Warn("fallback")
         }
-        Case(.present(.label("Pay"))) {
+        Case(.exists(.label("Pay"))) {
             Activate(.label("Pay"))
         }
     }
     """))
     expect(caseAfterElse, contains: "Case must appear before Else")
-    let changeAlias = compileError(root(#"Activate(.label("Pay")).expect(.changed(.screenChanged))"#))
+    let changeAlias = compileError(root(#"Activate(.label("Pay")).expect(.change(.screenChanged))"#))
     expect(changeAlias, contains: "unsupported change predicate '.screenChanged'")
 
     let screenChangedAlias = compileError(root(#"Activate(.label("Pay")).expect(.screenChanged)"#))
     expect(screenChangedAlias, contains: "unsupported accessibility predicate '.screenChanged'")
 
-    let existsAlias = compileError(root(#"WaitFor(.exists(.label("Receipt")))"#))
-    expect(existsAlias, contains: "unsupported accessibility predicate '.exists'")
+    let presentAlias = compileError(root(#"WaitFor(.present(.label("Receipt")))"#))
+    expect(presentAlias, contains: "unsupported accessibility predicate '.present'")
 }
 
 @Test func `runtime parser rejects arbitrary Swift and bypass shapes`() throws {
@@ -828,7 +849,7 @@ import ThePlans
             "expected a ButtonHeist expression beginning with '.'"
         ),
         (
-            root(#"WaitFor(AccessibilityPredicate.present(.label("Pay")))"#),
+            root(#"WaitFor(AccessibilityPredicate.exists(.label("Pay")))"#),
             "expected a ButtonHeist expression beginning with '.'"
         ),
         (
@@ -836,11 +857,11 @@ import ThePlans
             "expected a string literal or scoped string reference"
         ),
         (
-            root(#"WaitFor(.present(.label("Pay")), timeout: 1)"#),
+            root(#"WaitFor(.exists(.label("Pay")), timeout: 1)"#),
             "expected a timeout duration such as .seconds(1)"
         ),
         (
-            root(#"WaitFor(.present(.label("Pay")), timeout: Double.seconds(1))"#),
+            root(#"WaitFor(.exists(.label("Pay")), timeout: Double.seconds(1))"#),
             "expected a timeout duration such as .seconds(1)"
         ),
     ]
@@ -888,7 +909,7 @@ import ThePlans
             CustomAction("Archive", on: messageAlias)
         }
 
-        If(.present(.label(rootAlias))) {
+        If(.exists(.label(rootAlias))) {
             TypeText(rootAlias)
         }
 
@@ -897,7 +918,7 @@ import ThePlans
         }
 
         ForEach(.matching(.label("Message")), limit: 1) { rowTarget in
-            Activate(rowTarget).expect(.absent(rowTarget))
+            Activate(rowTarget).expect(.missing(rowTarget))
         }
     }
     """
@@ -923,7 +944,7 @@ import ThePlans
     #expect(plan.body == [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(
-                predicate: .present(.label(.ref("rootValue"))),
+                predicate: .exists(.label(.ref("rootValue"))),
                 body: [.action(try ActionStep(command: .typeText(text: .ref("rootValue"), target: nil)))]
             ),
         ])),
@@ -944,7 +965,7 @@ import ThePlans
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("rowTarget")),
-                    expectation: WaitStep(predicate: .absent(.ref("rowTarget")), timeout: 1)
+                    expectation: WaitStep(predicate: .missing(.ref("rowTarget")), timeout: 1)
                 )),
             ]
         )),
@@ -965,7 +986,7 @@ import ThePlans
         (
             root("""
             ForEach(.matching(.label("Row")), limit: 1) { row in
-                Activate(row).expect(.absent(row))
+                Activate(row).expect(.missing(row))
             }
             Activate(row)
             """),

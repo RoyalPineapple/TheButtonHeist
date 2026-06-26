@@ -114,40 +114,40 @@ extension ElementUpdatePredicateExpr: CustomStringConvertible {
     }
 }
 
-public enum ChangePredicateExpr: Codable, Sendable, Equatable {
-    case screen(where: StatePredicateExpr? = nil)
-    case elements
-    case updated(ElementUpdatePredicateExpr)
+public enum ElementDeltaPredicateExpr: Codable, Sendable, Equatable {
+    case appearedElement(ElementPredicateTemplate)
+    case disappearedElement(ElementPredicateTemplate)
+    case updatedElement(ElementUpdatePredicateExpr)
 
     private enum WireType: String, CaseIterable {
-        case screenChanged = "screen_changed"
-        case elementsChanged = "elements_changed"
-        case elementUpdated = "element_updated"
+        case appeared
+        case disappeared
+        case updated
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, element, `where`, property, from, fromRef = "from_ref", to, toRef = "to_ref"
+        case type, element, property, from, fromRef = "from_ref", to, toRef = "to_ref"
     }
 
-    public init(_ change: AccessibilityPredicate.Change) {
-        switch change {
-        case .screen(let state):
-            self = .screen(where: state.map(StatePredicateExpr.init))
-        case .elements:
-            self = .elements
-        case .updated(let update):
-            self = .updated(ElementUpdatePredicateExpr(update))
+    public init(_ predicate: ElementDeltaPredicate) {
+        switch predicate {
+        case .appearedElement(let element):
+            self = .appearedElement(ElementPredicateTemplate(element))
+        case .disappearedElement(let element):
+            self = .disappearedElement(ElementPredicateTemplate(element))
+        case .updatedElement(let update):
+            self = .updatedElement(ElementUpdatePredicateExpr(update))
         }
     }
 
-    public func resolve(in environment: HeistExecutionEnvironment) throws -> AccessibilityPredicate.Change {
+    public func resolve(in environment: HeistExecutionEnvironment) throws -> ElementDeltaPredicate {
         switch self {
-        case .screen(let state):
-            return .screen(where: try state?.resolve(in: environment))
-        case .elements:
-            return .elements
-        case .updated(let update):
-            return .updated(try update.resolve(in: environment))
+        case .appearedElement(let element):
+            return .appearedElement(try element.resolve(in: environment))
+        case .disappearedElement(let element):
+            return .disappearedElement(try element.resolve(in: environment))
+        case .updatedElement(let update):
+            return .updatedElement(try update.resolve(in: environment))
         }
     }
 
@@ -155,35 +155,210 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
         guard let wireType = WireType(rawValue: typeString) else {
+            let validTypes = WireType.allCases.map(\.rawValue).joined(separator: ", ")
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
-                debugDescription: "Unknown change predicate type: \"\(typeString)\". Valid: \(WireType.allCases.map(\.rawValue).joined(separator: ", "))"
+                debugDescription: "Unknown element delta predicate expression type: \"\(typeString)\". Valid: \(validTypes)"
             )
         }
         switch wireType {
-        case .screenChanged:
-            try decoder.rejectUnknownKeys(allowed: ["type", "where"], typeName: "screen_changed predicate expression")
-            self = .screen(where: try container.decodeIfPresent(StatePredicateExpr.self, forKey: .where))
-        case .elementsChanged:
-            try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "elements_changed predicate expression")
-            self = .elements
-        case .elementUpdated:
-            self = .updated(try ElementUpdatePredicateExpr(from: decoder))
+        case .appeared:
+            try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "appeared predicate expression")
+            self = .appearedElement(try container.decode(ElementPredicateTemplate.self, forKey: .element))
+        case .disappeared:
+            try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "disappeared predicate expression")
+            self = .disappearedElement(try container.decode(ElementPredicateTemplate.self, forKey: .element))
+        case .updated:
+            self = .updatedElement(try ElementUpdatePredicateExpr(from: decoder))
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .screen(let state):
-            try container.encode(WireType.screenChanged.rawValue, forKey: .type)
-            try container.encodeIfPresent(state, forKey: .where)
-        case .elements:
-            try container.encode(WireType.elementsChanged.rawValue, forKey: .type)
-        case .updated(let update):
-            try container.encode(WireType.elementUpdated.rawValue, forKey: .type)
+        case .appearedElement(let element):
+            try container.encode(WireType.appeared.rawValue, forKey: .type)
+            try container.encode(element, forKey: .element)
+        case .disappearedElement(let element):
+            try container.encode(WireType.disappeared.rawValue, forKey: .type)
+            try container.encode(element, forKey: .element)
+        case .updatedElement(let update):
+            try container.encode(WireType.updated.rawValue, forKey: .type)
             try update.encode(to: encoder)
+        }
+    }
+}
+
+extension ElementDeltaPredicateExpr: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .appearedElement(let element):
+            return ScoreDescription.call("appeared", [element.description])
+        case .disappearedElement(let element):
+            return ScoreDescription.call("disappeared", [element.description])
+        case .updatedElement(let update):
+            return ScoreDescription.call("updated", [update.description])
+        }
+    }
+}
+
+public enum ChangePredicateExpr: Codable, Sendable, Equatable {
+    case any
+    case screenScope([StatePredicateExpr] = [])
+    case elementsScope([ElementDeltaPredicateExpr] = [])
+    case allScopes([ChangePredicateExpr])
+
+    private enum PredicateWireType: String {
+        case change
+    }
+
+    private enum ScopeWireType: String, CaseIterable {
+        case screen
+        case elements
+        case all
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case type, scopes, assertions
+    }
+
+    public init(_ change: AccessibilityPredicate.Change) {
+        switch change {
+        case .any:
+            self = .any
+        case .screenScope(let assertions):
+            self = .screenScope(assertions.map(StatePredicateExpr.init))
+        case .elementsScope(let assertions):
+            self = .elementsScope(assertions.map(ElementDeltaPredicateExpr.init))
+        case .allScopes(let changes):
+            self = .allScopes(changes.map(ChangePredicateExpr.init))
+        }
+    }
+
+    public func resolve(in environment: HeistExecutionEnvironment) throws -> AccessibilityPredicate.Change {
+        switch self {
+        case .any:
+            return .any
+        case .screenScope(let assertions):
+            return .screenScope(try assertions.map { try $0.resolve(in: environment) })
+        case .elementsScope(let assertions):
+            return .elementsScope(try assertions.map { try $0.resolve(in: environment) })
+        case .allScopes(let changes):
+            return .allScopes(try changes.map { try $0.resolve(in: environment) })
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let typeString = try container.decode(String.self, forKey: .type)
+        if typeString == PredicateWireType.change.rawValue {
+            try decoder.rejectUnknownKeys(allowed: ["type", "scopes"], typeName: "change predicate expression")
+            let scopes = try container.decodeIfPresent([ChangeScopePredicateExpr].self, forKey: .scopes) ?? []
+            self = Self.composed(scopes.map(\.change))
+            return
+        }
+        self = try ChangeScopePredicateExpr(from: decoder).change
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(PredicateWireType.change.rawValue, forKey: .type)
+        let scopes = Self.flatten(self).map(ChangeScopePredicateExpr.init)
+        if !scopes.isEmpty {
+            try container.encode(scopes, forKey: .scopes)
+        }
+    }
+
+    private static func composed(_ changes: [ChangePredicateExpr]) -> ChangePredicateExpr {
+        let flattened = changes.flatMap(flatten)
+        switch flattened.count {
+        case 0:
+            return .any
+        case 1:
+            return flattened[0]
+        default:
+            return .allScopes(flattened)
+        }
+    }
+
+    fileprivate static func flatten(_ change: ChangePredicateExpr) -> [ChangePredicateExpr] {
+        switch change {
+        case .any:
+            return []
+        case .screenScope, .elementsScope:
+            return [change]
+        case .allScopes(let changes):
+            return changes.flatMap(flatten)
+        }
+    }
+}
+
+private struct ChangeScopePredicateExpr: Codable, Sendable, Equatable {
+    let change: ChangePredicateExpr
+
+    init(_ change: ChangePredicateExpr) {
+        self.change = change
+    }
+
+    private enum ScopeWireType: String, CaseIterable {
+        case screen
+        case elements
+        case all
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case type, assertions, scopes
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "change scope expression")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let typeString = try container.decode(String.self, forKey: .type)
+        guard let type = ScopeWireType(rawValue: typeString) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown change scope type: \"\(typeString)\". Valid: \(ScopeWireType.allCases.map(\.rawValue).joined(separator: ", "))"
+            )
+        }
+        switch type {
+        case .screen:
+            change = .screenScope(try container.decodeIfPresent([StatePredicateExpr].self, forKey: .assertions) ?? [])
+        case .elements:
+            change = .elementsScope(try container.decodeIfPresent([ElementDeltaPredicateExpr].self, forKey: .assertions) ?? [])
+        case .all:
+            let scopes = try container.decode([ChangeScopePredicateExpr].self, forKey: .scopes).map(\.change)
+            guard !scopes.isEmpty else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .scopes,
+                    in: container,
+                    debugDescription: "all change scope expression requires at least one child scope"
+                )
+            }
+            change = .allScopes(scopes)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch change {
+        case .any:
+            try container.encode(ScopeWireType.all.rawValue, forKey: .type)
+            try container.encode([ChangeScopePredicateExpr](), forKey: .scopes)
+        case .screenScope(let assertions):
+            try container.encode(ScopeWireType.screen.rawValue, forKey: .type)
+            if !assertions.isEmpty {
+                try container.encode(assertions, forKey: .assertions)
+            }
+        case .elementsScope(let assertions):
+            try container.encode(ScopeWireType.elements.rawValue, forKey: .type)
+            if !assertions.isEmpty {
+                try container.encode(assertions, forKey: .assertions)
+            }
+        case .allScopes(let changes):
+            try container.encode(ScopeWireType.all.rawValue, forKey: .type)
+            try container.encode(changes.flatMap(ChangePredicateExpr.flatten).map(ChangeScopePredicateExpr.init), forKey: .scopes)
         }
     }
 }
@@ -191,13 +366,14 @@ public enum ChangePredicateExpr: Codable, Sendable, Equatable {
 extension ChangePredicateExpr: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .screen(let state):
-            guard let state else { return "screen_changed" }
-            return ScoreDescription.call("screen_changed", ["where=\(state)"])
-        case .elements:
-            return "elements_changed"
-        case .updated(let update):
-            return ScoreDescription.call("element_updated", [update.description])
+        case .any:
+            return "change"
+        case .screenScope(let assertions):
+            return ScoreDescription.call("screen", assertions.map(\.description))
+        case .elementsScope(let assertions):
+            return ScoreDescription.call("elements", assertions.map(\.description))
+        case .allScopes(let changes):
+            return ScoreDescription.call("all", changes.map(\.description))
         }
     }
 }
@@ -205,7 +381,8 @@ extension ChangePredicateExpr: CustomStringConvertible {
 public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
     case predicate(AccessibilityPredicate)
     case state(StatePredicateExpr)
-    case changed(ChangePredicateExpr)
+    case changePredicate(ChangePredicateExpr)
+    case noChangePredicate
 
     public init(_ predicate: AccessibilityPredicate) {
         self = .predicate(predicate)
@@ -217,8 +394,10 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
             return predicate
         case .state(let state):
             return .state(try state.resolve(in: environment))
-        case .changed(let change):
-            return .changed(try change.resolve(in: environment))
+        case .changePredicate(let change):
+            return .change(try change.resolve(in: environment))
+        case .noChangePredicate:
+            return .noChange
         }
     }
 
@@ -226,10 +405,13 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: PredicateProbeKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
         switch typeString {
-        case "present", "absent", "all":
+        case "exists", "missing", "all":
             self = .state(try StatePredicateExpr(from: decoder))
-        case "screen_changed", "elements_changed", "element_updated":
-            self = .changed(try ChangePredicateExpr(from: decoder))
+        case "change":
+            self = .changePredicate(try ChangePredicateExpr(from: decoder))
+        case "no_change":
+            try decoder.rejectUnknownKeys(allowed: ["type"], typeName: "no_change predicate expression")
+            self = .noChangePredicate
         default:
             self = .predicate(try AccessibilityPredicate(from: decoder))
         }
@@ -241,12 +423,15 @@ public enum AccessibilityPredicateExpr: Codable, Sendable, Equatable {
             try predicate.encode(to: encoder)
         case .state(let state):
             try state.encode(to: encoder)
-        case .changed(let change):
+        case .changePredicate(let change):
             try change.encode(to: encoder)
+        case .noChangePredicate:
+            var container = encoder.container(keyedBy: PredicateProbeKeys.self)
+            try container.encode("no_change", forKey: .type)
         }
     }
 
-    private enum PredicateProbeKeys: String, CodingKey {
+    private enum PredicateProbeKeys: String, CodingKey, CaseIterable {
         case type
     }
 }
@@ -258,8 +443,10 @@ public extension AccessibilityPredicateExpr {
             return lhsPredicate == rhsPredicate
         case (.state(let lhsState), .state(let rhsState)):
             return lhsState == rhsState
-        case (.changed(let lhsChange), .changed(let rhsChange)):
+        case (.changePredicate(let lhsChange), .changePredicate(let rhsChange)):
             return lhsChange == rhsChange
+        case (.noChangePredicate, .noChangePredicate):
+            return true
         case (.predicate(let predicate), .state(let state)),
              (.state(let state), .predicate(let predicate)):
             guard case .state(let predicateState) = predicate,
@@ -267,14 +454,18 @@ public extension AccessibilityPredicateExpr {
                 return false
             }
             return predicateState == resolvedState
-        case (.predicate(let predicate), .changed(let change)),
-             (.changed(let change), .predicate(let predicate)):
-            guard case .changed(let predicateChange) = predicate,
+        case (.predicate(let predicate), .changePredicate(let change)),
+             (.changePredicate(let change), .predicate(let predicate)):
+            guard case .changePredicate(let predicateChange) = predicate,
                   let resolvedChange = try? change.resolve(in: .empty) else {
                 return false
             }
             return predicateChange == resolvedChange
-        case (.state, .changed), (.changed, .state):
+        case (.predicate(let predicate), .noChangePredicate),
+             (.noChangePredicate, .predicate(let predicate)):
+            return predicate == .noChange
+        case (.state, .changePredicate), (.changePredicate, .state), (.state, .noChangePredicate), (.noChangePredicate, .state),
+             (.changePredicate, .noChangePredicate), (.noChangePredicate, .changePredicate):
             return false
         }
     }
@@ -287,8 +478,10 @@ extension AccessibilityPredicateExpr: CustomStringConvertible {
             return predicate.description
         case .state(let state):
             return state.description
-        case .changed(let change):
-            return ScoreDescription.call("changed", [change.description])
+        case .changePredicate(let change):
+            return ScoreDescription.call("change", [change.description])
+        case .noChangePredicate:
+            return "no_change"
         }
     }
 }

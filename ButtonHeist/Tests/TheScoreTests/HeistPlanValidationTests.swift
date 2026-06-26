@@ -69,7 +69,7 @@ func actionStepRejectsExpectationAndWaiverTogether() {
         "payload": {"label": "Save"}
       },
       "expectation": {
-        "predicate": {"type": "present", "element": {"label": "Done"}},
+        "predicate": {"type": "exists", "element": {"label": "Done"}},
         "timeout": 1
       },
       "without_expectation": "not needed"
@@ -122,7 +122,7 @@ func lintFlagsMechanicalCommandsAndViewportSetup() throws {
         .action(try ActionStep(command: .viewportScroll(ScrollTarget(direction: .down)))),
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
-            expectation: WaitStep(predicate: .state(.present(.label("Done"))), timeout: 1)
+            expectation: WaitStep(predicate: .state(.exists(.label("Done"))), timeout: 1)
         )),
     ])
 
@@ -155,7 +155,7 @@ func lintReportsTypeTextWithoutTarget() throws {
 func lintReportsEmptyBranches() throws {
     let plan = try HeistPlan(body: [
         .conditional(try ConditionalStep(cases: [
-            PredicateCase(predicate: .state(.present(.label("Home"))), body: []),
+            PredicateCase(predicate: .state(.exists(.label("Home"))), body: []),
         ])),
     ])
 
@@ -354,9 +354,9 @@ func runtimeSafetyEnforcesBounds() throws {
     )
     let deepPredicate = AccessibilityPredicateExpr.state(.all([
         .all([
-            .present(ElementPredicateTemplate(label: .exact(.literal("Nested")))),
+            .exists(ElementPredicateTemplate(label: .exact(.literal("Nested")))),
         ]),
-        .present(ElementPredicateTemplate(label: .exact(.literal("Sibling")))),
+        .exists(ElementPredicateTemplate(label: .exact(.literal("Sibling")))),
     ]))
     let raw = HeistPlanAdmissionCandidate(body: [
         .wait(WaitStep(predicate: deepPredicate, timeout: 0)),
@@ -389,7 +389,7 @@ func runtimeSafetyEnforcesBounds() throws {
 func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
         .conditional(try ConditionalStep(cases: [
-            PredicateCase(predicate: .state(.present(.label("Home"))), body: [.warn(WarnStep(message: "nested"))]),
+            PredicateCase(predicate: .state(.exists(.label("Home"))), body: [.warn(WarnStep(message: "nested"))]),
         ])),
     ])
 
@@ -467,12 +467,12 @@ func runtimeSafetyRejectsNestedCollectionLoops() throws {
     let cases: [(HeistPlanAdmissionCandidate, String)] = [
         (HeistPlanAdmissionCandidate(body: [
             .conditional(try ConditionalStep(cases: [
-                PredicateCase(predicate: .state(.present(.label("Home"))), body: [.forEachString(nested)]),
+                PredicateCase(predicate: .state(.exists(.label("Home"))), body: [.forEachString(nested)]),
             ])),
         ]), "$.body[0].conditional.cases[0].body[0].for_each_string"),
         (HeistPlanAdmissionCandidate(body: [
             .wait(WaitStep(
-                predicate: .state(.present(.label("Home"))),
+                predicate: .state(.exists(.label("Home"))),
                 timeout: 1,
                 elseBody: [.forEachString(nested)]
             )),
@@ -780,14 +780,14 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
     let plan = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.target(.predicate(.label("Sign In")))),
-            expectation: WaitStep(predicate: .state(.present(.label("Home"))), timeout: 5)
+            expectation: WaitStep(predicate: .state(.exists(.label("Home"))), timeout: 5)
         )),
-        .wait(WaitStep(predicate: .state(.absent(.label("Loading"))), timeout: 1)),
+        .wait(WaitStep(predicate: .state(.missing(.label("Loading"))), timeout: 1)),
         .conditional(try ConditionalStep(cases: [
-            PredicateCase(predicate: .state(.present(.label("Home"))), body: [.warn(WarnStep(message: "home"))]),
+            PredicateCase(predicate: .state(.exists(.label("Home"))), body: [.warn(WarnStep(message: "home"))]),
         ])),
         .wait(WaitStep(
-            predicate: .state(.present(.label("Done"))),
+            predicate: .state(.exists(.label("Done"))),
             timeout: 2,
             elseBody: [.fail(FailStep(message: "timeout"))]
         )),
@@ -799,7 +799,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
-                    expectation: WaitStep(predicate: .state(.absentTarget(.ref("target"))), timeout: 2)
+                    expectation: WaitStep(predicate: .state(.missingTarget(.ref("target"))), timeout: 2)
                 )),
             ]
         )),
@@ -810,7 +810,7 @@ func runtimeSafetyAcceptsRepresentativeCanonicalPlan() throws {
                 .action(try ActionStep(
                     command: .typeText(text: .ref("item"), target: .target(.predicate(.label("Add item")))),
                     expectation: WaitStep(
-                        predicate: .state(.present(ElementPredicateTemplate(label: .exact(.ref("item"))))),
+                        predicate: .state(.exists(ElementPredicateTemplate(label: .exact(.ref("item"))))),
                         timeout: 2
                     )
                 )),

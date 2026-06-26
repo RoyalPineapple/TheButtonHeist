@@ -60,7 +60,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testHeistPlanCarriesWaitStep() throws {
         let plan = try HeistPlan(body: [
-            .wait(WaitStep(predicate: .changed(.elements), timeout: 2)),
+            .wait(WaitStep(predicate: .change(.elements()), timeout: 2)),
         ])
 
         let decodedPlan = try roundTripHeistPlan(plan)
@@ -68,7 +68,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         guard case .wait(let wait)? = decodedPlan.body.first else {
             return XCTFail("Expected wait step")
         }
-        XCTAssertEqual(wait.predicate, .changed(.elements))
+        XCTAssertEqual(wait.predicate, .change(.elements()))
         XCTAssertEqual(wait.timeout, 2)
     }
 

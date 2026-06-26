@@ -268,17 +268,17 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
         body: [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Submit"))),
-                expectation: WaitStep(predicate: .present(.label("Done")), timeout: 1)
+                expectation: WaitStep(predicate: .exists(.label("Done")), timeout: 1)
             )),
-            .wait(WaitStep(predicate: .changed(.screen()), timeout: 2)),
+            .wait(WaitStep(predicate: .change(.screen()), timeout: 2)),
         ]
     ).describeHeist(named: "submit")
 
-    #expect(description.semanticSurface.expectations == [#"present(predicate(label="Done"))"#])
-    #expect(description.semanticSurface.waits == ["changed(screen_changed)"])
+    #expect(description.semanticSurface.expectations == [#"exists(predicate(label="Done"))"#])
+    #expect(description.semanticSurface.waits == ["change(screen(*))"])
     #expect(description.semanticSurface.expectedEffects == [
-        #"present(predicate(label="Done"))"#,
-        "changed(screen_changed)",
+        #"exists(predicate(label="Done"))"#,
+        "change(screen(*))",
     ])
 }
 
@@ -323,9 +323,9 @@ private func detailedSurfacePlan() throws -> HeistPlan {
                 body: [
                     .action(try ActionStep(
                         command: .activate(.predicate(.label("Checkout"))),
-                        expectation: WaitStep(predicate: .present(.label("Done")), timeout: 1)
+                        expectation: WaitStep(predicate: .exists(.label("Done")), timeout: 1)
                     )),
-                    .wait(WaitStep(predicate: .present(.label("Confirm")), timeout: 1)),
+                    .wait(WaitStep(predicate: .exists(.label("Confirm")), timeout: 1)),
                     .invoke(HeistInvocationStep(path: ["confirm"])),
                 ]
             ),

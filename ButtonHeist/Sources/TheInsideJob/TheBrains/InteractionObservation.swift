@@ -133,16 +133,18 @@ final class InteractionObservation {
 
     func waitForPredicate(
         _ step: WaitStep,
-        initialTrace: AccessibilityTrace? = nil
+        initialTrace: AccessibilityTrace? = nil,
+        after sequence: UInt64? = nil
     ) async -> HeistWaitReceipt {
-        await predicateWait.wait(for: step, initialTrace: initialTrace)
+        await predicateWait.wait(for: step, initialTrace: initialTrace, after: sequence)
     }
 
     func waitForPredicate(
         _ step: ResolvedWaitStep,
-        initialTrace: AccessibilityTrace? = nil
+        initialTrace: AccessibilityTrace? = nil,
+        after sequence: UInt64? = nil
     ) async -> HeistWaitReceipt {
-        await predicateWait.wait(for: step, initialTrace: initialTrace)
+        await predicateWait.wait(for: step, initialTrace: initialTrace, after: sequence)
     }
 
     func waitForPredicateCases(

@@ -6,16 +6,16 @@ import Testing
 func `representative heist plan encodes decodes validates and renders`() throws {
     let plan = try HeistPlan("loginFlow") {
         TypeText("alex@example.com", into: .identifier("email"))
-            .expect(.present(.value("alex@example.com")), timeout: .seconds(1))
+            .expect(.exists(.value("alex@example.com")), timeout: .seconds(1))
 
         Activate(.label("Submit"))
-            .expect(.changed(.screen()))
-            .expect(.present(.label("Home")), timeout: .seconds(5))
+            .expect(.change(.screen()))
+            .expect(.exists(.label("Home")), timeout: .seconds(5))
 
-        WaitFor(.absent(.label("Loading")), timeout: .seconds(1))
+        WaitFor(.missing(.label("Loading")), timeout: .seconds(1))
 
         If {
-            Case(.present(.label("Promo"))) {
+            Case(.exists(.label("Promo"))) {
                 Warn("promo visible")
             }
 

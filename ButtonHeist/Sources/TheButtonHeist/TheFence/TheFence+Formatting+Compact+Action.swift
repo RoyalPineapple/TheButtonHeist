@@ -51,9 +51,9 @@ extension FenceResponse {
         command: TheFence.Command? = nil,
         result: ActionResult? = nil
     ) -> String? {
-        if expectation.predicate == .changed(.screen()), expectation.actual == "elementsChanged" {
-            return "screen_changed requires a screen-level transition; " +
-                "use elements_changed for same-screen element updates " +
+        if expectation.predicate == .change(.screen()), expectation.actual == "elementsChanged" {
+            return ".change(.screen()) requires a screen-level transition; " +
+                "use .change(.elements()) for same-screen element updates " +
                 "or wait when the UI may settle asynchronously"
         }
 
@@ -72,7 +72,7 @@ extension FenceResponse {
     ) -> Bool {
         guard expectation.actual == AccessibilityTrace.DeltaKind.noChange.rawValue,
               let predicate = expectation.predicate,
-              case .changed = predicate
+              case .changePredicate = predicate
         else { return false }
 
         if command == .activate {
