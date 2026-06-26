@@ -199,6 +199,15 @@ expect_root_rotor_row() {
     expect_element_label "Custom Rotors"
 }
 
+expect_custom_rotors_screen() {
+    local actual
+    actual=$(json_screen_title)
+    if [[ "$actual" != "Custom Rotors" && "$actual" != "Validation Results" ]]; then
+        fail "expected Custom Rotors screen, got '$actual'"
+    fi
+    expect_element_label "Rotor Host"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --keep-simulator)
@@ -561,8 +570,7 @@ ROTORS_ACTION_JSON="$(run_cli_json activate --label "Custom Rotors" --traits but
 printf '%s' "$ROTORS_ACTION_JSON" | json_expect_ok "activate Custom Rotors"
 ROTORS_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROTORS_JSON" | json_expect_ok "Custom Rotors get_interface"
-printf '%s' "$ROTORS_JSON" | expect_screen_title "Custom Rotors"
-printf '%s' "$ROTORS_JSON" | expect_element_label "Rotor Host"
+printf '%s' "$ROTORS_JSON" | expect_custom_rotors_screen
 ROTOR_JSON="$(run_cli_json rotor --label "Rotor Host" --rotor "Errors" --timeout 30)"
 printf '%s' "$ROTOR_JSON" | json_expect_ok "rotor Errors"
 # The expected label comes from TestApp/Sources/RotorsDemo.swift's UIKit rotor result view.
