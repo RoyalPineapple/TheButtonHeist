@@ -23,6 +23,7 @@ SOURCE="$TMP_DIR/Plan.swift"
 OUTPUT="$TMP_DIR/compiled.heist"
 RENDERED="$TMP_DIR/rendered.swift"
 EXPECTED="$TMP_DIR/expected.swift"
+EXAMPLE_OUTPUT="$TMP_DIR/example.heist"
 
 cat > "$SOURCE" <<'SWIFT'
 import ThePlans
@@ -61,6 +62,11 @@ echo "Validating compiled heist package passes runtime validation"
 echo "Rendering compiled heist package as canonical Swift"
 "$HEIST_PLAN_TOOL" render-swift "$OUTPUT" > "$RENDERED"
 diff -u "$EXPECTED" "$RENDERED"
+
+echo "Compiling checked-in public example with heist-plan"
+HEIST_SOURCE_COMPILER_TRACE=1 HEIST_THEPLANS_BUILD_DIR="$HEIST_THEPLANS_BUILD_DIR" \
+    "$HEIST_PLAN_TOOL" compile examples/heist-program.swift --output "$EXAMPLE_OUTPUT"
+"$HEIST_PLAN_TOOL" validate "$EXAMPLE_OUTPUT"
 
 echo "Compiling Swift fixture through installed-prefix artifacts"
 INSTALLED_PREFIX="$TMP_DIR/installed-prefix"

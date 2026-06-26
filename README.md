@@ -137,7 +137,7 @@ checks, put them in order:
 `.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")), .traits([.button]))`.
 All checks must pass. Use `.traits([...])` for required traits and
 `.excludeTraits([...])` for rejected traits.
-Property-update `from` and `to` filters use the same exact-by-default matching
+Property-update `before` and `after` filters use the same exact-by-default matching
 model. For KIF migrations that previously used a selector such as
 `usingLabelContaining("Search")`, write the looseness explicitly with
 `.label(.contains("Search"))` or `.element(.label(.contains("Search")))`;
@@ -247,7 +247,7 @@ after evidence, the action can say what must be true after it runs:
 
 ```swift
 Activate(.label("Sign In"))
-    .expect(.present(.label("Home")), timeout: .seconds(5))
+    .expect(.exists(.label("Home")), timeout: .seconds(5))
 ```
 
 If the expectation fails, the action fails with the receipt attached. That is
@@ -270,10 +270,10 @@ import ThePlans
 
 let login = try HeistPlan("login") {
     TypeText("agent@example.com", into: .label("Email"))
-        .expect(.present(.element(.label("Email"), .value("agent@example.com"))), timeout: .seconds(2))
+        .expect(.exists(.element(.label("Email"), .value("agent@example.com"))), timeout: .seconds(2))
 
     Activate(.label("Sign In"))
-        .expect(.present(.label("Home")), timeout: .seconds(5))
+        .expect(.exists(.label("Home")), timeout: .seconds(5))
 }
 ```
 
@@ -298,17 +298,17 @@ control primitives:
 ```swift
 let search = try HeistPlan("searchFlow") {
     TypeText("milk", into: .label("Search"))
-        .expect(.present(.element(.label("Search"), .value("milk"))), timeout: .seconds(2))
+        .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: .seconds(2))
 
     Activate(.label("Search"))
-        .expect(.changed(.screen()), timeout: .seconds(5))
+        .expect(.change(.screen()), timeout: .seconds(5))
 
-    WaitFor(.present(.label("Results")), timeout: .seconds(5))
+    WaitFor(.exists(.label("Results")), timeout: .seconds(5))
         .else {
             Fail("Search did not settle")
         }
 
-    If(.present(.label("Results"))) {
+    If(.exists(.label("Results"))) {
         Warn("Search results loaded")
     }
 }

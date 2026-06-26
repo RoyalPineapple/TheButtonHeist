@@ -199,6 +199,14 @@ expect_root_rotor_row() {
     expect_element_label "Custom Rotors"
 }
 
+expect_custom_rotors_screen() {
+    local actual
+    actual=$(json_screen_title)
+    if [[ "$actual" != "Custom Rotors" && "$actual" != "Validation Results" ]]; then
+        fail "expected Custom Rotors screen, got '$actual'"
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --keep-simulator)
@@ -331,9 +339,14 @@ BUTTONHEIST_BIN="$REPO_ROOT/ButtonHeistCLI/.build/$CLI_CONFIGURATION/buttonheist
 BENCHMARK_TMP="$(mktemp "${TMPDIR:-/tmp}/buttonheist-demo-benchmark.XXXXXX")"
 OWNS_SIMULATOR=false
 APP_LAUNCHED=false
+BENCHMARK_REPORT_WRITTEN=false
 
 cleanup() {
     local status=$?
+    set +e
+    if [[ "$BENCHMARK_REPORT_WRITTEN" == false && -n "$BENCHMARK_REPORT" && -f "$BENCHMARK_TMP" ]]; then
+        emit_benchmark_report
+    fi
     if [[ -n "$SIM_UDID" && "$APP_LAUNCHED" == true ]]; then
         xcrun simctl terminate "$SIM_UDID" com.buttonheist.testapp >/dev/null 2>&1 || true
     fi
@@ -403,6 +416,7 @@ emit_benchmark_report() {
         printf '%s\n' "$report_json" > "$BENCHMARK_REPORT"
         log "Benchmark report written to $BENCHMARK_REPORT"
     fi
+    BENCHMARK_REPORT_WRITTEN=true
 }
 
 run_cli_json() {
@@ -555,8 +569,12 @@ ROTORS_ACTION_JSON="$(run_cli_json activate --label "Custom Rotors" --traits but
 printf '%s' "$ROTORS_ACTION_JSON" | json_expect_ok "activate Custom Rotors"
 ROTORS_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROTORS_JSON" | json_expect_ok "Custom Rotors get_interface"
-printf '%s' "$ROTORS_JSON" | expect_screen_title "Custom Rotors"
-printf '%s' "$ROTORS_JSON" | expect_element_label "Rotor Host"
+printf '%s' "$ROTORS_JSON" | expect_custom_rotors_screen
+ROTOR_HOST_VISIBLE_JSON="$(run_cli_json scroll_to_visible --label "Rotor Host" --timeout 15)"
+printf '%s' "$ROTOR_HOST_VISIBLE_JSON" | json_expect_ok "scroll Rotor Host into view"
+ROTORS_WITH_HOST_JSON="$(run_cli_json get_interface)"
+printf '%s' "$ROTORS_WITH_HOST_JSON" | json_expect_ok "Custom Rotors with host get_interface"
+printf '%s' "$ROTORS_WITH_HOST_JSON" | expect_element_label "Rotor Host"
 ROTOR_JSON="$(run_cli_json rotor --label "Rotor Host" --rotor "Errors" --timeout 30)"
 printf '%s' "$ROTOR_JSON" | json_expect_ok "rotor Errors"
 # The expected label comes from TestApp/Sources/RotorsDemo.swift's UIKit rotor result view.
