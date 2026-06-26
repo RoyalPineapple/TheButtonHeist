@@ -42,6 +42,50 @@ extension TheBrains {
         let lastObservedSummary: String?
     }
 
+    private struct RepeatUntilLoopState {
+        var observedSequence: SettledObservationSequence
+        var observedTrace: AccessibilityTrace?
+        var lastObservedSummary: String?
+        var lastExpectation: ExpectationResult
+        var lastActionResult: ActionResult?
+        var iterationNodes: [HeistExecutionStepResult] = []
+        var iterationCount = 0
+
+        init(
+            initialObservedSequence: SettledObservationSequence,
+            initialOutcome: RepeatUntilOutcome
+        ) {
+            observedSequence = initialObservedSequence
+            observedTrace = initialOutcome.actionResult?.accessibilityTrace
+            lastObservedSummary = initialOutcome.lastObservedSummary
+            lastExpectation = initialOutcome.expectation
+            lastActionResult = initialOutcome.actionResult
+        }
+
+        mutating func applyPostBody(_ postBody: RepeatUntilPostBodyResult) {
+            if let sequence = postBody.observedSequence {
+                observedSequence = sequence
+            }
+            if let trace = postBody.observedTrace {
+                observedTrace = trace
+            }
+            lastObservedSummary = postBody.lastObservedSummary ?? lastObservedSummary
+            lastExpectation = postBody.expectation
+            lastActionResult = postBody.actionResult
+        }
+
+        func outcome(failureReason: String? = nil) -> RepeatUntilOutcome {
+            RepeatUntilOutcome(
+                iterationCount: iterationCount,
+                expectation: lastExpectation,
+                actionResult: lastActionResult,
+                lastObservedSummary: lastObservedSummary,
+                failureReason: failureReason,
+                iterationNodes: iterationNodes
+            )
+        }
+    }
+
     private struct RepeatUntilIterationFrame {
         let path: String
         let start: CFAbsoluteTime
@@ -164,16 +208,13 @@ extension TheBrains {
         timeout: Double
     ) async -> HeistExecutionStepResult {
         let deadline = context.start + timeout
-        var observedSequence = initialObservedSequence
-        var observedTrace = initialOutcome.actionResult?.accessibilityTrace
-        var lastObservedSummary = initialOutcome.lastObservedSummary
-        var lastExpectation = initialOutcome.expectation
-        var lastActionResult = initialOutcome.actionResult
-        var iterationNodes: [HeistExecutionStepResult] = []
-        var iterationCount = 0
+        var state = RepeatUntilLoopState(
+            initialObservedSequence: initialObservedSequence,
+            initialOutcome: initialOutcome
+        )
 
         while CFAbsoluteTimeGetCurrent() < deadline {
-            let iterationIndex = iterationCount
+            let iterationIndex = state.iterationCount
             let iterationStart = CFAbsoluteTimeGetCurrent()
             let iterationPath = "\(context.path).repeat_until.iterations[\(iterationIndex)]"
             let iterationResults = await executeHeistSteps(
@@ -183,52 +224,37 @@ extension TheBrains {
                 scope: context.scope,
                 path: "\(iterationPath).body"
             )
-            iterationCount += 1
+            state.iterationCount += 1
             let frame = RepeatUntilIterationFrame(
                 path: iterationPath,
                 start: iterationStart,
                 index: iterationIndex,
-                count: iterationCount
+                count: state.iterationCount
             )
 
-            if let abortedAtChildPath = iterationResults.firstFailedStep?.path {
-                return repeatUntilBodyFailureResult(
+            if let failedStep = iterationResults.firstFailedStep {
+                return await repeatUntilResultAfterBodyFailure(
                     context: context,
                     step: step,
                     frame: frame,
-                    lastObservedSummary: lastObservedSummary,
-                    abortedAtChildPath: abortedAtChildPath,
+                    failedStep: failedStep,
                     iterationResults: iterationResults,
-                    previousIterationNodes: iterationNodes
+                    deadline: deadline,
+                    state: &state
                 )
             }
 
             let postBody = await repeatUntilPostBodyResult(
                 context: context,
                 step: step,
-                observedSequence: observedSequence,
-                observedTrace: observedTrace,
+                observedSequence: state.observedSequence,
+                observedTrace: state.observedTrace,
                 deadline: deadline
             )
-            if let sequence = postBody.observedSequence {
-                observedSequence = sequence
-            }
-            if let trace = postBody.observedTrace {
-                observedTrace = trace
-            }
-            lastObservedSummary = postBody.lastObservedSummary ?? lastObservedSummary
-            lastExpectation = postBody.expectation
-            lastActionResult = postBody.actionResult
+            state.applyPostBody(postBody)
 
-            let iterationOutcome = RepeatUntilOutcome(
-                iterationCount: iterationCount,
-                expectation: lastExpectation,
-                actionResult: lastActionResult,
-                lastObservedSummary: lastObservedSummary,
-                failureReason: nil,
-                iterationNodes: []
-            )
-            iterationNodes.append(repeatUntilIterationResult(
+            let iterationOutcome = state.outcome().withIterationNodes([])
+            state.iterationNodes.append(repeatUntilIterationResult(
                 path: frame.path,
                 start: frame.start,
                 step: step,
@@ -238,11 +264,11 @@ extension TheBrains {
                 children: iterationResults
             ))
 
-            if lastExpectation.met {
+            if state.lastExpectation.met {
                 return repeatUntilResult(
                     context: context,
                     step: step,
-                    outcome: iterationOutcome.withIterationNodes(iterationNodes)
+                    outcome: iterationOutcome.withIterationNodes(state.iterationNodes)
                 )
             }
             if !postBody.actionResult.success {
@@ -256,13 +282,8 @@ extension TheBrains {
         return await repeatUntilTimeoutResult(
             context: context,
             step: step,
-            outcome: RepeatUntilOutcome(
-                iterationCount: iterationCount,
-                expectation: lastExpectation,
-                actionResult: lastActionResult,
-                lastObservedSummary: lastObservedSummary,
-                failureReason: repeatUntilTimeoutReason(step: step, expectation: lastExpectation),
-                iterationNodes: iterationNodes
+            outcome: state.outcome(
+                failureReason: repeatUntilTimeoutReason(step: step, expectation: state.lastExpectation)
             )
         )
     }
@@ -310,6 +331,96 @@ extension TheBrains {
                 iterationNodes: iterationNodes
             )
         )
+    }
+
+    private func repeatUntilResultAfterBodyFailure(
+        context: RepeatUntilExecutionContext,
+        step: ResolvedRepeatUntilStep,
+        frame: RepeatUntilIterationFrame,
+        failedStep: HeistExecutionStepResult,
+        iterationResults: [HeistExecutionStepResult],
+        deadline: CFAbsoluteTime,
+        state: inout RepeatUntilLoopState
+    ) async -> HeistExecutionStepResult {
+        if repeatUntilShouldCheckStopPredicate(afterBodyFailure: failedStep, in: iterationResults) {
+            let postBody = await repeatUntilPostBodyResult(
+                context: context,
+                step: step,
+                observedSequence: state.observedSequence,
+                observedTrace: state.observedTrace,
+                deadline: deadline
+            )
+            state.applyPostBody(postBody)
+
+            if state.lastExpectation.met {
+                let iterationOutcome = state.outcome().withIterationNodes([])
+                state.iterationNodes.append(repeatUntilIterationResult(
+                    path: frame.path,
+                    start: frame.start,
+                    step: step,
+                    iterationIndex: frame.index,
+                    outcome: iterationOutcome,
+                    abortedAtChildPath: nil,
+                    children: repeatUntilIterationResultsIgnoringRedundantFailure(
+                        iterationResults,
+                        failedPath: failedStep.path
+                    )
+                ))
+                return repeatUntilResult(
+                    context: context,
+                    step: step,
+                    outcome: iterationOutcome.withIterationNodes(state.iterationNodes)
+                )
+            }
+        }
+
+        return repeatUntilBodyFailureResult(
+            context: context,
+            step: step,
+            frame: frame,
+            lastObservedSummary: state.lastObservedSummary,
+            abortedAtChildPath: failedStep.path,
+            iterationResults: iterationResults,
+            previousIterationNodes: state.iterationNodes
+        )
+    }
+
+    private func repeatUntilShouldCheckStopPredicate(
+        afterBodyFailure failedStep: HeistExecutionStepResult,
+        in iterationResults: [HeistExecutionStepResult]
+    ) -> Bool {
+        guard iterationResults.contains(where: { $0.path == failedStep.path }) else { return false }
+        guard failedStep.kind == .action,
+              failedStep.failure?.category == .action,
+              failedStep.actionEvidence?.actionResult?.success == false else {
+            return false
+        }
+        switch failedStep.actionEvidence?.actionResult?.errorKind {
+        case nil, .some(.actionFailed):
+            return true
+        case .some(.elementNotFound), .some(.timeout), .some(.validationError), .some(.authFailure), .some(.general):
+            return false
+        }
+    }
+
+    private func repeatUntilIterationResultsIgnoringRedundantFailure(
+        _ iterationResults: [HeistExecutionStepResult],
+        failedPath: String
+    ) -> [HeistExecutionStepResult] {
+        iterationResults.map { result in
+            guard result.path == failedPath else { return result }
+            return HeistExecutionStepResult(
+                path: result.path,
+                kind: result.kind,
+                status: .passed,
+                durationMs: result.durationMs,
+                intent: result.intent,
+                evidence: result.evidence,
+                failure: nil,
+                abortedAtChildPath: nil,
+                children: result.children
+            )
+        }
     }
 
     private func repeatUntilPostBodyResult(

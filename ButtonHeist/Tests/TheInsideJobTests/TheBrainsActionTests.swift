@@ -898,6 +898,106 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeout, defaultActionExpectationTimeout, accuracy: 0.1)
     }
 
+    func testHeistRepeatUntilSucceedsWhenBodyActionFailsAfterPredicateMet() async throws {
+        var activationCount = 0
+        let runtime = heistRuntime(
+            observations: [
+                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+                observedState(elements: [(makeElement(value: "2", identifier: "quantity"), "quantity")]),
+            ],
+            execute: { command in
+                if case .activate = command {
+                    activationCount += 1
+                    if activationCount == 2 {
+                        return ActionResult(
+                            success: false,
+                            method: .activate,
+                            message: "Element is disabled (has 'notEnabled' trait)",
+                            errorKind: .actionFailed
+                        )
+                    }
+                }
+                return ActionResult(success: true, method: .activate, message: command.runtimeType.rawValue)
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                timeout: 1,
+                body: [
+                    .action(try ActionStep(command: .activate(.predicate(.identifier("quantity"))))),
+                ]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        let secondIteration = try XCTUnwrap(step.children.last)
+        let redundantRetry = try XCTUnwrap(secondIteration.children.first)
+
+        XCTAssertTrue(result.success, result.message ?? "repeat_until failed")
+        XCTAssertNil(heist.abortedAtPath)
+        XCTAssertEqual(activationCount, 2)
+        XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
+        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
+        XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration, .repeatUntilIteration])
+        XCTAssertEqual(secondIteration.status, .passed)
+        XCTAssertEqual(redundantRetry.status, .passed)
+        XCTAssertEqual(redundantRetry.actionEvidence?.actionResult?.success, false)
+        XCTAssertNil(redundantRetry.failure)
+    }
+
+    func testHeistRepeatUntilBodyActionFailureStillFailsWhenPredicateUnmet() async throws {
+        var activationCount = 0
+        let runtime = heistRuntime(
+            observations: [
+                observedState(elements: [(makeElement(value: "0", identifier: "quantity"), "quantity")]),
+                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+                observedState(elements: [(makeElement(value: "1", identifier: "quantity"), "quantity")]),
+            ],
+            execute: { command in
+                if case .activate = command {
+                    activationCount += 1
+                    if activationCount == 2 {
+                        return ActionResult(
+                            success: false,
+                            method: .activate,
+                            message: "Element is disabled (has 'notEnabled' trait)",
+                            errorKind: .actionFailed
+                        )
+                    }
+                }
+                return ActionResult(success: true, method: .activate, message: command.runtimeType.rawValue)
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                timeout: 1,
+                body: [
+                    .action(try ActionStep(command: .activate(.predicate(.identifier("quantity"))))),
+                ]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        let failedIteration = try XCTUnwrap(step.children.last)
+        let failedRetry = try XCTUnwrap(failedIteration.children.first)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(activationCount, 2)
+        XCTAssertEqual(heist.abortedAtPath, "$.body[0].repeat_until.iterations[1].body[0]")
+        XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
+        XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
+        XCTAssertEqual(failedIteration.status, .failed)
+        XCTAssertEqual(failedRetry.status, .failed)
+        XCTAssertEqual(failedRetry.actionEvidence?.actionResult?.errorKind, .actionFailed)
+    }
+
     func testHeistRepeatUntilTimeoutWithElseRunsElseBodyWithoutBodyWhenTimeoutIsZero() async throws {
         var incrementCount = 0
         let runtime = heistRuntime(
