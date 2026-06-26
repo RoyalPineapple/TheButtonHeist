@@ -126,7 +126,12 @@ public extension HeistElement {
         annotation: InterfaceElementAnnotation? = nil
     ) {
         let frame = accessibilityFrame(for: element.shape)
-        let activationPoint = accessibilityActivationPoint(for: element, frame: frame)
+        let projectedFrame = contentSpaceFrame(for: frame, annotation: annotation)
+        let activationPoint = accessibilityActivationPoint(
+            for: element,
+            sourceFrame: frame,
+            projectedFrame: projectedFrame
+        )
         let validCustomContent = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
         let validRotors = element.customRotors.filter { !$0.name.isEmpty }
         self.init(
@@ -136,10 +141,10 @@ public extension HeistElement {
             identifier: element.identifier,
             hint: element.hint,
             traits: element.traits.heistTraits,
-            frameX: sanitizedDouble(frame.origin.x),
-            frameY: sanitizedDouble(frame.origin.y),
-            frameWidth: sanitizedDouble(frame.size.width),
-            frameHeight: sanitizedDouble(frame.size.height),
+            frameX: sanitizedDouble(projectedFrame.origin.x),
+            frameY: sanitizedDouble(projectedFrame.origin.y),
+            frameWidth: sanitizedDouble(projectedFrame.size.width),
+            frameHeight: sanitizedDouble(projectedFrame.size.height),
             activationPointX: sanitizedDouble(activationPoint.x),
             activationPointY: sanitizedDouble(activationPoint.y),
             respondsToUserInteraction: element.respondsToUserInteraction,
@@ -152,13 +157,31 @@ public extension HeistElement {
     }
 }
 
-private func accessibilityActivationPoint(for element: AccessibilityElement, frame: CGRect) -> CGPoint {
+private func contentSpaceFrame(for frame: CGRect, annotation: InterfaceElementAnnotation?) -> CGRect {
+    guard let contentSpaceOrigin = annotation?.contentSpaceOrigin else { return frame }
+    return CGRect(
+        x: CGFloat(contentSpaceOrigin.x),
+        y: CGFloat(contentSpaceOrigin.y),
+        width: frame.size.width,
+        height: frame.size.height
+    )
+}
+
+private func accessibilityActivationPoint(
+    for element: AccessibilityElement,
+    sourceFrame: CGRect,
+    projectedFrame: CGRect
+) -> CGPoint {
     if element.usesDefaultActivationPoint {
-        return CGPoint(x: frame.midX, y: frame.midY)
+        return CGPoint(x: projectedFrame.midX, y: projectedFrame.midY)
     }
-    return CGPoint(
+    let sourceActivationPoint = CGPoint(
         x: CGFloat(element.activationPoint.x),
         y: CGFloat(element.activationPoint.y)
+    )
+    return CGPoint(
+        x: sourceActivationPoint.x + projectedFrame.origin.x - sourceFrame.origin.x,
+        y: sourceActivationPoint.y + projectedFrame.origin.y - sourceFrame.origin.y
     )
 }
 

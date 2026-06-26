@@ -136,7 +136,8 @@ extension TheStash {
                     nextTraversalIndex += 1
                     elementAnnotations.append(InterfaceElementAnnotation(
                         path: childPath,
-                        actions: buildActions(for: entry.element)
+                        actions: buildActions(for: entry.element),
+                        contentSpaceOrigin: entry.contentSpaceOrigin.map(AccessibilityPoint.init)
                     ))
                 case .container(let entry):
                     var nestedChildren: [AccessibilityHierarchy] = []
@@ -199,7 +200,8 @@ extension TheStash {
         let annotations = entries.enumerated().map { index, entry in
             InterfaceElementAnnotation(
                 path: TreePath([index]),
-                actions: buildActions(for: entry.element)
+                actions: buildActions(for: entry.element),
+                contentSpaceOrigin: entry.contentSpaceOrigin.map(AccessibilityPoint.init)
             )
         }
         return Interface(
@@ -214,9 +216,12 @@ extension TheStash {
     private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
         screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .element(let element, _) = node else { return nil }
+            let contentSpaceOrigin = screen.liveCapture.heistId(for: element)
+                .flatMap { screen.semantic.elements[$0]?.contentSpaceOrigin }
             return InterfaceElementAnnotation(
                 path: path,
-                actions: buildActions(for: element)
+                actions: buildActions(for: element),
+                contentSpaceOrigin: contentSpaceOrigin.map(AccessibilityPoint.init)
             )
         }
     }
