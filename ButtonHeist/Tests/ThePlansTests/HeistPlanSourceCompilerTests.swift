@@ -299,6 +299,31 @@ import ThePlans
     #expect(plan == expected)
 }
 
+@Test func `inline plan source RepeatUntil compiles`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root("""
+    RepeatUntil(.present(.value("3")), timeout: .seconds(2)) {
+        Increment(.identifier("Quantity"))
+    }.else {
+        Fail("quantity did not reach 3")
+    }
+    """))
+    let expected = try HeistPlan(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .present(.value("3")),
+            timeout: 2,
+            body: [
+                .action(try ActionStep(command: .increment(.predicate(.identifier("Quantity"))))),
+            ],
+            elseBody: [
+                .fail(FailStep(message: "quantity did not reach 3")),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `inline plan source WaitFor and If compile`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     WaitFor(.present(.label("Home")), timeout: .seconds(1))
@@ -1023,6 +1048,7 @@ private enum ParsedHeistStepKind: Equatable {
     case conditional
     case forEachElement
     case forEachString
+    case repeatUntil
     case warn
     case fail
     case heist
@@ -1037,6 +1063,7 @@ private extension HeistStep {
         case .conditional: return .conditional
         case .forEachElement: return .forEachElement
         case .forEachString: return .forEachString
+        case .repeatUntil: return .repeatUntil
         case .warn: return .warn
         case .fail: return .fail
         case .heist: return .heist

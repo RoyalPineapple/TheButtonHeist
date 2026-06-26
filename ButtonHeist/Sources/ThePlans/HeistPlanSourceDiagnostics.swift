@@ -19,8 +19,13 @@ extension HeistPlanSourceParser {
             throw error(currentToken, "enum declarations are Swift wrapper code, not ButtonHeist DSL body syntax")
         case "if":
             throw error(currentToken, "native Swift if/else is not supported inside ButtonHeist DSL bodies. Use If { Case(...) { ... } Else { ... } }")
+        case "repeat":
+            throw error(currentToken, "native Swift repeat/while is not supported; use RepeatUntil for bounded repeated actions")
         case "for", "while", "switch":
-            throw error(currentToken, "native Swift \(name) statements are not supported; use ButtonHeist constructs such as If, WaitFor, and ForEach")
+            throw error(
+                currentToken,
+                "native Swift \(name) statements are not supported; use ButtonHeist constructs such as If, WaitFor, ForEach, and RepeatUntil"
+            )
         case "try":
             if let correction = runHeistCorrectionAfterTryPrefix(startingAt: index + 1) {
                 throw error(

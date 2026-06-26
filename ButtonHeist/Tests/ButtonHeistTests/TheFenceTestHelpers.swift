@@ -502,7 +502,7 @@ private extension HeistStep {
             return action.command.fenceCommandForInspection
         case .wait:
             return .wait
-        case .conditional, .forEachElement, .forEachString, .heist, .invoke, .warn, .fail:
+        case .conditional, .forEachElement, .forEachString, .repeatUntil, .heist, .invoke, .warn, .fail:
             return .runHeist
         }
     }

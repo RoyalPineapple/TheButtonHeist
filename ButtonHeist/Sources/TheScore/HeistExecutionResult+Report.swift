@@ -55,6 +55,11 @@ public extension HeistExecutionStepResult {
         return evidence
     }
 
+    var repeatUntilEvidence: HeistRepeatUntilEvidence? {
+        guard case .repeatUntil(let evidence) = evidence else { return nil }
+        return evidence
+    }
+
     var invocationEvidence: HeistInvocationEvidence? {
         guard case .invocation(let evidence) = evidence else { return nil }
         return evidence
@@ -80,6 +85,10 @@ public extension HeistExecutionStepResult {
             return "for_each_string"
         case .forEachIteration:
             return "for_each_iteration"
+        case .repeatUntil:
+            return "repeat_until"
+        case .repeatUntilIteration:
+            return "repeat_until_iteration"
         case .warn:
             return "warn"
         case .fail:
@@ -152,6 +161,18 @@ public extension HeistExecutionStepResult {
             }
             return "completed \(forEach.iterationCount) of \(forEach.matchedCount) matched element(s)"
         }
+        if let repeatUntil = repeatUntilEvidence {
+            if let failureReason = repeatUntil.failureReason {
+                return failureReason
+            }
+            if let ordinal = repeatUntil.iterationOrdinal {
+                return "iteration \(ordinal) predicate \(repeatUntil.expectation.met ? "met" : "not met")"
+            }
+            if repeatUntil.expectation.met {
+                return "predicate met after \(repeatUntil.iterationCount) iteration(s)"
+            }
+            return "timed out after \(repeatUntil.iterationCount) iteration(s)"
+        }
         if let invocation = invocationEvidence {
             if let childFailedPath = invocation.childFailedPath {
                 return "child failed at \(childFailedPath)"
@@ -174,6 +195,8 @@ public extension HeistExecutionStepResult {
             return actionEvidence?.expectationActionResult ?? actionEvidence?.actionResult
         case .wait:
             return waitEvidence?.actionResult
+        case .repeatUntil:
+            return repeatUntilEvidence?.actionResult
         default:
             return nil
         }
@@ -200,6 +223,8 @@ public extension HeistExecutionStepResult {
             return actionEvidence?.expectation
         case .wait:
             return waitEvidence?.expectation
+        case .repeatUntil:
+            return repeatUntilEvidence?.expectation
         default:
             return nil
         }
@@ -224,6 +249,8 @@ public extension HeistExecutionStepResult {
             return actionEvidence?.expectationActionResult ?? actionEvidence?.actionResult
         case .wait:
             return waitEvidence?.actionResult
+        case .repeatUntil:
+            return repeatUntilEvidence?.actionResult
         default:
             return nil
         }
@@ -241,9 +268,9 @@ public extension HeistExecutionStepResult {
         guard status == .failed else { return nil }
         if children.contains(where: { $0.status == .failed }) {
             switch kind {
-            case .conditional, .forEachIteration, .heist, .invoke:
+            case .conditional, .forEachIteration, .repeatUntilIteration, .heist, .invoke:
                 return nil
-            case .action, .wait, .forEachElement, .forEachString, .warn, .fail:
+            case .action, .wait, .forEachElement, .forEachString, .repeatUntil, .warn, .fail:
                 break
             }
         }

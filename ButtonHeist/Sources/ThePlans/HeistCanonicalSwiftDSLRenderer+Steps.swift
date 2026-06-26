@@ -26,6 +26,8 @@ extension HeistCanonicalSwiftDSLRenderer {
             return try renderForEachElement(forEach, indent: indent, environment: environment)
         case .forEachString(let forEach):
             return try renderForEachString(forEach, indent: indent, environment: environment)
+        case .repeatUntil(let repeatUntil):
+            return try renderRepeatUntil(repeatUntil, indent: indent, environment: environment)
         case .warn(let warn):
             return line("Warn(\(quote(warn.message)))", indent)
         case .fail(let fail):
@@ -200,5 +202,29 @@ extension HeistCanonicalSwiftDSLRenderer {
         \(body)
         \(line("}", indent))
         """
+    }
+
+    func renderRepeatUntil(
+        _ repeatUntil: RepeatUntilStep,
+        indent: Int,
+        environment: RenderEnvironment
+    ) throws -> String {
+        let body = try render(steps: repeatUntil.body, indent: indent + 1, environment: environment)
+        let predicate = try render(predicate: repeatUntil.predicate, environment: environment)
+        let timeout = ".seconds(\(decimal(repeatUntil.timeout)))"
+        var source = """
+        \(line("RepeatUntil(\(predicate), timeout: \(timeout)) {", indent))
+        \(body)
+        \(line("}", indent))
+        """
+        if let elseBody = repeatUntil.elseBody {
+            source += "\n"
+            source += line(".else {", indent)
+            source += "\n"
+            source += try render(steps: elseBody, indent: indent + 1, environment: environment)
+            source += "\n"
+            source += line("}", indent)
+        }
+        return source
     }
 }

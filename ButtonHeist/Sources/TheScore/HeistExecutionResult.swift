@@ -27,6 +27,8 @@ public enum HeistExecutionStepKind: String, Codable, Sendable, Equatable {
     case forEachElement = "for_each_element"
     case forEachString = "for_each_string"
     case forEachIteration = "for_each_iteration"
+    case repeatUntil = "repeat_until"
+    case repeatUntilIteration = "repeat_until_iteration"
     case warn
     case fail
     case heist
@@ -82,6 +84,7 @@ public enum HeistStepIntent: Codable, Sendable, Equatable {
     case conditional
     case forEachString(parameter: HeistReferenceName, count: Int)
     case forEachElement(parameter: HeistReferenceName, matching: String, limit: Int)
+    case repeatUntil(predicate: String, timeout: Double)
     case invoke(path: String, argument: String?)
     case heist(name: String?)
     case warn(message: String)
@@ -94,6 +97,7 @@ public enum HeistStepEvidence: Codable, Sendable, Equatable {
     case caseSelection(HeistCaseSelectionEvidence)
     case forEachString(HeistForEachStringEvidence)
     case forEachElement(HeistForEachElementEvidence)
+    case repeatUntil(HeistRepeatUntilEvidence)
     case invocation(HeistInvocationEvidence)
     case warning(HeistExecutionWarning)
 }
@@ -199,6 +203,37 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
         self.iterationOrdinal = iterationOrdinal
         self.targetOrdinal = targetOrdinal
         self.targetSummary = targetSummary
+        self.failureReason = failureReason
+    }
+}
+
+public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
+    public let predicate: AccessibilityPredicate
+    public let timeout: Double
+    public let iterationCount: Int
+    public let iterationOrdinal: Int?
+    public let expectation: ExpectationResult
+    public let actionResult: ActionResult?
+    public let lastObservedSummary: String?
+    public let failureReason: String?
+
+    public init(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        iterationCount: Int,
+        iterationOrdinal: Int? = nil,
+        expectation: ExpectationResult,
+        actionResult: ActionResult? = nil,
+        lastObservedSummary: String? = nil,
+        failureReason: String? = nil
+    ) {
+        self.predicate = predicate
+        self.timeout = timeout
+        self.iterationCount = iterationCount
+        self.iterationOrdinal = iterationOrdinal
+        self.expectation = expectation
+        self.actionResult = actionResult
+        self.lastObservedSummary = lastObservedSummary
         self.failureReason = failureReason
     }
 }

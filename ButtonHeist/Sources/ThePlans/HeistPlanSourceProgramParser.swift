@@ -209,6 +209,8 @@ extension HeistPlanSourceParser {
             return [try parseIf()]
         case ["ForEach"]:
             return [try parseForEach()]
+        case ["RepeatUntil"]:
+            return [try parseRepeatUntil()]
         case ["HeistPlan"]:
             let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
             return [.heist(plan.uncheckedPlanForRuntimeSafetyValidation())]

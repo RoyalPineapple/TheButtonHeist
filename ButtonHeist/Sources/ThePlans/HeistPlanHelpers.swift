@@ -13,6 +13,7 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case invalidForEachParameter(String)
     case emptyForEachSteps
     case emptyForEachValues
+    case emptyRepeatUntilSteps
     case nestedForEachUnsupported
 }
 

@@ -369,7 +369,7 @@ final class WireCommandParityTests: XCTestCase {
         case .conditional(let conditional):
             return conditional.cases.flatMap { $0.body.flatMap(runtimeActions) }
                 + (conditional.elseBody ?? []).flatMap(runtimeActions)
-        case .forEachElement, .forEachString, .heist, .invoke:
+        case .forEachElement, .forEachString, .repeatUntil, .heist, .invoke:
             return []
         case .warn, .fail:
             return []

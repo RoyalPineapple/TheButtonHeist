@@ -105,6 +105,10 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         )
     }
 
+    mutating func visitRepeatUntil(_ step: RepeatUntilStep, context: HeistTraversalContext) {
+        validateRepeatUntil(step, path: context.path)
+    }
+
     mutating func visitWarn(_ warn: WarnStep, context: HeistTraversalContext) {
         addString(warn.message, path: "\(context.path).message", role: "warn message")
     }
@@ -419,6 +423,27 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
                 definitionScope: definitionScope,
                 valuePath: "\(path).values[\(index)]"
             )
+        }
+    }
+
+    mutating func validateRepeatUntil(_ step: RepeatUntilStep, path: String) {
+        guard step.timeout >= 0 else {
+            fail(
+                path: "\(path).timeout",
+                contract: "repeat_until timeout must be non-negative",
+                observed: "\(step.timeout)",
+                correction: "Use a timeout of 0 or more seconds."
+            )
+            return
+        }
+        guard !step.body.isEmpty else {
+            fail(
+                path: "\(path).body",
+                contract: "repeat_until body must not be empty",
+                observed: "empty body",
+                correction: "Add at least one action to repeat, or use WaitFor for passive waiting."
+            )
+            return
         }
     }
 

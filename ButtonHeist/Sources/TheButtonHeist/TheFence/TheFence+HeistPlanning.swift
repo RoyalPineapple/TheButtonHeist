@@ -109,7 +109,7 @@ extension TheFence {
             return .action(action)
         case .wait(let wait):
             return .wait(wait)
-        case .conditional, .forEachElement, .forEachString, .warn, .fail, .heist, .invoke:
+        case .conditional, .forEachElement, .forEachString, .repeatUntil, .warn, .fail, .heist, .invoke:
             throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
         }
     }
