@@ -68,7 +68,7 @@ final class InteractionObservation {
 
     func observeSemanticState(
         scope: SemanticObservationScope,
-        after sequence: UInt64?,
+        after sequence: SettledObservationSequence?,
         timeout: Double?
     ) async -> HeistSemanticObservation? {
         let event = await stash.observeSettledSemanticObservation(
@@ -134,7 +134,7 @@ final class InteractionObservation {
     func waitForPredicate(
         _ step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: UInt64? = nil
+        after sequence: SettledObservationSequence? = nil
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(for: step, initialTrace: initialTrace, after: sequence)
     }
@@ -142,7 +142,7 @@ final class InteractionObservation {
     func waitForPredicate(
         _ step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: UInt64? = nil
+        after sequence: SettledObservationSequence? = nil
     ) async -> HeistWaitReceipt {
         await predicateWait.wait(for: step, initialTrace: initialTrace, after: sequence)
     }

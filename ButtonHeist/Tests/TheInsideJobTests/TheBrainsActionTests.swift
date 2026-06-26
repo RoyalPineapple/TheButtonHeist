@@ -893,9 +893,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(incrementCount, 1)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 1)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
-        XCTAssertEqual(observedTimeouts.count, 2)
-        XCTAssertEqual(observedTimeouts[0], 0)
-        XCTAssertEqual(try XCTUnwrap(observedTimeouts[1]), defaultActionExpectationTimeout, accuracy: 0.1)
+        XCTAssertEqual(observedTimeouts.count, 1)
+        let observedTimeout = try XCTUnwrap(observedTimeouts.first.flatMap { $0 })
+        XCTAssertEqual(observedTimeout, defaultActionExpectationTimeout, accuracy: 0.1)
     }
 
     func testHeistRepeatUntilTimeoutWithElseRunsElseBodyWithoutBodyWhenTimeoutIsZero() async throws {
@@ -3132,7 +3132,7 @@ final class TheBrainsActionTests: XCTestCase {
     private func heistRuntime(
         observations: [PostActionObservation.BeforeState],
         execute: (@MainActor (RuntimeActionMessage) async -> ActionResult)? = nil,
-        wait: (@MainActor (ResolvedWaitStep, AccessibilityTrace?, UInt64?) async -> ActionResult)? = nil,
+        wait: (@MainActor (ResolvedWaitStep, AccessibilityTrace?, SettledObservationSequence?) async -> ActionResult)? = nil,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
         unavailableObservationCount: Int = 0,
@@ -3171,6 +3171,24 @@ final class TheBrainsActionTests: XCTestCase {
                         )
                         return HeistWaitReceipt(actionResult: result, expectation: expectation)
                     }
+                }
+                if waitStep.timeout == 0,
+                   afterSequence == nil,
+                   let observation = observationSource.immediate(scope: waitStep.predicate.observationScope) {
+                    let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: observation)
+                    let result = ActionResult(
+                        success: expectation.met,
+                        method: .wait,
+                        message: expectation.actual,
+                        errorKind: expectation.met ? nil : .timeout,
+                        accessibilityTrace: observation.accessibilityTrace
+                    )
+                    return HeistWaitReceipt(
+                        actionResult: result,
+                        expectation: expectation,
+                        observedSequence: observation.event.sequence,
+                        observationSummary: observation.summary
+                    )
                 }
                 guard let observation = observationSource.next(
                     scope: waitStep.predicate.observationScope,
@@ -3293,7 +3311,7 @@ private final class ScriptedHeistObservationSource {
     private var remainingUnavailableObservations: Int
     private var previousObservation: SettledSemanticObservation?
     private var previousCapture: AccessibilityTrace.Capture?
-    private var nextObservationSequence: UInt64 = 0
+    private var nextObservationSequence: SettledObservationSequence = 0
     private let observedScopes: (@MainActor (SemanticObservationScope) -> Void)?
     private let observedTimeouts: (@MainActor (Double?) -> Void)?
     private let file: StaticString
@@ -3319,6 +3337,24 @@ private final class ScriptedHeistObservationSource {
         remainingObservations.first
     }
 
+    func immediate(scope: SemanticObservationScope) -> HeistSemanticObservation? {
+        guard remainingUnavailableObservations == 0 else { return nil }
+        guard !remainingObservations.isEmpty else {
+            XCTFail("Expected scripted heist case observation", file: file, line: line)
+            return nil
+        }
+        let state = remainingObservations.removeFirst()
+        nextObservationSequence += 1
+        let observation = observation(
+            from: state,
+            scope: scope,
+            sequence: nextObservationSequence
+        )
+        previousObservation = observation.event.observation
+        previousCapture = observation.accessibilityTrace.captures.last
+        return observation
+    }
+
     func next(
         scope: SemanticObservationScope,
         timeout: Double?
@@ -3335,8 +3371,23 @@ private final class ScriptedHeistObservationSource {
         }
         let state = remainingObservations.removeFirst()
         nextObservationSequence += 1
+        let observation = observation(
+            from: state,
+            scope: scope,
+            sequence: nextObservationSequence
+        )
+        previousObservation = observation.event.observation
+        previousCapture = observation.accessibilityTrace.captures.last
+        return observation
+    }
+
+    private func observation(
+        from state: PostActionObservation.BeforeState,
+        scope: SemanticObservationScope,
+        sequence: SettledObservationSequence
+    ) -> HeistSemanticObservation {
         let settledObservation = SettledSemanticObservation(
-            sequence: nextObservationSequence,
+            sequence: sequence,
             scope: scope,
             screen: .empty,
             tripwireSignal: .empty
@@ -3347,15 +3398,13 @@ private final class ScriptedHeistObservationSource {
             AccessibilityTrace(capture: state.capture)
         }
         let event = SettledSemanticObservationEvent(
-            sequence: nextObservationSequence,
+            sequence: sequence,
             scope: scope,
             observation: settledObservation,
             previous: previousObservation,
             trace: trace,
             delta: trace.endpointDelta
         )
-        previousObservation = settledObservation
-        previousCapture = trace.captures.last
         return HeistSemanticObservation(
             event: event,
             state: state,

@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import TheScore
 
 extension TheStash {
     typealias DiscoveryObservation = SemanticObservationStream.DiscoveryObservation
@@ -31,7 +32,7 @@ extension TheStash {
 
     func observeSettledSemanticObservation(
         scope: SemanticObservationScope,
-        after sequence: UInt64?,
+        after sequence: SettledObservationSequence?,
         timeout: Double?
     ) async -> SettledSemanticObservationEvent? {
         await semanticObservationStream.settledEvent(scope: scope, after: sequence, timeout: timeout)

@@ -2312,7 +2312,7 @@ symbol	ButtonHeist.symbols.json	s:8TheScore20SessionLockedPayloadV4fromACs7Decod
 symbol	ButtonHeist.symbols.json	s:8TheScore20SessionLockedPayloadV7message17activeConnectionsACSS_Sitcfc	swift.init	public	init(message:activeConnections:)	SessionLockedPayload.init(message:activeConnections:)	init(message: String, activeConnections: Int)
 symbol	ButtonHeist.symbols.json	s:8TheScore20SessionLockedPayloadV7messageSSvp	swift.property	public	message	SessionLockedPayload.message	let message: String
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV	swift.struct	public	ActionSubjectEvidence	ActionSubjectEvidence	struct ActionSubjectEvidence
-symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV26settledObservationSequences6UInt64VSgvp	swift.property	public	settledObservationSequence	ActionSubjectEvidence.settledObservationSequence	let settledObservationSequence: UInt64?
+symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV26settledObservationSequenceAA07SettledgH0VSgvp	swift.property	public	settledObservationSequence	ActionSubjectEvidence.settledObservationSequence	let settledObservationSequence: SettledObservationSequence?
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ActionSubjectEvidence.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV5PhaseO	swift.enum	public	ActionSubjectEvidence.Phase	ActionSubjectEvidence.Phase	enum Phase
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV5PhaseO22resolvedBeforeDispatchyA2EmF	swift.enum.case	public	ActionSubjectEvidence.Phase.resolvedBeforeDispatch	ActionSubjectEvidence.Phase.resolvedBeforeDispatch	case resolvedBeforeDispatch
@@ -2324,7 +2324,7 @@ symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV6SourceO20ele
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV6SourceO22resolvedSemanticTargetyA2EmF	swift.enum.case	public	ActionSubjectEvidence.Source.resolvedSemanticTarget	ActionSubjectEvidence.Source.resolvedSemanticTarget	case resolvedSemanticTarget
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV6SourceO8rawValueAESgSS_tcfc	swift.init	public	init(rawValue:)	ActionSubjectEvidence.Source.init(rawValue:)	init?(rawValue: String)
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ActionSubjectEvidence.encode(to:)	func encode(to encoder: any Encoder) throws
-symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV6source5phase6target7element26settledObservationSequenceA2C6SourceO_AC5PhaseO0A5Plans13ElementTargetOAA05HeistP0Vs6UInt64VSgtcfc	swift.init	public	init(source:phase:target:element:settledObservationSequence:)	ActionSubjectEvidence.init(source:phase:target:element:settledObservationSequence:)	init(source: ActionSubjectEvidence.Source, phase: ActionSubjectEvidence.Phase = .resolvedBeforeDispatch, target: ElementTarget, element: HeistElement, settledObservationSequence: UInt64? = nil)
+symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV6source5phase6target7element26settledObservationSequenceA2C6SourceO_AC5PhaseO0A5Plans13ElementTargetOAA05HeistP0VAA07SettledkL0VSgtcfc	swift.init	public	init(source:phase:target:element:settledObservationSequence:)	ActionSubjectEvidence.init(source:phase:target:element:settledObservationSequence:)	init(source: ActionSubjectEvidence.Source, phase: ActionSubjectEvidence.Phase = .resolvedBeforeDispatch, target: ElementTarget, element: HeistElement, settledObservationSequence: SettledObservationSequence? = nil)
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV6sourceAC6SourceOvp	swift.property	public	source	ActionSubjectEvidence.source	let source: ActionSubjectEvidence.Source
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV6target0A5Plans13ElementTargetOvp	swift.property	public	target	ActionSubjectEvidence.target	let target: ElementTarget
 symbol	ButtonHeist.symbols.json	s:8TheScore21ActionSubjectEvidenceV7elementAA12HeistElementVvp	swift.property	public	element	ActionSubjectEvidence.element	let element: HeistElement
@@ -2583,6 +2583,18 @@ symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV4fromACs
 symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV4path7actionsAcA8TreePathV_Say0A5Plans0D6ActionOGtcfc	swift.init	public	init(path:actions:)	InterfaceElementAnnotation.init(path:actions:)	init(path: TreePath, actions: [ElementAction])
 symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV4pathAA8TreePathVvp	swift.property	public	path	InterfaceElementAnnotation.path	let path: TreePath
 symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV7actionsSay0A5Plans0D6ActionOGvp	swift.property	public	actions	InterfaceElementAnnotation.actions	let actions: [ElementAction]
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV	swift.struct	public	SettledObservationSequence	SettledObservationSequence	struct SettledObservationSequence
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV11descriptionSSvp	swift.property	public	description	SettledObservationSequence.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV14integerLiteralACs6UInt64V_tcfc	swift.init	public	init(integerLiteral:)	SettledObservationSequence.init(integerLiteral:)	init(integerLiteral value: UInt64)
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV1loiySbAC_ACtFZ	swift.func.op	public	<(_:_:)	SettledObservationSequence.<(_:_:)	static func < (lhs: SettledObservationSequence, rhs: SettledObservationSequence) -> Bool
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV1poiyA2C_s6UInt64VtFZ	swift.func.op	public	+(_:_:)	SettledObservationSequence.+(_:_:)	static func + (lhs: SettledObservationSequence, rhs: UInt64) -> SettledObservationSequence
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV1soiyA2C_s6UInt64VtFZ	swift.func.op	public	-(_:_:)	SettledObservationSequence.-(_:_:)	static func - (lhs: SettledObservationSequence, rhs: UInt64) -> SettledObservationSequence
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV2peoiyyACz_s6UInt64VtFZ	swift.func.op	public	+=(_:_:)	SettledObservationSequence.+=(_:_:)	static func += (lhs: inout SettledObservationSequence, rhs: UInt64)
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	SettledObservationSequence.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	SettledObservationSequence.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV8rawValueACs6UInt64V_tcfc	swift.init	public	init(rawValue:)	SettledObservationSequence.init(rawValue:)	init(rawValue: UInt64)
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV8rawValues6UInt64Vvp	swift.property	public	rawValue	SettledObservationSequence.rawValue	let rawValue: UInt64
+symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceVyACs6UInt64Vcfc	swift.init	public	init(_:)	SettledObservationSequence.init(_:)	init(_ rawValue: UInt64)
 symbol	ButtonHeist.symbols.json	s:8TheScore27HeistForEachElementEvidenceV	swift.struct	public	HeistForEachElementEvidence	HeistForEachElementEvidence	struct HeistForEachElementEvidence
 symbol	ButtonHeist.symbols.json	s:8TheScore27HeistForEachElementEvidenceV12matchedCountSivp	swift.property	public	matchedCount	HeistForEachElementEvidence.matchedCount	let matchedCount: Int
 symbol	ButtonHeist.symbols.json	s:8TheScore27HeistForEachElementEvidenceV13failureReasonSSSgvp	swift.property	public	failureReason	HeistForEachElementEvidence.failureReason	let failureReason: String?
@@ -3771,6 +3783,15 @@ relationship	conformsTo	s:8TheScore26InterfaceElementAnnotationV	s:SH	InterfaceE
 relationship	conformsTo	s:8TheScore26InterfaceElementAnnotationV	s:SQ	InterfaceElementAnnotation	Swift.Equatable
 relationship	conformsTo	s:8TheScore26InterfaceElementAnnotationV	s:Se	InterfaceElementAnnotation	Swift.Decodable
 relationship	conformsTo	s:8TheScore26InterfaceElementAnnotationV	s:s8SendableP	InterfaceElementAnnotation	Swift.Sendable
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:SE	SettledObservationSequence	Swift.Encodable
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:SH	SettledObservationSequence	Swift.Hashable
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:SL	SettledObservationSequence	Swift.Comparable
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:SQ	SettledObservationSequence	Swift.Equatable
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:SY	SettledObservationSequence	Swift.RawRepresentable
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:Se	SettledObservationSequence	Swift.Decodable
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:s23CustomStringConvertibleP	SettledObservationSequence	Swift.CustomStringConvertible
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:s27ExpressibleByIntegerLiteralP	SettledObservationSequence	Swift.ExpressibleByIntegerLiteral
+relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:s8SendableP	SettledObservationSequence	Swift.Sendable
 relationship	conformsTo	s:8TheScore27HeistForEachElementEvidenceV	s:SE	HeistForEachElementEvidence	Swift.Encodable
 relationship	conformsTo	s:8TheScore27HeistForEachElementEvidenceV	s:SQ	HeistForEachElementEvidence	Swift.Equatable
 relationship	conformsTo	s:8TheScore27HeistForEachElementEvidenceV	s:Se	HeistForEachElementEvidence	Swift.Decodable

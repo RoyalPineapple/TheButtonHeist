@@ -30,7 +30,7 @@ struct PredicateCaseSelection {
     static func evaluate(
         _ cases: [ResolvedPredicateCase],
         observation: HeistSemanticObservation,
-        changeBaselineSequence: UInt64? = nil
+        changeBaselineSequence: SettledObservationSequence? = nil
     ) -> PredicateCaseSelection {
         let evaluatedCases = cases.map {
             PredicateEvaluation.caseMatch(

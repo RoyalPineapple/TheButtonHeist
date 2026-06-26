@@ -937,7 +937,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     private func activationSubjectEvidence(
         target: ElementTarget,
         element: AccessibilityElement,
-        settledObservationSequence: UInt64?
+        settledObservationSequence: SettledObservationSequence?
     ) -> ActionSubjectEvidence {
         ActionSubjectEvidence(
             source: .resolvedSemanticTarget,

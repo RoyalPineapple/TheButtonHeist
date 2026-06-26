@@ -139,14 +139,14 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
     public let phase: Phase
     public let target: ElementTarget
     public let element: HeistElement
-    public let settledObservationSequence: UInt64?
+    public let settledObservationSequence: SettledObservationSequence?
 
     public init(
         source: Source,
         phase: Phase = .resolvedBeforeDispatch,
         target: ElementTarget,
         element: HeistElement,
-        settledObservationSequence: UInt64? = nil
+        settledObservationSequence: SettledObservationSequence? = nil
     ) {
         self.source = source
         self.phase = phase
@@ -171,7 +171,7 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
             phase: try container.decode(Phase.self, forKey: .phase),
             target: try container.decode(ElementTarget.self, forKey: .target),
             element: try container.decode(HeistElement.self, forKey: .element),
-            settledObservationSequence: try container.decodeIfPresent(UInt64.self, forKey: .settledObservationSequence)
+            settledObservationSequence: try container.decodeIfPresent(SettledObservationSequence.self, forKey: .settledObservationSequence)
         )
     }
 

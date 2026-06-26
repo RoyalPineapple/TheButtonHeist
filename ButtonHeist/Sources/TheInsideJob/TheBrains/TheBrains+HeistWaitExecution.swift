@@ -32,13 +32,13 @@ extension TheBrains {
 struct HeistWaitReceipt {
     let actionResult: ActionResult
     let expectation: ExpectationResult
-    let observedSequence: UInt64?
+    let observedSequence: SettledObservationSequence?
     let observationSummary: String?
 
     init(
         actionResult: ActionResult,
         expectation: ExpectationResult,
-        observedSequence: UInt64? = nil,
+        observedSequence: SettledObservationSequence? = nil,
         observationSummary: String? = nil
     ) {
         self.actionResult = actionResult

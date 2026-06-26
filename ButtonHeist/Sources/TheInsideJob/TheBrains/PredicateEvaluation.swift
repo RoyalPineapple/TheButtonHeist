@@ -8,9 +8,19 @@ enum PredicateEvaluation {
         _ predicate: AccessibilityPredicate,
         currentElements: [HeistElement],
         delta: AccessibilityTrace.Delta?,
-        observedSequence: UInt64? = nil,
-        changeBaselineSequence: UInt64? = nil
+        observedSequence: SettledObservationSequence? = nil,
+        changeBaselineSequence: SettledObservationSequence? = nil
     ) -> ExpectationResult {
+        if predicate.requiresChangeBaseline,
+           let observedSequence,
+           let changeBaselineSequence,
+           observedSequence <= changeBaselineSequence {
+            return ExpectationResult(
+                met: false,
+                predicate: predicate,
+                actual: PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
+            )
+        }
         return predicate.evaluate(
             currentElements: currentElements,
             delta: delta
@@ -31,7 +41,7 @@ enum PredicateEvaluation {
     static func evaluate(
         _ predicate: AccessibilityPredicate,
         in observation: HeistSemanticObservation,
-        changeBaselineSequence: UInt64? = nil
+        changeBaselineSequence: SettledObservationSequence? = nil
     ) -> ExpectationResult {
         evaluate(
             predicate,
@@ -56,7 +66,7 @@ enum PredicateEvaluation {
     static func caseMatch(
         _ predicateCase: ResolvedPredicateCase,
         in observation: HeistSemanticObservation,
-        changeBaselineSequence: UInt64? = nil
+        changeBaselineSequence: SettledObservationSequence? = nil
     ) -> HeistCaseMatchResult {
         HeistCaseMatchResult(
             predicate: predicateCase.predicate,

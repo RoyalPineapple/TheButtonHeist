@@ -35,7 +35,7 @@ extension TheBrains {
     }
 
     private struct RepeatUntilPostBodyResult {
-        let observedSequence: UInt64?
+        let observedSequence: SettledObservationSequence?
         let observedTrace: AccessibilityTrace?
         let expectation: ExpectationResult
         let actionResult: ActionResult
@@ -159,7 +159,7 @@ extension TheBrains {
     private func repeatUntilLoopResult(
         context: RepeatUntilExecutionContext,
         step: ResolvedRepeatUntilStep,
-        initialObservedSequence: UInt64,
+        initialObservedSequence: SettledObservationSequence,
         initialOutcome: RepeatUntilOutcome,
         timeout: Double
     ) async -> HeistExecutionStepResult {
@@ -315,7 +315,7 @@ extension TheBrains {
     private func repeatUntilPostBodyResult(
         context: RepeatUntilExecutionContext,
         step: ResolvedRepeatUntilStep,
-        observedSequence: UInt64,
+        observedSequence: SettledObservationSequence,
         observedTrace: AccessibilityTrace?,
         deadline: CFAbsoluteTime
     ) async -> RepeatUntilPostBodyResult {

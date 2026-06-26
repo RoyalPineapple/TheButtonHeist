@@ -1,12 +1,13 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import TheScore
 
 @MainActor
 final class SemanticObservationSettledWaiters {
     private struct Waiter {
         let scope: SemanticObservationScope
-        let afterSequence: UInt64?
+        let afterSequence: SettledObservationSequence?
         let continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>
         let timeoutTask: Task<Void, Never>?
     }
@@ -20,7 +21,7 @@ final class SemanticObservationSettledWaiters {
 
     func wait(
         scope: SemanticObservationScope,
-        afterSequence: UInt64?,
+        afterSequence: SettledObservationSequence?,
         timeout: Double?
     ) async -> SettledSemanticObservationEvent? {
         let id = nextID

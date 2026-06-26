@@ -506,6 +506,7 @@
 		E327E060E6709EE93A5BBEBB /* TheFence+ParameterSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */; };
 		E32BF6C82BFF422F15ED89BF /* ElementInflation+SemanticReveal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E490456D6CC6DED8007F49 /* ElementInflation+SemanticReveal.swift */; };
 		E4B24C07DB78F43379D9FB9F /* SemanticObservationEventFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED94086CF1C3C5F4EDA1E1D2 /* SemanticObservationEventFactory.swift */; };
+		E4C9535ACE3ECC037E2A663A /* SettledObservationSequence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6433ED88BFE730D2251B86AD /* SettledObservationSequence.swift */; };
 		E562D0F62864699DD3DB22FE /* BHDemo.app in Dependencies */ = {isa = PBXBuildFile; fileRef = 575B313FA1A35CFD461B9B83 /* BHDemo.app */; };
 		E5D5E025A0672D93F8FA9D40 /* ScreenFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D79C29B3000357A40270A6 /* ScreenFactory.swift */; };
 		E6249B5295FE8C0005B5066A /* TheTripwire+Pulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC74D304B3A4C3503A77A1B3 /* TheTripwire+Pulse.swift */; };
@@ -1040,6 +1041,7 @@
 		63AEBA441147E38C0ED98046 /* TheGetaway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheGetaway.swift; sourceTree = "<group>"; };
 		63D669CF03D7916F6AF2264D /* RuntimeActionMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeActionMessage.swift; sourceTree = "<group>"; };
 		641841F7DF4A876D3CB48A34 /* InteractionObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractionObservation.swift; sourceTree = "<group>"; };
+		6433ED88BFE730D2251B86AD /* SettledObservationSequence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettledObservationSequence.swift; sourceTree = "<group>"; };
 		646758066069FA0EF01D841D /* PrivateStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateStorage.swift; sourceTree = "<group>"; };
 		64831F1A7E3216700C7582B6 /* TheBrains+ScreenCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBrains+ScreenCapture.swift"; sourceTree = "<group>"; };
 		6536DB1847A58980945D1D48 /* FenceJSON+Response.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FenceJSON+Response.swift"; sourceTree = "<group>"; };
@@ -1993,6 +1995,7 @@
 				B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */,
 				439B35798F06B42BE1C978A6 /* ServerMessages+WireCoding.swift */,
 				1D53B2D3E81CB69878BE8422 /* ServerStatusPayloads.swift */,
+				6433ED88BFE730D2251B86AD /* SettledObservationSequence.swift */,
 				197B9F666150FC755DF1A339 /* SubtreeSelector.swift */,
 				FDE004739CB85718050B9E82 /* TLSPreSharedKeyMaterial.swift */,
 				FD8B147CDF7EEAF215380C3F /* TreeChangeModels.swift */,
@@ -2701,6 +2704,7 @@
 				500C86B095B0F024D2F4B97C /* ServerMessages+WireCoding.swift in Sources */,
 				EF33A29DE94964545E58B8E8 /* ServerMessages.swift in Sources */,
 				ABFAA551D9A60C474DCA5C48 /* ServerStatusPayloads.swift in Sources */,
+				E4C9535ACE3ECC037E2A663A /* SettledObservationSequence.swift in Sources */,
 				D5F9D7C6167FDDA623BD43B9 /* SubtreeSelector.swift in Sources */,
 				BC2DABD1766584EB9ABCD64C /* TLSPreSharedKeyMaterial.swift in Sources */,
 				6BB029DA9ECB8B7273C4ED53 /* TreeChangeModels.swift in Sources */,
