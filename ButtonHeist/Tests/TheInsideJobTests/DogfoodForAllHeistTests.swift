@@ -290,7 +290,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     func testListAndCalculatorFlowsUsePublicHeists() async throws {
         let heist = try await Heist {
             try DogfoodHome.openScreen("Todo List")
-            try TodoScreen.completeItem("Return package, High priority")
+            try TodoScreen.completeItem("Buy groceries, High priority")
 
             try DogfoodNavigation.backToRoot()
 

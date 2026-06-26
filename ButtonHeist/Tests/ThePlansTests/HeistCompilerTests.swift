@@ -223,7 +223,7 @@ struct HeistCompilerTests {
         #expect(plan.body == [
             .action(try ActionStep(
                 command: .activate(.predicate(.label("Pay"))),
-                expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+                expectation: WaitStep(predicate: .changed(.screen()), timeout: 1)
             )),
         ])
     }

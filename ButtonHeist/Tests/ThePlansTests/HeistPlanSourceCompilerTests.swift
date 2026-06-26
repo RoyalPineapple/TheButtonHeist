@@ -63,7 +63,7 @@ import ThePlans
     let expected = try HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .changed(.screen()), timeout: 0)
+            expectation: WaitStep(predicate: .changed(.screen()), timeout: 1)
         )),
     ])
 
@@ -98,7 +98,7 @@ import ThePlans
                 element: .identifier("Search"),
                 property: .value,
                 to: "Bruschetta"
-            ))))
+            ))), timeout: 1)
         )),
     ])
     let expectedUnscoped = try HeistPlan(body: [
@@ -107,7 +107,7 @@ import ThePlans
             expectation: WaitStep(predicate: .changed(.updated(ElementUpdatePredicateExpr(
                 property: .value,
                 to: "3"
-            ))))
+            ))), timeout: 1)
         )),
     ])
     let expectedFromTo = try HeistPlan(body: [
@@ -118,7 +118,7 @@ import ThePlans
                 property: .value,
                 from: "2",
                 to: "3"
-            ))))
+            ))), timeout: 1)
         )),
     ])
     let expectedBroadFromTo = try HeistPlan(body: [
@@ -129,7 +129,7 @@ import ThePlans
                 property: .value,
                 from: .prefix("cart:"),
                 to: .contains("items")
-            ))))
+            ))), timeout: 1)
         )),
     ])
 
@@ -179,7 +179,7 @@ import ThePlans
     #expect(plan.body == [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Pay"))),
-            expectation: WaitStep(predicate: .changed(.elements), timeout: 0)
+            expectation: WaitStep(predicate: .changed(.elements), timeout: 1)
         )),
         .wait(WaitStep(
             predicate: .present(.label("Receipt")),
@@ -290,7 +290,7 @@ import ThePlans
             body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(.label(.ref("item")))),
-                    expectation: WaitStep(predicate: .state(.present(.label(.ref("item")))), timeout: 0)
+                    expectation: WaitStep(predicate: .state(.present(.label(.ref("item")))), timeout: 1)
                 )),
             ]
         )),
@@ -357,7 +357,7 @@ import ThePlans
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
-                    expectation: WaitStep(predicate: .state(.absentTarget(.ref("target"))), timeout: 0)
+                    expectation: WaitStep(predicate: .state(.absentTarget(.ref("target"))), timeout: 1)
                 )),
             ]
         )),
@@ -944,7 +944,7 @@ import ThePlans
             body: [
                 .action(try ActionStep(
                     command: .activate(.ref("rowTarget")),
-                    expectation: WaitStep(predicate: .absent(.ref("rowTarget")), timeout: 0)
+                    expectation: WaitStep(predicate: .absent(.ref("rowTarget")), timeout: 1)
                 )),
             ]
         )),
