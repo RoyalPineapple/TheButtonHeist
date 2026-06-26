@@ -112,7 +112,7 @@ Semantic actions should describe user intent and expected semantic outcome:
 ```swift
 HeistPlan {
     TypeText("milk", into: .label("Search"))
-        .expect(.present(.element(label: "Search", value: "milk")))
+        .expect(.present(.element(.label("Search"), .value("milk"))))
 
     Activate(.label("Delete"))
         .expect(.absent(.label("Delete")))
@@ -185,6 +185,21 @@ WaitFor(.present(.element(
 `StringMatch` cases `.contains`, `.prefix`, and `.suffix` work on all element string predicate fields
 and require non-empty strings. They are opt-in matching modes, not a fallback
 for failed exact predicates.
+
+To require multiple ordered checks, use repeated checks in `.element(...)`:
+
+```swift
+Activate(.element(
+    .label(.prefix("foo")),
+    .label(.contains("bar")),
+    .label(.suffix("baz")),
+    .traits([.button]),
+    .excludeTraits([.notEnabled])
+))
+```
+
+All checks must pass in order. Contradictory checks are valid source but cannot
+match any element in practice.
 
 Use `.changed(.updated(...))` for explicit property-delta assertions. The
 optional first argument scopes the update to an element predicate; omitting it

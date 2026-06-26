@@ -36,22 +36,37 @@ final class ElementTargetOptionsTests: XCTestCase {
         )
     }
 
-    func testGestureElementObjectEncodesExactStringMatchesAsObjects() {
+    func testGestureElementObjectEncodesPredicateChecks() {
         let object = TapSubcommand.elementObject(.predicate(
-            ElementPredicate(label: "Save", identifier: "saveButton", value: "1")
+            ElementPredicate(label: "Save", identifier: "saveButton", value: "1", traits: [.button])
         ))
 
-        XCTAssertEqual(object[.label], .object([
-            "mode": .string("exact"),
-            "value": .string("Save"),
-        ]))
-        XCTAssertEqual(object[.identifier], .object([
-            "mode": .string("exact"),
-            "value": .string("saveButton"),
-        ]))
-        XCTAssertEqual(object[.value], .object([
-            "mode": .string("exact"),
-            "value": .string("1"),
+        XCTAssertEqual(object[.checks], .array([
+            .object([
+                "kind": .string("label"),
+                "match": .object([
+                    "mode": .string("exact"),
+                    "value": .string("Save"),
+                ]),
+            ]),
+            .object([
+                "kind": .string("identifier"),
+                "match": .object([
+                    "mode": .string("exact"),
+                    "value": .string("saveButton"),
+                ]),
+            ]),
+            .object([
+                "kind": .string("value"),
+                "match": .object([
+                    "mode": .string("exact"),
+                    "value": .string("1"),
+                ]),
+            ]),
+            .object([
+                "kind": .string("traits"),
+                "values": .array([.string("button")]),
+            ]),
         ]))
     }
 

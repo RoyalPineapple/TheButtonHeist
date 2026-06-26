@@ -46,8 +46,9 @@ WaitFor(.present(.label("Checkout")), timeout: .seconds(5))
 .label("Pay")
 .identifier("pay_button")
 .value("Milk")
-.element(label: "Pay", traits: [.button])
-.target(.element(label: "Delete"), ordinal: 1)
+.element(.label("Pay"), .traits([.button]))
+.element(.label(.prefix("foo")), .label(.contains("bar")), .label(.suffix("baz")))
+.target(.element(.label("Delete"), .traits([.button])), ordinal: 1)
 ```
 
 Ordinal belongs inside the target:
@@ -259,7 +260,7 @@ Activate(.label("Continue"))
     .expect(.changed(.screen()))
 
 TypeText("milk", into: .label("Search"))
-    .expect(.present(.element(label: "Search", value: "milk")))
+    .expect(.present(.element(.label("Search"), .value("milk"))))
 
 Activate(.label("Delete"))
     .expect(.absent(.label("Delete")))

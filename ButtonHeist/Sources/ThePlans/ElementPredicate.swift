@@ -182,25 +182,83 @@ public extension StringMatch where Value == String {
 
 }
 
+public extension StringMatch where Value: Codable {
+    static func decodeOneOrMany<Key: CodingKey>(
+        from container: KeyedDecodingContainer<Key>,
+        forKey key: Key
+    ) throws -> [Self] {
+        guard container.contains(key) else { return [] }
+        let decoder = try container.superDecoder(forKey: key)
+        if (try? decoder.unkeyedContainer()) != nil {
+            return try [Self](from: decoder)
+        }
+        return [try Self(from: decoder)]
+    }
+
+    static func encodeOneOrMany<Key: CodingKey>(
+        _ matches: [Self],
+        to container: inout KeyedEncodingContainer<Key>,
+        forKey key: Key
+    ) throws {
+        switch matches.count {
+        case 0:
+            break
+        case 1:
+            try container.encode(matches[0], forKey: key)
+        default:
+            try container.encode(matches, forKey: key)
+        }
+    }
+}
+
+public enum ElementPredicateCheck<Value: StringMatchPayload>: Sendable, Equatable, Hashable {
+    case label(StringMatch<Value>)
+    case identifier(StringMatch<Value>)
+    case value(StringMatch<Value>)
+    case traits([HeistTrait])
+    case excludeTraits([HeistTrait])
+
+    public var hasPredicateLiteral: Bool {
+        switch self {
+        case .label(let match), .identifier(let match), .value(let match):
+            return match.hasPredicateLiteral
+        case .traits(let traits), .excludeTraits(let traits):
+            return !traits.isEmpty
+        }
+    }
+
+    public func map<NewValue: StringMatchPayload>(
+        _ transform: (Value) throws -> NewValue
+    ) rethrows -> ElementPredicateCheck<NewValue> {
+        switch self {
+        case .label(let match):
+            return try .label(match.map(transform))
+        case .identifier(let match):
+            return try .identifier(match.map(transform))
+        case .value(let match):
+            return try .value(match.map(transform))
+        case .traits(let traits):
+            return .traits(traits)
+        case .excludeTraits(let traits):
+            return .excludeTraits(traits)
+        }
+    }
+}
+
 // MARK: - Element Predicate
 
 /// The canonical predicate for matching a single accessibility element.
 ///
-/// String fields (`label`, `identifier`, `value`) use `StringMatch`; exact
-/// matching is the default for legacy `.label("Pay")`-style construction.
-/// Trait fields use exact bitmask comparison. Specificity is expressed entirely
-/// by which fields are set — there is no separate scope or query system.
+/// Predicates are ordered check chains. Matching is equivalent to `&&` over the
+/// checks; diagnostics can use the same order to explain where a candidate first
+/// failed.
 public struct ElementPredicate: Sendable, Equatable, Hashable {
-    /// Match against element label.
-    public let label: StringMatch<String>?
-    /// Match against accessibility identifier.
-    public let identifier: StringMatch<String>?
-    /// Match against element value.
-    public let value: StringMatch<String>?
-    /// All listed traits must be present on the element.
-    public let traits: [HeistTrait]
-    /// None of the listed traits may be present on the element.
-    public let excludeTraits: [HeistTrait]
+    /// Ordered checks against one accessibility element. All checks must pass.
+    public let checks: [ElementPredicateCheck<String>]
+
+    public init(_ checks: [ElementPredicateCheck<String>] = []) {
+        self.checks = checks
+    }
 
     public init(
         label: StringMatch<String>? = nil,
@@ -209,26 +267,56 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
         traits: [HeistTrait] = [],
         excludeTraits: [HeistTrait] = []
     ) {
-        self.label = label
-        self.identifier = identifier
-        self.value = value
-        self.traits = traits
-        self.excludeTraits = excludeTraits
+        self.init(Self.checks(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits,
+            excludeTraits: excludeTraits
+        ))
     }
 
-    public var hasTraitPredicates: Bool {
-        !traits.isEmpty || !excludeTraits.isEmpty
+    public init(
+        _ checks: [ElementPredicateCheck<String>],
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) {
+        self.init(checks + Self.traitChecks(traits: traits, excludeTraits: excludeTraits))
     }
 
-    /// Whether any property predicate is set. Empty strings are treated as
-    /// unset: they match nothing rather than everything.
+    /// Whether any predicate is set. Empty string and empty trait collection
+    /// checks are treated as unset: they match nothing rather than everything.
     public var hasPredicates: Bool {
-        label?.hasPredicateLiteral == true || identifier?.hasPredicateLiteral == true ||
-            value?.hasPredicateLiteral == true || hasTraitPredicates
+        checks.contains { $0.hasPredicateLiteral }
     }
 
     /// Returns `self` when at least one predicate field is set, else `nil`.
     public var nonEmpty: Self? { hasPredicates ? self : nil }
+
+    private static func checks(
+        label: StringMatch<String>?,
+        identifier: StringMatch<String>?,
+        value: StringMatch<String>?,
+        traits: [HeistTrait],
+        excludeTraits: [HeistTrait]
+    ) -> [ElementPredicateCheck<String>] {
+        var checks: [ElementPredicateCheck<String>] = []
+        if let label { checks.append(.label(label)) }
+        if let identifier { checks.append(.identifier(identifier)) }
+        if let value { checks.append(.value(value)) }
+        checks += traitChecks(traits: traits, excludeTraits: excludeTraits)
+        return checks
+    }
+
+    private static func traitChecks(
+        traits: [HeistTrait],
+        excludeTraits: [HeistTrait]
+    ) -> [ElementPredicateCheck<String>] {
+        var checks: [ElementPredicateCheck<String>] = []
+        if !traits.isEmpty { checks.append(.traits(traits)) }
+        if !excludeTraits.isEmpty { checks.append(.excludeTraits(excludeTraits)) }
+        return checks
+    }
 }
 
 // MARK: - Convenience Constructors
@@ -280,6 +368,16 @@ public extension ElementPredicate {
             excludeTraits: excludeTraits
         )
     }
+
+    /// Match by an ordered list of property checks. Repeating a property means
+    /// every check against that property must pass.
+    static func element(
+        _ checks: ElementPredicateCheck<String>...,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> ElementPredicate {
+        ElementPredicate(checks, traits: traits, excludeTraits: excludeTraits)
+    }
 }
 
 // MARK: - Evaluation
@@ -303,18 +401,7 @@ public extension ElementPredicate {
     /// The single source of truth for predicate evaluation.
     func matches(_ subject: some ElementPredicateSubject) -> Bool {
         guard hasPredicates else { return false }
-        if let label {
-            guard let candidate = subject.predicateLabel, label.matches(candidate) else { return false }
-        }
-        if let identifier {
-            guard let candidate = subject.predicateIdentifier, identifier.matches(candidate) else { return false }
-        }
-        if let value {
-            guard let candidate = subject.predicateValue, value.matches(candidate) else { return false }
-        }
-        if !traits.isEmpty, !subject.satisfiesRequiredTraits(traits) { return false }
-        if !excludeTraits.isEmpty, subject.violatesExcludedTraits(excludeTraits) { return false }
-        return true
+        return checks.allSatisfy { $0.matches(subject) }
     }
 
 }
@@ -323,40 +410,143 @@ public extension ElementPredicate {
 
 extension ElementPredicate: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
+        case checks
         case label, identifier, value, traits, excludeTraits
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            label: try container.decodeIfPresent(StringMatch<String>.self, forKey: .label),
-            identifier: try container.decodeIfPresent(StringMatch<String>.self, forKey: .identifier),
-            value: try container.decodeIfPresent(StringMatch<String>.self, forKey: .value),
-            traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits) ?? [],
-            excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
-        )
+        let hasChecks = container.contains(.checks)
+        let hasFlatFields = Self.flatCodingKeys.contains { container.contains($0) }
+        if hasChecks, hasFlatFields {
+            throw DecodingError.dataCorruptedError(
+                forKey: .checks,
+                in: container,
+                debugDescription: "element predicate accepts either checks or flat fields, not both"
+            )
+        }
+        if hasChecks {
+            self.init(try container.decode([ElementPredicateCheck<String>].self, forKey: .checks))
+        } else {
+            self.init(try Self.decodeFlatChecks(from: container))
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(label, forKey: .label)
-        try container.encodeIfPresent(identifier, forKey: .identifier)
-        try container.encodeIfPresent(value, forKey: .value)
-        if !traits.isEmpty { try container.encode(traits, forKey: .traits) }
-        if !excludeTraits.isEmpty { try container.encode(excludeTraits, forKey: .excludeTraits) }
+        if !checks.isEmpty { try container.encode(checks, forKey: .checks) }
+    }
+
+    private static let flatCodingKeys: [CodingKeys] = [.label, .identifier, .value, .traits, .excludeTraits]
+
+    private static func decodeFlatChecks(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> [ElementPredicateCheck<String>] {
+        var checks: [ElementPredicateCheck<String>] = []
+        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .label).map(ElementPredicateCheck.label)
+        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .identifier)
+            .map(ElementPredicateCheck.identifier)
+        checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value).map(ElementPredicateCheck.value)
+        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits), !traits.isEmpty {
+            checks.append(.traits(traits))
+        }
+        if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits), !traits.isEmpty {
+            checks.append(.excludeTraits(traits))
+        }
+        return checks
     }
 }
 
 extension ElementPredicate: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("predicate", [
-            ScoreDescription.stringMatchField("label", label),
-            ScoreDescription.stringMatchField("identifier", identifier),
-            ScoreDescription.stringMatchField("value", value),
-            ScoreDescription.listField("traits", traits.isEmpty ? nil : traits),
-            ScoreDescription.listField("excludeTraits", excludeTraits.isEmpty ? nil : excludeTraits),
-        ].compactMap { $0 })
+        ScoreDescription.call("predicate", checks.compactMap(ScoreDescription.predicateCheckField))
+    }
+}
+
+extension ElementPredicateCheck: Codable where Value: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case kind, match, values
+    }
+
+    private enum Kind: String, Codable {
+        case label, identifier, value, traits, excludeTraits
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate check")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .label:
+            try Self.rejectIrrelevantField(.values, in: container, forKind: .label)
+            self = .label(try container.decode(StringMatch<Value>.self, forKey: .match))
+        case .identifier:
+            try Self.rejectIrrelevantField(.values, in: container, forKind: .identifier)
+            self = .identifier(try container.decode(StringMatch<Value>.self, forKey: .match))
+        case .value:
+            try Self.rejectIrrelevantField(.values, in: container, forKind: .value)
+            self = .value(try container.decode(StringMatch<Value>.self, forKey: .match))
+        case .traits:
+            try Self.rejectIrrelevantField(.match, in: container, forKind: .traits)
+            self = .traits(try container.decode([HeistTrait].self, forKey: .values))
+        case .excludeTraits:
+            try Self.rejectIrrelevantField(.match, in: container, forKind: .excludeTraits)
+            self = .excludeTraits(try container.decode([HeistTrait].self, forKey: .values))
+        }
+    }
+
+    private static func rejectIrrelevantField(
+        _ key: CodingKeys,
+        in container: KeyedDecodingContainer<CodingKeys>,
+        forKind kind: Kind
+    ) throws {
+        guard container.contains(key) else { return }
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: container,
+            debugDescription: "\(key.stringValue) is not valid for \(kind.rawValue) element predicate checks"
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .label(let match):
+            try container.encode(Kind.label, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .identifier(let match):
+            try container.encode(Kind.identifier, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .value(let match):
+            try container.encode(Kind.value, forKey: .kind)
+            try container.encode(match, forKey: .match)
+        case .traits(let traits):
+            try container.encode(Kind.traits, forKey: .kind)
+            try container.encode(traits, forKey: .values)
+        case .excludeTraits(let traits):
+            try container.encode(Kind.excludeTraits, forKey: .kind)
+            try container.encode(traits, forKey: .values)
+        }
+    }
+}
+
+public extension ElementPredicateCheck where Value == String {
+    func matches(_ subject: some ElementPredicateSubject) -> Bool {
+        switch self {
+        case .label(let match):
+            guard let candidate = subject.predicateLabel else { return false }
+            return match.matches(candidate)
+        case .identifier(let match):
+            guard let candidate = subject.predicateIdentifier else { return false }
+            return match.matches(candidate)
+        case .value(let match):
+            guard let candidate = subject.predicateValue else { return false }
+            return match.matches(candidate)
+        case .traits(let traits):
+            return traits.isEmpty || subject.satisfiesRequiredTraits(traits)
+        case .excludeTraits(let traits):
+            return traits.isEmpty || !subject.violatesExcludedTraits(traits)
+        }
     }
 }
 

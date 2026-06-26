@@ -62,6 +62,7 @@ public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
 public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
     static let argument = Self("argument")
+    static let checks = Self("checks")
     static let command = Self("command")
     static let container = Self("container")
     static let continuation = Self("continuation")
@@ -73,7 +74,7 @@ public extension FenceParameterKey {
     static let expect = Self("expect"), from = Self("from"), heistId = Self("heistId")
     static let heist = Self("heist"), identifier = Self("identifier")
     static let inlineData = Self("inlineData"), path = Self("path"), isModalBoundary = Self("isModalBoundary")
-    static let label = Self("label"), matcher = Self("matcher")
+    static let kind = Self("kind"), label = Self("label"), match = Self("match"), matcher = Self("matcher")
     static let maxScrollsPerContainer = Self("maxScrollsPerContainer")
     static let maxScrollsPerDiscovery = Self("maxScrollsPerDiscovery")
     static let mode = Self("mode")
@@ -462,14 +463,15 @@ enum FenceParameterBlocks: Sendable {
         exclusiveMinimum: 0
     )
 
-    private static func stringMatchParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+    private static func stringMatchParam(_ key: FenceParameterKey, allowsArray: Bool = false) -> FenceParameterSpec {
         let modeValues = StringMatch<String>.Mode.allCases.map(\.rawValue)
+        let description = "StringMatch object with mode \(modeValues.joined(separator: "/")) and value. " +
+            "Use mode exact for exact matching. Broad modes require a non-empty value." +
+            (allowsArray
+                ? " Element matcher fields also accept an array of StringMatch objects; every object must match."
+                : "")
         let schema: [String: HeistValue] = [
             "type": .string(FenceParameterSpec.ParamType.object.jsonSchemaType),
-            "description": .string(
-                "StringMatch object with mode \(modeValues.joined(separator: "/")) and value. " +
-                    "Use mode exact for exact matching. Broad modes require a non-empty value."
-            ),
             "properties": .object([
                 "mode": .object([
                     "type": .string(FenceParameterSpec.ParamType.string.jsonSchemaType),
@@ -481,6 +483,7 @@ enum FenceParameterBlocks: Sendable {
             ]),
             "required": .array(["mode", "value"].map { .string($0) }),
             "additionalProperties": .bool(false),
+            "description": .string(description),
         ]
         return FenceParameterSpec(
             key: key.rawValue,
@@ -508,14 +511,32 @@ enum FenceParameterBlocks: Sendable {
             preconditionFailure("ElementTarget field '\(field.name)' is not a Fence parameter key")
         }
         switch field.kind {
+        case .predicateChecks:
+            return predicateChecksParam(key)
         case .string:
             return param(key, .string)
         case .stringMatch:
-            return stringMatchParam(key)
+            return stringMatchParam(key, allowsArray: true)
         case .stringArray:
             return param(key, .stringArray)
         case .nonNegativeInteger:
             return param(key, .integer, minimum: 0)
         }
+    }
+
+    private static func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSpec {
+        param(
+            key, .array,
+            arrayItemType: .object,
+            arrayItemProperties: [
+                param(
+                    .kind, .string, required: true,
+                    enumValues: ["label", "identifier", "value", "traits", "excludeTraits"]
+                ),
+                stringMatchParam(.match),
+                param(.values, .stringArray),
+            ],
+            arrayItemAdditionalProperties: false
+        )
     }
 }

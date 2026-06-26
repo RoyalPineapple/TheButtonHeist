@@ -79,42 +79,58 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseElementPredicateTemplateFields() throws -> ElementPredicateTemplate {
-        var label: StringMatch<StringExpr>?
-        var identifier: StringMatch<StringExpr>?
-        var value: StringMatch<StringExpr>?
-        var traits: [HeistTrait] = []
-        var excludeTraits: [HeistTrait] = []
+        var checks: [ElementPredicateCheck<StringExpr>] = []
         if currentToken.isSymbol(")") {
-            return .element()
+            return ElementPredicateTemplate()
         }
         while true {
-            if consumeIdentifier("label") != nil {
+            if currentToken.isSymbol("."),
+               lookaheadIdentifier(in: Set(["label", "identifier", "value", "traits", "excludeTraits"])) {
+                switch try parseDotCallName(allowedPrefixes: []) {
+                case "label":
+                    try expectSymbol("(")
+                    checks.append(.label(try parseStringMatchCallArgument(field: "label")))
+                    try expectSymbol(")")
+                case "identifier":
+                    try expectSymbol("(")
+                    checks.append(.identifier(try parseStringMatchCallArgument(field: "identifier")))
+                    try expectSymbol(")")
+                case "value":
+                    try expectSymbol("(")
+                    checks.append(.value(try parseStringMatchCallArgument(field: "value")))
+                    try expectSymbol(")")
+                case "traits":
+                    try expectSymbol("(")
+                    checks.append(.traits(try parseTraitArray(role: "traits")))
+                    try expectSymbol(")")
+                case "excludeTraits":
+                    try expectSymbol("(")
+                    checks.append(.excludeTraits(try parseTraitArray(role: "excludeTraits")))
+                    try expectSymbol(")")
+                default:
+                    throw error(previous, ".element(...) checks accept .label, .identifier, .value, .traits, and .excludeTraits")
+                }
+            } else if consumeIdentifier("label") != nil {
                 try expectSymbol(":")
-                label = try parseStringMatchFieldValue(field: "label")
+                checks.append(.label(try parseStringMatchFieldValue(field: "label")))
             } else if consumeIdentifier("identifier") != nil {
                 try expectSymbol(":")
-                identifier = try parseStringMatchFieldValue(field: "identifier")
+                checks.append(.identifier(try parseStringMatchFieldValue(field: "identifier")))
             } else if consumeIdentifier("value") != nil {
                 try expectSymbol(":")
-                value = try parseStringMatchFieldValue(field: "value")
+                checks.append(.value(try parseStringMatchFieldValue(field: "value")))
             } else if consumeIdentifier("traits") != nil {
                 try expectSymbol(":")
-                traits = try parseTraitArray(role: "traits")
+                checks.append(.traits(try parseTraitArray(role: "traits")))
             } else if consumeIdentifier("excludeTraits") != nil {
                 try expectSymbol(":")
-                excludeTraits = try parseTraitArray(role: "excludeTraits")
+                checks.append(.excludeTraits(try parseTraitArray(role: "excludeTraits")))
             } else {
                 throw error(currentToken, ".element(...) accepts label, identifier, value, traits, and excludeTraits")
             }
             guard consumeSymbol(",") else { break }
         }
-        return .element(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
-        )
+        return ElementPredicateTemplate(checks)
     }
 
     mutating func parseTraitArray(role: String) throws -> [HeistTrait] {
@@ -133,15 +149,31 @@ extension HeistPlanSourceParser {
     }
 
     mutating func concretePredicate(from template: ElementPredicateTemplate) throws -> ElementPredicate {
-        let label = try concreteStringMatch(template.label, role: "label")
-        let identifier = try concreteStringMatch(template.identifier, role: "identifier")
-        let value = try concreteStringMatch(template.value, role: "value")
-        return ElementPredicate(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: template.traits,
-            excludeTraits: template.excludeTraits
+        return ElementPredicate(try template.checks.map { try concreteCheck($0) })
+    }
+
+    mutating func concreteCheck(_ check: ElementPredicateCheck<StringExpr>) throws -> ElementPredicateCheck<String> {
+        switch check {
+        case .label(let match):
+            return try .label(concreteStringMatch(match, role: "label"))
+        case .identifier(let match):
+            return try .identifier(concreteStringMatch(match, role: "identifier"))
+        case .value(let match):
+            return try .value(concreteStringMatch(match, role: "value"))
+        case .traits(let traits):
+            return .traits(traits)
+        case .excludeTraits(let traits):
+            return .excludeTraits(traits)
+        }
+    }
+
+    mutating func concreteStringMatch(
+        _ match: StringMatch<StringExpr>,
+        role: String
+    ) throws -> StringMatch<String> {
+        StringMatch<String>(
+            mode: StringMatch<String>.Mode(rawValue: match.mode.rawValue) ?? .exact,
+            value: try concreteString(match.value, role: role)
         )
     }
 

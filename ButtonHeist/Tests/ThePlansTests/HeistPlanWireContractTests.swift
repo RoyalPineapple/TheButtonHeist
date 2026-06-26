@@ -276,7 +276,12 @@ private let expectedAllStepKindsPlanJSON = """
       "action" : {
         "command" : {
           "payload" : {
-            "label" : "Pay"
+            "checks" : [
+              {
+                "kind" : "label",
+                "match" : "Pay"
+              }
+            ]
           },
           "type" : "activate"
         },
@@ -294,7 +299,12 @@ private let expectedAllStepKindsPlanJSON = """
       "wait" : {
         "predicate" : {
           "element" : {
-            "label" : "Home"
+            "checks" : [
+              {
+                "kind" : "label",
+                "match" : "Home"
+              }
+            ]
           },
           "type" : "present"
         },
@@ -315,7 +325,12 @@ private let expectedAllStepKindsPlanJSON = """
             ],
             "predicate" : {
               "element" : {
-                "label" : "Promo"
+                "checks" : [
+                  {
+                    "kind" : "label",
+                    "match" : "Promo"
+                  }
+                ]
               },
               "type" : "present"
             }
@@ -356,9 +371,17 @@ private let expectedAllStepKindsPlanJSON = """
         ],
         "limit" : 2,
         "matching" : {
-          "label" : "Delete",
-          "traits" : [
-            "button"
+          "checks" : [
+            {
+              "kind" : "label",
+              "match" : "Delete"
+            },
+            {
+              "kind" : "traits",
+              "values" : [
+                "button"
+              ]
+            }
           ]
         },
         "parameter" : "row"
@@ -373,7 +396,12 @@ private let expectedAllStepKindsPlanJSON = """
               "command" : {
                 "payload" : {
                   "target" : {
-                    "label" : "Search"
+                    "checks" : [
+                      {
+                        "kind" : "label",
+                        "match" : "Search"
+                      }
+                    ]
                   },
                   "text_ref" : "item"
                 },
@@ -438,7 +466,12 @@ private let expectedAllStepKindsPlanJSON = """
             "command" : {
               "payload" : {
                 "target" : {
-                  "label" : "Search"
+                  "checks" : [
+                    {
+                      "kind" : "label",
+                      "match" : "Search"
+                    }
+                  ]
                 },
                 "text_ref" : "query"
               },

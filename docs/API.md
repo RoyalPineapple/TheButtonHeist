@@ -160,9 +160,14 @@ side-effecting commands.
 
 `heistId` is a current-capture annotation. It can appear in interface captures
 and diagnostics to correlate current tree entries. Public action targets use
-`ElementTarget` predicate fields: label, identifier, value, traits,
-excluded traits, and optional ordinal. `heistId` is not a replay selector and it
-is not geometry authority.
+`ElementTarget` predicate checks: label, identifier, value, traits, excluded
+traits, and optional ordinal. `heistId` is not a replay selector and it is not
+geometry authority.
+The string fields may be a single StringMatch or an array of StringMatch values
+when one property needs multiple checks; every entry for that property must
+match. Prefer ordered `checks` when string checks and trait checks belong in one
+predicate chain; use `.traits([...])` for required traits and
+`.excludeTraits([...])` for rejected traits.
 
 Durable flows use semantic selectors and matchers: accessibility identifier,
 label, value, traits, excluded traits, and ordinal as a last-resort

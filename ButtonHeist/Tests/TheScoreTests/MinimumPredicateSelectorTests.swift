@@ -16,45 +16,66 @@ final class MinimumPredicateSelectorTests: XCTestCase {
 
         XCTAssertEqual(candidates.map(\.predicate), [
             ElementPredicate(identifier: "saveButton"),
-            ElementPredicate(label: "Save", identifier: "saveButton"),
-            ElementPredicate(label: "Save", identifier: "saveButton", traits: [.button]),
-            ElementPredicate(label: "Save", identifier: "saveButton", value: "Ready", traits: [.button]),
-            ElementPredicate(label: "Save", identifier: "saveButton", value: "Ready", traits: [.button, .selected]),
-            ElementPredicate(
-                label: "Save",
-                identifier: "saveButton",
-                value: "Ready",
-                traits: [.button, .selected],
-                excludeTraits: [.inactive]
-            ),
-            ElementPredicate(
-                label: "Save",
-                identifier: "saveButton",
-                value: "Ready",
-                traits: [.button, .selected],
-                excludeTraits: [.inactive, .isEditing]
-            ),
-            ElementPredicate(
-                label: "Save",
-                identifier: "saveButton",
-                value: "Ready",
-                traits: [.button, .selected],
-                excludeTraits: [.inactive, .isEditing, .notEnabled]
-            ),
-            ElementPredicate(
-                label: "Save",
-                identifier: "saveButton",
-                value: "Ready",
-                traits: [.button, .selected],
-                excludeTraits: [.inactive, .isEditing, .notEnabled, .updatesFrequently]
-            ),
-            ElementPredicate(
-                label: "Save",
-                identifier: "saveButton",
-                value: "Ready",
-                traits: [.button, .selected],
-                excludeTraits: [.inactive, .isEditing, .notEnabled, .updatesFrequently, .visited]
-            ),
+            ElementPredicate([.identifier("saveButton"), .label("Save")]),
+            ElementPredicate([.identifier("saveButton"), .label("Save"), .traits([.button])]),
+            ElementPredicate([.identifier("saveButton"), .label("Save"), .traits([.button]), .value("Ready")]),
+            ElementPredicate([
+                .identifier("saveButton"),
+                .label("Save"),
+                .traits([.button]),
+                .value("Ready"),
+                .traits([.selected]),
+            ]),
+            ElementPredicate([
+                .identifier("saveButton"),
+                .label("Save"),
+                .traits([.button]),
+                .value("Ready"),
+                .traits([.selected]),
+                .excludeTraits([.inactive]),
+            ]),
+            ElementPredicate([
+                .identifier("saveButton"),
+                .label("Save"),
+                .traits([.button]),
+                .value("Ready"),
+                .traits([.selected]),
+                .excludeTraits([.inactive]),
+                .excludeTraits([.isEditing]),
+            ]),
+            ElementPredicate([
+                .identifier("saveButton"),
+                .label("Save"),
+                .traits([.button]),
+                .value("Ready"),
+                .traits([.selected]),
+                .excludeTraits([.inactive]),
+                .excludeTraits([.isEditing]),
+                .excludeTraits([.notEnabled]),
+            ]),
+            ElementPredicate([
+                .identifier("saveButton"),
+                .label("Save"),
+                .traits([.button]),
+                .value("Ready"),
+                .traits([.selected]),
+                .excludeTraits([.inactive]),
+                .excludeTraits([.isEditing]),
+                .excludeTraits([.notEnabled]),
+                .excludeTraits([.updatesFrequently]),
+            ]),
+            ElementPredicate([
+                .identifier("saveButton"),
+                .label("Save"),
+                .traits([.button]),
+                .value("Ready"),
+                .traits([.selected]),
+                .excludeTraits([.inactive]),
+                .excludeTraits([.isEditing]),
+                .excludeTraits([.notEnabled]),
+                .excludeTraits([.updatesFrequently]),
+                .excludeTraits([.visited]),
+            ]),
         ])
     }
 

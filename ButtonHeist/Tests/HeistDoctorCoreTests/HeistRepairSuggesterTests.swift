@@ -73,7 +73,12 @@ private let expectedRepairJSONReportJSON = """
         ]
       },
       "newTarget" : {
-        "label" : "Remove"
+        "checks" : [
+          {
+            "kind" : "label",
+            "match" : "Remove"
+          }
+        ]
       },
       "oldResolvedElement" : {
         "actions" : [
@@ -95,7 +100,12 @@ private let expectedRepairJSONReportJSON = """
         ]
       },
       "oldTarget" : {
-        "label" : "Delete"
+        "checks" : [
+          {
+            "kind" : "label",
+            "match" : "Delete"
+          }
+        ]
       },
       "reasons" : [
         "Old target resolved to one element in the last successful before snapshot.",

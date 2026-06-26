@@ -48,29 +48,39 @@ extension HeistPlanSourceParser {
     }
 
     func renderPredicateCorrection(_ predicate: ElementPredicateTemplate) -> String {
-        if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            switch (predicate.label, predicate.identifier, predicate.value) {
-            case (.some(let label), nil, nil):
-                return ".label(\(renderStringMatchCallArgument(label)))"
-            case (nil, .some(let identifier), nil):
-                return ".identifier(\(renderStringMatchCallArgument(identifier)))"
-            case (nil, nil, .some(let value)):
-                return ".value(\(renderStringMatchCallArgument(value)))"
-            default:
+        if predicate.checks.count == 1 {
+            switch predicate.checks[0] {
+            case .label(let match):
+                return ".label(\(renderStringMatchCallArgument(match)))"
+            case .identifier(let match):
+                return ".identifier(\(renderStringMatchCallArgument(match)))"
+            case .value(let match):
+                return ".value(\(renderStringMatchCallArgument(match)))"
+            case .traits, .excludeTraits:
                 break
             }
         }
-        var fields: [String] = []
-        if let label = predicate.label { fields.append("label: \(renderStringMatchFieldArgument(label))") }
-        if let identifier = predicate.identifier { fields.append("identifier: \(renderStringMatchFieldArgument(identifier))") }
-        if let value = predicate.value { fields.append("value: \(renderStringMatchFieldArgument(value))") }
-        if !predicate.traits.isEmpty {
-            fields.append("traits: [\(predicate.traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
-        }
-        if !predicate.excludeTraits.isEmpty {
-            fields.append("excludeTraits: [\(predicate.excludeTraits.map { ".\($0.rawValue)" }.joined(separator: ", "))]")
-        }
+        let fields = predicate.checks.map(renderPredicateCheckCorrection)
         return ".element(\(fields.joined(separator: ", ")))"
+    }
+
+    func renderPredicateCheckCorrection(_ check: ElementPredicateCheck<StringExpr>) -> String {
+        switch check {
+        case .label(let match):
+            return ".label(\(renderStringMatchCallArgument(match)))"
+        case .identifier(let match):
+            return ".identifier(\(renderStringMatchCallArgument(match)))"
+        case .value(let match):
+            return ".value(\(renderStringMatchCallArgument(match)))"
+        case .traits(let traits):
+            return ".traits(\(renderTraitArrayCorrection(traits)))"
+        case .excludeTraits(let traits):
+            return ".excludeTraits(\(renderTraitArrayCorrection(traits)))"
+        }
+    }
+
+    func renderTraitArrayCorrection(_ traits: [HeistTrait]) -> String {
+        "[\(traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
     }
 
     func renderStringMatchCallArgument(_ match: StringMatch<StringExpr>) -> String {

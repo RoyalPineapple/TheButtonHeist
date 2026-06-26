@@ -26,74 +26,99 @@ extension HeistCanonicalSwiftDSLRenderer {
     }
 
     func renderTargetPredicate(_ predicate: ElementPredicate) -> String {
-        if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            switch (predicate.label, predicate.identifier, predicate.value) {
-            case (.some(let label), nil, nil):
-                return ".label(\(renderCallArgument(label)))"
-            case (nil, .some(let identifier), nil):
-                return ".identifier(\(renderCallArgument(identifier)))"
-            case (nil, nil, .some(let value)):
-                return ".value(\(renderCallArgument(value)))"
-            default:
-                break
-            }
-        }
-        return ".element(\(renderElementPredicateFields(predicate)))"
+        if let shorthand = renderSingleCheckTarget(predicate.checks) { return shorthand }
+        return ".element(\(renderElementPredicateChecks(predicate)))"
     }
 
     func render(predicate: ElementPredicate) -> String {
-        if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            switch (predicate.label, predicate.identifier, predicate.value) {
-            case (.some(let label), nil, nil):
-                return ".label(\(renderCallArgument(label)))"
-            case (nil, .some(let identifier), nil):
-                return ".identifier(\(renderCallArgument(identifier)))"
-            case (nil, nil, .some(let value)):
-                return ".value(\(renderCallArgument(value)))"
-            default:
-                break
-            }
-        }
-        return ".element(\(renderElementPredicateFields(predicate)))"
+        if let shorthand = renderSingleCheckTarget(predicate.checks) { return shorthand }
+        return ".element(\(renderElementPredicateChecks(predicate)))"
     }
 
     func render(predicate: ElementPredicateTemplate, environment: RenderEnvironment) throws -> String {
-        if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
-            switch (predicate.label, predicate.identifier, predicate.value) {
-            case (.some(let label), nil, nil):
-                return ".label(\(try renderCallArgument(label, environment: environment)))"
-            case (nil, .some(let identifier), nil):
-                return ".identifier(\(try renderCallArgument(identifier, environment: environment)))"
-            case (nil, nil, .some(let value)):
-                return ".value(\(try renderCallArgument(value, environment: environment)))"
-            default:
-                break
-            }
+        if let shorthand = try renderSingleCheckTarget(predicate.checks, environment: environment) { return shorthand }
+        return ".element(\(try renderElementPredicateTemplateChecks(predicate, environment: environment)))"
+    }
+
+    func renderSingleCheckTarget(_ checks: [ElementPredicateCheck<String>]) -> String? {
+        guard checks.count == 1 else { return nil }
+        switch checks[0] {
+        case .label(let match):
+            return ".label(\(renderCallArgument(match)))"
+        case .identifier(let match):
+            return ".identifier(\(renderCallArgument(match)))"
+        case .value(let match):
+            return ".value(\(renderCallArgument(match)))"
+        case .traits, .excludeTraits:
+            return nil
         }
-        return ".element(\(try renderElementPredicateTemplateFields(predicate, environment: environment)))"
     }
 
-    func renderElementPredicateFields(_ predicate: ElementPredicate) -> String {
-        [
-            predicate.label.map { "label: \(renderFieldArgument($0))" },
-            predicate.identifier.map { "identifier: \(renderFieldArgument($0))" },
-            predicate.value.map { "value: \(renderFieldArgument($0))" },
-            renderTraits("traits", predicate.traits),
-            renderTraits("excludeTraits", predicate.excludeTraits),
-        ].compactMap { $0 }.joined(separator: ", ")
+    func renderSingleCheckTarget(
+        _ checks: [ElementPredicateCheck<StringExpr>],
+        environment: RenderEnvironment
+    ) throws -> String? {
+        guard checks.count == 1 else { return nil }
+        switch checks[0] {
+        case .label(let match):
+            return ".label(\(try renderCallArgument(match, environment: environment)))"
+        case .identifier(let match):
+            return ".identifier(\(try renderCallArgument(match, environment: environment)))"
+        case .value(let match):
+            return ".value(\(try renderCallArgument(match, environment: environment)))"
+        case .traits, .excludeTraits:
+            return nil
+        }
     }
 
-    func renderElementPredicateTemplateFields(
+    func renderElementPredicateChecks(_ predicate: ElementPredicate) -> String {
+        predicate.checks.map(renderPredicateCheck).joined(separator: ", ")
+    }
+
+    func renderElementPredicateTemplateChecks(
         _ predicate: ElementPredicateTemplate,
         environment: RenderEnvironment
     ) throws -> String {
-        try [
-            predicate.label.map { "label: \(try renderFieldArgument($0, environment: environment))" },
-            predicate.identifier.map { "identifier: \(try renderFieldArgument($0, environment: environment))" },
-            predicate.value.map { "value: \(try renderFieldArgument($0, environment: environment))" },
-            renderTraits("traits", predicate.traits),
-            renderTraits("excludeTraits", predicate.excludeTraits),
-        ].compactMap { $0 }.joined(separator: ", ")
+        try predicate.checks.map {
+            try renderPredicateCheck($0, environment: environment)
+        }.joined(separator: ", ")
+    }
+
+    func renderPredicateCheck(_ check: ElementPredicateCheck<String>) -> String {
+        switch check {
+        case .label(let match):
+            return ".label(\(renderCallArgument(match)))"
+        case .identifier(let match):
+            return ".identifier(\(renderCallArgument(match)))"
+        case .value(let match):
+            return ".value(\(renderCallArgument(match)))"
+        case .traits(let traits):
+            return ".traits(\(renderTraitArray(traits)))"
+        case .excludeTraits(let traits):
+            return ".excludeTraits(\(renderTraitArray(traits)))"
+        }
+    }
+
+    func renderPredicateCheck(
+        _ check: ElementPredicateCheck<StringExpr>,
+        environment: RenderEnvironment
+    ) throws -> String {
+        switch check {
+        case .label(let match):
+            return ".label(\(try renderCallArgument(match, environment: environment)))"
+        case .identifier(let match):
+            return ".identifier(\(try renderCallArgument(match, environment: environment)))"
+        case .value(let match):
+            return ".value(\(try renderCallArgument(match, environment: environment)))"
+        case .traits(let traits):
+            return ".traits(\(renderTraitArray(traits)))"
+        case .excludeTraits(let traits):
+            return ".excludeTraits(\(renderTraitArray(traits)))"
+        }
+    }
+
+    func renderTraitArray(_ traits: [HeistTrait]) -> String {
+        "[\(traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
     }
 
     func renderCallArgument(_ match: StringMatch<String>) -> String {

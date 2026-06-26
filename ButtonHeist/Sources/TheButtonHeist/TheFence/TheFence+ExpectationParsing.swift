@@ -83,17 +83,10 @@ extension TheFence {
         }
 
         private static func validateElementPredicateStringMatchObjects(_ value: HeistValue, path: [String]) throws {
-            guard case .object(let object) = value else { return }
-            for key in ["label", "identifier", "value"] {
-                guard let match = object[key] else { continue }
-                guard case .object = match else {
-                    throw SchemaValidationError(
-                        field: (path + [key]).joined(separator: "."),
-                        observed: match.schemaObservedDescription,
-                        expected: "StringMatch object with mode and value"
-                    )
-                }
-            }
+            try TheFence.validateElementPredicatePayloadStringMatches(
+                value,
+                field: path.joined(separator: ".")
+            )
         }
 
         private static func expectationDecodingFailure(_ error: DecodingError, value: HeistValue) -> Error {

@@ -105,7 +105,7 @@ final class ElementPredicateTests: XCTestCase {
         guard case .predicate(let predicate, _) = target.elementTarget else {
             return XCTFail("Expected .predicate")
         }
-        XCTAssertEqual(predicate.label, "Save")
+        XCTAssertEqual(predicate.checks, [.label(.exact("Save"))])
     }
 
     // MARK: - Codable Round-Trip
@@ -126,11 +126,11 @@ final class ElementPredicateTests: XCTestCase {
         """
         let data = Data(json.utf8)
         let predicate = try JSONDecoder().decode(ElementPredicate.self, from: data)
-        XCTAssertEqual(predicate.label, "Settings")
-        XCTAssertEqual(predicate.traits, [.header, .button])
-        XCTAssertEqual(predicate.excludeTraits, [.notEnabled])
-        XCTAssertNil(predicate.identifier)
-        XCTAssertNil(predicate.value)
+        XCTAssertEqual(predicate.checks, [
+            .label(.exact("Settings")),
+            .traits([.header, .button]),
+            .excludeTraits([.notEnabled]),
+        ])
     }
 
     // MARK: - Empty String Handling
@@ -161,6 +161,11 @@ final class ElementPredicateTests: XCTestCase {
         let predicate = ElementPredicate(label: "", identifier: "", value: "")
         XCTAssertFalse(predicate.hasPredicates, "All-empty-string predicate should have no predicates")
         XCTAssertNil(predicate.nonEmpty, "All-empty-string predicate should be nonEmpty == nil")
+    }
+
+    func testEmptyStringTemplatePredicateTreatedAsNoPredicate() {
+        let predicate = ElementPredicateTemplate(label: "", identifier: "", value: "")
+        XCTAssertFalse(predicate.hasPredicates, "All-empty-string template predicate should have no predicates")
     }
 
     // MARK: - String Matching
@@ -222,6 +227,87 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertTrue(element.matches(ElementPredicate(value: .suffix("results"))))
         XCTAssertFalse(element.matches(ElementPredicate(label: "results")))
         XCTAssertFalse(element.matches(ElementPredicate(value: "0 result")))
+    }
+
+    func testMultipleStringMatchesForSamePropertyMustAllMatch() {
+        let element = HeistElement.stub(label: "foobarbaz")
+        let predicate = ElementPredicate.element(
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz"))
+        )
+
+        XCTAssertTrue(element.matches(predicate))
+        XCTAssertEqual(predicate.checks, [
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz")),
+        ])
+        XCTAssertFalse(element.matches(ElementPredicate.element(
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("qux"))
+        )))
+        XCTAssertFalse(HeistElement.stub(label: "foobarqux").matches(predicate))
+    }
+
+    func testRepeatedStringMatchesDecodeFromArrayJSON() throws {
+        let data = Data(#"""
+        {
+          "label": [
+            { "mode": "prefix", "value": "foo" },
+            { "mode": "contains", "value": "bar" },
+            { "mode": "suffix", "value": "baz" }
+          ],
+          "traits": ["button"]
+        }
+        """#.utf8)
+
+        let predicate = try JSONDecoder().decode(ElementPredicate.self, from: data)
+
+        XCTAssertEqual(predicate.checks, [
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz")),
+            .traits([.button]),
+        ])
+        XCTAssertTrue(HeistElement.stub(label: "foobarbaz", traits: [.button]).matches(predicate))
+
+        let encoded = try JSONEncoder().encode(predicate)
+        let decoded = try JSONDecoder().decode(ElementPredicate.self, from: encoded)
+        XCTAssertEqual(decoded, predicate)
+    }
+
+    func testOrderedCheckDecodingRejectsFieldsThatDoNotMatchKind() {
+        let labelWithValues = Data(#"""
+        {
+          "checks": [
+            { "kind": "label", "match": { "mode": "exact", "value": "Save" }, "values": ["button"] }
+          ]
+        }
+        """#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementPredicate.self, from: labelWithValues)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("values is not valid for label"))
+        }
+
+        let traitsWithMatch = Data(#"""
+        {
+          "checks": [
+            { "kind": "traits", "match": { "mode": "exact", "value": "button" }, "values": ["button"] }
+          ]
+        }
+        """#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementPredicate.self, from: traitsWithMatch)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("match is not valid for traits"))
+        }
     }
 
     func testTypographyFoldingOnLabel() {

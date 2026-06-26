@@ -72,9 +72,19 @@ extension HeistPlanRuntimeSafetyValidator {
         _ predicate: ElementPredicate,
         path: String
     ) {
-        validateString(predicate.label, path: "\(path).label", role: "element label")
-        validateString(predicate.identifier, path: "\(path).identifier", role: "element identifier")
-        validateString(predicate.value, path: "\(path).value", role: "element value")
+        for (index, check) in predicate.checks.enumerated() {
+            let checkPath = "\(path).checks[\(index)]"
+            switch check {
+            case .label(let match):
+                validateString(match, path: "\(checkPath).label", role: "element label")
+            case .identifier(let match):
+                validateString(match, path: "\(checkPath).identifier", role: "element identifier")
+            case .value(let match):
+                validateString(match, path: "\(checkPath).value", role: "element value")
+            case .traits, .excludeTraits:
+                break
+            }
+        }
     }
 
     mutating func validateElementPredicate(
@@ -82,14 +92,18 @@ extension HeistPlanRuntimeSafetyValidator {
         path: String,
         scope: HeistReferenceScope
     ) {
-        if let label = predicate.label {
-            validateString(label, path: "\(path).label", scope: scope)
-        }
-        if let identifier = predicate.identifier {
-            validateString(identifier, path: "\(path).identifier", scope: scope)
-        }
-        if let value = predicate.value {
-            validateString(value, path: "\(path).value", scope: scope)
+        for (index, check) in predicate.checks.enumerated() {
+            let checkPath = "\(path).checks[\(index)]"
+            switch check {
+            case .label(let match):
+                validateString(match, path: "\(checkPath).label", scope: scope)
+            case .identifier(let match):
+                validateString(match, path: "\(checkPath).identifier", scope: scope)
+            case .value(let match):
+                validateString(match, path: "\(checkPath).value", scope: scope)
+            case .traits, .excludeTraits:
+                break
+            }
         }
     }
 
@@ -169,6 +183,22 @@ extension HeistPlanRuntimeSafetyValidator {
                 observed: "empty \(match.mode.rawValue) match",
                 correction: "Use a non-empty string, or an exact match when the empty string is intentional."
             )
+        }
+    }
+
+    mutating func validateStrings(_ matches: [StringMatch<String>], path: String, role: String) {
+        for (index, match) in matches.enumerated() {
+            validateString(match, path: "\(path)[\(index)]", role: role)
+        }
+    }
+
+    mutating func validateStrings(
+        _ matches: [StringMatch<StringExpr>],
+        path: String,
+        scope: HeistReferenceScope
+    ) {
+        for (index, match) in matches.enumerated() {
+            validateString(match, path: "\(path)[\(index)]", scope: scope)
         }
     }
 }

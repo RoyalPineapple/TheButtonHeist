@@ -333,7 +333,7 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertEqual(decoded.text, "Hello")
         if case .predicate(let matcher, _) = decoded.elementTarget {
-            XCTAssertEqual(matcher.identifier, "nameField")
+            XCTAssertEqual(matcher.checks, [.identifier(.exact("nameField"))])
         } else {
             XCTFail("Expected .matcher elementTarget")
         }
@@ -410,8 +410,10 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
         if case .state(.absent(let predicate)) = decoded.predicate {
-            XCTAssertEqual(predicate.label, .exact("Loading"))
-            XCTAssertEqual(predicate.traits, [.staticText])
+            XCTAssertEqual(predicate.checks, [
+                .label(.exact("Loading")),
+                .traits([.staticText]),
+            ])
             XCTAssertEqual(decoded.timeout, 5.0)
         } else {
             XCTFail("Expected wait(.absent), got \(decoded)")
@@ -424,7 +426,7 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(WaitTarget.self, from: data)
 
         if case .state(.present(let predicate)) = decoded.predicate {
-            XCTAssertEqual(predicate.identifier, .exact("spinner"))
+            XCTAssertEqual(predicate.checks, [.identifier(.exact("spinner"))])
             XCTAssertNil(decoded.timeout)
             XCTAssertEqual(decoded.resolvedTimeout, 10.0)
         } else {
@@ -492,7 +494,7 @@ final class ClientMessageTests: XCTestCase {
         guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
         }
-        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(matcher.checks, [.label(.exact("Save"))])
         XCTAssertNil(ordinal)
     }
 
@@ -504,8 +506,10 @@ final class ClientMessageTests: XCTestCase {
         guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
         }
-        XCTAssertEqual(matcher.label, "Save")
-        XCTAssertEqual(matcher.traits, [.button])
+        XCTAssertEqual(matcher.checks, [
+            .label(.exact("Save")),
+            .traits([.button]),
+        ])
         XCTAssertEqual(ordinal, 2)
     }
 
@@ -516,7 +520,7 @@ final class ClientMessageTests: XCTestCase {
         guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
         }
-        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(matcher.checks, [.label(.exact("Save"))])
         XCTAssertEqual(ordinal, 2)
     }
 

@@ -89,16 +89,10 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     private func requireObjectStringMatchFields() throws {
-        for field in ElementTarget.inlineSchemaFields where field.kind == .stringMatch {
-            guard let value = argumentValues[field.name] else { continue }
-            guard case .object = value else {
-                throw SchemaValidationError(
-                    field: self.field(field.name),
-                    observed: value.schemaObservedDescription,
-                    expected: "StringMatch object with mode and value"
-                )
-            }
-        }
+        try TheFence.validateElementPredicatePayloadStringMatches(
+            .object(argumentValues),
+            field: argumentFieldPrefix ?? "target"
+        )
     }
 
     private func elementTargetPayloadFailure(_ error: DecodingError, value: HeistValue) -> Error {

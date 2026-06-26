@@ -68,8 +68,12 @@ final class HeistPlanTests: XCTestCase {
         let command = try XCTUnwrap(action["command"] as? [String: Any])
         XCTAssertEqual(command["type"] as? String, "activate")
         let target = try XCTUnwrap(command["payload"] as? [String: Any])
-        XCTAssertEqual(target["label"] as? String, "List")
-        XCTAssertEqual(target["traits"] as? [String], ["adjustable"])
+        let checks = try XCTUnwrap(target["checks"] as? [[String: Any]])
+        XCTAssertEqual(checks.count, 2)
+        XCTAssertEqual(checks[0]["kind"] as? String, "label")
+        XCTAssertEqual(checks[0]["match"] as? String, "List")
+        XCTAssertEqual(checks[1]["kind"] as? String, "traits")
+        XCTAssertEqual(checks[1]["values"] as? [String], ["adjustable"])
     }
 
     func testActionStepRejectsHeistIdAsDurableIdentity() {

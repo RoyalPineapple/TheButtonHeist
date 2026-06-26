@@ -25,6 +25,27 @@ func actionConstructorBuildsOneActionStep() throws {
 }
 
 @Test
+func actionTargetSupportsRepeatedStringChecksForOneProperty() throws {
+    let heist = try HeistPlan {
+        Activate(.element(
+            .label(.prefix("foo")),
+            .label(.contains("bar")),
+            .label(.suffix("baz")),
+            traits: [.button]
+        ))
+    }
+
+    #expect(try heist == HeistPlan(body: [
+        .action(try ActionStep(command: .activate(.predicate(.element(
+            .label(.prefix(.literal("foo"))),
+            .label(.contains(.literal("bar"))),
+            .label(.suffix(.literal("baz"))),
+            traits: [.button]
+        ))))),
+    ]))
+}
+
+@Test
 func actionExpectationAttachesWaitStep() throws {
     let heist = try HeistPlan {
         Activate(.label("Sign In"))
@@ -208,7 +229,7 @@ func `string heist search flow preserves query ref in composed post activation e
     let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
 
     #expect(decoded == heist)
-    #expect(json.contains(#""label_ref":"query""#))
+    #expect(json.contains(#""checks":[{"kind":"label","match":{"ref":"query"}}]"#))
 }
 
 @Test

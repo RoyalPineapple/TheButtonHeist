@@ -18,7 +18,7 @@ _Generated from `TheFence.Command.descriptors`._
 
 ## StringMatch
 
-`stringMatch` fields such as `label`, `identifier`, `value`, and update `from`/`to` filters accept object form `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`. Use `exact` for exact matching; broad modes require a non-empty value.
+`stringMatch` fields such as `label`, `identifier`, `value`, and update `from`/`to` filters accept object form `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`. Use `exact` for exact matching; broad modes require a non-empty value. Element matcher fields `label`, `identifier`, and `value` may also accept an array of StringMatch objects; every object in the array must match the same property. Prefer `checks` for ordered element predicate chains, including repeated string checks and trait checks. A string check item is `{ "kind": "label|identifier|value", "match": { "mode": "...", "value": "..." } }`; a trait check item is `{ "kind": "traits|excludeTraits", "values": ["button"] }`. Update `from` and `to` filters remain single StringMatch objects.
 
 ## Details
 
@@ -55,10 +55,14 @@ Parameters:
 Read the app accessibility hierarchy, optionally scoped to a subtree.
 
 Build DSL targets from returned accessibility language: `.label("Pay")`,
-`.identifier("pay_button")`, `.value("Milk")`, `.element(label: "Pay",
-traits: [.button])`, or `.target(..., ordinal: n)` for duplicates.
+`.identifier("pay_button")`, `.value("Milk")`, `.element(.label("Pay"),
+.traits([.button]))`, or `.target(..., ordinal: n)` for duplicates.
 Direct matcher fields `label`, `identifier`, and `value` accept StringMatch
-objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`.
+objects like `{ "mode": "exact|contains|prefix|suffix", "value": "..." }`,
+or an array of those objects when one property needs multiple checks.
+Prefer `checks` when order matters or traits belong in the same predicate
+chain; each item is `{ "kind": "label|identifier|value|traits|excludeTraits",
+"match": StringMatch }` or `{ "kind": "traits|excludeTraits", "values": [...] }`.
 `containerName` is for inspection and viewport/debug commands only; it is
 not a semantic target or durable heist selector.
 `maxScrollsPerContainer` and `maxScrollsPerDiscovery` bound the command-owned
@@ -70,6 +74,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
+| `checks` | `array` | no | - | - |
 | `label` | `stringMatch` | no | - | - |
 | `identifier` | `stringMatch` | no | - | - |
 | `value` | `stringMatch` | no | - | - |
@@ -172,7 +177,7 @@ Author plans as ButtonHeist source, not raw JSON IR:
 `If(.present(.label("Pay"))) { ... }.else { ... }`
 `WaitFor(.changed(.screen()), timeout: .seconds(10)).else { ... }`
 `ForEach(["Milk", "Bread"]) { item in ... }`
-`ForEach(.matching(.label("Delete")), limit: 20) { target in ... }`
+`ForEach(.matching(.element(.label(.prefix("Delete")), .traits([.button]))), limit: 20) { target in ... }`
 `Warn("message")`
 `Fail("message")`
 

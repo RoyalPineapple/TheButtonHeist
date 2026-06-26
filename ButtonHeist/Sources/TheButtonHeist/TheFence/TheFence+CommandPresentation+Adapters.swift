@@ -9,7 +9,7 @@ public extension TheFence.Command {
             Read it with \(inlineCode(getInterface.rawValue)); use \(inlineCode(getScreen.rawValue)) \
             only when pixels or viewport geometry matter. Target controls by accessibility language: \
             \(inlineCode(#".label("Pay")"#)), \(inlineCode(#".identifier("pay_button")"#)), \
-            \(inlineCode(#".value("Milk")"#)), \(inlineCode(#".element(label: "Pay", traits: [.button])"#)), \
+            \(inlineCode(#".value("Milk")"#)), \(inlineCode(#".element(.label("Pay"), .traits([.button]))"#)), \
             and \(inlineCode(#".target(.label("Delete"), ordinal: 1)"#)) when duplicates need an ordinal. \
             Act with \(inlineCode(perform.rawValue)) for one DSL step; use \(inlineCode(runHeist.rawValue)) \
             for a full \(inlineCode("HeistPlan { ... }")). Runtime ButtonHeist source is the authoring \
@@ -30,6 +30,8 @@ public extension TheFence.Command {
         StringMatch:
           label, identifier, and value matcher fields accept
           {"mode":"exact|contains|prefix|suffix","value":"..."}. Broad modes require a non-empty value.
+          Use checks for ordered matcher chains, including traits:
+          {"checks":[{"kind":"label","match":{"mode":"prefix","value":"foo"}},{"kind":"traits","values":["button"]}]}
         """
     }
 }

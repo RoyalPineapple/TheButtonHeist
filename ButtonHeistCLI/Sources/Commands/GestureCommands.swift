@@ -23,17 +23,41 @@ extension GestureCLICommandContract {
         switch target {
         case .predicate(let predicate, let ordinal):
             var object: [FenceParameterKey: HeistValue] = [:]
-            if let label = predicate.label { object[.label] = stringMatchValue(label) }
-            if let identifier = predicate.identifier { object[.identifier] = stringMatchValue(identifier) }
-            if let value = predicate.value { object[.value] = stringMatchValue(value) }
-            if !predicate.traits.isEmpty {
-                object[.traits] = .array(predicate.traits.map { .string($0.rawValue) })
-            }
-            if !predicate.excludeTraits.isEmpty {
-                object[.excludeTraits] = .array(predicate.excludeTraits.map { .string($0.rawValue) })
+            if !predicate.checks.isEmpty {
+                object[.checks] = .array(predicate.checks.map(predicateCheckValue))
             }
             if let ordinal { object[.ordinal] = .int(ordinal) }
             return object
+        }
+    }
+
+    static func predicateCheckValue(_ check: ElementPredicateCheck<String>) -> HeistValue {
+        switch check {
+        case .label(let match):
+            return .object([
+                "kind": .string("label"),
+                "match": stringMatchValue(match),
+            ])
+        case .identifier(let match):
+            return .object([
+                "kind": .string("identifier"),
+                "match": stringMatchValue(match),
+            ])
+        case .value(let match):
+            return .object([
+                "kind": .string("value"),
+                "match": stringMatchValue(match),
+            ])
+        case .traits(let traits):
+            return .object([
+                "kind": .string("traits"),
+                "values": .array(traits.map { .string($0.rawValue) }),
+            ])
+        case .excludeTraits(let traits):
+            return .object([
+                "kind": .string("excludeTraits"),
+                "values": .array(traits.map { .string($0.rawValue) }),
+            ])
         }
     }
 

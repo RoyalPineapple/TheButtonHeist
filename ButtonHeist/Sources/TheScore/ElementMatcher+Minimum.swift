@@ -301,35 +301,14 @@ public enum MinimumPredicateSelector {
         case .value(let value):
             return ElementPredicate(value: .exact(value))
         case .trait(let trait):
-            return ElementPredicate(traits: [trait])
+            return ElementPredicate([.traits([trait])])
         case .excludedTrait(let trait):
-            return ElementPredicate(excludeTraits: [trait])
+            return ElementPredicate([.excludeTraits([trait])])
         }
     }
 
     private static func combinedPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
-        var label: StringMatch<String>?
-        var identifier: StringMatch<String>?
-        var value: StringMatch<String>?
-        var traits: [HeistTrait] = []
-        var excludeTraits: [HeistTrait] = []
-
-        for atom in atoms {
-            let predicate = atom.predicate
-            if label == nil { label = predicate.label }
-            if identifier == nil { identifier = predicate.identifier }
-            if value == nil { value = predicate.value }
-            traits.append(contentsOf: predicate.traits)
-            excludeTraits.append(contentsOf: predicate.excludeTraits)
-        }
-
-        return ElementPredicate(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: AccessibilityPolicy.orderedMatcherTraits(unique(traits)),
-            excludeTraits: AccessibilityPolicy.orderedMatcherTraits(unique(excludeTraits))
-        )
+        ElementPredicate(atoms.flatMap { $0.predicate.checks })
     }
 
     private static func tier(for atoms: [MatcherAtom]) -> CandidateTier {
@@ -345,11 +324,6 @@ public enum MinimumPredicateSelector {
         case (false, false):
             return .ordinalDisambiguation
         }
-    }
-
-    private static func unique(_ traits: [HeistTrait]) -> [HeistTrait] {
-        var seen = Set<HeistTrait>()
-        return traits.filter { seen.insert($0).inserted }
     }
 
     private static func nonEmpty(_ value: String?) -> String? {

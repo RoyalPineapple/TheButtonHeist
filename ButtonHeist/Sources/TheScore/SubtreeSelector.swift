@@ -56,11 +56,7 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
             var element = container.nestedContainer(keyedBy: ElementTarget.CodingKeys.self, forKey: .element)
             switch target {
             case .predicate(let predicate, let ordinal):
-                try element.encodeIfPresent(predicate.label, forKey: .label)
-                try element.encodeIfPresent(predicate.identifier, forKey: .identifier)
-                try element.encodeIfPresent(predicate.value, forKey: .value)
-                if !predicate.traits.isEmpty { try element.encode(predicate.traits, forKey: .traits) }
-                if !predicate.excludeTraits.isEmpty { try element.encode(predicate.excludeTraits, forKey: .excludeTraits) }
+                if !predicate.checks.isEmpty { try element.encode(predicate.checks, forKey: .checks) }
                 try container.encodeIfPresent(ordinal, forKey: .ordinal)
             }
         case .container(let matcher, let ordinal):

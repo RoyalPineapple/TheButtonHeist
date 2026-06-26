@@ -1426,7 +1426,7 @@ final class TheFenceHandlerTests: XCTestCase {
               case .predicate(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
-        XCTAssertEqual(matcher.identifier, "myButton")
+        XCTAssertEqual(matcher.checks, [.identifier(.exact("myButton"))])
     }
 
     @ButtonHeistActor
@@ -1441,8 +1441,10 @@ final class TheFenceHandlerTests: XCTestCase {
               case .predicate(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
-        XCTAssertEqual(matcher.label, "Save")
-        XCTAssertEqual(matcher.traits, [.button])
+        XCTAssertEqual(matcher.checks, [
+            .label(.exact("Save")),
+            .traits([.button]),
+        ])
     }
 
     @ButtonHeistActor
@@ -1468,7 +1470,7 @@ final class TheFenceHandlerTests: XCTestCase {
               case .predicate(let matcher, let ordinal) = target else {
             return XCTFail("Expected .matcher with ordinal")
         }
-        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(matcher.checks, [.label(.exact("Save"))])
         XCTAssertEqual(ordinal, 2)
     }
 
@@ -3174,7 +3176,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected requestInterface query, got \(String(describing: mockConn.sent.last))")
             return
         }
-        XCTAssertEqual(query.matcher.label, "Submit")
+        XCTAssertEqual(query.matcher.checks, [.label(.exact("Submit"))])
 
         let json = publicJSONObject(response)
         let responseInterface = json["interface"] as! [String: Any]

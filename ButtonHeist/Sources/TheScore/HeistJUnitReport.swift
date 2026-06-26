@@ -84,10 +84,8 @@ extension HeistJUnitReport {
         public var displayName: String {
             var name = "[\(index)] \(command)"
             if case .predicate(let predicate, _)? = target {
-                if let label = predicate.label {
-                    name += " label=\"\(label)\""
-                } else if let identifier = predicate.identifier {
-                    name += " identifier=\"\(identifier)\""
+                if let summary = predicate.checks.compactMap(ScoreDescription.predicateCheckField).first {
+                    name += " \(summary)"
                 }
             }
             return name
@@ -193,9 +191,7 @@ extension HeistJUnitReport {
         if let target = failedStep.target {
             var parts: [String] = []
             if case .predicate(let predicate, _) = target {
-                if let label = predicate.label { parts.append("label=\"\(label)\"") }
-                if let identifier = predicate.identifier { parts.append("identifier=\"\(identifier)\"") }
-                if let value = predicate.value { parts.append("value=\"\(value)\"") }
+                parts = predicate.checks.compactMap(ScoreDescription.predicateCheckField)
             }
             if !parts.isEmpty {
                 body += "target: \(parts.joined(separator: ", "))\n"
