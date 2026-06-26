@@ -66,7 +66,7 @@ struct HeistPlanToolTests {
         #expect(result.stdout == """
         HeistPlan("loginFlow") {
             TypeText("alex@example.com", into: .identifier("email"))
-                .expect(.present(.value("alex@example.com")))
+                .expect(.exists(.value("alex@example.com")))
 
             Warn("done")
         }
@@ -143,7 +143,7 @@ struct HeistPlanToolTests {
 private func representativePlan() throws -> HeistPlan {
     try HeistPlan("loginFlow") {
         TypeText("alex@example.com", into: .identifier("email"))
-            .expect(.present(.value("alex@example.com")), timeout: .seconds(1))
+            .expect(.exists(.value("alex@example.com")), timeout: .seconds(1))
 
         Warn("done")
     }
