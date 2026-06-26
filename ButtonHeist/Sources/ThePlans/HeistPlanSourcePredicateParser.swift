@@ -52,8 +52,14 @@ extension HeistPlanSourceParser {
                 try expectSymbol(")")
             }
             return .elementsScope(assertions)
+        case "appeared":
+            return .elementsScope([try parseAppearedElementDeltaPredicateExpr()])
+        case "disappeared":
+            return .elementsScope([try parseDisappearedElementDeltaPredicateExpr()])
+        case "updated":
+            return .elementsScope([try parseUpdatedElementDeltaPredicateExpr()])
         default:
-            throw error(previous, "unsupported change predicate '.\(name)'")
+            throw error(previous, "unsupported change predicate '.\(name)'. Valid: screen, elements, appeared, disappeared, updated")
         }
     }
 
@@ -105,56 +111,202 @@ extension HeistPlanSourceParser {
         let name = try parseDotCallName(allowedPrefixes: [])
         switch name {
         case "appeared":
-            try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplate()
-            try expectSymbol(")")
-            return .appearedElement(predicate)
+            return try parseAppearedElementDeltaPredicateExpr()
         case "disappeared":
-            try expectSymbol("(")
-            let predicate = try parseElementPredicateTemplate()
-            try expectSymbol(")")
-            return .disappearedElement(predicate)
+            return try parseDisappearedElementDeltaPredicateExpr()
         case "updated":
-            try expectSymbol("(")
-            let update = try parseElementUpdatePredicate()
-            try expectSymbol(")")
-            return .updatedElement(update)
+            return try parseUpdatedElementDeltaPredicateExpr()
         default:
             throw error(previous, "unsupported element delta predicate '.\(name)'")
         }
     }
 
+    mutating func parseAppearedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
+        try expectSymbol("(")
+        let predicate = try parseElementPredicateTemplate()
+        try expectSymbol(")")
+        return .appearedElement(predicate)
+    }
+
+    mutating func parseDisappearedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
+        try expectSymbol("(")
+        let predicate = try parseElementPredicateTemplate()
+        try expectSymbol(")")
+        return .disappearedElement(predicate)
+    }
+
+    mutating func parseUpdatedElementDeltaPredicateExpr() throws -> ElementDeltaPredicateExpr {
+        try expectSymbol("(")
+        let update = try parseElementUpdatePredicate()
+        try expectSymbol(")")
+        return .updatedElement(update)
+    }
+
     mutating func parseElementUpdatePredicate() throws -> ElementUpdatePredicateExpr {
-        var before: ElementPredicateTemplate?
-        var after: ElementPredicateTemplate?
-        var property: ElementProperty?
+        var element: ElementPredicateTemplate?
+        var change: AnyPropertyChangeExpr?
         if currentToken.isSymbol(")") {
             return ElementUpdatePredicateExpr()
         }
         while true {
-            if lookaheadLabel("property") {
-                try expectIdentifier("property")
+            if lookaheadLabel("element") {
+                try expectIdentifier("element")
                 try expectSymbol(":")
-                property = try parseEnumCase(ElementProperty.self, role: "element property")
-            } else if lookaheadLabel("before") {
+                guard element == nil else {
+                    throw error(previous, "element update predicate accepts element only once")
+                }
+                element = try parseElementPredicateTemplate()
+            } else if currentToken.isSymbol(".") {
+                guard change == nil else {
+                    throw error(previous, "element update predicate accepts one property change")
+                }
+                change = try parsePropertyChangeExpr()
+            } else {
+                let message = """
+                element update predicate accepts element: and one property change: \
+                value, traits, hint, actions, frame, activationPoint, customContent, rotors
+                """
+                throw error(currentToken, message)
+            }
+            guard consumeSymbol(",") else { break }
+        }
+        return ElementUpdatePredicateExpr(element: element, change: change)
+    }
+
+    mutating func parsePropertyChangeExpr() throws -> AnyPropertyChangeExpr {
+        let name = try parseDotCallName(allowedPrefixes: [])
+        try expectSymbol("(")
+        let change: AnyPropertyChangeExpr
+        switch name {
+        case "value":
+            let fields = try parseStringPropertyChangeFields(property: "value")
+            change = .value(before: fields.before, after: fields.after)
+        case "hint":
+            let fields = try parseStringPropertyChangeFields(property: "hint")
+            change = .hint(before: fields.before, after: fields.after)
+        case "actions":
+            let fields = try parseStringPropertyChangeFields(property: "actions")
+            change = .actions(before: fields.before, after: fields.after)
+        case "frame":
+            let fields = try parseStringPropertyChangeFields(property: "frame")
+            change = .frame(before: fields.before, after: fields.after)
+        case "activationPoint":
+            let fields = try parseStringPropertyChangeFields(property: "activationPoint")
+            change = .activationPoint(before: fields.before, after: fields.after)
+        case "customContent":
+            let fields = try parseStringPropertyChangeFields(property: "customContent")
+            change = .customContent(before: fields.before, after: fields.after)
+        case "rotors":
+            let fields = try parseStringPropertyChangeFields(property: "rotors")
+            change = .rotors(before: fields.before, after: fields.after)
+        case "traits":
+            let fields = try parseTraitsPropertyChangeFields()
+            change = .traits(before: fields.before, after: fields.after)
+        default:
+            throw error(previous, "unsupported element update property '.\(name)'. Valid: \(Self.validElementProperties)")
+        }
+        try expectSymbol(")")
+        return change
+    }
+
+    mutating func parseStringPropertyChangeFields(
+        property: String
+    ) throws -> (before: StringMatch<StringExpr>?, after: StringMatch<StringExpr>?) {
+        var before: StringMatch<StringExpr>?
+        var after: StringMatch<StringExpr>?
+        if currentToken.isSymbol(")") {
+            return (nil, nil)
+        }
+        while true {
+            if lookaheadLabel("before") {
                 try expectIdentifier("before")
                 try expectSymbol(":")
                 guard before == nil else {
-                    throw error(previous, "element update predicate accepts before only once")
+                    throw error(previous, "\(property) update predicate accepts before only once")
                 }
-                before = try parseElementPredicateTemplate()
+                before = try parseStringMatchFieldValue(field: "\(property) before")
             } else if lookaheadLabel("after") {
                 try expectIdentifier("after")
                 try expectSymbol(":")
                 guard after == nil else {
-                    throw error(previous, "element update predicate accepts after only once")
+                    throw error(previous, "\(property) update predicate accepts after only once")
                 }
-                after = try parseElementPredicateTemplate()
+                after = try parseStringMatchFieldValue(field: "\(property) after")
             } else {
-                throw error(currentToken, "element update predicate accepts before, after, and property")
+                throw error(currentToken, "\(property) update predicate accepts before and after")
             }
             guard consumeSymbol(",") else { break }
         }
-        return ElementUpdatePredicateExpr(before: before, after: after, property: property)
+        return (before, after)
+    }
+
+    mutating func parseTraitsPropertyChangeFields() throws -> (before: TraitSetMatch?, after: TraitSetMatch?) {
+        var before: TraitSetMatch?
+        var after: TraitSetMatch?
+        if currentToken.isSymbol(")") {
+            return (nil, nil)
+        }
+        while true {
+            if lookaheadLabel("before") {
+                try expectIdentifier("before")
+                try expectSymbol(":")
+                guard before == nil else {
+                    throw error(previous, "traits update predicate accepts before only once")
+                }
+                before = try parseTraitSetMatch(role: "traits before")
+            } else if lookaheadLabel("after") {
+                try expectIdentifier("after")
+                try expectSymbol(":")
+                guard after == nil else {
+                    throw error(previous, "traits update predicate accepts after only once")
+                }
+                after = try parseTraitSetMatch(role: "traits after")
+            } else {
+                throw error(currentToken, "traits update predicate accepts before and after")
+            }
+            guard consumeSymbol(",") else { break }
+        }
+        return (before, after)
+    }
+
+    mutating func parseTraitSetMatch(role: String) throws -> TraitSetMatch {
+        try expectSymbol(".")
+        let mode = try parseIdentifier()
+        try expectSymbol("(")
+        let match: TraitSetMatch
+        switch mode {
+        case "include":
+            match = TraitSetMatch(include: try parseTraitArray(role: role))
+        case "exclude":
+            match = TraitSetMatch(exclude: try parseTraitArray(role: role))
+        case "match":
+            var include: [HeistTrait] = []
+            var exclude: [HeistTrait] = []
+            if !currentToken.isSymbol(")") {
+                while true {
+                    if lookaheadLabel("include") {
+                        try expectIdentifier("include")
+                        try expectSymbol(":")
+                        include = try parseTraitArray(role: "\(role) include")
+                    } else if lookaheadLabel("exclude") {
+                        try expectIdentifier("exclude")
+                        try expectSymbol(":")
+                        exclude = try parseTraitArray(role: "\(role) exclude")
+                    } else {
+                        throw error(currentToken, "trait set match accepts include and exclude")
+                    }
+                    guard consumeSymbol(",") else { break }
+                }
+            }
+            match = TraitSetMatch(include: include, exclude: exclude)
+        default:
+            throw error(previous, "unsupported trait set match '.\(mode)'. Valid: include, exclude, match")
+        }
+        try expectSymbol(")")
+        return match
+    }
+
+    private static var validElementProperties: String {
+        ElementProperty.allCases.map(\.rawValue).joined(separator: ", ")
     }
 }

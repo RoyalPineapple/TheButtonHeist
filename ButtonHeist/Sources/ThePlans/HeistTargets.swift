@@ -304,6 +304,26 @@ public extension ChangePredicateExpr {
         .elementsScope([first] + rest)
     }
 
+    static func appeared(_ predicate: ElementPredicateTemplate) -> ChangePredicateExpr {
+        .elementsScope([.appearedElement(predicate)])
+    }
+
+    static func disappeared(_ predicate: ElementPredicateTemplate) -> ChangePredicateExpr {
+        .elementsScope([.disappearedElement(predicate)])
+    }
+
+    static func updated() -> ChangePredicateExpr {
+        .elementsScope([.updatedElement(ElementUpdatePredicateExpr())])
+    }
+
+    static func updated(_ change: AnyPropertyChangeExpr) -> ChangePredicateExpr {
+        .elementsScope([.updatedElement(ElementUpdatePredicateExpr(change: change))])
+    }
+
+    static func updated(element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr? = nil) -> ChangePredicateExpr {
+        .elementsScope([.updatedElement(ElementUpdatePredicateExpr(element: element, change: change))])
+    }
+
     static func all(_ changes: ChangePredicateExpr...) -> ChangePredicateExpr {
         .allScopes(changes)
     }
@@ -326,6 +346,26 @@ public extension AccessibilityPredicate.Change {
         .elementsScope([first] + rest)
     }
 
+    static func appeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.Change {
+        .elementsScope([.appearedElement(predicate)])
+    }
+
+    static func disappeared(_ predicate: ElementPredicate) -> AccessibilityPredicate.Change {
+        .elementsScope([.disappearedElement(predicate)])
+    }
+
+    static func updated() -> AccessibilityPredicate.Change {
+        .elementsScope([.updatedElement(ElementUpdatePredicate())])
+    }
+
+    static func updated(_ change: AnyPropertyChange) -> AccessibilityPredicate.Change {
+        .elementsScope([.updatedElement(ElementUpdatePredicate(change: change))])
+    }
+
+    static func updated(element: ElementPredicate, _ change: AnyPropertyChange? = nil) -> AccessibilityPredicate.Change {
+        .elementsScope([.updatedElement(ElementUpdatePredicate(element: element, change: change))])
+    }
+
     static func all(_ changes: AccessibilityPredicate.Change...) -> AccessibilityPredicate.Change {
         .allScopes(changes)
     }
@@ -340,16 +380,16 @@ public extension ElementDeltaPredicateExpr {
         .disappearedElement(predicate)
     }
 
-    static func updated(
-        before: ElementPredicateTemplate? = nil,
-        after: ElementPredicateTemplate? = nil,
-        property: ElementProperty? = nil
-    ) -> ElementDeltaPredicateExpr {
-        .updatedElement(ElementUpdatePredicateExpr(
-            before: before,
-            after: after,
-            property: property
-        ))
+    static func updated() -> ElementDeltaPredicateExpr {
+        .updatedElement(ElementUpdatePredicateExpr())
+    }
+
+    static func updated(_ change: AnyPropertyChangeExpr) -> ElementDeltaPredicateExpr {
+        .updatedElement(ElementUpdatePredicateExpr(change: change))
+    }
+
+    static func updated(element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr? = nil) -> ElementDeltaPredicateExpr {
+        .updatedElement(ElementUpdatePredicateExpr(element: element, change: change))
     }
 }
 
@@ -362,15 +402,15 @@ public extension ElementDeltaPredicate {
         .disappearedElement(predicate)
     }
 
-    static func updated(
-        before: ElementPredicate? = nil,
-        after: ElementPredicate? = nil,
-        property: ElementProperty? = nil
-    ) -> ElementDeltaPredicate {
-        .updatedElement(ElementUpdatePredicate(
-            before: before,
-            after: after,
-            property: property
-        ))
+    static func updated() -> ElementDeltaPredicate {
+        .updatedElement(ElementUpdatePredicate())
+    }
+
+    static func updated(_ change: AnyPropertyChange) -> ElementDeltaPredicate {
+        .updatedElement(ElementUpdatePredicate(change: change))
+    }
+
+    static func updated(element: ElementPredicate, _ change: AnyPropertyChange? = nil) -> ElementDeltaPredicate {
+        .updatedElement(ElementUpdatePredicate(element: element, change: change))
     }
 }

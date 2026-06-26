@@ -17,8 +17,30 @@ struct CanonicalHeistSourceRoundTripTests {
             .action(try ActionStep(
                 command: .typeText(text: .literal("Bruschetta"), target: .predicate(.identifier("Search"))),
                 expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                    after: .element(identifier: "Search", value: "Bruschetta"),
-                    property: .value
+                    element: .identifier("Search"),
+                    change: .value(after: "Bruschetta")
+                )))))
+            )),
+            .action(try ActionStep(
+                command: .activate(.predicate(.label("Add item"))),
+                expectation: WaitStep(predicate: .change(.elements(.appearedElement(.label("Milk")))))
+            )),
+            .action(try ActionStep(
+                command: .activate(.predicate(.label("Remove"))),
+                expectation: WaitStep(predicate: .change(.elements(.disappearedElement(.identifier("row-1")))))
+            )),
+            .action(try ActionStep(
+                command: .typeText(text: .literal("milk"), target: .predicate(.identifier("Search"))),
+                expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                    element: .identifier("Search"),
+                    change: .value(before: "", after: "milk")
+                )))))
+            )),
+            .action(try ActionStep(
+                command: .activate(.predicate(.identifier("Favorite"))),
+                expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                    element: .identifier("Favorite"),
+                    change: .traits(before: .exclude([.selected]), after: .include([.selected]))
                 )))))
             )),
             .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),

@@ -278,18 +278,13 @@ public extension AccessibilityPredicate.Change {
             return ExpectationResult(met: false, predicate: nil, actual: "no element updates")
         }
         for edit in updates {
-            if let before = update.before {
-                guard before.matches(edit.before) else { continue }
+            if let element = update.element {
+                guard element.matches(edit.before) || element.matches(edit.after) else { continue }
             }
-            if let after = update.after {
-                guard after.matches(edit.after) else { continue }
-            }
-            let targetChanges: [PropertyChange]
-            if let property = update.property {
-                targetChanges = edit.changes.filter { $0.property == property }
-                if targetChanges.isEmpty { continue }
-            } else {
-                targetChanges = edit.changes
+            var targetChanges = edit.changes
+            if let change = update.change {
+                targetChanges = targetChanges.filter { propertyChange($0, matches: change) }
+                guard !targetChanges.isEmpty else { continue }
             }
             return ExpectationResult(
                 met: true,
@@ -303,10 +298,90 @@ public extension AccessibilityPredicate.Change {
         return ExpectationResult(met: false, predicate: nil, actual: observed)
     }
 
+    private static func propertyChange(
+        _ propertyChange: PropertyChange,
+        matches change: AnyPropertyChange
+    ) -> Bool {
+        guard propertyChange.property == change.property else { return false }
+        switch change {
+        case .value(let change):
+            return stringPropertyChange(propertyChange, matches: change)
+        case .traits(let change):
+            return traitPropertyChange(propertyChange, matches: change)
+        case .hint(let change):
+            return stringPropertyChange(propertyChange, matches: change)
+        case .actions(let change):
+            return stringPropertyChange(propertyChange, matches: change)
+        case .frame(let change):
+            return stringPropertyChange(propertyChange, matches: change)
+        case .activationPoint(let change):
+            return stringPropertyChange(propertyChange, matches: change)
+        case .customContent(let change):
+            return stringPropertyChange(propertyChange, matches: change)
+        case .rotors(let change):
+            return stringPropertyChange(propertyChange, matches: change)
+        }
+    }
+
+    private static func stringPropertyChange<P: ElementPropertyKind>(
+        _ propertyChange: PropertyChange,
+        matches change: ElementPropertyChange<P>
+    ) -> Bool where P.Checker == StringMatch<String> {
+        if let before = change.before {
+            guard before.matchesPropertyValue(propertyChange.old) else { return false }
+        }
+        if let after = change.after {
+            guard after.matchesPropertyValue(propertyChange.new) else { return false }
+        }
+        return true
+    }
+
+    private static func traitPropertyChange(
+        _ propertyChange: PropertyChange,
+        matches change: ElementPropertyChange<TraitsProperty>
+    ) -> Bool {
+        if let before = change.before {
+            guard before.matchesTraitPropertyValue(propertyChange.old) else { return false }
+        }
+        if let after = change.after {
+            guard after.matchesTraitPropertyValue(propertyChange.new) else { return false }
+        }
+        return true
+    }
+
     private static func describeUpdate(_ edit: ElementUpdate, changes: [PropertyChange]) -> String {
         let properties = changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
         let name = edit.after.label ?? edit.before.label ?? edit.after.description
         return "\(name): \(properties.joined(separator: ", "))"
+    }
+}
+
+private extension StringMatch where Value == String {
+    func matchesPropertyValue(_ candidate: String?) -> Bool {
+        guard let candidate else { return false }
+        switch self {
+        case .exact(let pattern):
+            return ElementPredicate.stringEquals(candidate, pattern)
+        case .contains(let pattern):
+            guard !pattern.isEmpty else { return false }
+            return ElementPredicate.stringContains(candidate, pattern)
+        case .prefix(let pattern):
+            guard !pattern.isEmpty else { return false }
+            return ElementPredicate.stringHasPrefix(candidate, pattern)
+        case .suffix(let pattern):
+            guard !pattern.isEmpty else { return false }
+            return ElementPredicate.stringHasSuffix(candidate, pattern)
+        }
+    }
+}
+
+private extension TraitSetMatch {
+    func matchesTraitPropertyValue(_ value: String?) -> Bool {
+        let traits = Set((value ?? "")
+            .split(separator: ",")
+            .compactMap { HeistTrait(rawValue: $0.trimmingCharacters(in: .whitespacesAndNewlines)) })
+        return include.allSatisfy { traits.contains($0) }
+            && exclude.allSatisfy { !traits.contains($0) }
     }
 }
 

@@ -69,7 +69,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testExpectationResultEncodeDecode() throws {
         let result = ExpectationResult(
             met: false,
-            predicate: .change(.elements(.updatedElement(ElementUpdatePredicate(after: .value("hello"))))),
+            predicate: .change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(after: "hello"))))),
             actual: "counter: value: world → hell"
         )
         let data = try JSONEncoder().encode(result)
@@ -201,7 +201,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     // MARK: - Codable: element updated
 
     func testElementUpdatedToOnlyEncodeDecode() throws {
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: .value("5")))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(after: "5")))))
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
         XCTAssertEqual(decoded, predicate)
@@ -209,9 +209,8 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedAllFieldsEncodeDecode() throws {
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            before: .element(label: "Counter", value: "3"),
-            after: .element(label: "Counter", value: "5"),
-            property: .value
+            element: .label("Counter"),
+            change: .value(before: "3", after: "5")
         ))))
         let data = try JSONEncoder().encode(predicate)
         let decoded = try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
@@ -230,7 +229,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedMetWhenNewValueMatches() {
         let delta = makeUpdateDelta(label: "counter", property: .value, old: "3", new: "5")
         let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: .value("5")))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(after: "5")))))
         XCTAssertTrue(predicate.validate(against: action).met)
     }
 
@@ -238,9 +237,8 @@ final class AccessibilityPredicateTests: XCTestCase {
         let delta = makeUpdateDelta(label: "Quantity", property: .value, old: "2", new: "3")
         let action = makeResult(success: true, delta: delta)
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            before: .element(label: "Quantity", value: "2"),
-            after: .element(label: "Quantity", value: "3"),
-            property: .value
+            element: .label("Quantity"),
+            change: .value(before: "2", after: "3")
         ))))
         let result = predicate.validate(against: action)
 
@@ -251,9 +249,8 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedDoesNotPassWhenCurrentValueAlreadyMatchedWithoutDeltaEvidence() {
         let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 1))
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            before: .element(label: "Quantity", value: "3"),
-            after: .element(label: "Quantity", value: "3"),
-            property: .value
+            element: .label("Quantity"),
+            change: .value(before: "3", after: "3")
         ))))
         let result = predicate.evaluate(
             currentElements: [makeElement(label: "Quantity", value: "3")],
@@ -267,7 +264,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedNotMetWhenNoMatch() {
         let delta = makeUpdateDelta(label: "counter", property: .value, old: "3", new: "4")
         let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: .value("5")))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(after: "5")))))
         XCTAssertFalse(predicate.validate(against: action).met)
     }
 
@@ -278,7 +275,8 @@ final class AccessibilityPredicateTests: XCTestCase {
         ])))
         let action = makeResult(success: true, delta: delta)
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            after: .element(label: "Counter", value: "5")
+            element: .label("Counter"),
+            change: .value(after: "5")
         ))))
         XCTAssertTrue(predicate.validate(against: action).met)
     }
@@ -287,7 +285,8 @@ final class AccessibilityPredicateTests: XCTestCase {
         let delta = makeUpdateDelta(label: "Other", property: .value, old: "3", new: "5")
         let action = makeResult(success: true, delta: delta)
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            after: .element(label: "Counter", value: "5")
+            element: .label("Counter"),
+            change: .value(after: "5")
         ))))
         XCTAssertFalse(predicate.validate(against: action).met)
     }
@@ -295,7 +294,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedMetWhenOldAndNewValueMatch() {
         let delta = makeUpdateDelta(label: "counter", property: .value, old: "3", new: "5")
         let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(before: .value("3"), after: .value("5")))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(before: "3", after: "5")))))
         XCTAssertTrue(predicate.validate(against: action).met)
     }
 
@@ -303,9 +302,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let delta = makeUpdateDelta(label: "cart", property: .value, old: "cart: empty", new: "3 items")
         let action = makeResult(success: true, delta: delta)
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            before: .value(.prefix("cart:")),
-            after: .value(.suffix("items")),
-            property: .value
+            change: .value(before: .prefix("cart:"), after: .suffix("items"))
         ))))
 
         XCTAssertTrue(predicate.validate(against: action).met)
@@ -315,10 +312,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         let delta = makeUpdateDelta(label: "Search Field", property: .value, old: "Search for tea", new: "John Smith")
         let action = makeResult(success: true, delta: delta)
         let predicates = [
-            ElementUpdatePredicate(before: .value(.exact("Search for tea")), after: .value(.exact("John Smith"))),
-            ElementUpdatePredicate(before: .value(.contains("for")), after: .value(.contains("Smith"))),
-            ElementUpdatePredicate(before: .value(.prefix("Search")), after: .value(.prefix("John"))),
-            ElementUpdatePredicate(before: .value(.suffix("tea")), after: .value(.suffix("Smith"))),
+            ElementUpdatePredicate(change: .value(before: .exact("Search for tea"), after: .exact("John Smith"))),
+            ElementUpdatePredicate(change: .value(before: .contains("for"), after: .contains("Smith"))),
+            ElementUpdatePredicate(change: .value(before: .prefix("Search"), after: .prefix("John"))),
+            ElementUpdatePredicate(change: .value(before: .suffix("tea"), after: .suffix("Smith"))),
         ]
 
         for update in predicates {
@@ -332,14 +329,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         let action = makeResult(success: true, delta: .elementsChanged(.init(elementCount: 2, edits: ElementEdits(updated: [gained, lost]))))
 
         let selectedGain = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            before: .excludeTraits([.selected]),
-            after: .traits([.selected]),
-            property: .traits
+            change: .traits(before: .exclude([.selected]), after: .include([.selected]))
         ))))
         let enabledLoss = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            before: .traits([.notEnabled]),
-            after: .excludeTraits([.notEnabled]),
-            property: .traits
+            change: .traits(before: .include([.notEnabled]), after: .exclude([.notEnabled]))
         ))))
 
         XCTAssertTrue(selectedGain.validate(against: action).met)
@@ -355,7 +348,7 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedNotMetWhenNoDelta() {
         let action = makeResult(success: true)
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: .value("5")))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(after: "5")))))
         let result = predicate.validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "no observed accessibility trace")
@@ -364,7 +357,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedNotMetWhenEmptyUpdates() {
         let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [])))
         let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: .value("5")))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(after: "5")))))
         let result = predicate.validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "no element updates")
@@ -373,7 +366,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     func testElementUpdatedDiagnosticOnMiss() {
         let delta = makeUpdateDelta(label: "counter", property: .value, old: "3", new: "4")
         let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: .value("5")))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(after: "5")))))
         let result = predicate.validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "counter: value: 3 → 4")
@@ -385,7 +378,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             makeUpdate(label: "counter", property: .value, old: "3", new: "5"),
         ])))
         let action = makeResult(success: true, delta: delta)
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: .value("5")))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value(after: "5")))))
         XCTAssertTrue(predicate.validate(against: action).met)
     }
 
@@ -402,16 +395,16 @@ final class AccessibilityPredicateTests: XCTestCase {
         ])))
         let action = makeResult(success: true, delta: delta)
         let element = ElementPredicate(label: "Toggle")
-        let traitsResult = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: element, property: .traits))))
+        let traitsResult = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(element: element, change: .traits()))))
             .validate(against: action)
         XCTAssertTrue(traitsResult.met)
         let valueResult = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            after: .element(label: "Toggle", value: "5"),
-            property: .value
+            element: element,
+            change: .value(after: "5")
         ))))
             .validate(against: action)
         XCTAssertTrue(valueResult.met)
-        let hintResult = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(after: element, property: .hint))))
+        let hintResult = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(element: element, change: .hint()))))
             .validate(against: action)
         XCTAssertFalse(hintResult.met)
     }
@@ -424,9 +417,7 @@ final class AccessibilityPredicateTests: XCTestCase {
             ]))))
         )
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
-            before: .value("OFF"),
-            after: .value("ON"),
-            property: .value
+            change: .value(before: "OFF", after: "ON")
         ))))
         XCTAssertTrue(predicate.validate(against: result).met)
     }
@@ -458,7 +449,7 @@ final class AccessibilityPredicateTests: XCTestCase {
                 makeUpdate(label: "btn_1", property: .hint, old: "A", new: "B"),
             ]))))
         )
-        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(property: .value))))
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(change: .value()))))
         XCTAssertFalse(predicate.validate(against: result).met)
     }
 
@@ -535,9 +526,8 @@ final class AccessibilityPredicateTests: XCTestCase {
             .change(.screen()),
             .change(.elements()),
             .change(.elements(.updatedElement(ElementUpdatePredicate(
-                before: .element(label: "btn", value: "A"),
-                after: .element(label: "btn", value: "B"),
-                property: .value
+                element: .label("btn"),
+                change: .value(before: "A", after: "B")
             )))),
         ]
         let encoder = JSONEncoder()
