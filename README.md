@@ -171,13 +171,17 @@ printf '%s\n' '{"command":"get_interface"}' | buttonheist json_lines
 
 ## Ways to run heists
 
-The Button Heist has three public ways in:
+The twist is that agents and tests use the same heist language.
 
-- `perform(step:)` runs one instruction from MCP.
-- `run_heist(plan:)` runs a full plan from MCP or the CLI.
-- Checked-in Swift files compile to a validated `HeistPlan` for local authoring.
+An agent can drive the app one precise step at a time with `perform(step:)`.
+When the job has a name, the same language becomes a `HeistPlan`: something an
+agent can discover, the CLI can run, and a test suite can keep in source control.
 
-All three enter the same runtime. A generated `.heist` package is an artifact, not a hand-authored source file. Raw JSON is for generated tooling and diagnostics.
+- `perform(step:)` runs one Button Heist step from MCP.
+- `run_heist(plan:)` runs a composed `HeistPlan` from MCP or the CLI.
+- Checked-in Swift heist files compile to the same validated plan your tests can run.
+
+Different doors. Same runtime. Same receipts.
 
 ## Screenshots and gestures
 
