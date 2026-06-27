@@ -33,8 +33,6 @@ The important question is not whether an event was delivered. It is whether the 
 
 ## Why this holds up
 
-Coordinates drift. Screens reflow. Loading states lie. Labels get close enough for a person to guess and too vague for a machine to trust.
-
 Contracts reduce ambiguity. The Button Heist pulls UI ambiguity into the open by asking the app what it declares, acting through that declaration, and keeping the evidence afterward.
 
 That gives agents and tests a steadier surface:
@@ -47,7 +45,7 @@ That gives agents and tests a steadier surface:
 
 ## First heist
 
-A single move proves one contract. A heist names a product capability.
+A single move proves one contract. A heist defines a product capability.
 
 ```swift
 HeistPlan("shop") {
