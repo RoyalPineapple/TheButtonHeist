@@ -87,9 +87,43 @@ Agents and tests use the same heist language. That is the practical payoff of
 defining product capabilities against the accessibility contract.
 
 - `perform(step:)` runs one Button Heist step from MCP.
-- `list_heists` and `describe_heist` let an agent discover named capabilities.
 - `run_heist(plan:)` runs a composed `HeistPlan` from MCP or the CLI.
 - Checked-in Swift heist files compile to the same validated plan your tests can run.
+
+A live agent can take one step:
+
+```text
+perform step: """
+Activate(.label("Pay"))
+    .expect(.appeared(.label("Payment Complete")))
+"""
+```
+
+A composed job can run as a plan:
+
+```text
+run_heist plan: """
+HeistPlan("checkout") {
+    Activate(.label("Pay"))
+        .expect(.appeared(.label("Payment Complete")))
+}
+"""
+```
+
+The same product capability can live in source control:
+
+```swift
+func makeCheckoutHeist() throws -> HeistPlan {
+    try HeistPlan("checkout") {
+        Activate(.label("Pay"))
+            .expect(.appeared(.label("Payment Complete")))
+    }
+}
+```
+
+```bash
+buttonheist run_heist --path Heists/Checkout.swift --entry makeCheckoutHeist
+```
 
 Different doors. Same runtime. Same evidence.
 
