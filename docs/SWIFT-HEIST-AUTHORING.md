@@ -86,20 +86,25 @@ In app and UI tests, Swift calls the job and The Button Heist describes the job.
 host-language runner boundary is:
 
 ```swift
-try await RunHeist("addToCart", argument: "Milk") { item in
+import ButtonHeistTesting
+
+try await runHeist("addToCart", argument: "Milk") { item in
     Activate(.label(item))
     Activate(.label("Add to Cart"))
         .expect(.exists(.label("Cart")))
 }
 ```
 
-Outside `RunHeist(...) { ... }` is Swift: tests may choose data, await the
+Outside `runHeist(...) { ... }` is Swift: tests may choose data, await the
 receipt, and assert on failures. Inside the closure is heist source that
 lowers to `HeistPlan`, validates through the normal plan contract, executes
 through the in-app heist runtime, and returns the normal receipt.
 
-Inside a durable plan, `RunHeist("Name", argument)` remains the composition
-step that invokes a named reusable heist. It is not a Swift helper call:
+`RunHeist(...)` composes inside durable plans. `runHeist(...)` executes a heist
+now from Swift tests. `run_heist` crosses the CLI/MCP tool boundary.
+
+Inside a durable plan, `RunHeist("Name", argument)` is the composition step
+that invokes a named reusable heist. It is not a Swift helper call:
 
 ```swift
 HeistPlan("purchaseFlow") {

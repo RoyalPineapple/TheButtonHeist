@@ -5,42 +5,54 @@ import TheScore
 extension FenceResponse {
 
     static func compactDeltaKind(_ delta: AccessibilityTrace.Delta) -> String {
-        switch delta {
-        case .noChange:
-            return AccessibilityTrace.DeltaKind.noChange.rawValue
-        case .elementsChanged:
-            return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
-        case .screenChanged:
-            return AccessibilityTrace.DeltaKind.screenChanged.rawValue
-        }
+        DeltaProjection(delta: delta, profile: .summary).kind.rawValue
     }
 
     static func compactDelta(_ delta: AccessibilityTrace.Delta, method: String) -> String {
-        switch delta {
-        case .noChange(let payload):
+        compactDelta(
+            DeltaProjection(delta: delta, profile: .summary, includeScreenInterface: true),
+            method: method
+        )
+    }
+
+    static func compactDelta(_ projection: DeltaProjection, method: String) -> String {
+        switch projection.kind {
+        case .noChange:
             // Auto-settle can produce a no-change delta carrying transients
             // when an element appeared and disappeared during settle but
             // baseline and final are otherwise identical. Surface those.
-            if payload.transient.isEmpty {
+            if projection.transient.elements.isEmpty {
                 return "\(method): no change"
             }
-            var lines: [String] = ["\(method): no net change (\(payload.elementCount) elements)"]
-            for element in payload.transient {
+            var lines: [String] = ["\(method): no net change (\(projection.elementCount) elements)"]
+            for element in projection.transient.elements {
                 lines.append("  +- \(compactElementLine(element))")
+            }
+            if let omitted = projection.transient.omittedCount {
+                lines.append("  ... transient omitted \(omitted) observed elements")
             }
             return lines.joined(separator: "\n")
 
-        case .elementsChanged(let payload):
-            var lines: [String] = ["\(method): elements changed (\(payload.elementCount) elements)"]
-            lines.append(contentsOf: compactEditLines(payload.edits))
-            for element in payload.transient {
+        case .elementsChanged:
+            var lines: [String] = ["\(method): elements changed (\(projection.elementCount) elements)"]
+            if let edits = projection.edits {
+                lines.append(contentsOf: compactEditLines(edits))
+            }
+            for element in projection.transient.elements {
                 lines.append("  +- \(compactElementLine(element))")
+            }
+            if let omitted = projection.transient.omittedCount {
+                lines.append("  ... transient omitted \(omitted) observed elements")
             }
             return lines.joined(separator: "\n")
 
-        case .screenChanged(let payload):
+        case .screenChanged:
             var lines: [String] = ["\(method): screen changed"]
-            lines.append(compactInterface(payload.newInterface))
+            if let interface = projection.screen?.interface {
+                lines.append(compactInterface(interface))
+            } else if let screen = projection.screen {
+                lines.append("\(screen.screenDescription) (\(screen.elementCount) elements)")
+            }
             return lines.joined(separator: "\n")
         }
     }
@@ -59,6 +71,32 @@ extension FenceResponse {
             for change in update.changes where !change.property.isGeometry {
                 lines.append("  ~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
             }
+        }
+        return lines
+    }
+
+    private static func compactEditLines(_ edits: DeltaEditsProjection) -> [String] {
+        var lines: [String] = []
+        for element in edits.added.elements {
+            lines.append("  + \(compactElementLine(element))")
+        }
+        if let omitted = edits.added.omittedCount {
+            lines.append("  ... added omitted \(omitted) observed elements")
+        }
+        for element in edits.removed.elements {
+            lines.append("  - \(compactElementLine(element))")
+        }
+        if let omitted = edits.removed.omittedCount {
+            lines.append("  ... removed omitted \(omitted) observed elements")
+        }
+        for update in edits.updated.updates {
+            let name = nonEmptyDescription(update.after)
+            for change in update.changes {
+                lines.append("  ~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
+            }
+        }
+        if let omitted = edits.updated.omittedCount {
+            lines.append("  ... updated omitted \(omitted) observed elements")
         }
         return lines
     }

@@ -39,14 +39,20 @@ extension FenceResponse {
         visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
         totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
     ) -> String {
-        var lines: [String] = ["\(interface.projectedElements.count) elements"]
-        lines.append(contentsOf: compactDiscoveryDiagnostics(interface.diagnostics?.discovery))
-        lines.append(contentsOf: compactTreeLines(
-            interface,
-            detail: detail,
-            visibleElementBudget: visibleElementBudget,
-            totalNodeBudget: totalNodeBudget
-        ))
+        let profile = ProjectionProfile(
+            kind: detail == .full ? .full : .summary,
+            limits: .current(
+                visibleElementBudget: visibleElementBudget,
+                totalNodeBudget: totalNodeBudget
+            )
+        )
+        return compactInterface(InterfaceProjection(interface: interface, profile: profile))
+    }
+
+    static func compactInterface(_ projection: InterfaceProjection) -> String {
+        var lines: [String] = ["\(projection.elementCount) elements"]
+        lines.append(contentsOf: compactDiscoveryDiagnostics(projection.diagnostics?.discovery))
+        lines.append(contentsOf: compactTreeLines(projection))
         return lines.joined(separator: "\n")
     }
 
@@ -108,152 +114,54 @@ extension FenceResponse {
         visibleElementBudget: Int = ButtonHeistRuntimeKnobs.current.visibleElementBudget,
         totalNodeBudget: Int = ButtonHeistRuntimeKnobs.current.totalNodeBudget
     ) -> [String] {
-        let counter = LineIndexCounter()
-        let elementAnnotations = interface.annotations.elementByPath
-        let containerAnnotations = interface.annotations.containerByPath
-        let totalNodeBudgetTracker = PublicNodeBudgetTracker(budget: totalNodeBudget)
-        let projectionStats = PublicInterfaceProjectionStats(observedElementCount: interface.projectedElements.count)
-        let context = CompactTreeRenderContext(
-            detail: detail,
-            counter: counter,
-            elementAnnotations: elementAnnotations,
-            containerAnnotations: containerAnnotations,
-            visibleElementBudget: visibleElementBudget,
-            totalNodeBudget: totalNodeBudgetTracker,
-            projectionStats: projectionStats
-        )
-        var remainingElements: Int?
-        var lines: [String] = []
-        for (index, node) in interface.tree.enumerated() {
-            lines.append(contentsOf: compactTreeLines(
-                node,
-                path: TreePath([index]),
-                context: context,
-                remainingElements: &remainingElements
-            ))
-        }
-        if totalNodeBudgetTracker.wasLimited {
-            let omittedElementCount = max(
-                0,
-                projectionStats.observedElementCount - projectionStats.renderedElementCount
+        let profile = ProjectionProfile(
+            kind: detail == .full ? .full : .summary,
+            limits: .current(
+                visibleElementBudget: visibleElementBudget,
+                totalNodeBudget: totalNodeBudget
             )
+        )
+        return compactTreeLines(InterfaceProjection(interface: interface, profile: profile))
+    }
+
+    static func compactTreeLines(_ projection: InterfaceProjection) -> [String] {
+        var lines: [String] = []
+        for node in projection.tree {
+            lines.append(contentsOf: compactTreeLines(node, detail: projection.detail))
+        }
+        if projection.rendering.reason == .totalNodeBudget,
+           let totalNodeBudget = projection.rendering.totalNodeBudget {
             lines.append(
-                "... interface truncated: omitted \(omittedElementCount) observed elements " +
-                "(totalNodeBudget=\(totalNodeBudgetTracker.budget))"
+                "... interface truncated: omitted \(projection.rendering.omittedElementCount) observed elements " +
+                "(totalNodeBudget=\(totalNodeBudget))"
             )
         }
         return lines
     }
 
-    /// Reference counter used by `compactTreeLines` to thread display indices
-    /// through the parser hierarchy recursion.
-    private final class LineIndexCounter {
-        var value: Int = 0
-    }
-
-    private struct CompactTreeRenderContext {
-        let detail: InterfaceDetail
-        let counter: LineIndexCounter
-        let elementAnnotations: [TreePath: InterfaceElementAnnotation]
-        let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
-        let visibleElementBudget: Int
-        let totalNodeBudget: PublicNodeBudgetTracker
-        let projectionStats: PublicInterfaceProjectionStats
-    }
-
     private static func compactTreeLines(
-        _ node: AccessibilityHierarchy,
-        path: TreePath,
-        context: CompactTreeRenderContext,
-        remainingElements: inout Int?
+        _ node: InterfaceNodeProjection,
+        detail: InterfaceDetail
     ) -> [String] {
         switch node {
-        case .element(let element, _):
-            let index = context.counter.value
-            context.counter.value += 1
-            if let remaining = remainingElements {
-                guard remaining > 0 else { return [] }
-            }
-            guard context.totalNodeBudget.consumeNode() else { return [] }
-            if let remaining = remainingElements {
-                remainingElements = remaining - 1
-            }
-            context.projectionStats.recordRenderedElement()
-            let projected = HeistElement(
-                accessibilityElement: element,
-                annotation: context.elementAnnotations[path]
-            )
-            return [compactElementLine(projected, displayIndex: index, detail: context.detail)]
+        case .element(let projection):
+            return [compactElementLine(projection.element, displayIndex: projection.order, detail: detail)]
 
-        case .container(let container, let children):
-            var observedElementCount = 0
-            for child in children {
-                observedElementCount += child.pathIndexedElements().count
-            }
-            let isScrollable = {
-                if case .scrollable = container.type { return true }
-                return false
-            }()
-            if let remaining = remainingElements, remaining <= 0 {
-                context.counter.value += observedElementCount
-                return []
-            }
-            guard context.totalNodeBudget.consumeNode() else {
-                context.counter.value += observedElementCount
-                return []
-            }
+        case .container(let projection):
             let header = compactContainerLine(
-                container,
-                annotation: context.containerAnnotations[path],
-                detail: context.detail,
-                observedElementCount: observedElementCount
+                projection.container,
+                containerName: projection.containerName,
+                detail: detail,
+                observedElementCount: projection.observedElementCount
             )
-            let budgetCap = max(0, context.visibleElementBudget)
-            let shouldTruncate = isScrollable && observedElementCount > budgetCap
-            let parentRemainingBefore = remainingElements
-            var scrollRemainingElements: Int? = shouldTruncate
-                ? min(parentRemainingBefore ?? budgetCap, budgetCap)
-                : nil
-            var body: [String] = []
-
-            for (index, child) in children.enumerated() {
-                let lines: [String]
-                if shouldTruncate {
-                    lines = compactTreeLines(
-                        child,
-                        path: path.appending(index),
-                        context: context,
-                        remainingElements: &scrollRemainingElements
-                    )
-                } else {
-                    lines = compactTreeLines(
-                        child,
-                        path: path.appending(index),
-                        context: context,
-                        remainingElements: &remainingElements
-                    )
-                }
-                body.append(contentsOf: indented(lines: lines))
+            var body = projection.children.flatMap {
+                indented(lines: compactTreeLines($0, detail: detail))
             }
-
-            if shouldTruncate {
-                let effectiveBudget = min(parentRemainingBefore ?? budgetCap, budgetCap)
-                let renderedElementCount = max(0, effectiveBudget - (scrollRemainingElements ?? 0))
-                if let parentRemainingBefore {
-                    remainingElements = max(0, parentRemainingBefore - renderedElementCount)
-                }
-                let omittedElementCount = max(0, observedElementCount - renderedElementCount)
-                let scrollBudgetHit = (scrollRemainingElements ?? 0) <= 0
-                if scrollBudgetHit, omittedElementCount > 0 {
-                    body.append(
-                        "  ... subtree truncated: omitted \(omittedElementCount) observed elements " +
-                        "(visibleElementBudget=\(budgetCap))"
-                    )
-                }
-            }
-
-            if !isScrollable, remainingElements != nil, observedElementCount > 0, body.isEmpty {
-                return []
+            if let truncation = projection.truncation {
+                body.append(
+                    "  ... subtree truncated: omitted \(truncation.omittedElementCount) observed elements " +
+                    "(visibleElementBudget=\(truncation.visibleElementBudget))"
+                )
             }
             return [header] + body
         }
@@ -344,6 +252,22 @@ extension FenceResponse {
             )
         }
         return parts.joined(separator: " ")
+    }
+
+    private static func compactContainerLine(
+        _ container: AccessibilityContainer,
+        containerName: String?,
+        detail: InterfaceDetail,
+        observedElementCount: Int? = nil
+    ) -> String {
+        compactContainerLine(
+            container,
+            annotation: containerName.map {
+                InterfaceContainerAnnotation(path: .root, containerName: ContainerName(rawValue: $0))
+            },
+            detail: detail,
+            observedElementCount: observedElementCount
+        )
     }
 
 }

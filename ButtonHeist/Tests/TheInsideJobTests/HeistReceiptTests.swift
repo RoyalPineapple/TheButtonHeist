@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import AccessibilitySnapshotParser
+@testable import ButtonHeistTesting
 import ThePlans
 @_spi(ButtonHeistInternals) @testable import TheScore
 
@@ -20,6 +21,56 @@ final class HeistReceiptTests: XCTestCase {
         XCTAssertEqual(heist.result.warnings, [
             HeistExecutionWarning(path: "$.body[0]", message: "ok"),
         ])
+    }
+
+    func testPublicRunHeistFacadeWarnRunsInAppProcess() async throws {
+        let heist = try await runHeist("publicFacadeWarn") {
+            Warn("ok")
+        }
+
+        XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
+        XCTAssertEqual(heist.result.steps.first?.reportMessage, "ok")
+        XCTAssertEqual(heist.result.warnings, [
+            HeistExecutionWarning(path: "$.body[0]", message: "ok"),
+        ])
+    }
+
+    func testPublicRunHeistFacadeDottedNameRunsAsNamedCapability() async throws {
+        let heist = try await runHeist("PublicFacade.warn") {
+            Warn("ok")
+        }
+
+        let step = try XCTUnwrap(heist.result.steps.first)
+        XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
+        XCTAssertEqual(step.reportDisplayName, #"RunHeist("PublicFacade.warn")"#)
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
+        XCTAssertEqual(step.children.first?.reportMessage, "ok")
+    }
+
+    func testRunHeistTestingFacadeDottedStringArgumentBuildsValidatedInvocation() throws {
+        let request = try makeRunHeistRequest("Cart.addItem", argument: "Milk") { _ in
+            Warn("adding")
+        }
+
+        let invocation = try invocationStep(in: request.plan)
+        XCTAssertNil(request.plan.name)
+        XCTAssertEqual(request.plan.parameter, .string(name: "input"))
+        XCTAssertEqual(request.argument, .string(.literal("Milk")))
+        XCTAssertEqual(invocation.path, ["Cart", "addItem"])
+        XCTAssertEqual(invocation.argument, .string(.ref("input")))
+    }
+
+    func testRunHeistTestingFacadeDottedElementTargetArgumentBuildsValidatedInvocation() throws {
+        let request = try makeRunHeistRequest("Rows.activate", argument: ElementTarget.label("Milk")) { _ in
+            Warn("activating")
+        }
+
+        let invocation = try invocationStep(in: request.plan)
+        XCTAssertNil(request.plan.name)
+        XCTAssertEqual(request.plan.parameter, .elementTarget(name: "input"))
+        XCTAssertEqual(request.argument, .elementTarget(.target(.label("Milk"))))
+        XCTAssertEqual(invocation.path, ["Rows", "activate"])
+        XCTAssertEqual(invocation.argument, .elementTarget(.ref("input")))
     }
 
     func testPrebuiltPlanRunsThroughInAppRuntimeWithoutTransport() async throws {
@@ -92,17 +143,61 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testRunHeistSwiftBoundaryBindsOneStringArgument() async throws {
-        let job = TheInsideJob(token: "in-app-runheist-string-test")
-        let capture = RuntimeCapture(job: job)
-
-        let heist = try await RunHeist("addToCart", argument: "Milk", runtime: capture.runtime) { _ in
+        let heist = try await runHeist("addToCart", argument: "Milk") { _ in
+            Warn("adding")
+        }
+        let request = try makeRunHeistRequest("addToCart", argument: "Milk") { _ in
             Warn("adding")
         }
 
         XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(capture.argument, .string(.literal("Milk")))
-        XCTAssertEqual(capture.plan?.name, "addToCart")
-        XCTAssertEqual(capture.plan?.parameter, .string(name: "input"))
+        XCTAssertEqual(request.argument, .string(.literal("Milk")))
+        XCTAssertEqual(request.plan.name, "addToCart")
+        XCTAssertEqual(request.plan.parameter, .string(name: "input"))
+    }
+
+    func testRunHeistTestingFacadeNoArgumentLowersLikeNamedHeistPlan() throws {
+        let expectedPlan = try HeistPlan("CheckoutPay") {
+            Warn("paying")
+        }
+        let request = try makeRunHeistRequest("CheckoutPay") {
+            Warn("paying")
+        }
+
+        XCTAssertEqual(request.plan, expectedPlan)
+        XCTAssertEqual(request.plan.name, "CheckoutPay")
+        XCTAssertEqual(request.argument, .none)
+    }
+
+    func testRunHeistTestingFacadeStringArgumentLowersLikeNamedHeistPlan() throws {
+        let expectedPlan = try HeistPlan("CartAddItem", parameter: "input") { _ in
+            Warn("adding")
+        }
+        let request = try makeRunHeistRequest("CartAddItem", argument: "Milk") { _ in
+            Warn("adding")
+        }
+
+        XCTAssertEqual(request.plan, expectedPlan)
+        XCTAssertEqual(request.plan.name, "CartAddItem")
+        XCTAssertEqual(request.plan.parameter, .string(name: "input"))
+        XCTAssertEqual(request.argument, .string(.literal("Milk")))
+    }
+
+    func testRunHeistTestingFacadeElementTargetArgumentLowersLikeNamedHeistPlan() throws {
+        let expectedPlan = try HeistPlan("RowsActivate", targetParameter: "input") { _ in
+            Warn("activating")
+        }
+        let request = try makeRunHeistRequest(
+            "RowsActivate",
+            argument: ElementTarget.label("Milk")
+        ) { _ in
+            Warn("activating")
+        }
+
+        XCTAssertEqual(request.plan, expectedPlan)
+        XCTAssertEqual(request.plan.name, "RowsActivate")
+        XCTAssertEqual(request.plan.parameter, .elementTarget(name: "input"))
+        XCTAssertEqual(request.argument, .elementTarget(.target(.label("Milk"))))
     }
 
     func testSingleElementTargetRootHeistBindsOneRootArgument() async throws {
@@ -464,6 +559,21 @@ private extension ActionResult {
     var heistExecutionPayload: HeistExecutionResult? {
         guard case .heistExecution(let result) = payload else { return nil }
         return result
+    }
+}
+
+private func invocationStep(in plan: HeistPlan) throws -> HeistInvocationStep {
+    guard case .invoke(let invocation)? = plan.body.first else {
+        throw HeistReceiptTestFailure("Expected wrapper plan to invoke a dotted heist definition")
+    }
+    return invocation
+}
+
+private struct HeistReceiptTestFailure: Error, CustomStringConvertible {
+    let description: String
+
+    init(_ description: String) {
+        self.description = description
     }
 }
 

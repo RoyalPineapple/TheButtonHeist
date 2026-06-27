@@ -23,16 +23,15 @@ struct PublicActionResponse: FencePublicJSONResponse {
     let timing: ActionPerformanceTiming?
 
     init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
-        let surfacedExpectation = result.success ? expectation : nil
-        let expectationHint = surfacedExpectation.flatMap {
-            FenceResponse.expectationFailureHint($0, command: command, result: result)
-        }
-        self.init(
+        self.init(projection: ActionProjection(
             method: command.rawValue,
             result: result,
             expectation: expectation,
-            expectationHint: expectationHint
-        )
+            expectationHint: expectation.flatMap {
+                FenceResponse.expectationFailureHint($0, command: command, result: result)
+            },
+            profile: .summary
+        ))
     }
 
     init(
@@ -41,41 +40,48 @@ struct PublicActionResponse: FencePublicJSONResponse {
         expectation: ExpectationResult?,
         expectationHint: String? = nil
     ) {
-        let surfacedExpectation = result.success ? expectation : nil
-        self.status = PublicStatus(result.publicStatus(expectation: surfacedExpectation))
-        self.method = method
-        self.message = result.message
-        switch result.payload {
+        self.init(projection: ActionProjection(
+            method: method,
+            result: result,
+            expectation: expectation,
+            expectationHint: expectationHint,
+            profile: .summary
+        ))
+    }
+
+    init(projection: ActionProjection) {
+        self.status = PublicStatus(projection.status)
+        self.method = projection.method
+        self.message = projection.message
+        switch projection.payload {
         case .value(let value):
             self.value = value
             self.rotor = nil
         case .rotor(let rotor):
             self.value = nil
             self.rotor = PublicRotorResult(result: rotor)
-        case .screenshot, .heistExecution, .none:
+        case .screenshot, .heistExecutionStepCount, .none:
             self.value = nil
             self.rotor = nil
         }
-        self.delta = result.accessibilityTrace?.endpointDelta.map(PublicDelta.init)
-        self.screenName = result.accessibilityTrace?.endpointScreenName
-        self.screenId = result.accessibilityTrace?.endpointScreenId
-        let failure = result.publicFailureProjection(fallbackMessage: method)
+        self.delta = projection.delta.map { PublicDelta(projection: $0) }
+        self.screenName = projection.screenName
+        self.screenId = projection.screenId
+        let failure = projection.failure
         self.errorClass = failure?.errorClass
         self.errorCode = failure?.errorCode
         self.phase = failure?.phase
         self.retryable = failure?.retryable
         self.hint = failure?.hint
-        self.expectation = surfacedExpectation.map {
-            PublicExpectationResult(result: $0, hint: expectationHint)
-        }
-        self.activationTrace = result.activationTrace
-        self.timing = result.timing
+        self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
+        self.activationTrace = projection.activationTrace
+        self.timing = projection.timing
     }
 
 }
 
 /// Status vocabulary for public command responses.
-enum PublicResponseStatus: String {
+enum PublicResponseStatus: String, Sendable, Equatable {
     case ok
     case error
     case expectationFailed = "expectation_failed"
@@ -178,6 +184,13 @@ struct PublicExpectationResult: Encodable {
         self.expected = result.predicate
         self.hint = hint
     }
+
+    init(projection: ExpectationProjection) {
+        self.met = projection.met
+        self.actual = projection.actual
+        self.expected = projection.expected
+        self.hint = projection.hint
+    }
 }
 
 struct PublicDelta: Encodable {
@@ -189,35 +202,42 @@ struct PublicDelta: Encodable {
     let newInterface: PublicInterface?
 
     init(delta: AccessibilityTrace.Delta) {
-        switch delta {
-        case .noChange(let payload):
+        self.init(projection: DeltaProjection(delta: delta, profile: .summary, includeScreenInterface: true))
+    }
+
+    init(projection: DeltaProjection) {
+        switch projection.kind {
+        case .noChange:
             self.kind = AccessibilityTrace.DeltaKind.noChange.rawValue
-            self.elementCount = payload.elementCount
-            self.captureEdge = payload.captureEdge
-            self.transient = payload.transient.isEmpty
+            self.elementCount = projection.elementCount
+            self.captureEdge = projection.captureEdge
+            self.transient = projection.transient.elements.isEmpty
                 ? nil
-                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
+                : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
             self.edits = nil
             self.newInterface = nil
-        case .elementsChanged(let payload):
+        case .elementsChanged:
             self.kind = AccessibilityTrace.DeltaKind.elementsChanged.rawValue
-            self.elementCount = payload.elementCount
-            self.captureEdge = payload.captureEdge
-            self.transient = payload.transient.isEmpty
+            self.elementCount = projection.elementCount
+            self.captureEdge = projection.captureEdge
+            self.transient = projection.transient.elements.isEmpty
                 ? nil
-                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
-            let edits = PublicElementEdits(edits: payload.edits)
-            self.edits = edits.isEmpty ? nil : edits
+                : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
+            if let edits = projection.edits.map({ PublicElementEdits(projection: $0) }) {
+                self.edits = edits.isEmpty ? nil : edits
+            } else {
+                self.edits = nil
+            }
             self.newInterface = nil
-        case .screenChanged(let payload):
+        case .screenChanged:
             self.kind = AccessibilityTrace.DeltaKind.screenChanged.rawValue
-            self.elementCount = payload.elementCount
-            self.captureEdge = payload.captureEdge
-            self.transient = payload.transient.isEmpty
+            self.elementCount = projection.elementCount
+            self.captureEdge = projection.captureEdge
+            self.transient = projection.transient.elements.isEmpty
                 ? nil
-                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
+                : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
             self.edits = nil
-            self.newInterface = PublicInterface(interface: payload.newInterface, detail: .summary)
+            self.newInterface = projection.screen?.interface.map { PublicInterface(interface: $0, detail: .summary) }
         }
     }
 }
@@ -236,6 +256,18 @@ struct PublicElementEdits: Encodable {
         self.removed = edits.removed.isEmpty ? nil : edits.removed.map { PublicElement(element: $0, detail: .summary) }
         let filteredUpdates = edits.updated.compactMap { PublicElementUpdate(update: $0) }
         self.updated = filteredUpdates.isEmpty ? nil : filteredUpdates
+    }
+
+    init(projection: DeltaEditsProjection) {
+        self.added = projection.added.elements.isEmpty
+            ? nil
+            : projection.added.elements.map { PublicElement(element: $0, detail: .summary) }
+        self.removed = projection.removed.elements.isEmpty
+            ? nil
+            : projection.removed.elements.map { PublicElement(element: $0, detail: .summary) }
+        self.updated = projection.updated.updates.isEmpty
+            ? nil
+            : projection.updated.updates.compactMap(PublicElementUpdate.init(update:))
     }
 }
 
@@ -265,18 +297,19 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let netDelta: PublicDelta?
 
     init(result: HeistExecutionResult, netDelta: AccessibilityTrace.Delta?) {
-        self.status = PublicStatus(result.abortedAtPath == nil ? .ok : .partial)
-        self.report = PublicHeistReport(result: result)
-        self.executedTopLevelStepCount = result.executedTopLevelStepCount
-        self.executedNodeCount = result.executedNodeCount
-        self.outputReceiptNodeCount = result.outputReceiptNodes.count
-        self.durationMs = result.durationMs
-        self.abortedAtPath = result.abortedAtPath
-        let checked = result.expectationsChecked
-        self.expectations = checked > 0
-            ? PublicHeistExpectations(checked: checked, met: result.expectationsMet)
-            : nil
-        self.netDelta = netDelta.map(PublicDelta.init)
+        self.init(projection: HeistReportProjection(result: result, netDelta: netDelta, profile: .mcp))
+    }
+
+    init(projection: HeistReportProjection) {
+        self.status = PublicStatus(projection.status)
+        self.report = PublicHeistReport(projection: projection)
+        self.executedTopLevelStepCount = projection.summary.executedTopLevelStepCount
+        self.executedNodeCount = projection.summary.executedNodeCount
+        self.outputReceiptNodeCount = projection.summary.outputReceiptNodeCount
+        self.durationMs = projection.summary.durationMs
+        self.abortedAtPath = projection.summary.abortedAtPath
+        self.expectations = projection.summary.expectations.map { PublicHeistExpectations(projection: $0) }
+        self.netDelta = projection.netDelta.map { PublicDelta(projection: $0) }
     }
 }
 
@@ -285,8 +318,12 @@ struct PublicHeistReport: Encodable {
     let nodes: [PublicHeistReportNode]
 
     init(result: HeistExecutionResult) {
-        self.summary = PublicHeistReportSummary(result: result)
-        self.nodes = result.steps.map(PublicHeistReportNode.init(step:))
+        self.init(projection: HeistReportProjection(result: result, netDelta: nil, profile: .mcp))
+    }
+
+    init(projection: HeistReportProjection) {
+        self.summary = PublicHeistReportSummary(projection: projection.summary)
+        self.nodes = projection.nodes.map { PublicHeistReportNode(projection: $0) }
     }
 }
 
@@ -299,15 +336,16 @@ struct PublicHeistReportSummary: Encodable {
     let expectations: PublicHeistExpectations?
 
     init(result: HeistExecutionResult) {
-        self.executedTopLevelStepCount = result.executedTopLevelStepCount
-        self.executedNodeCount = result.executedNodeCount
-        self.outputReceiptNodeCount = result.outputReceiptNodes.count
-        self.abortedAtPath = result.abortedAtPath
-        self.durationMs = result.durationMs
-        let checked = result.expectationsChecked
-        self.expectations = checked > 0
-            ? PublicHeistExpectations(checked: checked, met: result.expectationsMet)
-            : nil
+        self.init(projection: HeistReportProjection(result: result, netDelta: nil, profile: .mcp).summary)
+    }
+
+    init(projection: HeistReportSummaryProjection) {
+        self.executedTopLevelStepCount = projection.executedTopLevelStepCount
+        self.executedNodeCount = projection.executedNodeCount
+        self.outputReceiptNodeCount = projection.outputReceiptNodeCount
+        self.abortedAtPath = projection.abortedAtPath
+        self.durationMs = projection.durationMs
+        self.expectations = projection.expectations.map { PublicHeistExpectations(projection: $0) }
     }
 }
 
@@ -329,20 +367,22 @@ struct PublicHeistReportNode: Encodable {
     let children: [PublicHeistReportNode]
 
     init(step: HeistExecutionStepResult) {
-        self.path = step.path
-        self.kind = step.reportStepName
-        self.capability = step.invocationEvidence?.invocation?.capabilityName
-        self.status = step.status.rawValue
-        self.message = step.reportMessage
-        self.durationMs = step.durationMs
-        self.intent = step.intent
-        self.evidence = PublicHeistReportEvidence(step: step)
-        self.failure = step.failure
-        self.abortedAtChildPath = step.abortedAtChildPath
-        self.expectation = step.reportExpectation.map {
-            PublicExpectationResult(result: $0)
-        }
-        self.children = step.children.map(PublicHeistReportNode.init(step:))
+        self.init(projection: HeistReportNodeProjection(step: step, profile: .mcp))
+    }
+
+    init(projection: HeistReportNodeProjection) {
+        self.path = projection.path.rawValue
+        self.kind = projection.kind
+        self.capability = projection.capability
+        self.status = projection.status.rawValue
+        self.message = projection.message
+        self.durationMs = projection.durationMs
+        self.intent = projection.intent
+        self.evidence = projection.evidence.flatMap { PublicHeistReportEvidence(projection: $0) }
+        self.failure = projection.failure
+        self.abortedAtChildPath = projection.abortedAtChildPath
+        self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
+        self.children = projection.children.map { PublicHeistReportNode(projection: $0) }
     }
 }
 
@@ -359,25 +399,21 @@ struct PublicHeistReportEvidence: Encodable {
     init?(
         step: HeistExecutionStepResult
     ) {
-        guard let evidence = step.evidence else { return nil }
-        switch evidence {
-        case .action(let evidence):
-            self.init(action: PublicHeistActionEvidence(evidence: evidence))
-        case .wait(let evidence):
-            self.init(wait: PublicHeistWaitEvidence(evidence: evidence))
-        case .caseSelection(let evidence):
-            self.init(caseSelection: PublicHeistCaseSelectionEvidence(evidence: evidence))
-        case .forEachString(let evidence):
-            self.init(forEachString: PublicHeistForEachStringEvidence(evidence: evidence))
-        case .forEachElement(let evidence):
-            self.init(forEachElement: PublicHeistForEachElementEvidence(evidence: evidence))
-        case .repeatUntil(let evidence):
-            self.init(repeatUntil: PublicHeistRepeatUntilEvidence(evidence: evidence))
-        case .invocation(let evidence):
-            self.init(invocation: PublicHeistInvocationEvidence(evidence: evidence))
-        case .warning(let warning):
-            self.init(warning: PublicHeistWarningEvidence(warning: warning))
-        }
+        self.init(projection: HeistReportNodeProjection(step: step, profile: .mcp).evidence)
+    }
+
+    init?(projection: HeistReportEvidenceProjection?) {
+        guard let projection else { return nil }
+        self.init(
+            action: projection.action.map { PublicHeistActionEvidence(projection: $0) },
+            wait: projection.wait.map { PublicHeistWaitEvidence(projection: $0) },
+            caseSelection: projection.caseSelection.map { PublicHeistCaseSelectionEvidence(projection: $0) },
+            forEachString: projection.forEachString.map { PublicHeistForEachStringEvidence(projection: $0) },
+            forEachElement: projection.forEachElement.map { PublicHeistForEachElementEvidence(projection: $0) },
+            repeatUntil: projection.repeatUntil.map { PublicHeistRepeatUntilEvidence(projection: $0) },
+            invocation: projection.invocation.map { PublicHeistInvocationEvidence(projection: $0) },
+            warning: projection.warning.map { PublicHeistWarningEvidence(projection: $0) }
+        )
     }
 
     private init(
@@ -409,18 +445,15 @@ struct PublicHeistActionEvidence: Encodable {
     let expectation: PublicExpectationResult?
 
     init(evidence: HeistActionEvidence) {
-        let commandName = evidence.command?.wireType.rawValue
-        self.commandName = commandName
-        self.target = evidence.command?.reportTarget
-        self.result = evidence.actionResult.map {
-            PublicHeistReportActionResult(method: commandName ?? $0.method.rawValue, result: $0)
-        }
-        self.expectationResult = evidence.expectationActionResult.map {
-            PublicHeistReportActionResult(method: $0.method.rawValue, result: $0)
-        }
-        self.expectation = evidence.expectation.map {
-            PublicExpectationResult(result: $0)
-        }
+        self.init(projection: HeistActionEvidenceProjection(evidence: evidence, profile: .mcp))
+    }
+
+    init(projection: HeistActionEvidenceProjection) {
+        self.commandName = projection.commandName
+        self.target = projection.target
+        self.result = projection.result.map { PublicHeistReportActionResult(projection: $0) }
+        self.expectationResult = projection.expectationResult.map { PublicHeistReportActionResult(projection: $0) }
+        self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
     }
 }
 
@@ -431,10 +464,14 @@ struct PublicHeistWaitEvidence: Encodable {
     let finalSummary: String?
 
     init(evidence: HeistWaitEvidence) {
-        self.result = PublicHeistReportActionResult(method: evidence.actionResult.method.rawValue, result: evidence.actionResult)
-        self.expectation = PublicExpectationResult(result: evidence.expectation)
-        self.baselineSummary = evidence.baselineSummary
-        self.finalSummary = evidence.finalSummary
+        self.init(projection: HeistWaitEvidenceProjection(evidence: evidence, profile: .mcp))
+    }
+
+    init(projection: HeistWaitEvidenceProjection) {
+        self.result = PublicHeistReportActionResult(projection: projection.result)
+        self.expectation = PublicExpectationResult(projection: projection.expectation)
+        self.baselineSummary = projection.baselineSummary
+        self.finalSummary = projection.finalSummary
     }
 }
 
@@ -448,23 +485,17 @@ struct PublicHeistCaseSelectionEvidence: Encodable {
     let omittedCaseCount: Int?
 
     init(evidence: HeistCaseSelectionEvidence) {
-        let selection = evidence.selection
-        self.outcome = selection.outcome
-        self.elapsedMs = selection.elapsedMs
-        self.timeout = selection.timeout
-        self.lastObservedSummary = selection.lastObservedSummary
-        self.caseCount = selection.cases.count
-        let visibleCases = Array(selection.cases.prefix(PublicHeistProjectionLimits.caseResults))
-        self.cases = visibleCases.isEmpty ? nil : visibleCases.map(PublicHeistCaseMatchResult.init(match:))
-        self.omittedCaseCount = Self.omittedCount(
-            total: selection.cases.count,
-            visible: visibleCases.count
-        )
+        self.init(projection: HeistCaseSelectionEvidenceProjection(evidence: evidence, profile: .mcp))
     }
 
-    private static func omittedCount(total: Int, visible: Int) -> Int? {
-        let omitted = total - visible
-        return omitted > 0 ? omitted : nil
+    init(projection: HeistCaseSelectionEvidenceProjection) {
+        self.outcome = projection.outcome
+        self.elapsedMs = projection.elapsedMs
+        self.timeout = projection.timeout
+        self.lastObservedSummary = projection.lastObservedSummary
+        self.caseCount = projection.caseCount
+        self.cases = projection.cases.isEmpty ? nil : projection.cases.map { PublicHeistCaseMatchResult(projection: $0) }
+        self.omittedCaseCount = projection.omittedCaseCount
     }
 }
 
@@ -474,9 +505,13 @@ struct PublicHeistCaseMatchResult: Encodable {
     let actual: String?
 
     init(match: HeistCaseMatchResult) {
-        self.predicate = match.predicate
-        self.met = match.result.met
-        self.actual = match.result.actual
+        self.init(projection: HeistCaseMatchProjection(match: match))
+    }
+
+    init(projection: HeistCaseMatchProjection) {
+        self.predicate = projection.predicate
+        self.met = projection.met
+        self.actual = projection.actual
     }
 }
 
@@ -489,12 +524,16 @@ struct PublicHeistForEachStringEvidence: Encodable {
     let failureReason: String?
 
     init(evidence: HeistForEachStringEvidence) {
-        self.parameter = evidence.parameter
-        self.count = evidence.count
-        self.iterationCount = evidence.iterationCount
-        self.iterationOrdinal = evidence.iterationOrdinal
-        self.value = evidence.value
-        self.failureReason = evidence.failureReason
+        self.init(projection: HeistForEachStringEvidenceProjection(evidence: evidence))
+    }
+
+    init(projection: HeistForEachStringEvidenceProjection) {
+        self.parameter = projection.parameter
+        self.count = projection.count
+        self.iterationCount = projection.iterationCount
+        self.iterationOrdinal = projection.iterationOrdinal
+        self.value = projection.value
+        self.failureReason = projection.failureReason
     }
 }
 
@@ -510,15 +549,19 @@ struct PublicHeistForEachElementEvidence: Encodable {
     let failureReason: String?
 
     init(evidence: HeistForEachElementEvidence) {
-        self.parameter = evidence.parameter
-        self.matching = evidence.matching
-        self.limit = evidence.limit
-        self.matchedCount = evidence.matchedCount
-        self.iterationCount = evidence.iterationCount
-        self.iterationOrdinal = evidence.iterationOrdinal
-        self.targetOrdinal = evidence.targetOrdinal
-        self.targetSummary = evidence.targetSummary
-        self.failureReason = evidence.failureReason
+        self.init(projection: HeistForEachElementEvidenceProjection(evidence: evidence))
+    }
+
+    init(projection: HeistForEachElementEvidenceProjection) {
+        self.parameter = projection.parameter
+        self.matching = projection.matching
+        self.limit = projection.limit
+        self.matchedCount = projection.matchedCount
+        self.iterationCount = projection.iterationCount
+        self.iterationOrdinal = projection.iterationOrdinal
+        self.targetOrdinal = projection.targetOrdinal
+        self.targetSummary = projection.targetSummary
+        self.failureReason = projection.failureReason
     }
 }
 
@@ -533,16 +576,18 @@ struct PublicHeistRepeatUntilEvidence: Encodable {
     let failureReason: String?
 
     init(evidence: HeistRepeatUntilEvidence) {
-        self.predicate = evidence.predicate
-        self.timeout = evidence.timeout
-        self.iterationCount = evidence.iterationCount
-        self.iterationOrdinal = evidence.iterationOrdinal
-        self.expectation = PublicExpectationResult(result: evidence.expectation)
-        self.result = evidence.actionResult.map {
-            PublicHeistReportActionResult(method: $0.method.rawValue, result: $0)
-        }
-        self.lastObservedSummary = evidence.lastObservedSummary
-        self.failureReason = evidence.failureReason
+        self.init(projection: HeistRepeatUntilEvidenceProjection(evidence: evidence, profile: .mcp))
+    }
+
+    init(projection: HeistRepeatUntilEvidenceProjection) {
+        self.predicate = projection.predicate
+        self.timeout = projection.timeout
+        self.iterationCount = projection.iterationCount
+        self.iterationOrdinal = projection.iterationOrdinal
+        self.expectation = PublicExpectationResult(projection: projection.expectation)
+        self.result = projection.result.map { PublicHeistReportActionResult(projection: $0) }
+        self.lastObservedSummary = projection.lastObservedSummary
+        self.failureReason = projection.failureReason
     }
 }
 
@@ -555,16 +600,16 @@ struct PublicHeistInvocationEvidence: Encodable {
     let expectation: PublicExpectationResult?
 
     init(evidence: HeistInvocationEvidence) {
-        self.capability = evidence.invocation?.capabilityName
-        self.name = evidence.name
-        self.argument = evidence.argument
-        self.childFailedPath = evidence.childFailedPath
-        self.expectationResult = evidence.expectationActionResult.map {
-            PublicHeistReportActionResult(method: $0.method.rawValue, result: $0)
-        }
-        self.expectation = evidence.expectation.map {
-            PublicExpectationResult(result: $0)
-        }
+        self.init(projection: HeistInvocationEvidenceProjection(evidence: evidence, profile: .mcp))
+    }
+
+    init(projection: HeistInvocationEvidenceProjection) {
+        self.capability = projection.capability
+        self.name = projection.name
+        self.argument = projection.argument
+        self.childFailedPath = projection.childFailedPath
+        self.expectationResult = projection.expectationResult.map { PublicHeistReportActionResult(projection: $0) }
+        self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
     }
 }
 
@@ -573,8 +618,12 @@ struct PublicHeistWarningEvidence: Encodable {
     let message: String
 
     init(warning: HeistExecutionWarning) {
-        self.path = warning.path
-        self.message = warning.message
+        self.init(projection: HeistWarningEvidenceProjection(warning: warning))
+    }
+
+    init(projection: HeistWarningEvidenceProjection) {
+        self.path = projection.path
+        self.message = projection.message
     }
 }
 
@@ -597,33 +646,44 @@ struct PublicHeistReportActionResult: Encodable {
     let omitted: PublicHeistActionResultOmissions?
 
     init(method: String, result: ActionResult) {
-        self.status = PublicStatus(result.publicStatus(expectation: nil))
-        self.method = method
-        self.message = result.message
-        switch result.payload {
+        self.init(projection: ActionProjection(
+            method: method,
+            result: result,
+            profile: .mcp,
+            includeOmissions: true
+        ))
+    }
+
+    init(projection: ActionProjection) {
+        self.status = PublicStatus(projection.status)
+        self.method = projection.method
+        self.message = projection.message
+        switch projection.payload {
         case .value(let value):
             self.value = value
             self.rotor = nil
         case .rotor(let rotor):
             self.value = nil
             self.rotor = PublicRotorResult(result: rotor)
-        case .screenshot, .heistExecution, .none:
+        case .screenshot, .heistExecutionStepCount, .none:
             self.value = nil
             self.rotor = nil
         }
-        self.delta = result.accessibilityTrace?.endpointDelta.map(PublicHeistDelta.init(delta:))
-        self.screenName = result.accessibilityTrace?.endpointScreenName
-        self.screenId = result.accessibilityTrace?.endpointScreenId
-        let failure = result.publicFailureProjection(fallbackMessage: method)
+        self.delta = projection.delta.map { PublicHeistDelta(projection: $0) }
+        self.screenName = projection.screenName
+        self.screenId = projection.screenId
+        let failure = projection.failure
         self.errorClass = failure?.errorClass
         self.errorCode = failure?.errorCode
         self.phase = failure?.phase
         self.retryable = failure?.retryable
         self.hint = failure?.hint
-        self.activationTrace = result.activationTrace
-        self.timing = result.timing
-        let omissions = PublicHeistActionResultOmissions(result: result)
-        self.omitted = omissions.isEmpty ? nil : omissions
+        self.activationTrace = projection.activationTrace
+        self.timing = projection.timing
+        self.omitted = projection.omitted.flatMap {
+            let omissions = PublicHeistActionResultOmissions(projection: $0)
+            return omissions.isEmpty ? nil : omissions
+        }
     }
 }
 
@@ -636,20 +696,12 @@ struct PublicHeistActionResultOmissions: Encodable {
     }
 
     init(result: ActionResult) {
-        self.accessibilityTrace = result.accessibilityTrace.map {
-            PublicProjectionOmission(
-                reason: "raw accessibility trace omitted from public heist report",
-                projectedAs: "delta",
-                omittedCount: $0.captures.count
-            )
-        }
-        self.subjectEvidence = result.subjectEvidence.map { _ in
-            PublicProjectionOmission(
-                reason: "raw subject evidence omitted from public heist report",
-                projectedAs: nil,
-                omittedCount: nil
-            )
-        }
+        self.init(projection: ActionResultOmissionsProjection(result: result))
+    }
+
+    init(projection: ActionResultOmissionsProjection) {
+        self.accessibilityTrace = projection.accessibilityTrace.map { PublicProjectionOmission(projection: $0) }
+        self.subjectEvidence = projection.subjectEvidence.map { PublicProjectionOmission(projection: $0) }
     }
 }
 
@@ -657,6 +709,18 @@ struct PublicProjectionOmission: Encodable {
     let reason: String
     let projectedAs: String?
     let omittedCount: Int?
+
+    init(reason: String, projectedAs: String?, omittedCount: Int?) {
+        self.reason = reason
+        self.projectedAs = projectedAs
+        self.omittedCount = omittedCount
+    }
+
+    init(projection: ProjectionOmission) {
+        self.reason = projection.reason
+        self.projectedAs = projection.projectedAs
+        self.omittedCount = projection.omittedCount
+    }
 }
 
 struct PublicHeistDelta: Encodable {
@@ -669,64 +733,49 @@ struct PublicHeistDelta: Encodable {
     let omitted: PublicHeistDeltaOmissions?
 
     init(delta: AccessibilityTrace.Delta) {
-        switch delta {
-        case .noChange(let payload):
-            let transient = Self.elements(payload.transient)
-            let omittedTransientCount = Self.omittedCount(
-                total: payload.transient.count,
-                visible: transient.count
-            )
+        self.init(projection: DeltaProjection(delta: delta, profile: .mcp, includeScreenInterface: false))
+    }
+
+    init(projection: DeltaProjection) {
+        switch projection.kind {
+        case .noChange:
+            let transient = Self.elements(projection.transient.elements)
             self.kind = AccessibilityTrace.DeltaKind.noChange.rawValue
-            self.elementCount = payload.elementCount
-            self.captureEdge = payload.captureEdge
+            self.elementCount = projection.elementCount
+            self.captureEdge = projection.captureEdge
             self.transient = transient.isEmpty ? nil : transient
             self.edits = nil
             self.screen = nil
-            let omitted = PublicHeistDeltaOmissions(transient: omittedTransientCount)
+            let omitted = PublicHeistDeltaOmissions(transient: projection.transient.omittedCount)
             self.omitted = omitted.isEmpty ? nil : omitted
 
-        case .elementsChanged(let payload):
-            let transient = Self.elements(payload.transient)
-            let omittedTransientCount = Self.omittedCount(
-                total: payload.transient.count,
-                visible: transient.count
-            )
-            let edits = PublicHeistElementEdits(edits: payload.edits)
+        case .elementsChanged:
+            let transient = Self.elements(projection.transient.elements)
+            let edits = projection.edits.map { PublicHeistElementEdits(projection: $0) }
             self.kind = AccessibilityTrace.DeltaKind.elementsChanged.rawValue
-            self.elementCount = payload.elementCount
-            self.captureEdge = payload.captureEdge
+            self.elementCount = projection.elementCount
+            self.captureEdge = projection.captureEdge
             self.transient = transient.isEmpty ? nil : transient
-            self.edits = edits.isEmpty ? nil : edits
+            self.edits = edits?.isEmpty == false ? edits : nil
             self.screen = nil
-            let omitted = PublicHeistDeltaOmissions(transient: omittedTransientCount)
+            let omitted = PublicHeistDeltaOmissions(transient: projection.transient.omittedCount)
             self.omitted = omitted.isEmpty ? nil : omitted
 
-        case .screenChanged(let payload):
-            let transient = Self.elements(payload.transient)
-            let omittedTransientCount = Self.omittedCount(
-                total: payload.transient.count,
-                visible: transient.count
-            )
+        case .screenChanged:
+            let transient = Self.elements(projection.transient.elements)
             self.kind = AccessibilityTrace.DeltaKind.screenChanged.rawValue
-            self.elementCount = payload.elementCount
-            self.captureEdge = payload.captureEdge
+            self.elementCount = projection.elementCount
+            self.captureEdge = projection.captureEdge
             self.transient = transient.isEmpty ? nil : transient
             self.edits = nil
-            self.screen = PublicHeistScreenProjection(interface: payload.newInterface)
-            let omitted = PublicHeistDeltaOmissions(transient: omittedTransientCount)
+            self.screen = projection.screen.map { PublicHeistScreenProjection(projection: $0) }
+            let omitted = PublicHeistDeltaOmissions(transient: projection.transient.omittedCount)
             self.omitted = omitted.isEmpty ? nil : omitted
         }
     }
 
     private static func elements(_ elements: [HeistElement]) -> [PublicElement] {
-        elements.prefix(PublicHeistProjectionLimits.deltaElementsPerBucket).map {
-            PublicElement(element: $0, detail: .summary)
-        }
-    }
-
-    private static func omittedCount(total: Int, visible: Int) -> Int? {
-        let omitted = total - visible
-        return omitted > 0 ? omitted : nil
+        elements.map { PublicElement(element: $0, detail: .summary) }
     }
 }
 
@@ -741,30 +790,26 @@ struct PublicHeistElementEdits: Encodable {
     }
 
     init(edits: ElementEdits) {
-        let added = Self.elements(edits.added)
-        let removed = Self.elements(edits.removed)
-        let meaningfulUpdates = edits.updated.compactMap { PublicElementUpdate(update: $0) }
-        let updated = Array(meaningfulUpdates.prefix(PublicHeistProjectionLimits.deltaElementsPerBucket))
+        self.init(projection: DeltaEditsProjection(edits: edits, profile: .mcp))
+    }
+
+    init(projection: DeltaEditsProjection) {
+        let added = Self.elements(projection.added.elements)
+        let removed = Self.elements(projection.removed.elements)
+        let updated = projection.updated.updates.compactMap(PublicElementUpdate.init(update:))
         self.added = added.isEmpty ? nil : added
         self.removed = removed.isEmpty ? nil : removed
         self.updated = updated.isEmpty ? nil : updated
         let omitted = PublicHeistElementEditOmissions(
-            added: Self.omittedCount(total: edits.added.count, visible: added.count),
-            removed: Self.omittedCount(total: edits.removed.count, visible: removed.count),
-            updated: Self.omittedCount(total: meaningfulUpdates.count, visible: updated.count)
+            added: projection.added.omittedCount,
+            removed: projection.removed.omittedCount,
+            updated: projection.updated.omittedCount
         )
         self.omitted = omitted.isEmpty ? nil : omitted
     }
 
     private static func elements(_ elements: [HeistElement]) -> [PublicElement] {
-        elements.prefix(PublicHeistProjectionLimits.deltaElementsPerBucket).map {
-            PublicElement(element: $0, detail: .summary)
-        }
-    }
-
-    private static func omittedCount(total: Int, visible: Int) -> Int? {
-        let omitted = total - visible
-        return omitted > 0 ? omitted : nil
+        elements.map { PublicElement(element: $0, detail: .summary) }
     }
 }
 
@@ -794,23 +839,18 @@ struct PublicHeistScreenProjection: Encodable {
     let omittedElementCount: Int?
 
     init(interface: Interface) {
-        let elements = interface.projectedElements
-        let visible = Array(elements.prefix(PublicHeistProjectionLimits.screenPreviewElements))
-        self.screenDescription = InterfaceSummary.screenDescription(for: interface)
-        self.screenId = InterfaceSummary.screenId(for: interface)
-        self.elementCount = elements.count
-        self.elements = visible.isEmpty
-            ? nil
-            : visible.map { PublicElement(element: $0, detail: .summary) }
-        let omitted = elements.count - visible.count
-        self.omittedElementCount = omitted > 0 ? omitted : nil
+        self.init(projection: DeltaScreenProjection(interface: interface, profile: .mcp, includeInterface: false))
     }
-}
 
-private enum PublicHeistProjectionLimits {
-    static let deltaElementsPerBucket = 5
-    static let screenPreviewElements = 5
-    static let caseResults = 10
+    init(projection: DeltaScreenProjection) {
+        self.screenDescription = projection.screenDescription
+        self.screenId = projection.screenId
+        self.elementCount = projection.elementCount
+        self.elements = projection.elements.isEmpty
+            ? nil
+            : projection.elements.map { PublicElement(element: $0, detail: .summary) }
+        self.omittedElementCount = projection.omittedElementCount
+    }
 }
 
 struct PublicHeistExpectations: Encodable {
@@ -822,5 +862,11 @@ struct PublicHeistExpectations: Encodable {
         self.checked = checked
         self.met = met
         self.allMet = checked == met
+    }
+
+    init(projection: HeistExpectationsProjection) {
+        self.checked = projection.checked
+        self.met = projection.met
+        self.allMet = projection.allMet
     }
 }

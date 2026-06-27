@@ -67,6 +67,42 @@ struct PublicContainer: Encodable {
         self.frameHeight = Self.sanitizedDouble(container.frame.size.height)
     }
 
+    init(projection: InterfaceContainerProjection, detail: InterfaceDetail) {
+        let children = projection.children.map { PublicTreeNode(projection: $0, detail: detail) }
+        let fields = Self.fields(
+            for: projection.container,
+            children: children,
+            observedElementCount: projection.observedElementCount
+        )
+        self.type = fields.type
+        self.label = fields.label
+        self.value = fields.value
+        self.identifier = fields.identifier
+        self.rowCount = fields.rowCount
+        self.columnCount = fields.columnCount
+        self.contentWidth = fields.contentWidth
+        self.contentHeight = fields.contentHeight
+        self.scrollAxis = fields.scrollAxis
+        self.pageScrollsX = fields.pageScrollsX
+        self.pageScrollsY = fields.pageScrollsY
+        self.observedElementCount = fields.observedElementCount
+        self.truncation = projection.truncation.map(PublicSubtreeTruncation.init(projection:))
+        self.isModalBoundary = projection.container.isModalBoundary ? true : nil
+        self.containerName = projection.containerName
+        self.children = children
+        guard detail == .full else {
+            self.frameX = nil
+            self.frameY = nil
+            self.frameWidth = nil
+            self.frameHeight = nil
+            return
+        }
+        self.frameX = Self.sanitizedDouble(projection.container.frame.origin.x)
+        self.frameY = Self.sanitizedDouble(projection.container.frame.origin.y)
+        self.frameWidth = Self.sanitizedDouble(projection.container.frame.size.width)
+        self.frameHeight = Self.sanitizedDouble(projection.container.frame.size.height)
+    }
+
     private static func sanitizedDouble(_ value: Double) -> Double {
         value.isFinite ? value : 0
     }
@@ -183,4 +219,23 @@ struct PublicSubtreeTruncation: Encodable {
     let renderedElementCount: Int
     let omittedElementCount: Int
     let visibleElementBudget: Int
+
+    init(
+        observedElementCount: Int,
+        renderedElementCount: Int,
+        omittedElementCount: Int,
+        visibleElementBudget: Int
+    ) {
+        self.observedElementCount = observedElementCount
+        self.renderedElementCount = renderedElementCount
+        self.omittedElementCount = omittedElementCount
+        self.visibleElementBudget = visibleElementBudget
+    }
+
+    init(projection: InterfaceSubtreeTruncationProjection) {
+        self.observedElementCount = projection.observedElementCount
+        self.renderedElementCount = projection.renderedElementCount
+        self.omittedElementCount = projection.omittedElementCount
+        self.visibleElementBudget = projection.visibleElementBudget
+    }
 }

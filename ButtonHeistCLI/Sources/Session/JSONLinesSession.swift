@@ -94,14 +94,15 @@ final class JSONLinesSession {
     // MARK: - Output
 
     private func outputResponse(_ response: FenceResponse, id: PublicRequestId?) {
+        let presenter = FenceResponsePresenter(profile: .summary)
         switch format {
         case .human:
-            writeOutput(response.humanFormatted())
+            writeOutput(presenter.humanText(for: response))
         case .compact:
-            writeOutput(response.compactFormatted())
+            writeOutput(presenter.compactText(for: response))
         case .json:
             do {
-                let data = try response.jsonData(requestId: id)
+                let data = try presenter.jsonData(for: response, requestId: id)
                 if let json = String(data: data, encoding: .utf8) {
                     writeOutput(json)
                 } else {

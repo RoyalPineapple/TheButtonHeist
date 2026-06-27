@@ -110,6 +110,44 @@ HeistPlan("checkout") {
 
 Send that source through `run_heist(plan:)`.
 
+In tests, runHeist is the assertion. If the accessibility contract is not
+fulfilled, the test fails with the evidence.
+
+```swift
+import ButtonHeistTesting
+import XCTest
+
+@MainActor
+final class CheckoutHeistTests: XCTestCase {
+    func testCheckoutCompletes() async throws {
+        try await runHeist("Checkout.pay") {
+            Activate(.label("Pay"))
+                .expect(.appeared(.label("Payment Complete")))
+        }
+    }
+}
+```
+
+```swift
+import ButtonHeistTesting
+import Testing
+
+@Suite(.serialized)
+struct CheckoutHeistTests {
+    @MainActor
+    @Test
+    func checkoutCompletes() async throws {
+        try await runHeist("Checkout.pay") {
+            Activate(.label("Pay"))
+                .expect(.appeared(.label("Payment Complete")))
+        }
+    }
+}
+```
+
+`RunHeist(...)` composes inside plans. `runHeist(...)` executes from Swift
+tests. `run_heist` crosses the CLI/MCP tool boundary.
+
 The same product capability can live in source control:
 
 ```swift
@@ -160,19 +198,8 @@ Boring in the useful way: receipts say what ran, what changed, and where the mac
 
 ### 1. Add `TheInsideJob`
 
-Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC `+load`; no app setup code is required. Release builds do not start the server.
-
-```swift
-import SwiftUI
-import TheInsideJob
-
-@main
-struct MyApp: App {
-    var body: some Scene {
-        WindowGroup { ContentView() }
-    }
-}
-```
+Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC
+`+load`; no app setup code is required. Release builds do not start the server.
 
 By default the server accepts simulator loopback and USB-scoped connections. It does not publish Bonjour on the LAN unless you opt into network scope with `INSIDEJOB_SCOPE=simulator,usb,network` or `InsideJobScope`.
 

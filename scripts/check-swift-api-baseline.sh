@@ -18,6 +18,7 @@ MACOS_MODULES=(
 )
 IOS_DEBUG_MODULES=(
     "TheInsideJob:"
+    "ButtonHeistTesting:ButtonHeistDSL,ThePlans"
 )
 
 UPDATE=0
@@ -27,7 +28,8 @@ usage() {
 Usage: scripts/check-swift-api-baseline.sh [--update]
 
 Checks checked-in public Swift API snapshots for ThePlans, TheScore,
-ButtonHeistDSL, ButtonHeist, and the iOS DEBUG TheInsideJob module.
+ButtonHeistDSL, ButtonHeist, and the iOS DEBUG TheInsideJob and
+ButtonHeistTesting modules.
 
 Options:
   --update    Regenerate snapshots after an intentional public API change.

@@ -75,7 +75,7 @@ public extension AccessibilityTrace {
 
     /// On-the-wire `kind` discriminator. Product code should switch over
     /// `Delta`; this type exists only at the Codable/public projection edge.
-    enum DeltaKind: String, Codable {
+    enum DeltaKind: String, Codable, Sendable {
         case noChange
         case elementsChanged
         case screenChanged
