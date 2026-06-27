@@ -1,6 +1,6 @@
 # ButtonHeist MCP Server
 
-The buyer interface. This is the piece that lets an agent talk to ButtonHeist like it was born there.
+The MCP server exposes The Button Heist's accessibility contract runtime to agents. It projects the same command contract used by the CLI and heist execution, so direct commands and composed heists run through one action/wait runtime.
 
 ## Build
 

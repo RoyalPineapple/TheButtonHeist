@@ -1,16 +1,16 @@
 # Data Ownership
 
-Button Heist tracks **source-of-truth state only at ownership boundaries.**
+The Button Heist tracks **source-of-truth state only at ownership boundaries.**
 Everything else is a short-lived index, a request correlation, a lifecycle
 phase, a durable artifact, or final output formatting — never a second
-worldview that can drift from the first.
+settled-state view that can drift from the first.
 
 This file is the contract. Before adding any new long-lived map, table, cache,
 or ledger, find the owner below that already holds the fact you want. If none
 does, you are either (a) adding state to the wrong layer, or (b) re-deriving
 something a receipt/capture/tree already carries. Both are bugs.
 
-## The rule of one worldview
+## The rule of one settled view
 
 Every tracked structure must classify as **exactly one** of:
 
@@ -27,15 +27,15 @@ If a structure does not fit exactly one row, remove it or inline it.
 
 ## Approved long-lived state owners
 
-### 1. TheStash — the settled accessibility world model
+### 1. TheStash — the settled accessibility interface
 - **Tracks:** the settled `Screen`, latest disposable `LiveCapture`, and named
   non-clean settle diagnostic evidence.
-- **Why:** there must be exactly one answer to "what accessibility world do we
-  believe," while live handles and diagnostics remain separate.
+- **Why:** there must be exactly one answer to "what settled accessibility
+  interface do we believe," while live handles and diagnostics remain separate.
 - **Key:** `heistId` (semantic), `TreePath` / `AccessibilityElement` (capture).
-- **Lifetime:** clean settle updates settled world; live refresh replaces only
+- **Lifetime:** clean settle updates settled interface; live refresh replaces only
   live capture; non-clean settle records diagnostic evidence and marks settled
-  world dirty without publishing a settled observation.
+  interface dirty without publishing a settled observation.
 - **Invalidation:** live capture is last-read-wins and viewport-shaped;
   `Screen.merging(_:)` is pure last-read-wins on heistId conflict.
 - **Output:** `HeistElement` / `Interface` via `get_interface` (derived on demand).
@@ -85,7 +85,7 @@ Transport classes do **not** own auth. See the earned-ledger note below.
 ### 5. HeistExecutionResult — heist execution evidence
 - **Tracks:** the full execution tree (`steps`, each with children, outcomes,
   action results, expectations).
-- **Why:** the tree **is** the report. There is no second report worldview.
+- **Why:** the tree **is** the report. There is no second report view.
 - **Key:** structural position in the tree.
 - **Lifetime:** produced once per heist run; flows through as a value.
 - **Invalidation:** immutable value — never mutated after construction.

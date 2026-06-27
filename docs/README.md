@@ -1,6 +1,6 @@
 # Documentation
 
-Technical documentation for Button Heist internals. The blueprints, not the sales pitch.
+Technical documentation for The Button Heist's public contracts, runtime architecture, and integration surfaces.
 
 ## Contents
 

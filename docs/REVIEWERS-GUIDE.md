@@ -1,10 +1,10 @@
 # Reviewer's Guide
 
-A quick orientation for anyone reviewing the ButtonHeist codebase for the first time.
+A quick orientation for anyone reviewing The Button Heist codebase for the first time.
 
-## What Is This?
+## What is this?
 
-Button Heist lets AI agents inspect and control iOS apps programmatically. Embed the `TheInsideJob` framework in your iOS app, then connect over WiFi or USB to activate controls, read UI hierarchies, type text, perform explicit gestures, move the viewport, and take screenshots — all without manual interaction.
+The Button Heist lets agents and tests operate iOS apps through the app's accessibility contract. Embed the `TheInsideJob` framework, connect with the CLI or MCP server, read the settled accessibility interface, act through declared accessibility actions, and receive evidence-backed receipts.
 
 ## Common Starter Flow
 
@@ -20,9 +20,9 @@ buttonheist get_screen                        # Capture the screen
 
 The generated command reference is the source of truth for the full command contract.
 
-## Why So Many Commands?
+## Command families
 
-The `TheFence.Command` enum is the flat public command-key adapter; command families are the source of truth for product meaning. CLI and MCP project from the same Fence-owned descriptors, and each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll operations, text editing, heist replay, etc.).
+The `TheFence.Command` enum is the flat public command-key adapter; command families expose product semantics through the shared command contract. CLI and MCP project from the same Fence-owned descriptors, and each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll operations, text editing, heist replay, etc.).
 
 Both interfaces expose canonical command names. Semantic operations like `activate`, `type_text`, and `get_interface` stay top-level; mechanical gestures remain explicit action routes, and viewport commands remain direct debug routes.
 
@@ -33,7 +33,7 @@ Both interfaces expose canonical command names. Semantic operations like `activa
 
 This boundary exists so that **tests can inject mock connections** at the TheHandoff level via factory closures, while TheFence handles the command-level concerns independently.
 
-## Semantic Commands And Mechanical Gestures
+## Semantic actions and spatial gestures
 
 - **`activate`** is the primary interaction command. It resolves semantic identity, reveals the element when needed, refreshes live accessibility geometry, calls `accessibilityActivate()` once, then dispatches at the activation point only if UIKit declines. This abstracts viewport position across SwiftUI, UIKit, and custom controls.
 - **`one_finger_tap`** is an explicit mechanical/spatial gesture. With an element target it still resolves semantic identity and fresh geometry first; with coordinates it acts on the current viewport.

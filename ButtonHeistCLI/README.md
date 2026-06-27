@@ -1,6 +1,6 @@
 # ButtonHeist CLI
 
-The CLI is the terminal adapter for Button Heist. It routes through
+The CLI is the terminal adapter for The Button Heist. It routes through
 `TheFence.Command`, the same product command contract used by JSON-lines stdin,
 MCP, and heist execution.
 
@@ -63,7 +63,7 @@ buttonheist activate --label "Sign In" --traits button
 buttonheist type_text "user@example.com" --identifier emailField
 ```
 
-Semantic commands identify elements by matcher fields. Button Heist resolves
+Semantic commands identify elements by matcher fields. The Button Heist resolves
 the target, moves the viewport if needed, refreshes, and uses fresh live
 geometry before acting.
 
@@ -87,8 +87,8 @@ buttonheist run_heist --path checkout.heist --junit report.xml
 ```
 
 Heist replay uses durable semantic selectors and matchers. Capture-local
-annotations are evidence and diagnostics, not replay identity. The `.heist`
-package is an authored replay artifact.
+annotations are evidence and diagnostics, not replay identity. Source is
+authored; a `.heist` package is a generated replay artifact.
 
 ### JSON-Lines Mode
 

@@ -45,7 +45,7 @@ That maps closely to our receipt-pair model:
 - Button Heist repair target: durable semantic heist target suggestion.
 
 The important distinction is that Button Heist's repair evidence is the parsed
-accessibility world model, not raw DOM position, CSS, XPath, or visual geometry.
+accessibility contract evidence, not raw DOM position, CSS, XPath, or visual geometry.
 
 ### Robust Locators Are Preventive, Not Repair
 

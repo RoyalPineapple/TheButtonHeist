@@ -1,11 +1,11 @@
 # Accessibility Contract Runtime
 
-Button Heist lets callers write programs against an app's accessibility
+The Button Heist lets callers write programs against an app's accessibility
 contract.
 
 The accessibility contract is the semantic interface the app exposes to
 assistive technologies: labels, identifiers, roles, values, states, and
-actions. Button Heist makes that contract executable for agents, tests, and
+actions. The Button Heist makes that contract executable for agents, tests, and
 replay.
 
 ## Runtime Invariant
@@ -18,7 +18,7 @@ flowchart LR
     Evidence --> Projection["Validation, report, or next step"]
 ```
 
-Semantic intent enters the runtime. Button Heist owns target resolution, reveal,
+Semantic intent enters the runtime. The Button Heist owns target resolution, reveal,
 element inflation, action execution, settling, and evidence. The result is
 settled semantic evidence, not a mechanical playback log.
 

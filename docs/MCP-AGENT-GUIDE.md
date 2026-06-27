@@ -1,6 +1,6 @@
 # Button Heist MCP Agent Guide
 
-Button Heist drives iOS apps through the accessibility layer — the same interface VoiceOver uses. You interact with live UI elements by their identity and traits, not screen coordinates. A coordinate that works on one device breaks on another; an element's label and traits work everywhere.
+The Button Heist drives iOS apps through the settled accessibility interface. When the app exposes a complete accessibility contract, agents can target declared labels, identifiers, values, traits, and actions instead of calculating screen coordinates.
 
 ## Core Loop
 
@@ -12,7 +12,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Choosing Tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content The Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is The Button Heist's generated name for a container in the current interface capture. It is useful for inspection. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
 **Acting**: `perform(step:)` runs one ButtonHeist DSL instruction. Use it when one line is enough: one action, or one simple wait.
 
@@ -253,7 +253,7 @@ WaitFor(.label("Receipt"), timeout: .seconds(10))
 ```
 
 If the action receipt shows a spinner or loading overlay instead of the final state,
-run a simple `WaitFor(...)` through `perform(step:)`. Button Heist checks the
+run a simple `WaitFor(...)` through `perform(step:)`. The Button Heist checks the
 current settled hierarchy first, then watches settled accessibility state until the
 predicate is true or the timeout expires.
 

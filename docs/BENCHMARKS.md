@@ -1,30 +1,30 @@
-# Button Heist: Benchmarks
+# The Button Heist: Benchmarks
 
-## The Problem
+## The problem
 
-AI agents need to operate iOS apps. The existing approach — read the screen's accessibility tree, compute pixel coordinates, tap at (x, y) — works on toy tasks but breaks down on real workflows. Every action requires re-reading the entire screen. Every tap requires coordinate math that varies by device. Every screen transition means starting over. The agent spends more time observing than acting, and the observation history fills the context window until the model drowns in its own notes.
+AI agents need to operate iOS apps. A common approach is to read an accessibility snapshot, compute a screen coordinate, tap that point, then read again to see what happened. That can work, but it gets expensive as workflows grow: the agent spends turns on coordinate math, repeated full-screen reads, and viewport bookkeeping instead of the product task.
 
-## The Insight
+## The insight
 
-VoiceOver users don't compute coordinates. They navigate a semantic interface: labels, values, traits, actions. "Activate the Sign In button" works on every device, every screen size, every orientation. The accessibility layer is already a stable, device-independent API for interacting with UI. Nobody was using it that way for agents.
+Assistive technologies do not operate an app by calculating tap points. They depend on the settled accessibility interface: labels, values, traits, state, and actions. When an app exposes that contract well, "activate the Sign In button" is a more durable instruction than "tap this coordinate."
 
-## What Button Heist Does
+## What The Button Heist Does
 
-Button Heist exposes the iOS accessibility layer as an MCP server. Agents interact with UI elements by identity — name, role, state — not by position. The server resolves targeting, handles activation, and reports what changed as a compact delta. The agent says what it wants, such as activating the Dark button, not a pixel coordinate.
+The Button Heist makes the settled accessibility interface executable. Agents interact with UI elements by identity, role, state, and declared action. The runtime resolves the target, acts through the accessibility contract, waits for settlement, and reports what changed as a compact delta.
 
 Three properties make this work:
 
-**Semantic addressing.** Target elements by label, value, and traits — the same properties VoiceOver announces. No coordinate math, no screenshot parsing, no fragile pixel positions. One tool call, one element, zero ambiguity.
+**Contract-based addressing.** Target elements by label, identifier, value, traits, and action. Coordinates and screenshots remain available when pixels or spatial gestures are the subject, but ordinary controls can be addressed through the contract the app already exposes.
 
-**Delta responses.** Every action returns exactly what changed: which elements appeared, disappeared, or updated. The agent doesn't need to re-read the entire screen after every tap. On a 50-action workflow, this eliminates 50 full-screen reads.
+**Delta responses.** Actions return what changed: which elements appeared, disappeared, or updated. When the delta answers the next question, the agent can keep moving without a full-screen read after every action.
 
-**Composable actions.** Because addressing is stable and deterministic, actions can be composed into heist programs. Five semantic steps can run with inline expectations that verify the outcome. If step 3 fails, the heist stops there. Coordinate-based tools cannot compose this way because each gesture depends on reading the screen after the previous one.
+**Composable actions.** Heists compose declared actions with expectations. Five steps can run with inline checks that verify the outcome. If step 3 cannot satisfy the contract, the heist stops there with the receipt that explains why.
 
 ## Side by Side
 
 The difference is visible in a single action. Here's what it looks like to activate "Settings" in both tools — actual calls from the benchmark traces.
 
-**Button Heist** — one call, semantic target, structured delta back:
+**The Button Heist** — one call, semantic target, structured delta back:
 
 ```
 → activate(label: "Settings", traits: ["button"])
@@ -40,7 +40,7 @@ The difference is visible in a single action. Here's what it looks like to activ
 
 The agent asked for "Settings" by name. The response tells it the screen changed and lists every element on the new screen with labels, traits, and values ready for semantic targeting.
 
-**ios-simulator-mcp** — read the full tree, compute coordinates, tap blind:
+**ios-simulator-mcp** — read the full tree, compute coordinates, tap by point:
 
 ```
 → ui_describe_all(udid: "2159E2B8-...")
@@ -59,7 +59,7 @@ The agent gets a raw JSON tree with pixel coordinates for every element. It has 
 ← "Tapped successfully"
 ```
 
-"Tapped successfully" — but what happened? Did the setting actually change? The agent doesn't know. Compare that to what Button Heist returns for the same kind of action — tapping "Large" in the text size picker:
+"Tapped successfully" confirms the event was delivered, but not what the interface became. Compare that to what The Button Heist returns for the same kind of action — tapping "Large" in the text size picker:
 
 ```
 → activate(label: "Large", traits: ["button"])
@@ -71,9 +71,9 @@ The agent gets a raw JSON tree with pixel coordinates for every element. It has 
   ~ medium_button: traits "button, selected" → "button"
 ```
 
-The delta tells the agent exactly what happened: "Large" gained the `selected` trait, "Medium" lost it, the summary label updated from "Medium" to "Large". No ambiguity, no follow-up read needed.
+The delta names the relevant contract change: "Large" gained the `selected` trait, "Medium" lost it, and the summary label updated from "Medium" to "Large".
 
-ios-simulator-mcp has to call `ui_describe_all` again to learn what Button Heist already told it inline. That's two tool calls and two full tree reads for one tap. Multiply that by 50 actions and the context window difference is enormous.
+ios-simulator-mcp has to call `ui_describe_all` again to learn what The Button Heist already returned inline. That's two tool calls and two full tree reads for one tap. Multiply that by longer workflows and the context-window difference becomes material.
 
 ## How Agents Think
 
@@ -83,7 +83,7 @@ The numbers tell you the tools are different. The agent reasoning tells you *why
 
 Both agents need to change three settings: Color Scheme to Dark, Accent Color to Purple, Text Size to Large.
 
-**Button Heist agent** thinks about the task:
+**The Button Heist agent** thinks about the task:
 
 > *"I need to activate 'Dark' button, 'Purple' button, 'Large' button, then read the current values."*
 
@@ -109,7 +109,7 @@ The BH agent names what it wants. The idb agent does division to figure out whic
 
 Both agents need to press 13 buttons in sequence.
 
-**Button Heist agent** plans the sequence and sends it:
+**The Button Heist agent** plans the sequence and sends it:
 
 > *"Clear the display, enter 344, press multiply, enter 289, press equals, press divide, enter 99, press equals. Let me send these as one typed heist."*
 
@@ -198,4 +198,4 @@ Agent workflows are getting longer. Today's agents fill forms and check settings
 
 A tool that's 2x slower at 10 actions is 5x slower at 50 and hits a wall at 100. At some point the question shifts from "which is faster?" to "which can finish the job?"
 
-We built Button Heist because we think the accessibility layer is the right abstraction for agent-driven UI. The benchmarks suggest that bet is paying off — especially as workflows get longer.
+We built The Button Heist because we think the accessibility layer is the right abstraction for agent-driven UI. The benchmarks suggest that bet is paying off, especially as workflows get longer.

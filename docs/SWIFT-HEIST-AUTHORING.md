@@ -1,10 +1,10 @@
 # Swift Heist Authoring Boundary
 
-ButtonHeist's durable language is `HeistPlan`. Canonical ButtonHeist source is
+The Button Heist's durable language is `HeistPlan`. Canonical heist source is
 the runtime text form of that language; it is parsed by ThePlans and never by
 `swiftc`. Swift files are a trusted local authoring frontend that may generate a
 validated `HeistPlan`, but arbitrary Swift structure is not itself durable
-ButtonHeist language.
+heist language.
 
 Treat checked-in Swift files like product code, but keep the boundary explicit:
 Swift may wrap, select, name, organize, and call heists outside the DSL. If a
@@ -15,7 +15,7 @@ Durable loops must use Button Heist's explicit `ForEach` primitive, not native
 Swift `for`.
 
 `HeistPlan` is the execution model. Humans may author rich Swift DSL files that
-build a `HeistPlan`. Agents should prefer canonical ButtonHeist source strings
+build a `HeistPlan`. Agents should prefer canonical heist source strings
 when sending compact heists through MCP. Standalone `.json` files are explicit
 raw HeistPlan IR for debug, import, and export; generated `.heist` package
 directories store `manifest.json` and canonical `plan.json`. Public MCP tools
@@ -33,9 +33,9 @@ details. In particular, JSON does not recover:
 - local variables, constants, or their names
 - source grouping, whitespace, formatting, or review intent
 
-At runtime, Button Heist executes only `HeistPlan`. Swift result builders are
+At runtime, The Button Heist executes only `HeistPlan`. Swift result builders are
 convenience for building AST values; they are not the language contract and do
-not preserve Swift source structure. Canonical ButtonHeist source is the
+not preserve Swift source structure. Canonical heist source is the
 constrained runtime authoring language accepted by `run_heist(plan:)`; `.json`
 is raw IR; `.heist` is a generated package artifact. Swift DSL, canonical
 source, and canonical plan JSON are projections of the same AST. That AST
@@ -82,7 +82,7 @@ grouping, comments, local constants, or native Swift calls.
 
 ## Swift Test Runner Boundary
 
-In app and UI tests, Swift calls the job and ButtonHeist describes the job. The
+In app and UI tests, Swift calls the job and The Button Heist describes the job. The
 host-language runner boundary is:
 
 ```swift
@@ -94,7 +94,7 @@ try await RunHeist("addToCart", argument: "Milk") { item in
 ```
 
 Outside `RunHeist(...) { ... }` is Swift: tests may choose data, await the
-receipt, and assert on failures. Inside the closure is ButtonHeist DSL that
+receipt, and assert on failures. Inside the closure is heist source that
 lowers to `HeistPlan`, validates through the normal plan contract, executes
 through the in-app heist runtime, and returns the normal receipt.
 
@@ -172,8 +172,8 @@ the label `Search` with case and typography folding; it does not match
 `label`, `identifier`, and `value`. Prefer exact labels, identifiers, values,
 and traits when they name the intended control clearly.
 
-When migrating a KIF selector such as `usingLabelContaining("Search")`, use an
-explicit broad match so the looseness stays visible in review:
+When converting a loose text selector, use an explicit broad match so the
+looseness stays visible in review:
 
 ```swift
 Activate(.label(.contains("Search")))

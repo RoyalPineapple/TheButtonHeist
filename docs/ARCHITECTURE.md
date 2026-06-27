@@ -1,7 +1,7 @@
 # Button Heist Architecture
 
-Button Heist lets callers write programs against an app's accessibility
-contract. Semantic intent enters the runtime; Button Heist owns target
+The Button Heist lets callers write programs against an app's accessibility
+contract. Semantic intent enters the runtime; The Button Heist owns target
 resolution, reveal, element inflation, action execution, settling, and
 evidence; callers receive settled semantic evidence for validation,
 reporting, or the next step.
@@ -51,7 +51,7 @@ snapshots rather than pretending an empty post-navigation parse is stable.
 ### Observation Has One Owner
 
 `get_interface` returns the app accessibility state for the current screen,
-including semantic content Button Heist can discover in scrollable containers.
+including semantic content The Button Heist can discover in scrollable containers.
 `get_screen` returns pixels plus the fresh visible accessibility tree with
 geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
@@ -96,13 +96,13 @@ flowchart LR
 
 ## Execution and Predicate Pipeline
 
-Button Heist has one source of truth: the accessibility tree, a snapshot of
+The Button Heist has one source of truth: the accessibility tree, a snapshot of
 that tree, or a diff between snapshots. Targets, searches, waits, expectations,
 and repeat-loop stop conditions all evaluate through the same predicate model.
 
 ```mermaid
 flowchart TD
-    Author["Authoring surface<br/>Swift DSL or runtime ButtonHeist source"] --> Compile["Compile / build HeistPlan<br/>ThePlans parser + builders"]
+    Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Compile / build HeistPlan<br/>ThePlans parser + builders"]
     Compile --> Validate["Runtime validation<br/>finite steps, valid predicates, valid targets"]
     Validate --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
@@ -146,7 +146,7 @@ The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
 - `WaitFor(...)`: baseline is the first snapshot taken inside the wait.
 - `Action(...).expect(...)`: baseline is the pre-action snapshot.
 - `RepeatUntil(...)` and action `.until(...)`: the stop predicate is checked
-  immediately first; after each body, Button Heist waits up to one second for
+  immediately first; after each body, The Button Heist waits up to one second for
   `.change()`, then evaluates the stop predicate against the accumulated trace.
 
 The public predicate layer is intentionally one tree language:
