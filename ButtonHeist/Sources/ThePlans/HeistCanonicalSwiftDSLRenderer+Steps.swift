@@ -42,14 +42,30 @@ extension HeistCanonicalSwiftDSLRenderer {
             \(line("}", indent))
             """
         case .invoke(let invoke):
-            return try line(render(invoke: invoke, environment: environment), indent)
+            return try render(invoke: invoke, indent: indent, environment: environment)
         }
     }
 
-    func render(invoke: HeistInvocationStep, environment: RenderEnvironment) throws -> String {
+    func render(
+        invoke: HeistInvocationStep,
+        indent: Int,
+        environment: RenderEnvironment
+    ) throws -> String {
         let callee = invoke.path.joined(separator: ".")
         let argument = try render(argument: invoke.argument, environment: environment)
-        return argument.isEmpty ? "RunHeist(\(quote(callee)))" : "RunHeist(\(quote(callee)), \(argument))"
+        let base = argument.isEmpty ? "RunHeist(\(quote(callee)))" : "RunHeist(\(quote(callee)), \(argument))"
+        var text = line(base, indent)
+        if let expectation = invoke.expectation {
+            let predicate = try render(predicate: expectation.predicate, environment: environment)
+            text += "\n" + line(".expect(\(predicate)\(renderInvocationExpectationTimeout(expectation.timeout)))", indent + 1)
+        }
+        return text
+    }
+
+    private func renderInvocationExpectationTimeout(_ timeout: Double) -> String {
+        abs(timeout - defaultActionExpectationTimeout) < 0.000_001
+            ? ""
+            : ", timeout: .seconds(\(decimal(timeout)))"
     }
 
     func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {

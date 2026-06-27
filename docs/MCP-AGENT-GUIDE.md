@@ -126,6 +126,7 @@ HeistPlan("shop") {
     }
 
     RunHeist("Cart.addItem", "Milk")
+        .expect(.appeared(.label("subtotal")))
 
     If(.label("Pay")) {
         Activate(.label("Pay"))

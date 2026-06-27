@@ -2,18 +2,21 @@ import Foundation
 
 public struct HeistInvocationStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case path, argument
+        case path, argument, expectation
     }
 
     public let path: [String]
     public let argument: HeistArgument
+    public let expectation: WaitStep?
 
     public init(
         path: [String],
-        argument: HeistArgument = .none
+        argument: HeistArgument = .none,
+        expectation: WaitStep? = nil
     ) {
         self.path = path
         self.argument = argument
+        self.expectation = expectation
     }
 
     public init(from decoder: Decoder) throws {
@@ -21,8 +24,16 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             path: try container.decode([String].self, forKey: .path),
-            argument: try container.decodeIfPresent(HeistArgument.self, forKey: .argument) ?? .none
+            argument: try container.decodeIfPresent(HeistArgument.self, forKey: .argument) ?? .none,
+            expectation: try container.decodeIfPresent(WaitStep.self, forKey: .expectation)
         )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(path, forKey: .path)
+        try container.encode(argument, forKey: .argument)
+        try container.encodeIfPresent(expectation, forKey: .expectation)
     }
 
     /// Dotted capability name, e.g. `LibraryScreen.addToCart`.

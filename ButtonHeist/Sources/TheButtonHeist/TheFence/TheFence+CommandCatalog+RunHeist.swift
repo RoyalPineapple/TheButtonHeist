@@ -55,7 +55,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                     Author plans as ButtonHeist source, not raw JSON IR:
                     `HeistPlan("shop") { ... }`
                     `HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
-                    `RunHeist("Cart.addItem", "Milk")`
+                    `RunHeist("Cart.addItem", "Milk").expect(.appeared(.label("subtotal")))`
                     `If(.label("Pay")) { ... }.else { ... }`
                     `WaitFor(.change(.screen()), timeout: .seconds(10)).else { ... }`
                     `ForEach("Milk", "Bread") { item in ... }`

@@ -862,6 +862,20 @@ func runHeistBuildsHeistRunSteps() throws {
     #expect(targetRun.heistSteps == [
         .invoke(HeistInvocationStep(path: ["Rows", "activate"], argument: .elementTarget(.target(.label("Row 1"))))),
     ])
+
+    let expectedSubtotal = WaitStep(
+        predicate: .change(.elements(.appearedElement(.label("subtotal")))),
+        timeout: defaultActionExpectationTimeout
+    )
+    let expectedRun = RunHeist("Cart.addItem", "Milk")
+        .expect(.appeared(.label("subtotal")))
+    #expect(expectedRun.heistSteps == [
+        .invoke(HeistInvocationStep(
+            path: ["Cart", "addItem"],
+            argument: .string(.literal("Milk")),
+            expectation: expectedSubtotal
+        )),
+    ])
 }
 
 @Test
@@ -888,10 +902,14 @@ func runHeistRendersAsRunHeistInCanonicalSwift() throws {
                 ]),
             ], body: []),
         ],
-        body: [.invoke(HeistInvocationStep(path: ["CartScreen", "checkout"]))]
+        body: [.invoke(HeistInvocationStep(
+            path: ["CartScreen", "checkout"],
+            expectation: WaitStep(predicate: .change(.screen()), timeout: defaultActionExpectationTimeout)
+        ))]
     )
     let rendered = try plan.canonicalSwiftDSL()
     #expect(rendered.contains("RunHeist(\"CartScreen.checkout\")"))
+    #expect(rendered.contains(".expect(.change(.screen()))"))
     #expect(!rendered.contains("CartScreen.checkout()"))
 }
 

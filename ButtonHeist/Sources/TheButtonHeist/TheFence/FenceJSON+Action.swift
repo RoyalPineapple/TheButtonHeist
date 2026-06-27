@@ -529,12 +529,20 @@ struct PublicHeistInvocationEvidence: Encodable {
     let name: String?
     let argument: String?
     let childFailedPath: String?
+    let expectationResult: PublicHeistReportActionResult?
+    let expectation: PublicExpectationResult?
 
     init(evidence: HeistInvocationEvidence) {
         self.capability = evidence.invocation?.capabilityName
         self.name = evidence.name
         self.argument = evidence.argument
         self.childFailedPath = evidence.childFailedPath
+        self.expectationResult = evidence.expectationActionResult.map {
+            PublicHeistReportActionResult(method: $0.method.rawValue, result: $0)
+        }
+        self.expectation = evidence.expectation.map {
+            PublicExpectationResult(result: $0)
+        }
     }
 }
 

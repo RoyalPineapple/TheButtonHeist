@@ -326,6 +326,12 @@ struct HeistPlanTraversal {
     ) {
         let invokeContext = context.child(path: "\(context.path).invoke")
         visitor.visitInvoke(invoke, context: invokeContext)
+        if let expectation = invoke.expectation {
+            visitor.visitWait(
+                expectation,
+                context: invokeContext.child(path: "\(invokeContext.path).expectation")
+            )
+        }
         guard let resolved = context.resolveInvocation(path: invoke.path) else { return }
         let resolvedName = resolved.qualifiedName
         guard context.callGraphCycle(closing: resolvedName) == nil,

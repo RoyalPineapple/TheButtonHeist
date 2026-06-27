@@ -553,13 +553,13 @@ private func makeActionStep(
     }
 }
 
-private struct ExpectationTimeoutComposition {
+struct ExpectationTimeoutComposition {
     let timeout: Double
     let explicitTimeout: Double?
     let failure: String?
 }
 
-private func composeExpectationTimeout(
+func composeExpectationTimeout(
     existing: WaitStep?,
     existingExplicit: Double?,
     nextExplicit: Double?
@@ -591,12 +591,12 @@ private func composeExpectationTimeout(
     }
 }
 
-private struct ExpectationPredicateComposition {
+struct ExpectationPredicateComposition {
     let predicate: AccessibilityPredicateExpr
     let failure: String?
 }
 
-private func composeExpectationPredicates(
+func composeExpectationPredicates(
     existing: AccessibilityPredicateExpr,
     next: AccessibilityPredicateExpr
 ) -> ExpectationPredicateComposition {

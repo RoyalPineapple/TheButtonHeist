@@ -55,6 +55,37 @@ extension TheBrains {
         }
     }
 
+    private struct InvocationResolution {
+        let requestedName: String
+        let resolvedPath: [String]
+        let resolvedName: String
+        let definition: HeistPlan?
+    }
+
+    private struct InvocationExecutionContext {
+        let invoke: HeistInvocationStep
+        let path: String
+        let start: CFAbsoluteTime
+        let requestedName: String
+        let intent: HeistStepIntent
+
+        var argumentSummary: String? {
+            invoke.argument == .none ? nil : invoke.runHeistSummary
+        }
+    }
+
+    private struct InvocationExpectationContext {
+        let source: WaitStep
+        let resolved: ResolvedWaitStep
+        let baseline: HeistWaitReceipt
+    }
+
+    private enum InvocationExpectationPreparation {
+        case none
+        case prepared(InvocationExpectationContext)
+        case failed(HeistExecutionStepResult)
+    }
+
     func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .heistPlan)
@@ -422,70 +453,38 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
-        let invocationName = invoke.path.joined(separator: ".")
-        let localDefinition = scope.plan.heistDefinition(at: invoke.path)
-        let rootDefinition = invoke.path.count > 1 ? scope.rootPlan.heistDefinition(at: invoke.path) : nil
-        let definition = localDefinition ?? rootDefinition
-        let resolvedInvocationPath = localDefinition == nil && rootDefinition != nil
-            ? invoke.path
-            : scope.definitionPath + invoke.path
-        let resolvedInvocationName = resolvedInvocationPath.joined(separator: ".")
-        let intent = HeistStepIntent.invoke(
-            path: invocationName,
-            argument: invoke.argument == .none ? nil : invoke.runHeistSummary
+        let resolution = resolveInvocation(invoke, scope: scope)
+        let context = InvocationExecutionContext(
+            invoke: invoke,
+            path: path,
+            start: start,
+            requestedName: resolution.requestedName,
+            intent: invocationIntent(invoke, invocationName: resolution.requestedName)
         )
-        guard !scope.invocationStack.contains(resolvedInvocationName) else {
-            let observed = "recursive heist run \(resolvedInvocationName)"
-            return HeistExecutionStepResult(
-                path: path,
-                kind: .invoke,
-                status: .failed,
-                durationMs: elapsedMilliseconds(since: start),
-                intent: intent,
-                evidence: .invocation(HeistInvocationEvidence(invocation: invoke, name: invocationName)),
-                failure: HeistFailureDetail(
-                    category: .invocation,
-                    contract: "heist invocation must not recurse",
-                    observed: observed
-                )
-            )
+        guard !scope.invocationStack.contains(resolution.resolvedName) else {
+            return recursiveInvocationResult(context: context, resolvedInvocationName: resolution.resolvedName)
         }
-        guard let definition else {
-            let observed = "unknown heist run \(invocationName)"
-            return HeistExecutionStepResult(
-                path: path,
-                kind: .invoke,
-                status: .failed,
-                durationMs: elapsedMilliseconds(since: start),
-                intent: intent,
-                evidence: .invocation(HeistInvocationEvidence(invocation: invoke, name: invocationName)),
-                failure: HeistFailureDetail(
-                    category: .invocation,
-                    contract: "heist invocation path resolves to a definition",
-                    observed: observed,
-                    expected: invocationName
-                )
-            )
+        guard let definition = resolution.definition else {
+            return unknownInvocationResult(context: context)
         }
+
         let childEnvironment: HeistExecutionEnvironment
         do {
             childEnvironment = try environment.binding(argument: invoke.argument, to: definition.parameter)
         } catch {
-            let observed = "could not bind heist run argument: \(error)"
-            return HeistExecutionStepResult(
-                path: path,
-                kind: .invoke,
-                status: .failed,
-                durationMs: elapsedMilliseconds(since: start),
-                intent: intent,
-                evidence: .invocation(HeistInvocationEvidence(invocation: invoke, name: invocationName)),
-                failure: HeistFailureDetail(
-                    category: .validation,
-                    contract: "heist invocation argument binds to the target parameter",
-                    observed: observed
-                )
-            )
+            return invocationBindingFailureResult(context: context, error: error)
         }
+
+        let expectationContext: InvocationExpectationContext?
+        switch await prepareInvocationExpectation(context: context, environment: environment, runtime: runtime) {
+        case .none:
+            expectationContext = nil
+        case .prepared(let prepared):
+            expectationContext = prepared
+        case .failed(let result):
+            return result
+        }
+
         let children = await executeHeistSteps(
             definition.body,
             runtime: runtime,
@@ -493,30 +492,261 @@ extension TheBrains {
             scope: HeistExecutionScope(
                 plan: definition,
                 rootPlan: scope.rootPlan,
-                definitionPath: resolvedInvocationPath,
-                invocationStack: scope.invocationStack.union([resolvedInvocationName])
+                definitionPath: resolution.resolvedPath,
+                invocationStack: scope.invocationStack.union([resolution.resolvedName])
             ),
             path: "\(path).invoke.body"
         )
         let abortedAtChildPath = children.firstFailedStep?.path
+        let expectationReceipt = await evaluateInvocationExpectation(
+            expectationContext,
+            runtime: runtime,
+            childFailed: abortedAtChildPath != nil
+        )
+        let failure = invocationFailure(
+            abortedAtChildPath: abortedAtChildPath,
+            expectationContext: expectationContext,
+            expectationReceipt: expectationReceipt
+        )
+        return completedInvocationResult(
+            context: context,
+            children: children,
+            abortedAtChildPath: abortedAtChildPath,
+            expectationReceipt: expectationReceipt,
+            failure: failure
+        )
+    }
+
+    private func resolveInvocation(
+        _ invoke: HeistInvocationStep,
+        scope: HeistExecutionScope
+    ) -> InvocationResolution {
+        let requestedName = invoke.path.joined(separator: ".")
+        let localDefinition = scope.plan.heistDefinition(at: invoke.path)
+        let rootDefinition = invoke.path.count > 1 ? scope.rootPlan.heistDefinition(at: invoke.path) : nil
+        let resolvedPath = localDefinition == nil && rootDefinition != nil
+            ? invoke.path
+            : scope.definitionPath + invoke.path
+        return InvocationResolution(
+            requestedName: requestedName,
+            resolvedPath: resolvedPath,
+            resolvedName: resolvedPath.joined(separator: "."),
+            definition: localDefinition ?? rootDefinition
+        )
+    }
+
+    private func invocationIntent(
+        _ invoke: HeistInvocationStep,
+        invocationName: String
+    ) -> HeistStepIntent {
+        HeistStepIntent.invoke(
+            path: invocationName,
+            argument: invoke.argument == .none ? nil : invoke.runHeistSummary
+        )
+    }
+
+    private func recursiveInvocationResult(
+        context: InvocationExecutionContext,
+        resolvedInvocationName: String
+    ) -> HeistExecutionStepResult {
+        let observed = "recursive heist run \(resolvedInvocationName)"
         return HeistExecutionStepResult(
-            path: path,
+            path: context.path,
             kind: .invoke,
-            status: abortedAtChildPath == nil ? .passed : .failed,
-            durationMs: elapsedMilliseconds(since: start),
-            intent: intent,
+            status: .failed,
+            durationMs: elapsedMilliseconds(since: context.start),
+            intent: context.intent,
+            evidence: .invocation(HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName)),
+            failure: HeistFailureDetail(
+                category: .invocation,
+                contract: "heist invocation must not recurse",
+                observed: observed
+            )
+        )
+    }
+
+    private func unknownInvocationResult(
+        context: InvocationExecutionContext
+    ) -> HeistExecutionStepResult {
+        let observed = "unknown heist run \(context.requestedName)"
+        return HeistExecutionStepResult(
+            path: context.path,
+            kind: .invoke,
+            status: .failed,
+            durationMs: elapsedMilliseconds(since: context.start),
+            intent: context.intent,
+            evidence: .invocation(HeistInvocationEvidence(invocation: context.invoke, name: context.requestedName)),
+            failure: HeistFailureDetail(
+                category: .invocation,
+                contract: "heist invocation path resolves to a definition",
+                observed: observed,
+                expected: context.requestedName
+            )
+        )
+    }
+
+    private func invocationBindingFailureResult(
+        context: InvocationExecutionContext,
+        error: Error
+    ) -> HeistExecutionStepResult {
+        let observed = "could not bind heist run argument: \(error)"
+        return HeistExecutionStepResult(
+            path: context.path,
+            kind: .invoke,
+            status: .failed,
+            durationMs: elapsedMilliseconds(since: context.start),
+            intent: context.intent,
             evidence: .invocation(HeistInvocationEvidence(
-                invocation: invoke,
-                name: invocationName,
-                argument: invoke.argument == .none ? nil : invoke.runHeistSummary,
-                childFailedPath: abortedAtChildPath
+                invocation: context.invoke,
+                name: context.requestedName
             )),
-            failure: abortedAtChildPath.map {
-                childFailureDetail(category: .invocation, childPath: $0)
-            },
+            failure: HeistFailureDetail(
+                category: .validation,
+                contract: "heist invocation argument binds to the target parameter",
+                observed: observed
+            )
+        )
+    }
+
+    private func prepareInvocationExpectation(
+        context: InvocationExecutionContext,
+        environment: HeistExecutionEnvironment,
+        runtime: HeistExecutionRuntime
+    ) async -> InvocationExpectationPreparation {
+        guard let expectation = context.invoke.expectation else { return .none }
+        let resolved: ResolvedWaitStep
+        do {
+            resolved = try expectation.resolve(in: environment)
+        } catch {
+            return .failed(invocationExpectationResolutionFailureResult(
+                context: context,
+                expectation: expectation,
+                error: error
+            ))
+        }
+        let baseline = await runtime.wait(
+            ResolvedWaitStep(predicate: resolved.predicate, timeout: immediateTimeout),
+            nil,
+            nil
+        )
+        return .prepared(InvocationExpectationContext(
+            source: expectation,
+            resolved: resolved,
+            baseline: baseline
+        ))
+    }
+
+    private func invocationExpectationResolutionFailureResult(
+        context: InvocationExecutionContext,
+        expectation: WaitStep,
+        error: Error
+    ) -> HeistExecutionStepResult {
+        let observed = "could not resolve heist run expectation: \(error)"
+        let expectationActionResult = ActionResult(
+            success: false,
+            method: .wait,
+            message: observed,
+            errorKind: .actionFailed
+        )
+        let expectationResult = ExpectationResult(
+            met: false,
+            predicate: nil,
+            actual: observed
+        )
+        return HeistExecutionStepResult(
+            path: context.path,
+            kind: .invoke,
+            status: .failed,
+            durationMs: elapsedMilliseconds(since: context.start),
+            intent: context.intent,
+            evidence: .invocation(HeistInvocationEvidence(
+                invocation: context.invoke,
+                name: context.requestedName,
+                argument: context.argumentSummary,
+                expectationActionResult: expectationActionResult,
+                expectation: expectationResult
+            )),
+            failure: HeistFailureDetail(
+                category: .expectation,
+                contract: "heist invocation expectation predicate resolves before evaluation",
+                observed: observed,
+                expected: expectation.predicate.description
+            )
+        )
+    }
+
+    private func evaluateInvocationExpectation(
+        _ context: InvocationExpectationContext?,
+        runtime: HeistExecutionRuntime,
+        childFailed: Bool
+    ) async -> HeistWaitReceipt? {
+        guard !childFailed, let context else { return nil }
+        return await runtime.wait(
+            context.resolved,
+            context.baseline.actionResult.accessibilityTrace,
+            context.baseline.observedSequence
+        )
+    }
+
+    private func invocationFailure(
+        abortedAtChildPath: String?,
+        expectationContext: InvocationExpectationContext?,
+        expectationReceipt: HeistWaitReceipt?
+    ) -> HeistFailureDetail? {
+        if let abortedAtChildPath {
+            return childFailureDetail(category: .invocation, childPath: abortedAtChildPath)
+        }
+        guard let expectationContext, let expectationReceipt else { return nil }
+        return invocationExpectationFailure(expectation: expectationContext.source, receipt: expectationReceipt)
+    }
+
+    private func completedInvocationResult(
+        context: InvocationExecutionContext,
+        children: [HeistExecutionStepResult],
+        abortedAtChildPath: String?,
+        expectationReceipt: HeistWaitReceipt?,
+        failure: HeistFailureDetail?
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: context.path,
+            kind: .invoke,
+            status: failure == nil ? .passed : .failed,
+            durationMs: elapsedMilliseconds(since: context.start),
+            intent: context.intent,
+            evidence: .invocation(HeistInvocationEvidence(
+                invocation: context.invoke,
+                name: context.requestedName,
+                argument: context.argumentSummary,
+                childFailedPath: abortedAtChildPath,
+                expectationActionResult: expectationReceipt?.actionResult,
+                expectation: expectationReceipt?.expectation
+            )),
+            failure: failure,
             abortedAtChildPath: abortedAtChildPath,
             children: children
         )
+    }
+
+    private func invocationExpectationFailure(
+        expectation: WaitStep,
+        receipt: HeistWaitReceipt
+    ) -> HeistFailureDetail? {
+        guard !receipt.actionResult.success || !receipt.expectation.met else { return nil }
+        return HeistFailureDetail(
+            category: .expectation,
+            contract: "heist invocation expectation is met",
+            observed: expectationObserved(receipt),
+            expected: expectation.predicate.description
+        )
+    }
+
+    private func expectationObserved(_ receipt: HeistWaitReceipt) -> String {
+        [
+            receipt.expectation.actual,
+            receipt.actionResult.message,
+            receipt.actionResult.errorKind.map { "errorKind=\($0.rawValue)" },
+            receipt.actionResult.settled.map { "settled=\($0)" },
+        ].compactMap { $0 }.joined(separator: "; ")
     }
 
     func childFailureDetail(category: HeistFailureCategory, childPath: String) -> HeistFailureDetail {
