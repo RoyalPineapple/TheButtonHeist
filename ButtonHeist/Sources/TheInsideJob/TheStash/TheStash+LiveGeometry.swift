@@ -49,6 +49,11 @@ extension TheStash {
         case geometryUnavailable
     }
 
+    private struct LiveGeometry {
+        let frame: CGRect
+        let activationPoint: CGPoint
+    }
+
     func resolveLiveActionTarget(for screenElement: ScreenElement) -> LiveActionTargetResolution {
         guard let object = dispatchObject(for: screenElement) else {
             return .objectUnavailable
@@ -106,24 +111,24 @@ extension TheStash {
         return nil
     }
 
-    private static func liveGeometry(for element: AccessibilityElement) -> (frame: CGRect, activationPoint: CGPoint)? {
+    private static func liveGeometry(for element: AccessibilityElement) -> LiveGeometry? {
         let frame = element.bhFrame
         let activationPoint = element.bhResolvedActivationPoint
         guard isUsableFrame(frame),
               isUsablePoint(activationPoint) else {
             return nil
         }
-        return (frame, activationPoint)
+        return LiveGeometry(frame: frame, activationPoint: activationPoint)
     }
 
-    private static func liveGeometry(for container: AccessibilityContainer) -> (frame: CGRect, activationPoint: CGPoint)? {
+    private static func liveGeometry(for container: AccessibilityContainer) -> LiveGeometry? {
         let frame = container.frame.cgRect
         let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
         guard isUsableFrame(frame),
               isUsablePoint(activationPoint) else {
             return nil
         }
-        return (frame, activationPoint)
+        return LiveGeometry(frame: frame, activationPoint: activationPoint)
     }
 
     private static func isUsableFrame(_ frame: CGRect) -> Bool {

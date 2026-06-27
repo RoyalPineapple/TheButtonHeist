@@ -74,7 +74,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     private func select(
         _ query: InterfaceQuery,
-        in interface: Interface = makeInterface()
+        in interface: Interface = InterfaceSelectorTests.makeInterface()
     ) throws(InterfaceSelectionError) -> Interface {
         try InterfaceSelector(interface: interface).select(query)
     }
@@ -87,90 +87,34 @@ final class InterfaceSelectorTests: XCTestCase {
         let primaryGroup = makeActionsContainer(containerName: "semantic_actions__actions")
 
         var nodes: [TestInterfaceNode] = [
-            .element(header),
-            .container(primaryGroup, containerName: "semantic_actions__actions", children: [.element(submit), .element(cancel)]),
-            .element(footer),
+            .heistElement(header),
+            .container(primaryGroup, containerName: "semantic_actions__actions", children: [
+                .heistElement(submit),
+                .heistElement(cancel),
+            ]),
+            .heistElement(footer),
         ]
 
         if includeDuplicateGroup {
             let archive = makeElement(label: "Archive", identifier: "archive_button", traits: [.button])
             let secondaryGroup = makeActionsContainer(containerName: "semantic_actions__secondary_actions", y: 160)
-            nodes.insert(.container(secondaryGroup, containerName: "semantic_actions__secondary_actions", children: [.element(archive)]), at: 2)
+            nodes.insert(
+                .container(
+                    secondaryGroup,
+                    containerName: "semantic_actions__secondary_actions",
+                    children: [.heistElement(archive)]
+                ),
+                at: 2
+            )
         }
 
-        return makeInterface(nodes: nodes)
+        return TestInterfaceFixture(nodes: nodes).interface
     }
 
     private static func makeActionsContainer(containerName _: String, y: Double = 40) -> AccessibilityContainer {
         AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
             frame: AccessibilityRect(x: 0, y: y, width: 200, height: 100)
-        )
-    }
-
-    private enum TestInterfaceNode {
-        case element(HeistElement)
-        case container(AccessibilityContainer, containerName: ContainerName, children: [TestInterfaceNode])
-    }
-
-    private static func makeInterface(nodes: [TestInterfaceNode]) -> Interface {
-        var traversalIndex = 0
-        var elementAnnotations: [InterfaceElementAnnotation] = []
-        var containerAnnotations: [InterfaceContainerAnnotation] = []
-
-        func convert(_ node: TestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
-            switch node {
-            case .element(let element):
-                let index = traversalIndex
-                traversalIndex += 1
-                elementAnnotations.append(InterfaceElementAnnotation(
-                    path: path,
-                    actions: element.actions
-                ))
-                return .element(makeAccessibilityElement(element), traversalIndex: index)
-            case .container(let container, let containerName, let children):
-                containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
-                return .container(
-                    container,
-                    children: children.enumerated().map { offset, child in
-                        convert(child, path: path.appending(offset))
-                    }
-                )
-            }
-        }
-
-        let tree = nodes.enumerated().map { offset, node in
-            convert(node, path: TreePath([offset]))
-        }
-        return Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: tree,
-            annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
-        )
-    }
-
-    private static func makeAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
-        AccessibilityElement(
-            description: element.description,
-            label: element.label,
-            value: element.value,
-            traits: AccessibilityTraits.fromNames(element.traits.map { $0.rawValue }),
-            identifier: element.identifier,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(AccessibilityRect(
-                x: element.frameX,
-                y: element.frameY,
-                width: element.frameWidth,
-                height: element.frameHeight
-            )),
-            activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: true
         )
     }
 

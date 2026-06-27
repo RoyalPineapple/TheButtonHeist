@@ -50,6 +50,11 @@ final class ElementInflation {
         case liveObjectOnly
     }
 
+    private enum StaleLiveTargetRecovery {
+        case refreshVisibleTarget
+        case fail
+    }
+
     enum ElementInflationFailureStep: String {
         case notFound
         case ambiguous
@@ -385,55 +390,13 @@ final class ElementInflation {
         method: ActionMethod,
         deallocatedBoundary: String
     ) -> Result<InflatedElementTarget, ElementInflationFailure> {
-        let liveResolution = stash.resolveLiveActionTarget(for: screenElement)
-        if case .resolved(let liveTarget) = liveResolution {
-            guard liveTarget.screenElement.matches(target) else {
-                return resolveFreshVisibleElementTarget(
-                    target: target,
-                    method: method,
-                    deallocatedBoundary: deallocatedBoundary
-                )
-            }
-            return .success(InflatedElementTarget(
-                target: target,
-                screenElement: liveTarget.screenElement,
-                liveTarget: liveTarget
-            ))
-        }
-
-        if case .objectUnavailable = liveResolution {
-            return resolveFreshVisibleElementTarget(
-                target: target,
-                method: method,
-                deallocatedBoundary: deallocatedBoundary
-            )
-        }
-
-        switch liveResolution {
-        case .resolved(let liveTarget):
-            return .success(InflatedElementTarget(
-                target: target,
-                screenElement: liveTarget.screenElement,
-                liveTarget: liveTarget
-            ))
-        case .objectUnavailable:
-            return .failure(.staleRefresh(
-                ActionCapabilityDiagnostic.elementDeallocated(
-                    boundary: deallocatedBoundary,
-                    element: screenElement,
-                    isInflated: stash.visibleIds.contains(screenElement.heistId)
-                ),
-                failureKind: .targetUnavailable
-            ))
-        case .geometryUnavailable:
-            return .failure(.geometryNotActionable(
-                ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: method,
-                    element: screenElement,
-                    isVisible: stash.visibleIds.contains(screenElement.heistId)
-                )
-            ))
-        }
+        resolveLiveElementTarget(
+            target: target,
+            screenElement: screenElement,
+            method: method,
+            deallocatedBoundary: deallocatedBoundary,
+            staleTargetRecovery: .refreshVisibleTarget
+        )
     }
 
     private func resolveFreshVisibleElementTarget(
@@ -444,11 +407,12 @@ final class ElementInflation {
         stash.refreshCurrentVisibleTree()
         switch stash.resolveVisibleTarget(target) {
         case .resolved(let visibleElement):
-            return resolveVisibleReboundElementTarget(
+            return resolveLiveElementTarget(
                 target: target,
                 screenElement: visibleElement,
                 method: method,
-                deallocatedBoundary: deallocatedBoundary
+                deallocatedBoundary: deallocatedBoundary,
+                staleTargetRecovery: .fail
             )
         case .notFound(let facts):
             return .failure(.staleRefresh(
@@ -460,20 +424,36 @@ final class ElementInflation {
         }
     }
 
-    private func resolveVisibleReboundElementTarget(
+    private func resolveLiveElementTarget(
         target: ElementTarget,
         screenElement: TheStash.ScreenElement,
         method: ActionMethod,
-        deallocatedBoundary: String
+        deallocatedBoundary: String,
+        staleTargetRecovery: StaleLiveTargetRecovery
     ) -> Result<InflatedElementTarget, ElementInflationFailure> {
         switch stash.resolveLiveActionTarget(for: screenElement) {
         case .resolved(let liveTarget):
+            if case .refreshVisibleTarget = staleTargetRecovery,
+               !liveTarget.screenElement.matches(target) {
+                return resolveFreshVisibleElementTarget(
+                    target: target,
+                    method: method,
+                    deallocatedBoundary: deallocatedBoundary
+                )
+            }
             return .success(InflatedElementTarget(
                 target: target,
                 screenElement: liveTarget.screenElement,
                 liveTarget: liveTarget
             ))
         case .objectUnavailable:
+            if case .refreshVisibleTarget = staleTargetRecovery {
+                return resolveFreshVisibleElementTarget(
+                    target: target,
+                    method: method,
+                    deallocatedBoundary: deallocatedBoundary
+                )
+            }
             return .failure(.staleRefresh(
                 ActionCapabilityDiagnostic.elementDeallocated(
                     boundary: deallocatedBoundary,

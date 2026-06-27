@@ -252,49 +252,112 @@ enum ReceiptTestInterfaceNode {
     case container(AccessibilityContainer, containerName: ContainerName? = nil, children: [ReceiptTestInterfaceNode])
 }
 
+struct ReceiptTestInterfaceFixture {
+    let nodes: [ReceiptTestInterfaceNode]
+    let timestamp: Date
+
+    init(
+        nodes: [ReceiptTestInterfaceNode],
+        timestamp: Date = Date(timeIntervalSince1970: 0)
+    ) {
+        self.nodes = nodes
+        self.timestamp = timestamp
+    }
+
+    init(
+        elements: [HeistElement],
+        timestamp: Date = Date(timeIntervalSince1970: 0)
+    ) {
+        self.init(nodes: elements.map(ReceiptTestInterfaceNode.element), timestamp: timestamp)
+    }
+
+    var interface: Interface {
+        var traversalIndex = 0
+        var elementAnnotations: [InterfaceElementAnnotation] = []
+        var containerAnnotations: [InterfaceContainerAnnotation] = []
+
+        func convert(_ node: ReceiptTestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
+            switch node {
+            case .element(let element):
+                let index = traversalIndex
+                traversalIndex += 1
+                elementAnnotations.append(InterfaceElementAnnotation(
+                    path: path,
+                    actions: element.actions
+                ))
+                return .element(Self.accessibilityElement(element), traversalIndex: index)
+
+            case .container(let container, let containerName, let children):
+                containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
+                return .container(
+                    container,
+                    children: children.enumerated().map { index, child in
+                        convert(child, path: path.appending(index))
+                    }
+                )
+            }
+        }
+
+        return Interface(
+            timestamp: timestamp,
+            tree: nodes.enumerated().map { index, node in
+                convert(node, path: TreePath([index]))
+            },
+            annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
+        )
+    }
+
+    private static func accessibilityElement(_ element: HeistElement) -> AccessibilityElement {
+        AccessibilityElement(
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
+            identifier: element.identifier,
+            hint: element.hint,
+            userInputLabels: nil,
+            shape: .frame(AccessibilityRect(
+                x: element.frameX,
+                y: element.frameY,
+                width: element.frameWidth,
+                height: element.frameHeight
+            )),
+            activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: element.customContent?.map {
+                AccessibilityElement.CustomContent(
+                    label: $0.label,
+                    value: $0.value,
+                    isImportant: $0.isImportant
+                )
+            } ?? [],
+            customRotors: element.rotors?.map { AccessibilityElement.CustomRotor(name: $0.name) } ?? [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: element.respondsToUserInteraction
+        )
+    }
+}
+
 func makeReceiptTestInterface(
     _ elements: [HeistElement],
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Interface {
-    makeReceiptTestInterface(nodes: elements.map(ReceiptTestInterfaceNode.element), timestamp: timestamp)
+    ReceiptTestInterfaceFixture(elements: elements, timestamp: timestamp).interface
 }
 
 func makeReceiptTestInterface(
     nodes: [ReceiptTestInterfaceNode],
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Interface {
-    var traversalIndex = 0
-    var elementAnnotations: [InterfaceElementAnnotation] = []
-    var containerAnnotations: [InterfaceContainerAnnotation] = []
+    ReceiptTestInterfaceFixture(nodes: nodes, timestamp: timestamp).interface
+}
 
-    func convert(_ node: ReceiptTestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
-        switch node {
-        case .element(let element):
-            let index = traversalIndex
-            traversalIndex += 1
-            elementAnnotations.append(InterfaceElementAnnotation(
-                path: path,
-                actions: element.actions
-            ))
-            return .element(makeReceiptTestAccessibilityElement(element), traversalIndex: index)
-        case .container(let container, let containerName, let children):
-            containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
-            return .container(
-                container,
-                children: children.enumerated().map { index, child in
-                    convert(child, path: path.appending(index))
-                }
-            )
-        }
-    }
-
-    return Interface(
-        timestamp: timestamp,
-        tree: nodes.enumerated().map { index, node in
-            convert(node, path: TreePath([index]))
-        },
-        annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
-    )
+func makeTestInterface(
+    elements: [HeistElement],
+    timestamp: Date = Date(timeIntervalSince1970: 0)
+) -> Interface {
+    makeReceiptTestInterface(elements, timestamp: timestamp)
 }
 
 func makeReceiptTestContainer(
@@ -348,37 +411,6 @@ func makeReceiptTestScrollableContainer(
         frameWidth: frameWidth,
         frameHeight: frameHeight,
         isModalBoundary: isModalBoundary
-    )
-}
-
-func makeReceiptTestAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
-    AccessibilityElement(
-        description: element.description,
-        label: element.label,
-        value: element.value,
-        traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
-        identifier: element.identifier,
-        hint: element.hint,
-        userInputLabels: nil,
-        shape: .frame(AccessibilityRect(
-            x: element.frameX,
-            y: element.frameY,
-            width: element.frameWidth,
-            height: element.frameHeight
-        )),
-        activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
-        usesDefaultActivationPoint: true,
-        customActions: [],
-        customContent: element.customContent?.map {
-            AccessibilityElement.CustomContent(
-                label: $0.label,
-                value: $0.value,
-                isImportant: $0.isImportant
-            )
-        } ?? [],
-        customRotors: element.rotors?.map { AccessibilityElement.CustomRotor(name: $0.name) } ?? [],
-        accessibilityLanguage: nil,
-        respondsToUserInteraction: element.respondsToUserInteraction
     )
 }
 

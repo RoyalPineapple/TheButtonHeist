@@ -69,6 +69,25 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.isFailure)
     }
 
+    func testActionFailureProjectionFeedsJSONAndCompactRendering() {
+        let response = FenceResponse.action(
+            command: .wait,
+            result: ActionResult(
+                success: false,
+                method: .wait,
+                message: "timed out after 2s",
+                errorKind: .timeout
+            )
+        )
+
+        let json = publicJSONObject(response)
+
+        XCTAssertEqual(json["status"] as? String, "error")
+        XCTAssertEqual(json["errorClass"] as? String, "timeout")
+        XCTAssertNil(json["errorCode"])
+        XCTAssertEqual(response.compactFormatted(), "wait: error[timeout]: timed out after 2s")
+    }
+
     func testActionFailureCodeAndClassAgreeAcrossPublicFormats() {
         let response = FenceResponse.action(
             command: .activate,
