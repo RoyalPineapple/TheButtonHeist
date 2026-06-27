@@ -1,6 +1,6 @@
 # Heist Doctor
 
-`heist-doctor` is an alpha, suggestion-only repair experiment for Button Heist
+`heist-doctor` is an alpha, suggestion-only repair experiment for The Button Heist
 receipts.
 
 It compares a last passing `HeistExecutionResult` receipt with a new failing
@@ -27,7 +27,7 @@ the tool is still young:
 - confidence calibration has not been proven across broad real failures
 - public `run_heist` JSON is not the same shape as the raw receipt input
 - output can be verbose when the preserved hierarchy is flat or broad
-- artifact retention policy still belongs to CI, not to Button Heist itself
+- artifact retention policy still belongs to CI, not to The Button Heist itself
 
 The safe promise is narrow: if you provide the right two raw receipts, the doctor
 can explain a candidate target repair or explain why it is refusing to guess.
@@ -55,7 +55,7 @@ experiment, raw receipts around 7-8 MB compressed to roughly 200-250 KB.
 
 ## Automatic Receipt Recording
 
-Button Heist can write raw gzip receipts automatically when this environment
+The Button Heist can write raw gzip receipts automatically when this environment
 variable is set:
 
 ```bash
@@ -153,7 +153,7 @@ receipt, there is no safe target repair.
 The artifact boundary stays deliberately boring for now:
 
 ```text
-Button Heist run -> HeistExecutionResult.json.gz -> CI artifact
+The Button Heist run -> HeistExecutionResult.json.gz -> CI artifact
 last-pass artifact + new-fail artifact -> heist-doctor
 ```
 

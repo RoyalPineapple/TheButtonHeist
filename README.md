@@ -32,6 +32,7 @@ It can:
 - leave CI with a receipt that names the contract that broke
 
 That is the shape of the project: product semantics in, settled evidence out.
+Rendered as canonical heist source for `run_heist(plan:)`:
 
 ```swift
 HeistPlan("shop") {

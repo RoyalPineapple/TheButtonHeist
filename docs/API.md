@@ -1,7 +1,7 @@
-# Button Heist API
+# The Button Heist API
 
 This page documents the public integration contracts and invariants around
-Button Heist. It is not a command or parameter catalog.
+The Button Heist. It is not a command or parameter catalog.
 
 Generated references are the source of truth for executable surface area:
 
@@ -17,7 +17,7 @@ Generated references are the source of truth for executable surface area:
 
 ## Contract Layers
 
-Button Heist has one product command contract: `TheFence.Command`. CLI
+The Button Heist has one product command contract: `TheFence.Command`. CLI
 commands, JSON-lines stdin, MCP tools, and heist execution all route through
 that contract. MCP exposes one tool per exposed command, projected from
 Fence-owned command descriptors.
@@ -137,7 +137,7 @@ cannot be created.
 ## Semantic Targeting
 
 Element-targeted semantic commands abstract viewport mechanics. Callers provide
-identity, not coordinates. Button Heist owns the element inflation loop:
+identity, not coordinates. The Button Heist owns the element inflation loop:
 
 1. Resolve the semantic target against current accessibility state.
 2. Reveal it if viewport movement is required.
@@ -193,14 +193,14 @@ distinguish complete captures from bounded projections. The state vocabulary is:
 |-------|---------|
 | `full` | The response rendered every observed element in the requested projection. |
 | `filtered` | The caller requested a scoped projection, such as a subtree, and the response is complete for that scope. |
-| `truncated` | Button Heist intentionally omitted part of an otherwise available projection to keep the response bounded. |
+| `truncated` | The Button Heist intentionally omitted part of an otherwise available projection to keep the response bounded. |
 | `sparse` | The runtime had only partial semantic evidence for the screen. Clients may inspect it, but should not treat absence as conclusive. |
 | `failed` | The runtime could not produce a usable semantic projection. The response should carry the product error instead of a partial tree. |
 
 The current `get_interface` projection emits `full` or `truncated`.
 `filtered`, `sparse`, and `failed` are reserved contract states for scoped or
 degraded projections; they must use the same rendering object before they are
-exposed. For huge scroll views, Button Heist bounds each scrollable subtree by
+exposed. For huge scroll views, The Button Heist bounds each scrollable subtree by
 `BH_SCROLL_SUBTREE_ELEMENT_BUDGET` / `BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET`
 (default `300`, clamped to `0...1000`). A truncated scroll container keeps its
 scroll metrics and `observedElementCount`, renders only the leading elements,
@@ -363,7 +363,7 @@ Flags take precedence over environment variables.
 ### Interface
 
 `Interface` is the accessibility capture returned to clients. Its public JSON
-shape carries a canonical tree plus Button Heist annotations. Flat element
+shape carries a canonical tree plus ButtonHeist annotations. Flat element
 lists are projections for formatting and matching, not a second wire truth.
 
 ### HeistElement

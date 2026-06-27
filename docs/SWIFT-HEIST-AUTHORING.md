@@ -11,7 +11,7 @@ Swift may wrap, select, name, organize, and call heists outside the DSL. If a
 behavior must survive `.heist`, JSON, catalog discovery, MCP
 composition, or canonical rendering, express it as `HeistDef`, `RunHeist`,
 `If`, `WaitFor`, `ForEach`, `Warn`, `Fail`, actions, targets, and expectations.
-Durable loops must use Button Heist's explicit `ForEach` primitive, not native
+Durable loops must use The Button Heist's explicit `ForEach` primitive, not native
 Swift `for`.
 
 `HeistPlan` is the execution model. Humans may author rich Swift DSL files that
@@ -336,7 +336,7 @@ module. Resolution runs in this order:
 
 The compiler never builds `ThePlans` from source on demand. If no built
 artifacts are found, compilation fails with a diagnostic that lists every path
-that was searched and tells you to install Button Heist with compiler artifacts,
+that was searched and tells you to install The Button Heist with compiler artifacts,
 run `swift build --package-path ButtonHeist --product heist-plan`, or set
 `HEIST_THEPLANS_BUILD_DIR`. In Xcode/Tuist tests, the diagnostic also lists
 candidate products directories. Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace
@@ -346,7 +346,7 @@ which resolution branch was taken.
 
 Swift Heist does not preserve:
 
-- native Swift loop intent unless the source used Button Heist `ForEach`
+- native Swift loop intent unless the source used The Button Heist `ForEach`
 - arbitrary helper functions or closure structure
 - comments, whitespace, imports, or local constants
 - hidden pre-action viewport movement for semantic actions

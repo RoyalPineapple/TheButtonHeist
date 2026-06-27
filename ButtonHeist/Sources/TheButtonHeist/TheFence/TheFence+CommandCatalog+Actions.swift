@@ -155,7 +155,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                     param(.replacingExisting, .boolean, defaultValue: .bool(false)),
                 ] + FenceParameterBlocks.expectation,
                 projection: .cliOnly(
-                    "Type text. With replacingExisting=true, Button Heist clears the focused field before typing."
+                    "Type text. With replacingExisting=true, The Button Heist clears the focused field before typing."
                 )
             )
         case .editAction:

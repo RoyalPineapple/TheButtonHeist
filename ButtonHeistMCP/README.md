@@ -43,6 +43,7 @@ layer.
 
 ## See Also
 
+- [MCP Agent Guide](../docs/MCP-AGENT-GUIDE.md) for agent observation, action, wait, and heist-composition patterns
 - [MCP Tool Reference](../docs/reference/mcp-tools.md) for the generated tool surface
 - [Command Reference](../docs/reference/commands.md) for canonical Fence commands
 - [API Reference](../docs/API.md) for public API context

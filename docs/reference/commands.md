@@ -7,7 +7,7 @@ _Generated from `TheFence.Command.descriptors`._
 | Command | Family | CLI | MCP | Description |
 |---------|--------|-----|-----|-------------|
 | `activate` | `semanticAction` | `activate` | - | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
-| `connect` | `session` | `connect` | direct | Establish or switch the active connection to a Button Heist app. |
+| `connect` | `session` | `connect` | direct | Establish or switch the active connection to an app running The Button Heist. |
 | `describe_heist` | `heistRuntime` | `describe_heist` | direct | Describe one root entry or reusable heist from a plan so an agent can call it safely. |
 | `dismiss_keyboard` | `semanticAction` | `dismiss_keyboard` | - | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `spatialAction` | `drag` | - | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint (activation point or unit start override) or pointToPoint. |
@@ -21,7 +21,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `list_targets` | `session` | `list_targets` | - | List configured connection targets and the default target. |
 | `long_press` | `spatialAction` | `long_press` | - | Explicit mechanical/spatial long press. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. |
 | `one_finger_tap` | `spatialAction` | `one_finger_tap` | - | Explicit mechanical/spatial tap. Element targets dispatch at their activation point unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. ordinary accessible controls should use the semantic command path. |
-| `perform` | `heistRuntime` | - | direct | Run one ButtonHeist DSL instruction from `step`: one action or one simple wait. |
+| `perform` | `heistRuntime` | - | direct | Run one ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement. |
 | `ping` | `session` | `ping` | - | Check connection health without reading accessibility state. |
 | `rotor` | `semanticAction` | `rotor` | - | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
 | `run_heist` | `heistRuntime` | `run_heist` | direct | Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`. |
@@ -30,7 +30,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_visible` | `viewportDebug` | `scroll_to_visible` | - | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | `semanticAction` | `set_pasteboard` | - | Write text to the general pasteboard from within the app. |
 | `swipe` | `spatialAction` | `swipe` | - | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
-| `type_text` | `semanticAction` | `type_text` | - | Type text. With replacingExisting=true, Button Heist clears the focused field before typing. |
+| `type_text` | `semanticAction` | `type_text` | - | Type text. With replacingExisting=true, The Button Heist clears the focused field before typing. |
 | `wait` | `assertion` | `wait` | - | Assert that an accessibility predicate is satisfied within timeout by evaluating settled accessibility state. |
 
 ## StringMatch
@@ -59,7 +59,7 @@ Parameters:
 
 ### `connect`
 
-Establish or switch the active connection to a Button Heist app.
+Establish or switch the active connection to an app running The Button Heist.
 
 - Family: `session`
 - CLI: direct command `connect`
@@ -307,7 +307,7 @@ Parameters:
 
 ### `perform`
 
-Run one ButtonHeist DSL instruction from `step`: one action or one simple wait.
+Run one ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
 Examples:
 `Activate(.label("Pay")).expect(.change(.screen()))`
@@ -502,7 +502,7 @@ Parameters:
 
 ### `type_text`
 
-Type text. With replacingExisting=true, Button Heist clears the focused field before typing.
+Type text. With replacingExisting=true, The Button Heist clears the focused field before typing.
 
 - Family: `semanticAction`
 - CLI: direct command `type_text`

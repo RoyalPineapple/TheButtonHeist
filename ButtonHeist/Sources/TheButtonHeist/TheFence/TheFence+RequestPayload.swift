@@ -73,7 +73,7 @@ extension TheFence {
             throw SchemaValidationError(
                 field: "command",
                 observed: "string \"\(command.rawValue)\"",
-                expected: "public Button Heist command"
+                expected: "public command for The Button Heist"
             )
         }
         try validateRequestKeys(command: command, arguments: arguments)

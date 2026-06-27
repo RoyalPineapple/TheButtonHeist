@@ -1,4 +1,4 @@
-# Button Heist Architecture
+# The Button Heist architecture
 
 The Button Heist lets callers write programs against an app's accessibility
 contract. Semantic intent enters the runtime; The Button Heist owns target

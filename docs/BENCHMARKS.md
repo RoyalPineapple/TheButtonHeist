@@ -1,4 +1,4 @@
-# The Button Heist: Benchmarks
+# The Button Heist benchmarks
 
 ## The problem
 
@@ -8,7 +8,7 @@ AI agents need to operate iOS apps. A common approach is to read an accessibilit
 
 Assistive technologies do not operate an app by calculating tap points. They depend on the settled accessibility interface: labels, values, traits, state, and actions. When an app exposes that contract well, "activate the Sign In button" is a more durable instruction than "tap this coordinate."
 
-## What The Button Heist Does
+## What The Button Heist does
 
 The Button Heist makes the settled accessibility interface executable. Agents interact with UI elements by identity, role, state, and declared action. The runtime resolves the target, acts through the accessibility contract, waits for settlement, and reports what changed as a compact delta.
 
@@ -20,7 +20,7 @@ Three properties make this work:
 
 **Composable actions.** Heists compose declared actions with expectations. Five steps can run with inline checks that verify the outcome. If step 3 cannot satisfy the contract, the heist stops there with the receipt that explains why.
 
-## Side by Side
+## Side by side
 
 The difference is visible in a single action. Here's what it looks like to activate "Settings" in both tools — actual calls from the benchmark traces.
 
@@ -75,7 +75,7 @@ The delta names the relevant contract change: "Large" gained the `selected` trai
 
 ios-simulator-mcp has to call `ui_describe_all` again to learn what The Button Heist already returned inline. That's two tool calls and two full tree reads for one tap. Multiply that by longer workflows and the context-window difference becomes material.
 
-## How Agents Think
+## How agents think
 
 The numbers tell you the tools are different. The agent reasoning tells you *why*. These are actual agent thoughts from the benchmark traces — same model (Claude Sonnet 4.6), same task, same app.
 
@@ -103,7 +103,7 @@ Both agents need to change three settings: Color Scheme to Dark, Accent Color to
 → ui_tap(x: 314, y: 237)
 ```
 
-The BH agent names what it wants. The idb agent does division to figure out which third of a segmented control to tap. Both get the job done — one spends its reasoning tokens on the task, the other on arithmetic.
+The Button Heist agent names what it wants. The idb agent does division to figure out which third of a segmented control to tap. Both get the job done — one spends its reasoning tokens on the task, the other on arithmetic.
 
 ### Calculator: entering (344 × 289) ÷ 99
 
@@ -136,9 +136,9 @@ Both agents need to press 13 buttons in sequence.
   ...one call per button
 ```
 
-Same 13 buttons. BH sends them in one call by name. The idb agent computes center coordinates for each button from its frame geometry, then taps them one at a time — 13 tool calls instead of 1.
+Same 13 buttons. The Button Heist sends them in one call by name. The idb agent computes center coordinates for each button from its frame geometry, then taps them one at a time — 13 tool calls instead of 1.
 
-## The Numbers
+## The numbers
 
 Tested against [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-mcp), a lightweight MCP wrapper around Meta's [idb (iOS Development Bridge)](https://github.com/facebook/idb). ios-simulator-mcp represents the coordinate-based approach that most iOS automation tools use today — read the accessibility tree for element positions, then tap by coordinate. It's well-built, minimal, and easy to set up. We chose it as the baseline because it's the most accessible entry point for agents that need to drive iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
 
@@ -146,7 +146,7 @@ Tested against [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-m
 
 Task prompts describe *what* the agent should achieve, not *how* to use the tools. Neither agent gets mechanism-specific hints — both discover how to interact from their tool surface alone. 96 trials total.
 
-|  | Button Heist | ios-simulator-mcp |
+|  | The Button Heist | ios-simulator-mcp |
 |---|---|---|
 | Avg wall time | 134s | 235s |
 | Avg turns | 14 | 43 |
@@ -157,7 +157,7 @@ Task prompts describe *what* the agent should achieve, not *how* to use the tool
 
 ### Per-task breakdown (averages over 3 trials)
 
-| Task | BH | ios-simulator-mcp | Speedup |
+| Task | The Button Heist | ios-simulator-mcp | Speedup |
 |---|---|---|---|
 | T9-swipe-order | 29s / 5t | 179s / 26t | **6.1x** |
 | T15-todo-deep | 221s / 16t | 734s / 88t | **3.3x** |
@@ -178,21 +178,21 @@ Task prompts describe *what* the agent should achieve, not *how* to use the tool
 
 ### Less instruction, better results
 
-An earlier benchmark round used prescriptive prompts — "increment the stepper 5 times", "use the Add to Order action." These happened to map directly to BH's tool vocabulary. We rewrote every task to describe outcomes only: "raise the stepper to 5", "add the first 3 items to the order." Neither agent gets told how to do it.
+An earlier benchmark round used prescriptive prompts — "increment the stepper 5 times", "use the Add to Order action." These happened to map directly to The Button Heist's tool vocabulary. We rewrote every task to describe outcomes only: "raise the stepper to 5", "add the first 3 items to the order." Neither agent gets told how to do it.
 
-The fair prompts *widened* the gap (2.2x → 2.4x). The prescriptive instructions were actually helping the coordinate-based agent more than BH — they told both agents what to do, but the coordinate agent needed that hand-holding more because its tool surface doesn't reveal what controls can do. BH agents discover `increment`, `Mark complete`, and `Add to Order` from the accessibility interface itself.
+The fair prompts *widened* the gap (2.2x → 2.4x). The prescriptive instructions were actually helping the coordinate-based agent more than The Button Heist — they told both agents what to do, but the coordinate agent needed that hand-holding more because its tool surface doesn't reveal what controls can do. The Button Heist agents discover `increment`, `Mark complete`, and `Add to Order` from the accessibility interface itself.
 
 ### Where the gap comes from
 
-| Task type | BH advantage | Why |
+| Task type | The Button Heist edge | Why |
 |---|---|---|
 | Scroll + select | **4–6x** | Semantic find vs read-tree-compute-tap loops |
 | Custom actions (order, complete, delete) | **3–5x** | Direct invocation vs visual menu navigation |
 | Multi-screen workflows | **2–3x** | Deltas eliminate redundant tree reads |
-| Simple taps | ~1x | Both approaches handle simple buttons well |
+| Single taps | ~1x | Both approaches handle ordinary buttons well |
 | Scale (50+ actions) | **2.6x** | Per-action overhead compounds with task length |
 
-## Why It Matters
+## Why it matters
 
 Agent workflows are getting longer. Today's agents fill forms and check settings. Tomorrow's will run end-to-end test suites, perform accessibility audits, and navigate unfamiliar apps exploratorily. The number of actions per session will grow from dozens to hundreds.
 

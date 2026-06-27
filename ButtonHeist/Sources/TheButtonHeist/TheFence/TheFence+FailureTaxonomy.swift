@@ -29,7 +29,7 @@ public extension FenceError {
                 errorCode: "discovery.no_device_found",
                 phase: .discovery,
                 retryable: true,
-                hint: "Start the app and confirm it advertises a Button Heist session.",
+                hint: "Start the app and confirm it advertises a session for The Button Heist.",
                 coreMessage: message,
                 displayMessage: message
             )
