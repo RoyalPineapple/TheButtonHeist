@@ -38,7 +38,7 @@ exposed through the accessibility interface, waits for settlement, then proves
 that `Payment Complete` appeared. The important question is not whether an
 event was delivered. It is whether the interface contract was fulfilled.
 
-## Runtime invariant
+## Runtime
 
 ```mermaid
 flowchart LR
