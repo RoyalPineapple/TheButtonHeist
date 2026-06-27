@@ -1,5 +1,311 @@
 import Foundation
 
+public enum HeistBuildDiagnosticKind: String, Sendable, Equatable {
+    case error
+    case warning
+}
+
+public enum HeistBuildPhase: String, Sendable, Equatable {
+    case sourceCompilation = "source_compilation"
+    case swiftCompilation = "swift_compilation"
+    case planValidation = "plan_validation"
+    case planning
+}
+
+public struct HeistBuildSourceSpan: Sendable, Equatable, CustomStringConvertible {
+    public let sourceName: String
+    public let offset: Int
+    public let line: Int
+    public let column: Int
+    public let length: Int?
+
+    public init(
+        sourceName: String,
+        offset: Int,
+        line: Int,
+        column: Int,
+        length: Int? = nil
+    ) {
+        self.sourceName = sourceName
+        self.offset = offset
+        self.line = line
+        self.column = column
+        self.length = length
+    }
+
+    public var description: String {
+        "\(sourceName):\(line):\(column)"
+    }
+}
+
+public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible {
+    public let code: String
+    public let kind: HeistBuildDiagnosticKind
+    public let phase: HeistBuildPhase
+    public let sourceSpan: HeistBuildSourceSpan?
+    public let path: String?
+    public let message: String
+    public let hint: String?
+
+    public init(
+        code: String,
+        kind: HeistBuildDiagnosticKind = .error,
+        phase: HeistBuildPhase,
+        sourceSpan: HeistBuildSourceSpan? = nil,
+        path: String? = nil,
+        message: String,
+        hint: String? = nil
+    ) {
+        self.code = code
+        self.kind = kind
+        self.phase = phase
+        self.sourceSpan = sourceSpan
+        self.path = path
+        self.message = message
+        self.hint = hint
+    }
+
+    public var severity: Severity {
+        switch kind {
+        case .error:
+            return .error
+        case .warning:
+            return .warning
+        }
+    }
+
+    public var source: HeistCompilationSourceLocation? {
+        guard let sourceSpan else { return nil }
+        return HeistCompilationSourceLocation(
+            url: URL(fileURLWithPath: sourceSpan.sourceName),
+            line: sourceSpan.line,
+            column: sourceSpan.column
+        )
+    }
+
+    public var description: String {
+        renderedMessage
+    }
+
+    public var renderedMessage: String {
+        let location: String
+        if let sourceSpan {
+            location = "\(sourceSpan): "
+        } else if let path {
+            location = "\(path): "
+        } else {
+            location = ""
+        }
+        let suffix = hint.map { " Hint: \($0)" } ?? ""
+        return "\(kind.rawValue): \(location)\(message)\(suffix)"
+    }
+}
+
+public enum ValidationResult<Value: Sendable, Diagnostic: Sendable>: Sendable {
+    case success(Value, diagnostics: [Diagnostic])
+    case failure([Diagnostic])
+}
+
+extension HeistPlanAdmissionCandidate {
+    func runtimeSafetyValidationResult(
+        limits: HeistPlanRuntimeSafetyLimits = .standard
+    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
+        var validator = HeistPlanRuntimeSafetyValidator(limits: limits)
+        let plan = uncheckedPlanForRuntimeSafetyValidation()
+        let failures = validator.failures(in: plan)
+        guard failures.isEmpty else {
+            return .failure(failures.map(\.diagnostic))
+        }
+        return .success(plan, diagnostics: [])
+    }
+}
+
+extension HeistPlanRuntimeSafetyError {
+    var diagnostics: [HeistBuildDiagnostic] {
+        failures.map(\.diagnostic)
+    }
+}
+
+public extension HeistPlanning {
+    static func loadValidatedPlanResult(
+        from request: HeistPlanSourceRequest
+    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
+        guard request.rawStructuredJSONIRFields.isEmpty else {
+            return .failure([HeistPlanningError.rawStructuredJSONIRFields(
+                commandName: request.commandName,
+                fields: request.rawStructuredJSONIRFields.sorted()
+            ).diagnostic])
+        }
+
+        let hasPath = request.path != nil
+        let hasInlineSource = request.inlineButtonHeistSource != nil
+        let sourceCount = [hasPath, hasInlineSource].filter { $0 }.count
+        guard sourceCount == 1 else {
+            if sourceCount == 0 {
+                return .failure([HeistPlanningError.missingPlanSource(commandName: request.commandName).diagnostic])
+            }
+            return .failure([HeistPlanningError.multiplePlanSources(commandName: request.commandName).diagnostic])
+        }
+
+        if let path = request.path {
+            return loadValidatedArtifactPlanResult(path: path, commandName: request.commandName)
+        }
+
+        guard request.acceptsInlineButtonHeistSource else {
+            return .failure([HeistPlanningError.inlineSourceNotAccepted(commandName: request.commandName).diagnostic])
+        }
+        guard let source = request.inlineButtonHeistSource else {
+            return .failure([HeistPlanningError.missingPlanSource(commandName: request.commandName).diagnostic])
+        }
+        return compileInlineButtonHeistSourceResult(source, commandName: request.commandName)
+    }
+
+    static func decodeArgumentJSONResult(
+        _ data: Data,
+        sourceURL: URL = URL(fileURLWithPath: "inline-heist-argument.json")
+    ) -> ValidationResult<HeistArgument, HeistBuildDiagnostic> {
+        do {
+            return .success(try JSONDecoder().decode(HeistArgument.self, from: data), diagnostics: [])
+        } catch {
+            return .failure([HeistPlanningError.invalidArgument(
+                source: sourceURL.path,
+                reason: String(describing: error)
+            ).diagnostic])
+        }
+    }
+
+    static func validateRootArgumentResult(
+        _ argument: HeistArgument,
+        for plan: HeistPlan
+    ) -> ValidationResult<Void, HeistBuildDiagnostic> {
+        do {
+            _ = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
+            return .success((), diagnostics: [])
+        } catch {
+            return .failure([HeistPlanningError.invalidRootArgument(String(describing: error)).diagnostic])
+        }
+    }
+}
+
+public extension HeistPlanningError {
+    var diagnostics: [HeistBuildDiagnostic] {
+        [diagnostic]
+    }
+
+    var diagnostic: HeistBuildDiagnostic {
+        switch self {
+        case .missingPlanSource:
+            return planningDiagnostic(code: "heist.planning.missing_plan_source", message: description)
+        case .multiplePlanSources:
+            return planningDiagnostic(code: "heist.planning.multiple_plan_sources", message: description)
+        case .inlineSourceNotAccepted:
+            return planningDiagnostic(code: "heist.planning.inline_source_not_accepted", message: description)
+        case .emptyPath:
+            return planningDiagnostic(code: "heist.planning.empty_path", message: description)
+        case .unsupportedPath(_, let path):
+            return planningDiagnostic(
+                code: "heist.planning.unsupported_path",
+                path: path,
+                message: description
+            )
+        case .emptyInlineSource:
+            return planningDiagnostic(code: "heist.planning.empty_inline_source", message: description)
+        case .rawStructuredJSONIRFields:
+            return planningDiagnostic(code: "heist.planning.raw_json_ir_fields", message: description)
+        case .invalidPlanSource:
+            return planningDiagnostic(code: "heist.planning.invalid_plan_source", message: description)
+        case .invalidArgument(let source, _):
+            return planningDiagnostic(
+                code: "heist.planning.invalid_argument",
+                path: source,
+                message: description
+            )
+        case .invalidRootArgument:
+            return planningDiagnostic(code: "heist.planning.invalid_root_argument", message: description)
+        }
+    }
+
+    private func planningDiagnostic(
+        code: String,
+        path: String? = nil,
+        message: String
+    ) -> HeistBuildDiagnostic {
+        HeistBuildDiagnostic(
+            code: code,
+            phase: .planning,
+            path: path,
+            message: message
+        )
+    }
+}
+
+private extension HeistPlanning {
+    static func loadValidatedArtifactPlanResult(
+        path: String,
+        commandName: String
+    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .failure([HeistPlanningError.emptyPath(commandName: commandName).diagnostic])
+        }
+
+        let url = URL(fileURLWithPath: (trimmed as NSString).expandingTildeInPath)
+        guard url.pathExtension.lowercased() == "heist" else {
+            return .failure([HeistPlanningError.unsupportedPath(commandName: commandName, path: path).diagnostic])
+        }
+
+        do {
+            return .success(try HeistArtifactCodec.read(from: url).plan, diagnostics: [])
+        } catch let error as HeistArtifactCodecError {
+            return .failure([HeistBuildDiagnostic(
+                code: "heist.planning.invalid_artifact",
+                phase: .planning,
+                path: url.path,
+                message: error.description
+            )])
+        } catch {
+            return .failure([HeistBuildDiagnostic(
+                code: "heist.planning.invalid_artifact",
+                phase: .planning,
+                path: url.path,
+                message: String(describing: error)
+            )])
+        }
+    }
+
+    static func compileInlineButtonHeistSourceResult(
+        _ source: String,
+        commandName: String
+    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
+        guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failure([HeistPlanningError.emptyInlineSource(commandName: commandName).diagnostic])
+        }
+
+        do {
+            return .success(try compileHeistPlanSource(
+                source,
+                sourceName: "\(commandName)-inline.plan"
+            ), diagnostics: [])
+        } catch let error as HeistPlanSourceCompilerError {
+            return .failure([error.diagnostic])
+        } catch {
+            return .failure([HeistPlanningError.invalidPlanSource(String(describing: error)).diagnostic])
+        }
+    }
+}
+
+private extension HeistPlanRuntimeSafetyFailure {
+    var diagnostic: HeistBuildDiagnostic {
+        HeistBuildDiagnostic(
+            code: "heist.plan.runtime_safety",
+            phase: .planValidation,
+            path: path,
+            message: "\(contract); observed \(observed)",
+            hint: correction
+        )
+    }
+}
+
 extension HeistPlanSourceParser {
     mutating func rejectForbiddenStatementSyntax() throws {
         guard case .identifier(let name) = currentToken.kind else { return }
@@ -82,7 +388,8 @@ extension HeistPlanSourceParser {
             sourceName: sourceName,
             offset: token.marker.offset,
             line: token.marker.line,
-            column: token.marker.column
+            column: token.marker.column,
+            length: token.marker.length
         )
     }
 

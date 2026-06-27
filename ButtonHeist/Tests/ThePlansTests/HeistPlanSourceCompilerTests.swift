@@ -777,11 +777,14 @@ import ThePlans
 }
 
 @Test func `inline plan source RunHeist syntax validates through normal runtime pipeline`() throws {
-    #expect(throws: HeistPlanSourceCompilerError.self) {
-        _ = try HeistPlanSourceCompiler().compile(root("""
-        RunHeist("CartScreen.checkout")
-        """))
-    }
+    let diagnostic = compileDiagnostic(root("""
+    RunHeist("CartScreen.checkout")
+    """))
+
+    #expect(diagnostic.code == "heist.plan.runtime_safety")
+    #expect(diagnostic.kind == .error)
+    #expect(diagnostic.phase == .planValidation)
+    #expect(diagnostic.path == "$.body[0]")
 }
 
 @Test func `inline plan source unsupported Swift syntax is rejected`() throws {
@@ -795,6 +798,39 @@ import ThePlans
             _ = try HeistPlanSourceCompiler().compile(source)
         }
     }
+}
+
+@Test func `inline plan source syntax errors expose typed diagnostic fields`() throws {
+    let diagnostic = compileDiagnostic("""
+    HeistPlan {
+        let label = "Pay"
+        Activate(.label(label))
+    }
+    """)
+
+    #expect(diagnostic.code == "heist.source.invalid_syntax")
+    #expect(diagnostic.kind == .error)
+    #expect(diagnostic.phase == .sourceCompilation)
+    #expect(diagnostic.sourceSpan?.sourceName == "inline-heist-plan")
+    #expect(diagnostic.sourceSpan?.line == 2)
+    #expect(diagnostic.sourceSpan?.column == 5)
+}
+
+@Test func `planning admission exposes typed diagnostics before rendering`() {
+    let result = HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceRequest(
+        commandName: "run_heist",
+        rawStructuredJSONIRFields: ["body", "version"]
+    ))
+
+    guard case .failure(let diagnostics) = result, let diagnostic = diagnostics.first else {
+        Issue.record("Expected raw JSON IR fields to fail planning admission")
+        return
+    }
+
+    #expect(diagnostic.code == "heist.planning.raw_json_ir_fields")
+    #expect(diagnostic.kind == .error)
+    #expect(diagnostic.phase == .planning)
+    #expect(diagnostic.sourceSpan == nil)
 }
 
 @Test func `canonical ForEach string compiles without body try`() throws {
@@ -1446,6 +1482,12 @@ import ThePlans
 
     expect(diagnostic, contains: "max total heist definitions")
     expect(diagnostic, contains: "252 definitions")
+
+    let typedDiagnostic = compileDiagnostic(source)
+    #expect(typedDiagnostic.code == "heist.plan.runtime_safety")
+    #expect(typedDiagnostic.phase == .planValidation)
+    #expect(typedDiagnostic.path == "$.definitions")
+    #expect(typedDiagnostic.hint == "Use 250 definitions or fewer.")
 }
 
 private func assertCanonicalRoundTrip(_ plan: HeistPlan) throws {
@@ -1461,6 +1503,27 @@ private func compileError(_ source: String) -> String {
         return ""
     } catch {
         return String(describing: error)
+    }
+}
+
+private func compileDiagnostic(_ source: String) -> HeistBuildDiagnostic {
+    do {
+        _ = try HeistPlanSourceCompiler().compile(source)
+        Issue.record("Expected source to fail: \(source)")
+        return HeistBuildDiagnostic(
+            code: "test.missing_diagnostic",
+            phase: .sourceCompilation,
+            message: "Expected source to fail"
+        )
+    } catch let error as HeistPlanSourceCompilerError {
+        return error.diagnostic
+    } catch {
+        Issue.record("Expected HeistPlanSourceCompilerError, got \(error)")
+        return HeistBuildDiagnostic(
+            code: "test.unexpected_error",
+            phase: .sourceCompilation,
+            message: String(describing: error)
+        )
     }
 }
 

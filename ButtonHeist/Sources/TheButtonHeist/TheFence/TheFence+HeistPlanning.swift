@@ -41,6 +41,15 @@ extension TheFence {
         case wrongStepCount(Int)
         case unsupportedStep
 
+        var diagnostic: HeistBuildDiagnostic {
+            switch self {
+            case .wrongStepCount:
+                return Self.diagnostic(code: "heist.perform.wrong_step_count")
+            case .unsupportedStep:
+                return Self.diagnostic(code: "heist.perform.unsupported_step")
+            }
+        }
+
         var description: String {
             switch self {
             case .wrongStepCount:
@@ -54,6 +63,15 @@ extension TheFence {
         perform accepts one action statement or one simple WaitFor statement. \
         Use run_heist for branching, loops, reusable heists, warnings, failures, or multiple steps.
         """
+
+        private static func diagnostic(code: String) -> HeistBuildDiagnostic {
+            HeistBuildDiagnostic(
+                code: code,
+                phase: .planning,
+                message: guidance,
+                hint: "Use run_heist for full ButtonHeist programs."
+            )
+        }
     }
 
     func decodePerformRequest(_ arguments: CommandArgumentEnvelope) throws -> PerformRequest {
@@ -77,40 +95,42 @@ extension TheFence {
     }
 
     func loadInlinePerformStepSource(_ source: String) throws -> HeistPlan {
-        do {
-            return try loadInlineButtonHeistSource(
-                """
-                HeistPlan {
-                \(source)
-                }
-                """,
-                commandName: Command.perform.rawValue
-            )
-        } catch {
-            guard String(describing: error).contains("WaitFor is a gate") else {
-                throw error
+        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceRequest(
+            commandName: Command.perform.rawValue,
+            inlineButtonHeistSource:
+            """
+            HeistPlan {
+            \(source)
             }
-            throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
+            """
+        )) {
+        case .success(let plan, _):
+            return plan
+        case .failure(let diagnostics):
+            guard diagnostics.contains(where: { $0.message.contains("WaitFor is a gate") }) else {
+                throw buildDiagnosticFenceError(diagnostics)
+            }
+            throw buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
         }
     }
 
     func performableStep(in plan: HeistPlan) throws -> PerformableHeistStep {
         guard plan.definitions.isEmpty else {
-            throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
+            throw buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
         }
         guard plan.body.count == 1, let step = plan.body.first else {
-            throw FenceError.invalidRequest(PerformStepValidationError.wrongStepCount(plan.body.count).description)
+            throw buildDiagnosticFenceError([PerformStepValidationError.wrongStepCount(plan.body.count).diagnostic])
         }
         switch step {
         case .action(let action):
             guard action.command.isPerformPrimitive else {
-                throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
+                throw buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
             }
             return .action(action)
         case .wait(let wait):
             return .wait(wait)
         case .conditional, .forEachElement, .forEachString, .repeatUntil, .warn, .fail, .heist, .invoke:
-            throw FenceError.invalidRequest(PerformStepValidationError.unsupportedStep.description)
+            throw buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
         }
     }
 
@@ -172,27 +192,29 @@ private extension TheFence {
         // Admission: accept exactly one public source shape for a plan. ThePlans
         // then returns a RuntimeSafety-validated executable `HeistPlan`.
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
-        do {
-            return try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
-                commandName: commandName,
-                path: try arguments.schemaString("path"),
-                inlineButtonHeistSource: try arguments.schemaString("plan"),
-                rawStructuredJSONIRFields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys),
-                acceptsInlineButtonHeistSource: acceptsInlinePlanSource
-            ))
-        } catch let error as HeistPlanningError {
-            throw FenceError.invalidRequest(error.description)
+        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceRequest(
+            commandName: commandName,
+            path: try arguments.schemaString("path"),
+            inlineButtonHeistSource: try arguments.schemaString("plan"),
+            rawStructuredJSONIRFields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys),
+            acceptsInlineButtonHeistSource: acceptsInlinePlanSource
+        )) {
+        case .success(let plan, _):
+            return plan
+        case .failure(let diagnostics):
+            throw buildDiagnosticFenceError(diagnostics)
         }
     }
 
     func loadInlineButtonHeistSource(_ source: String, commandName: String) throws -> HeistPlan {
-        do {
-            return try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceRequest(
-                commandName: commandName,
-                inlineButtonHeistSource: source
-            ))
-        } catch let error as HeistPlanningError {
-            throw FenceError.invalidRequest(error.description)
+        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceRequest(
+            commandName: commandName,
+            inlineButtonHeistSource: source
+        )) {
+        case .success(let plan, _):
+            return plan
+        case .failure(let diagnostics):
+            throw buildDiagnosticFenceError(diagnostics)
         }
     }
 
@@ -209,22 +231,33 @@ private extension TheFence {
     func decodeRootHeistArgument(from arguments: CommandArgumentEnvelope) throws -> HeistArgument {
         guard let value = arguments.argumentValues["argument"] else { return .none }
         let data = try JSONEncoder().encode(value)
-        do {
-            return try HeistPlanning.decodeArgumentJSON(
-                data,
-                sourceURL: URL(fileURLWithPath: "run_heist-argument.json")
-            )
-        } catch let error as HeistPlanningError {
-            throw FenceError.invalidRequest(error.description)
+        switch HeistPlanning.decodeArgumentJSONResult(
+            data,
+            sourceURL: URL(fileURLWithPath: "run_heist-argument.json")
+        ) {
+        case .success(let argument, _):
+            return argument
+        case .failure(let diagnostics):
+            throw buildDiagnosticFenceError(diagnostics)
         }
     }
 
     func validateRootHeistArgument(_ argument: HeistArgument, for plan: HeistPlan) throws {
-        do {
-            try HeistPlanning.validateRootArgument(argument, for: plan)
-        } catch let error as HeistPlanningError {
-            throw FenceError.invalidRequest(error.description)
+        switch HeistPlanning.validateRootArgumentResult(argument, for: plan) {
+        case .success:
+            return
+        case .failure(let diagnostics):
+            throw buildDiagnosticFenceError(diagnostics)
         }
+    }
+
+    func buildDiagnosticFenceError(_ diagnostics: [HeistBuildDiagnostic]) -> FenceError {
+        FenceError.invalidRequest(Self.renderBuildDiagnostics(diagnostics))
+    }
+
+    static func renderBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
+        guard !diagnostics.isEmpty else { return "Heist planning failed." }
+        return diagnostics.map(\.renderedMessage).joined(separator: "\n")
     }
 
 }

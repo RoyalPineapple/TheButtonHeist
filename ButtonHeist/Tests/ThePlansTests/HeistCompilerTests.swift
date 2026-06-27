@@ -60,10 +60,13 @@ struct HeistCompilerTests {
         )
 
         let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let diagnostic = try #require(diagnostics.first)
 
-        #expect(diagnostics.contains { $0.severity == .error })
-        #expect(diagnostics.map(\.description).joined(separator: "\n").contains("Broken.swift"))
-        #expect(diagnostics.map(\.description).joined(separator: "\n").count < 2_500)
+        #expect(diagnostic.code == "heist.swift_compilation.compile_failed")
+        #expect(diagnostic.kind == .error)
+        #expect(diagnostic.phase == .swiftCompilation)
+        #expect(diagnostic.sourceSpan?.sourceName.hasSuffix("Broken.swift") == true)
+        #expect(diagnostic.renderedMessage.count < 2_500)
     }
 
     @Test
@@ -84,9 +87,12 @@ struct HeistCompilerTests {
         )
 
         let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
+        let diagnostic = try #require(diagnostics.first)
 
-        #expect(diagnostics.map(\.description).joined(separator: "\n").contains("valid HeistPlan JSON"))
-        #expect(diagnostics.map(\.description).joined(separator: "\n").count < 2_500)
+        #expect(diagnostic.code == "heist.swift_compilation.invalid_output")
+        #expect(diagnostic.phase == .swiftCompilation)
+        #expect(diagnostic.message.contains("valid HeistPlan JSON"))
+        #expect(diagnostic.renderedMessage.count < 2_500)
     }
 
     @Test
@@ -318,8 +324,11 @@ struct HeistCompilerTests {
         _ = try temp.writeSwiftSource(named: "Second.swift", namedPlan: "Duplicate")
 
         let diagnostics = try await requireFailure(HeistCompiler().compileDirectory(temp.url))
+        let diagnostic = try #require(diagnostics.first)
 
-        #expect(diagnostics.map(\.description).joined(separator: "\n").contains("Duplicate capability name"))
+        #expect(diagnostic.code == "heist.catalog.duplicate_capability")
+        #expect(diagnostic.phase == .planValidation)
+        #expect(diagnostic.sourceSpan?.sourceName.hasSuffix("Second.swift") == true)
     }
 
     @Test
