@@ -40,14 +40,6 @@ event was delivered. It is whether the interface contract was fulfilled.
 
 ## Runtime
 
-```mermaid
-flowchart LR
-    Contract["Accessibility contract"] --> Program["Semantic program or command"]
-    Program --> Runtime["Shared action-or-wait runtime"]
-    Runtime --> Evidence["Settled semantic evidence"]
-    Evidence --> Projection["Validation, report, or next step"]
-```
-
 Semantic intent enters the runtime. The Button Heist owns target resolution, reveal,
 element inflation, action execution, settling, and evidence. The result is
 settled semantic evidence, not a mechanical playback log.
