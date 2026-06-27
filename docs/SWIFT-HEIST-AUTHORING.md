@@ -154,7 +154,7 @@ CustomAction("Archive", on: .label("Message"))
     .expect(.change(.elements()))
 
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.change(.updated(element: .identifier("Search"), .value(after: "Bruschetta"))))
+    .expect(.exists(.element(.identifier("Search"), .value("Bruschetta"))))
 
 Increment(.label("Quantity"))
     .expect(.change(.updated(element: .label("Quantity"), .value(before: "2", after: "3"))))
@@ -210,6 +210,11 @@ grammar as targets and state assertions. For example, `.value(after: "3")` is
 exact and `.value(after: .contains("items"))` is explicitly broad. This remains
 an observed-change predicate and does not infer the action's target from hidden
 context.
+
+When text entry or validation can reflow the interface, prefer a settled-state
+assertion such as `.exists(.element(..., .value(...)))` or a `WaitFor(...)`
+over `.updated(...)`. Keep `.updated(...)` for changes that should remain
+same-screen element deltas.
 
 `.expect(.updated(...))` lowers to an element-change predicate. Include
 `element:` when the assertion must be tied to a durable element predicate.

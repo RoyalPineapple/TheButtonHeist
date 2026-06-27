@@ -38,7 +38,7 @@ Rendered as canonical heist source for `run_heist(plan:)`:
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search Items"))
-            .expect(.updated(element: .label("Search Items"), .value(item)))
+            .expect(.exists(.element(.label("Search Items"), .value(item))))
 
         Activate(.label(item))
             .expect(.appeared(.element(
@@ -178,9 +178,9 @@ import ThePlans
 
 let login = try HeistPlan("login") {
     TypeText("agent@example.com", into: .label("Email"))
-        .expect(.change(.updated(
-            element: .label("Email"),
-            .value(after: "agent@example.com")
+        .expect(.exists(.element(
+            .label("Email"),
+            .value("agent@example.com")
         )))
 
     Activate(.label("Sign In"))
@@ -206,7 +206,7 @@ This is where accessibility semantics become product semantics. The reusable pie
 
 Once jobs need more than straight-line instructions, the heist language adds a small set of control primitives. Few parts. Bounded motion. No hidden loop carrying state into the dark.
 
-Action expectations usually assert deltas: something appeared, changed, or updated after the step. Standalone waits and branches inspect current settled state.
+Action expectations usually assert deltas: something appeared, changed, or updated after the step. When an action can reflow the screen, assert the settled state instead. Standalone waits and branches inspect current settled state.
 
 - `WaitFor` is an assertion: a predicate must become true before the timeout, unless an explicit timeout branch handles the miss.
 - `If` is a decision: inspect settled current state and choose a branch.
@@ -217,9 +217,9 @@ Action expectations usually assert deltas: something appeared, changed, or updat
 ```swift
 let search = try HeistPlan("searchFlow") {
     TypeText("milk", into: .label("Search"))
-        .expect(.change(.updated(
-            element: .label("Search"),
-            .value(after: "milk")
+        .expect(.exists(.element(
+            .label("Search"),
+            .value("milk")
         )))
 
     Activate(.label("Search"))
@@ -245,7 +245,7 @@ import TheInsideJob
 
 let heist = try await RunHeist("search", argument: "milk") { query in
     TypeText(query, into: .label("Search"))
-        .expect(.change(.updated(.value(after: .exact(query)))))
+        .expect(.exists(.element(.label("Search"), .value(query))))
 
     Activate(.label("Search"))
         .expect(.change(.screen()))

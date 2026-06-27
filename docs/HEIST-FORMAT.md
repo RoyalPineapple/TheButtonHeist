@@ -119,7 +119,7 @@ It is Swift-shaped, but it is the source language accepted by MCP and
 ```swift
 HeistPlan("purchaseFlow") {
     TypeText("milk", into: .label("Search Items"))
-        .expect(.updated(element: .label("Search Items"), .value("milk")))
+        .expect(.exists(.element(.label("Search Items"), .value("milk"))))
 
     Activate(.label("Milk"))
         .expect(.appeared(.element(
@@ -139,7 +139,7 @@ The same primitives scale up without creating a second runtime:
 ```swift
 HeistDef<String>("addToCart", parameter: "item") { item in
     TypeText(item, into: .label("Search Items"))
-        .expect(.updated(element: .label("Search Items"), .value(item)))
+        .expect(.exists(.element(.label("Search Items"), .value(item))))
 
     Activate(.label(item))
         .expect(.appeared(.element(

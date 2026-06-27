@@ -21,7 +21,7 @@ Allowed `perform(step:)` statements are one action or one `WaitFor(...)` stateme
 ```swift
 Activate(.label("Pay")).expect(.change(.screen()))
 TypeText("milk", into: .label("Search"))
-    .expect(.updated(element: .element(label: "Search"), .value("milk")))
+    .expect(.exists(.element(.label("Search"), .value("milk"))))
 Increment(.label("Quantity"))
     .until(.element(label: "Quantity", value: "10"), timeout: .seconds(5))
 Decrement(.label("Quantity"))
@@ -74,13 +74,17 @@ WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
 
 For `.missing(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require The Button Heist to prove the element existed and then vanished.
 
-Use explicit property-delta expectations when the action should update a known
-element value:
+For text entry that may reflow the interface, assert the settled field state:
 
 ```swift
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.updated(element: .identifier("Search"), .value("Bruschetta")))
+    .expect(.exists(.element(.identifier("Search"), .value("Bruschetta"))))
+```
 
+Use explicit property-delta expectations when the action should update a known
+element in place:
+
+```swift
 Increment(.label("Quantity"))
     .expect(.updated(element: .label("Quantity"), .value(before: "2", after: "3")))
 ```
@@ -103,7 +107,7 @@ HeistPlan {
         .expect(.change(.screen()))
 
     TypeText("milk", into: .label("Search"))
-        .expect(.updated(element: .element(label: "Search"), .value("milk")))
+        .expect(.exists(.element(.label("Search"), .value("milk"))))
 }
 ```
 
@@ -113,7 +117,7 @@ Use `run_heist(plan:)` for definitions, composition, branching, waits with bodie
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search Items"))
-            .expect(.updated(element: .label("Search Items"), .value(item)))
+            .expect(.exists(.element(.label("Search Items"), .value(item))))
         Activate(.label(item))
             .expect(.appeared(.element(
                 .label(.prefix(item)),
