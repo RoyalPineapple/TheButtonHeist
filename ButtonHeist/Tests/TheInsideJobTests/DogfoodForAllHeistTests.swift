@@ -96,17 +96,23 @@ private enum ControlsDemoScreen {
 }
 
 private enum TextInputScreen {
-    private static let nameField = ElementTarget.value("Name")
-    private static let emailField = ElementTarget.value("Email")
+    private static let nameField = ElementTarget.element(value: "Name", traits: [.textEntry])
+    private static let emailField = ElementTarget.element(value: "Email", traits: [.textEntry])
 
     static let fillProfile = HeistDef<String>("TextInputScreen.fillProfile", parameter: "name") { name in
-        TypeText(name, into: nameField)
+        Activate(nameField)
+            .withoutExpectation("Focuses the name field before typing")
+
+        TypeText(name)
             .expect(.exists(.value(name)), timeout: .seconds(2))
 
         DismissKeyboard()
             .withoutExpectation("Ends the first field edit before focusing the email field")
 
-        TypeText("dogfood@example.com", into: emailField)
+        Activate(emailField)
+            .withoutExpectation("Focuses the email field before typing")
+
+        TypeText("dogfood@example.com")
             .expect(.exists(.value("dogfood@example.com")), timeout: .seconds(4))
 
         DismissKeyboard()

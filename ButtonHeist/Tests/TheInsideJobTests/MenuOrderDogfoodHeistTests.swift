@@ -61,11 +61,6 @@ private enum DemoHome {
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
         try rawAction(
-            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .top)),
-            waiver: "Reanchors the menu before resolving each requested row"
-        )
-
-        try rawAction(
             .viewportScrollToVisible(.label(item)),
             waiver: "scroll_to_visible is the viewport precondition for the row custom action"
         )
