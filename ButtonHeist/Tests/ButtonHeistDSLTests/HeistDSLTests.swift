@@ -87,7 +87,7 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
             TypeText("Bruschetta", into: .identifier("Search"))
             .expect(.change(.updated(
                 element: .identifier("Search"),
-                .value(after: "Bruschetta")
+                .value("Bruschetta")
             )))
         }
 
@@ -117,7 +117,7 @@ func actionExpectationInfersElementChangeForDirectDeltaPredicates() throws {
     }
     let updated = try HeistPlan {
         TypeText("Bruschetta", into: .identifier("Search"))
-            .expect(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))
+            .expect(.updated(.value("Bruschetta")))
     }
 
     #expect(try appeared == HeistPlan(body: [
@@ -145,7 +145,6 @@ func actionExpectationInfersElementChangeForDirectDeltaPredicates() throws {
                 target: .predicate(.identifier("Search"))
             ),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Search"),
                 change: .value(after: "Bruschetta")
             )))), timeout: 1)
         )),
@@ -1015,7 +1014,7 @@ func namedHeistPlanCanDeclareSingularStringRootParameter() throws {
     #expect(try heist.canonicalSwiftDSL() == """
     HeistPlan("Search", parameter: "query") { query in
         TypeText(query, into: .label("Search"))
-            .expect(.exists(.value(query)), timeout: .seconds(2))
+            .expect(.value(query), timeout: .seconds(2))
     }
     """)
 }

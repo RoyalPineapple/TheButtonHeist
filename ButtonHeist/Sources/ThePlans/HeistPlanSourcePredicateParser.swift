@@ -181,7 +181,7 @@ extension HeistPlanSourceParser {
         let change: AnyPropertyChangeExpr
         switch name {
         case "value":
-            let fields = try parseStringPropertyChangeFields(property: "value")
+            let fields = try parseStringPropertyChangeFields(property: "value", allowsUnlabeledAfter: true)
             change = .value(before: fields.before, after: fields.after)
         case "hint":
             let fields = try parseStringPropertyChangeFields(property: "hint")
@@ -212,12 +212,16 @@ extension HeistPlanSourceParser {
     }
 
     mutating func parseStringPropertyChangeFields(
-        property: String
+        property: String,
+        allowsUnlabeledAfter: Bool = false
     ) throws -> (before: StringMatch<StringExpr>?, after: StringMatch<StringExpr>?) {
         var before: StringMatch<StringExpr>?
         var after: StringMatch<StringExpr>?
         if currentToken.isSymbol(")") {
             return (nil, nil)
+        }
+        if allowsUnlabeledAfter && !lookaheadLabel("before") && !lookaheadLabel("after") {
+            return (nil, try parseStringMatchCallArgument(field: "\(property) after"))
         }
         while true {
             if lookaheadLabel("before") {

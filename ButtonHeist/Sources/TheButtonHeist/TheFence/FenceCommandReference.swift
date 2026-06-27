@@ -44,7 +44,7 @@ public enum FenceCommandReference {
             lines.append(contentsOf: commandDetailLines(for: descriptor))
         }
 
-        return lines.joined(separator: "\n") + "\n"
+        return finalizedMarkdown(lines)
     }
 
     public static func mcpMarkdown(
@@ -80,6 +80,14 @@ public enum FenceCommandReference {
             lines.append(contentsOf: mcpDetailLines(for: descriptor))
         }
 
+        return finalizedMarkdown(lines)
+    }
+
+    private static func finalizedMarkdown(_ lines: [String]) -> String {
+        var lines = lines
+        while lines.last == "" {
+            lines.removeLast()
+        }
         return lines.joined(separator: "\n") + "\n"
     }
 

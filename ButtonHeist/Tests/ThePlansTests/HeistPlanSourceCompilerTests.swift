@@ -272,7 +272,7 @@ import ThePlans
     """#))
     let updated = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))
-        .expect(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))
+        .expect(.updated(.value("Bruschetta")))
     """#))
 
     let expectedAppeared = try HeistPlan(body: [
@@ -300,7 +300,6 @@ import ThePlans
                 target: .predicate(.identifier("Search"))
             ),
             expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
-                element: .identifier("Search"),
                 change: .value(after: "Bruschetta")
             )))), timeout: 1)
         )),

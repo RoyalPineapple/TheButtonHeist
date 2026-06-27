@@ -198,6 +198,9 @@ extension HeistCanonicalSwiftDSLRenderer {
         before: StringMatch<String>?,
         after: StringMatch<String>?
     ) -> String {
+        if name == "value", before == nil, let after {
+            return ".value(\(renderCallArgument(after)))"
+        }
         let fields = [
             before.map { "before: \(renderFieldArgument($0))" },
             after.map { "after: \(renderFieldArgument($0))" },
@@ -211,6 +214,9 @@ extension HeistCanonicalSwiftDSLRenderer {
         after: StringMatch<StringExpr>?,
         environment: RenderEnvironment
     ) throws -> String {
+        if name == "value", before == nil, let after {
+            return try ".value(\(renderCallArgument(after, environment: environment)))"
+        }
         let fields = try [
             before.map { "before: \(try renderFieldArgument($0, environment: environment))" },
             after.map { "after: \(try renderFieldArgument($0, environment: environment))" },

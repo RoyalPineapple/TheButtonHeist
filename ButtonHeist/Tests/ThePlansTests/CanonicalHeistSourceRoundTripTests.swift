@@ -72,7 +72,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 .expect(.appeared(.label("Toast")))
 
             TypeText("milk", into: .label("Search"))
-                .expect(.updated(element: .label("Search"), .value(after: "milk")))
+                .expect(.updated(element: .label("Search"), .value("milk")))
 
             WaitFor(.label("Results"), timeout: .seconds(2))
 
@@ -96,7 +96,7 @@ struct CanonicalHeistSourceRoundTripTests {
                 .expect(.appeared(.label("Toast")))
 
             TypeText("milk", into: .label("Search"))
-                .expect(.updated(element: .label("Search"), .value(after: "milk")))
+                .expect(.updated(element: .label("Search"), .value("milk")))
 
             WaitFor(.label("Results"), timeout: .seconds(2))
 
