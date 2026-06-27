@@ -3,6 +3,11 @@
 @_exported import ButtonHeistDSL
 import TheInsideJob
 
+/// Prepared in-process heist execution request used by the testing facade.
+///
+/// `runHeist` lowers Swift test code to the same validated `HeistPlan` shape as
+/// external heist execution, then executes it directly through `TheInsideJob`
+/// in the app process. It does not cross the `TheFence`/network boundary.
 struct HeistRunRequest: Equatable {
     let plan: HeistPlan
     let argument: HeistArgument
