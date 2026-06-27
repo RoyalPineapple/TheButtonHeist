@@ -152,7 +152,7 @@ Examples:
 `Mechanical.LongPress(.label("Message"), at: UnitPoint(x: 0.5, y: 0.5))`
 `Mechanical.Swipe(.label("Carousel"), .left)`
 `Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))`
-`WaitFor(.exists(.label("Checkout")), timeout: .seconds(5))`
+`WaitFor(.label("Checkout"), timeout: .seconds(5))`
 
 Use `perform` when one line is enough. Use `run_heist` when the job needs
 multiple instructions, reusable heists, `RunHeist`, `If`,
@@ -174,10 +174,10 @@ Author plans as ButtonHeist source, not raw JSON IR:
 `HeistPlan("shop") { ... }`
 `HeistDef<String>("Cart.addItem", parameter: "item") { item in ... }`
 `RunHeist("Cart.addItem", "Milk")`
-`If(.exists(.label("Pay"))) { ... }.else { ... }`
+`If(.label("Pay")) { ... }.else { ... }`
 `WaitFor(.change(.screen()), timeout: .seconds(10)).else { ... }`
-`ForEach(["Milk", "Bread"]) { item in ... }`
-`ForEach(.matching(.element(.label(.prefix("Delete")), .traits([.button]))), limit: 20) { target in ... }`
+`ForEach("Milk", "Bread") { item in ... }`
+`ForEach(.element(.label(.prefix("Delete")), .traits([.button])), limit: 20) { target in ... }`
 `Warn("message")`
 `Fail("message")`
 
@@ -194,4 +194,3 @@ Parameters:
 | `argument` | `object` | no | - | - |
 | `path` | `string` | no | - | - |
 | `plan` | `string` | no | - | - |
-

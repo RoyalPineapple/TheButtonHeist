@@ -65,6 +65,57 @@ struct CanonicalHeistSourceRoundTripTests {
         ]))
     }
 
+    @Test("canonical source renders shortest unambiguous sugar")
+    func canonicalSourceRendersShortestUnambiguousSugar() throws {
+        let plan = try HeistPlan {
+            Activate(.label("Add"))
+                .expect(.appeared(.label("Toast")))
+
+            TypeText("milk", into: .label("Search"))
+                .expect(.updated(element: .label("Search"), .value(after: "milk")))
+
+            WaitFor(.label("Results"), timeout: .seconds(2))
+
+            If(.value(.contains("Promo"))) {
+                Warn("promo")
+            }
+
+            ForEach("Milk", "Eggs") { item in
+                Activate(.label(item))
+            }
+
+            ForEach(.label("Delete"), limit: 2) { target in
+                Activate(target)
+                    .expect(.missing(target))
+            }
+        }
+
+        #expect(try plan.canonicalSwiftDSL() == """
+        HeistPlan {
+            Activate(.label("Add"))
+                .expect(.appeared(.label("Toast")))
+
+            TypeText("milk", into: .label("Search"))
+                .expect(.updated(element: .label("Search"), .value(after: "milk")))
+
+            WaitFor(.label("Results"), timeout: .seconds(2))
+
+            If(.value(.contains("Promo"))) {
+                Warn("promo")
+            }
+
+            ForEach("Milk", "Eggs") { item in
+                Activate(.label(item))
+            }
+
+            ForEach(.label("Delete"), limit: 2) { target in
+                Activate(target)
+                    .expect(.missing(target))
+            }
+        }
+        """)
+    }
+
     @Test("durable mechanical actions round trip")
     func durableMechanicalActionsRoundTrip() throws {
         try assertRoundTrip(try HeistPlan(body: [

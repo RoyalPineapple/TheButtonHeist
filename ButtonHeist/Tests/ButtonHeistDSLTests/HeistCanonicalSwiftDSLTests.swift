@@ -17,7 +17,7 @@ func decodedJSONRendersCanonicalSwiftDSLForFullAST() throws {
 func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
     let swiftPlan = try HeistPlan {
         Activate(.label("Sign In"))
-            .expect(.exists(.label("Home")), timeout: .seconds(5))
+            .expect(.label("Home"), timeout: .seconds(5))
 
         WaitFor(.missing(.label("Loading")), timeout: .seconds(1))
 
@@ -31,21 +31,21 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
             }
         }
 
-        WaitFor(.exists(.label("Results")), timeout: .seconds(8))
+        WaitFor(.label("Results"), timeout: .seconds(8))
             .else {
                 Fail("timeout")
             }
 
         Warn("results")
 
-        ForEach(.matching(.label("Delete")), limit: 20) { target in
+        ForEach(.label("Delete"), limit: 20) { target in
             Activate(target)
                 .expect(.missing(target), timeout: .seconds(2))
         }
 
-        ForEach(["Milk", "Eggs"]) { item in
+        ForEach("Milk", "Eggs") { item in
             TypeText(item, into: .label("Add item"))
-                .expect(.exists(.label(item)), timeout: .seconds(2))
+                .expect(.label(item), timeout: .seconds(2))
         }
 
         Warn("done")
@@ -222,7 +222,7 @@ private let rootStringCanonicalSwiftDSL = """
     HeistPlan("RootSearch", parameter: "query") { query in
         HeistDef<String>("Search.enter", parameter: "term") { term in
             TypeText(term, into: .label(.contains("Search")))
-                .expect(.exists(.value(term)), timeout: .seconds(2))
+                .expect(.value(term), timeout: .seconds(2))
         }
 
         HeistDef<ElementTarget>("Rows.pressRow", parameter: "row") { row in
@@ -232,21 +232,21 @@ private let rootStringCanonicalSwiftDSL = """
 
         RunHeist("Search.enter", query)
 
-        WaitFor(.exists(.label(query)), timeout: .seconds(1))
+        WaitFor(.label(query), timeout: .seconds(1))
 
-        If(.exists(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("ready")), .traits([.button]), .excludeTraits([.staticText])))) {
+        If(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("ready")), .traits([.button]), .excludeTraits([.staticText]))) {
             Warn("ready")
         }
         .else {
             Fail("not ready")
         }
 
-        ForEach(["Milk", "Eggs"]) { item in
+        ForEach("Milk", "Eggs") { item in
             TypeText(item, into: .label(.contains("Search")))
-                .expect(.exists(.label(item)), timeout: .seconds(2))
+                .expect(.label(item), timeout: .seconds(2))
         }
 
-        ForEach(.matching(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("available")), .traits([.button]), .excludeTraits([.staticText]))), limit: 3) { target in
+        ForEach(.element(.label(.contains("Result")), .identifier(.prefix("row")), .value(.suffix("available")), .traits([.button]), .excludeTraits([.staticText])), limit: 3) { target in
             RunHeist("Rows.pressRow", target)
         }
     }
@@ -292,11 +292,11 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
     enum SearchScreen {
         static let search = HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
-                .expect(.exists(.value(query)))
+                .expect(.value(query))
 
             Activate(.label("Search"))
                 .expect(.change(.screen()))
-                .expect(.exists(.label(query)), timeout: .seconds(5))
+                .expect(.label(query), timeout: .seconds(5))
         }
     }
 
@@ -308,10 +308,10 @@ func `canonical Swift renderer preserves composed expectation with string ref`()
     HeistPlan("searchFlow") {
         HeistDef<String>("SearchScreen.search", parameter: "query") { query in
             TypeText(query, into: .label("Search"))
-                .expect(.exists(.value(query)))
+                .expect(.value(query))
 
             Activate(.label("Search"))
-                .expect(.change(.screen(.exists(.label(query)))), timeout: .seconds(5))
+                .expect(.change(.screen(.label(query))), timeout: .seconds(5))
         }
 
         RunHeist("SearchScreen.search", "milk")
@@ -747,32 +747,32 @@ private let invalidStringLoopParameterJSON = """
 private let fullCanonicalSwiftDSL = """
 HeistPlan {
     Activate(.label("Sign In"))
-        .expect(.exists(.label("Home")), timeout: .seconds(5))
+        .expect(.label("Home"), timeout: .seconds(5))
 
     WaitFor(.missing(.label("Loading")), timeout: .seconds(1))
 
-    If(.exists(.label("Home"))) {
+    If(.label("Home")) {
         Warn("home")
     }
     .else {
         Fail("unknown")
     }
 
-    WaitFor(.exists(.label("Results")), timeout: .seconds(8))
+    WaitFor(.label("Results"), timeout: .seconds(8))
     .else {
         Fail("timeout")
     }
 
     Warn("results")
 
-    ForEach(.matching(.label("Delete")), limit: 20) { target in
+    ForEach(.label("Delete"), limit: 20) { target in
         Activate(target)
             .expect(.missing(target), timeout: .seconds(2))
     }
 
-    ForEach(["Milk", "Eggs"]) { item in
+    ForEach("Milk", "Eggs") { item in
         TypeText(item, into: .label("Add item"))
-            .expect(.exists(.label(item)), timeout: .seconds(2))
+            .expect(.label(item), timeout: .seconds(2))
     }
 
     Warn("done")

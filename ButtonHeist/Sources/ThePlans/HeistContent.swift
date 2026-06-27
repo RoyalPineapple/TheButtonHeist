@@ -504,6 +504,15 @@ public struct ForEach<Content: HeistContent>: HeistContent {
     }
 
     public init(
+        _ first: String,
+        _ rest: String...,
+        parameter: HeistReferenceName = "item",
+        @HeistBuilder content: (StringExpr) throws -> Content
+    ) {
+        self.init([first] + rest, parameter: parameter, content: content)
+    }
+
+    public init(
         _ matches: ElementMatches,
         limit: Int = 20,
         parameter: HeistReferenceName = "target",
@@ -528,5 +537,14 @@ public struct ForEach<Content: HeistContent>: HeistContent {
             self.heistDefinitions = []
             self.heistBuildDiagnostics = ["ForEach element loop is invalid: \(String(describing: error))"]
         }
+    }
+
+    public init(
+        _ predicate: ElementPredicate,
+        limit: Int = 20,
+        parameter: HeistReferenceName = "target",
+        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
+    ) {
+        self.init(.matching(predicate), limit: limit, parameter: parameter, content)
     }
 }

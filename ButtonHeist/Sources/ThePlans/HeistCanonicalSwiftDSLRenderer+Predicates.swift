@@ -6,7 +6,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .state(let state):
             return try render(state: state, environment: environment)
         case .changePredicate(let change):
-            return try ".change(\(render(change: change, environment: environment)))"
+            return try render(changePredicate: change, environment: environment)
         case .noChangePredicate:
             return ".noChange"
         case .predicate(let predicate):
@@ -19,16 +19,30 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .state(let state):
             return try render(state: state, environment: environment)
         case .changePredicate(let change):
-            return try ".change(\(render(change: change, environment: environment)))"
+            return try render(changePredicate: change, environment: environment)
         case .noChangePredicate:
             return ".noChange"
         }
     }
 
+    func render(changePredicate change: ChangePredicateExpr, environment: RenderEnvironment) throws -> String {
+        if case .elementsScope(let assertions) = change, assertions.count == 1 {
+            return try render(elementDelta: assertions[0], environment: environment)
+        }
+        return try ".change(\(render(change: change, environment: environment)))"
+    }
+
+    func render(changePredicate change: AccessibilityPredicate.Change, environment: RenderEnvironment) throws -> String {
+        if case .elementsScope(let assertions) = change, assertions.count == 1 {
+            return render(elementDelta: assertions[0])
+        }
+        return try ".change(\(render(change: change, environment: environment)))"
+    }
+
     func render(state: StatePredicateExpr, environment: RenderEnvironment) throws -> String {
         switch state {
         case .exists(let predicate):
-            return ".exists(\(try render(predicate: predicate, environment: environment)))"
+            return try render(predicate: predicate, environment: environment)
         case .missing(let predicate):
             return ".missing(\(try render(predicate: predicate, environment: environment)))"
         case .existsTarget(let target):
@@ -36,14 +50,14 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .missingTarget(let target):
             return ".missing(\(try render(target: target, environment: environment)))"
         case .all(let states):
-            return ".all([\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", "))])"
+            return ".all(\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
         }
     }
 
     func render(state: AccessibilityPredicate.State, environment: RenderEnvironment) throws -> String {
         switch state {
         case .exists(let predicate):
-            return ".exists(\(render(predicate: predicate)))"
+            return render(predicate: predicate)
         case .missing(let predicate):
             return ".missing(\(render(predicate: predicate)))"
         case .existsTarget(let target):
@@ -51,7 +65,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .missingTarget(let target):
             return ".missing(\(render(target: target)))"
         case .all(let states):
-            return ".all([\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", "))])"
+            return ".all(\(try states.map { try render(state: $0, environment: environment) }.joined(separator: ", ")))"
         }
     }
 

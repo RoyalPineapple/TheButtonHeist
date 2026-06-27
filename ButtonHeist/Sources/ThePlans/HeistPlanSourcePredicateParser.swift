@@ -24,6 +24,12 @@ extension HeistPlanSourceParser {
             return .state(try parseAllState())
         case "label", "identifier", "value", "traits", "excludeTraits", "element":
             return .exists(try parseElementPredicateTemplate(named: name))
+        case "appeared":
+            return .changePredicate(.elementsScope([try parseAppearedElementDeltaPredicateExpr()]))
+        case "disappeared":
+            return .changePredicate(.elementsScope([try parseDisappearedElementDeltaPredicateExpr()]))
+        case "updated":
+            return .changePredicate(.elementsScope([try parseUpdatedElementDeltaPredicateExpr()]))
         default:
             throw error(previous, "unsupported accessibility predicate '.\(name)'")
         }
@@ -95,13 +101,9 @@ extension HeistPlanSourceParser {
 
     mutating func parseAllState() throws -> StatePredicateExpr {
         try expectSymbol("(")
-        try expectSymbol("[")
-        var states: [StatePredicateExpr] = []
-        if !consumeSymbol("]") {
-            repeat {
-                states.append(try parseStatePredicateExpr())
-            } while consumeSymbol(",")
-            try expectSymbol("]")
+        var states: [StatePredicateExpr] = [try parseStatePredicateExpr()]
+        while consumeSymbol(",") {
+            states.append(try parseStatePredicateExpr())
         }
         try expectSymbol(")")
         return .all(states)

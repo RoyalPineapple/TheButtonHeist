@@ -247,7 +247,7 @@ after evidence, the action can say what must be true after it runs:
 
 ```swift
 Activate(.label("Sign In"))
-    .expect(.exists(.label("Home")), timeout: .seconds(5))
+    .expect(.label("Home"), timeout: .seconds(5))
 ```
 
 If the expectation fails, the action fails with the receipt attached. That is
@@ -270,10 +270,10 @@ import ThePlans
 
 let login = try HeistPlan("login") {
     TypeText("agent@example.com", into: .label("Email"))
-        .expect(.exists(.element(.label("Email"), .value("agent@example.com"))), timeout: .seconds(2))
+        .expect(.element(.label("Email"), .value("agent@example.com")), timeout: .seconds(2))
 
     Activate(.label("Sign In"))
-        .expect(.exists(.label("Home")), timeout: .seconds(5))
+        .expect(.label("Home"), timeout: .seconds(5))
 }
 ```
 
@@ -298,17 +298,17 @@ control primitives:
 ```swift
 let search = try HeistPlan("searchFlow") {
     TypeText("milk", into: .label("Search"))
-        .expect(.exists(.element(.label("Search"), .value("milk"))), timeout: .seconds(2))
+        .expect(.element(.label("Search"), .value("milk")), timeout: .seconds(2))
 
     Activate(.label("Search"))
         .expect(.change(.screen()), timeout: .seconds(5))
 
-    WaitFor(.exists(.label("Results")), timeout: .seconds(5))
+    WaitFor(.label("Results"), timeout: .seconds(5))
         .else {
             Fail("Search did not settle")
         }
 
-    If(.exists(.label("Results"))) {
+    If(.label("Results")) {
         Warn("Search results loaded")
     }
 }

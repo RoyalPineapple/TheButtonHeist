@@ -28,13 +28,6 @@ public struct WaitFor: HeistContent {
         self.init(.predicate(predicate), timeout: timeout)
     }
 
-    public init(
-        _ predicate: ElementPredicateTemplate,
-        timeout: Double = defaultWaitTimeout
-    ) {
-        self.init(.exists(predicate), timeout: timeout)
-    }
-
     public func `else`(
         @HeistBuilder _ content: () -> some HeistContent
     ) -> WaitFor {
@@ -96,14 +89,6 @@ public struct RepeatUntil: HeistContent {
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         self.init(.predicate(predicate), timeout: timeout, content)
-    }
-
-    public init(
-        _ predicate: ElementPredicateTemplate,
-        timeout: Double,
-        @HeistBuilder _ content: () -> some HeistContent
-    ) {
-        self.init(.exists(predicate), timeout: timeout, content)
     }
 
     public func `else`(

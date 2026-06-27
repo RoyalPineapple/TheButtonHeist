@@ -182,7 +182,7 @@ The public predicate layer is intentionally one tree language:
 then watches later settled captures until the requested accessibility predicate
 matches or the timeout expires. `.missing(...)` means current absence; it is not
 proof of a prior removal event. Use `.missing(...)` for current absence and
-`.change(.elements(.disappeared(...)))` when the removal itself matters.
+`.disappeared(...)` when the removal itself matters.
 
 ### Replay
 

@@ -106,6 +106,128 @@ func actionExpectationSupportsScopedPropertyUpdateDelta() throws {
 }
 
 @Test
+func actionExpectationInfersElementChangeForDirectDeltaPredicates() throws {
+    let appeared = try HeistPlan {
+        Activate(.label("Add Bruschetta"))
+            .expect(.appeared(.label(.contains("Bruschetta, $9.00"))))
+    }
+    let disappeared = try HeistPlan {
+        Activate(.label("Remove Bruschetta"))
+            .expect(.disappeared(.identifier("cart-row-bruschetta")))
+    }
+    let updated = try HeistPlan {
+        TypeText("Bruschetta", into: .identifier("Search"))
+            .expect(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))
+    }
+
+    #expect(try appeared == HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.label("Add Bruschetta")),
+            expectation: WaitStep(
+                predicate: .change(.elements(.appearedElement(.label(.contains("Bruschetta, $9.00"))))),
+                timeout: 1
+            )
+        )),
+    ]))
+    #expect(try disappeared == HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.label("Remove Bruschetta")),
+            expectation: WaitStep(
+                predicate: .change(.elements(.disappearedElement(.identifier("cart-row-bruschetta")))),
+                timeout: 1
+            )
+        )),
+    ]))
+    #expect(try updated == HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(
+                text: .literal("Bruschetta"),
+                target: .predicate(.identifier("Search"))
+            ),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                element: .identifier("Search"),
+                change: .value(after: "Bruschetta")
+            )))), timeout: 1)
+        )),
+    ]))
+}
+
+@Test
+func predicateContextsInferExistsFromElementPredicates() throws {
+    let heist = try HeistPlan {
+        Activate(.label("Search"))
+            .expect(.label("Results"))
+
+        Activate(.label("Open Details"))
+            .expect(.change(.screen(.label("Details"))))
+
+        WaitFor(.identifier("ready"), timeout: .seconds(2))
+
+        If(.value(.contains("Promo"))) {
+            Warn("promo visible")
+        }
+    }
+
+    #expect(try heist == HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.label("Search")),
+            expectation: WaitStep(predicate: .exists(.label("Results")), timeout: 1)
+        )),
+        .action(try ActionStep(
+            command: .activate(.label("Open Details")),
+            expectation: WaitStep(
+                predicate: .change(.screen(.exists(.label("Details")))),
+                timeout: 1
+            )
+        )),
+        .wait(WaitStep(predicate: .exists(.identifier("ready")), timeout: 2)),
+        .conditional(try ConditionalStep(cases: [
+            PredicateCase(
+                predicate: .exists(.value(.contains("Promo"))),
+                body: [.warn(WarnStep(message: "promo visible"))]
+            ),
+        ])),
+    ]))
+}
+
+@Test
+func forEachInfersStringValuesAndElementMatches() throws {
+    let heist = try HeistPlan {
+        ForEach("Milk", "Eggs") { item in
+            TypeText(item, into: .label("Search"))
+        }
+
+        ForEach(.label("Delete"), limit: 2) { target in
+            Activate(target).expect(.missing(target))
+        }
+    }
+
+    #expect(try heist == HeistPlan(body: [
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("item"),
+                    target: .target(.label("Search"))
+                ))),
+            ]
+        )),
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 2,
+            parameter: "target",
+            body: [
+                .action(try ActionStep(
+                    command: .activate(.ref("target")),
+                    expectation: WaitStep(predicate: .missing(.ref("target")), timeout: 1)
+                )),
+            ]
+        )),
+    ]))
+}
+
+@Test
 func `chained screen and state expectations compose into one action expectation`() throws {
     let forward = try HeistPlan {
         Activate(.label("Search"))
