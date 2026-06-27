@@ -68,10 +68,10 @@ HeistPlan("shop") {
     RunHeist("Cart.addItem", "Milk")
     RunHeist("Cart.addItem", "Eggs")
     RunHeist("Cart.addItem", "Bread")
-    WaitFor(.appeared(.element(
-        .label("subtotal"),
+    WaitFor(.updated(
+        element: .label("subtotal"),
         .value(.contains("3 items"))
-    )))
+    ))
 }
 ```
 
