@@ -92,23 +92,23 @@ defining product capabilities against the accessibility contract.
 
 A live agent can take one step:
 
-```text
-perform step: """
+```swift
 Activate(.label("Pay"))
     .expect(.appeared(.label("Payment Complete")))
-"""
 ```
+
+Send that source through `perform(step:)`.
 
 A composed job can run as a plan:
 
-```text
-run_heist plan: """
+```swift
 HeistPlan("checkout") {
     Activate(.label("Pay"))
         .expect(.appeared(.label("Payment Complete")))
 }
-"""
 ```
+
+Send that source through `run_heist(plan:)`.
 
 The same product capability can live in source control:
 
