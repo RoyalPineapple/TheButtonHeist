@@ -35,27 +35,7 @@ extension TheFence {
     }
 
     func missingElementTargetResponse(command: String) -> FenceResponse {
-        let contract = "requires target object with predicate fields"
-        let next = "get_interface()"
-        let matcherFields = ElementTarget.predicateFieldNames.map { "target.\($0)" }
-        let matcherHint: String
-        if let last = matcherFields.last {
-            matcherHint = matcherFields.dropLast().joined(separator: ", ") + ", or \(last)"
-        } else {
-            matcherHint = ""
-        }
-        let targetHint = matcherHint
-        let message = "\(command) request contract failed: missing target; \(contract). " +
-            "Next: \(next) to inspect the current app accessibility state, then retry \(command) with \(targetHint)."
-        return .error(
-            message,
-            details: FailureDetails(
-                errorCode: FenceRequestErrorCode.missingTarget,
-                phase: .request,
-                retryable: false,
-                hint: next
-            )
-        )
+        .failure(MissingElementTarget(command: command))
     }
 
 }

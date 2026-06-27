@@ -50,7 +50,7 @@ extension TheFence {
             return DispatchResult(response: response, durationMs: elapsedMilliseconds(since: start))
         } catch let error as SchemaValidationError {
             return DispatchResult(
-                response: .error(error.message),
+                response: .failure(error),
                 durationMs: elapsedMilliseconds(since: start)
             )
         } catch {

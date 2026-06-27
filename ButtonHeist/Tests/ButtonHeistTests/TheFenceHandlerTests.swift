@@ -303,6 +303,60 @@ final class TheFenceHandlerTests: XCTestCase {
         return makeReceiptTestInterface(nodes: nodes)
     }
 
+    // MARK: - Public Failure Mapping
+
+    func testPublicFailureMapperMapsKnownFenceError() throws {
+        let response = FenceResponse.failure(FenceError.notConnected)
+        let failure = try XCTUnwrap(response.publicFailure)
+
+        XCTAssertEqual(failure.code, "connection.not_connected")
+        XCTAssertEqual(failure.kind, .connection)
+        XCTAssertEqual(failure.message, "Not connected to device.")
+        XCTAssertEqual(failure.details.errorCode, "connection.not_connected")
+        XCTAssertEqual(failure.details.phase, .request)
+        XCTAssertEqual(failure.details.retryable, true)
+    }
+
+    func testPublicFailureMapperMapsConnectionDomainError() throws {
+        let response = FenceResponse.failure(HandoffConnectionError.timeout)
+        let failure = try XCTUnwrap(response.publicFailure)
+
+        XCTAssertEqual(failure.code, "setup.timeout")
+        XCTAssertEqual(failure.kind, .connection)
+        XCTAssertEqual(failure.message, "Connection timed out")
+        XCTAssertEqual(failure.details.phase, .setup)
+        XCTAssertEqual(failure.details.retryable, true)
+    }
+
+    @ButtonHeistActor
+    func testDispatchSchemaFailureUsesPublicFailureMapper() async throws {
+        let fence = TheFence(configuration: .init())
+        let validationError = SchemaValidationError(
+            field: "target",
+            observed: "integer 7",
+            expected: "object"
+        )
+        let parsed = TheFence.ParsedRequest(
+            command: .listTargets,
+            requestId: "public-failure-test",
+            arguments: TheFence.CommandArgumentEnvelope(values: [:]),
+            dispatch: TheFence.DecodedRequestDispatch(handler: { _, _ in
+                throw validationError
+            }),
+            expectationPayload: TheFence.ExpectationPayload(expectation: nil, timeout: nil)
+        )
+
+        let response = try await fence.execute(parsed: parsed)
+        let failure = try XCTUnwrap(response.publicFailure)
+
+        XCTAssertEqual(failure.code, "request.invalid")
+        XCTAssertEqual(failure.kind, .request)
+        XCTAssertEqual(failure.message, validationError.message)
+        XCTAssertEqual(failure.details.phase, .request)
+        XCTAssertEqual(failure.details.retryable, false)
+        XCTAssertEqual(failure.details.hint, "Fix the request shape or arguments before retrying.")
+    }
+
     // MARK: - Connect
 
     @ButtonHeistActor

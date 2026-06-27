@@ -52,7 +52,7 @@ struct ButtonHeistMCPServer {
             case .success(let value):
                 command = value
             case .failure(let error):
-                return .init(content: [.text(text: error.message, annotations: nil, _meta: nil)], isError: true)
+                return renderResponse(.failure(error))
             }
 
             let response = try await fence.execute(command: command, arguments: arguments)
