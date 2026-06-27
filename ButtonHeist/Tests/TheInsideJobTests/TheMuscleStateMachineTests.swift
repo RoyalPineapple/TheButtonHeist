@@ -1,4 +1,5 @@
 import XCTest
+import Network
 
 @testable import TheInsideJob
 
@@ -91,5 +92,18 @@ final class TheMuscleStateMachineTests: XCTestCase {
 
         let callbackOutcome = await delivery.disconnect(1)
         XCTAssertEqual(callbackOutcome, .failed(.callbacksNotInstalled("disconnectClient")))
+    }
+
+    func testServerTransportFailurePreservesNetworkDiagnosticReason() {
+        let diagnostic = ServerTransportFailure(.posix(.ECONNRESET))
+        let failure = ServerSendFailure.transportFailed(clientId: 12, diagnostic: diagnostic)
+
+        guard case .transportFailed(let clientId, let capturedDiagnostic) = failure else {
+            return XCTFail("Expected typed transport failure, got \(failure)")
+        }
+        XCTAssertEqual(clientId, 12)
+        XCTAssertEqual(capturedDiagnostic.reason, .posix(code: Int(POSIXErrorCode.ECONNRESET.rawValue)))
+        XCTAssertTrue(capturedDiagnostic.description.contains("posix"))
+        XCTAssertTrue(failure.localizedDescription.contains("posix"))
     }
 }

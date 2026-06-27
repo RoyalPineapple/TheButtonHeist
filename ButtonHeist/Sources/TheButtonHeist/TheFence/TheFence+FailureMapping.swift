@@ -20,10 +20,10 @@ extension FenceError {
         switch sendFailure {
         case .notConnected:
             self = .notConnected
-        case .encodingFailed(let message):
-            self = .actionFailed("Failed to send request: \(message)")
-        case .transportFailed(let message):
-            self = .actionFailed("Transport send failed: \(message)")
+        case .encodingFailed(let failure):
+            self = .actionFailed("Failed to send request: \(failure.description)")
+        case .transportFailed(let failure):
+            self = .actionFailed("Transport send failed: \(failure.description)")
         }
     }
 }

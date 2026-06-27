@@ -91,6 +91,18 @@ final class DeviceConnectionTLSTests: XCTestCase {
         XCTAssertFalse(reason.connectionFailureMessage.contains("Retry without a token"))
     }
 
+    func testDeviceTransportSendFailurePreservesNetworkDiagnosticReason() {
+        let diagnostic = DeviceTransportFailure(.posix(.ECONNRESET))
+        let failure = DeviceSendFailure.transportFailed(diagnostic)
+
+        guard case .transportFailed(let capturedDiagnostic) = failure else {
+            return XCTFail("Expected typed transport failure, got \(failure)")
+        }
+        XCTAssertEqual(capturedDiagnostic.reason, .posix(code: Int(POSIXErrorCode.ECONNRESET.rawValue)))
+        XCTAssertTrue(capturedDiagnostic.description.contains("posix"))
+        XCTAssertTrue(failure.localizedDescription.contains("posix"))
+    }
+
     // MARK: - DeviceConnection Init (actor-isolated)
 
     @ButtonHeistActor

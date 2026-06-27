@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 // MARK: - Event Enums
 
@@ -8,19 +9,98 @@ enum DeviceSendOutcome: Equatable, Sendable {
     case failed(DeviceSendFailure)
 }
 
+struct DeviceEncodingFailure: Error, LocalizedError, Equatable, Sendable, CustomStringConvertible {
+    let underlyingDescription: String
+
+    init(_ error: any Error) {
+        self.underlyingDescription = String(describing: error)
+    }
+
+    var description: String {
+        underlyingDescription
+    }
+
+    var errorDescription: String? {
+        underlyingDescription
+    }
+}
+
+struct DeviceTransportFailure: Error, LocalizedError, Equatable, Sendable, CustomStringConvertible {
+    enum Reason: Equatable, Sendable {
+        case posix(code: Int)
+        case dns(code: Int)
+        case tls(status: Int)
+        case wifiAware(code: Int)
+        case unknown(String)
+    }
+
+    let reason: Reason
+    let underlyingDescription: String
+
+    init(_ error: NWError) {
+        let reason = Self.reason(for: error)
+        self.reason = reason
+        self.underlyingDescription = "\(reason.description): \(error.localizedDescription)"
+    }
+
+    var description: String {
+        underlyingDescription
+    }
+
+    var errorDescription: String? {
+        underlyingDescription
+    }
+
+    var isEmpty: Bool {
+        underlyingDescription.isEmpty
+    }
+
+    private static func reason(for error: NWError) -> Reason {
+        switch error {
+        case .posix(let code):
+            return .posix(code: Int(code.rawValue))
+        case .dns(let code):
+            return .dns(code: Int(code))
+        case .tls(let status):
+            return .tls(status: Int(status))
+        case .wifiAware(let code):
+            return .wifiAware(code: Int(code))
+        @unknown default:
+            return .unknown(String(describing: error))
+        }
+    }
+}
+
+extension DeviceTransportFailure.Reason: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .posix(let code):
+            return "posix(\(code))"
+        case .dns(let code):
+            return "dns(\(code))"
+        case .tls(let status):
+            return "tls(\(status))"
+        case .wifiAware(let code):
+            return "wifiAware(\(code))"
+        case .unknown(let description):
+            return "unknown(\(description))"
+        }
+    }
+}
+
 enum DeviceSendFailure: Error, LocalizedError, Equatable, Sendable {
     case notConnected
-    case encodingFailed(String)
-    case transportFailed(String)
+    case encodingFailed(DeviceEncodingFailure)
+    case transportFailed(DeviceTransportFailure)
 
     var errorDescription: String? {
         switch self {
         case .notConnected:
             return "Connection is closed"
-        case .encodingFailed(let message):
-            return "Failed to encode request: \(message)"
-        case .transportFailed(let message):
-            return "Transport send failed: \(message)"
+        case .encodingFailed(let failure):
+            return "Failed to encode request: \(failure.description)"
+        case .transportFailed(let failure):
+            return "Transport send failed: \(failure.description)"
         }
     }
 }

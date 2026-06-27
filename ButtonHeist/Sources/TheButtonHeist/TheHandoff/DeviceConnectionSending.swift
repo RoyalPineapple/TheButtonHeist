@@ -16,7 +16,7 @@ extension DeviceConnection {
             data = encoded
         } catch {
             deviceConnectionLogger.error("Failed to encode message: \(error)")
-            return .failed(.encodingFailed(error.localizedDescription))
+            return .failed(.encodingFailed(DeviceEncodingFailure(error)))
         }
 
         let connection = active.connection
@@ -35,6 +35,6 @@ extension DeviceConnection {
         if let current = currentConnection, current !== connection {
             return
         }
-        onEvent?(.sendFailed(.transportFailed(error.localizedDescription), requestId: requestId))
+        onEvent?(.sendFailed(.transportFailed(DeviceTransportFailure(error)), requestId: requestId))
     }
 }
