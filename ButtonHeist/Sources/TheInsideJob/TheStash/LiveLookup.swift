@@ -185,6 +185,13 @@ struct LiveLookup {
             return nil
         }
         let expectedContentSize = contentSize.cgSize
+        if let nestedScrollView = resolveNestedLiveScrollView(
+            for: container,
+            expectedContentSize: expectedContentSize
+        ) {
+            return nestedScrollView
+        }
+
         let expectedFrame = container.container.frame.cgRect
         let candidates = tripwire.getAccessibleWindows()
             .flatMap { ScrollViewHierarchySearch.descendantScrollViews(in: $0.rootView) }
@@ -202,6 +209,32 @@ struct LiveLookup {
     }
 
     @MainActor
+    private func resolveNestedLiveScrollView(
+        for container: SemanticScreen.Container,
+        expectedContentSize: CGSize
+    ) -> UIScrollView? {
+        guard let location = container.scrollContentLocation,
+              let ancestorScrollView = capture.scrollView(forContainer: location.scrollContainer)
+        else { return nil }
+
+        let candidates = ScrollViewHierarchySearch.descendantScrollViews(in: ancestorScrollView)
+            .filter(\.isScrollEnabled)
+            .filter {
+                ScrollViewHierarchySearch.contentSize($0.contentSize, matches: expectedContentSize)
+            }
+        guard !candidates.isEmpty else { return nil }
+
+        let originMatches = candidates.filter {
+            ancestorScrollView.convert(Self.screenFrame(of: $0).origin, from: nil)
+                .approximatelyEquals(location.origin)
+        }
+        if originMatches.count == 1 {
+            return originMatches[0]
+        }
+        return candidates.count == 1 ? candidates[0] : nil
+    }
+
+    @MainActor
     private static func screenFrame(of view: UIView) -> CGRect {
         view.convert(view.bounds, to: nil)
     }
@@ -213,6 +246,13 @@ private extension CGRect {
             && abs(origin.y - other.origin.y) <= tolerance
             && abs(size.width - other.size.width) <= tolerance
             && abs(size.height - other.size.height) <= tolerance
+    }
+}
+
+private extension CGPoint {
+    func approximatelyEquals(_ other: CGPoint, tolerance: CGFloat = 1) -> Bool {
+        abs(x - other.x) <= tolerance
+            && abs(y - other.y) <= tolerance
     }
 }
 
