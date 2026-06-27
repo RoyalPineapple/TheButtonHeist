@@ -113,35 +113,23 @@ Send that source through `run_heist(plan:)`.
 The same product capability can be a test:
 
 ```swift
-import ButtonHeist
-import Testing
+import XCTest
+import ThePlans
+import TheInsideJob
 
-@Suite(.serialized)
-struct CheckoutHeistTests {
-    @ButtonHeistActor
-    @Test("checkout completes through accessibility")
-    func checkoutCompletes() async throws {
-        let config = try EnvironmentConfig.resolve()
-        let fence = TheFence(configuration: config.fenceConfiguration)
-        try await fence.start()
-        defer { fence.stop() }
-
-        let response = try await fence.execute(
-            command: .runHeist,
-            arguments: .init(values: [
-                "plan": .string("""
-                HeistPlan("checkout") {
-                    Activate(.label("Pay"))
-                        .expect(.appeared(.label("Payment Complete")))
-                }
-                """)
-            ])
-        )
-
-        #expect(!response.isFailure)
+@MainActor
+final class CheckoutHeistTests: XCTestCase {
+    func testCheckoutCompletes() async throws {
+        _ = try await RunHeist("Checkout.pay") {
+            Activate(.label("Pay"))
+                .expect(.appeared(.label("Payment Complete")))
+        }
     }
 }
 ```
+
+The heist is the assertion. If the contract does not hold, the test fails with
+the evidence.
 
 Different doors. Same runtime. Same evidence.
 
