@@ -7,10 +7,9 @@ extension FenceResponse {
     // MARK: - JSON Encoding
 
     public func jsonData(outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]) throws -> Data {
-        try PublicJSONSerializer.data(
-            encoding: PublicResponseModel(response: self),
-            outputFormatting: outputFormatting,
-            encodingFailureResponse: Self.jsonEncodingFailureResponse()
+        try FenceResponsePresenter(profile: .summary).jsonData(
+            for: self,
+            outputFormatting: outputFormatting
         )
     }
 
@@ -18,11 +17,10 @@ extension FenceResponse {
         requestId: PublicRequestId?,
         outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]
     ) throws -> Data {
-        return try PublicJSONSerializer.data(
-            encoding: PublicResponseModel(response: self),
+        return try FenceResponsePresenter(profile: .summary).jsonData(
+            for: self,
             requestId: requestId,
-            outputFormatting: outputFormatting,
-            encodingFailureResponse: Self.jsonEncodingFailureResponse()
+            outputFormatting: outputFormatting
         )
     }
 

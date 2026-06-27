@@ -8,6 +8,10 @@ extension FenceResponse {
 
     /// Token-efficient tree output for LLM agents. Omits geometry.
     public func compactFormatted() -> String {
+        FenceResponsePresenter(profile: .summary).compactText(for: self)
+    }
+
+    func compactFormatted(profile: ProjectionProfile) -> String {
         switch self {
         case .ok(let message):
             return message
@@ -28,27 +32,35 @@ extension FenceResponse {
             }
                 .joined(separator: "\n")
         case .interface(let interface, let detail):
-            var lines: [String] = [InterfaceSummary.screenDescription(for: interface)]
-            lines.append(Self.compactInterface(interface, detail: detail))
+            let projectionProfile = ProjectionProfile(
+                kind: detail == .full ? .full : profile.kind,
+                limits: profile.limits
+            )
+            let projection = InterfaceProjection(interface: interface, profile: projectionProfile)
+            var lines: [String] = [projection.screenDescription]
+            lines.append(Self.compactInterface(projection))
             return lines.joined(separator: "\n")
         case .action(let command, let result, let expectation):
-            return compactActionResult(command: command, result, expectation: expectation)
+            return compactActionResult(command: command, result, expectation: expectation, profile: profile)
         case .screenshot(let path, let payload, let options):
             return Self.compactScreenshot(
                 summary: "screenshot: \(path) (\(Int(payload.width))x\(Int(payload.height)))",
                 payload: payload,
-                options: options
+                options: options,
+                profile: profile
             )
         case .screenshotData(let payload, let options):
             return Self.compactScreenshot(
                 summary: "screenshot: \(Int(payload.width))x\(Int(payload.height))",
                 payload: payload,
-                options: options
+                options: options,
+                profile: profile
             )
         case .heistExecution(_, let result, let accessibilityTrace):
             return compactHeistFormatted(
                 result,
-                netDelta: accessibilityTrace?.meaningfulEndpointDelta
+                netDelta: accessibilityTrace?.meaningfulEndpointDelta,
+                profile: profile.kind == .summary ? .mcp : profile
             )
         case .heistCatalog(let catalog):
             return compactHeistCatalog(catalog)
@@ -79,12 +91,17 @@ extension FenceResponse {
     private static func compactScreenshot(
         summary: String,
         payload: ScreenPayload,
-        options: ScreenshotResponseOptions
+        options: ScreenshotResponseOptions,
+        profile: ProjectionProfile
     ) -> String {
         guard options.includeInterface else { return summary }
         var lines = [summary]
         if let interface = payload.interface {
-            lines.append(compactInterface(interface, detail: .full))
+            let projection = InterfaceProjection(
+                interface: interface,
+                profile: ProjectionProfile(kind: .full, limits: profile.limits)
+            )
+            lines.append(compactInterface(projection))
         } else {
             lines.append("interface: unavailable")
         }

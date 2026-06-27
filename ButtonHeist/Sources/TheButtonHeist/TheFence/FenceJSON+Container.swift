@@ -25,18 +25,12 @@ struct PublicContainer: Encodable {
     let frameHeight: Double?
     let children: [PublicTreeNode]
 
-    init(
-        container: AccessibilityContainer,
-        annotation: InterfaceContainerAnnotation?,
-        detail: InterfaceDetail,
-        observedElementCount: Int?,
-        truncation: PublicSubtreeTruncation?,
-        children: [PublicTreeNode]
-    ) {
+    init(projection: InterfaceContainerProjection, detail: InterfaceDetail) {
+        let children = projection.children.map { PublicTreeNode(projection: $0, detail: detail) }
         let fields = Self.fields(
-            for: container,
+            for: projection.container,
             children: children,
-            observedElementCount: observedElementCount
+            observedElementCount: projection.observedElementCount
         )
         self.type = fields.type
         self.label = fields.label
@@ -50,9 +44,9 @@ struct PublicContainer: Encodable {
         self.pageScrollsX = fields.pageScrollsX
         self.pageScrollsY = fields.pageScrollsY
         self.observedElementCount = fields.observedElementCount
-        self.truncation = truncation
-        self.isModalBoundary = container.isModalBoundary ? true : nil
-        self.containerName = annotation?.containerName?.rawValue
+        self.truncation = projection.truncation.map(PublicSubtreeTruncation.init(projection:))
+        self.isModalBoundary = projection.container.isModalBoundary ? true : nil
+        self.containerName = projection.containerName
         self.children = children
         guard detail == .full else {
             self.frameX = nil
@@ -61,10 +55,10 @@ struct PublicContainer: Encodable {
             self.frameHeight = nil
             return
         }
-        self.frameX = Self.sanitizedDouble(container.frame.origin.x)
-        self.frameY = Self.sanitizedDouble(container.frame.origin.y)
-        self.frameWidth = Self.sanitizedDouble(container.frame.size.width)
-        self.frameHeight = Self.sanitizedDouble(container.frame.size.height)
+        self.frameX = Self.sanitizedDouble(projection.container.frame.origin.x)
+        self.frameY = Self.sanitizedDouble(projection.container.frame.origin.y)
+        self.frameWidth = Self.sanitizedDouble(projection.container.frame.size.width)
+        self.frameHeight = Self.sanitizedDouble(projection.container.frame.size.height)
     }
 
     private static func sanitizedDouble(_ value: Double) -> Double {
@@ -183,4 +177,11 @@ struct PublicSubtreeTruncation: Encodable {
     let renderedElementCount: Int
     let omittedElementCount: Int
     let visibleElementBudget: Int
+
+    init(projection: InterfaceSubtreeTruncationProjection) {
+        self.observedElementCount = projection.observedElementCount
+        self.renderedElementCount = projection.renderedElementCount
+        self.omittedElementCount = projection.omittedElementCount
+        self.visibleElementBudget = projection.visibleElementBudget
+    }
 }

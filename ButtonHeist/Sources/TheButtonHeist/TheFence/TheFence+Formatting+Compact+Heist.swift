@@ -4,38 +4,46 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactHeistFormatted(_ result: HeistExecutionResult, netDelta: AccessibilityTrace.Delta?) -> String {
-        var text = "heist: \(result.executedTopLevelStepCount) top-level steps in \(result.durationMs)ms"
-        if let abortedAtPath = result.abortedAtPath {
+    func compactHeistFormatted(
+        _ result: HeistExecutionResult,
+        netDelta: AccessibilityTrace.Delta?,
+        profile: ProjectionProfile = .mcp
+    ) -> String {
+        compactHeistFormatted(HeistReportProjection(result: result, netDelta: netDelta, profile: profile))
+    }
+
+    func compactHeistFormatted(_ projection: HeistReportProjection) -> String {
+        var text = "heist: \(projection.summary.executedTopLevelStepCount) top-level steps in \(projection.summary.durationMs)ms"
+        if let abortedAtPath = projection.summary.abortedAtPath {
             text += " (stopped at \(abortedAtPath))"
         }
-        let checked = result.expectationsChecked
+        let checked = projection.summary.expectationsChecked
         if checked > 0 {
-            text += " [expectations: \(result.expectationsMet)/\(checked)]"
+            text += " [expectations: \(projection.summary.expectationsMet)/\(checked)]"
         }
-        if let netDelta {
-            text += " [net: \(Self.compactDeltaKind(netDelta))]"
+        if let netDelta = projection.netDelta {
+            text += " [net: \(netDelta.kind.rawValue)]"
         }
-        if let lastScreenId = Self.finalScreenId(result) {
+        if let lastScreenId = projection.finalScreenId {
             text = "\(lastScreenId) | \(text)"
         }
-        for (index, step) in result.outputReceiptNodes.enumerated() {
-            var line = "  [\(index)] \(step.reportDisplayName)"
+        for (index, step) in projection.outputNodes.enumerated() {
+            var line = "  [\(index)] \(step.displayName)"
             var detailLines: [String] = []
-            let delta = step.traceEvidenceResult?.accessibilityTrace?.endpointDelta
-            if let failureMessage = step.reportFailureMessage {
+            let delta = step.traceDelta
+            if let failureMessage = step.failureMessage {
                 line += " -> error: \(failureMessage)"
                 detailLines = Self.compactHeistFailureDeltaLines(delta, step: step)
             } else if step.status == .skipped {
                 line += " -> skipped"
-            } else if let warning = step.warningEvidence {
+            } else if let warning = step.evidence?.warning {
                 line += " -> warning: \(warning.message)"
             } else if let delta {
                 if let summary = Self.compactHeistDeltaSummary(delta, step: step) {
                     line += " -> \(summary)"
                 }
             }
-            if let expectation = step.reportExpectation {
+            if let expectation = step.expectation {
                 line += expectation.met ? " ✓" : " ✗"
             }
             text += "\n\(line)"
@@ -47,12 +55,12 @@ extension FenceResponse {
     }
 
     private static func compactHeistDeltaSummary(
-        _ delta: AccessibilityTrace.Delta,
-        step: HeistExecutionStepResult
+        _ delta: DeltaProjection,
+        step: HeistReportNodeProjection
     ) -> String? {
         let renderedDelta = Self.compactDelta(
             delta,
-            method: step.reportCommandName ?? step.reportDisplayName
+            method: step.commandName ?? step.displayName
         )
         return renderedDelta
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -62,13 +70,13 @@ extension FenceResponse {
     }
 
     private static func compactHeistFailureDeltaLines(
-        _ delta: AccessibilityTrace.Delta?,
-        step: HeistExecutionStepResult
+        _ delta: DeltaProjection?,
+        step: HeistReportNodeProjection
     ) -> [String] {
         guard let delta else { return [] }
         let renderedDelta = Self.compactDelta(
             delta,
-            method: step.reportCommandName ?? step.reportDisplayName
+            method: step.commandName ?? step.displayName
         )
         var deltaLines = renderedDelta
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -81,19 +89,12 @@ extension FenceResponse {
 
     private static func compactHeistStepDeltaSummary(
         _ summary: String,
-        step: HeistExecutionStepResult
+        step: HeistReportNodeProjection
     ) -> String {
-        let method = step.reportCommandName ?? step.reportDisplayName
+        let method = step.commandName ?? step.displayName
         let prefix = "\(method): "
         guard summary.hasPrefix(prefix) else { return summary }
         return String(summary.dropFirst(prefix.count))
-    }
-
-    /// Screen id of the last step that ran with trace evidence (action or wait).
-    private static func finalScreenId(_ result: HeistExecutionResult) -> String? {
-        result.traceResultsInExecutionOrder
-            .compactMap { $0.accessibilityTrace?.endpointScreenId }
-            .last
     }
 
 }

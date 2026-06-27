@@ -16,7 +16,8 @@ extension TheFence {
         heistName: String,
         totalTimeSeconds: Double
     ) -> HeistJUnitReport {
-        let steps = junitSteps(result: result)
+        let projection = HeistReportProjection(result: result, netDelta: nil, profile: .junit)
+        let steps = junitSteps(projection: projection)
         return HeistJUnitReport(
             heistName: heistName,
             app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
@@ -31,13 +32,17 @@ extension TheFence {
     /// Output-only step entries for the JUnit report, walked from the execution
     /// receipt tree in execution order.
     func junitSteps(result: HeistExecutionResult) -> [HeistJUnitReport.StepResult] {
-        result.outputReceiptNodes.enumerated().map { index, step in
+        junitSteps(projection: HeistReportProjection(result: result, netDelta: nil, profile: .junit))
+    }
+
+    func junitSteps(projection: HeistReportProjection) -> [HeistJUnitReport.StepResult] {
+        projection.outputNodes.enumerated().map { index, step in
             HeistJUnitReport.StepResult(
                 index: index,
-                command: step.reportCommandName ?? step.reportStepName,
-                target: step.reportTarget,
+                command: step.commandName ?? step.kind,
+                target: step.target,
                 timeSeconds: Double(step.durationMs) / 1000,
-                outcome: Self.junitOutcome(for: step, result: result)
+                outcome: Self.junitOutcome(for: step, projection: projection)
             )
         }
     }
@@ -45,12 +50,12 @@ extension TheFence {
     // MARK: - Private Helpers
 
     private static func junitOutcome(
-        for step: HeistExecutionStepResult,
-        result: HeistExecutionResult
+        for step: HeistReportNodeProjection,
+        projection: HeistReportProjection
     ) -> HeistJUnitReport.Outcome {
-        if let message = step.reportFailureMessage {
-            let enriched = step.path == result.failedStepPath
-                ? junitFailureMessage(message, result: result)
+        if let message = step.failureMessage {
+            let enriched = step.path == projection.failedStepPath
+                ? junitFailureMessage(message, projection: projection)
                 : message
             return .failed(message: enriched, errorKind: junitErrorKind(for: step))
         }
@@ -59,23 +64,23 @@ extension TheFence {
 
     private static func junitFailureMessage(
         _ message: String,
-        result: HeistExecutionResult
+        projection: HeistReportProjection
     ) -> String {
         var lines = [message]
-        if let screenshot = result.failureScreenshotSummary {
+        if let screenshot = projection.failureScreenshotSummary {
             lines.append(screenshot)
         }
-        if let interfaceDump = result.failureInterfaceDump() {
+        if let interfaceDump = projection.failureInterfaceDump {
             lines.append(interfaceDump)
         }
         return lines.joined(separator: "\n")
     }
 
-    private static func junitErrorKind(for step: HeistExecutionStepResult) -> HeistJUnitReport.ReportErrorKind? {
-        if let result = step.reportActionResult, !result.success {
-            return result.errorKind.map(HeistJUnitReport.ReportErrorKind.action)
+    private static func junitErrorKind(for step: HeistReportNodeProjection) -> HeistJUnitReport.ReportErrorKind? {
+        if let errorKind = step.actionErrorKind {
+            return .action(errorKind)
         }
-        switch step.failure?.category {
+        switch step.failureCategory {
         case .validation, .runtimeUnavailable, .targetResolution, .invocation, .loop, .explicitFailure:
             return .commandError
         case .action, .expectation, .wait, .none:

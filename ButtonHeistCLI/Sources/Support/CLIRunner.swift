@@ -1,6 +1,6 @@
 import ArgumentParser
 import Foundation
-import ButtonHeist
+@_spi(ButtonHeistInternals) import ButtonHeist
 
 /// Shared utility for standalone CLI commands that execute a single TheFence request.
 enum CLIRunner {
@@ -137,14 +137,15 @@ enum CLIRunner {
 
     @ButtonHeistActor
     private static func outputResponsePayload(_ response: FenceResponse, format: OutputFormat) {
+        let presenter = FenceResponsePresenter(profile: .summary)
         switch format {
         case .human:
-            writeOutput(response.humanFormatted())
+            writeOutput(presenter.humanText(for: response))
         case .compact:
-            writeOutput(response.compactFormatted())
+            writeOutput(presenter.compactText(for: response))
         case .json:
             do {
-                let data = try response.jsonData()
+                let data = try presenter.jsonData(for: response)
                 if let json = String(data: data, encoding: .utf8) {
                     writeOutput(json)
                 } else {
