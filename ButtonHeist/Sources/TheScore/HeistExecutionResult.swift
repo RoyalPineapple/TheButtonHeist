@@ -906,17 +906,23 @@ public struct HeistInvocationEvidence: Codable, Sendable, Equatable {
     public let name: String?
     public let argument: String?
     public let childFailedPath: String?
+    public let expectationActionResult: ActionResult?
+    public let expectation: ExpectationResult?
 
     public init(
         invocation: HeistInvocationStep? = nil,
         name: String? = nil,
         argument: String? = nil,
-        childFailedPath: String? = nil
+        childFailedPath: String? = nil,
+        expectationActionResult: ActionResult? = nil,
+        expectation: ExpectationResult? = nil
     ) {
         self.invocation = invocation
         self.name = name
         self.argument = argument
         self.childFailedPath = childFailedPath
+        self.expectationActionResult = expectationActionResult
+        self.expectation = expectation
     }
 }
 

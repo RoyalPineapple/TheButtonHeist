@@ -1559,6 +1559,64 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testHeistInvocationExpectationReturnsEvidenceOnInvokeNode() async throws {
+        var executedCommands: [RuntimeActionMessage] = []
+        let expectation = WaitStep(
+            predicate: .change(.elements(.appearedElement(.label("subtotal")))),
+            timeout: defaultActionExpectationTimeout
+        )
+        let runtime = heistRuntime(
+            observations: [
+                observedState(labels: ["Search"]),
+                observedState(labels: ["Search", "subtotal"]),
+            ],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlan(
+            definitions: [
+                try HeistPlan(
+                    name: "Cart",
+                    definitions: [
+                        try HeistPlan(
+                            name: "addItem",
+                            parameter: .string(name: "item"),
+                            body: [
+                                .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+                            ]
+                        ),
+                    ],
+                    body: []
+                ),
+            ],
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["Cart", "addItem"],
+                    argument: .string(.literal("Milk")),
+                    expectation: expectation
+                )),
+            ]
+        )
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(executedCommands, [
+            .activate(.predicate(ElementPredicate(label: "Milk"))),
+        ])
+        XCTAssertEqual(heist.expectationsChecked, 1)
+        XCTAssertEqual(heist.expectationsMet, 1)
+        XCTAssertEqual(step.kind, .invoke)
+        XCTAssertEqual(step.invocationEvidence?.expectationActionResult?.method, .wait)
+        XCTAssertEqual(step.invocationEvidence?.expectationActionResult?.success, true)
+        XCTAssertEqual(step.invocationEvidence?.expectation?.met, true)
+        XCTAssertEqual(step.reportExpectation?.met, true)
+    }
+
     func testHeistInvocationExecutesQualifiedExportedNamespaceDependency() async throws {
         var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(

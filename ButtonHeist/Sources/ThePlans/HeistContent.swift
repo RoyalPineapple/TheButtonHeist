@@ -352,11 +352,74 @@ public struct HeistDef<Input>: Sendable {
     }
 }
 
-private struct HeistInvocationContent: HeistContent {
-    let invocation: HeistInvocationStep
-    let heistDefinitions: [HeistPlan]
+public struct HeistInvocationContent: HeistContent {
+    public let invocation: HeistInvocationStep
+    public let heistDefinitions: [HeistPlan]
+    let explicitExpectationTimeout: Double?
+    let expectationValidationFailure: String?
 
-    var heistSteps: [HeistStep] { [.invoke(invocation)] }
+    public var heistSteps: [HeistStep] { [.invoke(invocation)] }
+
+    public var heistBuildDiagnostics: [String] {
+        guard let expectationValidationFailure else { return [] }
+        return ["RunHeist \(invocation.capabilityName) is invalid: \(expectationValidationFailure)"]
+    }
+
+    init(
+        invocation: HeistInvocationStep,
+        heistDefinitions: [HeistPlan],
+        explicitExpectationTimeout: Double? = nil,
+        expectationValidationFailure: String? = nil
+    ) {
+        self.invocation = invocation
+        self.heistDefinitions = heistDefinitions
+        self.explicitExpectationTimeout = explicitExpectationTimeout
+        self.expectationValidationFailure = expectationValidationFailure
+    }
+}
+
+public extension HeistInvocationContent {
+    func expect(
+        _ predicate: AccessibilityPredicateExpr,
+        timeout: Double? = nil
+    ) -> HeistInvocationContent {
+        let timeoutResult = composeExpectationTimeout(
+            existing: invocation.expectation,
+            existingExplicit: explicitExpectationTimeout,
+            nextExplicit: timeout
+        )
+        let predicateResult = invocation.expectation.map {
+            composeExpectationPredicates(existing: $0.predicate, next: predicate)
+        } ?? ExpectationPredicateComposition(predicate: predicate, failure: nil)
+        let validationFailure = [
+            expectationValidationFailure,
+            predicateResult.failure,
+            timeoutResult.failure,
+        ].compactMap { $0 }.joined(separator: "; ")
+
+        return HeistInvocationContent(
+            invocation: HeistInvocationStep(
+                path: invocation.path,
+                argument: invocation.argument,
+                expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
+            ),
+            heistDefinitions: heistDefinitions,
+            explicitExpectationTimeout: timeoutResult.explicitTimeout,
+            expectationValidationFailure: validationFailure.isEmpty ? nil : validationFailure
+        )
+    }
+
+    func expect(timeout: Double? = nil) -> HeistInvocationContent {
+        expect(.change(.elements()), timeout: timeout)
+    }
+
+    @_disfavoredOverload
+    func expect(
+        _ predicate: AccessibilityPredicate,
+        timeout: Double? = nil
+    ) -> HeistInvocationContent {
+        expect(.predicate(predicate), timeout: timeout)
+    }
 }
 
 private enum HeistDefinitionBuildResult: Sendable {
@@ -373,7 +436,7 @@ private struct HeistDefinitionBuildError: Error, Sendable, CustomStringConvertib
 }
 
 public extension HeistDef where Input == Void {
-    func callAsFunction() throws -> some HeistContent {
+    func callAsFunction() throws -> HeistInvocationContent {
         try invocation(argument: .none)
     }
 }
@@ -401,21 +464,21 @@ extension HeistDef: HeistContent {
 }
 
 public extension HeistDef where Input == String {
-    func callAsFunction(_ input: String) throws -> some HeistContent {
+    func callAsFunction(_ input: String) throws -> HeistInvocationContent {
         try invocation(argument: .string(.literal(input)))
     }
 
-    func callAsFunction(_ input: StringExpr) throws -> some HeistContent {
+    func callAsFunction(_ input: StringExpr) throws -> HeistInvocationContent {
         try invocation(argument: .string(input))
     }
 }
 
 public extension HeistDef where Input == ElementTarget {
-    func callAsFunction(_ input: ElementTarget) throws -> some HeistContent {
+    func callAsFunction(_ input: ElementTarget) throws -> HeistInvocationContent {
         try invocation(argument: .elementTarget(.target(input)))
     }
 
-    func callAsFunction(_ input: ElementTargetExpr) throws -> some HeistContent {
+    func callAsFunction(_ input: ElementTargetExpr) throws -> HeistInvocationContent {
         try invocation(argument: .elementTarget(input))
     }
 }
@@ -429,24 +492,24 @@ public extension HeistDef where Input == ElementTarget {
 /// references a capability by name and lowers to the invocation IR; the named
 /// capability must resolve within the closed plan — runtime safety enforces
 /// resolution, arity, type, and non-recursion.
-public func RunHeist(_ name: String) -> some HeistContent {
+public func RunHeist(_ name: String) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .none)
 }
 
-public func RunHeist(_ name: String, _ input: String) -> some HeistContent {
+public func RunHeist(_ name: String, _ input: String) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .string(.literal(input)))
 }
 
-public func RunHeist(_ name: String, _ input: StringExpr) -> some HeistContent {
+public func RunHeist(_ name: String, _ input: StringExpr) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .string(input))
 }
 
 @_disfavoredOverload
-public func RunHeist(_ name: String, _ input: ElementTarget) -> some HeistContent {
+public func RunHeist(_ name: String, _ input: ElementTarget) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .elementTarget(.target(input)))
 }
 
-public func RunHeist(_ name: String, _ input: ElementTargetExpr) -> some HeistContent {
+public func RunHeist(_ name: String, _ input: ElementTargetExpr) -> HeistInvocationContent {
     runHeistInvocation(name, argument: .elementTarget(input))
 }
 

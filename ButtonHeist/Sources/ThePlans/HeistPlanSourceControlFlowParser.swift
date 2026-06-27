@@ -105,9 +105,52 @@ extension HeistPlanSourceParser {
             argument = try parseHeistArgument()
         }
         try expectSymbol(")")
-        return .invoke(HeistInvocationStep(
+        var invocation = HeistInvocationStep(
             path: name.split(separator: ".").map(String.init),
             argument: argument
+        )
+        var explicitExpectationTimeout: Double?
+        while consumeSymbol(".") {
+            let chainToken = currentToken
+            let chain = try parseIdentifier()
+            switch chain {
+            case "expect":
+                try expectSymbol("(")
+                let predicate: AccessibilityPredicateExpr
+                let timeout: Double?
+                if currentToken.isSymbol(")") {
+                    predicate = .change(.elements())
+                    timeout = nil
+                } else {
+                    predicate = try parseAccessibilityPredicateExpr()
+                    timeout = try parseTrailingTimeout(defaultValue: nil)
+                }
+                try expectSymbol(")")
+                let timeoutResult = composeExpectationTimeout(
+                    existing: invocation.expectation,
+                    existingExplicit: explicitExpectationTimeout,
+                    nextExplicit: timeout
+                )
+                let predicateResult = invocation.expectation.map {
+                    composeExpectationPredicates(existing: $0.predicate, next: predicate)
+                } ?? ExpectationPredicateComposition(predicate: predicate, failure: nil)
+                if let failure = predicateResult.failure ?? timeoutResult.failure {
+                    throw error(chainToken, failure)
+                }
+                invocation = HeistInvocationStep(
+                    path: invocation.path,
+                    argument: invocation.argument,
+                    expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
+                )
+                explicitExpectationTimeout = timeoutResult.explicitTimeout
+            default:
+                throw error(chainToken, "unsupported RunHeist chain '.\(chain)'")
+            }
+        }
+        return .invoke(HeistInvocationStep(
+            path: invocation.path,
+            argument: invocation.argument,
+            expectation: invocation.expectation
         ))
     }
 

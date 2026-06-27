@@ -202,6 +202,8 @@ public extension HeistExecutionStepResult {
             return waitEvidence?.actionResult
         case .repeatUntil:
             return repeatUntilEvidence?.actionResult
+        case .invoke:
+            return invocationEvidence?.expectationActionResult
         default:
             return nil
         }
@@ -230,6 +232,8 @@ public extension HeistExecutionStepResult {
             return waitEvidence?.expectation
         case .repeatUntil:
             return repeatUntilEvidence?.expectation
+        case .invoke:
+            return invocationEvidence?.expectation
         default:
             return nil
         }
@@ -256,6 +260,8 @@ public extension HeistExecutionStepResult {
             return waitEvidence?.actionResult
         case .repeatUntil:
             return repeatUntilEvidence?.actionResult
+        case .invoke:
+            return invocationEvidence?.expectationActionResult
         default:
             return nil
         }

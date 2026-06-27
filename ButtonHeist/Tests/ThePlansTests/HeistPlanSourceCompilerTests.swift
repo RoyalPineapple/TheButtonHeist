@@ -107,6 +107,46 @@ import ThePlans
     #expect(plan == expected)
 }
 
+@Test func `inline plan source RunHeist expectation compiles`() throws {
+    let plan = try HeistPlanSourceCompiler().compile("""
+    HeistPlan("shop") {
+        HeistDef<String>("Cart.addItem", parameter: "item") { item in
+            Activate(.label(item))
+        }
+
+        RunHeist("Cart.addItem", "Milk")
+            .expect(.appeared(.label("subtotal")))
+    }
+    """)
+    let expected = try HeistPlan(
+        name: "shop",
+        definitions: [
+            try HeistPlan(name: "Cart", definitions: [
+                try HeistPlan(
+                    name: "addItem",
+                    parameter: .string(name: "item"),
+                    body: [
+                        .action(try ActionStep(command: .activate(.predicate(.label(.ref("item")))))),
+                    ]
+                ),
+            ], body: []),
+        ],
+        body: [
+            .invoke(HeistInvocationStep(
+                path: ["Cart", "addItem"],
+                argument: .string(.literal("Milk")),
+                expectation: WaitStep(
+                    predicate: .change(.elements(.appearedElement(.label("subtotal")))),
+                    timeout: defaultActionExpectationTimeout
+                )
+            )),
+        ]
+    )
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `inline plan source property update expectations compile`() throws {
     let scoped = try HeistPlanSourceCompiler().compile(root(#"""
     TypeText("Bruschetta", into: .identifier("Search"))
