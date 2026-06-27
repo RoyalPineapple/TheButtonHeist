@@ -53,7 +53,10 @@ A single move proves one contract. A heist defines a product capability.
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search Items"))
-            .expect(.exists(.element(.label("Search Items"), .value(item))))
+            .expect(.updated(
+                element: .label("Search Items"),
+                .value(item)
+            ))
 
         Activate(.label(item))
             .expect(.appeared(.element(
