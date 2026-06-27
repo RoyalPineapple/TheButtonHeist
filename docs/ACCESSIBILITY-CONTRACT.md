@@ -1,4 +1,4 @@
-# Accessibility Contract Runtime
+# Accessibility contract runtime
 
 The Button Heist lets callers write programs against an app's accessibility
 contract.
@@ -8,7 +8,37 @@ assistive technologies: labels, identifiers, roles, values, states, and
 actions. The Button Heist makes that contract executable for agents, tests, and
 replay.
 
-## Runtime Invariant
+## Executable step
+
+Most UI automation treats interaction as an input event. The Button Heist treats
+interaction as an asserted transition in the accessibility contract. The event
+is not the interesting part. The settled change is.
+
+One action crosses the same checkpoint every time:
+
+```text
+read settled accessibility interface
+-> resolve semantic target
+-> perform declared action
+-> wait for settled accessibility interface
+-> compute delta
+-> assert evidence
+-> return receipt
+```
+
+For example:
+
+```swift
+Activate(.label("Pay"))
+    .expect(.appeared(.label("Payment Complete")))
+```
+
+This step resolves the control declared as `Pay`, performs the activation
+exposed through the accessibility interface, waits for settlement, then proves
+that `Payment Complete` appeared. The important question is not whether an
+event was delivered. It is whether the interface contract was fulfilled.
+
+## Runtime invariant
 
 ```mermaid
 flowchart LR
@@ -21,6 +51,36 @@ flowchart LR
 Semantic intent enters the runtime. The Button Heist owns target resolution, reveal,
 element inflation, action execution, settling, and evidence. The result is
 settled semantic evidence, not a mechanical playback log.
+
+```mermaid
+flowchart LR
+    Contract["Accessibility contract<br/>what exists, what can act"]
+    Before["Settled accessibility interface<br/>before"]
+    Action["Declared action<br/>activate, type, rotor, wait"]
+    After["Settled accessibility interface<br/>after"]
+    Evidence["Evidence<br/>appeared, disappeared, updated"]
+    Receipt["Receipt<br/>what changed, what was proven"]
+    Next["Next step"]
+
+    Contract --> Before
+    Before --> Action
+    Action --> After
+    Before --> Evidence
+    After --> Evidence
+    Evidence --> Receipt
+    Receipt --> Next
+    Next --> Before
+```
+
+## Receipts
+
+A receipt is plain evidence about what happened. It names the step, the status,
+the before and after interface, the delta, and the facts that satisfied or broke
+the contract.
+
+Receipts are not live handles, replay objects, or private runtime state. They
+are reportable facts that callers can assert against, print, store, or use to
+compose the next heist.
 
 ## Boundaries
 
@@ -55,7 +115,7 @@ commands. Viewport and mechanical commands are explicit when viewport state or
 the physical gesture itself is the intent. Viewport/debug commands are directly
 executable for inspection, but they are not durable heist primitives.
 
-## Conformance Cases
+## Conformance cases
 
 The product contract is healthy when these cases hold:
 
