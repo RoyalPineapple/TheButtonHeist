@@ -172,92 +172,96 @@ func stringMatchArgumentValue(_ value: String, mode: String = "exact") -> HeistV
     ])
 }
 
-@ButtonHeistActor
-func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (TheFence, MockConnection) {
-    let mockConn = MockConnection()
-    mockConn.serverInfo = TheFenceFixtures.testServerInfo
-    mockConn.autoResponse = { message in
-        switch message {
-        case .ping:
-            return .pong(PongPayload(
-                buttonHeistVersion: "0.0.1",
-                appName: "MockApp",
-                bundleIdentifier: "com.test.mock",
-                appVersion: "1.0",
-                appBuild: "1",
-                serverInstanceIdentifier: "mock-server",
-                serverTimestampMs: 1_700_000_000_000
-            ))
-        case .requestInterface:
-            return .interface(Interface(timestamp: Date(), tree: []))
-        case .requestScreen:
-            return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
-        default:
-            return .actionResult(ActionResult(success: true, method: .activate))
-        }
-    }
-
-    let mockDisc = MockDiscovery()
-    mockDisc.discoveredDevices = [TheFenceFixtures.testDevice]
-
-    let fence = TheFence(configuration: configuration)
-    fence.handoff.makeDiscovery = { mockDisc }
-    fence.handoff.makeConnection = { _ in mockConn }
-
-    makeReachabilityConnection = { _ in
-        let probe = MockConnection()
-        probe.emitTransportReadyOnConnect = true
-        probe.autoResponse = { message in
-            if case .status = message {
-                return .status(StatusPayload(
-                    identity: StatusIdentity(
-                        appName: "Mock", bundleIdentifier: "com.test",
-                        appBuild: "1", deviceName: "Mock",
-                        systemVersion: "18.0", buttonHeistVersion: "0.0.1"
-                    ),
-                    session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-                ))
-            }
-            return .actionResult(ActionResult(success: true, method: .activate))
-        }
-        return probe
-    }
-
-    return (fence, mockConn)
-}
-
-func makeReceiptTestElement(
-    label: String,
-    value: String? = nil,
-    identifier: String? = nil,
-    traits: [HeistTrait] = [.staticText],
-    actions: [ElementAction] = []
-) -> HeistElement {
-    HeistElement(
-        description: label,
-        label: label,
-        value: value,
-        identifier: identifier,
-        traits: traits,
-        frameX: 0,
-        frameY: 0,
-        frameWidth: 100,
-        frameHeight: 44,
-        actions: actions
-    )
-}
-
-enum ReceiptTestInterfaceNode {
-    case element(HeistElement)
-    case container(AccessibilityContainer, containerName: ContainerName? = nil, children: [ReceiptTestInterfaceNode])
-}
-
-struct ReceiptTestInterfaceFixture {
-    let nodes: [ReceiptTestInterfaceNode]
-    let timestamp: Date
+struct TestHeistElementBuilder {
+    var description: String?
+    var label: String?
+    var value: String?
+    var identifier: String?
+    var hint: String?
+    var traits: [HeistTrait]
+    var frameX: Double
+    var frameY: Double
+    var frameWidth: Double
+    var frameHeight: Double
+    var activationPointX: Double?
+    var activationPointY: Double?
+    var respondsToUserInteraction: Bool
+    var customContent: [HeistCustomContent]?
+    var rotors: [HeistRotor]?
+    var actions: [ElementAction]?
 
     init(
-        nodes: [ReceiptTestInterfaceNode],
+        label: String? = "Element",
+        value: String? = nil,
+        identifier: String? = nil,
+        hint: String? = nil,
+        traits: [HeistTrait] = [.staticText],
+        frameX: Double = 0,
+        frameY: Double = 0,
+        frameWidth: Double = 100,
+        frameHeight: Double = 44,
+        activationPointX: Double? = nil,
+        activationPointY: Double? = nil,
+        respondsToUserInteraction: Bool = true,
+        customContent: [HeistCustomContent]? = nil,
+        rotors: [HeistRotor]? = nil,
+        actions: [ElementAction]? = nil
+    ) {
+        self.description = label
+        self.label = label
+        self.value = value
+        self.identifier = identifier
+        self.hint = hint
+        self.traits = traits
+        self.frameX = frameX
+        self.frameY = frameY
+        self.frameWidth = frameWidth
+        self.frameHeight = frameHeight
+        self.activationPointX = activationPointX
+        self.activationPointY = activationPointY
+        self.respondsToUserInteraction = respondsToUserInteraction
+        self.customContent = customContent
+        self.rotors = rotors
+        self.actions = actions
+    }
+
+    func build() -> HeistElement {
+        HeistElement(
+            description: description ?? label ?? identifier ?? "Element",
+            label: label,
+            value: value,
+            identifier: identifier,
+            hint: hint,
+            traits: traits,
+            frameX: frameX,
+            frameY: frameY,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight,
+            activationPointX: activationPointX,
+            activationPointY: activationPointY,
+            respondsToUserInteraction: respondsToUserInteraction,
+            customContent: customContent,
+            rotors: rotors,
+            actions: actions ?? defaultActions
+        )
+    }
+
+    private var defaultActions: [ElementAction] {
+        traits.contains(.button) ? [.activate] : []
+    }
+}
+
+struct TestInterfaceBuilder {
+    enum Node {
+        case element(HeistElement)
+        case container(AccessibilityContainer, containerName: ContainerName? = nil, children: [Node])
+    }
+
+    var nodes: [Node]
+    var timestamp: Date
+
+    init(
+        nodes: [Node],
         timestamp: Date = Date(timeIntervalSince1970: 0)
     ) {
         self.nodes = nodes
@@ -268,15 +272,15 @@ struct ReceiptTestInterfaceFixture {
         elements: [HeistElement],
         timestamp: Date = Date(timeIntervalSince1970: 0)
     ) {
-        self.init(nodes: elements.map(ReceiptTestInterfaceNode.element), timestamp: timestamp)
+        self.init(nodes: elements.map(Node.element), timestamp: timestamp)
     }
 
-    var interface: Interface {
+    func build() -> Interface {
         var traversalIndex = 0
         var elementAnnotations: [InterfaceElementAnnotation] = []
         var containerAnnotations: [InterfaceContainerAnnotation] = []
 
-        func convert(_ node: ReceiptTestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
+        func convert(_ node: Node, path: TreePath) -> AccessibilityHierarchy {
             switch node {
             case .element(let element):
                 let index = traversalIndex
@@ -339,18 +343,90 @@ struct ReceiptTestInterfaceFixture {
     }
 }
 
+typealias ReceiptTestInterfaceNode = TestInterfaceBuilder.Node
+
+@ButtonHeistActor
+func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (TheFence, MockConnection) {
+    let mockConn = MockConnection()
+    mockConn.serverInfo = TheFenceFixtures.testServerInfo
+    mockConn.autoResponse = { message in
+        switch message {
+        case .ping:
+            return .pong(PongPayload(
+                buttonHeistVersion: "0.0.1",
+                appName: "MockApp",
+                bundleIdentifier: "com.test.mock",
+                appVersion: "1.0",
+                appBuild: "1",
+                serverInstanceIdentifier: "mock-server",
+                serverTimestampMs: 1_700_000_000_000
+            ))
+        case .requestInterface:
+            return .interface(Interface(timestamp: Date(), tree: []))
+        case .requestScreen:
+            return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
+        default:
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+    }
+
+    let mockDisc = MockDiscovery()
+    mockDisc.discoveredDevices = [TheFenceFixtures.testDevice]
+
+    let fence = TheFence(configuration: configuration)
+    fence.handoff.makeDiscovery = { mockDisc }
+    fence.handoff.makeConnection = { _ in mockConn }
+
+    makeReachabilityConnection = { _ in
+        let probe = MockConnection()
+        probe.emitTransportReadyOnConnect = true
+        probe.autoResponse = { message in
+            if case .status = message {
+                return .status(StatusPayload(
+                    identity: StatusIdentity(
+                        appName: "Mock", bundleIdentifier: "com.test",
+                        appBuild: "1", deviceName: "Mock",
+                        systemVersion: "18.0", buttonHeistVersion: "0.0.1"
+                    ),
+                    session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                ))
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+        return probe
+    }
+
+    return (fence, mockConn)
+}
+
+func makeReceiptTestElement(
+    label: String,
+    value: String? = nil,
+    identifier: String? = nil,
+    traits: [HeistTrait] = [.staticText],
+    actions: [ElementAction] = []
+) -> HeistElement {
+    TestHeistElementBuilder(
+        label: label,
+        value: value,
+        identifier: identifier,
+        traits: traits,
+        actions: actions
+    ).build()
+}
+
 func makeReceiptTestInterface(
     _ elements: [HeistElement],
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Interface {
-    ReceiptTestInterfaceFixture(elements: elements, timestamp: timestamp).interface
+    TestInterfaceBuilder(elements: elements, timestamp: timestamp).build()
 }
 
 func makeReceiptTestInterface(
     nodes: [ReceiptTestInterfaceNode],
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Interface {
-    ReceiptTestInterfaceFixture(nodes: nodes, timestamp: timestamp).interface
+    TestInterfaceBuilder(nodes: nodes, timestamp: timestamp).build()
 }
 
 func makeTestInterface(
@@ -445,6 +521,84 @@ func makeReceiptTestTrace(
     return AccessibilityTrace(captures: [beforeCapture, afterCapture])
 }
 
+func makeTestScreenPayload(
+    pngData: String = "",
+    width: Double = 393,
+    height: Double = 852,
+    timestamp: Date = Date(timeIntervalSince1970: 0),
+    interface: Interface? = nil
+) -> ScreenPayload {
+    ScreenPayload(
+        pngData: pngData,
+        width: width,
+        height: height,
+        timestamp: timestamp,
+        interface: interface
+    )
+}
+
+func makeTestActionResult(
+    success: Bool = true,
+    method: ActionMethod = .activate,
+    message: String? = nil,
+    errorKind: ErrorKind? = nil,
+    payload: ResultPayload? = nil,
+    accessibilityTrace: AccessibilityTrace? = nil,
+    settled: Bool? = nil,
+    settleTimeMs: Int? = nil,
+    subjectEvidence: ActionSubjectEvidence? = nil,
+    activationTrace: ActivationTrace? = nil,
+    timing: ActionPerformanceTiming? = nil
+) -> ActionResult {
+    ActionResult(
+        success: success,
+        method: method,
+        message: message,
+        errorKind: errorKind,
+        payload: payload,
+        accessibilityTrace: accessibilityTrace,
+        settled: settled,
+        settleTimeMs: settleTimeMs,
+        subjectEvidence: subjectEvidence,
+        activationTrace: activationTrace,
+        timing: timing
+    )
+}
+
+func makeTestHeistActionStep(
+    path: String = "$.body[0]",
+    command: HeistActionCommand? = nil,
+    result: ActionResult = makeTestActionResult(),
+    expectationActionResult: ActionResult? = nil,
+    expectation: ExpectationResult? = nil,
+    durationMs: Int = 1
+) -> HeistExecutionStepResult {
+    HeistExecutionStepResult(
+        path: path,
+        kind: .action,
+        status: result.success ? .passed : .failed,
+        durationMs: durationMs,
+        evidence: .action(HeistActionEvidence(
+            command: command,
+            actionResult: result,
+            expectationActionResult: expectationActionResult,
+            expectation: expectation
+        ))
+    )
+}
+
+func makeTestHeistExecutionResult(
+    steps: [HeistExecutionStepResult] = [makeTestHeistActionStep()],
+    durationMs: Int = 1,
+    abortedAtPath: String? = nil
+) -> HeistExecutionResult {
+    HeistExecutionResult(
+        steps: steps,
+        durationMs: durationMs,
+        abortedAtPath: abortedAtPath
+    )
+}
+
 func makeBackgroundElementsChangedTrace(elementCount: Int) -> AccessibilityTrace {
     let interface = makeReceiptTestInterface(elementCount: elementCount)
     let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: interface)
@@ -484,6 +638,14 @@ func publicJSONObject(
     }
 }
 
+func publicJSONProbe(
+    _ response: FenceResponse,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) -> JSONProbe {
+    JSONProbe(publicJSONObject(response, file: file, line: line))
+}
+
 func publicInterfaceJSONObject(
     _ interface: PublicInterface,
     file: StaticString = #filePath,
@@ -495,6 +657,118 @@ func publicInterfaceJSONObject(
         return [:]
     }
     return dict
+}
+
+func publicInterfaceJSONProbe(
+    _ interface: PublicInterface,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) throws -> JSONProbe {
+    JSONProbe(try publicInterfaceJSONObject(interface, file: file, line: line))
+}
+
+struct JSONProbe {
+    private let value: Any?
+    private let path: String
+
+    init(_ value: Any?, path: String = "$") {
+        self.value = value
+        self.path = path
+    }
+
+    func object(
+        _ key: String? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> JSONProbe {
+        let probe = key.map(child) ?? self
+        guard probe.value is [String: Any] else {
+            XCTFail("Expected object at \(probe.path), got \(probe.typeDescription)", file: file, line: line)
+            return JSONProbe([:], path: probe.path)
+        }
+        return probe
+    }
+
+    func array(
+        _ key: String? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> [JSONProbe] {
+        let probe = key.map(child) ?? self
+        guard let array = probe.value as? [Any] else {
+            XCTFail("Expected array at \(probe.path), got \(probe.typeDescription)", file: file, line: line)
+            return []
+        }
+        return array.enumerated().map { index, value in
+            JSONProbe(value, path: "\(probe.path)[\(index)]")
+        }
+    }
+
+    func string(
+        _ key: String? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> String? {
+        typedValue(key, as: String.self, file: file, line: line)
+    }
+
+    func bool(
+        _ key: String? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Bool? {
+        typedValue(key, as: Bool.self, file: file, line: line)
+    }
+
+    func int(
+        _ key: String? = nil,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Int? {
+        let probe = key.map(child) ?? self
+        if let value = probe.value as? Int { return value }
+        if let number = probe.value as? NSNumber { return number.intValue }
+        XCTFail("Expected int at \(probe.path), got \(probe.typeDescription)", file: file, line: line)
+        return nil
+    }
+
+    func assertMissing(
+        _ key: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard let object = value as? [String: Any] else {
+            XCTFail("Expected object at \(path), got \(typeDescription)", file: file, line: line)
+            return
+        }
+        XCTAssertNil(object[key], "Expected \(path).\(key) to be absent", file: file, line: line)
+    }
+
+    private func child(_ key: String) -> JSONProbe {
+        guard let object = value as? [String: Any] else {
+            return JSONProbe(nil, path: "\(path).\(key)")
+        }
+        return JSONProbe(object[key], path: "\(path).\(key)")
+    }
+
+    private func typedValue<T>(
+        _ key: String?,
+        as type: T.Type,
+        file: StaticString,
+        line: UInt
+    ) -> T? {
+        let probe = key.map(child) ?? self
+        guard let value = probe.value as? T else {
+            XCTFail("Expected \(type) at \(probe.path), got \(probe.typeDescription)", file: file, line: line)
+            return nil
+        }
+        return value
+    }
+
+    private var typeDescription: String {
+        guard let value else { return "nil" }
+        return String(describing: Swift.type(of: value))
+    }
 }
 
 struct HeistInspection {

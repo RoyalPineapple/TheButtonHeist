@@ -17,6 +17,44 @@ import ThePlans
 /// retained from a previous exploration that has since scrolled out of view.
 extension Screen {
 
+    struct TestEntry {
+        let element: AccessibilityElement
+        let heistId: HeistId
+        let object: NSObject?
+
+        init(
+            _ element: AccessibilityElement,
+            heistId: HeistId,
+            object: NSObject? = nil
+        ) {
+            self.element = element
+            self.heistId = heistId
+            self.object = object
+        }
+
+        init(
+            label: String = "Element",
+            heistId: HeistId? = nil,
+            value: String? = nil,
+            identifier: String? = nil,
+            traits: UIAccessibilityTraits = .none,
+            frame: CGRect = CGRect(x: 0, y: 0, width: 100, height: 44),
+            object: NSObject? = nil
+        ) {
+            self.init(
+                AccessibilityElement.make(
+                    label: label,
+                    value: value,
+                    identifier: identifier,
+                    traits: traits,
+                    frame: frame
+                ),
+                heistId: heistId ?? HeistId(rawValue: label),
+                object: object
+            )
+        }
+    }
+
     /// An entry that is registered but is not in the live hierarchy. Used to
     /// simulate known semantic state without a real scrollable container.
     struct OffViewportEntry {
@@ -41,6 +79,19 @@ extension Screen {
     /// Build a `Screen` from a flat list of `(element, heistId)` pairs. The
     /// hierarchy is constructed from the live pairs in order; known-only
     /// entries are added to `elements` but not to `hierarchy`.
+    static func makeForTests(
+        _ entries: [TestEntry],
+        offViewport: [OffViewportEntry] = [],
+        firstResponderHeistId: HeistId? = nil
+    ) -> Screen {
+        makeForTests(
+            elements: entries.map { (element: $0.element, heistId: $0.heistId) },
+            objects: Dictionary(uniqueKeysWithValues: entries.map { ($0.heistId, $0.object) }),
+            offViewport: offViewport,
+            firstResponderHeistId: firstResponderHeistId
+        )
+    }
+
     static func makeForTests(
         elements liveElements: [(element: AccessibilityElement, heistId: HeistId)] = [],
         objects: [HeistId: NSObject?] = [:],

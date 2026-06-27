@@ -126,10 +126,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             totalMs: 116
         )
 
-        let data = try encoder.encode(timing)
-        let decoded = try decoder.decode(ActionPerformanceTiming.self, from: data)
-
-        XCTAssertEqual(decoded, timing)
+        _ = try assertRoundTrip(timing, encoder: encoder, decoder: decoder)
     }
 
     func testActionPerformanceTimingDecodesPartialPayload() throws {
@@ -158,10 +155,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             timing: timing
         )
 
-        let data = try encoder.encode(result)
-        let decoded = try decoder.decode(ActionResult.self, from: data)
-
-        XCTAssertEqual(decoded, result)
+        let decoded = try assertRoundTrip(result, encoder: encoder, decoder: decoder)
         XCTAssertEqual(decoded.timing, timing)
     }
 

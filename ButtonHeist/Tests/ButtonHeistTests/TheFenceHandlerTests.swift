@@ -242,30 +242,11 @@ final class TheFenceHandlerTests: XCTestCase {
         return try TheFence.CommandArgumentEnvelope(values: arguments).decodedElementTarget()
     }
 
-    private func testElement(
-        label: String,
-        identifier: String? = nil,
-        traits: [HeistTrait] = []
-    ) -> HeistElement {
-        HeistElement(
-            description: label,
-            label: label,
-            value: nil,
-            identifier: identifier,
-            traits: traits,
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 10,
-            frameHeight: 10,
-            actions: traits.contains(.button) ? [.activate] : []
-        )
-    }
-
     private func selectionTestInterface(includeDuplicateGroup: Bool = false) -> Interface {
-        let header = testElement(label: "Menu", traits: [.header])
-        let submit = testElement(label: "Submit", traits: [.button])
-        let cancel = testElement(label: "Cancel", traits: [.button])
-        let footer = testElement(label: "Footer")
+        let header = TestHeistElementBuilder(label: "Menu", traits: [.header]).build()
+        let submit = TestHeistElementBuilder(label: "Submit", traits: [.button]).build()
+        let cancel = TestHeistElementBuilder(label: "Cancel", traits: [.button]).build()
+        let footer = TestHeistElementBuilder(label: "Footer", traits: []).build()
         var nodes: [ReceiptTestInterfaceNode] = [
             .element(header),
             .container(
@@ -283,7 +264,7 @@ final class TheFenceHandlerTests: XCTestCase {
             .element(footer),
         ]
         if includeDuplicateGroup {
-            let archive = testElement(label: "Archive", traits: [.button])
+            let archive = TestHeistElementBuilder(label: "Archive", traits: [.button]).build()
             nodes.insert(
                 .container(
                     makeReceiptTestSemanticContainer(
@@ -2694,7 +2675,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         let predicate = AccessibilityPredicate.exists(ElementPredicate(label: "Home"))
         let interface = makeReceiptTestInterface([
-            testElement(label: "Home", traits: [.staticText]),
+            TestHeistElementBuilder(label: "Home").build(),
         ])
         let trace = AccessibilityTrace.projectingForTests(.screenChanged(.init(
             elementCount: 1,
@@ -3174,19 +3155,18 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(command: .getInterface)
 
-        let json = publicJSONObject(response)
-        let interface = json["interface"] as! [String: Any]
-        XCTAssertEqual(interface["screenDescription"] as? String, "Menu — 2 buttons")
-        XCTAssertEqual(interface["screenId"] as? String, "menu")
-        let navigation = interface["navigation"] as! [String: Any]
-        XCTAssertEqual(navigation["screenTitle"] as? String, "Menu")
-        XCTAssertNil(navigation["backButton"])
-        XCTAssertNil(navigation["tabBarItems"])
-        let tree = interface["tree"] as! [[String: Any]]
+        let interface = publicJSONProbe(response).object("interface")
+        XCTAssertEqual(interface.string("screenDescription"), "Menu — 2 buttons")
+        XCTAssertEqual(interface.string("screenId"), "menu")
+        let navigation = interface.object("navigation")
+        XCTAssertEqual(navigation.string("screenTitle"), "Menu")
+        navigation.assertMissing("backButton")
+        navigation.assertMissing("tabBarItems")
+        let tree = interface.array("tree")
         XCTAssertEqual(tree.count, 3)
-        let container = tree[1]["container"] as! [String: Any]
-        XCTAssertEqual(container["containerName"] as? String, "semantic_actions__actions")
-        let children = container["children"] as! [[String: Any]]
+        let container = tree[1].object("container")
+        XCTAssertEqual(container.string("containerName"), "semantic_actions__actions")
+        let children = container.array("children")
         XCTAssertEqual(children.count, 2)
     }
 
@@ -3229,17 +3209,15 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(query.maxScrollsPerContainer, 25)
         XCTAssertEqual(query.maxScrollsPerDiscovery, 40)
 
-        let json = publicJSONObject(response)
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
+        let tree = publicJSONProbe(response).object("interface").array("tree")
         XCTAssertEqual(tree.count, 1)
-        let container = tree[0]["container"] as! [String: Any]
-        XCTAssertEqual(container["containerName"] as? String, "semantic_actions__actions")
-        let children = container["children"] as! [[String: Any]]
+        let container = tree[0].object("container")
+        XCTAssertEqual(container.string("containerName"), "semantic_actions__actions")
+        let children = container.array("children")
         XCTAssertEqual(children.count, 2)
-        XCTAssertEqual((children[0]["element"] as? [String: Any])?["label"] as? String, "Submit")
-        XCTAssertNil((children[0]["element"] as? [String: Any])?["heistId"])
-        XCTAssertEqual((children[1]["element"] as? [String: Any])?["label"] as? String, "Cancel")
+        XCTAssertEqual(children[0].object("element").string("label"), "Submit")
+        children[0].object("element").assertMissing("heistId")
+        XCTAssertEqual(children[1].object("element").string("label"), "Cancel")
     }
 
     @ButtonHeistActor
@@ -3275,13 +3253,12 @@ final class TheFenceHandlerTests: XCTestCase {
     func testContainerNameAppearsInSummaryJsonAndCompactOutput() {
         let response = FenceResponse.interface(selectionTestInterface(), detail: .summary)
 
-        let json = publicJSONObject(response)
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
-        let container = tree[1]["container"] as! [String: Any]
-        XCTAssertEqual(container["containerName"] as? String, "semantic_actions__actions")
-        XCTAssertEqual(container["containerName"] as? String, "semantic_actions__actions")
-        XCTAssertNil(container["frameX"], "summary should expose identity, not geometry")
+        let container = publicJSONProbe(response)
+            .object("interface")
+            .array("tree")[1]
+            .object("container")
+        XCTAssertEqual(container.string("containerName"), "semantic_actions__actions")
+        container.assertMissing("frameX")
 
         let compact = response.compactFormatted()
         XCTAssertTrue(
@@ -3294,7 +3271,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testGetInterfaceSendsMatcherInObservationQuery() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let submit = testElement(label: "Submit", traits: [.button])
+        let submit = TestHeistElementBuilder(label: "Submit", traits: [.button]).build()
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface:
@@ -3316,13 +3293,11 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(query.matcher.checks, [.label(.exact("Submit"))])
 
-        let json = publicJSONObject(response)
-        let responseInterface = json["interface"] as! [String: Any]
-        let tree = responseInterface["tree"] as! [[String: Any]]
+        let tree = publicJSONProbe(response).object("interface").array("tree")
         XCTAssertEqual(tree.count, 1)
-        let element = tree[0]["element"] as! [String: Any]
-        XCTAssertEqual(element["label"] as? String, "Submit")
-        XCTAssertNil(element["heistId"])
+        let element = tree[0].object("element")
+        XCTAssertEqual(element.string("label"), "Submit")
+        element.assertMissing("heistId")
     }
 
     @ButtonHeistActor

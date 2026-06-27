@@ -16,10 +16,10 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     func testNoChangeSparseRoundTrip() throws {
         let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 12))
         let data = try encoder.encode(delta)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(json["kind"] as? String, "noChange")
-        XCTAssertEqual(json["elementCount"] as? Int, 12)
-        XCTAssertNil(json["transient"])
+        let json = JSONProbe(data: data)
+        XCTAssertEqual(json.string("kind"), "noChange")
+        XCTAssertEqual(json.int("elementCount"), 12)
+        json.assertMissing("transient")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .noChange(let payload) = decoded else {
@@ -48,14 +48,13 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         )
         let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 4, captureEdge: edge))
         let data = try encoder.encode(delta)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let edgeJson = try XCTUnwrap(json["captureEdge"] as? [String: Any])
-        let beforeJson = try XCTUnwrap(edgeJson["before"] as? [String: Any])
-        let afterJson = try XCTUnwrap(edgeJson["after"] as? [String: Any])
-        XCTAssertEqual(beforeJson["sequence"] as? Int, 1)
-        XCTAssertEqual(beforeJson["hash"] as? String, "sha256:before")
-        XCTAssertEqual(afterJson["sequence"] as? Int, 2)
-        XCTAssertEqual(afterJson["hash"] as? String, "sha256:after")
+        let edgeJson = JSONProbe(data: data).object("captureEdge")
+        let beforeJson = edgeJson.object("before")
+        let afterJson = edgeJson.object("after")
+        XCTAssertEqual(beforeJson.int("sequence"), 1)
+        XCTAssertEqual(beforeJson.string("hash"), "sha256:before")
+        XCTAssertEqual(afterJson.int("sequence"), 2)
+        XCTAssertEqual(afterJson.string("hash"), "sha256:after")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .noChange(let payload) = decoded else {
@@ -71,19 +70,19 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         let edits = ElementEdits(added: [added])
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(elementCount: 14, edits: edits))
         let data = try encoder.encode(delta)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(json["kind"] as? String, "elementsChanged")
-        XCTAssertEqual(json["elementCount"] as? Int, 14)
+        let json = JSONProbe(data: data)
+        XCTAssertEqual(json.string("kind"), "elementsChanged")
+        XCTAssertEqual(json.int("elementCount"), 14)
         // edits live nested under "edits" — never flat at the top level.
-        XCTAssertNil(json["added"])
-        XCTAssertNil(json["removed"])
-        XCTAssertNil(json["updated"])
-        XCTAssertNil(json["treeInserted"])
-        XCTAssertNil(json["transient"])
-        let editsJson = try XCTUnwrap(json["edits"] as? [String: Any])
-        XCTAssertNotNil(editsJson["added"])
-        XCTAssertNil(editsJson["removed"])
-        XCTAssertNil(editsJson["updated"])
+        json.assertMissing("added")
+        json.assertMissing("removed")
+        json.assertMissing("updated")
+        json.assertMissing("treeInserted")
+        json.assertMissing("transient")
+        let editsJson = json.object("edits")
+        editsJson.assertPresent("added")
+        editsJson.assertMissing("removed")
+        editsJson.assertMissing("updated")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -98,8 +97,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     func testElementsChangedEmptyEditsOmitsKey() throws {
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(elementCount: 3, edits: ElementEdits()))
         let data = try encoder.encode(delta)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertNil(json["edits"], "edits should be omitted when empty")
+        JSONProbe(data: data).assertMissing("edits")
 
         // Missing edits key must decode as an empty ElementEdits.
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
@@ -128,15 +126,14 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         let data = try encoder.encode(delta)
 
         // heistId is excluded from the wire — the delta is self-describing by label.
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let editsJSON = try XCTUnwrap((json["edits"] as? [String: Any]))
-        let removedJSON = try XCTUnwrap(editsJSON["removed"] as? [[String: Any]])
-        XCTAssertEqual(removedJSON.first?["label"] as? String, "Old")
-        XCTAssertNil(removedJSON.first?["heistId"])
-        let updatedJSON = try XCTUnwrap(editsJSON["updated"] as? [[String: Any]])
-        XCTAssertNil(updatedJSON.first?["element"])
-        XCTAssertEqual((updatedJSON.first?["before"] as? [String: Any])?["value"] as? String, "1")
-        XCTAssertEqual((updatedJSON.first?["after"] as? [String: Any])?["value"] as? String, "2")
+        let editsJSON = JSONProbe(data: data).object("edits")
+        let removedJSON = editsJSON.array("removed")
+        XCTAssertEqual(removedJSON.first?.string("label"), "Old")
+        removedJSON.first?.assertMissing("heistId")
+        let updatedJSON = editsJSON.array("updated")
+        updatedJSON.first?.assertMissing("element")
+        XCTAssertEqual(updatedJSON.first?.object("before").string("value"), "1")
+        XCTAssertEqual(updatedJSON.first?.object("after").string("value"), "2")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -165,12 +162,12 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             elementCount: 8, newInterface: interface
         ))
         let data = try encoder.encode(delta)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(json["kind"] as? String, "screenChanged")
-        XCTAssertEqual(json["elementCount"] as? Int, 8)
-        XCTAssertNotNil(json["newInterface"])
-        XCTAssertNil(json["postEdits"])
-        XCTAssertNil(json["transient"])
+        let json = JSONProbe(data: data)
+        XCTAssertEqual(json.string("kind"), "screenChanged")
+        XCTAssertEqual(json.int("elementCount"), 8)
+        json.assertPresent("newInterface")
+        json.assertMissing("postEdits")
+        json.assertMissing("transient")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .screenChanged(let payload) = decoded else {
@@ -189,8 +186,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             transient: [transient]
         ))
         let data = try encoder.encode(delta)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertNotNil(json["transient"])
+        JSONProbe(data: data).assertPresent("transient")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .screenChanged(let payload) = decoded else {
@@ -202,30 +198,34 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     // MARK: - Malformed Input Rejection
 
     func testRejectsUnknownKind() {
-        let payload = #"{"kind": "shrugChanged", "elementCount": 0}"#
-        XCTAssertThrowsError(
-            try decoder.decode(AccessibilityTrace.Delta.self, from: Data(payload.utf8))
+        assertDecodeFailure(
+            AccessibilityTrace.Delta.self,
+            json: #"{"kind": "shrugChanged", "elementCount": 0}"#,
+            decoder: decoder
         )
     }
 
     func testRejectsMissingKind() {
-        let payload = #"{"elementCount": 0}"#
-        XCTAssertThrowsError(
-            try decoder.decode(AccessibilityTrace.Delta.self, from: Data(payload.utf8))
+        assertDecodeFailure(
+            AccessibilityTrace.Delta.self,
+            json: #"{"elementCount": 0}"#,
+            decoder: decoder
         )
     }
 
     func testRejectsScreenChangedWithoutNewInterface() {
-        let payload = #"{"kind": "screenChanged", "elementCount": 0}"#
-        XCTAssertThrowsError(
-            try decoder.decode(AccessibilityTrace.Delta.self, from: Data(payload.utf8))
+        assertDecodeFailure(
+            AccessibilityTrace.Delta.self,
+            json: #"{"kind": "screenChanged", "elementCount": 0}"#,
+            decoder: decoder
         )
     }
 
     func testRejectsMissingElementCount() {
-        let payload = #"{"kind": "noChange"}"#
-        XCTAssertThrowsError(
-            try decoder.decode(AccessibilityTrace.Delta.self, from: Data(payload.utf8))
+        assertDecodeFailure(
+            AccessibilityTrace.Delta.self,
+            json: #"{"kind": "noChange"}"#,
+            decoder: decoder
         )
     }
 
@@ -233,17 +233,16 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
 
     func testEmptyElementEditsEncodesEmptyObject() throws {
         let data = try encoder.encode(ElementEdits())
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertTrue(json.isEmpty)
+        XCTAssertTrue(JSONProbe(data: data).isEmptyObject())
     }
 
     func testElementEditsRoundTripDropsEmptyArrays() throws {
         let edits = ElementEdits(added: [makeElement(label: "X")])
         let data = try encoder.encode(edits)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertNotNil(json["added"])
-        XCTAssertNil(json["removed"])
-        XCTAssertNil(json["updated"])
+        let json = JSONProbe(data: data)
+        json.assertPresent("added")
+        json.assertMissing("removed")
+        json.assertMissing("updated")
 
         let decoded = try decoder.decode(ElementEdits.self, from: data)
         XCTAssertEqual(decoded.added.map(\.label), ["X"])
@@ -253,14 +252,10 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeElement(label: String, value: String? = nil) -> HeistElement {
-        HeistElement(
-            description: label,
+        makeTestHeistElement(
             label: label,
             value: value,
-            identifier: nil,
-            traits: [.button],
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            actions: [.activate]
+            traits: [.button]
         )
     }
 }
