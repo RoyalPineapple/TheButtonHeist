@@ -90,63 +90,6 @@ public struct SessionStatePayload: Sendable, Equatable {
     }
 }
 
-/// Stable public category for a command failure.
-public enum PublicFailureKind: String, Sendable, Equatable {
-    case request
-    case discovery
-    case connection
-    case authentication = "auth"
-    case session
-    case configuration
-    case server
-    case client
-    case unknown
-}
-
-/// Canonical public failure shape used by CLI and MCP responses.
-public struct PublicFailure: Sendable, Equatable {
-    /// Stable machine-readable failure code.
-    public let code: String
-    /// Broad public category for the failure.
-    public let kind: PublicFailureKind
-    /// User-facing failure message.
-    public let message: String
-    /// Lifecycle metadata and recovery hint for the failure.
-    public let details: FailureDetails
-
-    private static let unknownDetails = FailureDetails(
-        errorCode: "client.unknown",
-        phase: .client,
-        retryable: false,
-        hint: nil
-    )
-
-    /// Creates a public failure from fully typed metadata.
-    public init(message: String, details: FailureDetails, kind: PublicFailureKind? = nil) {
-        self.code = details.errorCode
-        self.kind = kind ?? PublicFailureKind(details: details)
-        self.message = message
-        self.details = details
-    }
-
-    /// Creates a public failure, falling back to the unknown client error shape when details are absent.
-    public init(message: String, details: FailureDetails?, kind: PublicFailureKind? = nil) {
-        let resolvedKind: PublicFailureKind?
-        if let kind {
-            resolvedKind = kind
-        } else if details == nil {
-            resolvedKind = .unknown
-        } else {
-            resolvedKind = nil
-        }
-        self.init(
-            message: message,
-            details: details ?? Self.unknownDetails,
-            kind: resolvedKind
-        )
-    }
-}
-
 enum FenceRequestErrorCode {
     static let missingTarget = "request.missing_target"
 }
@@ -207,58 +150,6 @@ private enum PublicFailureMapper {
     }
 }
 
-private extension PublicFailureKind {
-    init(details: FailureDetails) {
-        if let prefix = details.errorCode.split(separator: ".").first.map(String.init) {
-            switch prefix {
-            case "request":
-                self = .request
-                return
-            case "discovery":
-                self = .discovery
-                return
-            case "setup", "connection", "protocol", "tls":
-                self = .connection
-                return
-            case "auth":
-                self = .authentication
-                return
-            case "session":
-                self = .session
-                return
-            case "config":
-                self = .configuration
-                return
-            case "server":
-                self = .server
-                return
-            case "client", "formatting", "screen":
-                self = .client
-                return
-            default:
-                break
-            }
-        }
-
-        switch details.phase {
-        case .discovery:
-            self = .discovery
-        case .setup, .transport, .protocolNegotiation, .tls:
-            self = .connection
-        case .authentication:
-            self = .authentication
-        case .session:
-            self = .session
-        case .server:
-            self = .server
-        case .request:
-            self = .request
-        case .client:
-            self = .client
-        }
-    }
-}
-
 /// Typed response from TheFence command execution.
 ///
 /// Cases marked `…Data` carry the raw payload in memory (base64-encoded).
@@ -297,7 +188,12 @@ public enum FenceResponse {
     /// Builds an error response with typed metadata when the error belongs to TheFence.
     public static func failure(_ error: Error) -> FenceResponse {
         let failure = PublicFailureMapper.map(error)
-        return .error(failure.message, details: failure.details)
+        return .error(failure)
+    }
+
+    /// Builds an error response from the canonical public failure value.
+    public static func error(_ failure: PublicFailure) -> FenceResponse {
+        .error(failure.message, details: failure.details)
     }
 
     /// Canonical public failure payload when this response is an error.
