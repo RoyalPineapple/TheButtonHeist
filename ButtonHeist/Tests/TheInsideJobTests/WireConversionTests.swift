@@ -136,14 +136,9 @@ final class WireConverterTests: XCTestCase {
         )
     }
 
-    private enum TestInterfaceNode {
-        case element(Screen.ScreenElement)
-        case container(ContainerName, AccessibilityContainer, children: [TestInterfaceNode])
-    }
-
     /// Build a test tree node from a ScreenElement leaf.
     private func wireLeaf(_ element: Screen.ScreenElement) -> TestInterfaceNode {
-        .element(element)
+        .screenElement(element)
     }
 
     /// Build a test tree container node with a fixed containerName.
@@ -154,7 +149,6 @@ final class WireConverterTests: XCTestCase {
         children: [TestInterfaceNode]
     ) -> TestInterfaceNode {
         .container(
-            containerName,
             AccessibilityContainer(
                 type: type,
                 frame: AccessibilityRect(
@@ -164,6 +158,7 @@ final class WireConverterTests: XCTestCase {
                     height: frame.size.height
                 )
             ),
+            containerName: containerName,
             children: children
         )
     }
@@ -172,38 +167,7 @@ final class WireConverterTests: XCTestCase {
         nodes: [TestInterfaceNode],
         timestamp: Date
     ) -> Interface {
-        var traversalIndex = 0
-        var elementAnnotations: [InterfaceElementAnnotation] = []
-        var containerAnnotations: [InterfaceContainerAnnotation] = []
-
-        func convert(_ node: TestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
-            switch node {
-            case .element(let element):
-                let index = traversalIndex
-                traversalIndex += 1
-                elementAnnotations.append(InterfaceElementAnnotation(
-                    path: path,
-                    actions: WireConversion.convert(element.element).actions
-                ))
-                return .element(element.element, traversalIndex: index)
-            case .container(let containerName, let container, let children):
-                containerAnnotations.append(InterfaceContainerAnnotation(path: path, containerName: containerName))
-                return .container(
-                    container,
-                    children: children.enumerated().map { index, child in
-                        convert(child, path: path.appending(index))
-                    }
-                )
-            }
-        }
-
-        return Interface(
-            timestamp: timestamp,
-            tree: nodes.enumerated().map { index, node in
-                convert(node, path: TreePath([index]))
-            },
-            annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
-        )
+        TestInterfaceFixture(nodes: nodes, timestamp: timestamp).interface
     }
 
     private func computeDelta(

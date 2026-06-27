@@ -495,6 +495,51 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("has no content-space position"))
     }
 
+    func testFreshLiveRebindMissPreservesVisibleTargetDiagnostics() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        rootView.addSubview(makeButton(label: "Current Visible", frame: CGRect(x: 40, y: 120, width: 240, height: 44)))
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let staleTarget = AccessibilityElement.make(
+            label: "Gone Target",
+            traits: .button,
+            frame: CGRect(x: 40, y: 120, width: 240, height: 44),
+            respondsToUserInteraction: false
+        )
+        let staleScreen = Screen.makeForTests(
+            elements: [(staleTarget, HeistId(rawValue: "gone_target"))],
+            objects: [HeistId(rawValue: "gone_target"): nil]
+        )
+        brains.navigation.elementInflation.discoverTarget = { _ in staleScreen }
+        defer {
+            brains.navigation.elementInflation.discoverTarget = nil
+        }
+
+        let result = await brains.navigation.elementInflation.inflate(
+            for: .predicate(ElementPredicate(label: "Gone Target", traits: [.button])),
+            method: .activate,
+            deallocatedBoundary: "test inflation"
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected stale refresh failure, got \(result)")
+        }
+        XCTAssertEqual(failure.failedStep, .staleRefresh)
+        XCTAssertEqual(failure.failureKind, .targetUnavailable)
+        XCTAssertTrue(failure.message.contains("element inflation failed [staleRefresh]"))
+        XCTAssertTrue(failure.message.contains("target was not found in fresh live geometry"))
+        XCTAssertTrue(failure.message.contains("No match for"))
+        XCTAssertTrue(failure.message.contains("Gone Target"))
+        XCTAssertTrue(failure.message.contains("scope: visible"))
+        XCTAssertFalse(failure.message.contains("live target became stale"))
+    }
+
     func testKnownOffscreenTargetWithoutLiveScrollParentFailsNoRevealPath() async {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)

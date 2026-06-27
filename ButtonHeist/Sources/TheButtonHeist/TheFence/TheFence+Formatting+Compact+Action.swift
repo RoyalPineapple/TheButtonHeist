@@ -115,11 +115,10 @@ extension FenceResponse {
     }
 
     private static func compactActionFailure(commandName: String, result: ActionResult, screenId: String?) -> String {
-        let message = result.message ?? commandName
-        let errorCode = result.publicFailureDetails?.errorCode
-            ?? result.publicErrorClass
-            ?? ErrorKind.actionFailed.rawValue
-        var text = "\(commandName): error[\(errorCode)]: \(message)"
+        guard let failure = result.publicFailureProjection(fallbackMessage: commandName) else {
+            return "\(commandName): ok"
+        }
+        var text = "\(commandName): error[\(failure.compactCode)]: \(failure.message)"
         if let screenId {
             text = "\(screenId) | \(text)"
         }

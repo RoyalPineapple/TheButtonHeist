@@ -59,12 +59,12 @@ struct PublicActionResponse: FencePublicJSONResponse {
         self.delta = result.accessibilityTrace?.endpointDelta.map(PublicDelta.init)
         self.screenName = result.accessibilityTrace?.endpointScreenName
         self.screenId = result.accessibilityTrace?.endpointScreenId
-        self.errorClass = result.publicErrorClass
-        let details = result.publicFailureDetails
-        self.errorCode = details?.errorCode
-        self.phase = details?.phase.rawValue
-        self.retryable = details?.retryable
-        self.hint = details?.hint
+        let failure = result.publicFailureProjection(fallbackMessage: method)
+        self.errorClass = failure?.errorClass
+        self.errorCode = failure?.errorCode
+        self.phase = failure?.phase
+        self.retryable = failure?.retryable
+        self.hint = failure?.hint
         self.expectation = surfacedExpectation.map {
             PublicExpectationResult(result: $0, hint: expectationHint)
         }
@@ -96,6 +96,16 @@ extension ActionResult {
         success ? nil : (errorKind ?? .actionFailed).rawValue
     }
 
+    /// Canonical public failure projection shared by JSON and compact renderers.
+    func publicFailureProjection(fallbackMessage: String) -> PublicActionFailureProjection? {
+        guard !success else { return nil }
+        return PublicActionFailureProjection(
+            message: message ?? fallbackMessage,
+            errorClass: publicErrorClass ?? ErrorKind.actionFailed.rawValue,
+            details: publicFailureDetails
+        )
+    }
+
     /// Structured failure metadata for the diagnosable accessibility-tree case.
     var publicFailureDetails: FailureDetails? {
         guard !success else { return nil }
@@ -114,6 +124,18 @@ extension ActionResult {
     // `actionFailed` wire results to local diagnostics.
     static let accessibilityTreeUnavailableMessage =
         "Could not access accessibility tree: no traversable app windows"
+}
+
+struct PublicActionFailureProjection {
+    let message: String
+    let errorClass: String
+    let details: FailureDetails?
+
+    var errorCode: String? { details?.errorCode }
+    var phase: String? { details?.phase.rawValue }
+    var retryable: Bool? { details?.retryable }
+    var hint: String? { details?.hint }
+    var compactCode: String { errorCode ?? errorClass }
 }
 
 struct PublicRotorResult: Encodable {
@@ -592,12 +614,12 @@ struct PublicHeistReportActionResult: Encodable {
         self.delta = result.accessibilityTrace?.endpointDelta.map(PublicHeistDelta.init(delta:))
         self.screenName = result.accessibilityTrace?.endpointScreenName
         self.screenId = result.accessibilityTrace?.endpointScreenId
-        self.errorClass = result.publicErrorClass
-        let details = result.publicFailureDetails
-        self.errorCode = details?.errorCode
-        self.phase = details?.phase.rawValue
-        self.retryable = details?.retryable
-        self.hint = details?.hint
+        let failure = result.publicFailureProjection(fallbackMessage: method)
+        self.errorClass = failure?.errorClass
+        self.errorCode = failure?.errorCode
+        self.phase = failure?.phase
+        self.retryable = failure?.retryable
+        self.hint = failure?.hint
         self.activationTrace = result.activationTrace
         self.timing = result.timing
         let omissions = PublicHeistActionResultOmissions(result: result)

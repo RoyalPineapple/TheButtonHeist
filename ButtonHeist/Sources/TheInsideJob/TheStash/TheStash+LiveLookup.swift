@@ -34,11 +34,10 @@ extension TheStash {
     }
 
     func liveScrollView(forContainerName containerName: ContainerName) -> UIScrollView? {
-        liveLookup.scrollView(
-            for: containerName,
-            semanticContainer: uniqueSemanticContainer(named: containerName),
-            tripwire: tripwire
-        )
+        if let scrollView = liveLookup.scrollView(forContainerName: containerName) {
+            return scrollView
+        }
+        return uniqueLiveScrollView(for: semanticContainers(named: containerName))
     }
 
     func liveScrollView(for container: SemanticScreen.Container) -> UIScrollView? {
@@ -46,7 +45,7 @@ extension TheStash {
     }
 
     func uniqueSemanticContainer(named containerName: ContainerName) -> SemanticScreen.Container? {
-        let matches = semanticContainersInTraversalOrder.filter { $0.containerName == containerName }
+        let matches = semanticContainers(named: containerName)
         return matches.count == 1 ? matches[0] : nil
     }
 
@@ -80,6 +79,22 @@ extension TheStash {
 
     func liveScrollContainerDiagnostics() -> String {
         liveLookup.scrollContainerDiagnostics()
+    }
+
+    private func semanticContainers(named containerName: ContainerName) -> [SemanticScreen.Container] {
+        semanticContainersInTraversalOrder.filter { $0.containerName == containerName }
+    }
+
+    private func uniqueLiveScrollView(for containers: [SemanticScreen.Container]) -> UIScrollView? {
+        var scrollViews = Set<UIScrollView>()
+        for container in containers {
+            guard let scrollView = liveLookup.scrollView(
+                for: container,
+                tripwire: tripwire
+            ) else { continue }
+            scrollViews.insert(scrollView)
+        }
+        return scrollViews.count == 1 ? scrollViews.first : nil
     }
 }
 
