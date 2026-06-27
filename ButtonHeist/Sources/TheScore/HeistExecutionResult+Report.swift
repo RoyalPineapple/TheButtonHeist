@@ -1,5 +1,5 @@
-import ThePlans
 import Foundation
+import ThePlans
 
 // MARK: - Heist Report Facts
 //
@@ -10,11 +10,16 @@ import Foundation
 public extension HeistExecutionStepResult {
     /// Number of executed receipt nodes in this subtree, including this node.
     var executedNodeCount: Int {
-        (status == .skipped ? 0 : 1) + children.reduce(0) { $0 + $1.executedNodeCount }
+        (outcome.status == .skipped ? 0 : 1) + children.reduce(0) { $0 + $1.executedNodeCount }
     }
 
     var isFailure: Bool {
-        status == .failed || children.contains(where: \.isFailure)
+        switch outcome {
+        case .failed:
+            return true
+        case .passed, .skipped:
+            return children.contains(where: \.isFailure)
+        }
     }
 
     var firstFailedStep: HeistExecutionStepResult? {
@@ -23,11 +28,11 @@ public extension HeistExecutionStepResult {
                 return failed
             }
         }
-        return status == .failed ? self : nil
+        return outcome.status == .failed ? self : nil
     }
 
     var reportStatus: HeistExecutionStepStatus {
-        status
+        outcome.status
     }
 
     var actionEvidence: HeistActionEvidence? {
@@ -123,8 +128,8 @@ public extension HeistExecutionStepResult {
     /// Message to surface for this step. Failure evidence wins over compact
     /// success summaries because failed receipts are the detail-oriented case.
     var reportMessage: String? {
-        if let failure {
-            return failure.observed
+        if case .failed(let outcome) = outcome {
+            return outcome.failure.observed
         }
         if let warning = warningEvidence {
             return warning.message
@@ -232,13 +237,13 @@ public extension HeistExecutionStepResult {
 
     /// Number of expectations evaluated in this subtree.
     var expectationsChecked: Int {
-        (status == .skipped || reportExpectation == nil ? 0 : 1)
+        (outcome.status == .skipped || reportExpectation == nil ? 0 : 1)
             + children.reduce(0) { $0 + $1.expectationsChecked }
     }
 
     /// Number of evaluated expectations that were met in this subtree.
     var expectationsMet: Int {
-        (status == .skipped ? 0 : ((reportExpectation?.met == true) ? 1 : 0))
+        (outcome.status == .skipped ? 0 : ((reportExpectation?.met == true) ? 1 : 0))
             + children.reduce(0) { $0 + $1.expectationsMet }
     }
 
@@ -265,7 +270,7 @@ public extension HeistExecutionStepResult {
     /// Public-facing failure message for a failed step, derived from factual
     /// execution evidence.
     var reportFailureMessage: String? {
-        guard status == .failed else { return nil }
+        guard case .failed(let outcome) = outcome else { return nil }
         if children.contains(where: { $0.status == .failed }) {
             switch kind {
             case .conditional, .forEachIteration, .repeatUntilIteration, .heist, .invoke:
@@ -274,16 +279,7 @@ public extension HeistExecutionStepResult {
                 break
             }
         }
-        if let failure {
-            return failure.observed
-        }
-        if let action = reportActionResult, !action.success {
-            return action.message ?? "action failed"
-        }
-        if let expectation = reportExpectation, !expectation.met {
-            return expectation.actual ?? "expectation not met"
-        }
-        return "heist step failed"
+        return outcome.failure.observed
     }
 }
 
@@ -312,7 +308,12 @@ public extension HeistExecutionResult {
 
     /// Whether any step in the execution tree failed.
     var isFailure: Bool {
-        steps.contains(where: \.isFailure)
+        switch outcome {
+        case .failed:
+            return true
+        case .passed:
+            return false
+        }
     }
 
     /// First failed receipt node. Child failures are canonical before compound
