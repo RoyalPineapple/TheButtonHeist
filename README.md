@@ -130,7 +130,7 @@ known elements:
 
 Because The Button Heist acts from a settled accessibility interface and reads another settled accessibility interface afterward, diagnosis starts from facts. The diagnostic can show what the accessibility contract actually contained.
 
-Receipts are intentionally plain. They are boring in the useful way: they say what ran, what changed, and where the machine stopped. They are not live handles, replay objects, or private runtime state. They carry evidence you can assert against, print, report, or use to compose the next heist.
+Receipts are intentionally plain. Boring in the useful way: they say what ran, what changed, and where the machine stopped. They are not live handles, replay objects, or private runtime state. They carry evidence you can assert against, print, report, or use to compose the next heist.
 
 ## Heists
 
