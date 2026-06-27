@@ -33,15 +33,17 @@ The important question is not whether an event was delivered. It is whether the 
 
 ## Why this holds up
 
-Contracts reduce ambiguity. The Button Heist pulls UI ambiguity into the open by asking the app what it declares, acting through that declaration, and keeping the evidence afterward.
+Contracts reduce ambiguity. The Button Heist asks the app what it declares now,
+acts through that declaration, waits for the interface to settle, and returns
+the evidence.
 
-That gives agents and tests a steadier surface:
+That changes the unit of automation:
 
-- product semantics, not screen coordinates
-- settled state, not sleeps
-- declared accessibility actions, not private implementation details
-- receipts, not hope
 - reusable product capabilities, not long transcripts of taps
+- product semantics, not screen coordinates
+- settled evidence, not sleeps
+- the same heist language for agents and tests
+- receipts you can assert, print, report, and compose
 
 ## First heist
 
@@ -66,9 +68,23 @@ HeistPlan("shop") {
 }
 ```
 
-Each `Cart.addItem` call still runs through accessibility predicates and receipts. But callers can work at the level of the product: search, add to cart, checkout.
+Each `Cart.addItem` call runs the same product capability with a new argument.
+The heist owns the search, activation, settlement, and evidence. The caller says
+what product move they want.
 
 That is where the tool changes shape. The accessibility interface becomes the language of app interaction.
+
+## Ways to run heists
+
+Agents and tests use the same heist language. That is the practical payoff of
+defining product capabilities against the accessibility contract.
+
+- `perform(step:)` runs one Button Heist step from MCP.
+- `list_heists` and `describe_heist` let an agent discover named capabilities.
+- `run_heist(plan:)` runs a composed `HeistPlan` from MCP or the CLI.
+- Checked-in Swift heist files compile to the same validated plan your tests can run.
+
+Different doors. Same runtime. Same evidence.
 
 ## Receipts
 
@@ -153,7 +169,10 @@ Add the MCP server to your project's `.mcp.json`:
 
 ### 3. Drive the app
 
-Agents usually start with `get_interface`, then act with commands such as `activate`, `type_text`, `rotor`, `wait`, and `run_heist`.
+Agents usually start with `get_interface`, then use `perform(step:)` for one
+semantic step or `run_heist(plan:)` for a named capability.
+
+The CLI exposes the same runtime as terminal commands:
 
 ```bash
 buttonheist list_devices
@@ -168,20 +187,6 @@ For long-running automation, `json_lines` keeps one connection open and accepts 
 ```bash
 printf '%s\n' '{"command":"get_interface"}' | buttonheist json_lines
 ```
-
-## Ways to run heists
-
-The twist is that agents and tests use the same heist language.
-
-An agent can drive the app one precise step at a time with `perform(step:)`.
-When the job has a name, the same language becomes a `HeistPlan`: something an
-agent can discover, the CLI can run, and a test suite can keep in source control.
-
-- `perform(step:)` runs one Button Heist step from MCP.
-- `run_heist(plan:)` runs a composed `HeistPlan` from MCP or the CLI.
-- Checked-in Swift heist files compile to the same validated plan your tests can run.
-
-Different doors. Same runtime. Same receipts.
 
 ## Screenshots and gestures
 
