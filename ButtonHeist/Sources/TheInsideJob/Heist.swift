@@ -204,6 +204,8 @@ public struct Heist: Sendable {
 /// receipt, while the closure lowers to a validated `HeistPlan` and executes
 /// through the same in-app heist runtime as `run_heist`.
 @MainActor
+@available(*, deprecated, message: "Use runHeist from ButtonHeistTesting in Swift tests. RunHeist remains the DSL composition step inside HeistPlan.")
+@discardableResult
 public func RunHeist<Content: HeistContent>(
     _ name: String,
     @HeistBuilder _ content: () throws -> Content
@@ -226,6 +228,8 @@ func RunHeist<Content: HeistContent>(
 /// The `argument` value belongs to Swift; the closure receives a DSL reference
 /// to the root parameter so durable behavior still lives in the `HeistPlan`.
 @MainActor
+@available(*, deprecated, message: "Use runHeist from ButtonHeistTesting in Swift tests. RunHeist remains the DSL composition step inside HeistPlan.")
+@discardableResult
 public func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: String,
@@ -249,6 +253,8 @@ func RunHeist<Content: HeistContent>(
 
 @_disfavoredOverload
 @MainActor
+@available(*, deprecated, message: "Use runHeist from ButtonHeistTesting in Swift tests. RunHeist remains the DSL composition step inside HeistPlan.")
+@discardableResult
 public func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: ElementTarget,
@@ -272,6 +278,8 @@ func RunHeist<Content: HeistContent>(
 
 /// Swift/test runner boundary for a one-element-target-argument Button Heist plan.
 @MainActor
+@available(*, deprecated, message: "Use runHeist from ButtonHeistTesting in Swift tests. RunHeist remains the DSL composition step inside HeistPlan.")
+@discardableResult
 public func RunHeist<Content: HeistContent>(
     _ name: String,
     argument input: ElementTargetExpr,

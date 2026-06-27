@@ -28,6 +28,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "47CC85220F1B9BAB16C8A47D"
+               BuildableName = "ButtonHeistTesting.framework"
+               BlueprintName = "ButtonHeistTesting"
+               ReferencedContainer = "container:ButtonHeist.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "4966D1848821855A88573DCD"
                BuildableName = "TheInsideJob.framework"
                BlueprintName = "TheInsideJob"

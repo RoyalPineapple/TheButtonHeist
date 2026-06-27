@@ -2,6 +2,7 @@
 import XCTest
 import ThePlans
 
+import ButtonHeistTesting
 import TheInsideJob
 
 private enum DogfoodHome {
@@ -278,7 +279,7 @@ private enum LongListScreen {
 final class DogfoodForAllHeistTests: XCTestCase {
 
     func testFormFlowsUsePublicHeists() async throws {
-        let heist = try await Heist {
+        let heist = try await runHeist("DogfoodFormFlows") {
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.fillProfile("Ada Lovelace")
@@ -296,7 +297,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testListAndCalculatorFlowsUsePublicHeists() async throws {
-        let heist = try await Heist {
+        let heist = try await runHeist("DogfoodListAndCalculatorFlows") {
             try DogfoodHome.openScreen("Todo List")
             try TodoScreen.completeItem("Buy groceries, High priority")
 
@@ -318,7 +319,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testControlsAndPresentationFlowsUsePublicHeists() async throws {
-        let heist = try await Heist {
+        let heist = try await runHeist("DogfoodControlsAndPresentationFlows") {
             try DogfoodHome.openScreen("Controls Demo")
 
             ForEach(["Buttons & Actions", "Display"]) { screen in
@@ -351,7 +352,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testPublicRootInputsAndPrebuiltPlansDriveDemoApp() async throws {
-        let stringRoot = try await Heist("Grace Hopper") { name in
+        let stringRoot = try await runHeist("DogfoodFillProfileName", argument: "Grace Hopper") { name in
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Text Input")
             try TextInputScreen.fillProfile(name)
@@ -370,7 +371,10 @@ final class DogfoodForAllHeistTests: XCTestCase {
         XCTAssertTrue(stringRoot.result.actionMethods.contains(.typeText))
         XCTAssertTrue(stringRoot.result.actionMethods.contains(.resignFirstResponder))
 
-        let targetRoot = try await Heist(.element(label: "Primary Button", traits: [.button])) { target in
+        let targetRoot = try await runHeist(
+            "DogfoodActivatePrimaryButton",
+            argument: .element(label: "Primary Button", traits: [.button])
+        ) { target in
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Buttons & Actions")
 
@@ -402,7 +406,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testRuntimeControlFlowAndLoopResultsUseDemoAppEvidence() async throws {
-        let heist = try await Heist {
+        let heist = try await runHeist("DogfoodRuntimeControlFlowAndLoops") {
             try DogfoodHome.openScreen("Controls Demo")
 
             If {
@@ -450,7 +454,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testAdjustableControlsRepeatUntilDrivesVolumeToMaximum() async throws {
-        let heist = try await Heist {
+        let heist = try await runHeist("DogfoodAdjustableControlsRepeatUntil") {
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Adjustable Controls")
             try AdjustableControlsScreen.driveVolumeToMaximum()
@@ -472,7 +476,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testAdvancedRuntimeActionsUsePublicHeistsAgainstDemoApp() async throws {
-        let heist = try await Heist {
+        let heist = try await runHeist("DogfoodAdvancedRuntimeActions") {
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Adjustable Controls")
             try AdjustableControlsScreen.adjustVolume()
@@ -511,7 +515,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testTextEditingPasteboardAndElementForEachUseDemoApp() async throws {
-        let heist = try await Heist {
+        let heist = try await runHeist("DogfoodTextEditingPasteboardAndElementForEach") {
             let activeFixBug = ElementPredicate(
                 label: "Fix bug, High priority",
                 value: "Active"
@@ -557,7 +561,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 
     func testViewportRuntimeCommandsUseDemoApp() async throws {
-        let heist = try await Heist {
+        let heist = try await runHeist("DogfoodViewportRuntimeCommands") {
             try DogfoodHome.openScreen("Long List")
             try LongListScreen.exerciseViewportRuntimeCommands()
             try DogfoodNavigation.backToRoot()
@@ -571,7 +575,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
 
     func testFailedDogfoodHeistPreservesInspectableRunResult() async throws {
         do {
-            _ = try await Heist {
+            _ = try await runHeist("DogfoodIntentionalFailure") {
                 WaitFor(.exists(.label("ButtonHeist Demo")), timeout: .seconds(2))
                 Warn("before dogfood failure")
                 Fail("intentional dogfood failure")

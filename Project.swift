@@ -101,6 +101,22 @@ let project = Project(
             ]
         ),
 
+        // MARK: - Public iOS Test Facade
+        .target(
+            name: "ButtonHeistTesting",
+            destinations: [.iPhone, .iPad],
+            product: .framework,
+            bundleId: "com.buttonheist.testing",
+            deploymentTargets: .iOS("17.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Sources/ButtonHeistTesting/**"],
+
+            dependencies: [
+                .target(name: "ButtonHeistDSL"),
+                .target(name: "TheInsideJob"),
+            ]
+        ),
+
         // MARK: - macOS Client Framework (single import for Mac consumers)
         .target(
             name: "ButtonHeist",
@@ -188,6 +204,7 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TheInsideJobTests/**"],
             dependencies: [
+                .target(name: "ButtonHeistTesting"),
                 .target(name: "TheInsideJob"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
@@ -204,6 +221,7 @@ let project = Project(
         frameworkScheme(name: "TheScore"),
         frameworkScheme(name: "ButtonHeistDSL"),
         frameworkScheme(name: "ButtonHeist"),
+        frameworkScheme(name: "ButtonHeistTesting"),
         frameworkScheme(name: "TheInsideJob"),
         .scheme(
             name: "ThePlansTests",

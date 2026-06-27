@@ -25,6 +25,7 @@ CONTRACT_TARGETS = (
     "HeistDoctorTool",
     "TheInsideJob",
     "ThePlant",
+    "ButtonHeistTesting",
     "ButtonHeist",
 )
 

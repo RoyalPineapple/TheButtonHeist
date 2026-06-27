@@ -16,6 +16,7 @@ let package = Package(
         .executable(name: "buttonheist-docgen", targets: ["ButtonHeistDocGen"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
+        .library(name: "ButtonHeistTesting", targets: ["ButtonHeistTesting"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
@@ -104,6 +105,15 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .target(
+            name: "ButtonHeistTesting",
+            dependencies: [
+                "ButtonHeistDSL",
+                "TheInsideJob",
+            ],
+            path: "Sources/ButtonHeistTesting",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .target(
             name: "ButtonHeist",
             dependencies: [
                 "ThePlans",
@@ -152,7 +162,7 @@ let package = Package(
         .testTarget(
             name: "TheInsideJobTests",
             dependencies: [
-                "TheInsideJob", "ThePlans", "TheScore",
+                "ButtonHeistTesting", "TheInsideJob", "ThePlans", "TheScore",
             ],
             path: "Tests/TheInsideJobTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

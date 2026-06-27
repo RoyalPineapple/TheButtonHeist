@@ -31,7 +31,7 @@ to one-step or composed `HeistPlan`s before crossing the device wire.
 
 | Surface | Public status | Entry points | Contract source | Compatibility policy |
 |---------|---------------|--------------|-----------------|----------------------|
-| SwiftPM products and modules | Public integration surface | `TheInsideJob`, `ButtonHeist`, `ButtonHeistDSL`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, `api-baselines/swift/*.symbols.txt`, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. Use matching package, CLI, MCP, and embedded app builds. |
+| SwiftPM products and modules | Public integration surface | `ButtonHeistTesting`, `TheInsideJob`, `ButtonHeist`, `ButtonHeistDSL`, `TheScore`, `ThePlans`, `heist-plan` | `Package.swift`, this document, `api-baselines/swift/*.symbols.txt`, [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md), and [Wire Protocol](WIRE-PROTOCOL.md) | Released as one product version. Use matching package, CLI, MCP, and embedded app builds. |
 | SwiftPM experimental tools | Public experimental, SwiftPM-only | `heist-doctor`, `buttonheist-docgen` | [Heist Doctor](HEIST-DOCTOR.md), generated references | Suggestion-only receipt analysis and repo reference generation. Not installed by Homebrew and not a major-version stability contract. |
 | Homebrew release | Public install surface | `buttonheist`, `buttonheist-mcp`, `heist-plan`, installed `ThePlans` compiler artifacts | `Formula/buttonheist.rb` and `scripts/release-contract.sh` | Formula and release archives use SemVer `MAJOR.MINOR.PATCH`. Experimental `heist-doctor` is intentionally excluded. |
 | CLI commands | Public command surface | `buttonheist <command>` | Generated [Command Reference](reference/commands.md) | Command names, CLI exposure, and parameters are descriptor-owned. Regenerate references after command changes. |
@@ -45,7 +45,8 @@ to one-step or composed `HeistPlan`s before crossing the device wire.
 ## Swift API Baselines
 
 CI checks compiler-exported public symbol snapshots for `ThePlans`,
-`TheScore`, `ButtonHeistDSL`, `ButtonHeist`, and `TheInsideJob` with:
+`TheScore`, `ButtonHeistDSL`, `ButtonHeist`, `TheInsideJob`, and
+`ButtonHeistTesting` with:
 
 ```bash
 scripts/check-swift-api-baseline.sh
@@ -54,12 +55,13 @@ scripts/check-swift-api-baseline.sh
 The snapshots live in `api-baselines/swift/`. `ThePlans`, `TheScore`,
 `ButtonHeistDSL`, and `ButtonHeist` are extracted from the macOS SwiftPM build.
 `TheInsideJob` is extracted separately from an iOS simulator DEBUG SwiftPM build
-because its public module is UIKit/DEBUG-gated. `ButtonHeistDSL` and
-`ButtonHeist` are extracted with their public re-exported modules included, so
-removing a re-export or changing a re-exported symbol changes the product
-snapshot. The external import fixtures compile consumers from outside the
-repository to prove the documented macOS products and iOS DEBUG `TheInsideJob`
-import work in SwiftPM.
+because its public module is UIKit/DEBUG-gated. `ButtonHeistTesting` is also
+extracted from that iOS simulator DEBUG build. `ButtonHeistDSL`,
+`ButtonHeist`, and `ButtonHeistTesting` are extracted with their public
+re-exported modules included, so removing a re-export or changing a re-exported
+symbol changes the product snapshot. The external import fixtures compile
+consumers from outside the repository to prove the documented macOS products
+and iOS DEBUG public imports work in SwiftPM.
 
 For an intentional public Swift API change, update snapshots with:
 

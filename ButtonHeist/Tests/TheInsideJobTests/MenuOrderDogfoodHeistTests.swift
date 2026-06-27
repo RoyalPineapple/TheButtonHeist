@@ -1,8 +1,7 @@
 #if canImport(UIKit)
 import XCTest
-import ThePlans
 
-import TheInsideJob
+import ButtonHeistTesting
 
 private enum DemoHome {
     private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
@@ -125,7 +124,7 @@ private struct DemoMenuItem {
 final class MenuOrderDogfoodHeistTests: XCTestCase {
 
     func testMenuOrderFlowUsesReusablePublicHeists() async throws {
-        let heist = try await RunHeist("MenuOrderDogfood_orderTwoItems") {
+        let heist = try await runHeist("MenuOrderDogfood_orderTwoItems") {
             try DemoHome.openMenu()
 
             ForEach(DemoOrder.itemLabels) { item in
