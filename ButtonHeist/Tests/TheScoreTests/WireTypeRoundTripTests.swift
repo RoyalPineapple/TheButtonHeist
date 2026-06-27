@@ -10,6 +10,15 @@ final class WireTypeRoundTripTests: XCTestCase {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
+    // MARK: - AccessibilityPredicate
+
+    func testAccessibilityPredicateWireContractValuesStayStable() {
+        XCTAssertEqual(AccessibilityPredicate.wireTypeValues, ["exists", "missing", "all", "no_change", "change"])
+        XCTAssertEqual(AccessibilityPredicate.wireTypeValues, AccessibilityPredicateContract.PredicateWireType.values)
+        XCTAssertEqual(AccessibilityPredicateContract.StateWireType.values, ["exists", "missing", "all"])
+        XCTAssertEqual(AccessibilityPredicateContract.ChangeScopeWireType.values, ["screen", "elements", "all"])
+    }
+
     // MARK: - ScrollEdge
 
     func testScrollEdgeRawValues() {
