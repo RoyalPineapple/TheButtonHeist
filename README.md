@@ -6,28 +6,30 @@
 
 # The Button Heist
 
-The Button Heist makes the settled accessibility interface executable. Agents and tests act through the same contract assistive technologies depend on, then receive evidence that the contract changed as expected.
+The Button Heist makes the settled accessibility interface executable. Agents and tests act through the same contract assistive technologies depend on. They make a move, wait for the app to settle, and bring back evidence that the contract changed as expected.
 
-The Button Heist is not novel because it uses accessibility. It is novel because it turns accessibility into an executable, settled, evidence-producing contract that agents and tests can compose into durable product capabilities.
+The familiar part is accessibility. The new part is the loop: settled interface, declared action, checked result, receipt. A UI snapshot becomes a contract you can run.
 
-Accessibility is the interface. Strip an app of rendering and the accessibility tree is what remains: labels, values, traits, hierarchy, state, and actions. The app declares what is true now and what can happen next. An operator reads that declaration, acts on it, and reads back what changed.
+Accessibility is the interface. Strip an app of rendering and it is still talking: labels, values, traits, hierarchy, state, and actions. It says what is true now. It says what can happen next. It says what changed.
 
-That makes accessibility the app's command surface: named objects, declared verbs, and read-back state. A visual interface asks an operator to infer what can be done from pixels. The accessibility interface says what exists, what actions it supports, and what changed after the action.
+A visual interface asks an operator to infer what can be done from pixels. The accessibility interface publishes a command surface: named objects, declared verbs, and read-back state.
 
-VoiceOver is one client for that command surface. The Button Heist is another: a way for agents and tests to operate the same interface and bring back evidence.
+VoiceOver is one client for that surface. The Button Heist is another. It asks the app what it has promised, makes one declared move, waits for the machinery to stop, and keeps the receipt.
 
-There is no second, secret app behind the glass. The app has already published the contract. The Button Heist makes that contract executable.
+There is no second app behind the glass. The app has already published the contract. The Button Heist makes that contract executable.
 
 ## One move
 
-The Button Heist lets agents and tests drive iOS apps by accessibility intent instead of screen coordinates.
+The whole machine is visible in one move:
 
 ```swift
 Activate(.label("Pay"))
     .expect(.appeared(.label("Payment Complete")))
 ```
 
-In the syntax, `.appeared(...)` says the step must prove a before/after transition: the settled accessibility interface after the action must contain evidence that `Payment Complete` appeared.
+This looks like a tap. It is stricter than that.
+
+`.appeared(...)` says the step must prove a before/after transition. The settled accessibility interface after the action must contain evidence that `Payment Complete` appeared.
 
 This is not "tap Pay." It means:
 
@@ -39,25 +41,25 @@ This is not "tap Pay." It means:
 6. Prove that `Payment Complete` appeared.
 7. Return evidence of the transition.
 
-The important question is not whether an event was delivered. The important question is whether the interface contract was fulfilled.
+The question is not whether an event was delivered. The question is whether the interface contract was fulfilled.
 
 ## The contract
 
-A contract reduces uncertainty. It makes three things explicit:
+A contract gives uncertainty a handle. It makes three things explicit:
 
 - what the app declares
 - what can be acted on
 - what the contract requires after the action
 
-Ambiguity becomes concrete in the accessibility interface. A control can be visible but not exposed. A label can be close enough for a person to infer, but too vague for assistive technology or an agent to trust. State can change on screen while semantic state stays stale. A tap can work even though the accessibility action is missing.
+Ambiguity becomes concrete in the accessibility interface. A control can be visible but silent. A label can be close enough for a person to infer, but too vague for assistive technology or an agent to trust. State can change on screen while semantic state stays stale. A tap can work even though the accessibility action is missing.
 
 The Button Heist makes those gaps testable. It executes the accessibility contract and requires evidence that the contract changed as expected.
 
-The machinery is small on purpose: read what the app declares, make one declared move, wait for the app to become still, and keep the receipt.
+The machinery is small on purpose: read what the app declares, make one declared move, wait for the app to become still, keep the receipt.
 
 ## The core loop
 
-Every heist step follows the same loop:
+Every heist step crosses the same checkpoint:
 
 ```text
 read settled accessibility interface
@@ -69,7 +71,7 @@ read settled accessibility interface
 -> return receipt
 ```
 
-Most UI automation treats interaction as an input event. The Button Heist treats interaction as an asserted transition in the accessibility contract.
+Most UI automation treats interaction as an input event. The Button Heist treats interaction as an asserted transition in the accessibility contract. The event is not the interesting part. The settled change is.
 
 ```mermaid
 flowchart LR
@@ -97,13 +99,13 @@ A direct command is one loop:
 buttonheist activate --label "Settings" --traits button
 ```
 
-The runtime resolves the target, makes it actionable, performs the accessibility operation, waits for the app to settle, and returns a receipt with the new state and evidence. The next command, assertion, audit, or test reads from that receipt.
+The runtime resolves the target, makes it actionable, performs the accessibility operation, waits for the app to settle, and returns a receipt with the new state and evidence. The next command, assertion, audit, or test starts from that receipt.
 
-The normal path is semantic: activate named controls, type into fields, run accessibility actions, move through rotors, and wait on settled predicates. Screenshots, viewport commands, and spatial gestures still exist, but they are supporting tools. For ordinary app flows, the durable control surface is the accessibility contract.
+The normal path is semantic: activate named controls, type into fields, run accessibility actions, move through rotors, and wait on settled predicates. Screenshots, viewport commands, and spatial gestures still exist, but they are supporting tools. For ordinary app flows, the durable control surface is the contract the app already owes its users.
 
 ## Receipts
 
-A receipt is the durable answer to "what happened?"
+A receipt is the durable answer to "what happened?" Not a hunch. Not a tap log. The facts.
 
 ```text
 step: Activate(label: "Pay")
@@ -116,7 +118,7 @@ evidence:
   appeared: "Total $41.00" [staticText]
 ```
 
-When a step cannot satisfy the contract, the same evidence matters more:
+When a step cannot satisfy the contract, the evidence matters more:
 
 ```text
 activate -> error[elementNotFound]
@@ -128,13 +130,13 @@ known elements:
   "Save" [button]
 ```
 
-Because The Button Heist acts from a settled accessibility interface and reads another settled accessibility interface afterward, diagnosis starts from facts. The diagnostic can show what the accessibility contract actually contained.
+Because The Button Heist acts from a settled accessibility interface and reads another settled accessibility interface afterward, diagnosis starts from facts. The diagnostic shows what the app actually exposed.
 
 Receipts are intentionally plain. Boring in the useful way: they say what ran, what changed, and where the machine stopped. They are not live handles, replay objects, or private runtime state. They carry evidence you can assert against, print, report, or use to compose the next heist.
 
 ## Heists
 
-A heist is how a product capability is defined: do these actions, wait for these facts, and keep the receipt.
+A heist is a product capability with a paper trail: do these actions, wait for these facts, and keep the receipt.
 
 Humans can author heists in checked-in Swift files. Agents can author runtime heists as canonical source sent through `run_heist(plan:)`. Both forms lower to the same `HeistPlan` and run through the same receipt-producing runtime.
 
@@ -153,11 +155,11 @@ let login = try HeistPlan("login") {
 }
 ```
 
-Each instruction runs through the same action/wait runtime. The heist rolls those step receipts into one receipt tree, so a report can show the whole job or point to the exact instruction where the contract was not fulfilled.
+Each instruction runs through the same action/wait runtime. The heist rolls those step receipts into one receipt tree. A report can show the whole job, or point to the exact instruction where the contract was not fulfilled.
 
 ## Product capabilities
 
-Once a heist has a name, callers can use it as a product capability:
+Once a heist has a name, the unit of automation changes. Callers can use it as a product capability:
 
 ```swift
 RunHeist("SearchScreen.search", "milk")
@@ -165,11 +167,11 @@ RunHeist("LibraryScreen.addToCart", "Milk")
 RunHeist("CartScreen.checkout")
 ```
 
-This is where accessibility semantics become product semantics. The reusable piece is still grounded in predicates and receipts, but the agent or test can operate at the level of the product: search, add to cart, confirm, checkout.
+This is where accessibility semantics become product semantics. The reusable piece is still grounded in predicates and receipts, but the caller can operate at the level of the product: search, add to cart, confirm, checkout.
 
 ## The shape of a job
 
-Once jobs need more than straight-line instructions, the heist language adds a small set of control primitives.
+Once jobs need more than straight-line instructions, the heist language adds a small set of control primitives. Few parts. Bounded motion. No hidden loop carrying state into the dark.
 
 Action expectations usually assert deltas: something appeared, changed, or updated after the step. Standalone waits and branches inspect current settled state.
 
@@ -201,7 +203,7 @@ let search = try HeistPlan("searchFlow") {
 }
 ```
 
-Heists stay deliberately finite and inspectable: values, predicates, assertions, decisions, bounded loops, composition, and explicit effects.
+Heists stay deliberately finite and inspectable: values, predicates, assertions, decisions, bounded loops, composition, and explicit effects. Enough language to do the job. Not enough to hide it.
 
 The same shape works inside app tests:
 
@@ -225,7 +227,7 @@ Outside `RunHeist(...) { ... }` is Swift test code. Inside the closure is the he
 
 The Button Heist narrows the problem the agent has to solve. The agent sees the interface in language, chooses intent in language, and receives evidence in language. It does not need to become a surveyor of rectangles before asking for a button.
 
-Accessibility makes that possible. When the app exposes a complete accessibility contract, it names controls, describes roles, exposes values, offers actions, and reports state. The Button Heist keeps that contract live and runs ordinary semantic interactions through it.
+Accessibility makes that possible. A good app already names controls, describes roles, exposes values, offers actions, and reports state. The Button Heist keeps that contract live and runs ordinary semantic interactions through it.
 
 For maps, canvases, drawing surfaces, games, and spatial products, explicit mechanical gestures stay available. Those are intentional spatial interactions, not the normal path for buttons, fields, menus, actions, rotors, waits, and product flows.
 
@@ -235,11 +237,11 @@ That division of labor is the product: the app publishes product semantics, The 
 
 Screenshots are visual evidence. They show the visual interface, and The Button Heist can capture them when pixels are the right evidence.
 
-They are not the normal way to act. Pixels are good evidence. They are poor instructions. Accessibility says what each control is called, what role it has, what value it reports, which actions it accepts, and how the app says it changed.
+They are not the normal way to act. Pixels are good evidence. Poor instructions. Accessibility says what each control is called, what role it has, what value it reports, which actions it accepts, and how the app says it changed.
 
 The Button Heist targets controls by product semantics, not by any one field. A target can use labels, values, identifiers, required traits, excluded traits, and ordinal disambiguation. Hierarchy, state, and available actions remain observable facts and assertion evidence, not durable target identity.
 
-For durable heists, the best target is the smallest accessibility predicate that names the intended control in its screen context.
+For durable heists, the best target is the smallest accessibility predicate that names the intended control in its screen context. Small names. Long lives.
 
 String predicates are exact by default. When you need looseness, ask for it explicitly:
 
