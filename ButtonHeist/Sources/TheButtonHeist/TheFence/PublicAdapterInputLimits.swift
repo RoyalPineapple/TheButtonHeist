@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 /// Limits for public machine-input adapters before they materialize recursive
 /// JSON structures. Public users hit these through `buttonheist json_lines` and
@@ -20,15 +21,112 @@ public struct PublicAdapterInputError: Error, LocalizedError, CustomStringConver
     public var description: String { message }
 }
 
+/// Expected root shape for public JSON input.
+public enum PublicJSONRoot: Sendable {
+    case any
+    case array
+    case object
+}
+
+/// Decodes public JSON input after applying adapter size and shape limits.
+public enum PublicJSONInputDecoder {
+    public static func decode<T: Decodable>(
+        _ type: T.Type,
+        from input: String,
+        root: PublicJSONRoot = .any,
+        context: String = "Public JSON input",
+        rootMismatchMessage: String? = nil
+    ) throws -> T {
+        try decode(
+            type,
+            from: Data(input.utf8),
+            root: root,
+            context: context,
+            rootMismatchMessage: rootMismatchMessage
+        )
+    }
+
+    public static func decode<T: Decodable>(
+        _ type: T.Type,
+        from data: Data,
+        root: PublicJSONRoot = .any,
+        context: String = "Public JSON input",
+        rootMismatchMessage: String? = nil
+    ) throws -> T {
+        try PublicJSONInputPreflight.validate(
+            data,
+            root: root,
+            context: context,
+            rootMismatchMessage: rootMismatchMessage
+        )
+        return try JSONDecoder().decode(type, from: data)
+    }
+
+    public static func decodeHeistValue(
+        from input: String,
+        root: PublicJSONRoot = .any,
+        context: String = "Public JSON input",
+        rootMismatchMessage: String? = nil
+    ) throws -> HeistValue {
+        try decode(
+            HeistValue.self,
+            from: input,
+            root: root,
+            context: context,
+            rootMismatchMessage: rootMismatchMessage
+        )
+    }
+}
+
 public enum PublicJSONInputPreflight {
     public static func validateObject(
         _ input: String,
         context: String = "Public JSON request",
         maxBytes: Int = PublicAdapterInputLimits.maxRequestBytes,
         maxNestingDepth: Int = PublicAdapterInputLimits.maxNestingDepth,
-        maxTotalObjectKeys: Int = PublicAdapterInputLimits.maxTotalObjectKeys
+        maxTotalObjectKeys: Int = PublicAdapterInputLimits.maxTotalObjectKeys,
+        rootMismatchMessage: String? = nil
     ) throws {
-        let byteCount = input.utf8.count
+        try validate(
+            Data(input.utf8),
+            root: .object,
+            context: context,
+            maxBytes: maxBytes,
+            maxNestingDepth: maxNestingDepth,
+            maxTotalObjectKeys: maxTotalObjectKeys,
+            rootMismatchMessage: rootMismatchMessage
+        )
+    }
+
+    public static func validateArray(
+        _ data: Data,
+        context: String = "Public JSON input",
+        maxBytes: Int = PublicAdapterInputLimits.maxRequestBytes,
+        maxNestingDepth: Int = PublicAdapterInputLimits.maxNestingDepth,
+        maxTotalObjectKeys: Int = PublicAdapterInputLimits.maxTotalObjectKeys,
+        rootMismatchMessage: String? = nil
+    ) throws {
+        try validate(
+            data,
+            root: .array,
+            context: context,
+            maxBytes: maxBytes,
+            maxNestingDepth: maxNestingDepth,
+            maxTotalObjectKeys: maxTotalObjectKeys,
+            rootMismatchMessage: rootMismatchMessage
+        )
+    }
+
+    public static func validate(
+        _ data: Data,
+        root: PublicJSONRoot = .any,
+        context: String = "Public JSON input",
+        maxBytes: Int = PublicAdapterInputLimits.maxRequestBytes,
+        maxNestingDepth: Int = PublicAdapterInputLimits.maxNestingDepth,
+        maxTotalObjectKeys: Int = PublicAdapterInputLimits.maxTotalObjectKeys,
+        rootMismatchMessage: String? = nil
+    ) throws {
+        let byteCount = data.count
         guard byteCount <= maxBytes else {
             throw PublicAdapterInputError(
                 "\(context) exceeds \(maxBytes) bytes (observed \(byteCount) bytes)"
@@ -36,34 +134,48 @@ public enum PublicJSONInputPreflight {
         }
 
         var scanner = PublicJSONInputScanner(
-            bytes: Array(input.utf8),
+            bytes: Array(data),
             context: context,
+            rootMismatchMessage: rootMismatchMessage,
             maxNestingDepth: maxNestingDepth,
             maxTotalObjectKeys: maxTotalObjectKeys
         )
-        try scanner.parseRootObject()
+        try scanner.parseRoot(root)
     }
 }
 
 private struct PublicJSONInputScanner {
     private let bytes: [UInt8]
     private let context: String
+    private let rootMismatchMessage: String?
     private let maxNestingDepth: Int
     private let maxTotalObjectKeys: Int
     private var index = 0
     private var totalObjectKeys = 0
 
-    init(bytes: [UInt8], context: String, maxNestingDepth: Int, maxTotalObjectKeys: Int) {
+    init(
+        bytes: [UInt8],
+        context: String,
+        rootMismatchMessage: String?,
+        maxNestingDepth: Int,
+        maxTotalObjectKeys: Int
+    ) {
         self.bytes = bytes
         self.context = context
+        self.rootMismatchMessage = rootMismatchMessage
         self.maxNestingDepth = maxNestingDepth
         self.maxTotalObjectKeys = maxTotalObjectKeys
     }
 
-    mutating func parseRootObject() throws {
+    mutating func parseRoot(_ root: PublicJSONRoot) throws {
         skipWhitespace()
-        guard peek == Self.leftBrace else {
-            throw invalidJSON()
+        switch root {
+        case .any:
+            guard peek != nil else { throw invalidJSON() }
+        case .array:
+            guard peek == Self.leftBracket else { throw rootMismatch() }
+        case .object:
+            guard peek == Self.leftBrace else { throw rootMismatch() }
         }
         try parseValue(depth: 1)
         skipWhitespace()
@@ -274,6 +386,10 @@ private struct PublicJSONInputScanner {
 
     private func invalidJSON() -> PublicAdapterInputError {
         PublicAdapterInputError("\(context) is not valid JSON")
+    }
+
+    private func rootMismatch() -> PublicAdapterInputError {
+        PublicAdapterInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
     }
 
     private static func isWhitespace(_ byte: UInt8) -> Bool {

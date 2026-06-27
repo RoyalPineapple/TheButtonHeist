@@ -32,31 +32,29 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
             request.set(.inlineData, true)
         }
 
-        if output != nil || !inline {
-            try await CLIRunner.run(
-                connection: connection,
-                format: .human,
-                command: Self.fenceCommand,
-                arguments: Self.fenceArguments(request),
-                statusMessage: "Requesting screenshot..."
-            )
+        let commandResultMapper: CLIRunner.CommandResultMapper?
+        if inline {
+            commandResultMapper = Self.inlineCommandResult(for:)
         } else {
-            let (fence, response) = try await CLIRunner.execute(
-                connection: connection,
-                command: Self.fenceCommand,
-                arguments: Self.fenceArguments(request),
-                statusMessage: "Requesting screenshot..."
-            )
-            defer { fence.stop() }
-
-            if case .screenshotData(let payload, _) = response {
-                guard let data = Data(base64Encoded: payload.pngData) else {
-                    throw ValidationError("Failed to decode screenshot data")
-                }
-                FileHandle.standardOutput.write(data)
-            } else {
-                CLIRunner.outputResponse(response, format: .human)
-            }
+            commandResultMapper = nil
         }
+        try await CLIRunner.run(
+            connection: connection,
+            format: .human,
+            command: Self.fenceCommand,
+            arguments: Self.fenceArguments(request),
+            statusMessage: "Requesting screenshot...",
+            result: commandResultMapper
+        )
+    }
+
+    static func inlineCommandResult(for response: FenceResponse) throws -> CLIRunner.CommandResult {
+        guard case .screenshotData(let payload, _) = response else {
+            return .response(response, format: .human)
+        }
+        guard let data = Data(base64Encoded: payload.pngData) else {
+            throw ValidationError("Failed to decode screenshot data")
+        }
+        return .binary(data)
     }
 }

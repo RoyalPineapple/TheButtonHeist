@@ -408,6 +408,22 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testSharedRequestBuilderRejectsMalformedMachineJSON() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(from: #"{"command":"ping","#)
+        ) { error in
+            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            XCTAssertTrue(message.contains("Public JSON request is not valid JSON"), message)
+        }
+    }
+
+    func testSharedRequestBuilderAcceptsValidPingRequest() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"ping"}"#)
+
+        XCTAssertEqual(parsed.command, .ping)
+        XCTAssertNil(parsed.requestId)
+    }
+
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONLinesMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
             from: #"{"command":"activate","target":{"identifier":{"mode":"exact","value":"button_save"}}}"#

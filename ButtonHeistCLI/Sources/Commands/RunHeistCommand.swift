@@ -209,20 +209,18 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     }
 
     private static func parseRootArgument(_ rawValue: String) throws -> HeistValue {
-        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw ValidationError("--argument must be a JSON object")
-        }
-        let value: HeistValue
         do {
-            value = try JSONDecoder().decode(HeistValue.self, from: Data(trimmed.utf8))
+            return try PublicJSONInputDecoder.decodeHeistValue(
+                from: rawValue,
+                root: .object,
+                context: "--argument",
+                rootMismatchMessage: "--argument must be a JSON object"
+            )
+        } catch let error as PublicAdapterInputError {
+            throw ValidationError(error.message)
         } catch {
             throw ValidationError("--argument must be valid JSON: \(error)")
         }
-        guard case .object = value else {
-            throw ValidationError("--argument must be a JSON object")
-        }
-        return value
     }
 }
 
