@@ -6,7 +6,7 @@
 
 # The Button Heist
 
-The Button Heist makes the settled accessibility interface executable. Agents and tests act through the same contract assistive technologies depend on. They make a move, wait for the app to settle, and bring back evidence that the contract changed as expected.
+The Button Heist makes the settled accessibility interface executable. Agents and tests do not need to guess from pixels first. They act through the same contract assistive technologies depend on, wait for the app to settle, and bring back evidence that the contract changed as expected.
 
 The familiar part is accessibility. The new part is the loop: settled interface, declared action, checked result, receipt. A UI snapshot becomes a contract you can run.
 
@@ -17,6 +17,34 @@ A visual interface asks an operator to infer what can be done from pixels. The a
 VoiceOver is one client for that surface. The Button Heist is another. It asks the app what it has promised, makes one declared move, waits for the machinery to stop, and keeps the receipt.
 
 There is no second app behind the glass. The app has already published the contract. The Button Heist makes that contract executable.
+
+## What it unlocks
+
+The Button Heist changes the unit of automation. A command can be `Activate Pay`. A named heist can be `Cart.addItem("Milk")` or `Checkout.pay()`. Both run through the same settled accessibility contract. Both bring back proof.
+
+It can:
+
+- drive ordinary controls by label, value, identifier, traits, and declared action
+- type into fields and prove the semantic value changed
+- wait through async UI until a confirmation, result, or error state appears
+- compose multi-step flows into named product capabilities
+- let agents inspect those capabilities before they call them
+- leave CI with a receipt that names the contract that broke
+
+That is the face of the project: product semantics in, settled evidence out.
+
+```swift
+HeistDef<String>("Cart.addItem", parameter: "item") { item in
+    TypeText(item, into: .label("Search Items"))
+        .expect(.updated(element: .label("Search Items"), .value(after: item)))
+
+    Activate(.label(item))
+        .expect(.appeared(.element(
+            .label(.prefix(item)),
+            .identifier(.contains("cart"))
+        )))
+}
+```
 
 ## One move
 
