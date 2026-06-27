@@ -81,6 +81,23 @@ import Testing
     ])
 }
 
+@Test func `plan call graph resolves qualified exported namespace invocations from definition bodies`() throws {
+    let raw = HeistPlanAdmissionCandidate(definitions: [
+        HeistPlanAdmissionCandidate(name: "lib", definitions: [
+            HeistPlanAdmissionCandidate(name: "a", body: [
+                .invoke(HeistInvocationStep(path: ["lib", "b"])),
+            ]),
+            HeistPlanAdmissionCandidate(name: "b", body: [
+                .warn(WarnStep(message: "b")),
+            ]),
+        ], body: []),
+    ], body: [.invoke(HeistInvocationStep(path: ["lib", "a"]))])
+
+    let graph = HeistCallGraph(plan: raw.uncheckedPlanForRuntimeSafetyValidation())
+
+    #expect(graph.edges.contains(HeistCallGraph.Edge(caller: "lib.a", callee: "lib.b")))
+}
+
 @Test func `random generated definition graphs agree with reference cycle checker`() throws {
     var rng = SeededGenerator(seed: 0xAC1DCA11)
 

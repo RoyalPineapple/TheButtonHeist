@@ -1,5 +1,16 @@
 import Foundation
 
+struct ResolvedStringLoopPayloadValidationContext {
+    let path: String
+    let depth: Int
+    let scope: HeistReferenceScope
+    let environment: HeistExecutionEnvironment
+    let definitionScope: HeistDefinitionScope
+    let rootDefinitionScope: HeistDefinitionScope
+    let callGraph: HeistCallGraph?
+    let valuePath: String
+}
+
 /// RuntimeSafety owns the bounded executable-plan boundary.
 ///
 /// Totality rests on three bounds: (a) acyclic call graph
@@ -103,6 +114,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             scope: context.scope,
             environment: context.environment,
             definitionScope: context.definitionScope,
+            rootDefinitionScope: context.rootDefinitionScope,
             callGraph: context.callGraph
         )
     }
@@ -213,7 +225,17 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             validateParameter(component, path: "\(context.path).path[\(index)]", role: "heist run path component")
         }
         validateArgument(step.argument, path: "\(context.path).argument", scope: context.scope)
-        guard let resolved = context.definitionScope.resolve(path: step.path) else {
+        guard let resolved = context.resolveInvocation(path: step.path) else {
+            if step.path.count > 1 {
+                let displayPath = step.path.joined(separator: ".")
+                fail(
+                    path: "\(context.path).path",
+                    contract: "heist run path must resolve to a declared exported capability",
+                    observed: displayPath,
+                    correction: "No export named '\(displayPath)' in this plan; declare it in a Namespace block or use a local nested capability."
+                )
+                return
+            }
             fail(
                 path: "\(context.path).path",
                 contract: "heist run path must resolve to a local capability",
@@ -381,6 +403,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
         definitionScope: HeistDefinitionScope,
+        rootDefinitionScope: HeistDefinitionScope,
         callGraph: HeistCallGraph?
     ) {
         validateParameter(step.parameter, path: "\(path).parameter", role: "for_each_string parameter")
@@ -399,13 +422,16 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         for (index, value) in step.values.enumerated() {
             validateResolvedStringLoopPayloads(
                 step.body,
-                path: "\(path).body",
-                depth: bodyDepth,
-                scope: scope.bindingString(step.parameter),
-                environment: environment.binding(string: value, to: step.parameter),
-                definitionScope: definitionScope,
-                callGraph: callGraph,
-                valuePath: "\(path).values[\(index)]"
+                context: ResolvedStringLoopPayloadValidationContext(
+                    path: "\(path).body",
+                    depth: bodyDepth,
+                    scope: scope.bindingString(step.parameter),
+                    environment: environment.binding(string: value, to: step.parameter),
+                    definitionScope: definitionScope,
+                    rootDefinitionScope: rootDefinitionScope,
+                    callGraph: callGraph,
+                    valuePath: "\(path).values[\(index)]"
+                )
             )
         }
     }
@@ -433,24 +459,19 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validateResolvedStringLoopPayloads(
         _ steps: [HeistStep],
-        path: String,
-        depth: Int,
-        scope: HeistReferenceScope,
-        environment: HeistExecutionEnvironment,
-        definitionScope: HeistDefinitionScope,
-        callGraph: HeistCallGraph?,
-        valuePath: String
+        context: ResolvedStringLoopPayloadValidationContext
     ) {
-        var validator = StringLoopResolvedPayloadValidator(valuePath: valuePath)
+        var validator = StringLoopResolvedPayloadValidator(valuePath: context.valuePath)
         let traversal = HeistPlanTraversal()
         traversal.walk(
             steps: steps,
-            path: path,
-            depth: depth,
-            scope: scope,
-            environment: environment,
-            definitionScope: definitionScope,
-            callGraph: callGraph,
+            path: context.path,
+            depth: context.depth,
+            scope: context.scope,
+            environment: context.environment,
+            definitionScope: context.definitionScope,
+            rootDefinitionScope: context.rootDefinitionScope,
+            callGraph: context.callGraph,
             visitor: &validator
         )
         failures += validator.failures

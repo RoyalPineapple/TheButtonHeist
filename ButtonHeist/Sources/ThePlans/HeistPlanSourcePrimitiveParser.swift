@@ -231,7 +231,7 @@ extension HeistPlanSourceParser {
     }
 
     var startsDefinition: Bool {
-        tokenIsIdentifier(currentToken, "HeistDef")
+        tokenIsIdentifier(currentToken, "HeistDef") || tokenIsIdentifier(currentToken, "Namespace")
     }
 
     var atEnd: Bool {

@@ -1561,6 +1561,36 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testHeistInvocationExecutesQualifiedExportedNamespaceDependency() async throws {
+        var executedCommands: [RuntimeActionMessage] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = try HeistPlanAdmissionCandidate(definitions: [
+            HeistPlanAdmissionCandidate(name: "lib", definitions: [
+                HeistPlanAdmissionCandidate(name: "payOpen", body: [
+                    .action(try ActionStep(command: .activate(.predicate(.label("Pay"))))),
+                ]),
+                HeistPlanAdmissionCandidate(name: "checkout", body: [
+                    .invoke(HeistInvocationStep(path: ["lib", "payOpen"])),
+                ]),
+            ], body: []),
+        ], body: [
+            .invoke(HeistInvocationStep(path: ["lib", "checkout"])),
+        ]).validatedForRuntimeSafety()
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(executedCommands, [
+            .activate(.predicate(ElementPredicate(label: "Pay"))),
+        ])
+    }
+
     func testHeistExecutionBindsRootStringArgument() async throws {
         var executedCommands: [RuntimeActionMessage] = []
         let runtime = heistRuntime(

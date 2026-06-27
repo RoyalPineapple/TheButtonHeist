@@ -399,6 +399,119 @@ import ThePlans
     try assertCanonicalRoundTrip(plan)
 }
 
+@Test func `namespace block allows qualified reusable capability composition`() throws {
+    let source = """
+    HeistPlan("Checkout") {
+        Namespace("lib") {
+            HeistDef<Void>("payOpen") {
+                Warn("pay opened")
+            }
+
+            HeistDef<Void>("clearCheck") {
+                Warn("check cleared")
+            }
+
+            HeistDef<Void>("checkout") {
+                RunHeist("lib.payOpen")
+                RunHeist("lib.clearCheck")
+            }
+        }
+
+        RunHeist("lib.checkout")
+    }
+    """
+
+    let plan = try HeistPlanSourceCompiler().compile(source)
+    let lib = try #require(plan.definitions.first { $0.name == "lib" })
+    let checkout = try #require(lib.definitions.first { $0.name == "checkout" })
+
+    #expect(checkout.body == [
+        .invoke(HeistInvocationStep(path: ["lib", "payOpen"])),
+        .invoke(HeistInvocationStep(path: ["lib", "clearCheck"])),
+    ])
+    #expect(plan.body == [
+        .invoke(HeistInvocationStep(path: ["lib", "checkout"])),
+    ])
+
+    try assertCanonicalRoundTrip(plan)
+}
+
+@Test func `qualified namespace calls fail clearly when the export is missing`() throws {
+    let diagnostic = compileError("""
+    HeistPlan {
+        HeistDef<Void>("caller") {
+            RunHeist("lib.nope")
+        }
+
+        RunHeist("caller")
+    }
+    """)
+
+    expect(diagnostic, contains: "heist run path must resolve to a declared exported capability")
+    expect(diagnostic, contains: "No export named 'lib.nope'")
+}
+
+@Test func `unqualified sibling call inside namespace remains local only`() throws {
+    let diagnostic = compileError("""
+    HeistPlan {
+        Namespace("lib") {
+            HeistDef<Void>("payOpen") {
+                Warn("pay opened")
+            }
+
+            HeistDef<Void>("checkout") {
+                RunHeist("payOpen")
+            }
+        }
+
+        RunHeist("lib.checkout")
+    }
+    """)
+
+    expect(diagnostic, contains: "heist run path must resolve to a local capability")
+}
+
+@Test func `exported namespace capability cycle is rejected`() throws {
+    let diagnostic = compileError("""
+    HeistPlan {
+        Namespace("lib") {
+            HeistDef<Void>("a") {
+                RunHeist("lib.b")
+            }
+
+            HeistDef<Void>("b") {
+                RunHeist("lib.a")
+            }
+        }
+
+        RunHeist("lib.a")
+    }
+    """)
+
+    expect(diagnostic, contains: "heist runs must not be recursive")
+    expect(diagnostic, contains: "lib.a -> lib.b -> lib.a")
+}
+
+@Test func `exported namespace calls enforce target arity`() throws {
+    let diagnostic = compileError("""
+    HeistPlan {
+        Namespace("lib") {
+            HeistDef<String>("addItem", parameter: "dish") { dish in
+                TypeText(dish, into: .label("Search"))
+            }
+
+            HeistDef<Void>("caller") {
+                RunHeist("lib.addItem")
+            }
+        }
+
+        RunHeist("lib.caller")
+    }
+    """)
+
+    expect(diagnostic, contains: "heist run argument type must match the target parameter")
+}
+
 @Test func `inline plan source ForEach string compiles`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
     ForEach(["a", "b"]) { item in

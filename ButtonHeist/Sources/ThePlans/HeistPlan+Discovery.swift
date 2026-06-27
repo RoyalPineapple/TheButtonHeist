@@ -222,6 +222,7 @@ private extension HeistPlan {
                 entry: catalogEntry(name: rootName, role: .entry, parameter: parameter),
                 plan: self,
                 definitionScope: rootScope,
+                rootDefinitionScope: rootScope,
                 environment: Self.discoveryEnvironment(for: parameter),
                 invocationStack: []
             ),
@@ -230,6 +231,7 @@ private extension HeistPlan {
         collectCatalogDefinitions(
             definitions,
             pathPrefix: [],
+            rootDefinitionScope: rootScope,
             into: &heists
         )
         try validateUniqueCatalogNames(heists.map(\.entry.name))
@@ -239,6 +241,7 @@ private extension HeistPlan {
     func collectCatalogDefinitions(
         _ definitions: [HeistPlan],
         pathPrefix: [String],
+        rootDefinitionScope: HeistDefinitionScope,
         into heists: inout [ResolvedCatalogHeist]
     ) {
         for definition in definitions {
@@ -254,12 +257,14 @@ private extension HeistPlan {
                 ),
                 plan: definition,
                 definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: namePath),
+                rootDefinitionScope: rootDefinitionScope,
                 environment: environment,
                 invocationStack: [qualifiedName]
             ))
             collectCatalogDefinitions(
                 definition.definitions,
                 pathPrefix: namePath,
+                rootDefinitionScope: rootDefinitionScope,
                 into: &heists
             )
         }
@@ -392,6 +397,7 @@ struct ResolvedCatalogHeist {
     let entry: HeistCatalogEntry
     let plan: HeistPlan
     let definitionScope: HeistDefinitionScope
+    let rootDefinitionScope: HeistDefinitionScope
     let environment: HeistExecutionEnvironment
     let invocationStack: [String]
 }
@@ -410,6 +416,7 @@ private struct HeistSemanticSurfaceBuilder {
         builder.collect(
             steps: resolved.plan.body,
             definitionScope: resolved.definitionScope,
+            rootDefinitionScope: resolved.rootDefinitionScope,
             environment: resolved.environment,
             invocationStack: resolved.invocationStack
         )
@@ -427,6 +434,7 @@ private struct HeistSemanticSurfaceBuilder {
     mutating func collect(
         steps: [HeistStep],
         definitionScope: HeistDefinitionScope,
+        rootDefinitionScope: HeistDefinitionScope,
         environment: HeistExecutionEnvironment,
         invocationStack: [String]
     ) {
@@ -434,6 +442,7 @@ private struct HeistSemanticSurfaceBuilder {
             collect(
                 step: step,
                 definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope,
                 environment: environment,
                 invocationStack: invocationStack
             )
@@ -443,6 +452,7 @@ private struct HeistSemanticSurfaceBuilder {
     mutating func collect(
         step: HeistStep,
         definitionScope: HeistDefinitionScope,
+        rootDefinitionScope: HeistDefinitionScope,
         environment: HeistExecutionEnvironment,
         invocationStack: [String]
     ) {
@@ -460,6 +470,7 @@ private struct HeistSemanticSurfaceBuilder {
                 collect(
                     steps: elseBody,
                     definitionScope: definitionScope,
+                    rootDefinitionScope: rootDefinitionScope,
                     environment: environment,
                     invocationStack: invocationStack
                 )
@@ -470,6 +481,7 @@ private struct HeistSemanticSurfaceBuilder {
                 collect(
                     steps: predicateCase.body,
                     definitionScope: definitionScope,
+                    rootDefinitionScope: rootDefinitionScope,
                     environment: environment,
                     invocationStack: invocationStack
                 )
@@ -478,6 +490,7 @@ private struct HeistSemanticSurfaceBuilder {
                 collect(
                     steps: elseBody,
                     definitionScope: definitionScope,
+                    rootDefinitionScope: rootDefinitionScope,
                     environment: environment,
                     invocationStack: invocationStack
                 )
@@ -489,6 +502,7 @@ private struct HeistSemanticSurfaceBuilder {
             collect(
                 steps: forEach.body,
                 definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope,
                 environment: nestedEnvironment,
                 invocationStack: invocationStack
             )
@@ -498,6 +512,7 @@ private struct HeistSemanticSurfaceBuilder {
             collect(
                 steps: forEach.body,
                 definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope,
                 environment: nestedEnvironment,
                 invocationStack: invocationStack
             )
@@ -507,6 +522,7 @@ private struct HeistSemanticSurfaceBuilder {
             collect(
                 steps: repeatUntil.body,
                 definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope,
                 environment: environment,
                 invocationStack: invocationStack
             )
@@ -514,6 +530,7 @@ private struct HeistSemanticSurfaceBuilder {
                 collect(
                     steps: elseBody,
                     definitionScope: definitionScope,
+                    rootDefinitionScope: rootDefinitionScope,
                     environment: environment,
                     invocationStack: invocationStack
                 )
@@ -527,29 +544,50 @@ private struct HeistSemanticSurfaceBuilder {
             collect(
                 steps: plan.body,
                 definitionScope: nestedScope,
+                rootDefinitionScope: nestedScope,
                 environment: environment,
                 invocationStack: invocationStack
             )
 
         case .invoke(let invocation):
-            guard let resolved = definitionScope.resolve(path: invocation.path) else { return }
-            appendUnique(resolved.qualifiedName, to: &nestedRunHeists)
-            guard HeistCallGraph.cycle(closing: resolved.qualifiedName, in: invocationStack) == nil,
-                  let nestedEnvironment = try? environment.binding(
-                    argument: invocation.argument,
-                    to: resolved.definition.parameter
-                  )
-            else { return }
-            collect(
-                steps: resolved.definition.body,
-                definitionScope: HeistDefinitionScope(
-                    definitions: resolved.definition.definitions,
-                    pathPrefix: resolved.namePath
-                ),
-                environment: nestedEnvironment,
-                invocationStack: invocationStack + [resolved.qualifiedName]
+            collectInvocation(
+                invocation,
+                definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope,
+                environment: environment,
+                invocationStack: invocationStack
             )
         }
+    }
+
+    mutating func collectInvocation(
+        _ invocation: HeistInvocationStep,
+        definitionScope: HeistDefinitionScope,
+        rootDefinitionScope: HeistDefinitionScope,
+        environment: HeistExecutionEnvironment,
+        invocationStack: [String]
+    ) {
+        guard let resolved = definitionScope.resolveInvocation(
+            path: invocation.path,
+            rootScope: rootDefinitionScope
+        ) else { return }
+        appendUnique(resolved.qualifiedName, to: &nestedRunHeists)
+        guard HeistCallGraph.cycle(closing: resolved.qualifiedName, in: invocationStack) == nil,
+              let nestedEnvironment = try? environment.binding(
+                argument: invocation.argument,
+                to: resolved.definition.parameter
+              )
+        else { return }
+        collect(
+            steps: resolved.definition.body,
+            definitionScope: HeistDefinitionScope(
+                definitions: resolved.definition.definitions,
+                pathPrefix: resolved.namePath
+            ),
+            rootDefinitionScope: rootDefinitionScope,
+            environment: nestedEnvironment,
+            invocationStack: invocationStack + [resolved.qualifiedName]
+        )
     }
 
     mutating func collectTargets(from command: HeistActionCommand) {
