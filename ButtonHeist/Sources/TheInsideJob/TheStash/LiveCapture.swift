@@ -21,6 +21,7 @@ import AccessibilitySnapshotParser
 struct LiveCapture: Equatable {
     let snapshot: Snapshot
     let dispatchReferences: DispatchReferences
+    private let elementIndex: LiveElementIndex
     private let scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]
 
     var hierarchy: [AccessibilityHierarchy] {
@@ -37,6 +38,10 @@ struct LiveCapture: Equatable {
 
     var heistIdByElement: [AccessibilityElement: HeistId] {
         snapshot.heistIdByElement
+    }
+
+    var heistIdsByPath: [TreePath: HeistId] {
+        snapshot.heistIdsByPath
     }
 
     var elementRefs: [HeistId: ElementRef] {
@@ -72,6 +77,7 @@ struct LiveCapture: Equatable {
         containerNames: [AccessibilityContainer: ContainerName],
         containerNamesByPath: [TreePath: ContainerName] = [:],
         heistIdByElement: [AccessibilityElement: HeistId],
+        heistIdsByPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
         containerContentFramesByPath: [TreePath: CGRect] = [:],
@@ -86,6 +92,7 @@ struct LiveCapture: Equatable {
             containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
             heistIdByElement: heistIdByElement,
+            heistIdsByPath: heistIdsByPath,
             containerContentFramesByPath: containerContentFramesByPath,
             containerScrollContentLocationsByPath: containerScrollContentLocationsByPath
         )
@@ -110,6 +117,10 @@ struct LiveCapture: Equatable {
     ) {
         self.snapshot = snapshot
         self.dispatchReferences = dispatchReferences
+        elementIndex = LiveElementIndex(
+            snapshot: snapshot,
+            dispatchReferences: dispatchReferences
+        )
         self.scrollableViewsByContainerName = scrollableViewsByContainerName ?? Self.scrollableViewsByContainerName(
             snapshot: snapshot,
             dispatchReferences: dispatchReferences
@@ -121,27 +132,43 @@ struct LiveCapture: Equatable {
     }
 
     var heistIds: Set<HeistId> {
-        snapshot.heistIds
+        elementIndex.heistIds
     }
 
     func contains(heistId: HeistId) -> Bool {
-        snapshot.contains(heistId: heistId)
+        elementIndex.contains(heistId: heistId)
     }
 
     func heistId(for element: AccessibilityElement) -> HeistId? {
-        snapshot.heistId(for: element)
+        elementIndex.heistId(for: element)
+    }
+
+    func heistId(forPath path: TreePath) -> HeistId? {
+        elementIndex.heistId(forPath: path)
     }
 
     func element(for heistId: HeistId) -> AccessibilityElement? {
-        snapshot.element(for: heistId)
+        elementIndex.element(for: heistId)
+    }
+
+    func elementEntry(for heistId: HeistId) -> LiveElementIndex.ElementEntry? {
+        elementIndex.elementEntry(for: heistId)
+    }
+
+    func orderedElementEntries() -> [LiveElementIndex.ElementEntry] {
+        elementIndex.orderedElementEntries
     }
 
     func object(for heistId: HeistId) -> NSObject? {
-        elementRefs[heistId]?.object
+        elementIndex.object(for: heistId)
+    }
+
+    func heistId(matching object: NSObject) -> HeistId? {
+        elementIndex.heistId(matching: object)
     }
 
     func scrollView(for heistId: HeistId) -> UIScrollView? {
-        elementRefs[heistId]?.scrollView
+        elementIndex.scrollView(for: heistId)
     }
 
     func scrollView(forContainer containerName: ContainerName) -> UIScrollView? {
@@ -153,12 +180,12 @@ struct LiveCapture: Equatable {
            let scrollView = scrollView(forContainer: containerName) {
             return scrollView
         }
-        return scrollableContainerViewsByPath[container.path]?.view as? UIScrollView
-            ?? containerRefsByPath[container.path]?.object as? UIScrollView
+        return elementIndex.scrollableView(forContainerPath: container.path) as? UIScrollView
+            ?? elementIndex.containerObject(forPath: container.path) as? UIScrollView
     }
 
     func containerObject(forPath path: TreePath) -> NSObject? {
-        containerRefsByPath[path]?.object
+        elementIndex.containerObject(forPath: path)
     }
 
     func containerContentFrame(forPath path: TreePath) -> CGRect? {
@@ -190,6 +217,7 @@ struct LiveCapture: Equatable {
         let containerNames: [AccessibilityContainer: ContainerName]
         let containerNamesByPath: [TreePath: ContainerName]
         let heistIdByElement: [AccessibilityElement: HeistId]
+        let heistIdsByPath: [TreePath: HeistId]
         let containerContentFramesByPath: [TreePath: CGRect]
         let containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation]
 
@@ -198,13 +226,19 @@ struct LiveCapture: Equatable {
             containerNames: [AccessibilityContainer: ContainerName],
             containerNamesByPath: [TreePath: ContainerName] = [:],
             heistIdByElement: [AccessibilityElement: HeistId],
+            heistIdsByPath: [TreePath: HeistId] = [:],
             containerContentFramesByPath: [TreePath: CGRect] = [:],
             containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] = [:]
         ) {
             self.hierarchy = hierarchy
             self.containerNames = containerNames
-            self.containerNamesByPath = containerNamesByPath
+            self.containerNamesByPath = containerNamesByPath.isEmpty
+                ? Self.deriveContainerNamesByPath(hierarchy: hierarchy, containerNames: containerNames)
+                : containerNamesByPath
             self.heistIdByElement = heistIdByElement
+            self.heistIdsByPath = heistIdsByPath.isEmpty
+                ? Self.deriveHeistIdsByPath(hierarchy: hierarchy, heistIdByElement: heistIdByElement)
+                : heistIdsByPath
             self.containerContentFramesByPath = containerContentFramesByPath
             self.containerScrollContentLocationsByPath = containerScrollContentLocationsByPath
         }
@@ -216,7 +250,7 @@ struct LiveCapture: Equatable {
         )
 
         var heistIds: Set<HeistId> {
-            Set(heistIdByElement.values)
+            Set(heistIdsByPath.values)
         }
 
         func contains(heistId: HeistId) -> Bool {
@@ -228,7 +262,10 @@ struct LiveCapture: Equatable {
         }
 
         func element(for heistId: HeistId) -> AccessibilityElement? {
-            heistIdByElement.first { $0.value == heistId }?.key
+            guard let path = heistIdsByPath.first(where: { $0.value == heistId })?.key,
+                  case .element(let element, _) = hierarchy.node(at: path)
+            else { return nil }
+            return element
         }
 
         func containerContentFrame(forPath path: TreePath) -> CGRect? {
@@ -237,6 +274,28 @@ struct LiveCapture: Equatable {
 
         func containerScrollContentLocation(forPath path: TreePath) -> SemanticScreen.ScrollContentLocation? {
             containerScrollContentLocationsByPath[path]
+        }
+
+        private static func deriveHeistIdsByPath(
+            hierarchy: [AccessibilityHierarchy],
+            heistIdByElement: [AccessibilityElement: HeistId]
+        ) -> [TreePath: HeistId] {
+            Dictionary(
+                uniqueKeysWithValues: hierarchy.pathIndexedElements.compactMap { item in
+                    heistIdByElement[item.element].map { (item.path, $0) }
+                }
+            )
+        }
+
+        private static func deriveContainerNamesByPath(
+            hierarchy: [AccessibilityHierarchy],
+            containerNames: [AccessibilityContainer: ContainerName]
+        ) -> [TreePath: ContainerName] {
+            Dictionary(
+                uniqueKeysWithValues: hierarchy.containerPaths.compactMap { item in
+                    containerNames[item.container].map { (item.path, $0) }
+                }
+            )
         }
     }
 
@@ -307,6 +366,103 @@ struct LiveCapture: Equatable {
         }
     }
 
+    // MARK: - Live Element Index
+
+    struct LiveElementIndex: Equatable {
+        struct ElementEntry: Equatable {
+            let path: TreePath
+            let heistId: HeistId
+            let element: AccessibilityElement
+            let ref: ElementRef?
+        }
+
+        private let entriesByPath: [TreePath: ElementEntry]
+        private let pathsByHeistId: [HeistId: TreePath]
+        private let orderedPaths: [TreePath]
+        private let containerRefsByPath: [TreePath: ContainerRef]
+        private let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
+
+        init(
+            snapshot: Snapshot,
+            dispatchReferences: DispatchReferences
+        ) {
+            var entriesByPath: [TreePath: ElementEntry] = [:]
+            var pathsByHeistId: [HeistId: TreePath] = [:]
+            var orderedPaths: [TreePath] = []
+
+            for item in snapshot.hierarchy.pathIndexedElements {
+                guard let heistId = snapshot.heistIdsByPath[item.path],
+                      pathsByHeistId[heistId] == nil
+                else { continue }
+                let entry = ElementEntry(
+                    path: item.path,
+                    heistId: heistId,
+                    element: item.element,
+                    ref: dispatchReferences.elementRefs[heistId]
+                )
+                entriesByPath[item.path] = entry
+                pathsByHeistId[heistId] = item.path
+                orderedPaths.append(item.path)
+            }
+
+            self.entriesByPath = entriesByPath
+            self.pathsByHeistId = pathsByHeistId
+            self.orderedPaths = orderedPaths
+            containerRefsByPath = dispatchReferences.containerRefsByPath
+            scrollableContainerViewsByPath = dispatchReferences.scrollableContainerViewsByPath
+        }
+
+        var heistIds: Set<HeistId> {
+            Set(pathsByHeistId.keys)
+        }
+
+        var orderedElementEntries: [ElementEntry] {
+            orderedPaths.compactMap { entriesByPath[$0] }
+        }
+
+        func contains(heistId: HeistId) -> Bool {
+            pathsByHeistId[heistId] != nil
+        }
+
+        func heistId(for element: AccessibilityElement) -> HeistId? {
+            orderedElementEntries.first { $0.element == element }?.heistId
+        }
+
+        func heistId(forPath path: TreePath) -> HeistId? {
+            entriesByPath[path]?.heistId
+        }
+
+        func element(for heistId: HeistId) -> AccessibilityElement? {
+            elementEntry(for: heistId)?.element
+        }
+
+        func elementEntry(for heistId: HeistId) -> ElementEntry? {
+            pathsByHeistId[heistId].flatMap { entriesByPath[$0] }
+        }
+
+        func object(for heistId: HeistId) -> NSObject? {
+            elementEntry(for: heistId)?.ref?.object
+        }
+
+        func heistId(matching object: NSObject) -> HeistId? {
+            orderedElementEntries.first { entry in
+                entry.ref?.object === object
+            }?.heistId
+        }
+
+        func scrollView(for heistId: HeistId) -> UIScrollView? {
+            elementEntry(for: heistId)?.ref?.scrollView
+        }
+
+        func containerObject(forPath path: TreePath) -> NSObject? {
+            containerRefsByPath[path]?.object
+        }
+
+        func scrollableView(forContainerPath path: TreePath) -> UIView? {
+            scrollableContainerViewsByPath[path]?.view
+        }
+    }
+
     private static func scrollableViewsByContainerName(
         snapshot: Snapshot,
         dispatchReferences: DispatchReferences
@@ -316,10 +472,9 @@ struct LiveCapture: Equatable {
 
         for (container, path) in snapshot.hierarchy.containerPaths {
             guard let ref = dispatchReferences.scrollableContainerViewsByPath[path]
-                ?? dispatchReferences.scrollableContainerViews[container]
                 ?? scrollableContainerRefFromContainerObject(dispatchReferences.containerRefsByPath[path])
             else { continue }
-            guard let containerName = snapshot.containerNamesByPath[path] ?? snapshot.containerNames[container] else {
+            guard let containerName = snapshot.containerNamesByPath[path] else {
                 continue
             }
             guard !ambiguousNames.contains(containerName) else { continue }
@@ -338,6 +493,27 @@ struct LiveCapture: Equatable {
     ) -> ScrollableViewRef? {
         guard let scrollView = ref?.object as? UIScrollView else { return nil }
         return ScrollableViewRef(view: scrollView)
+    }
+}
+
+private extension Array where Element == AccessibilityHierarchy {
+    func node(at path: TreePath) -> AccessibilityHierarchy? {
+        guard let rootIndex = path.indices.first,
+              indices.contains(rootIndex)
+        else { return nil }
+        guard path.indices.count > 1 else { return self[rootIndex] }
+        return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+    }
+}
+
+private extension AccessibilityHierarchy {
+    func node(at path: TreePath) -> AccessibilityHierarchy? {
+        guard !path.indices.isEmpty else { return self }
+        guard case .container(_, let children) = self,
+              let childIndex = path.indices.first,
+              children.indices.contains(childIndex)
+        else { return nil }
+        return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
     }
 }
 

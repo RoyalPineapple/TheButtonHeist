@@ -118,9 +118,7 @@ private extension TheStash {
     /// returned rotor target flows through the same parser as `get_interface`.
     func parseLiveObject(_ object: NSObject) -> ScreenElement? {
         guard let screen = parse() else { return nil }
-        guard let heistId = screen.liveCapture.elementRefs.first(where: { _, ref in
-            ref.object === object
-        })?.key else { return nil }
+        guard let heistId = screen.liveCapture.heistId(matching: object) else { return nil }
         return screen.findElement(heistId: heistId)
     }
 

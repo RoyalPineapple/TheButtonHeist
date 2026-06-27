@@ -81,8 +81,7 @@ extension TheBurglar {
         accumulator.contentFrames[container] = contentFrame
         accumulator.contentFramesByPath[path] = contentFrame
 
-        if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView
-            ?? scrollableContainerViews[container] as? UIScrollView,
+        if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView,
            !scrollView.bhIsUnsafeForProgrammaticScrolling {
             let childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             for (index, child) in children.enumerated() {
@@ -189,10 +188,9 @@ extension TheBurglar {
             )
             contexts[element] = context
             contextsByPath[path] = context
-        case .container(let container, let children):
+        case .container(_, let children):
             let childScrollContext: ScrollContext?
-            if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView
-                ?? scrollableContainerViews[container] as? UIScrollView,
+            if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView,
                !scrollView.bhIsUnsafeForProgrammaticScrolling {
                 childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             } else {

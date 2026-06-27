@@ -20,7 +20,7 @@ extension TheBurglar {
         let scrollViews = scrollViewsByContainerForCurrentCapture(
             hierarchy: hierarchy,
             scrollViewsByPath: result.scrollViewsByPath
-        ).merging(result.scrollViews, uniquingKeysWith: { current, _ in current })
+        )
         let indexedElements = hierarchy.pathIndexedElements
         let elements = indexedElements.map(\.element)
         let contextsByPath = buildElementContextsByPath(
@@ -51,6 +51,8 @@ extension TheBurglar {
         screenElements.reserveCapacity(elements.count)
         var heistIdByElement: [AccessibilityElement: HeistId] = [:]
         heistIdByElement.reserveCapacity(elements.count)
+        var heistIdsByPath: [TreePath: HeistId] = [:]
+        heistIdsByPath.reserveCapacity(elements.count)
         var elementRefs: [HeistId: Screen.ElementRef] = [:]
         elementRefs.reserveCapacity(elements.count)
         for ((parsedElement, path, _), heistId) in zip(indexedElements, resolvedHeistIds) {
@@ -64,14 +66,15 @@ extension TheBurglar {
             )
             screenElements[heistId] = entry
             heistIdByElement[parsedElement] = heistId
+            heistIdsByPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
-                object: result.objectsByPath[path] ?? result.objects[parsedElement],
+                object: result.objectsByPath[path],
                 scrollView: context?.scrollView
             )
         }
 
         let firstResponders = zip(indexedElements, resolvedHeistIds).filter { item, _ in
-            let object = result.objectsByPath[item.path] ?? result.objects[item.element]
+            let object = result.objectsByPath[item.path]
             return (object as? UIView)?.isFirstResponder == true
         }
         if firstResponders.count > 1 {
@@ -91,6 +94,7 @@ extension TheBurglar {
             containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
             heistIdByElement: heistIdByElement,
+            heistIdsByPath: heistIdsByPath,
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: identityContext.contentFramesByPath,
