@@ -27,7 +27,7 @@ Binary:
 .build/release/buttonheist
 ```
 
-## Device Targeting
+## Device targeting
 
 All device-backed commands accept `--device <filter>`. The filter matches
 discovered metadata such as service name, app name, device name, short ID,
@@ -40,7 +40,7 @@ buttonheist --device demo activate --identifier loginButton
 
 Without `--device`, direct commands require exactly one reachable target.
 
-## Command Surface
+## Command surface
 
 Run local help for executable usage:
 
@@ -55,7 +55,7 @@ generated reference disagree, the generated reference wins.
 
 ## Workflows
 
-### Inspect and Act
+### Inspect and act
 
 ```bash
 buttonheist get_interface
@@ -67,7 +67,7 @@ Semantic commands identify elements by matcher fields. The Button Heist resolves
 the target, moves the viewport if needed, refreshes, and uses fresh live
 geometry before acting.
 
-### Viewport and Screenshots
+### Viewport and screenshots
 
 ```bash
 buttonheist scroll --direction down
@@ -80,7 +80,7 @@ the command's purpose. They are not setup for ordinary semantic actions.
 Screenshots write artifact files by default; inline PNG data is an explicit raw
 output mode.
 
-### Replay Authored Heists
+### Replay authored heists
 
 ```bash
 buttonheist run_heist --path checkout.heist --junit report.xml
@@ -90,7 +90,7 @@ Heist replay uses durable semantic selectors and matchers. Capture-local
 annotations are evidence and diagnostics, not replay identity. Source is
 authored; a `.heist` package is a generated replay artifact.
 
-### JSON-Lines Mode
+### JSON-lines mode
 
 `buttonheist json_lines` keeps a single connection open and accepts canonical
 JSON requests on stdin.
@@ -123,7 +123,7 @@ to choose explicitly.
 
 Status messages go to stderr.
 
-## See Also
+## See also
 
 - [MCP Server](../ButtonHeistMCP/)
 - [Command Reference](../docs/reference/commands.md)

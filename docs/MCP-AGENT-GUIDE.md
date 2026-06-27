@@ -2,7 +2,7 @@
 
 The Button Heist drives iOS apps through the settled accessibility interface. When the app exposes a complete accessibility contract, agents can target declared labels, identifiers, values, traits, and actions instead of calculating screen coordinates.
 
-## Core Loop
+## Core loop
 
 1. **Read** — `get_interface` returns the app accessibility state with labels, values, traits, actions, and capture-local diagnostic annotations.
 2. **Act** — use `perform(step:)` with one ButtonHeist DSL step for ordinary app controls. Always attach `.expect(...)` when you know what should change.
@@ -10,7 +10,7 @@ The Button Heist drives iOS apps through the settled accessibility interface. Wh
 4. **Wait if needed** — when the delta shows a transient state, call `perform(step:)` with one `WaitFor(...)` statement. The server checks the current settled state first, then watches settled accessibility state until the predicate is true.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
-## Choosing Tools
+## Choosing tools
 
 **Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content The Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is The Button Heist's generated name for a container in the current interface capture. It is useful for inspection. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
@@ -77,8 +77,8 @@ For `.missing(...)`, the predicate means the element is absent from the current 
 For text entry that may reflow the interface, assert the settled field state:
 
 ```swift
-TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.exists(.element(.identifier("Search"), .value("Bruschetta"))))
+TypeText("Bruschetta", into: .label("Search Items"))
+    .expect(.exists(.element(.label("Search Items"), .value("Bruschetta"))))
 ```
 
 Use explicit property-delta expectations when the action should update a known
@@ -168,7 +168,7 @@ Do not author heists as raw `version`/`name`/`parameter`/`definitions`/`body` JS
 
 MCP tool arguments are preflighted before The Button Heist converts them into command values. Public machine input is bounded by `PublicAdapterInputLimits.maxRequestBytes`, `PublicAdapterInputLimits.maxNestingDepth`, and `PublicAdapterInputLimits.maxTotalObjectKeys`; the same limits apply to JSON-lines input.
 
-## Trace Semantics
+## Trace semantics
 
 Screen changes create full baselines. Same-screen changes are patches on top of the current baseline.
 
@@ -180,7 +180,7 @@ Actions can refresh off-screen state by exploring scroll views before or after t
 
 `get_interface` returns app state. A default call may refresh discoverable off-screen content so the returned hierarchy is current. Passing `subtree` scopes that projection to the part of the hierarchy you asked for. `get_screen` is diagnostic: it returns pixels plus fresh visible geometry for the current viewport, not a replacement for the app-state hierarchy.
 
-## Async Changes
+## Async changes
 
 For operations that take time, keep using the DSL:
 
@@ -206,7 +206,7 @@ Activate(.label("Continue"))
     .expect(.change(.screen()))
 
 TypeText("milk", into: .label("Search"))
-    .expect(.element(.label("Search"), .value("milk")))
+    .expect(.exists(.element(.label("Search"), .value("milk"))))
 
 Activate(.label("Delete"))
     .expect(.missing(.label("Delete")))
@@ -216,7 +216,7 @@ Before you act, ask what should be true afterward. A nav button changes the
 screen. A delete removes an element. Text entry updates a value. Encode that fact
 as the expectation and let the receipt confirm or correct you.
 
-## Authoring Heists
+## Authoring heists
 
 Heists are authored reusable instructions, not logs inferred from live clicking. Use `run_heist(plan:)` for multi-step flows and keep expectations in the source whenever the app should prove a state change.
 
@@ -230,7 +230,7 @@ Heists are authored reusable instructions, not logs inferred from live clicking.
 
 Read the delta first — skip `get_interface` when the delta already told you what changed. Use semantic matcher fields from the current screen; after navigation, build targets from the new delta or interface evidence. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.
 
-## Local MCP Development
+## Local MCP development
 
 Use this workflow when testing a worktree-local `ButtonHeistMCP` change through an MCP host.
 

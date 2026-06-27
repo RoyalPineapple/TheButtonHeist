@@ -10,7 +10,7 @@ swift build -c release
 # Binary at .build/release/buttonheist-mcp
 ```
 
-## Tool Surface
+## Tool surface
 
 ButtonHeistMCP projects its tool surface from `TheFence.Command` via
 `ToolDefinitions`. The MCP server exposes one tool per exposed command; command
@@ -26,7 +26,7 @@ The generated [MCP Tool Reference](../docs/reference/mcp-tools.md) is the
 current tool and schema reference. This README stays at the adapter behavior
 layer.
 
-## Runtime Behavior
+## Runtime behavior
 
 - Uses `StdioTransport`, so MCP traffic is JSON-RPC over stdin/stdout
 - Reuses a single `TheFence` instance and auto-reconnects when the next tool call arrives
@@ -41,7 +41,7 @@ layer.
 - `BUTTONHEIST_DRIVER_ID` is forwarded through `TheFence` for session locking
 - `BUTTONHEIST_SESSION_TIMEOUT` controls the idle disconnect timeout (default: 60 seconds)
 
-## See Also
+## See also
 
 - [MCP Agent Guide](../docs/MCP-AGENT-GUIDE.md) for agent observation, action, wait, and heist-composition patterns
 - [MCP Tool Reference](../docs/reference/mcp-tools.md) for the generated tool surface

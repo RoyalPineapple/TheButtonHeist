@@ -140,7 +140,7 @@ Same 13 buttons. The Button Heist sends them in one call by name. The idb agent 
 
 ## The numbers
 
-Tested against [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-mcp), a lightweight MCP wrapper around Meta's [idb (iOS Development Bridge)](https://github.com/facebook/idb). ios-simulator-mcp represents the coordinate-based approach that most iOS automation tools use today — read the accessibility tree for element positions, then tap by coordinate. It's well-built, minimal, and easy to set up. We chose it as the baseline because it's the most accessible entry point for agents that need to drive iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
+Tested against [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-mcp), a lightweight MCP wrapper around Meta's [idb (iOS Development Bridge)](https://github.com/facebook/idb). ios-simulator-mcp represents the coordinate-based approach that most iOS automation tools use today: read the accessibility tree for element positions, then tap by coordinate. It is well-built and minimal. We chose it as the baseline because it is a low-friction entry point for agents that need to drive iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
 
 ### Full suite (16 tasks, N=3, fair prompts)
 

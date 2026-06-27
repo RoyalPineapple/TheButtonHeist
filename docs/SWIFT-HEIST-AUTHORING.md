@@ -80,7 +80,7 @@ func checkoutPlan() throws -> HeistPlan {
 invocations, but it does not preserve arbitrary helper function names, source
 grouping, comments, local constants, or native Swift calls.
 
-## Swift Test Runner Boundary
+## Swift test runner boundary
 
 In app and UI tests, Swift calls the job and The Button Heist describes the job. The
 host-language runner boundary is:
@@ -153,8 +153,8 @@ reveal, element inflation, and live geometry through the runtime pipeline.
 CustomAction("Archive", on: .label("Message"))
     .expect(.change(.elements()))
 
-TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.exists(.element(.identifier("Search"), .value("Bruschetta"))))
+TypeText("Bruschetta", into: .label("Search Items"))
+    .expect(.exists(.element(.label("Search Items"), .value("Bruschetta"))))
 
 Increment(.label("Quantity"))
     .expect(.change(.updated(element: .label("Quantity"), .value(before: "2", after: "3"))))
@@ -255,7 +255,7 @@ mutations do not reset ordinal scheduling. Each body action still resolves the
 live `ElementTarget` through the normal command and element inflation pipeline, so
 out-of-range or non-inflated targets fail with normal command diagnostics.
 
-## Compilation Boundary
+## Compilation boundary
 
 Swift compilation is an **author-time** step, not a runtime capability. It lives
 only in the authoring tools:
@@ -347,7 +347,7 @@ run `swift build --package-path ButtonHeist --product heist-plan`, or set
 candidate products directories. Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace
 which resolution branch was taken.
 
-## Explicit Non-Goals
+## Explicit non-goals
 
 Swift Heist does not preserve:
 

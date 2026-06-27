@@ -6,39 +6,57 @@
 
 # The Button Heist
 
-The Button Heist makes the settled accessibility interface executable. Agents and tests do not need to guess from pixels first. They act through the same contract assistive technologies depend on, wait for the app to settle, and bring back evidence that the contract changed as expected.
+The Button Heist makes the iOS accessibility interface programmable.
 
-The familiar part is accessibility. The new part is the loop: settled interface, declared action, checked result, receipt. A UI snapshot becomes a contract you can run.
+Agents, humans, and tests act through the same contract VoiceOver depends on.
 
-Accessibility is the interface. Strip an app of rendering and it is still talking: labels, values, traits, hierarchy, state, and actions. It says what is true now. It says what can happen next. It says what changed.
+Every action is targeted and precise. The heist goes off clean, always returning with the evidence.
 
-A visual interface asks an operator to infer what can be done from pixels. The accessibility interface publishes a command surface: named objects, declared verbs, and read-back state.
+## One move
 
-VoiceOver is one client for that surface. The Button Heist is another. It asks the app what it has promised, makes one declared move, waits for the machinery to stop, and keeps the receipt.
+Begin with a single action:
 
-There is no second app behind the glass. The app has already published the contract. The Button Heist makes that contract executable.
+```swift
+Activate(.label("Pay"))
+    .expect(.appeared(.label("Payment Complete")))
+```
 
-## What it unlocks
+This is not "tap Pay." It is a contract:
 
-The Button Heist changes the unit of automation. A direct command can activate `Pay`. A named heist can be `Cart.addItem("Milk")` or `Checkout.pay()`. Both run through the same settled accessibility contract. Both bring back proof.
+- find the control the app declares as `Pay`
+- perform the activation exposed by accessibility
+- wait for the interface to settle
+- prove that `Payment Complete` appeared
+- return the receipt
 
-It can:
+The important question is not whether an event was delivered. It is whether the interface contract was fulfilled.
 
-- drive ordinary controls by label, value, identifier, traits, and declared action
-- type into fields and prove the semantic value changed
-- wait through async UI until a confirmation, result, or error state appears
-- compose multi-step flows into named product capabilities
-- let agents inspect those capabilities before they call them
-- leave CI with a receipt that names the contract that broke
+## Why this holds up
 
-That is the shape of the project: product semantics in, settled evidence out.
-Rendered as canonical heist source for `run_heist(plan:)`:
+Contracts reduce ambiguity. The Button Heist asks the app what it declares now,
+acts through that declaration, waits for the interface to settle, and returns
+the evidence.
+
+That changes the unit of automation:
+
+- reusable product capabilities, not long transcripts of taps
+- product semantics, not screen coordinates
+- settled evidence, not sleeps
+- the same heist language for agents and tests
+- receipts you can assert, print, report, and compose
+
+## First heist
+
+A single move proves one contract. A heist defines a product capability.
 
 ```swift
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search Items"))
-            .expect(.exists(.element(.label("Search Items"), .value(item))))
+            .expect(.updated(
+                element: .label("Search Items"),
+                .value(item)
+            ))
 
         Activate(.label(item))
             .expect(.appeared(.element(
@@ -48,93 +66,66 @@ HeistPlan("shop") {
     }
 
     RunHeist("Cart.addItem", "Milk")
+    RunHeist("Cart.addItem", "Eggs")
+    RunHeist("Cart.addItem", "Bread")
+    WaitFor(.updated(
+        element: .label("subtotal"),
+        .value(.contains("3 items"))
+    ))
 }
 ```
 
-## One move
+Each `Cart.addItem` call runs the same product capability with a new argument.
+The heist owns the search, activation, settlement, and evidence. The caller says
+what product move they want.
 
-The whole machine is visible in one move:
+That is where the tool changes shape. The accessibility interface becomes the language of app interaction.
+
+## Ways to run heists
+
+Agents and tests use the same heist language. That is the practical payoff of
+defining product capabilities against the accessibility contract.
+
+- `perform(step:)` runs one Button Heist step from MCP.
+- `run_heist(plan:)` runs a composed `HeistPlan` from MCP or the CLI.
+- Checked-in Swift heist files compile to the same validated plan your tests can run.
+
+A live agent can take one step:
 
 ```swift
 Activate(.label("Pay"))
     .expect(.appeared(.label("Payment Complete")))
 ```
 
-This looks like a tap. It is stricter than that.
+Send that source through `perform(step:)`.
 
-`.appeared(...)` says the step must prove a before/after transition. The settled accessibility interface after the action must contain evidence that `Payment Complete` appeared.
+A composed job can run as a plan:
 
-This is not "tap Pay." It means:
-
-1. Read the settled accessibility interface.
-2. Resolve the control the app declares as `Pay`.
-3. Perform the activation exposed by that interface.
-4. Wait for the app to settle.
-5. Re-read the settled accessibility interface.
-6. Prove that `Payment Complete` appeared.
-7. Return evidence of the transition.
-
-The question is not whether an event was delivered. The question is whether the interface contract was fulfilled.
-
-## The contract
-
-A contract gives uncertainty a handle. It makes three things explicit:
-
-- what the app declares
-- what can be acted on
-- what the contract requires after the action
-
-Ambiguity becomes concrete in the accessibility interface. A control can be visible but silent. A label can be close enough for a person to infer, but too vague for assistive technology or an agent to trust. State can change on screen while semantic state stays stale. A tap can work even though the accessibility action is missing.
-
-The Button Heist makes those gaps testable. It executes the accessibility contract and requires evidence that the contract changed as expected.
-
-The machinery is small on purpose: read what the app declares, make one declared move, wait for the app to become still, keep the receipt.
-
-## The core loop
-
-Every heist step crosses the same checkpoint:
-
-```text
-read settled accessibility interface
--> resolve semantic target
--> perform declared action
--> wait for settled accessibility interface
--> compute delta
--> assert evidence
--> return receipt
+```swift
+HeistPlan("checkout") {
+    Activate(.label("Pay"))
+        .expect(.appeared(.label("Payment Complete")))
+}
 ```
 
-Most UI automation treats interaction as an input event. The Button Heist treats interaction as an asserted transition in the accessibility contract. The event is not the interesting part. The settled change is.
+Send that source through `run_heist(plan:)`.
 
-```mermaid
-flowchart LR
-    Contract["Accessibility contract<br/>what exists, what can act"]
-    Before["Settled accessibility interface<br/>before"]
-    Action["Declared action<br/>activate, type, rotor, wait"]
-    After["Settled accessibility interface<br/>after"]
-    Evidence["Evidence<br/>appeared, disappeared, updated"]
-    Receipt["Receipt<br/>what changed, what was proven"]
-    Next["Next step"]
+The same product capability can live in source control:
 
-    Contract --> Before
-    Before --> Action
-    Action --> After
-    Before --> Evidence
-    After --> Evidence
-    Evidence --> Receipt
-    Receipt --> Next
-    Next --> Before
+```swift
+func makeCheckoutHeist() throws -> HeistPlan {
+    try HeistPlan("checkout") {
+        Activate(.label("Pay"))
+            .expect(.appeared(.label("Payment Complete")))
+    }
+}
 ```
-
-A direct command is one loop:
 
 ```bash
-buttonheist activate --label "Settings" --traits button
+buttonheist run_heist --path Heists/Checkout.swift --entry makeCheckoutHeist
 ```
 
-The runtime resolves the target, makes it actionable, performs the accessibility operation, waits for the app to settle, and returns a receipt with the new state and evidence. The next command, assertion, audit, or test starts from that receipt.
-
-The normal path is semantic: activate named controls, type into fields, run accessibility actions, move through rotors, and wait on settled predicates. Screenshots, viewport commands, and spatial gestures still exist, but they are supporting tools. For ordinary app flows, the durable control surface is the contract the app already owes its users.
+Different doors. Same runtime. Same evidence.
 
 ## Receipts
 
@@ -163,129 +154,7 @@ known elements:
   "Save" [button]
 ```
 
-Because The Button Heist acts from a settled accessibility interface and reads another settled accessibility interface afterward, diagnosis starts from facts. The diagnostic shows what the app actually exposed.
-
-Receipts are intentionally plain. Boring in the useful way: they say what ran, what changed, and where the machine stopped. They are not live handles, replay objects, or private runtime state. They carry evidence you can assert against, print, report, or use to compose the next heist.
-
-## Heists
-
-A heist is a product capability with a paper trail: do these actions, wait for these facts, and keep the receipt.
-
-Humans can author heists in checked-in Swift files. Agents can author runtime heists as canonical source sent through `run_heist(plan:)`. Both forms lower to the same `HeistPlan` and run through the same receipt-producing runtime.
-
-```swift
-import ThePlans
-
-let login = try HeistPlan("login") {
-    TypeText("agent@example.com", into: .label("Email"))
-        .expect(.exists(.element(
-            .label("Email"),
-            .value("agent@example.com")
-        )))
-
-    Activate(.label("Sign In"))
-        .expect(.change(.appeared(.label("Home"))))
-}
-```
-
-Each instruction runs through the same action/wait runtime. The heist rolls those step receipts into one receipt tree. A report can show the whole job, or point to the exact instruction where the contract was not fulfilled.
-
-## Product capabilities
-
-Once a heist has a name, the unit of automation changes. Callers can use it as a product capability:
-
-```swift
-RunHeist("SearchScreen.search", "milk")
-RunHeist("LibraryScreen.addToCart", "Milk")
-RunHeist("CartScreen.checkout")
-```
-
-This is where accessibility semantics become product semantics. The reusable piece is still grounded in predicates and receipts, but the caller can operate at the level of the product: search, add to cart, confirm, checkout.
-
-## The shape of a job
-
-Once jobs need more than straight-line instructions, the heist language adds a small set of control primitives. Few parts. Bounded motion. No hidden loop carrying state into the dark.
-
-Action expectations usually assert deltas: something appeared, changed, or updated after the step. When an action can reflow the screen, assert the settled state instead. Standalone waits and branches inspect current settled state.
-
-- `WaitFor` is an assertion: a predicate must become true before the timeout, unless an explicit timeout branch handles the miss.
-- `If` is a decision: inspect settled current state and choose a branch.
-- `ForEach` is the loop: repeat over a finite list of strings or semantic targets.
-- `RunHeist` is composition: call another product capability with no argument, one string, or one element target.
-- Actions, `Warn`, and `Fail` are the effects.
-
-```swift
-let search = try HeistPlan("searchFlow") {
-    TypeText("milk", into: .label("Search"))
-        .expect(.exists(.element(
-            .label("Search"),
-            .value("milk")
-        )))
-
-    Activate(.label("Search"))
-        .expect(.change(.screen()))
-
-    WaitFor(.label("Results"), timeout: .seconds(5))
-        .else {
-            Fail("Search did not settle")
-        }
-
-    If(.exists(.label("Results"))) {
-        Warn("Search results loaded")
-    }
-}
-```
-
-Heists stay deliberately finite and inspectable: values, predicates, assertions, decisions, bounded loops, composition, and explicit effects. Enough language to do the job. Not enough to hide it.
-
-The same shape works inside app tests:
-
-```swift
-import TheInsideJob
-
-let heist = try await RunHeist("search", argument: "milk") { query in
-    TypeText(query, into: .label("Search"))
-        .expect(.exists(.element(.label("Search"), .value(query))))
-
-    Activate(.label("Search"))
-        .expect(.change(.screen()))
-}
-
-heist.result
-```
-
-Outside `RunHeist(...) { ... }` is Swift test code. Inside the closure is the heist language that lowers to a validated `HeistPlan` and runs through the same runtime as MCP `run_heist`.
-
-## Why it works
-
-The Button Heist narrows the problem the agent has to solve. The agent sees the interface in language, chooses intent in language, and receives evidence in language. It does not need to become a surveyor of rectangles before asking for a button.
-
-Accessibility makes that possible. A good app already names controls, describes roles, exposes values, offers actions, and reports state. The Button Heist keeps that contract live and runs ordinary semantic interactions through it.
-
-For maps, canvases, drawing surfaces, games, and spatial products, explicit mechanical gestures stay available. Those are intentional spatial interactions, not the normal path for buttons, fields, menus, actions, rotors, waits, and product flows.
-
-That division of labor is the product: the app publishes product semantics, The Button Heist keeps the settled accessibility interface and receipts, and the agent chooses what should happen next.
-
-## Screenshots and accessibility
-
-Screenshots are visual evidence. They show the visual interface, and The Button Heist can capture them when pixels are the right evidence.
-
-They are not the normal way to act. Pixels are good evidence. Poor instructions. Accessibility says what each control is called, what role it has, what value it reports, which actions it accepts, and how the app says it changed.
-
-The Button Heist targets controls by product semantics, not by any one field. A target can use labels, values, identifiers, required traits, excluded traits, and ordinal disambiguation. Hierarchy, state, and available actions remain observable facts and assertion evidence, not durable target identity.
-
-For durable heists, the best target is the smallest accessibility predicate that names the intended control in its screen context. Small names. Long lives.
-
-String predicates are exact by default. When you need looseness, ask for it explicitly:
-
-```swift
-.label(.contains("Search"))
-.label(.prefix("Total"))
-.identifier(.contains("cart"))
-.element(.label(.prefix("Milk")), .traits([.button]))
-```
-
-All checks must pass. Use `.traits([...])` for required traits and `.excludeTraits([...])` for rejected traits.
+Boring in the useful way: receipts say what ran, what changed, and where the machine stopped. They are not live handles, replay objects, or private runtime state. They are evidence you can assert against, print, report, and compose.
 
 ## Quick start
 
@@ -339,41 +208,47 @@ Add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-Agents usually start with `get_interface`, then act with commands such as `activate`, `type_text`, `rotor`, `wait`, and `run_heist`.
+### 3. Drive the app
 
-### 3. Use the CLI directly
+Agents usually start with `get_interface`, then use `perform(step:)` for one
+semantic step or `run_heist(plan:)` for a named capability.
+
+The CLI exposes the same runtime as terminal commands:
 
 ```bash
-cd ButtonHeistCLI
-swift build -c release
-
-BH=.build/release/buttonheist
-
-$BH list_devices
-$BH get_interface
-$BH activate --identifier loginButton
-$BH type_text --text "Hello" --identifier nameField
-$BH get_screen --output screen.png
+buttonheist list_devices
+buttonheist get_interface
+buttonheist activate --identifier loginButton
+buttonheist type_text --text "Hello" --identifier nameField
+buttonheist get_screen --output screen.png
 ```
 
-`json_lines` keeps one connection open and accepts canonical machine JSON objects. Direct CLI commands and MCP tools project from the same Fence command contract.
+For long-running automation, `json_lines` keeps one connection open and accepts one command per line:
 
 ```bash
 printf '%s\n' '{"command":"get_interface"}' | buttonheist json_lines
 ```
 
+## Screenshots and gestures
+
+Screenshots are visual evidence. They show the rendered interface, and The Button Heist can capture them when pixels are the right proof.
+
+They are not the normal way to act. For buttons, fields, menus, actions, rotors, waits, and product flows, the durable control surface is the accessibility contract the app already owes its users.
+
+Explicit mechanical gestures stay available for maps, canvases, drawing surfaces, games, and spatial products. Those are intentional spatial interactions, not setup steps for ordinary controls.
+
 ## Documentation
 
 | Need | Read |
 |---|---|
-| Understand the product contract | [Accessibility contract](docs/ACCESSIBILITY-CONTRACT.md), [Architecture](docs/ARCHITECTURE.md) |
+| Understand the contract loop | [Accessibility contract](docs/ACCESSIBILITY-CONTRACT.md), [Architecture](docs/ARCHITECTURE.md) |
 | Connect an agent | [MCP agent guide](docs/MCP-AGENT-GUIDE.md), [ButtonHeistMCP](ButtonHeistMCP/) |
 | Use the terminal | [ButtonHeistCLI](ButtonHeistCLI/), [Command reference](docs/reference/commands.md) |
-| Author heists | [Swift heist authoring](docs/SWIFT-HEIST-AUTHORING.md), [Heist format](docs/HEIST-FORMAT.md) |
-| Integrate an app | [Quick start](#quick-start), [API](docs/API.md), [Auth](docs/AUTH.md) |
+| Author heists | [Swift heist authoring](docs/SWIFT-HEIST-AUTHORING.md), [Heist format](docs/HEIST-FORMAT.md), [Examples](examples/README.md) |
+| Integrate an app | [API](docs/API.md), [Auth](docs/AUTH.md), [USB connectivity](docs/USB_DEVICE_CONNECTIVITY.md) |
 | See evidence and experiments | [Benchmarks](docs/BENCHMARKS.md), [Heist Doctor](docs/HEIST-DOCTOR.md) |
 
-All docs start at [docs/README.md](docs/README.md). Generated references live in [docs/reference](docs/reference/).
+Generated references live in [docs/reference](docs/reference/).
 
 ## Troubleshooting
 
@@ -388,7 +263,7 @@ Check that:
 
 ### USB connection refused
 
-Check:
+Run:
 
 ```bash
 xcrun devicectl list devices
@@ -404,35 +279,6 @@ Make sure the app has an interface on a screen and that the root view exposes an
 ```bash
 buttonheist get_interface
 ```
-
-## The crew
-
-The Button Heist is a distributed system: a debug iOS framework inside the app, a macOS client outside it, and CLI/MCP fronts for humans and agents.
-
-### Inside the app
-
-| Name | Job |
-|---|---|
-| `TheInsideJob` | Embedded debug framework and server startup |
-| `TheStash` | Settled accessibility snapshots, target resolution, matching, wire conversion |
-| `TheBurglar` | Accessibility hierarchy parsing and screen/container structure |
-| `TheBrains` | Action execution, waits, heist execution, and result evidence |
-| `TheSafecracker` | Explicit mechanical input: touch, gesture, keyboard, edit, scroll mechanics |
-| `TheTripwire` | UI readiness, window signals, and settle support |
-| `TheMuscle` | Token validation, approval UI, and session locking |
-| `TheGetaway` | Message dispatch and response transport |
-
-### Outside the app
-
-| Name | Job |
-|---|---|
-| `TheFence` | Shared command contract for CLI and MCP |
-| `TheHandoff` | Device discovery, target resolution, TLS connection, and session state |
-| `ThePlans` | Pure heist language: plan AST, Swift authoring, JSON, validation, canonical rendering, and source compilation |
-| `TheScore` | Wire models, traces, predicates, and results shared across boundaries |
-| `ButtonHeistCLI` | Command-line adapter |
-| `ButtonHeistMCP` | MCP adapter for agents |
-| `HeistArtifactCodec` / `ScreenshotArtifactWriter` | Deterministic heist and screenshot artifacts |
 
 ## Development
 
@@ -473,8 +319,7 @@ ButtonHeist/
 
 ## Acknowledgments
 
-- [KIF (Keep It Functional)](https://github.com/kif-framework/KIF). The Button Heist owes part of its lineage to KIF's long accessibility-first history on iOS.
-- [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot). Used for parsing UIKit accessibility hierarchies via [AccessibilitySnapshotBH](https://github.com/RoyalPineapple/AccessibilitySnapshotBH).
+- [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot), used through [AccessibilitySnapshotBH](https://github.com/RoyalPineapple/AccessibilitySnapshotBH), handles UIKit accessibility hierarchy parsing. Patient infrastructure. The kind you want under a machine that acts on what the app says.
 
 ## License
 
