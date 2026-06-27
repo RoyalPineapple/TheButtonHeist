@@ -116,7 +116,7 @@ Use DSL when explaining or authoring heists.
 ```swift
 HeistPlan("purchaseFlow") {
     TypeText("milk", into: .label("Search"))
-        .expect(.exists(.value("milk")), timeout: .seconds(2))
+        .expect(.value("milk"), timeout: .seconds(2))
 
     Activate(.label("Milk"))
         .expect(.change(.screen()))
@@ -133,19 +133,19 @@ The same primitives scale up without creating a second runtime:
 ```swift
 HeistDef<String>("addToCart", parameter: "item") { item in
     TypeText(item, into: .label("Search"))
-        .expect(.exists(.value(item)), timeout: .seconds(2))
+        .expect(.value(item), timeout: .seconds(2))
 
     Activate(.label(item))
-        .expect(.exists(.label("Cart")), timeout: .seconds(2))
+        .expect(.label("Cart"), timeout: .seconds(2))
 }
 
 HeistPlan("cartFlow") {
-    ForEach(["Milk", "Eggs"]) { item in
+    ForEach("Milk", "Eggs") { item in
         RunHeist("addToCart", item)
     }
 
     If {
-        Case(.exists(.label("Checkout"))) {
+        Case(.label("Checkout")) {
             Activate(.label("Checkout"))
                 .expect(.change(.screen()))
         }
@@ -160,7 +160,7 @@ HeistPlan("cartFlow") {
 Semantic ForEach binds a target expression, not a cached element handle:
 
 ```swift
-ForEach(.matching(.label("Delete")), limit: 20) { target in
+ForEach(.label("Delete"), limit: 20) { target in
     Activate(target)
         .expect(.missing(target), timeout: .seconds(2))
 }

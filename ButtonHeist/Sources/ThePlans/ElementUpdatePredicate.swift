@@ -151,6 +151,15 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         .value(ElementPropertyChange(before: before, after: after))
     }
 
+    @_disfavoredOverload
+    public static func value(_ after: StringMatch<String>) -> Self {
+        .value(after: after)
+    }
+
+    public static func value(_ after: String) -> Self {
+        .value(after: .exact(after))
+    }
+
     public static func traits(
         before: TraitSetMatch? = nil,
         after: TraitSetMatch? = nil
@@ -313,6 +322,19 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
         after: StringMatch<StringExpr>? = nil
     ) -> Self {
         .value(ElementPropertyChangeExpr(before: before, after: after))
+    }
+
+    @_disfavoredOverload
+    public static func value(_ after: StringMatch<StringExpr>) -> Self {
+        .value(after: after)
+    }
+
+    public static func value(_ after: StringExpr) -> Self {
+        .value(after: .exact(after))
+    }
+
+    public static func value(_ after: String) -> Self {
+        .value(.literal(after))
     }
 
     public static func traits(

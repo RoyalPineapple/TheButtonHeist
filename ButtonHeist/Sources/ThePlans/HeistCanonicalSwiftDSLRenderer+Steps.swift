@@ -182,7 +182,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         let childEnvironment = environment.bindingTargetReference(forEach.parameter)
         let body = try render(steps: forEach.body, indent: indent + 1, environment: childEnvironment)
         return """
-        \(line("ForEach(.matching(\(render(predicate: forEach.matching))), limit: \(forEach.limit)) { \(forEach.parameter) in", indent))
+        \(line("ForEach(\(render(predicate: forEach.matching)), limit: \(forEach.limit)) { \(forEach.parameter) in", indent))
         \(body)
         \(line("}", indent))
         """
@@ -198,7 +198,7 @@ extension HeistCanonicalSwiftDSLRenderer {
         let values = forEach.values.map(quote).joined(separator: ", ")
         let body = try render(steps: forEach.body, indent: indent + 1, environment: childEnvironment)
         return """
-        \(line("ForEach([\(values)]) { \(forEach.parameter) in", indent))
+        \(line("ForEach(\(values)) { \(forEach.parameter) in", indent))
         \(body)
         \(line("}", indent))
         """

@@ -231,8 +231,8 @@ public extension AccessibilityPredicate {
         .state(.missingTarget(target))
     }
 
-    static func all(_ states: [AccessibilityPredicate.State]) -> AccessibilityPredicate {
-        .state(.all(states))
+    static func all(_ first: AccessibilityPredicate.State, _ rest: AccessibilityPredicate.State...) -> AccessibilityPredicate {
+        .state(.all([first] + rest))
     }
 }
 
@@ -270,8 +270,99 @@ public extension AccessibilityPredicateExpr {
         .noChangePredicate
     }
 
-    static func all(_ states: [StatePredicateExpr]) -> AccessibilityPredicateExpr {
-        .state(.all(states))
+    static func all(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> AccessibilityPredicateExpr {
+        .state(.all([first] + rest))
+    }
+
+    @_disfavoredOverload
+    static func label(_ label: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
+        .exists(.label(label))
+    }
+
+    static func label(_ label: StringExpr) -> AccessibilityPredicateExpr {
+        .exists(.label(label))
+    }
+
+    static func label(_ label: String) -> AccessibilityPredicateExpr {
+        .exists(.label(label))
+    }
+
+    @_disfavoredOverload
+    static func identifier(_ identifier: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
+        .exists(.identifier(identifier))
+    }
+
+    static func identifier(_ identifier: StringExpr) -> AccessibilityPredicateExpr {
+        .exists(.identifier(identifier))
+    }
+
+    static func identifier(_ identifier: String) -> AccessibilityPredicateExpr {
+        .exists(.identifier(identifier))
+    }
+
+    @_disfavoredOverload
+    static func value(_ value: StringMatch<StringExpr>) -> AccessibilityPredicateExpr {
+        .exists(.value(value))
+    }
+
+    static func value(_ value: StringExpr) -> AccessibilityPredicateExpr {
+        .exists(.value(value))
+    }
+
+    static func value(_ value: String) -> AccessibilityPredicateExpr {
+        .exists(.value(value))
+    }
+
+    static func traits(_ traits: [HeistTrait]) -> AccessibilityPredicateExpr {
+        .exists(.traits(traits))
+    }
+
+    static func excludeTraits(_ traits: [HeistTrait]) -> AccessibilityPredicateExpr {
+        .exists(.excludeTraits(traits))
+    }
+
+    static func element(
+        label: StringMatch<StringExpr>? = nil,
+        identifier: StringMatch<StringExpr>? = nil,
+        value: StringMatch<StringExpr>? = nil,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> AccessibilityPredicateExpr {
+        .exists(.element(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits,
+            excludeTraits: excludeTraits
+        ))
+    }
+
+    static func element(
+        _ checks: ElementPredicateCheck<StringExpr>...,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> AccessibilityPredicateExpr {
+        .exists(ElementPredicateTemplate(checks, traits: traits, excludeTraits: excludeTraits))
+    }
+
+    static func appeared(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
+        .change(.appeared(predicate))
+    }
+
+    static func disappeared(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
+        .change(.disappeared(predicate))
+    }
+
+    static func updated() -> AccessibilityPredicateExpr {
+        .change(.updated())
+    }
+
+    static func updated(_ change: AnyPropertyChangeExpr) -> AccessibilityPredicateExpr {
+        .change(.updated(change))
+    }
+
+    static func updated(element: ElementPredicateTemplate, _ change: AnyPropertyChangeExpr? = nil) -> AccessibilityPredicateExpr {
+        .change(.updated(element: element, change))
     }
 }
 
@@ -284,6 +375,81 @@ public extension StatePredicateExpr {
     @_disfavoredOverload
     static func missing(_ target: ElementTargetExpr) -> StatePredicateExpr {
         .missingTarget(target)
+    }
+
+    static func all(_ first: StatePredicateExpr, _ rest: StatePredicateExpr...) -> StatePredicateExpr {
+        .all([first] + rest)
+    }
+
+    @_disfavoredOverload
+    static func label(_ label: StringMatch<StringExpr>) -> StatePredicateExpr {
+        .exists(.label(label))
+    }
+
+    static func label(_ label: StringExpr) -> StatePredicateExpr {
+        .exists(.label(label))
+    }
+
+    static func label(_ label: String) -> StatePredicateExpr {
+        .exists(.label(label))
+    }
+
+    @_disfavoredOverload
+    static func identifier(_ identifier: StringMatch<StringExpr>) -> StatePredicateExpr {
+        .exists(.identifier(identifier))
+    }
+
+    static func identifier(_ identifier: StringExpr) -> StatePredicateExpr {
+        .exists(.identifier(identifier))
+    }
+
+    static func identifier(_ identifier: String) -> StatePredicateExpr {
+        .exists(.identifier(identifier))
+    }
+
+    @_disfavoredOverload
+    static func value(_ value: StringMatch<StringExpr>) -> StatePredicateExpr {
+        .exists(.value(value))
+    }
+
+    static func value(_ value: StringExpr) -> StatePredicateExpr {
+        .exists(.value(value))
+    }
+
+    static func value(_ value: String) -> StatePredicateExpr {
+        .exists(.value(value))
+    }
+
+    static func traits(_ traits: [HeistTrait]) -> StatePredicateExpr {
+        .exists(.traits(traits))
+    }
+
+    static func excludeTraits(_ traits: [HeistTrait]) -> StatePredicateExpr {
+        .exists(.excludeTraits(traits))
+    }
+
+    static func element(
+        label: StringMatch<StringExpr>? = nil,
+        identifier: StringMatch<StringExpr>? = nil,
+        value: StringMatch<StringExpr>? = nil,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> StatePredicateExpr {
+        .exists(.element(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits,
+            excludeTraits: excludeTraits
+        ))
+    }
+
+    static func element(
+        _ checks: ElementPredicateCheck<StringExpr>...,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> StatePredicateExpr {
+        .exists(ElementPredicateTemplate(checks, traits: traits, excludeTraits: excludeTraits))
     }
 }
 

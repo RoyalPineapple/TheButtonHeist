@@ -36,6 +36,19 @@ extension HeistPlanSourceParser {
                 body: closure.body
             ))
         }
+        if case .string = currentToken.kind {
+            var values: [String] = []
+            repeat {
+                values.append(try parseStringLiteral())
+            } while consumeSymbol(",")
+            try expectSymbol(")")
+            let closure = try parseClosureParameterBlock(binding: .string)
+            return .forEachString(try ForEachStringStep(
+                values: values,
+                parameter: closure.referenceName,
+                body: closure.body
+            ))
+        }
         let matching = try parseElementMatches()
         var limit = 20
         while consumeSymbol(",") {
@@ -43,7 +56,7 @@ extension HeistPlanSourceParser {
                 try expectSymbol(":")
                 limit = try parseInteger()
             } else {
-                throw error(currentToken, "ForEach(.matching(...)) accepts only limit:")
+                throw error(currentToken, "ForEach element loop accepts only limit:")
             }
         }
         try expectSymbol(")")
@@ -75,8 +88,8 @@ extension HeistPlanSourceParser {
     mutating func parseElementMatches() throws -> ElementPredicate {
         try expectSymbol(".")
         let name = try parseIdentifier()
-        guard name == "matching" else {
-            throw error(previous, "expected .matching(...)")
+        if name != "matching" {
+            return try concretePredicate(from: parseElementPredicateTemplate(named: name))
         }
         try expectSymbol("(")
         let predicate = try parseElementPredicate()

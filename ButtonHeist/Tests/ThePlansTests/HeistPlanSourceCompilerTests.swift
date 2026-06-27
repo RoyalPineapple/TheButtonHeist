@@ -261,6 +261,120 @@ import ThePlans
     #expect(updatedAny == expectedUpdatedAny)
 }
 
+@Test func `inline plan source accepts inferred element change predicates`() throws {
+    let appeared = try HeistPlanSourceCompiler().compile(root(#"""
+    Activate(.label("Add Bruschetta"))
+        .expect(.appeared(.label(.contains("Bruschetta, $9.00"))))
+    """#))
+    let disappeared = try HeistPlanSourceCompiler().compile(root(#"""
+    Activate(.label("Remove Bruschetta"))
+        .expect(.disappeared(.identifier("cart-row-bruschetta")))
+    """#))
+    let updated = try HeistPlanSourceCompiler().compile(root(#"""
+    TypeText("Bruschetta", into: .identifier("Search"))
+        .expect(.updated(.value("Bruschetta")))
+    """#))
+
+    let expectedAppeared = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Add Bruschetta"))),
+            expectation: WaitStep(
+                predicate: .change(.elements(.appearedElement(.label(.contains("Bruschetta, $9.00"))))),
+                timeout: 1
+            )
+        )),
+    ])
+    let expectedDisappeared = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Remove Bruschetta"))),
+            expectation: WaitStep(
+                predicate: .change(.elements(.disappearedElement(.identifier("cart-row-bruschetta")))),
+                timeout: 1
+            )
+        )),
+    ])
+    let expectedUpdated = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .typeText(
+                text: .literal("Bruschetta"),
+                target: .predicate(.identifier("Search"))
+            ),
+            expectation: WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+                change: .value(after: "Bruschetta")
+            )))), timeout: 1)
+        )),
+    ])
+
+    #expect(appeared == expectedAppeared)
+    #expect(disappeared == expectedDisappeared)
+    #expect(updated == expectedUpdated)
+    try assertCanonicalRoundTrip(appeared)
+    try assertCanonicalRoundTrip(disappeared)
+    try assertCanonicalRoundTrip(updated)
+}
+
+@Test func `inline plan source accepts controlled predicate and loop sugar`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root(#"""
+    Activate(.label("Search"))
+        .expect(.label("Results"))
+    Activate(.label("Open Details"))
+        .expect(.change(.screen(.label("Details"))))
+    If(.value(.contains("Promo"))) {
+        Warn("promo visible")
+    }
+    ForEach("Milk", "Eggs") { item in
+        TypeText(item, into: .label("Search"))
+    }
+    ForEach(.label("Delete"), limit: 2) { target in
+        Activate(target).expect(.missing(target))
+    }
+    """#))
+
+    let expected = try HeistPlan(body: [
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Search"))),
+            expectation: WaitStep(predicate: .exists(.label("Results")), timeout: 1)
+        )),
+        .action(try ActionStep(
+            command: .activate(.predicate(.label("Open Details"))),
+            expectation: WaitStep(
+                predicate: .change(.screen(.exists(.label("Details")))),
+                timeout: 1
+            )
+        )),
+        .conditional(try ConditionalStep(cases: [
+            PredicateCase(
+                predicate: .exists(.value(.contains("Promo"))),
+                body: [.warn(WarnStep(message: "promo visible"))]
+            ),
+        ])),
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("item"),
+                    target: .target(.label("Search"))
+                ))),
+            ]
+        )),
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 2,
+            parameter: "target",
+            body: [
+                .action(try ActionStep(
+                    command: .activate(.ref("target")),
+                    expectation: WaitStep(predicate: .missing(.ref("target")), timeout: 1)
+                )),
+            ]
+        )),
+    ])
+
+    #expect(plan == expected)
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `inline plan source unicode string escapes preserve following characters`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root(#"""
     Warn("A\u0062C")

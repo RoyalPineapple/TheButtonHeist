@@ -21,9 +21,9 @@ Allowed `perform(step:)` statements are one action or one simple wait:
 ```swift
 Activate(.label("Pay")).expect(.change(.screen()))
 TypeText("milk", into: .label("Search"))
-    .expect(.change(.elements(.updated(after: .element(label: "Search", value: "milk"), property: .value))))
+    .expect(.updated(element: .element(label: "Search"), .value(after: "milk")))
 Increment(.label("Quantity"))
-    .until(.exists(.element(label: "Quantity", value: "10")), timeout: .seconds(5))
+    .until(.element(label: "Quantity", value: "10"), timeout: .seconds(5))
 Decrement(.label("Quantity"))
 CustomAction("Archive", on: .label("Message"))
 Rotor("Headings", on: .label("Article"))
@@ -36,7 +36,7 @@ Mechanical.LongPress(.label("Message"))
 Mechanical.Swipe(.label("Carousel"), .left)
 Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 
-WaitFor(.exists(.label("Checkout")), timeout: .seconds(5))
+WaitFor(.label("Checkout"), timeout: .seconds(5))
 ```
 
 `perform(step:)` rejects program-shaped source: multiple statements, `HeistPlan`, `HeistDef`, `RunHeist`, `If`, `WaitFor(...).else { ... }`, `ForEach`, `Warn`, and `Fail`. Use `run_heist(plan:)` for those.
@@ -68,7 +68,7 @@ Activate(.label("Pay"), ordinal: 0)
 
 ```swift
 WaitFor(.change(.screen()), timeout: .seconds(10))
-WaitFor(.exists(.label("Receipt")), timeout: .seconds(5))
+WaitFor(.label("Receipt"), timeout: .seconds(5))
 WaitFor(.missing(.label("Loading")), timeout: .seconds(10))
 ```
 
@@ -79,10 +79,10 @@ element value:
 
 ```swift
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.change(.elements(.updated(after: .element(identifier: "Search", value: "Bruschetta"), property: .value))))
+    .expect(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))
 
 Increment(.label("Quantity"))
-    .expect(.change(.elements(.updated(before: .value("2"), after: .value("3"), property: .value))))
+    .expect(.updated(element: .label("Quantity"), .value(before: "2", after: "3")))
 ```
 
 `before` and `after` are optional element predicates using the same matcher
@@ -91,9 +91,9 @@ in the observed delta. Property updates support `value`, `traits`, `hint`,
 `actions`, `frame`, `activationPoint`, `customContent`, and `rotors`; they do
 not promise label or identifier changes because those fields are used for diff
 identity.
-Do not shorten this to `.expect(.updated(...))`: expectations do not infer the
-action target. If target-relative sugar is added later, it must lower to an
-explicit `.change(.elements(.updated(after: target, ...)))` predicate before runtime evaluation.
+The shorthand `.expect(.updated(...))` is only sugar for an observed element
+delta. It does not infer the action target. Include `element:` when the update
+must be tied to a durable element predicate.
 
 **Composing**: `run_heist` for typed multi-step plans in a single call. Prefer the `plan` field with canonical ButtonHeist source when authoring compact heists as an agent:
 
@@ -103,7 +103,7 @@ HeistPlan {
         .expect(.change(.screen()))
 
     TypeText("milk", into: .label("Search"))
-        .expect(.change(.elements(.updated(after: .element(label: "Search", value: "milk"), property: .value))))
+        .expect(.updated(element: .element(label: "Search"), .value(after: "milk")))
 }
 ```
 
@@ -113,14 +113,14 @@ Use `run_heist(plan:)` for definitions, composition, branching, waits with bodie
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
         TypeText(item, into: .label("Search"))
-            .expect(.change(.elements(.updated(after: .element(label: "Search", value: item), property: .value))))
+            .expect(.updated(element: .element(label: "Search"), .value(after: item)))
         Activate(.label("Add"))
-            .expect(.exists(.label("Added")))
+            .expect(.label("Added"))
     }
 
     RunHeist("Cart.addItem", "Milk")
 
-    If(.exists(.label("Pay"))) {
+    If(.label("Pay")) {
         Activate(.label("Pay"))
             .expect(.change(.screen()))
     }.else {
@@ -249,7 +249,7 @@ For operations that take time, keep using the DSL:
 Activate(.label("Pay"))
     .expect(.change(.screen()))
 
-WaitFor(.exists(.label("Receipt")), timeout: .seconds(10))
+WaitFor(.label("Receipt"), timeout: .seconds(10))
 ```
 
 If the action receipt shows a spinner or loading overlay instead of the final state,
@@ -267,7 +267,7 @@ Activate(.label("Continue"))
     .expect(.change(.screen()))
 
 TypeText("milk", into: .label("Search"))
-    .expect(.exists(.element(.label("Search"), .value("milk"))))
+    .expect(.element(.label("Search"), .value("milk")))
 
 Activate(.label("Delete"))
     .expect(.missing(.label("Delete")))
