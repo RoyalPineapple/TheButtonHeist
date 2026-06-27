@@ -9,7 +9,7 @@ import Foundation
 /// on teardown. This is the admission security boundary — it is not the
 /// transport's `SocketClientRegistry` (which owns socket facts under the same
 /// key) and must stay separate per the no-auth-in-transport rule. See
-/// `docs/DATA-OWNERSHIP.md`.
+/// `docs/ARCHITECTURE.md#state-has-one-owner`.
 struct TheMuscleClientRegistry {
     private var clients: [Int: ClientAuthenticationState] = [:]
 

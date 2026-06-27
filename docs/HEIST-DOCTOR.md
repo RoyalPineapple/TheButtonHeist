@@ -150,6 +150,20 @@ The doctor uses that evidence to prove old intent before it looks for a
 successor. If the old target did not resolve exactly once in the last passing
 receipt, there is no safe target repair.
 
+The artifact boundary stays deliberately boring for now:
+
+```text
+Button Heist run -> HeistExecutionResult.json.gz -> CI artifact
+last-pass artifact + new-fail artifact -> heist-doctor
+```
+
+There is no custom evidence-pack format, no product-owned receipt database, no
+visual snapshot store, and no runtime repair sidecar. Raw compressed receipts
+are small enough for current CI experiments and preserve the full evidence
+shape for future doctor work. If size, privacy, or processing cost becomes a
+real constraint, the next format can be designed from measured data instead of
+guesswork.
+
 ## Repair Rules
 
 The current alpha should keep these rules:

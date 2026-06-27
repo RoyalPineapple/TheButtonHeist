@@ -173,6 +173,56 @@ Actions can refresh off-screen state by exploring scroll views before or after t
 
 `get_interface` returns app state. A default call may refresh discoverable off-screen content so the returned hierarchy is current. Passing `subtree` scopes that projection to the part of the hierarchy you asked for. `get_screen` is diagnostic: it returns pixels plus fresh visible geometry for the current viewport, not a replacement for the app-state hierarchy.
 
+## Async Changes
+
+For operations that take time, keep using the DSL:
+
+```swift
+Activate(.label("Pay"))
+    .expect(.change(.screen()))
+
+WaitFor(.label("Receipt"), timeout: .seconds(10))
+```
+
+If the action receipt shows a spinner or loading overlay instead of the final state,
+run a simple `WaitFor(...)` through `perform(step:)`. The Button Heist checks the
+current settled hierarchy first, then watches settled accessibility state until the
+predicate is true or the timeout expires.
+
+## Expectations
+
+Every action is an opportunity to validate. Attach `.expect(...)` whenever you
+know what should change:
+
+```swift
+Activate(.label("Continue"))
+    .expect(.change(.screen()))
+
+TypeText("milk", into: .label("Search"))
+    .expect(.element(.label("Search"), .value("milk")))
+
+Activate(.label("Delete"))
+    .expect(.missing(.label("Delete")))
+```
+
+Before you act, ask what should be true afterward. A nav button changes the
+screen. A delete removes an element. Text entry updates a value. Encode that fact
+as the expectation and let the receipt confirm or correct you.
+
+## Authoring Heists
+
+Heists are authored reusable instructions, not logs inferred from live clicking. Use `run_heist(plan:)` for multi-step flows and keep expectations in the source whenever the app should prove a state change.
+
+**Attach expectations to every meaningful action.** A heist without expectations is only a sequence of commands; a heist with expectations is a self-verifying test suite that validates on every replay.
+
+**One action, one purpose.** Each step should do exactly one thing and verify it. Do not chain five interactions and check at the end — check after each one. This makes replay failures precise: step 7 failed means the 7th interaction broke.
+
+**Read the delta before moving on.** If your expectation wasn't met, understand why before continuing. Use `structuredContent.report.nodes[].evidence.action.result.delta` for full added, removed, updated, or destination-interface evidence; the text summary only expands details when the outcome needs attention.
+
+## Efficiency
+
+Read the delta first — skip `get_interface` when the delta already told you what changed. Use semantic matcher fields from the current screen; after navigation, build targets from the new delta or interface evidence. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.
+
 ## Local MCP Development
 
 Use this workflow when testing a worktree-local `ButtonHeistMCP` change through an MCP host.
@@ -240,53 +290,3 @@ When the session is done, shut down and delete the dedicated simulator:
 xcrun simctl shutdown "$SIM_UDID"
 xcrun simctl delete "$SIM_UDID"
 ```
-
-## Async Changes
-
-For operations that take time, keep using the DSL:
-
-```swift
-Activate(.label("Pay"))
-    .expect(.change(.screen()))
-
-WaitFor(.label("Receipt"), timeout: .seconds(10))
-```
-
-If the action receipt shows a spinner or loading overlay instead of the final state,
-run a simple `WaitFor(...)` through `perform(step:)`. The Button Heist checks the
-current settled hierarchy first, then watches settled accessibility state until the
-predicate is true or the timeout expires.
-
-## Expectations
-
-Every action is an opportunity to validate. Attach `.expect(...)` whenever you
-know what should change:
-
-```swift
-Activate(.label("Continue"))
-    .expect(.change(.screen()))
-
-TypeText("milk", into: .label("Search"))
-    .expect(.element(.label("Search"), .value("milk")))
-
-Activate(.label("Delete"))
-    .expect(.missing(.label("Delete")))
-```
-
-Before you act, ask what should be true afterward. A nav button changes the
-screen. A delete removes an element. Text entry updates a value. Encode that fact
-as the expectation and let the receipt confirm or correct you.
-
-## Authoring Heists
-
-Heists are authored reusable instructions, not logs inferred from live clicking. Use `run_heist(plan:)` for multi-step flows and keep expectations in the source whenever the app should prove a state change.
-
-**Attach expectations to every meaningful action.** A heist without expectations is only a sequence of commands; a heist with expectations is a self-verifying test suite that validates on every replay.
-
-**One action, one purpose.** Each step should do exactly one thing and verify it. Do not chain five interactions and check at the end — check after each one. This makes replay failures precise: step 7 failed means the 7th interaction broke.
-
-**Read the delta before moving on.** If your expectation wasn't met, understand why before continuing. Use `structuredContent.report.nodes[].evidence.action.result.delta` for full added, removed, updated, or destination-interface evidence; the text summary only expands details when the outcome needs attention.
-
-## Efficiency
-
-Read the delta first — skip `get_interface` when the delta already told you what changed. Use semantic matcher fields from the current screen; after navigation, build targets from the new delta or interface evidence. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.

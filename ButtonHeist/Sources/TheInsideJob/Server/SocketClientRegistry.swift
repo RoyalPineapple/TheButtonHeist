@@ -11,7 +11,7 @@ import Network
 /// Lifetime: per socket connection. Invalidation: `remove(_:)` on close,
 /// `drain()` on teardown. It owns `NWConnection` + send-buffer state only — auth
 /// phase lives in `TheMuscleClientRegistry` under the same key, deliberately
-/// separate so transport never owns auth semantics. See `docs/DATA-OWNERSHIP.md`.
+/// separate so transport never owns auth semantics. See `docs/ARCHITECTURE.md#state-has-one-owner`.
 struct SocketClientRegistry {
     struct Client {
         let connection: NWConnection

@@ -214,7 +214,7 @@ extension DisconnectReason: Equatable {
 /// Invalidation: overwritten by a newer reason; dropped when the attempt's
 /// `DeviceConnection` is released. It cannot be derived from a receipt —
 /// `NWConnection` discards the TLS failure cause once the connection tears down,
-/// so this is the only place it survives. See `docs/DATA-OWNERSHIP.md`.
+/// so this is the only place it survives. See `docs/ARCHITECTURE.md#state-has-one-owner`.
 ///
 /// `@unchecked Sendable` justification: all access to `reason` is serialized by `lock`.
 final class TLSFailureTracker: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment

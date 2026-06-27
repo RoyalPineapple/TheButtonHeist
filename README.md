@@ -329,6 +329,49 @@ $BH get_screen --output screen.png
 printf '%s\n' '{"command":"get_interface"}' | buttonheist json_lines
 ```
 
+## Documentation
+
+| Need | Read |
+|---|---|
+| Understand the product contract | [Accessibility contract](docs/ACCESSIBILITY-CONTRACT.md), [Architecture](docs/ARCHITECTURE.md) |
+| Connect an agent | [MCP agent guide](docs/MCP-AGENT-GUIDE.md), [ButtonHeistMCP](ButtonHeistMCP/) |
+| Use the terminal | [ButtonHeistCLI](ButtonHeistCLI/), [Command reference](docs/reference/commands.md) |
+| Author heists | [Swift heist authoring](docs/SWIFT-HEIST-AUTHORING.md), [Heist format](docs/HEIST-FORMAT.md) |
+| Integrate an app | [Quick start](#quick-start), [API](docs/API.md), [Auth](docs/AUTH.md) |
+| See evidence and experiments | [Benchmarks](docs/BENCHMARKS.md), [Heist Doctor](docs/HEIST-DOCTOR.md) |
+
+All docs start at [docs/README.md](docs/README.md). Generated references live in [docs/reference](docs/reference/).
+
+## Troubleshooting
+
+### Device not appearing
+
+Check that:
+
+1. `TheInsideJob` is linked to the debug target.
+2. The app is running in the foreground.
+3. The connection scope allows simulator, USB, network, or the direct target you are using.
+4. Bonjour/LAN discovery, if enabled, has the `_buttonheist._tcp` Info.plist entry.
+
+### USB connection refused
+
+Check:
+
+```bash
+xcrun devicectl list devices
+lsof -i -P -n | grep CoreDev
+```
+
+The app must be running on the device.
+
+### Empty hierarchy
+
+Make sure the app has an interface on a screen and that the root view exposes an accessibility hierarchy. Then run:
+
+```bash
+buttonheist get_interface
+```
+
 ## The crew
 
 The Button Heist is a distributed system: a debug iOS framework inside the app, a macOS client outside it, and CLI/MCP fronts for humans and agents.
@@ -374,6 +417,14 @@ tuist generate
 open ButtonHeist.xcworkspace
 ```
 
+### Test locally
+
+```bash
+tuist test TheScoreTests --no-selective-testing
+tuist test ButtonHeistTests --no-selective-testing
+tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
+```
+
 ### Project structure
 
 ```text
@@ -386,47 +437,6 @@ ButtonHeist/
 +-- docs/                         # Architecture, contracts, API, connectivity
 +-- examples/                     # Canonical semantic examples
 ```
-
-## Troubleshooting
-
-### Device not appearing
-
-Check that:
-
-1. `TheInsideJob` is linked to the debug target.
-2. The app is running in the foreground.
-3. The connection scope allows simulator, USB, network, or the direct target you are using.
-4. Bonjour/LAN discovery, if enabled, has the `_buttonheist._tcp` Info.plist entry.
-
-### USB connection refused
-
-Check:
-
-```bash
-xcrun devicectl list devices
-lsof -i -P -n | grep CoreDev
-```
-
-The app must be running on the device.
-
-### Empty hierarchy
-
-Make sure the app has an interface on a screen and that the root view exposes an accessibility hierarchy. Then run:
-
-```bash
-buttonheist get_interface
-```
-
-## Documentation
-
-| Start here | Read |
-|---|---|
-| Integrate a debug app | [Quick start](#quick-start), [API](docs/API.md) |
-| Connect an agent | [ButtonHeistMCP](ButtonHeistMCP/), [MCP tool reference](docs/reference/mcp-tools.md) |
-| Use the CLI | [ButtonHeistCLI](ButtonHeistCLI/), [Command reference](docs/reference/commands.md) |
-| Understand the runtime | [Accessibility contract](docs/ACCESSIBILITY-CONTRACT.md), [Architecture](docs/ARCHITECTURE.md) |
-
-All docs: [API](docs/API.md) / [Command reference](docs/reference/commands.md) / [MCP tool reference](docs/reference/mcp-tools.md) / [Architecture](docs/ARCHITECTURE.md) / [Wire protocol](docs/WIRE-PROTOCOL.md) / [Auth](docs/AUTH.md) / [USB](docs/USB_DEVICE_CONNECTIVITY.md) / [Bonjour troubleshooting](docs/BONJOUR_TROUBLESHOOTING.md) / [Reviewer's guide](docs/REVIEWERS-GUIDE.md)
 
 ## Acknowledgments
 
