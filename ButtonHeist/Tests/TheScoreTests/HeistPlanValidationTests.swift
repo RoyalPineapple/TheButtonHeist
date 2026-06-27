@@ -458,41 +458,81 @@ func typedLoopStepInitializersRejectNonCanonicalSwiftParameters() throws {
 }
 
 @Test
-func runtimeSafetyRejectsNestedCollectionLoops() throws {
-    let nested = try ForEachStringStep(
+func runtimeSafetyAllowsNestedCollectionLoops() throws {
+    let nestedString = try ForEachStringStep(
         values: ["Milk"],
         parameter: "item",
-        body: [.warn(WarnStep(message: "nested"))]
+        body: [.warn(WarnStep(message: "nested string"))]
     )
-    let cases: [(HeistPlanAdmissionCandidate, String)] = [
-        (HeistPlanAdmissionCandidate(body: [
+    let nestedElement = try ForEachElementStep(
+        matching: .label("Delete"),
+        limit: 1,
+        parameter: "target",
+        body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+    )
+    let cases: [HeistPlanAdmissionCandidate] = [
+        HeistPlanAdmissionCandidate(body: [
             .conditional(try ConditionalStep(cases: [
-                PredicateCase(predicate: .state(.exists(.label("Home"))), body: [.forEachString(nested)]),
+                PredicateCase(predicate: .state(.exists(.label("Home"))), body: [.forEachString(nestedString)]),
             ])),
-        ]), "$.body[0].conditional.cases[0].body[0].for_each_string"),
-        (HeistPlanAdmissionCandidate(body: [
+        ]),
+        HeistPlanAdmissionCandidate(body: [
             .wait(WaitStep(
                 predicate: .state(.exists(.label("Home"))),
                 timeout: 1,
-                elseBody: [.forEachString(nested)]
+                elseBody: [.forEachElement(nestedElement)]
             )),
-        ]), "$.body[0].wait.else_body[0].for_each_string"),
-        (HeistPlanAdmissionCandidate(body: [
+        ]),
+        HeistPlanAdmissionCandidate(body: [
             .forEachElement(try ForEachElementStep(
-                matching: .label("Delete"),
+                matching: .label("Row"),
                 limit: 1,
-                parameter: "target",
-                body: [.forEachString(nested)]
+                parameter: "row",
+                body: [.forEachString(nestedString)]
             )),
-        ]), "$.body[0].for_each_element.body[0].for_each_string"),
+        ]),
+        HeistPlanAdmissionCandidate(body: [
+            .forEachString(try ForEachStringStep(
+                values: ["Row"],
+                parameter: "rowName",
+                body: [.forEachElement(nestedElement)]
+            )),
+        ]),
     ]
 
-    for (raw, path) in cases {
+    for raw in cases {
         let failures = runtimeSafetyFailures(for: raw)
-        #expect(failures.contains {
-            $0.path == path && $0.contract == "collection ForEach steps are top-level only"
-        }, "\(path): \(failures)")
+        #expect(failures.isEmpty, "\(failures)")
     }
+}
+
+@Test
+func runtimeSafetyEnforcesBoundsOnNestedCollectionLoops() throws {
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .conditional(try ConditionalStep(cases: [
+            PredicateCase(predicate: .state(.exists(.label("Home"))), body: [
+                .forEachString(try ForEachStringStep(
+                    values: ["Milk", "Eggs"],
+                    parameter: "item",
+                    body: [.warn(WarnStep(message: "nested"))]
+                )),
+                .forEachElement(try ForEachElementStep(
+                    matching: .label("Delete"),
+                    limit: 2,
+                    parameter: "target",
+                    body: [.action(try ActionStep(command: .activate(.ref("target"))))]
+                )),
+            ]),
+        ])),
+    ])
+    let failures = runtimeSafetyFailures(
+        for: raw,
+        limits: HeistPlanRuntimeSafetyLimits(maxForEachStringValues: 1, maxForEachElementLimit: 1)
+    )
+    let contracts = failures.map(\.contract)
+
+    #expect(contracts.contains("max for_each_string values"))
+    #expect(contracts.contains("max for_each_element limit"))
 }
 
 @Test

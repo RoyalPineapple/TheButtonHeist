@@ -1136,6 +1136,29 @@ import ThePlans
     }
 }
 
+@Test func `parser accepts nested ForEach bodies and scopes aliases`() throws {
+    let source = """
+    HeistPlan("NestedLoops", parameter: "screen") { screen in
+        If(.exists(.label(screen))) {
+            ForEach(["Milk", "Eggs"]) { item in
+                ForEach(["Small"]) { size in
+                    TypeText(size, into: .label(item))
+                }
+            }
+        }
+
+        ForEach(["Message"]) { rowName in
+            ForEach(.matching(.label("Message")), limit: 1) { rowTarget in
+                Activate(rowTarget).expect(.exists(rowTarget))
+                TypeText(rowName, into: .label("Search"))
+            }
+        }
+    }
+    """
+
+    _ = try HeistPlanSourceCompiler().compile(source)
+}
+
 @Test func `runtime source compiler rejects standard definition cap`() throws {
     let definitions = (0...250).map { index in
         """

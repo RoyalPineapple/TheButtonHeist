@@ -92,7 +92,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {
-        validateForEachElement(step, path: context.path, allowsCollectionLoops: context.allowsCollectionLoops)
+        validateForEachElement(step, path: context.path)
     }
 
     mutating func visitForEachString(_ step: ForEachStringStep, context: HeistTraversalContext) {
@@ -103,8 +103,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             scope: context.scope,
             environment: context.environment,
             definitionScope: context.definitionScope,
-            callGraph: context.callGraph,
-            allowsCollectionLoops: context.allowsCollectionLoops
+            callGraph: context.callGraph
         )
     }
 
@@ -361,18 +360,8 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validateForEachElement(
         _ step: ForEachElementStep,
-        path: String,
-        allowsCollectionLoops: Bool
+        path: String
     ) {
-        guard allowsCollectionLoops else {
-            fail(
-                path: path,
-                contract: "collection ForEach steps are top-level only",
-                observed: "nested for_each_element",
-                correction: "Move this collection loop to the top-level heist steps."
-            )
-            return
-        }
         validateElementPredicate(step.matching, path: "\(path).matching")
         validateParameter(step.parameter, path: "\(path).parameter", role: "for_each_element parameter")
         if step.limit > limits.maxForEachElementLimit {
@@ -392,18 +381,8 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
         definitionScope: HeistDefinitionScope,
-        callGraph: HeistCallGraph?,
-        allowsCollectionLoops: Bool
+        callGraph: HeistCallGraph?
     ) {
-        guard allowsCollectionLoops else {
-            fail(
-                path: path,
-                contract: "collection ForEach steps are top-level only",
-                observed: "nested for_each_string",
-                correction: "Move this collection loop to the top-level heist steps."
-            )
-            return
-        }
         validateParameter(step.parameter, path: "\(path).parameter", role: "for_each_string parameter")
         if step.values.count > limits.maxForEachStringValues {
             fail(
@@ -468,7 +447,6 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             steps: steps,
             path: path,
             depth: depth,
-            allowsCollectionLoops: false,
             scope: scope,
             environment: environment,
             definitionScope: definitionScope,
