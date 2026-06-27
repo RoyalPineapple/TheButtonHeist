@@ -6,7 +6,7 @@ import Foundation
 struct ButtonHeistDocGen: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "buttonheist-docgen",
-        abstract: "Generate Button Heist descriptor-backed reference docs.",
+        abstract: "Generate The Button Heist descriptor-backed reference docs.",
         discussion: """
             Generates docs/reference/commands.md and docs/reference/mcp-tools.md
             from TheFence.Command descriptors.

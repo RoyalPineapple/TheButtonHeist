@@ -9,7 +9,7 @@ import os
 /// Key: an internal monotonic `UInt64` id. Lifetime: per spawned Task, from
 /// `record`/`spawn` until completion or cancellation. Invalidation: each Task
 /// self-removes on completion (sibling watcher); `cancelAll()` clears the rest
-/// at teardown. See `docs/DATA-OWNERSHIP.md`.
+/// at teardown. See `docs/ARCHITECTURE.md#state-has-one-owner`.
 ///
 /// Three crew members track callback-bridge Tasks the same way: hold a table,
 /// insert on spawn, and cancel-all on teardown. The pattern needs a lock

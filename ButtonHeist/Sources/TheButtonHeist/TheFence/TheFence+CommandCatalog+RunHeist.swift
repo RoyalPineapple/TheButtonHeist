@@ -17,7 +17,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 ],
                 projection: .mcpOnly(
                     """
-                    Run one ButtonHeist DSL instruction from `step`: one action or one simple wait.
+                    Run one ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
                     Examples:
                     `Activate(.label("Pay")).expect(.change(.screen()))`

@@ -5,9 +5,9 @@ import TheScore
 public extension TheFence.Command {
     static var mcpServerInstructions: String {
         return """
-            Button Heist turns the app's accessibility hierarchy into a world model for agents. \
-            Read it with \(inlineCode(getInterface.rawValue)); use \(inlineCode(getScreen.rawValue)) \
-            only when pixels or viewport geometry matter. Target controls by accessibility language: \
+            The Button Heist makes the app's settled accessibility interface executable for agents. \
+            Read that interface with \(inlineCode(getInterface.rawValue)); use \(inlineCode(getScreen.rawValue)) \
+            only when pixels or viewport geometry matter. Target controls by accessibility semantics: \
             \(inlineCode(#".label("Pay")"#)), \(inlineCode(#".identifier("pay_button")"#)), \
             \(inlineCode(#".value("Milk")"#)), \(inlineCode(#".element(.label("Pay"), .traits([.button]))"#)), \
             and \(inlineCode(#".target(.label("Delete"), ordinal: 1)"#)) when duplicates need an ordinal. \

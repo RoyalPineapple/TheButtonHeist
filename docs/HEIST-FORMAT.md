@@ -1,6 +1,6 @@
-# Heist Format
+# Heist format
 
-Button Heist has one authored language and one generated artifact format.
+The Button Heist has one authored language and one generated artifact format.
 
 Humans and agents write ButtonHeist DSL. The runtime executes a validated
 `HeistPlan`. A `.heist` path is a generated package directory that carries that
@@ -11,7 +11,7 @@ plan; it is not a hand-authored JSON file.
 | Role | Meaning |
 |------|---------|
 | `.swift` | Full Swift source for reusable authored heists, tests, helpers, and local constants. |
-| `plan` source string | ButtonHeist DSL source for MCP/CLI inline authoring. It is Swift-like, but accepts only the DSL constructs Button Heist can parse and render canonically. |
+| `plan` source string | ButtonHeist DSL source for MCP/CLI inline authoring. It is Swift-like, but accepts only the DSL constructs The Button Heist can parse and render canonically. |
 | `.heist` | Generated package artifact containing `manifest.json` and `plan.json`. Do not hand-author it. |
 | `.json` | Raw `HeistPlan` JSON IR for internal diagnostics and generated tooling only. It is not public heist authoring input or a public artifact API. |
 
@@ -109,17 +109,23 @@ Unknown keys are rejected. There is no app identifier, source metadata, runtime
 ID, capture-local element ID, geometry, or implicit viewport state in the root
 plan contract.
 
-## Authored Shape
+## Authored shape
 
-Use DSL when explaining or authoring heists.
+Use canonical ButtonHeist source when explaining or authoring portable heists.
+It is Swift-shaped, but it is the source language accepted by MCP and
+`run_heist(plan:)`; checked-in Swift files are covered in
+[Swift heist authoring](SWIFT-HEIST-AUTHORING.md).
 
 ```swift
 HeistPlan("purchaseFlow") {
-    TypeText("milk", into: .label("Search"))
-        .expect(.value("milk"), timeout: .seconds(2))
+    TypeText("milk", into: .label("Search Items"))
+        .expect(.exists(.element(.label("Search Items"), .value("milk"))))
 
     Activate(.label("Milk"))
-        .expect(.change(.screen()))
+        .expect(.appeared(.element(
+            .label(.prefix("Milk")),
+            .identifier(.contains("cart"))
+        )))
 
     WaitFor(.missing(.label("Loading")), timeout: .seconds(5))
         .else {
@@ -132,11 +138,14 @@ The same primitives scale up without creating a second runtime:
 
 ```swift
 HeistDef<String>("addToCart", parameter: "item") { item in
-    TypeText(item, into: .label("Search"))
-        .expect(.value(item), timeout: .seconds(2))
+    TypeText(item, into: .label("Search Items"))
+        .expect(.exists(.element(.label("Search Items"), .value(item))))
 
     Activate(.label(item))
-        .expect(.label("Cart"), timeout: .seconds(2))
+        .expect(.appeared(.element(
+            .label(.prefix(item)),
+            .identifier(.contains("cart"))
+        )))
 }
 
 HeistPlan("cartFlow") {
@@ -170,7 +179,7 @@ At runtime each iteration re-resolves the target through the normal semantic
 pipeline. The body receives no UIKit object, live geometry, runtime ID, capture
 ID, or viewport handle.
 
-## Rejected Historical Forms
+## Rejected historical forms
 
 These forms existed during the prototype phase and should not appear in public
 docs, demos, or new fixtures:
@@ -186,9 +195,9 @@ The generated `plan.json` may contain internal wire names. Do not copy those
 names into agent-facing examples. If a heist is meant for humans or agents to
 edit, render it as canonical DSL.
 
-## Runtime Contract
+## Runtime contract
 
-Normal heists express semantic intent and semantic outcomes. Button Heist owns
+Normal heists express semantic intent and semantic outcomes. The Button Heist owns
 reveal, element inflation, settlement, live geometry, and diagnostics while the
 plan runs.
 
@@ -206,7 +215,7 @@ Lint is separate quality guidance for authored or composed plans:
 Lint returns structured findings with severity, step path, message, and a fix
 suggestion. It does not replace runtime validation.
 
-## Non-Goals
+## Non-goals
 
 The durable heist AST is small on purpose. It does not support:
 
@@ -220,7 +229,7 @@ The durable heist AST is small on purpose. It does not support:
 - unknown JSON keys
 - mechanical commands in strict semantic tests unless explicitly waived
 
-## Live Composition
+## Live composition
 
 Live composition turns completed interactions and settled semantic evidence into
 semantic action intent plus validated semantic expectation.

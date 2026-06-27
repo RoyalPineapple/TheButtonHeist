@@ -1,4 +1,4 @@
-# Button Heist Authentication
+# The Button Heist authentication
 
 Every TCP connection must authenticate before it can send commands. The same
 token is used for both transport protection and application auth:
@@ -158,7 +158,7 @@ authenticated and unauthenticated connections:
 
 ## Threat Model
 
-Button Heist is a debug-only development tool. By default it accepts simulator
+The Button Heist is a debug-only development tool. By default it accepts simulator
 loopback and CoreDevice USB traffic, does not advertise Bonjour on the LAN, and
 rejects WiFi/LAN connections before authentication. Enabling
 `INSIDEJOB_SCOPE=network` is an explicit trust decision that makes the listener

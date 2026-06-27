@@ -1,26 +1,53 @@
 # Documentation
 
-Technical documentation for Button Heist internals. The blueprints, not the sales pitch.
+Technical documentation for The Button Heist's public contracts, runtime architecture, integration surfaces, and evidence trails.
 
-## Contents
+Start with the contract. Then choose the path that matches the job in front of you.
 
-| Document | Description |
-|----------|-------------|
-| [Accessibility Contract](ACCESSIBILITY-CONTRACT.md) | Canonical product contract, boundary map, pipeline, and conformance cases |
-| [Architecture](ARCHITECTURE.md) | Load-bearing product contracts and the compact component map |
-| [API](API.md) | Product API invariants, public surface matrix, and integration contracts; generated references own commands and parameters |
-| [Heist Doctor](HEIST-DOCTOR.md) | Public experimental SwiftPM-only repair-suggestion experiment for raw heist execution receipts |
-| [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md) | Source boundary between Swift DSL, HeistPlan JSON IR, and `.heist` artifacts |
-| [Element Inflation](ELEMENT-INFLATION.md) | Runtime boundary from semantic targets to inflated live targets |
-| [Command Reference](reference/commands.md) | Generated command names, CLI exposure, heist execution eligibility, and parameters |
-| [MCP Tool Reference](reference/mcp-tools.md) | Generated MCP tool surface projected from TheFence |
-| [Wire Protocol](WIRE-PROTOCOL.md) | Raw TheScore transport: envelopes, handshake, authentication, TLS transport, and wire-only examples |
-| [Authentication](AUTH.md) | Token-derived TLS PSK, token auth, and session locking |
-| [USB Connectivity](USB_DEVICE_CONNECTIVITY.md) | Connecting to physical devices over CoreDevice IPv6 tunnels without enabling LAN scope |
-| [Bonjour Troubleshooting](BONJOUR_TROUBLESHOOTING.md) | MDM stealth mode workarounds |
-| [Reviewer's Guide](REVIEWERS-GUIDE.md) | Quick orientation for new reviewers |
+## Start here
 
-## See Also
+| Document | Use it for |
+|----------|------------|
+| [Project overview](../README.md) | Public story, quick start, and first map of the system |
+| [Accessibility contract](ACCESSIBILITY-CONTRACT.md) | The core runtime idea: semantic intent in, settled evidence out |
+| [Architecture](ARCHITECTURE.md) | Load-bearing runtime contracts, component map, and core flows |
 
-- [Project Overview](../README.md) — Quick start and architecture
-- [Examples](../examples/README.md) — Canonical semantic command and heist examples
+## Agents and tools
+
+| Document | Use it for |
+|----------|------------|
+| [MCP agent guide](MCP-AGENT-GUIDE.md) | How agents should observe, act, wait, and compose heists |
+| [MCP server README](../ButtonHeistMCP/) | Adapter behavior, runtime behavior, and environment variables |
+| [CLI README](../ButtonHeistCLI/) | Terminal workflows, device targeting, output, and JSON-lines mode |
+| [Command reference](reference/commands.md) | Generated Fence command names, CLI exposure, and parameters |
+| [MCP tool reference](reference/mcp-tools.md) | Generated MCP tool surface projected from TheFence |
+
+## Authoring and artifacts
+
+| Document | Use it for |
+|----------|------------|
+| [Swift heist authoring](SWIFT-HEIST-AUTHORING.md) | Boundaries between Swift authoring, canonical heist source, and runtime execution |
+| [Heist format](HEIST-FORMAT.md) | `.heist` package shape, generated JSON IR, and artifact rules |
+| [API](API.md) | Public API invariants, surface matrix, and integration contracts |
+| [Examples](../examples/README.md) | Canonical semantic commands and heist examples |
+
+## Runtime internals
+
+| Document | Use it for |
+|----------|------------|
+| [Wire protocol](WIRE-PROTOCOL.md) | Raw transport, envelopes, handshake, authentication, and wire examples |
+
+## Security and connectivity
+
+| Document | Use it for |
+|----------|------------|
+| [Authentication](AUTH.md) | Token-derived TLS PSK, token auth, session locking, and threat model |
+| [USB connectivity](USB_DEVICE_CONNECTIVITY.md) | Physical-device connections over CoreDevice IPv6 tunnels without LAN scope |
+| [Bonjour troubleshooting](BONJOUR_TROUBLESHOOTING.md) | mDNS, stealth mode, fixed-port workarounds, and LAN discovery issues |
+
+## Evidence and repair
+
+| Document | Use it for |
+|----------|------------|
+| [Benchmarks](BENCHMARKS.md) | Comparative traces and workflow evidence |
+| [Heist Doctor](HEIST-DOCTOR.md) | Experimental repair-suggestion work over heist execution receipts |

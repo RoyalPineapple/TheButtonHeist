@@ -1,7 +1,7 @@
-# Button Heist Wire Protocol
+# The Button Heist wire protocol
 
-This document describes the raw TheScore transport between Button Heist clients
-and the iOS host. It is not the CLI, MCP, or heist command catalog.
+This document describes the raw TheScore transport between clients and the iOS
+host. It is not the CLI, MCP, or heist command catalog.
 
 Use generated references for product command surfaces:
 
@@ -11,12 +11,12 @@ Use generated references for product command surfaces:
 ## Versioning
 
 There is no separate wire-protocol version. The wire contract is versioned by
-the Button Heist product SemVer carried in `buttonHeistVersion`.
+The Button Heist product SemVer carried in `buttonHeistVersion`.
 
 Compatibility is exact product-version lockstep:
 
 - the embedded iOS server, macOS framework, CLI, and MCP server must come from
-  the same Button Heist release
+  the same product release
 - `buttonHeistVersion` must match exactly during the hello handshake
 - major, minor, and patch differences are all incompatible on the wire
 - there is no downgrade, feature negotiation, or best-effort compatibility mode
@@ -29,7 +29,7 @@ with a product version bump, not a parallel protocol version.
 
 ## Command Layers
 
-Button Heist has one product command contract: `TheFence.Command`. CLI,
+The Button Heist has one product command contract: `TheFence.Command`. CLI,
 session JSON, MCP tools, and heist execution adapt to command names
 such as `get_interface`, `activate`, and `scroll_to_visible`.
 
@@ -197,7 +197,7 @@ Clients without a token fail before starting the TLS connection.
 {"buttonHeistVersion":"<semver>","type":"requestInterface","payload":{}}
 ```
 
-The interface payload carries the canonical hierarchy tree plus Button Heist
+The interface payload carries the canonical hierarchy tree plus ButtonHeist
 annotations. There is no parallel wire `elements` array in the public wire
 contract.
 

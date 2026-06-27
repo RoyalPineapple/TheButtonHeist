@@ -1,9 +1,9 @@
-# Button Heist Examples
+# The Button Heist examples
 
-These examples show the same product contract through three surfaces:
+These examples show the same settled accessibility contract through two public surfaces:
 
 - [Semantic command](semantic-command.md): one direct command with expectation.
-- [Heist program](heist-program.swift): Swift DSL as a semantic program.
+- [Heist program](heist-program.swift): checked-in Swift authoring for a reusable semantic program.
 
 Each example follows the same machine:
 

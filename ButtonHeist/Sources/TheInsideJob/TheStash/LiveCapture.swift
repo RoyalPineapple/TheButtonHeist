@@ -17,7 +17,7 @@ import AccessibilitySnapshotParser
 /// wholesale on every parse, and invalidated by the next parse (last-read-wins).
 /// It carries weak UIKit refs, live geometry, and per-path lookups but is
 /// **never** unioned across exploration pages and must never be treated as
-/// stable identity. See `docs/DATA-OWNERSHIP.md`.
+/// stable identity. See `docs/ARCHITECTURE.md#state-has-one-owner`.
 struct LiveCapture: Equatable {
     let snapshot: Snapshot
     let dispatchReferences: DispatchReferences

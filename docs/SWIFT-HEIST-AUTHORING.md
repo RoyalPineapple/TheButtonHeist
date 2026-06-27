@@ -1,21 +1,21 @@
 # Swift Heist Authoring Boundary
 
-ButtonHeist's durable language is `HeistPlan`. Canonical ButtonHeist source is
+The Button Heist's durable language is `HeistPlan`. Canonical heist source is
 the runtime text form of that language; it is parsed by ThePlans and never by
 `swiftc`. Swift files are a trusted local authoring frontend that may generate a
 validated `HeistPlan`, but arbitrary Swift structure is not itself durable
-ButtonHeist language.
+heist language.
 
 Treat checked-in Swift files like product code, but keep the boundary explicit:
 Swift may wrap, select, name, organize, and call heists outside the DSL. If a
 behavior must survive `.heist`, JSON, catalog discovery, MCP
 composition, or canonical rendering, express it as `HeistDef`, `RunHeist`,
 `If`, `WaitFor`, `ForEach`, `Warn`, `Fail`, actions, targets, and expectations.
-Durable loops must use Button Heist's explicit `ForEach` primitive, not native
+Durable loops must use The Button Heist's explicit `ForEach` primitive, not native
 Swift `for`.
 
 `HeistPlan` is the execution model. Humans may author rich Swift DSL files that
-build a `HeistPlan`. Agents should prefer canonical ButtonHeist source strings
+build a `HeistPlan`. Agents should prefer canonical heist source strings
 when sending compact heists through MCP. Standalone `.json` files are explicit
 raw HeistPlan IR for debug, import, and export; generated `.heist` package
 directories store `manifest.json` and canonical `plan.json`. Public MCP tools
@@ -33,9 +33,9 @@ details. In particular, JSON does not recover:
 - local variables, constants, or their names
 - source grouping, whitespace, formatting, or review intent
 
-At runtime, Button Heist executes only `HeistPlan`. Swift result builders are
+At runtime, The Button Heist executes only `HeistPlan`. Swift result builders are
 convenience for building AST values; they are not the language contract and do
-not preserve Swift source structure. Canonical ButtonHeist source is the
+not preserve Swift source structure. Canonical heist source is the
 constrained runtime authoring language accepted by `run_heist(plan:)`; `.json`
 is raw IR; `.heist` is a generated package artifact. Swift DSL, canonical
 source, and canonical plan JSON are projections of the same AST. That AST
@@ -51,7 +51,7 @@ let heist = try HeistPlan("purchaseFlow") {
         Activate(.label(item))
 
         Activate(.label("Add to Cart"))
-            .expect(.label("Cart"))
+            .expect(.exists(.label("Cart")))
     }
 
     RunHeist("LibraryScreen.addToCart", "Milk")
@@ -82,19 +82,19 @@ grouping, comments, local constants, or native Swift calls.
 
 ## Swift Test Runner Boundary
 
-In app and UI tests, Swift calls the job and ButtonHeist describes the job. The
+In app and UI tests, Swift calls the job and The Button Heist describes the job. The
 host-language runner boundary is:
 
 ```swift
 try await RunHeist("addToCart", argument: "Milk") { item in
     Activate(.label(item))
     Activate(.label("Add to Cart"))
-        .expect(.label("Cart"))
+        .expect(.exists(.label("Cart")))
 }
 ```
 
 Outside `RunHeist(...) { ... }` is Swift: tests may choose data, await the
-receipt, and assert on failures. Inside the closure is ButtonHeist DSL that
+receipt, and assert on failures. Inside the closure is heist source that
 lowers to `HeistPlan`, validates through the normal plan contract, executes
 through the in-app heist runtime, and returns the normal receipt.
 
@@ -112,7 +112,7 @@ Semantic actions should describe user intent and expected semantic outcome:
 ```swift
 HeistPlan {
     TypeText("milk", into: .label("Search"))
-        .expect(.element(.label("Search"), .value("milk")))
+        .expect(.exists(.element(.label("Search"), .value("milk"))))
 
     Activate(.label("Delete"))
         .expect(.missing(.label("Delete")))
@@ -154,13 +154,13 @@ CustomAction("Archive", on: .label("Message"))
     .expect(.change(.elements()))
 
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))
+    .expect(.exists(.element(.identifier("Search"), .value("Bruschetta"))))
 
 Increment(.label("Quantity"))
-    .expect(.updated(element: .label("Quantity"), .value(before: "2", after: "3")))
+    .expect(.change(.updated(element: .label("Quantity"), .value(before: "2", after: "3"))))
 
 Increment(.label("Volume"))
-    .until(.element(label: "Volume", value: "100"), timeout: .seconds(5))
+    .until(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(5))
 
 Rotor("Headings", on: .label("Article"), direction: .next)
     .withoutExpectation("Navigation cursor only")
@@ -172,8 +172,8 @@ the label `Search` with case and typography folding; it does not match
 `label`, `identifier`, and `value`. Prefer exact labels, identifiers, values,
 and traits when they name the intended control clearly.
 
-When migrating a KIF selector such as `usingLabelContaining("Search")`, use an
-explicit broad match so the looseness stays visible in review:
+When converting a loose text selector, use an explicit broad match so the
+looseness stays visible in review:
 
 ```swift
 Activate(.label(.contains("Search")))
@@ -211,6 +211,11 @@ exact and `.value(after: .contains("items"))` is explicitly broad. This remains
 an observed-change predicate and does not infer the action's target from hidden
 context.
 
+When text entry or validation can reflow the interface, prefer a settled-state
+assertion such as `.exists(.element(..., .value(...)))` or a `WaitFor(...)`
+over `.updated(...)`. Keep `.updated(...)` for changes that should remain
+same-screen element deltas.
+
 `.expect(.updated(...))` lowers to an element-change predicate. Include
 `element:` when the assertion must be tied to a durable element predicate.
 
@@ -228,7 +233,7 @@ ForEach(.label("Delete"), limit: 20) { target in
 
 ForEach("Milk", "Eggs") { item in
     TypeText(item, into: .label("Add item"))
-        .expect(.label(item), timeout: .seconds(2))
+        .expect(.exists(.label(item)), timeout: .seconds(2))
 }
 ```
 
@@ -336,7 +341,7 @@ module. Resolution runs in this order:
 
 The compiler never builds `ThePlans` from source on demand. If no built
 artifacts are found, compilation fails with a diagnostic that lists every path
-that was searched and tells you to install Button Heist with compiler artifacts,
+that was searched and tells you to install The Button Heist with compiler artifacts,
 run `swift build --package-path ButtonHeist --product heist-plan`, or set
 `HEIST_THEPLANS_BUILD_DIR`. In Xcode/Tuist tests, the diagnostic also lists
 candidate products directories. Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace
@@ -346,7 +351,7 @@ which resolution branch was taken.
 
 Swift Heist does not preserve:
 
-- native Swift loop intent unless the source used Button Heist `ForEach`
+- native Swift loop intent unless the source used The Button Heist `ForEach`
 - arbitrary helper functions or closure structure
 - comments, whitespace, imports, or local constants
 - hidden pre-action viewport movement for semantic actions

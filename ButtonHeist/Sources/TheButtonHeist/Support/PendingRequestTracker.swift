@@ -24,7 +24,7 @@ enum PendingRequestTrackerError: Error, Equatable, LocalizedError {
 /// Invalidation: the entry is removed on each of those paths (owner-scoped
 /// removal is idempotent across orderings). Holds only the awaiting
 /// continuation — never caches a delivered result, so it cannot be derived from
-/// any receipt. See `docs/DATA-OWNERSHIP.md`.
+/// any receipt. See `docs/ARCHITECTURE.md#state-has-one-owner`.
 @ButtonHeistActor
 final class PendingRequestTracker<T: Sendable> {
     private struct PendingRequest: Sendable {

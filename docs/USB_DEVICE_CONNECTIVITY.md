@@ -4,7 +4,7 @@ Connecting to iOS devices over USB via CoreDevice IPv6 tunnels, bypassing WiFi/m
 
 ## Overview
 
-When WiFi is unreliable (VPN interference, network segmentation, mDNS issues), Button Heist can connect to physical devices over the CoreDevice USB IPv6 tunnel. USB traffic is allowed by the default `simulator,usb` scope, while WiFi/LAN traffic remains opt-in.
+When WiFi is unreliable (VPN interference, network segmentation, mDNS issues), The Button Heist can connect to physical devices over the CoreDevice USB IPv6 tunnel. USB traffic is allowed by the default `simulator,usb` scope, while WiFi/LAN traffic remains opt-in.
 
 USB uses the same TLS wire protocol as other transports. The difference is how the endpoint is found: direct/named target configuration for USB, Bonjour only when `network` scope is explicitly enabled.
 

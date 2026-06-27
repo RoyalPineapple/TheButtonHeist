@@ -6,14 +6,14 @@ _Generated from `TheFence.Command.descriptors`._
 
 | Tool | Family | Description |
 |------|--------|-------------|
-| `connect` | `session` | Establish or switch the active connection to a Button Heist app. |
+| `connect` | `session` | Establish or switch the active connection to an app running The Button Heist. |
 | `describe_heist` | `heistRuntime` | Describe one root entry or reusable heist from a plan so an agent can call it safely. |
 | `get_interface` | `observation` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `observation` | Read text from the general pasteboard. |
 | `get_screen` | `observation` | Capture a PNG screenshot with visible interface state. |
 | `get_session_state` | `session` | Inspect connection, device, and last-action session state. |
 | `list_heists` | `heistRuntime` | List the root entry and reusable heists in a plan. Use `detail: "detailed"` when composing against available capabilities. |
-| `perform` | `heistRuntime` | Run one ButtonHeist DSL instruction from `step`: one action or one simple wait. |
+| `perform` | `heistRuntime` | Run one ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement. |
 | `run_heist` | `heistRuntime` | Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`. |
 
 ## StringMatch
@@ -24,7 +24,7 @@ _Generated from `TheFence.Command.descriptors`._
 
 ### `connect`
 
-Establish or switch the active connection to a Button Heist app.
+Establish or switch the active connection to an app running The Button Heist.
 
 - Family: `session`
 
@@ -134,7 +134,7 @@ Parameters:
 
 ### `perform`
 
-Run one ButtonHeist DSL instruction from `step`: one action or one simple wait.
+Run one ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
 Examples:
 `Activate(.label("Pay")).expect(.change(.screen()))`

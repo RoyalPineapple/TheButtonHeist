@@ -1,7 +1,7 @@
-# Button Heist Architecture
+# The Button Heist architecture
 
-Button Heist lets callers write programs against an app's accessibility
-contract. Semantic intent enters the runtime; Button Heist owns target
+The Button Heist lets callers write programs against an app's accessibility
+contract. Semantic intent enters the runtime; The Button Heist owns target
 resolution, reveal, element inflation, action execution, settling, and
 evidence; callers receive settled semantic evidence for validation,
 reporting, or the next step.
@@ -51,13 +51,58 @@ snapshots rather than pretending an empty post-navigation parse is stable.
 ### Observation Has One Owner
 
 `get_interface` returns the app accessibility state for the current screen,
-including semantic content Button Heist can discover in scrollable containers.
+including semantic content The Button Heist can discover in scrollable containers.
 `get_screen` returns pixels plus the fresh visible accessibility tree with
 geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
 `detail: "full"` adds geometry and heavier accessibility fields.
+
+### Element Inflation Is Runtime-Owned
+
+Element inflation is the boundary between a durable semantic target and a fresh
+live target that can be acted on now. Callers provide semantic identity. The
+runtime owns the bounded viewport and live-geometry work required to execute
+that intent.
+
+The pipeline is:
+
+1. Resolve the semantic target against settled accessibility state.
+2. Reject missing or ambiguous targets with diagnostics.
+3. Reveal the resolved target when viewport movement is required.
+4. Refresh semantic and live state after reveal or stale-object detection.
+5. Acquire fresh live geometry and activation/action points.
+6. Execute the accessibility operation or explicit mechanical gesture.
+7. Return settled semantic evidence through `InteractionObservation`.
+
+Predicate evaluation uses semantic observations, not live UIKit geometry. Live
+geometry is used for inflation and explicit mechanical or viewport commands; it
+is not durable identity. If inflation cannot be proven, the command fails with
+diagnostics instead of acting on stale or guessed state.
+
+### State Has One Owner
+
+The Button Heist tracks source-of-truth state only at ownership boundaries.
+Everything else is a short-lived index, request correlation, lifecycle phase,
+durable artifact, or final output formatting.
+
+The approved long-lived owners are:
+
+- `TheStash`: settled `Screen`, latest disposable `LiveCapture`, and non-clean
+  settle diagnostics.
+- `TheMuscle`: auth, admission, and session state inside the app.
+- `TheHandoff`: external connection phase and discovery state outside the app.
+- `PendingRequestTracker`: request ID to continuation correlation, removed on
+  resolve, timeout, or cancellation.
+- `HeistExecutionResult`: immutable heist execution evidence. Report facts are
+  derived from it, not stored beside it.
+- Artifact stores: `.heist` package files and screenshot bytes on disk.
+
+`LiveCapture` is an ephemeral index. Its per-path maps exist to disambiguate a
+single capture and must not become stable identity. Transport registries and
+auth registries may share a client key, but they stay separate: transport does
+not own authentication semantics.
 
 ### One Driver Owns the Session
 
@@ -96,13 +141,13 @@ flowchart LR
 
 ## Execution and Predicate Pipeline
 
-Button Heist has one source of truth: the accessibility tree, a snapshot of
+The Button Heist has one source of truth: the accessibility tree, a snapshot of
 that tree, or a diff between snapshots. Targets, searches, waits, expectations,
 and repeat-loop stop conditions all evaluate through the same predicate model.
 
 ```mermaid
 flowchart TD
-    Author["Authoring surface<br/>Swift DSL or runtime ButtonHeist source"] --> Compile["Compile / build HeistPlan<br/>ThePlans parser + builders"]
+    Author["Authoring surface<br/>Swift DSL or runtime heist source"] --> Compile["Compile / build HeistPlan<br/>ThePlans parser + builders"]
     Compile --> Validate["Runtime validation<br/>finite steps, valid predicates, valid targets"]
     Validate --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
@@ -146,7 +191,7 @@ The `WaitFor`, post-action `.expect`, and `RepeatUntil` progress paths all call
 - `WaitFor(...)`: baseline is the first snapshot taken inside the wait.
 - `Action(...).expect(...)`: baseline is the pre-action snapshot.
 - `RepeatUntil(...)` and action `.until(...)`: the stop predicate is checked
-  immediately first; after each body, Button Heist waits up to one second for
+  immediately first; after each body, The Button Heist waits up to one second for
   `.change()`, then evaluates the stop predicate against the accumulated trace.
 
 The public predicate layer is intentionally one tree language:
@@ -200,6 +245,4 @@ failure points at the accessibility contract that changed.
 - [MCP Agent Guide](MCP-AGENT-GUIDE.md) - practical tool-use patterns for
   agents.
 - [Heist Format](HEIST-FORMAT.md) - generated heist artifact and plan IR format.
-- [Element Inflation](ELEMENT-INFLATION.md) - semantic target to inflated live
-  target boundary.
 - [Auth](AUTH.md) - authentication, approval, and session locking.
