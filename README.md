@@ -16,6 +16,8 @@ That makes accessibility the app's command surface: named objects, declared verb
 
 VoiceOver is one client for that command surface. The Button Heist is another: a way for agents and tests to operate the same interface and bring back evidence.
 
+There is no second, secret app behind the glass. The app has already published the contract. The Button Heist makes that contract executable.
+
 ## One move
 
 The Button Heist lets agents and tests drive iOS apps by accessibility intent instead of screen coordinates.
@@ -50,6 +52,8 @@ A contract reduces uncertainty. It makes three things explicit:
 Ambiguity becomes concrete in the accessibility interface. A control can be visible but not exposed. A label can be close enough for a person to infer, but too vague for assistive technology or an agent to trust. State can change on screen while semantic state stays stale. A tap can work even though the accessibility action is missing.
 
 The Button Heist makes those gaps testable. It executes the accessibility contract and requires evidence that the contract changed as expected.
+
+The machinery is small on purpose: read what the app declares, make one declared move, wait for the app to become still, and keep the receipt.
 
 ## The core loop
 
@@ -126,7 +130,7 @@ known elements:
 
 Because The Button Heist acts from a settled accessibility interface and reads another settled accessibility interface afterward, diagnosis starts from facts. The diagnostic can show what the accessibility contract actually contained.
 
-Receipts are intentionally plain. They are not live handles, replay objects, or private runtime state. They carry evidence you can assert against, print, report, or use to compose the next heist.
+Receipts are intentionally plain. They are boring in the useful way: they say what ran, what changed, and where the machine stopped. They are not live handles, replay objects, or private runtime state. They carry evidence you can assert against, print, report, or use to compose the next heist.
 
 ## Heists
 
@@ -219,7 +223,7 @@ Outside `RunHeist(...) { ... }` is Swift test code. Inside the closure is the he
 
 ## Why it works
 
-The Button Heist narrows the problem the agent has to solve. The agent sees the interface in language, chooses intent in language, and receives evidence in language. It does not need coordinate math, viewport bookkeeping, private state diffs, or a private app model before asking for a button.
+The Button Heist narrows the problem the agent has to solve. The agent sees the interface in language, chooses intent in language, and receives evidence in language. It does not need to become a surveyor of rectangles before asking for a button.
 
 Accessibility makes that possible. When the app exposes a complete accessibility contract, it names controls, describes roles, exposes values, offers actions, and reports state. The Button Heist keeps that contract live and runs ordinary semantic interactions through it.
 
@@ -231,7 +235,7 @@ That division of labor is the product: the app publishes product semantics, The 
 
 Screenshots are visual evidence. They show the visual interface, and The Button Heist can capture them when pixels are the right evidence.
 
-They are not the normal way to act. Pixels show what the interface looked like. Accessibility says what each control is called, what role it has, what value it reports, which actions it accepts, and how the app says it changed.
+They are not the normal way to act. Pixels are good evidence. They are poor instructions. Accessibility says what each control is called, what role it has, what value it reports, which actions it accepts, and how the app says it changed.
 
 The Button Heist targets controls by product semantics, not by any one field. A target can use labels, values, identifiers, required traits, excluded traits, and ordinal disambiguation. Hierarchy, state, and available actions remain observable facts and assertion evidence, not durable target identity.
 
