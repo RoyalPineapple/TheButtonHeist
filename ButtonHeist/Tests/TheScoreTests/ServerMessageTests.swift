@@ -267,6 +267,21 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(decoded.payload, .screenshot(screen))
     }
 
+    func testActionResultPayloadHeistExecutionWireShape() throws {
+        let heist = HeistExecutionResult(steps: [], durationMs: 42)
+        let result = ActionResult(success: true, method: .heistPlan, payload: .heistExecution(heist))
+
+        let data = try JSONEncoder().encode(result)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let payload = try XCTUnwrap(json["payload"] as? [String: Any])
+        XCTAssertEqual(payload["kind"] as? String, "heistExecution")
+        let inner = try XCTUnwrap(payload["data"] as? [String: Any])
+        XCTAssertEqual(inner["durationMs"] as? Int, 42)
+
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+        XCTAssertEqual(decoded.payload, .heistExecution(heist))
+    }
+
     func testActionResultSubjectEvidenceWireShape() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete", traits: [.button]))
         let element = HeistElement(
@@ -524,6 +539,16 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    func testActionResultRejectsSuccessWithErrorKind() throws {
+        let json = """
+        {"success":true,"method":"activate","errorKind":"actionFailed"}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("successful ActionResult must not include errorKind"), "\(error)")
+        }
+    }
+
     func testActionResultWithErrorKind() throws {
         let result = ActionResult(
             success: false,
@@ -553,17 +578,43 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
-    func testActionResultWithoutErrorKindDecodesAsNil() throws {
+    func testActionResultRejectsFailureWithoutErrorKind() throws {
         let json = """
         {"type":"actionResult","payload":{"success":false,"method":"syntheticTap","message":"fail"}}
         """
-        let decoded = try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))
 
-        if case .actionResult(let result) = decoded {
-            XCTAssertFalse(result.success)
-            XCTAssertNil(result.errorKind)
-        } else {
-            XCTFail("Expected actionResult, got \(decoded)")
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("failed ActionResult requires errorKind"), "\(error)")
+        }
+    }
+
+    func testActionResultRejectsTakeScreenshotPayloadMismatch() throws {
+        let json = """
+        {"success":true,"method":"takeScreenshot","payload":{"kind":"value","data":"not a screenshot"}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("takeScreenshot ActionResult payload must be screenshot"), "\(error)")
+        }
+    }
+
+    func testActionResultRejectsHeistPlanPayloadMismatch() throws {
+        let json = """
+        {"success":true,"method":"heistPlan","payload":{"kind":"value","data":"not a heist result"}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("heistPlan ActionResult payload must be heistExecution"), "\(error)")
+        }
+    }
+
+    func testActionResultRejectsValuePayloadForNonValueCarryingMethod() throws {
+        let json = """
+        {"success":true,"method":"activate","payload":{"kind":"value","data":"Hello"}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("value ActionResult payload is only valid"), "\(error)")
         }
     }
 

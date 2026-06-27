@@ -21,6 +21,23 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertEqual(decoded.settleTimeMs, 1234)
     }
 
+    func testFailedActionResultRoundTripsWithSettleFields() throws {
+        let result = ActionResult(
+            success: false,
+            method: .wait,
+            message: "timed out",
+            errorKind: .timeout,
+            settled: false,
+            settleTimeMs: 750
+        )
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+        XCTAssertFalse(decoded.success)
+        XCTAssertEqual(decoded.errorKind, .timeout)
+        XCTAssertEqual(decoded.settled, false)
+        XCTAssertEqual(decoded.settleTimeMs, 750)
+    }
+
     // MARK: - Delta transient payload
 
     func testAccessibilityTraceDeltaRoundTripsWithTransient() throws {

@@ -264,17 +264,49 @@ public struct ActionPerformanceTiming: Codable, Sendable, Equatable {
 
 /// The outcome of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable, Equatable {
+    // MARK: - Nested Types
+
+    private enum Outcome: Sendable, Equatable {
+        case success
+        case failure(ErrorKind)
+
+        init?(success: Bool, errorKind: ErrorKind?) {
+            switch (success, errorKind) {
+            case (true, nil):
+                self = .success
+            case (false, .some(let kind)):
+                self = .failure(kind)
+            case (true, .some), (false, nil):
+                return nil
+            }
+        }
+
+        var success: Bool {
+            if case .success = self { return true }
+            return false
+        }
+
+        var errorKind: ErrorKind? {
+            if case .failure(let kind) = self { return kind }
+            return nil
+        }
+    }
+
+    // MARK: - Properties
+
+    private let outcome: Outcome
+
     /// Whether the action was delivered and completed normally. `false` means
     /// the action reached the server but the handler reported failure — it is
     /// not a transport-level error (those surface as thrown errors).
-    public let success: Bool
+    public var success: Bool { outcome.success }
     /// Identifies the delivered action behavior. Activation-point delivery for
     /// `activate` still reports `.activate`.
     /// Explicit mechanical tap commands report the mechanical tap method.
     public let method: ActionMethod
     public let message: String?
     /// Typed error classification (nil on success)
-    public let errorKind: ErrorKind?
+    public var errorKind: ErrorKind? { outcome.errorKind }
     /// Command-specific payload. At most one variant per result.
     public let payload: ResultPayload?
     /// Source-of-truth accessibility capture receipt for this action.
@@ -296,6 +328,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
     /// Optional measured durations for the local observed action pipeline.
     public let timing: ActionPerformanceTiming?
 
+    // MARK: - Init
+
     public init(
         success: Bool,
         method: ActionMethod,
@@ -309,10 +343,41 @@ public struct ActionResult: Codable, Sendable, Equatable {
         activationTrace: ActivationTrace? = nil,
         timing: ActionPerformanceTiming? = nil
     ) {
-        self.success = success
+        guard let outcome = Outcome(success: success, errorKind: errorKind) else {
+            preconditionFailure(Self.outcomeValidationMessage(success: success, errorKind: errorKind))
+        }
+        guard Self.payload(payload, isCompatibleWith: method) else {
+            preconditionFailure(Self.payloadValidationMessage(method: method, payload: payload))
+        }
+        self.init(
+            outcome: outcome,
+            method: method,
+            message: message,
+            payload: payload,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+
+    private init(
+        outcome: Outcome,
+        method: ActionMethod,
+        message: String? = nil,
+        payload: ResultPayload? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
+        activationTrace: ActivationTrace? = nil,
+        timing: ActionPerformanceTiming? = nil
+    ) {
+        self.outcome = outcome
         self.method = method
         self.message = message
-        self.errorKind = errorKind
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
         self.settled = settled
@@ -321,6 +386,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         self.activationTrace = activationTrace
         self.timing = timing
     }
+
+    // MARK: - Coding
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case success
@@ -339,12 +406,31 @@ public struct ActionResult: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionResult")
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let success = try container.decode(Bool.self, forKey: .success)
+        let method = try container.decode(ActionMethod.self, forKey: .method)
+        let errorKind = try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind)
+        let payload = try container.decodeIfPresent(ResultPayload.self, forKey: .payload)
+
+        guard let outcome = Outcome(success: success, errorKind: errorKind) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .errorKind,
+                in: container,
+                debugDescription: Self.outcomeValidationMessage(success: success, errorKind: errorKind)
+            )
+        }
+        guard Self.payload(payload, isCompatibleWith: method) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .payload,
+                in: container,
+                debugDescription: Self.payloadValidationMessage(method: method, payload: payload)
+            )
+        }
+
         self.init(
-            success: try container.decode(Bool.self, forKey: .success),
-            method: try container.decode(ActionMethod.self, forKey: .method),
+            outcome: outcome,
+            method: method,
             message: try container.decodeIfPresent(String.self, forKey: .message),
-            errorKind: try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind),
-            payload: try container.decodeIfPresent(ResultPayload.self, forKey: .payload),
+            payload: payload,
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs),
@@ -369,6 +455,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         try container.encodeIfPresent(timing, forKey: .timing)
     }
 
+    // MARK: - Timing
+
     public func withTiming(_ timing: ActionPerformanceTiming?) -> ActionResult {
         guard let timing else { return self }
         return ActionResult(
@@ -384,5 +472,50 @@ public struct ActionResult: Codable, Sendable, Equatable {
             activationTrace: activationTrace,
             timing: self.timing?.merging(timing) ?? timing
         )
+    }
+
+    // MARK: - Private Helpers
+
+    private static func payload(_ payload: ResultPayload?, isCompatibleWith method: ActionMethod) -> Bool {
+        switch payload {
+        case nil:
+            return true
+        case .value:
+            return method == .typeText || method == .setPasteboard || method == .getPasteboard
+        case .rotor:
+            return method == .rotor
+        case .screenshot:
+            return method == .takeScreenshot
+        case .heistExecution:
+            return method == .heistPlan
+        }
+    }
+
+    private static func outcomeValidationMessage(success: Bool, errorKind: ErrorKind?) -> String {
+        if success, let errorKind {
+            return "successful ActionResult must not include errorKind \(errorKind.rawValue)"
+        }
+        return "failed ActionResult requires errorKind"
+    }
+
+    private static func payloadValidationMessage(method: ActionMethod, payload: ResultPayload?) -> String {
+        switch (method, payload) {
+        case (.takeScreenshot, .some(_)):
+            return "takeScreenshot ActionResult payload must be screenshot"
+        case (.heistPlan, .some(_)):
+            return "heistPlan ActionResult payload must be heistExecution"
+        case (.rotor, .some(_)):
+            return "rotor ActionResult payload must be rotor"
+        case (_, .value):
+            return "value ActionResult payload is only valid for typeText, setPasteboard, or getPasteboard"
+        case (_, .screenshot):
+            return "screenshot ActionResult payload is only valid for takeScreenshot"
+        case (_, .heistExecution):
+            return "heistExecution ActionResult payload is only valid for heistPlan"
+        case (_, .rotor):
+            return "rotor ActionResult payload is only valid for rotor"
+        case (_, nil):
+            return "ActionResult payload is compatible"
+        }
     }
 }
