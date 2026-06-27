@@ -422,7 +422,6 @@ All docs: [API](docs/API.md) / [Command reference](docs/reference/commands.md) /
 
 ## Acknowledgments
 
-- [KIF (Keep It Functional)](https://github.com/kif-framework/KIF). The Button Heist builds on KIF's long proof that semantic accessibility is a stable base for iOS testing, while moving the model toward accessibility actions, settled evidence, and agent-readable contracts.
 - [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot). Used for parsing UIKit accessibility hierarchies via [AccessibilitySnapshotBH](https://github.com/RoyalPineapple/AccessibilitySnapshotBH).
 
 ## License
