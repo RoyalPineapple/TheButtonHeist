@@ -21,7 +21,7 @@ Allowed `perform(step:)` statements are one action or one simple wait:
 ```swift
 Activate(.label("Pay")).expect(.change(.screen()))
 TypeText("milk", into: .label("Search"))
-    .expect(.updated(element: .element(label: "Search"), .value(after: "milk")))
+    .expect(.updated(element: .element(label: "Search"), .value("milk")))
 Increment(.label("Quantity"))
     .until(.element(label: "Quantity", value: "10"), timeout: .seconds(5))
 Decrement(.label("Quantity"))
@@ -79,7 +79,7 @@ element value:
 
 ```swift
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))
+    .expect(.updated(element: .identifier("Search"), .value("Bruschetta")))
 
 Increment(.label("Quantity"))
     .expect(.updated(element: .label("Quantity"), .value(before: "2", after: "3")))
@@ -103,7 +103,7 @@ HeistPlan {
         .expect(.change(.screen()))
 
     TypeText("milk", into: .label("Search"))
-        .expect(.updated(element: .element(label: "Search"), .value(after: "milk")))
+        .expect(.updated(element: .element(label: "Search"), .value("milk")))
 }
 ```
 
@@ -112,10 +112,13 @@ Use `run_heist(plan:)` for definitions, composition, branching, waits with bodie
 ```swift
 HeistPlan("shop") {
     HeistDef<String>("Cart.addItem", parameter: "item") { item in
-        TypeText(item, into: .label("Search"))
-            .expect(.updated(element: .element(label: "Search"), .value(after: item)))
-        Activate(.label("Add"))
-            .expect(.label("Added"))
+        TypeText(item, into: .label("Search Items"))
+            .expect(.updated(element: .label("Search Items"), .value(item)))
+        Activate(.label(item))
+            .expect(.appeared(.element(
+                .label(.prefix(item)),
+                .identifier(.contains("cart"))
+            )))
     }
 
     RunHeist("Cart.addItem", "Milk")

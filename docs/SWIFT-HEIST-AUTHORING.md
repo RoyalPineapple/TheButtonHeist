@@ -51,7 +51,7 @@ let heist = try HeistPlan("purchaseFlow") {
         Activate(.label(item))
 
         Activate(.label("Add to Cart"))
-            .expect(.label("Cart"))
+            .expect(.exists(.label("Cart")))
     }
 
     RunHeist("LibraryScreen.addToCart", "Milk")
@@ -89,7 +89,7 @@ host-language runner boundary is:
 try await RunHeist("addToCart", argument: "Milk") { item in
     Activate(.label(item))
     Activate(.label("Add to Cart"))
-        .expect(.label("Cart"))
+        .expect(.exists(.label("Cart")))
 }
 ```
 
@@ -112,7 +112,7 @@ Semantic actions should describe user intent and expected semantic outcome:
 ```swift
 HeistPlan {
     TypeText("milk", into: .label("Search"))
-        .expect(.element(.label("Search"), .value("milk")))
+        .expect(.exists(.element(.label("Search"), .value("milk"))))
 
     Activate(.label("Delete"))
         .expect(.missing(.label("Delete")))
@@ -154,13 +154,13 @@ CustomAction("Archive", on: .label("Message"))
     .expect(.change(.elements()))
 
 TypeText("Bruschetta", into: .identifier("Search"))
-    .expect(.updated(element: .identifier("Search"), .value(after: "Bruschetta")))
+    .expect(.change(.updated(element: .identifier("Search"), .value(after: "Bruschetta"))))
 
 Increment(.label("Quantity"))
-    .expect(.updated(element: .label("Quantity"), .value(before: "2", after: "3")))
+    .expect(.change(.updated(element: .label("Quantity"), .value(before: "2", after: "3"))))
 
 Increment(.label("Volume"))
-    .until(.element(label: "Volume", value: "100"), timeout: .seconds(5))
+    .until(.exists(.element(label: "Volume", value: "100")), timeout: .seconds(5))
 
 Rotor("Headings", on: .label("Article"), direction: .next)
     .withoutExpectation("Navigation cursor only")
@@ -228,7 +228,7 @@ ForEach(.label("Delete"), limit: 20) { target in
 
 ForEach("Milk", "Eggs") { item in
     TypeText(item, into: .label("Add item"))
-        .expect(.label(item), timeout: .seconds(2))
+        .expect(.exists(.label(item)), timeout: .seconds(2))
 }
 ```
 

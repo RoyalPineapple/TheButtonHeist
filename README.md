@@ -20,7 +20,7 @@ There is no second app behind the glass. The app has already published the contr
 
 ## What it unlocks
 
-The Button Heist changes the unit of automation. A command can be `Activate Pay`. A named heist can be `Cart.addItem("Milk")` or `Checkout.pay()`. Both run through the same settled accessibility contract. Both bring back proof.
+The Button Heist changes the unit of automation. A direct command can activate `Pay`. A named heist can be `Cart.addItem("Milk")` or `Checkout.pay()`. Both run through the same settled accessibility contract. Both bring back proof.
 
 It can:
 
@@ -31,18 +31,22 @@ It can:
 - let agents inspect those capabilities before they call them
 - leave CI with a receipt that names the contract that broke
 
-That is the face of the project: product semantics in, settled evidence out.
+That is the shape of the project: product semantics in, settled evidence out.
 
 ```swift
-HeistDef<String>("Cart.addItem", parameter: "item") { item in
-    TypeText(item, into: .label("Search Items"))
-        .expect(.updated(element: .label("Search Items"), .value(after: item)))
+HeistPlan("shop") {
+    HeistDef<String>("Cart.addItem", parameter: "item") { item in
+        TypeText(item, into: .label("Search Items"))
+            .expect(.updated(element: .label("Search Items"), .value(item)))
 
-    Activate(.label(item))
-        .expect(.appeared(.element(
-            .label(.prefix(item)),
-            .identifier(.contains("cart"))
-        )))
+        Activate(.label(item))
+            .expect(.appeared(.element(
+                .label(.prefix(item)),
+                .identifier(.contains("cart"))
+            )))
+    }
+
+    RunHeist("Cart.addItem", "Milk")
 }
 ```
 
@@ -173,13 +177,13 @@ import ThePlans
 
 let login = try HeistPlan("login") {
     TypeText("agent@example.com", into: .label("Email"))
-        .expect(.updated(
+        .expect(.change(.updated(
             element: .label("Email"),
             .value(after: "agent@example.com")
-        ))
+        )))
 
     Activate(.label("Sign In"))
-        .expect(.appeared(.label("Home")))
+        .expect(.change(.appeared(.label("Home"))))
 }
 ```
 
@@ -212,10 +216,10 @@ Action expectations usually assert deltas: something appeared, changed, or updat
 ```swift
 let search = try HeistPlan("searchFlow") {
     TypeText("milk", into: .label("Search"))
-        .expect(.updated(
+        .expect(.change(.updated(
             element: .label("Search"),
             .value(after: "milk")
-        ))
+        )))
 
     Activate(.label("Search"))
         .expect(.change(.screen()))
@@ -225,7 +229,7 @@ let search = try HeistPlan("searchFlow") {
             Fail("Search did not settle")
         }
 
-    If(.label("Results")) {
+    If(.exists(.label("Results"))) {
         Warn("Search results loaded")
     }
 }
@@ -240,7 +244,7 @@ import TheInsideJob
 
 let heist = try await RunHeist("search", argument: "milk") { query in
     TypeText(query, into: .label("Search"))
-        .expect(.updated(.value(query)))
+        .expect(.change(.updated(.value(after: .exact(query)))))
 
     Activate(.label("Search"))
         .expect(.change(.screen()))

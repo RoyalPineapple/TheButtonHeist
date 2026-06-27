@@ -115,11 +115,14 @@ Use DSL when explaining or authoring heists.
 
 ```swift
 HeistPlan("purchaseFlow") {
-    TypeText("milk", into: .label("Search"))
-        .expect(.value("milk"), timeout: .seconds(2))
+    TypeText("milk", into: .label("Search Items"))
+        .expect(.updated(element: .label("Search Items"), .value("milk")))
 
     Activate(.label("Milk"))
-        .expect(.change(.screen()))
+        .expect(.appeared(.element(
+            .label(.prefix("Milk")),
+            .identifier(.contains("cart"))
+        )))
 
     WaitFor(.missing(.label("Loading")), timeout: .seconds(5))
         .else {
@@ -132,11 +135,14 @@ The same primitives scale up without creating a second runtime:
 
 ```swift
 HeistDef<String>("addToCart", parameter: "item") { item in
-    TypeText(item, into: .label("Search"))
-        .expect(.value(item), timeout: .seconds(2))
+    TypeText(item, into: .label("Search Items"))
+        .expect(.updated(element: .label("Search Items"), .value(item)))
 
     Activate(.label(item))
-        .expect(.label("Cart"), timeout: .seconds(2))
+        .expect(.appeared(.element(
+            .label(.prefix(item)),
+            .identifier(.contains("cart"))
+        )))
 }
 
 HeistPlan("cartFlow") {
