@@ -14,7 +14,7 @@ Every action is targeted and precise. The heist goes off clean, always returning
 
 ## One move
 
-Start with one action:
+Begin with a single action:
 
 ```swift
 Activate(.label("Pay"))
