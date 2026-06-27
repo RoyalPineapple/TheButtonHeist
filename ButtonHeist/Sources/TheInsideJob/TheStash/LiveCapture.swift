@@ -151,11 +151,11 @@ struct LiveCapture: Equatable {
         elementIndex.element(for: heistId)
     }
 
-    func elementEntry(for heistId: HeistId) -> LiveElementIndex.ElementEntry? {
+    func elementEntry(for heistId: HeistId) -> LiveElementEntry? {
         elementIndex.elementEntry(for: heistId)
     }
 
-    func orderedElementEntries() -> [LiveElementIndex.ElementEntry] {
+    func orderedElementEntries() -> [LiveElementEntry] {
         elementIndex.orderedElementEntries
     }
 
@@ -366,17 +366,17 @@ struct LiveCapture: Equatable {
         }
     }
 
+    struct LiveElementEntry: Equatable {
+        let path: TreePath
+        let heistId: HeistId
+        let element: AccessibilityElement
+        let ref: ElementRef?
+    }
+
     // MARK: - Live Element Index
 
     struct LiveElementIndex: Equatable {
-        struct ElementEntry: Equatable {
-            let path: TreePath
-            let heistId: HeistId
-            let element: AccessibilityElement
-            let ref: ElementRef?
-        }
-
-        private let entriesByPath: [TreePath: ElementEntry]
+        private let entriesByPath: [TreePath: LiveElementEntry]
         private let pathsByHeistId: [HeistId: TreePath]
         private let orderedPaths: [TreePath]
         private let containerRefsByPath: [TreePath: ContainerRef]
@@ -386,7 +386,7 @@ struct LiveCapture: Equatable {
             snapshot: Snapshot,
             dispatchReferences: DispatchReferences
         ) {
-            var entriesByPath: [TreePath: ElementEntry] = [:]
+            var entriesByPath: [TreePath: LiveElementEntry] = [:]
             var pathsByHeistId: [HeistId: TreePath] = [:]
             var orderedPaths: [TreePath] = []
 
@@ -394,7 +394,7 @@ struct LiveCapture: Equatable {
                 guard let heistId = snapshot.heistIdsByPath[item.path],
                       pathsByHeistId[heistId] == nil
                 else { continue }
-                let entry = ElementEntry(
+                let entry = LiveElementEntry(
                     path: item.path,
                     heistId: heistId,
                     element: item.element,
@@ -416,7 +416,7 @@ struct LiveCapture: Equatable {
             Set(pathsByHeistId.keys)
         }
 
-        var orderedElementEntries: [ElementEntry] {
+        var orderedElementEntries: [LiveElementEntry] {
             orderedPaths.compactMap { entriesByPath[$0] }
         }
 
@@ -436,7 +436,7 @@ struct LiveCapture: Equatable {
             elementEntry(for: heistId)?.element
         }
 
-        func elementEntry(for heistId: HeistId) -> ElementEntry? {
+        func elementEntry(for heistId: HeistId) -> LiveElementEntry? {
             pathsByHeistId[heistId].flatMap { entriesByPath[$0] }
         }
 
