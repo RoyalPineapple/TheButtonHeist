@@ -21,24 +21,33 @@ jobs:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
 
     steps:
-      - name: Verify CI passed on release ancestry
+      - name: Verify CI passed on exact release commit
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${{ github.event.inputs.tag || github.ref_name }} --jq '.object.sha' 2>/dev/null \
             || echo "${{ github.sha }}")
-          # The release commit is a version bump that CI never runs on directly.
-          # Check the tagged commit first, then its parent (the last CI-tested commit on main).
-          for SHA in "$TAG_SHA" "$(gh api repos/${{ github.repository }}/git/commits/$TAG_SHA --jq '.parents[0].sha' 2>/dev/null || true)"; do
-            [[ -z "$SHA" ]] && continue
-            COUNT=$(gh run list --repo ${{ github.repository }} --commit "$SHA" --workflow CI --limit 5 \
-              --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')
-            if [[ "$COUNT" -gt 0 ]]; then
-              echo "CI verified green on ${SHA:0:8}"
-              exit 0
-            fi
-          done
-          echo "::error::No successful CI run found for tagged commit $TAG_SHA or its parent. Release requires CI green on main."
+          COUNT=$(gh run list \
+            --repo ${{ github.repository }} \
+            --workflow CI \
+            --branch main \
+            --commit "$TAG_SHA" \
+            --limit 20 \
+            --json conclusion,event,status \
+            --jq '[.[] | select(.event == "push" and .status == "completed" and .conclusion == "success")] | length')
+          if [[ "$COUNT" -gt 0 ]]; then
+            echo "CI verified green on exact release commit ${TAG_SHA:0:8}"
+            exit 0
+          fi
+          echo "::group::CI runs found for ${TAG_SHA:0:8}"
+          gh run list \
+            --repo ${{ github.repository }} \
+            --workflow CI \
+            --branch main \
+            --commit "$TAG_SHA" \
+            --limit 20 || true
+          echo "::endgroup::"
+          echo "::error::No successful main-branch CI push run found for exact tagged commit $TAG_SHA. Push the release commit to main, wait for CI to pass, then push or re-run the tag release."
           exit 1
 
       - name: Checkout repository

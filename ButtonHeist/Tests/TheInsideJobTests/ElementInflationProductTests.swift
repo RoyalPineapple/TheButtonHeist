@@ -135,6 +135,28 @@ final class ElementInflationProductTests: XCTestCase {
         XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
     }
 
+    func testSemanticActivateRevealsNestedScrollTargetWhenOtherWindowHasSameSizedScrollView() async throws {
+        let fixture = try installNestedScrollActivationFixture(
+            identifier: "nested_scroll_with_decoy_submit",
+            label: "Confirm Decoy Payment"
+        )
+        defer { fixture.cleanup() }
+        let decoyWindow = try installScrollDecoyWindow(contentSize: fixture.innerScrollView.contentSize)
+        defer { cleanupWindow(decoyWindow) }
+        try seedKnownNestedScrollTarget(fixture)
+
+        let result = await brains.executeRuntimeAction(.activate(
+            .predicate(ElementPredicate(identifier: "nested_scroll_with_decoy_submit", traits: [.button]))
+        ))
+
+        XCTAssertTrue(result.success, result.message ?? "nested scroll semantic activate failed with decoy")
+        guard result.success else { return }
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(fixture.target.activationCount, 1)
+        XCTAssertTrue(fixture.outerScrollView.didReceiveRevealRequest)
+        XCTAssertTrue(fixture.innerScrollView.didReceiveRevealRequest)
+    }
+
     func testAmbiguousSemanticActivateFailsBeforeGeometryOrAction() async throws {
         let fixture = try installAmbiguousActivationFixture()
         defer { fixture.cleanup() }
@@ -523,6 +545,26 @@ final class ElementInflationProductTests: XCTestCase {
         )
     }
 
+    private func installScrollDecoyWindow(contentSize: CGSize) throws -> UIWindow {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .clear
+
+        let scrollView = UIScrollView(frame: CGRect(x: 12, y: 120, width: 280, height: 200))
+        scrollView.contentSize = contentSize
+        scrollView.backgroundColor = .clear
+        scrollView.isAccessibilityElement = false
+        viewController.view.addSubview(scrollView)
+
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.windowLevel = .alert + 70
+        window.rootViewController = viewController
+        window.isHidden = false
+        window.layoutIfNeeded()
+        return window
+    }
+
     private func seedKnownOffscreenTarget(
         _ fixture: SemanticRevealFixture,
         in targetBrains: TheBrains? = nil,
@@ -750,6 +792,13 @@ final class ElementInflationProductTests: XCTestCase {
                 line: line
             )
         }
+    }
+
+    @MainActor
+    private func cleanupWindow(_ window: UIWindow) {
+        window.rootViewController?.view.accessibilityViewIsModal = false
+        window.isHidden = true
+        window.rootViewController = nil
     }
 }
 

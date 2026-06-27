@@ -156,6 +156,13 @@ fi
 if grep -Fq 'ButtonHeistFrameworks' .github/workflows/release.yml; then
     fail ".github/workflows/release.yml must not package ambiguous ButtonHeistFrameworks"
 fi
+grep -Fq 'Verify CI passed on exact release commit' .github/workflows/release.yml \
+    || fail ".github/workflows/release.yml must gate releases on exact release-commit CI"
+grep -Fq -- '--branch main' .github/workflows/release.yml \
+    || fail ".github/workflows/release.yml release CI guard must check main-branch CI"
+if grep -Fq 'parents[0]' .github/workflows/release.yml; then
+    fail ".github/workflows/release.yml must not accept parent-commit CI for release publishing"
+fi
 if grep -Eq 'bin\.install[[:space:]]+"heist-doctor"' "$BUTTONHEIST_FORMULA_TEMPLATE"; then
     fail "$BUTTONHEIST_FORMULA_TEMPLATE must not install experimental heist-doctor"
 fi

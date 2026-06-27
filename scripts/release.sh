@@ -5,11 +5,11 @@
 #   1. Validate: must be on main, in sync with origin, clean worktree
 #   2. Bump version across release truth files + regenerate Xcode projects
 #   3. Build CLI + MCP (in parallel)
-#   4. Rebase onto latest origin, commit/tag or tag current source, push tag
-#   5. Wait for tag-level release workflow guardrails; publish source + upgrade Homebrew on success
+#   4. Rebase onto latest origin, commit, push source to main, and wait for CI
+#   5. Tag the exact green main commit and wait for release packaging
 #
-# Local tests are skipped by default — the release workflow reruns the full
-# macOS/iOS guardrail on the exact tag before publishing artifacts.
+# Local tests are skipped by default — main-branch CI gates the exact release
+# commit before the tag is pushed and release artifacts are published.
 # Use --full for an optional local preflight before committing.
 #
 # Versioning: SemVer (MAJOR.MINOR.PATCH). Default bump is patch.
@@ -70,6 +70,61 @@ remote_release_tag_exists() {
 release_tag_exists() {
     local version="$1"
     local_release_tag_exists "$version" || remote_release_tag_exists "$version"
+}
+
+ci_push_run_count() {
+    local sha="$1"
+    local jq_filter="$2"
+    gh run list \
+        --repo "$BUTTONHEIST_GITHUB_REPO" \
+        --workflow CI \
+        --branch main \
+        --commit "$sha" \
+        --limit 20 \
+        --json conclusion,event,status \
+        --jq "$jq_filter" 2>/dev/null || echo 0
+}
+
+print_ci_runs_for_commit() {
+    local sha="$1"
+    gh run list \
+        --repo "$BUTTONHEIST_GITHUB_REPO" \
+        --workflow CI \
+        --branch main \
+        --commit "$sha" \
+        --limit 20 || true
+}
+
+wait_for_ci_success() {
+    local sha="$1"
+    local label="${2:-release commit}"
+    local success_count running_count failed_count total_count
+
+    echo "  Waiting for main CI on $label (${sha:0:8})..."
+    for _ in {1..160}; do
+        success_count=$(ci_push_run_count "$sha" '[.[] | select(.event == "push" and .status == "completed" and .conclusion == "success")] | length')
+        if [[ "$success_count" -gt 0 ]]; then
+            echo "  ✓ Main CI passed on ${sha:0:8}"
+            return 0
+        fi
+
+        running_count=$(ci_push_run_count "$sha" '[.[] | select(.event == "push" and .status != "completed")] | length')
+        failed_count=$(ci_push_run_count "$sha" '[.[] | select(.event == "push" and .status == "completed" and .conclusion != "success")] | length')
+        total_count=$(ci_push_run_count "$sha" '[.[] | select(.event == "push")] | length')
+        if [[ "$failed_count" -gt 0 && "$running_count" -eq 0 && "$total_count" -gt 0 ]]; then
+            echo "  ✗ Main CI failed on ${sha:0:8}"
+            print_ci_runs_for_commit "$sha"
+            echo ""
+            echo "  The release source commit is already on main. Fix main before tagging this version."
+            return 1
+        fi
+
+        sleep 15
+    done
+
+    echo "  ✗ Timed out waiting for main CI on ${sha:0:8}"
+    print_ci_runs_for_commit "$sha"
+    return 1
 }
 
 while [[ $# -gt 0 ]]; do
@@ -138,7 +193,7 @@ LOCAL_SHA=$(git rev-parse HEAD)
 REMOTE_SHA=$(git rev-parse origin/main)
 if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
     echo "Error: HEAD ($LOCAL_SHA) is not at origin/main ($REMOTE_SHA)"
-    echo "  git pull origin main   # or: git reset --hard origin/main"
+    echo "  git pull --ff-only origin main"
     exit 1
 fi
 
@@ -208,7 +263,7 @@ if [[ "$RUN_TESTS" == false ]]; then
     if [[ -z "$CI_RUN_ID" || "$CI_RUN_ID" == "null" ]]; then
         echo "Error: no CI run found after 20 minutes"
         echo "  Check: https://github.com/$BUTTONHEIST_GITHUB_REPO/actions"
-        echo "  Or run with --full to test locally before the tag-level release guardrail"
+        echo "  Or run with --full to test locally before the main CI release gate"
         exit 1
     fi
     if ! gh run watch "$CI_RUN_ID" --repo "$BUTTONHEIST_GITHUB_REPO" --exit-status; then
@@ -266,16 +321,18 @@ if [[ "$DRY_RUN" == true ]]; then
     if [[ "$RUN_TESTS" == true ]]; then
         echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
     else
-        echo "  3. (local tests skipped — release workflow reruns full guardrails on the tag. Use --full for local preflight)"
+        echo "  3. (local tests skipped — main CI gates the exact release commit. Use --full for local preflight)"
     fi
     if [[ "$TAG_CURRENT" == true ]]; then
-        echo "  4. Tag current HEAD as v$NEW_VERSION and push the tag"
+        echo "  4. Verify main CI is green on current HEAD"
+        echo "  5. Tag current HEAD as v$NEW_VERSION and push the tag"
     else
-        echo "  4. Rebase, commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push tag"
+        echo "  4. Rebase, commit 'Release $NEW_VERSION', and push the source commit to main"
+        echo "  5. Wait for main CI on the exact release commit"
+        echo "  6. Tag the green release commit as v$NEW_VERSION and push the tag"
     fi
-    echo "  5. Wait for tag-level release workflow guardrails"
-    echo "  6. On success: publish source to main and upgrade Homebrew"
-    echo "     On tag workflow failure: delete tag and remove the local release commit"
+    echo "  7. Wait for release workflow packaging and Homebrew publishing"
+    echo "     On release workflow failure: delete tag and keep main fix-forward"
     echo ""
     echo "Smallest local release-readiness preflight:"
     echo "  ./scripts/release-readiness.sh"
@@ -440,17 +497,19 @@ if [[ "$RUN_TESTS" == true ]]; then
 fi
 
 # --------------------------------------------------------------------------
-# Phase 5: Commit, tag, push tag
+# Phase 5: Commit, push source, wait for CI, tag
 # --------------------------------------------------------------------------
 
 if [[ "$TAG_CURRENT" == true ]]; then
-    echo "==> Phase 5: Tagging current release"
+    echo "==> Phase 5: Verifying and tagging current release"
     "$SCRIPT_DIR/validate-release-contract.sh"
+    RELEASE_SHA=$(git rev-parse HEAD)
+    wait_for_ci_success "$RELEASE_SHA" "current release source"
     git tag "v$NEW_VERSION"
     git push origin "v$NEW_VERSION"
-    echo "  ✓ Tagged current HEAD as v$NEW_VERSION and pushed"
+    echo "  ✓ Tagged green HEAD as v$NEW_VERSION and pushed"
 else
-    echo "==> Phase 5: Committing and tagging"
+    echo "==> Phase 5: Committing release source"
 
     # Regenerate right before commit so the pre-commit hook's tuist generate
     # produces identical output (build artifacts can shift cache state)
@@ -463,30 +522,33 @@ else
         -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme'
 
     git commit -m "Release $NEW_VERSION"
-    git tag "v$NEW_VERSION"
 
     # Rebase onto latest origin to avoid push rejection if main moved
     git fetch origin main --quiet
     if [[ "$(git rev-parse origin/main)" != "$(git rev-parse HEAD~1)" ]]; then
         echo "  Origin moved during release — rebasing..."
-        git tag -d "v$NEW_VERSION"
         git rebase origin/main
-        git tag "v$NEW_VERSION"
         echo "  ✓ Rebased onto latest origin/main"
     fi
-
-    git push origin "v$NEW_VERSION"
 
     # Version bump is committed — disable the cleanup trap
     trap - EXIT
 
-    echo "  ✓ Committed locally, tagged v$NEW_VERSION, pushed tag"
-    echo "  Source commit will be pushed to main after the tag-level release workflow passes."
+    RELEASE_SHA=$(git rev-parse HEAD)
+    echo "  Publishing release source commit to main..."
+    git push origin HEAD:main
+    echo "  ✓ Published release source commit ${RELEASE_SHA:0:8} to main"
+
+    wait_for_ci_success "$RELEASE_SHA" "release source"
+
+    git tag "v$NEW_VERSION"
+    git push origin "v$NEW_VERSION"
+    echo "  ✓ Tagged green release commit as v$NEW_VERSION and pushed"
 fi
 echo ""
 
 # --------------------------------------------------------------------------
-# Phase 6: Wait for tag workflow, publish source, and upgrade Homebrew
+# Phase 6: Wait for tag workflow and upgrade Homebrew
 # --------------------------------------------------------------------------
 
 echo "==> Phase 6: Waiting for release workflow"
@@ -523,24 +585,6 @@ else
     if gh run watch "$RUN_ID" --repo "$BUTTONHEIST_GITHUB_REPO" --exit-status; then
         echo ""
         echo "  ✓ Release workflow passed"
-        if [[ "$TAG_CURRENT" == false ]]; then
-            echo "  Publishing release source commit to main..."
-            git fetch origin main --quiet
-            if git merge-base --is-ancestor origin/main HEAD; then
-                git push origin HEAD:main
-                echo "  ✓ Published source commit to main"
-            else
-                cat >&2 <<EOF
-  ✗ Publish follow-up required: tag workflow passed and artifacts were published,
-    but origin/main moved before the release source commit could be fast-forwarded.
-
-  Do not delete v$NEW_VERSION and do not rerun the release. Re-apply the release
-  source changes onto current main and push them, or cut a follow-up patch if the
-  rebase changes release behavior.
-EOF
-                exit 1
-            fi
-        fi
         if command -v brew &>/dev/null && brew list royalpineapple/tap/buttonheist &>/dev/null; then
             echo "  Upgrading Homebrew..."
             brew update --quiet
@@ -555,35 +599,20 @@ EOF
         fi
     else
         echo ""
-        echo "  ✗ Tag workflow failed — rolling back unpublished release source"
+        echo "  ✗ Release workflow failed — deleting release tag"
         echo ""
 
-        # Delete remote and local tag
         git push origin --delete "v$NEW_VERSION" 2>/dev/null || true
         git tag -d "v$NEW_VERSION" 2>/dev/null || true
         echo "  ✓ Deleted tag v$NEW_VERSION"
-
-        if [[ "$TAG_CURRENT" == true ]]; then
-            echo "  ✓ Current source version was pre-existing; no release commit to revert"
-        else
-            # Remove the local version bump commit, but only if HEAD is actually the release commit.
-            # The commit has not been pushed to main yet, so failed attempts do not leave
-            # public release/revert churn.
-            RELEASE_MSG="Release $NEW_VERSION"
-            if [[ "$(git log -1 --format=%s)" == "$RELEASE_MSG" ]]; then
-                git reset --hard HEAD~1
-                echo "  ✓ Removed local release commit"
-            else
-                echo "  ⚠ HEAD is not the local release commit — skipping reset (manual cleanup needed)"
-            fi
-        fi
 
         # Delete the failed GitHub release if one was created
         gh release delete "v$NEW_VERSION" --repo "$BUTTONHEIST_GITHUB_REPO" --yes 2>/dev/null || true
         echo "  ✓ Cleaned up GitHub release"
 
         echo ""
-        echo "  Tag workflow failure rolled back. Fix the issue and re-run the same version:"
+        echo "  Release workflow failure rolled back at the tag boundary."
+        echo "  The release source commit remains on main; fix forward and re-run the same version:"
         if [[ "$TAG_CURRENT" == true ]]; then
             echo "    ./scripts/release.sh --tag-current"
         else
