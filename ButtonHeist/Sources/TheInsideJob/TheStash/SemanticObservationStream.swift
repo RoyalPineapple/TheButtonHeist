@@ -92,6 +92,10 @@ final class SemanticObservationStream {
         settledWaiters.count
     }
 
+    var cycleWaiterCount: Int {
+        cycles.waiterCount
+    }
+
     var activeObservationDemandCount: Int {
         scopePressure.activeDemandCount
     }

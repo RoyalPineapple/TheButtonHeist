@@ -160,12 +160,8 @@ public final class TheFence {
         let parsed: ParsedRequest
         do {
             parsed = try parseRequest(command: command, arguments: arguments)
-        } catch let error as SchemaValidationError {
-            return .error(error.message)
-        } catch let error as MissingElementTarget {
-            return missingElementTargetResponse(command: error.command)
-        } catch let error as FenceError {
-            return .error(error.coreMessage, details: error.failureDetails)
+        } catch {
+            return .failure(error)
         }
         return try await execute(parsed: parsed)
     }

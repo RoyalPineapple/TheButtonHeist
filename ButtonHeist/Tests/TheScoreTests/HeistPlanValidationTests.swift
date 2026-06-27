@@ -386,6 +386,62 @@ func runtimeSafetyEnforcesBounds() throws {
 }
 
 @Test
+func runtimeSafetyRejectsPredicateContractsThatDecodingRejects() throws {
+    let cases: [(String, HeistPlanAdmissionCandidate, AccessibilityPredicateContract.Violation)] = [
+        (
+            "concrete empty state all",
+            HeistPlanAdmissionCandidate(body: [
+                .wait(WaitStep(predicate: .predicate(.state(.all([]))), timeout: 0)),
+            ]),
+            .emptyStateAll
+        ),
+        (
+            "expression empty state all",
+            HeistPlanAdmissionCandidate(body: [
+                .wait(WaitStep(predicate: .state(.all([])), timeout: 0)),
+            ]),
+            .emptyStateAll
+        ),
+        (
+            "concrete empty change all",
+            HeistPlanAdmissionCandidate(body: [
+                .wait(WaitStep(predicate: .predicate(AccessibilityPredicate.change(.allScopes([]))), timeout: 0)),
+            ]),
+            .emptyChangeAllScope
+        ),
+        (
+            "expression empty change all",
+            HeistPlanAdmissionCandidate(body: [
+                .wait(WaitStep(predicate: .changePredicate(.allScopes([])), timeout: 0)),
+            ]),
+            .emptyChangeAllScope
+        ),
+        (
+            "concrete nested any change",
+            HeistPlanAdmissionCandidate(body: [
+                .wait(WaitStep(predicate: .predicate(AccessibilityPredicate.change(.allScopes([.any]))), timeout: 0)),
+            ]),
+            .unsupportedAnyChangeScope
+        ),
+        (
+            "expression nested any change",
+            HeistPlanAdmissionCandidate(body: [
+                .wait(WaitStep(predicate: .changePredicate(.allScopes([.any])), timeout: 0)),
+            ]),
+            .unsupportedAnyChangeScope
+        ),
+    ]
+
+    for (label, raw, violation) in cases {
+        let failures = runtimeSafetyFailures(for: raw)
+        #expect(
+            failures.contains { $0.contract == violation.contract && $0.observed == violation.observed },
+            "\(label): \(failures)"
+        )
+    }
+}
+
+@Test
 func runtimeSafetyRejectsNestedStepDepthWithPreciseDiagnostic() throws {
     let raw = HeistPlanAdmissionCandidate(body: [
         .conditional(try ConditionalStep(cases: [

@@ -430,9 +430,7 @@ enum PredicateObservationDiagnostics {
         observedSequence: SettledObservationSequence? = nil,
         observationSummary receiptObservationSummary: String? = nil
     ) -> HeistWaitReceipt {
-        var builder = ActionResultBuilder(method: .wait)
-        builder.accessibilityTrace = trace
-        builder.message = success
+        let message = success
             ? waitSuccessMessage(for: step.predicate, elapsed: elapsed)
             : waitTimeoutMessage(
                 for: step,
@@ -442,15 +440,15 @@ enum PredicateObservationDiagnostics {
                 presenceTimeoutMessage: presenceTimeoutMessage,
                 settledDiagnostics: settledDiagnostics
             )
-
-        let actionResult = success
-            ? builder.success()
-            : builder.failure(errorKind: .timeout)
         return HeistWaitReceipt(
-            actionResult: actionResult,
-            expectation: expectation,
-            observedSequence: observedSequence,
-            observationSummary: receiptObservationSummary
+            waitOutcome: HeistWaitOutcome(
+                status: success ? .matched : .timedOut,
+                message: message,
+                accessibilityTrace: trace,
+                expectation: expectation,
+                observedSequence: observedSequence,
+                observationSummary: receiptObservationSummary
+            )
         )
     }
 

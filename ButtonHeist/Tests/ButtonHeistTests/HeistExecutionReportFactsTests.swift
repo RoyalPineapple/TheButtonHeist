@@ -174,6 +174,51 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.outputReceiptNodes.count, 2)
     }
 
+    func testReportFailureFactsDeriveFromTypedOutcome() {
+        let predicate = AccessibilityPredicate.change(.screen())
+        let failure = HeistFailureDetail(
+            category: .expectation,
+            contract: "action expectation is met",
+            observed: "screen did not change",
+            expected: predicate.description
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    path: "$.body[0]",
+                    kind: .action,
+                    status: .failed,
+                    durationMs: 5,
+                    intent: .action(command: "activate", target: "label=Pay"),
+                    evidence: .action(HeistActionEvidence(
+                        command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
+                        actionResult: ActionResult(success: true, method: .activate),
+                        expectation: ExpectationResult(
+                            met: false,
+                            predicate: predicate,
+                            actual: "screen did not change"
+                        )
+                    )),
+                    failure: failure
+                ),
+            ],
+            durationMs: 5,
+            abortedAtPath: "$.body[0]"
+        )
+
+        let node = result.steps[0]
+        XCTAssertTrue(result.isFailure)
+        XCTAssertEqual(result.failedStepPath, "$.body[0]")
+        XCTAssertEqual(node.reportStatus, .failed)
+        XCTAssertEqual(node.reportMessage, "screen did not change")
+        XCTAssertEqual(node.reportFailureMessage, "screen did not change")
+        XCTAssertEqual(node.reportActionResult?.success, true)
+        guard case .failed(let outcome) = node.outcome else {
+            return XCTFail("Expected failed typed outcome")
+        }
+        XCTAssertEqual(outcome.failure, failure)
+    }
+
     func testConditionalSelectedCaseKeepsOnlySelectedChildren() {
         let result = HeistExecutionResult(
             steps: [

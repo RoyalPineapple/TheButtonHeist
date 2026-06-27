@@ -15,6 +15,11 @@ func writeOutput(_ message: String) {
     fflush(stdout)
 }
 
+/// Write binary data to stdout.
+func writeBinaryOutput(_ data: Data) {
+    FileHandle.standardOutput.write(data)
+}
+
 // MARK: - JSON Array Loading
 
 /// Parse a JSON array from either an inline string or a file path.
@@ -52,7 +57,14 @@ func loadJSONArray(
 
 private func parseJSONArray(from data: Data, source: String) throws -> [HeistValue] {
     do {
-        return try JSONDecoder().decode([HeistValue].self, from: data)
+        return try PublicJSONInputDecoder.decode(
+            [HeistValue].self,
+            from: data,
+            root: .array,
+            context: source
+        )
+    } catch let error as PublicAdapterInputError {
+        throw ValidationError(error.message)
     } catch {
         throw ValidationError("\(source) is not valid JSON: \(error.localizedDescription)")
     }
@@ -87,7 +99,14 @@ func loadJSONObject(
 
 private func parseJSONObject(from data: Data, source: String) throws -> [String: HeistValue] {
     do {
-        return try JSONDecoder().decode([String: HeistValue].self, from: data)
+        return try PublicJSONInputDecoder.decode(
+            [String: HeistValue].self,
+            from: data,
+            root: .object,
+            context: source
+        )
+    } catch let error as PublicAdapterInputError {
+        throw ValidationError(error.message)
     } catch {
         throw ValidationError("\(source) is not valid JSON object: \(error.localizedDescription)")
     }

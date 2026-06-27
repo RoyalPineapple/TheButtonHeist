@@ -186,20 +186,22 @@ final class TheMuscleTests: XCTestCase {
             tlsActive: true
         )
 
-        let data = await muscle.encodeEnvelope(.info(payload), requestId: "bad-info")
+        let result = await muscle.encodeEnvelope(.info(payload), requestId: "bad-info")
 
-        XCTAssertNil(
-            data,
-            "Encoding failure should fail closed instead of synthesizing a different response shape"
-        )
+        guard case .failure(let failure) = result else {
+            return XCTFail("Encoding failure should fail closed instead of synthesizing a different response shape")
+        }
+        XCTAssertEqual(failure.requestId, "bad-info")
     }
 
     func testExplicitErrorEnvelopeStillEncodes() async throws {
-        let encoded = await muscle.encodeEnvelope(
+        let result = await muscle.encodeEnvelope(
             .error(ServerError(kind: .general, message: "Explicit failure")),
             requestId: "explicit-error"
         )
-        let data = try XCTUnwrap(encoded)
+        guard case .success(let data) = result else {
+            return XCTFail("Expected explicit error envelope to encode, got \(result)")
+        }
 
         let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
         XCTAssertEqual(envelope.requestId, "explicit-error")
@@ -208,6 +210,43 @@ final class TheMuscleTests: XCTestCase {
         }
         XCTAssertEqual(error.kind, .general)
         XCTAssertEqual(error.message, "Explicit failure")
+    }
+
+    func testServerHelloResponseEnvelopeKeepsStableWireShape() async throws {
+        let result = await muscle.sendServerHello(clientId: 7)
+
+        XCTAssertEqual(result, .delivered)
+        let sent = try XCTUnwrap(sentMessages.first)
+        XCTAssertEqual(sent.clientId, 7)
+        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: sent.data)
+        XCTAssertNil(envelope.requestId)
+        guard case .serverHello = envelope.message else {
+            return XCTFail("Expected serverHello envelope, got \(envelope.message)")
+        }
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: sent.data) as? [String: Any])
+        XCTAssertEqual(object["type"] as? String, ServerWireMessageType.serverHello.rawValue)
+        XCTAssertNil(object["payload"])
+        XCTAssertEqual(object["buttonHeistVersion"] as? String, buttonHeistVersion)
+    }
+
+    func testAdmissionFailureResponseEnvelopeKeepsStableWireShape() async throws {
+        let (respond, responses) = collectResponses()
+        let data = try JSONEncoder().encode(RequestEnvelope(requestId: "unauth-ping", message: .ping))
+
+        _ = await muscle.admitClientMessage(1, data: data, respond: respond)
+
+        let response = try XCTUnwrap(responses().first)
+        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: response)
+        XCTAssertEqual(envelope.requestId, "unauth-ping")
+        guard case .error(let error) = envelope.message else {
+            return XCTFail("Expected error envelope, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .authFailure)
+        XCTAssertEqual(error.message, "Authentication required before ping.")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: response) as? [String: Any])
+        XCTAssertEqual(object["type"] as? String, ServerWireMessageType.error.rawValue)
+        XCTAssertNotNil(object["payload"])
+        XCTAssertEqual(object["buttonHeistVersion"] as? String, buttonHeistVersion)
     }
 
     // MARK: - Auth Flow Tests

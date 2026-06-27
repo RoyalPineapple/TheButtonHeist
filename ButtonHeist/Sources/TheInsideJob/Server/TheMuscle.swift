@@ -118,11 +118,8 @@ actor TheMuscle {
     }
 
     @discardableResult
-    func sendServerHello(clientId: Int) async -> ServerSendOutcome {
-        guard let data = encodeEnvelope(.serverHello) else {
-            return .failed(.transportFailed(clientId: clientId, message: "Failed to encode serverHello"))
-        }
-        return await delivery.send(data, toClient: clientId)
+    func sendServerHello(clientId: Int) async -> ResponseDeliveryResult {
+        await sendResponse(.serverHello, to: .client(clientId))
     }
 
     /// Called when a ping is received from an authenticated client.
@@ -204,11 +201,9 @@ actor TheMuscle {
         for output in effect.outputs {
             switch output {
             case .response(let message, let requestId, let respond):
-                sendMessage(message, requestId: requestId, respond: respond)
+                await sendResponse(message, requestId: requestId, to: .response(respond))
             case .client(let message, let requestId, let clientId):
-                if let data = encodeEnvelope(message, requestId: requestId) {
-                    _ = await delivery.send(data, toClient: clientId)
-                }
+                await sendResponse(message, requestId: requestId, to: .client(clientId))
             }
         }
 
@@ -295,22 +290,63 @@ actor TheMuscle {
 
     // MARK: - Helpers
 
-    func encodeEnvelope(_ message: ServerMessage, requestId: String? = nil) -> Data? {
-        do {
-            return try ResponseEnvelope(requestId: requestId, message: message).encoded()
-        } catch {
-            muscleLogger.error("Failed to encode message: \(error)")
-            return nil
+    func encodeEnvelope(
+        _ message: ServerMessage,
+        requestId: String? = nil
+    ) -> Result<Data, ResponseEncodingFailure> {
+        ResponseEnvelopeDelivery.encodeEnvelope(message, requestId: requestId)
+    }
+
+    private enum ResponseDestination: Sendable {
+        case response(TheMuscleAdmission.ResponseHandler)
+        case client(Int)
+    }
+
+    @discardableResult
+    private func sendResponse(
+        _ message: ServerMessage,
+        requestId: String? = nil,
+        to destination: ResponseDestination
+    ) async -> ResponseDeliveryResult {
+        let result: ResponseDeliveryResult
+        switch destination {
+        case .response(let respond):
+            result = ResponseEnvelopeDelivery.sendMessage(message, requestId: requestId, respond: respond)
+
+        case .client(let clientId):
+            result = await sendResponseToClient(message, requestId: requestId, clientId: clientId)
+        }
+        logResponseDeliveryResult(result)
+        return result
+    }
+
+    private func sendResponseToClient(
+        _ message: ServerMessage,
+        requestId: String?,
+        clientId: Int
+    ) async -> ResponseDeliveryResult {
+        switch encodeEnvelope(message, requestId: requestId) {
+        case .success(let data):
+            switch await delivery.send(data, toClient: clientId) {
+            case .enqueued:
+                return .delivered
+            case .failed(let failure):
+                return ResponseDeliveryResult(clientId: clientId, sendFailure: failure)
+            }
+
+        case .failure(let failure):
+            return .failed(.responseEncodingFailed(failure))
         }
     }
 
-    private func sendMessage(
-        _ message: ServerMessage,
-        requestId: String? = nil,
-        respond: @escaping @Sendable (Data) -> Void
-    ) {
-        if let data = encodeEnvelope(message, requestId: requestId) {
-            respond(data)
+    private func logResponseDeliveryResult(_ result: ResponseDeliveryResult) {
+        switch result {
+        case .delivered:
+            break
+        case .refused(let failure), .failed(let failure):
+            muscleLogger.error("\(failure.description)")
+        case .transportUnavailable:
+            muscleLogger.error("\(result.description)")
         }
     }
 }

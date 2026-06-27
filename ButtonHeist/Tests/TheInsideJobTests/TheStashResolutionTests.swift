@@ -770,6 +770,71 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNil(observation)
     }
 
+    func testCancelledSettledObservationWaiterUnregisters() async {
+        let waiter = Task { @MainActor in
+            await bagman.observeSettledSemanticObservation(scope: .visible, after: nil, timeout: 10)
+        }
+
+        for _ in 0..<20 where bagman.semanticObservationStream.settledWaiterCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
+
+        waiter.cancel()
+        for _ in 0..<20 where bagman.semanticObservationStream.settledWaiterCount != 0 {
+            await Task.yield()
+        }
+
+        let observation = await waiter.value
+        XCTAssertNil(observation)
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 0)
+
+        let late = Screen.makeForTests(elements: [(element(label: "Late"), "late")])
+        bagman.semanticObservationStream.commitSettledVisibleObservation(late)
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 0)
+    }
+
+    func testCancelledObservationCycleWaiterUnregisters() async {
+        var discoveryContinuation: CheckedContinuation<Void, Never>?
+        var discoveryScreen: Screen?
+        func resumeDiscovery(returning screen: Screen?) {
+            discoveryScreen = screen
+            let continuation = discoveryContinuation
+            discoveryContinuation = nil
+            continuation?.resume()
+        }
+
+        bagman.startPassiveSemanticObservation {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                discoveryContinuation = continuation
+            }
+            let screen = discoveryScreen
+            discoveryScreen = nil
+            return screen
+        }
+        defer { resumeDiscovery(returning: nil) }
+
+        let waiter = Task { @MainActor in
+            await bagman.observeSettledSemanticObservation(scope: .discovery, after: nil, timeout: 0)
+        }
+
+        for _ in 0..<20 where bagman.semanticObservationStream.cycleWaiterCount == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(bagman.semanticObservationStream.cycleWaiterCount, 1)
+
+        waiter.cancel()
+        for _ in 0..<20 where bagman.semanticObservationStream.cycleWaiterCount != 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(bagman.semanticObservationStream.cycleWaiterCount, 0)
+
+        resumeDiscovery(returning: Screen.makeForTests(elements: [(element(label: "Discovery"), "discovery")]))
+        let observation = await waiter.value
+        XCTAssertNil(observation)
+        XCTAssertEqual(bagman.semanticObservationStream.cycleWaiterCount, 0)
+    }
+
     func testContainerTargetResolutionUsesCommittedSemanticContainers() {
         let path = TreePath([0, 1])
         let container = AccessibilityContainer(

@@ -65,19 +65,303 @@ public enum AccessibilityPredicate: Sendable, Equatable {
     }
 }
 
-// MARK: - Codable
+// MARK: - Predicate Contract
 
-extension AccessibilityPredicate: Codable {
-    private enum WireType: String, CaseIterable {
+/// Shared contract that binds predicate wire discriminators to runtime semantics.
+public enum AccessibilityPredicateContract: Sendable, Equatable {
+    case state(State)
+    case change(Change)
+    case noChange
+
+    public enum PredicateWireType: String, CaseIterable, Sendable {
         case exists
         case missing
         case all
         case noChange = "no_change"
         case change
+
+        public static var values: [String] {
+            allCases.map(\.rawValue)
+        }
+
+        public static var validDescription: String {
+            values.joined(separator: ", ")
+        }
     }
 
+    public enum StateWireType: String, CaseIterable, Sendable {
+        case exists
+        case missing
+        case all
+
+        public static var values: [String] {
+            allCases.map(\.rawValue)
+        }
+
+        public static var validDescription: String {
+            values.joined(separator: ", ")
+        }
+
+        public var predicateWireType: PredicateWireType {
+            switch self {
+            case .exists:
+                return .exists
+            case .missing:
+                return .missing
+            case .all:
+                return .all
+            }
+        }
+    }
+
+    public enum ChangeScopeWireType: String, CaseIterable, Sendable {
+        case screen
+        case elements
+        case all
+
+        public static var values: [String] {
+            allCases.map(\.rawValue)
+        }
+
+        public static var validDescription: String {
+            values.joined(separator: ", ")
+        }
+    }
+
+    public enum PresenceRequirement: Sendable, Equatable {
+        case present
+        case absent
+
+        public var stateWireType: StateWireType {
+            switch self {
+            case .present:
+                return .exists
+            case .absent:
+                return .missing
+            }
+        }
+
+        public func isMet(isPresent: Bool) -> Bool {
+            switch self {
+            case .present:
+                return isPresent
+            case .absent:
+                return !isPresent
+            }
+        }
+
+        public func failureDescription(for predicate: ElementPredicate) -> String {
+            switch self {
+            case .present:
+                return "no element matches \(predicate)"
+            case .absent:
+                return "still present: \(predicate)"
+            }
+        }
+
+        public func failureDescription(for target: ElementTarget) -> String {
+            switch self {
+            case .present:
+                return "target not present: \(target)"
+            case .absent:
+                return "target still present: \(target)"
+            }
+        }
+    }
+
+    public enum State: Sendable, Equatable {
+        case element(PresenceRequirement, ElementPredicate)
+        case target(PresenceRequirement, ElementTarget)
+        case all([AccessibilityPredicate.State])
+
+        public var wireType: StateWireType {
+            switch self {
+            case .element(let requirement, _), .target(let requirement, _):
+                return requirement.stateWireType
+            case .all:
+                return .all
+            }
+        }
+
+        public var violation: Violation? {
+            switch self {
+            case .element, .target:
+                return nil
+            case .all(let states):
+                guard !states.isEmpty else { return .emptyStateAll }
+                return states.lazy.compactMap { $0.contract.violation }.first
+            }
+        }
+    }
+
+    public enum Change: Sendable, Equatable {
+        case any
+        case screen([AccessibilityPredicate.State])
+        case elements([ElementDeltaPredicate])
+        case all([AccessibilityPredicate.Change])
+
+        public func violation(in placement: ChangePlacement) -> Violation? {
+            switch self {
+            case .any:
+                return placement == .scope ? .unsupportedAnyChangeScope : nil
+            case .screen(let states):
+                return states.lazy.compactMap { $0.contract.violation }.first
+            case .elements:
+                return nil
+            case .all(let changes):
+                guard !changes.isEmpty else { return .emptyChangeAllScope }
+                return changes.lazy.compactMap { $0.contract.violation(in: .scope) }.first
+            }
+        }
+    }
+
+    public enum ChangePlacement: Sendable, Equatable {
+        case predicateRoot
+        case scope
+    }
+
+    public enum Violation: Sendable, Equatable, CustomStringConvertible {
+        case emptyStateAll
+        case emptyChangeAllScope
+        case unsupportedAnyChangeScope
+
+        public var contract: String {
+            switch self {
+            case .emptyStateAll:
+                return "non-empty state .all predicate"
+            case .emptyChangeAllScope:
+                return "non-empty change .all scope"
+            case .unsupportedAnyChangeScope:
+                return "supported change scope"
+            }
+        }
+
+        public var observed: String {
+            switch self {
+            case .emptyStateAll:
+                return "0 child states"
+            case .emptyChangeAllScope:
+                return "0 child scopes"
+            case .unsupportedAnyChangeScope:
+                return "any change used as a nested change scope"
+            }
+        }
+
+        public var correction: String {
+            switch self {
+            case .emptyStateAll:
+                return "Provide at least one child state predicate."
+            case .emptyChangeAllScope:
+                return "Provide at least one child change scope or use .change() for any semantic change."
+            case .unsupportedAnyChangeScope:
+                return "Use .change() at the predicate root, or replace the nested scope with screen/elements/all."
+            }
+        }
+
+        public var decodingDescription: String {
+            switch self {
+            case .emptyStateAll:
+                return "all predicate requires at least one child state"
+            case .emptyChangeAllScope:
+                return "all change scope requires at least one child scope"
+            case .unsupportedAnyChangeScope:
+                return "any change is only supported at the predicate root"
+            }
+        }
+
+        public var encodingDescription: String {
+            decodingDescription
+        }
+
+        public var evaluationDescription: String {
+            switch self {
+            case .emptyStateAll:
+                return "all predicate has no child states"
+            case .emptyChangeAllScope:
+                return "all change scope has no child scopes"
+            case .unsupportedAnyChangeScope:
+                return "any change is only supported at the predicate root"
+            }
+        }
+
+        public var description: String {
+            "\(contract): \(observed)"
+        }
+    }
+
+    public var predicateWireType: PredicateWireType {
+        switch self {
+        case .state(let state):
+            return state.wireType.predicateWireType
+        case .change:
+            return .change
+        case .noChange:
+            return .noChange
+        }
+    }
+
+    public var violation: Violation? {
+        switch self {
+        case .state(let state):
+            return state.violation
+        case .change(let change):
+            return change.violation(in: .predicateRoot)
+        case .noChange:
+            return nil
+        }
+    }
+}
+
+public extension AccessibilityPredicate {
+    var contract: AccessibilityPredicateContract {
+        switch self {
+        case .state(let state):
+            return .state(state.contract)
+        case .changePredicate(let change):
+            return .change(change.contract)
+        case .noChangePredicate:
+            return .noChange
+        }
+    }
+}
+
+public extension AccessibilityPredicate.State {
+    var contract: AccessibilityPredicateContract.State {
+        switch self {
+        case .exists(let predicate):
+            return .element(.present, predicate)
+        case .missing(let predicate):
+            return .element(.absent, predicate)
+        case .existsTarget(let target):
+            return .target(.present, target)
+        case .missingTarget(let target):
+            return .target(.absent, target)
+        case .all(let states):
+            return .all(states)
+        }
+    }
+}
+
+public extension AccessibilityPredicate.Change {
+    var contract: AccessibilityPredicateContract.Change {
+        switch self {
+        case .any:
+            return .any
+        case .screenScope(let assertions):
+            return .screen(assertions)
+        case .elementsScope(let assertions):
+            return .elements(assertions)
+        case .allScopes(let changes):
+            return .all(changes)
+        }
+    }
+}
+
+// MARK: - Codable
+
+extension AccessibilityPredicate: Codable {
     /// Discriminator strings accepted in object-form predicate payloads.
-    public static let wireTypeValues: [String] = WireType.allCases.map(\.rawValue)
+    public static let wireTypeValues: [String] = AccessibilityPredicateContract.PredicateWireType.values
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type, scopes
@@ -86,11 +370,11 @@ extension AccessibilityPredicate: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
-        guard let wireType = WireType(rawValue: typeString) else {
+        guard let wireType = AccessibilityPredicateContract.PredicateWireType(rawValue: typeString) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
-                debugDescription: "Unknown predicate type: \"\(typeString)\". Valid: \(Self.wireTypeValues.joined(separator: ", "))"
+                debugDescription: "Unknown predicate type: \"\(typeString)\". Valid: \(AccessibilityPredicateContract.PredicateWireType.validDescription)"
             )
         }
         switch wireType {
@@ -107,19 +391,26 @@ extension AccessibilityPredicate: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
+        let predicateContract = contract
+        if let violation = predicateContract.violation {
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(codingPath: encoder.codingPath, debugDescription: violation.encodingDescription)
+            )
+        }
         switch self {
         case .state(let stateClause):
             try stateClause.encode(to: encoder)
         case .changePredicate(let change):
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(WireType.change.rawValue, forKey: .type)
+            try container.encode(predicateContract.predicateWireType.rawValue, forKey: .type)
             let scopes = Self.flatten(change)
             if !scopes.isEmpty {
                 try container.encode(scopes, forKey: .scopes)
             }
         case .noChangePredicate:
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(WireType.noChange.rawValue, forKey: .type)
+            try container.encode(predicateContract.predicateWireType.rawValue, forKey: .type)
         }
     }
 
@@ -150,12 +441,6 @@ extension AccessibilityPredicate: Codable {
 // MARK: - State Codable
 
 extension AccessibilityPredicate.State: Codable {
-    private enum WireType: String {
-        case exists
-        case missing
-        case all
-    }
-
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type, element, target, states
     }
@@ -163,11 +448,11 @@ extension AccessibilityPredicate.State: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
-        guard let wireType = WireType(rawValue: typeString) else {
+        guard let wireType = AccessibilityPredicateContract.StateWireType(rawValue: typeString) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
-                debugDescription: "Unknown state predicate type: \"\(typeString)\". Valid: exists, missing, all"
+                debugDescription: "Unknown state predicate type: \"\(typeString)\". Valid: \(AccessibilityPredicateContract.StateWireType.validDescription)"
             )
         }
         switch wireType {
@@ -194,7 +479,7 @@ extension AccessibilityPredicate.State: Codable {
                 throw DecodingError.dataCorruptedError(
                     forKey: .states,
                     in: container,
-                    debugDescription: "all predicate requires at least one child state"
+                    debugDescription: AccessibilityPredicateContract.Violation.emptyStateAll.decodingDescription
                 )
             }
             self = .all(states)
@@ -202,22 +487,22 @@ extension AccessibilityPredicate.State: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
+        if let violation = contract.violation {
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(codingPath: encoder.codingPath, debugDescription: violation.encodingDescription)
+            )
+        }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .exists(let predicate):
-            try container.encode(WireType.exists.rawValue, forKey: .type)
+        switch contract {
+        case .element(let requirement, let predicate):
+            try container.encode(requirement.stateWireType.rawValue, forKey: .type)
             try container.encode(predicate, forKey: .element)
-        case .missing(let predicate):
-            try container.encode(WireType.missing.rawValue, forKey: .type)
-            try container.encode(predicate, forKey: .element)
-        case .existsTarget(let target):
-            try container.encode(WireType.exists.rawValue, forKey: .type)
-            try container.encode(target, forKey: .target)
-        case .missingTarget(let target):
-            try container.encode(WireType.missing.rawValue, forKey: .type)
+        case .target(let requirement, let target):
+            try container.encode(requirement.stateWireType.rawValue, forKey: .type)
             try container.encode(target, forKey: .target)
         case .all(let states):
-            try container.encode(WireType.all.rawValue, forKey: .type)
+            try container.encode(AccessibilityPredicateContract.StateWireType.all.rawValue, forKey: .type)
             try container.encode(states, forKey: .states)
         }
     }
@@ -256,12 +541,6 @@ extension AccessibilityPredicate.State: Codable {
 // MARK: - Change Codable
 
 extension AccessibilityPredicate.Change: Codable {
-    private enum WireType: String, CaseIterable {
-        case screen
-        case elements
-        case all
-    }
-
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type, assertions, scopes
     }
@@ -270,11 +549,11 @@ extension AccessibilityPredicate.Change: Codable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "change scope")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeString = try container.decode(String.self, forKey: .type)
-        guard let wireType = WireType(rawValue: typeString) else {
+        guard let wireType = AccessibilityPredicateContract.ChangeScopeWireType(rawValue: typeString) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
-                debugDescription: "Unknown change scope type: \"\(typeString)\". Valid: \(WireType.allCases.map(\.rawValue).joined(separator: ", "))"
+                debugDescription: "Unknown change scope type: \"\(typeString)\". Valid: \(AccessibilityPredicateContract.ChangeScopeWireType.validDescription)"
             )
         }
         switch wireType {
@@ -288,7 +567,7 @@ extension AccessibilityPredicate.Change: Codable {
                 throw DecodingError.dataCorruptedError(
                     forKey: .scopes,
                     in: container,
-                    debugDescription: "all change scope requires at least one child scope"
+                    debugDescription: AccessibilityPredicateContract.Violation.emptyChangeAllScope.decodingDescription
                 )
             }
             self = .allScopes(scopes)
@@ -296,23 +575,34 @@ extension AccessibilityPredicate.Change: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
+        if let violation = contract.violation(in: .scope) {
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(codingPath: encoder.codingPath, debugDescription: violation.encodingDescription)
+            )
+        }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
+        switch contract {
         case .any:
-            try container.encode(WireType.all.rawValue, forKey: .type)
-            try container.encode([AccessibilityPredicate.Change](), forKey: .scopes)
-        case .screenScope(let assertions):
-            try container.encode(WireType.screen.rawValue, forKey: .type)
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(
+                    codingPath: encoder.codingPath,
+                    debugDescription: AccessibilityPredicateContract.Violation.unsupportedAnyChangeScope.encodingDescription
+                )
+            )
+        case .screen(let assertions):
+            try container.encode(AccessibilityPredicateContract.ChangeScopeWireType.screen.rawValue, forKey: .type)
             if !assertions.isEmpty {
                 try container.encode(assertions, forKey: .assertions)
             }
-        case .elementsScope(let assertions):
-            try container.encode(WireType.elements.rawValue, forKey: .type)
+        case .elements(let assertions):
+            try container.encode(AccessibilityPredicateContract.ChangeScopeWireType.elements.rawValue, forKey: .type)
             if !assertions.isEmpty {
                 try container.encode(assertions, forKey: .assertions)
             }
-        case .allScopes(let scopes):
-            try container.encode(WireType.all.rawValue, forKey: .type)
+        case .all(let scopes):
+            try container.encode(AccessibilityPredicateContract.ChangeScopeWireType.all.rawValue, forKey: .type)
             try container.encode(scopes, forKey: .scopes)
         }
     }

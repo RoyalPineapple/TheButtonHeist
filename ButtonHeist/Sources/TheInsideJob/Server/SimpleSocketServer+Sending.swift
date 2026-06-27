@@ -49,7 +49,10 @@ extension SimpleSocketServer {
     private func completedSend(clientId: Int, byteCount: Int, error: NWError?) {
         clientRegistry.completeSend(clientId: clientId, byteCount: byteCount)
         if let error {
-            clientLifecycle.sendFailed(clientId, failure: .transportFailed(clientId: clientId, message: error.localizedDescription))
+            clientLifecycle.sendFailed(
+                clientId,
+                failure: .transportFailed(clientId: clientId, diagnostic: ServerTransportFailure(error))
+            )
         }
     }
 

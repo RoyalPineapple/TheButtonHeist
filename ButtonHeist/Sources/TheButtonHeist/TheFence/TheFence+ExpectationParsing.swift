@@ -184,21 +184,17 @@ extension TheFence {
     /// Parse compact command input into the same typed expectation argument
     /// shape accepted by direct, MCP, batch, and heist request decoding.
     public nonisolated static func parseExpectationArgument(_ rawValue: String) throws -> HeistValue {
-        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.first == "{" else {
-            throw FenceError.invalidRequest("Expected expectation JSON object")
-        }
-
-        let value: HeistValue
         do {
-            value = try JSONDecoder().decode(HeistValue.self, from: Data(trimmed.utf8))
+            return try PublicJSONInputDecoder.decodeHeistValue(
+                from: rawValue,
+                root: .object,
+                context: "Expectation JSON",
+                rootMismatchMessage: "Expected expectation JSON object"
+            )
+        } catch let error as PublicAdapterInputError {
+            throw FenceError.invalidRequest(error.message)
         } catch {
             throw FenceError.invalidRequest("Invalid expectation JSON: \(error.localizedDescription)")
         }
-
-        guard case .object = value else {
-            throw FenceError.invalidRequest("Expected expectation JSON to decode as an object")
-        }
-        return value
     }
 }

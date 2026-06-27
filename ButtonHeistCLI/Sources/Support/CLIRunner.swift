@@ -5,6 +5,26 @@ import ButtonHeist
 /// Shared utility for standalone CLI commands that execute a single TheFence request.
 enum CLIRunner {
 
+    // MARK: - Nested Types
+
+    typealias CommandResultMapper = (FenceResponse) throws -> CommandResult
+
+    enum CommandResult {
+        case response(FenceResponse, format: OutputFormat)
+        case binary(Data)
+
+        var isFailure: Bool {
+            switch self {
+            case .response(let response, _):
+                return response.isFailure
+            case .binary:
+                return false
+            }
+        }
+    }
+
+    // MARK: - Command Execution
+
     /// Execute a single TheFence command, format the response, and signal a non-zero
     /// exit code via `ExitCode.failure` when the action fails.
     ///
@@ -17,8 +37,10 @@ enum CLIRunner {
         format: OutputFormat?,
         command: TheFence.Command,
         arguments: TheFence.CommandArgumentEnvelope,
-        statusMessage: String? = nil
+        statusMessage: String? = nil,
+        result: CommandResultMapper? = nil
     ) async throws {
+        let fallbackFormat = format ?? .auto
         let fence: TheFence
         let response: FenceResponse
         do {
@@ -29,13 +51,24 @@ enum CLIRunner {
                 statusMessage: statusMessage
             )
         } catch {
-            outputResponse(.failure(error), format: format ?? .auto)
+            output(.response(.failure(error), format: fallbackFormat))
             throw ExitCode.failure
         }
         defer { fence.stop() }
 
-        outputResponse(response, format: format ?? .auto)
-        if response.isFailure {
+        let commandResult: CommandResult
+        do {
+            if let result {
+                commandResult = try result(response)
+            } else {
+                commandResult = .response(response, format: fallbackFormat)
+            }
+        } catch {
+            commandResult = .response(.failure(error), format: fallbackFormat)
+        }
+
+        output(commandResult)
+        if commandResult.isFailure {
             throw ExitCode.failure
         }
     }
@@ -89,6 +122,21 @@ enum CLIRunner {
 
     @ButtonHeistActor
     static func outputResponse(_ response: FenceResponse, format: OutputFormat) {
+        output(.response(response, format: format))
+    }
+
+    @ButtonHeistActor
+    static func output(_ result: CommandResult) {
+        switch result {
+        case .response(let response, let format):
+            outputResponsePayload(response, format: format)
+        case .binary(let data):
+            writeBinaryOutput(data)
+        }
+    }
+
+    @ButtonHeistActor
+    private static func outputResponsePayload(_ response: FenceResponse, format: OutputFormat) {
         switch format {
         case .human:
             writeOutput(response.humanFormatted())

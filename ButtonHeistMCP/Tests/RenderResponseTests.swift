@@ -166,6 +166,31 @@ struct RenderResponseTests {
         #expect(!text.contains("heistId"))
     }
 
+    @Test("error render uses canonical public failure mapping")
+    func errorRenderUsesCanonicalPublicFailureMapping() throws {
+        let response = FenceResponse.failure(FenceError.connectionTimeout)
+        let expected = try #require(response.publicFailure)
+
+        let result = ButtonHeistMCPServer.renderResponse(response)
+        let root = try #require(result.structuredContent?.objectValue)
+        let details = try #require(root["details"]?.objectValue)
+
+        #expect(result.isError == true)
+        #expect(root["status"]?.stringValue == "error")
+        #expect(root["message"]?.stringValue == expected.message)
+        #expect(root["code"]?.stringValue == expected.code)
+        #expect(root["kind"]?.stringValue == expected.kind.rawValue)
+        #expect(root["errorCode"]?.stringValue == expected.code)
+        #expect(root["phase"]?.stringValue == expected.details.phase.rawValue)
+        #expect(root["retryable"] == .bool(expected.details.retryable))
+        #expect(root["hint"]?.stringValue == expected.details.hint)
+        #expect(details["code"]?.stringValue == expected.code)
+        #expect(details["kind"]?.stringValue == expected.kind.rawValue)
+        #expect(details["phase"]?.stringValue == expected.details.phase.rawValue)
+        #expect(details["retryable"] == .bool(expected.details.retryable))
+        #expect(details["hint"]?.stringValue == expected.details.hint)
+    }
+
     private static func interfaceFixture() -> Interface {
         var elementAnnotations: [InterfaceElementAnnotation] = []
         let button = AccessibilityElement(

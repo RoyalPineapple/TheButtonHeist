@@ -29,10 +29,7 @@ enum CLIRequestBuilder {
     }
 
     static func parsedRequest(from line: String) throws -> CLIParsedRequest {
-        guard line.hasPrefix("{") else {
-            throw ValidationError("Expected JSON object input")
-        }
-        return try parseMachineRequest(line)
+        try parseMachineRequest(line)
     }
 
     static func parseMachineRequest(_ line: String) throws -> CLIParsedRequest {
@@ -77,9 +74,14 @@ private struct CLIMachineRequestEnvelope: Decodable {
     let arguments: TheFence.CommandArgumentEnvelope
 
     static func decode(from line: String) throws -> Self {
-        try PublicJSONInputPreflight.validateObject(line)
         do {
-            return try JSONDecoder().decode(Self.self, from: Data(line.utf8))
+            return try PublicJSONInputDecoder.decode(
+                Self.self,
+                from: line,
+                root: .object,
+                context: "Public JSON request",
+                rootMismatchMessage: "Expected JSON object input"
+            )
         } catch let error as DecodingError {
             throw CLIRequestBuildError(
                 message: CLIRequestBuilder.diagnosticMessage(for: error),

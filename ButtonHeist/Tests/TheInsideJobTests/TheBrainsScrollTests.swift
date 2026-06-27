@@ -27,6 +27,16 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - Programmatic Scroll Safety
 
+    func testTargetUnavailableScrollFailureMapsToElementNotFoundErrorKind() {
+        let result = TheSafecracker.InteractionResult.failure(
+            .scrollToVisible,
+            message: "element inflation failed [notFound]: missing",
+            failureKind: .targetUnavailable
+        )
+
+        XCTAssertEqual(TheBrains.actionErrorKind(for: result), .elementNotFound)
+    }
+
     func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {
         let windowScene = try requireForegroundWindowScene()
         let pageViewController = UIPageViewController(
@@ -456,6 +466,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .scrollToVisible)
+        XCTAssertEqual(result.failureKind, .targetUnavailable)
         XCTAssertTrue(result.message?.contains("element inflation failed [notFound]") == true)
         XCTAssertTrue(result.message?.contains("No match for") == true)
         XCTAssertTrue(result.message?.contains("Missing Button") == true)
@@ -930,6 +941,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .scroll)
+        XCTAssertEqual(result.failureKind, .targetUnavailable)
         XCTAssertEqual(scrollView.contentOffset, .zero)
         XCTAssertTrue(
             result.message?.contains("known but not currently visible") == true,
@@ -954,6 +966,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .scrollToEdge)
+        XCTAssertEqual(result.failureKind, .targetUnavailable)
         XCTAssertEqual(scrollView.contentOffset, .zero)
         XCTAssertTrue(
             result.message?.contains("known but not currently visible") == true,

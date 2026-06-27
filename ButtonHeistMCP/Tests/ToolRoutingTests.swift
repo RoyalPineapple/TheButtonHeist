@@ -60,6 +60,23 @@ struct ToolRoutingTests {
         #expect(error.message == "Unknown tool: not_a_tool")
     }
 
+    @Test("routing errors map to canonical public failures")
+    func routingErrorsMapToCanonicalPublicFailures() throws {
+        let result = routeToolRequest(name: "not_a_tool")
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected routing failure")
+            return
+        }
+
+        let failure = try #require(FenceResponse.failure(error).publicFailure)
+        #expect(failure.code == "request.invalid")
+        #expect(failure.kind == .request)
+        #expect(failure.message == "Unknown tool: not_a_tool")
+        #expect(failure.details.phase == .request)
+        #expect(failure.details.retryable == false)
+    }
+
     @Test("MCP routes run_heist plan source opaquely")
     func runHeistDoesNotParsePlanSource() throws {
         // The MCP adapter has no knowledge of ButtonHeist plan source parsing. The

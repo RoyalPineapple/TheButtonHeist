@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
+import os
 import TheScore
 
 @MainActor
@@ -8,7 +9,7 @@ final class SemanticObservationSettledWaiters {
     private struct Waiter {
         let scope: SemanticObservationScope
         let afterSequence: SettledObservationSequence?
-        let continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>
+        let continuation: SemanticObservationWaiterContinuation<SettledSemanticObservationEvent?>
         let timeoutTask: Task<Void, Never>?
     }
 
@@ -26,22 +27,38 @@ final class SemanticObservationSettledWaiters {
     ) async -> SettledSemanticObservationEvent? {
         let id = nextID
         nextID += 1
+        let continuationBox = SemanticObservationWaiterContinuation<SettledSemanticObservationEvent?>()
 
-        return await withCheckedContinuation { continuation in
-            let timeoutTask: Task<Void, Never>? = observationWaitTimeout(timeout).map { timeout in
-                Task { [weak self] in
-                    let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
-                    guard await Task.cancellableSleep(for: .nanoseconds(nanoseconds)) else { return }
-                    self?.complete(id, returning: nil)
+        let result: SettledSemanticObservationEvent? = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>) in
+                if Task.isCancelled {
+                    continuation.resume(returning: nil)
+                    return
                 }
+                guard continuationBox.register(continuation) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                let timeoutTask: Task<Void, Never>? = observationWaitTimeout(timeout).map { timeout in
+                    Task { [weak self] in
+                        let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
+                        guard await Task.cancellableSleep(for: .nanoseconds(nanoseconds)) else { return }
+                        self?.complete(id, returning: nil)
+                    }
+                }
+                waitersByID[id] = Waiter(
+                    scope: scope,
+                    afterSequence: afterSequence,
+                    continuation: continuationBox,
+                    timeoutTask: timeoutTask
+                )
             }
-            waitersByID[id] = Waiter(
-                scope: scope,
-                afterSequence: afterSequence,
-                continuation: continuation,
-                timeoutTask: timeoutTask
-            )
+        } onCancel: {
+            continuationBox.resume(returning: nil)
         }
+        complete(id, returning: nil)
+        return result
     }
 
     func completeAll(returning event: SettledSemanticObservationEvent?) {
@@ -68,6 +85,34 @@ final class SemanticObservationSettledWaiters {
         guard let timeout else { return nil }
         guard timeout > 0 else { return nil }
         return timeout
+    }
+}
+
+struct SemanticObservationWaiterContinuation<Value: Sendable> {
+    private struct State {
+        var continuation: CheckedContinuation<Value, Never>?
+        var didResume = false
+    }
+
+    private let lock = OSAllocatedUnfairLock(initialState: State())
+
+    func register(_ continuation: CheckedContinuation<Value, Never>) -> Bool {
+        lock.withLock { state -> Bool in
+            guard !state.didResume else { return false }
+            state.continuation = continuation
+            return true
+        }
+    }
+
+    func resume(returning value: Value) {
+        let continuationToResume = lock.withLock { state -> CheckedContinuation<Value, Never>? in
+            guard !state.didResume else { return nil }
+            state.didResume = true
+            let continuation = state.continuation
+            state.continuation = nil
+            return continuation
+        }
+        continuationToResume?.resume(returning: value)
     }
 }
 

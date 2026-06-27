@@ -18,7 +18,11 @@ extension Navigation {
         elementTarget: ElementTarget?
     ) async -> TheSafecracker.InteractionResult {
         guard let elementTarget else {
-            return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
+            return .failure(
+                .scrollToVisible,
+                message: "Element target required for scroll_to_visible",
+                failureKind: .inputValidation
+            )
         }
 
         switch await elementInflation.inflate(
@@ -29,7 +33,7 @@ extension Navigation {
         case .inflated:
             return .success(method: .scrollToVisible)
         case .failed(let failure):
-            return .failure(.scrollToVisible, message: failure.message)
+            return failure.interactionResult(commandMethod: .scrollToVisible)
         }
     }
 }

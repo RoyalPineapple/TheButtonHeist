@@ -88,22 +88,18 @@ public extension AccessibilityPredicate.State {
     /// Evaluate this state against a single observed interface. For `.all`,
     /// every child state must hold against the same `elements`.
     func evaluate(in elements: [HeistElement]) -> (met: Bool, actual: String?) {
-        switch self {
-        case .exists(let predicate):
-            let met = predicate.anyMatch(in: elements)
-            return (met, met ? nil : "no element matches \(predicate)")
-        case .missing(let predicate):
-            let met = !predicate.anyMatch(in: elements)
-            return (met, met ? nil : "still present: \(predicate)")
-        case .existsTarget(let target):
-            let met = target.isPresent(in: elements)
-            return (met, met ? nil : "target not present: \(target)")
-        case .missingTarget(let target):
-            let met = !target.isPresent(in: elements)
-            return (met, met ? nil : "target still present: \(target)")
+        switch contract {
+        case .element(let requirement, let predicate):
+            let isPresent = predicate.anyMatch(in: elements)
+            let met = requirement.isMet(isPresent: isPresent)
+            return (met, met ? nil : requirement.failureDescription(for: predicate))
+        case .target(let requirement, let target):
+            let isPresent = target.isPresent(in: elements)
+            let met = requirement.isMet(isPresent: isPresent)
+            return (met, met ? nil : requirement.failureDescription(for: target))
         case .all(let states):
             guard !states.isEmpty else {
-                return (false, "all predicate has no child states")
+                return (false, AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription)
             }
             let failures = states.compactMap { state -> String? in
                 let outcome = state.evaluate(in: elements)
@@ -131,43 +127,63 @@ public extension AccessibilityPredicate.Change {
     func evaluate(
         delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
+        evaluate(delta: delta, placement: .predicateRoot)
+    }
+
+    func evaluate(
+        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+    ) -> ExpectationResult {
+        evaluate(accumulatedDelta: accumulatedDelta, placement: .predicateRoot)
+    }
+
+    private func evaluate(
+        delta: AccessibilityTrace.Delta?,
+        placement: AccessibilityPredicateContract.ChangePlacement
+    ) -> ExpectationResult {
+        if let violation = contract.violation(in: placement) {
+            return ExpectationResult(met: false, predicate: .change(self), actual: violation.evaluationDescription)
+        }
         let result: ExpectationResult
-        switch self {
+        switch contract {
         case .any:
             result = ExpectationResult(
                 met: delta?.isSemanticChange == true,
                 predicate: nil,
                 actual: delta?.kindDescription ?? "noTrace"
             )
-        case .screenScope(let assertions):
+        case .screen(let assertions):
             result = Self.evaluateScreen(assertions: assertions, delta: delta)
-        case .elementsScope(let assertions):
+        case .elements(let assertions):
             result = Self.evaluateElements(assertions: assertions, delta: delta)
-        case .allScopes(let changes):
-            let results = changes.map { $0.evaluate(delta: delta) }
+        case .all(let changes):
+            let results = changes.map { $0.evaluate(delta: delta, placement: .scope) }
             let failures = results.compactMap { $0.met ? nil : ($0.actual ?? $0.predicate?.description) }
             result = ExpectationResult(met: failures.isEmpty, predicate: nil, actual: failures.isEmpty ? nil : failures.joined(separator: "; "))
         }
         return ExpectationResult(met: result.met, predicate: .change(self), actual: result.actual)
     }
 
-    func evaluate(
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+    private func evaluate(
+        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?,
+        placement: AccessibilityPredicateContract.ChangePlacement
     ) -> ExpectationResult {
+        if let violation = contract.violation(in: placement) {
+            return ExpectationResult(met: false, predicate: .change(self), actual: violation.evaluationDescription)
+        }
         let result: ExpectationResult
-        switch self {
+        switch contract {
         case .any:
             result = ExpectationResult(
                 met: accumulatedDelta?.isSemanticChange == true,
                 predicate: nil,
                 actual: accumulatedDelta?.kindDescription ?? "noTrace"
             )
-        case .screenScope(let assertions):
+        case .screen(let assertions):
             result = Self.evaluateScreen(assertions: assertions, accumulatedDelta: accumulatedDelta)
-        case .elementsScope(let assertions):
+        case .elements(let assertions):
             result = Self.evaluateElements(assertions: assertions, accumulatedDelta: accumulatedDelta)
-        case .allScopes(let changes):
-            let results = changes.map { $0.evaluate(accumulatedDelta: accumulatedDelta) }
+        case .all(let changes):
+            let results = changes.map { $0.evaluate(accumulatedDelta: accumulatedDelta, placement: .scope) }
             let failures = results.compactMap { $0.met ? nil : ($0.actual ?? $0.predicate?.description) }
             result = ExpectationResult(met: failures.isEmpty, predicate: nil, actual: failures.isEmpty ? nil : failures.joined(separator: "; "))
         }

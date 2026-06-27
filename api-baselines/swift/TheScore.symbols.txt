@@ -101,8 +101,8 @@ symbol	TheScore.symbols.json	s:8TheScore12ActionResultV7messageSSSgvp	swift.prop
 symbol	TheScore.symbols.json	s:8TheScore12ActionResultV7payloadAA0D7PayloadOSgvp	swift.property	public	payload	ActionResult.payload	let payload: ResultPayload?
 symbol	TheScore.symbols.json	s:8TheScore12ActionResultV7settledSbSgvp	swift.property	public	settled	ActionResult.settled	let settled: Bool?
 symbol	TheScore.symbols.json	s:8TheScore12ActionResultV7success6method7message9errorKind7payload18accessibilityTrace7settled12settleTimeMs15subjectEvidence010activationL06timingACSb_AA0C6MethodOSSSgAA05ErrorI0OSgAA0D7PayloadOSgAA013AccessibilityL0VSgSbSgSiSgAA0c7SubjectR0VSgAA010ActivationL0VSgAA0C17PerformanceTimingVSgtcfc	swift.init	public	init(success:method:message:errorKind:payload:accessibilityTrace:settled:settleTimeMs:subjectEvidence:activationTrace:timing:)	ActionResult.init(success:method:message:errorKind:payload:accessibilityTrace:settled:settleTimeMs:subjectEvidence:activationTrace:timing:)	init(success: Bool, method: ActionMethod, message: String? = nil, errorKind: ErrorKind? = nil, payload: ResultPayload? = nil, accessibilityTrace: AccessibilityTrace? = nil, settled: Bool? = nil, settleTimeMs: Int? = nil, subjectEvidence: ActionSubjectEvidence? = nil, activationTrace: ActivationTrace? = nil, timing: ActionPerformanceTiming? = nil)
-symbol	TheScore.symbols.json	s:8TheScore12ActionResultV7successSbvp	swift.property	public	success	ActionResult.success	let success: Bool
-symbol	TheScore.symbols.json	s:8TheScore12ActionResultV9errorKindAA05ErrorF0OSgvp	swift.property	public	errorKind	ActionResult.errorKind	let errorKind: ErrorKind?
+symbol	TheScore.symbols.json	s:8TheScore12ActionResultV7successSbvp	swift.property	public	success	ActionResult.success	var success: Bool { get }
+symbol	TheScore.symbols.json	s:8TheScore12ActionResultV9errorKindAA05ErrorF0OSgvp	swift.property	public	errorKind	ActionResult.errorKind	var errorKind: ErrorKind? { get }
 symbol	TheScore.symbols.json	s:8TheScore12ElementEditsV	swift.struct	public	ElementEdits	ElementEdits	struct ElementEdits
 symbol	TheScore.symbols.json	s:8TheScore12ElementEditsV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementEdits.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore12ElementEditsV5added7removed7updatedACSayAA05HeistC0VG_AISayAA0C6UpdateVGtcfc	swift.init	public	init(added:removed:updated:)	ElementEdits.init(added:removed:updated:)	init(added: [HeistElement] = [], removed: [HeistElement] = [], updated: [ElementUpdate] = [])
@@ -582,7 +582,7 @@ symbol	TheScore.symbols.json	s:8TheScore20HeistCaseMatchResultV9predicate6result
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV	swift.struct	public	HeistExecutionResult	HeistExecutionResult	struct HeistExecutionResult
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV014traceResultsInD5OrderSayAA06ActionE0VGvp	swift.property	public	traceResultsInExecutionOrder	HeistExecutionResult.traceResultsInExecutionOrder	var traceResultsInExecutionOrder: [ActionResult] { get }
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV10durationMsSivp	swift.property	public	durationMs	HeistExecutionResult.durationMs	let durationMs: Int
-symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV13abortedAtPathSSSgvp	swift.property	public	abortedAtPath	HeistExecutionResult.abortedAtPath	let abortedAtPath: String?
+symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV13abortedAtPathSSSgvp	swift.property	public	abortedAtPath	HeistExecutionResult.abortedAtPath	var abortedAtPath: String? { get }
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV14failedStepKindAA0cdgH0OSgvp	swift.property	public	failedStepKind	HeistExecutionResult.failedStepKind	var failedStepKind: HeistExecutionStepKind? { get }
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV14failedStepPathSSSgvp	swift.property	public	failedStepPath	HeistExecutionResult.failedStepPath	var failedStepPath: String? { get }
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV15expectationsMetSivp	swift.property	public	expectationsMet	HeistExecutionResult.expectationsMet	var expectationsMet: Int { get }
@@ -601,7 +601,9 @@ symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV25settledInterfac
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV26failureDiagnosticInterfaceAA0H0VSgvp	swift.property	public	failureDiagnosticInterface	HeistExecutionResult.failureDiagnosticInterface	var failureDiagnosticInterface: Interface? { get }
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistExecutionResult.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV5steps10durationMs13abortedAtPathACSayAA0cd4StepE0VG_SiSSSgtcfc	swift.init	public	init(steps:durationMs:abortedAtPath:)	HeistExecutionResult.init(steps:durationMs:abortedAtPath:)	init(steps: [HeistExecutionStepResult], durationMs: Int, abortedAtPath: String? = nil)
-symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV5stepsSayAA0cd4StepE0VGvp	swift.property	public	steps	HeistExecutionResult.steps	let steps: [HeistExecutionStepResult]
+symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV5stepsSayAA0cd4StepE0VGvp	swift.property	public	steps	HeistExecutionResult.steps	var steps: [HeistExecutionStepResult] { get }
+symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	HeistExecutionResult.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV7outcomeAA0cD7OutcomeOvp	swift.property	public	outcome	HeistExecutionResult.outcome	let outcome: HeistExecutionOutcome
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV8warningsSayAA0cD7WarningVGvp	swift.property	public	warnings	HeistExecutionResult.warnings	var warnings: [HeistExecutionWarning] { get }
 symbol	TheScore.symbols.json	s:8TheScore20HeistExecutionResultV9isFailureSbvp	swift.property	public	isFailure	HeistExecutionResult.isFailure	var isFailure: Bool { get }
 symbol	TheScore.symbols.json	s:8TheScore20HeistFailureCategoryO	swift.enum	public	HeistFailureCategory	HeistFailureCategory	enum HeistFailureCategory
@@ -664,6 +666,11 @@ symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO4pingyA2CmF	swif
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO6statusyA2CmF	swift.enum.case	public	ClientWireMessageType.status	ClientWireMessageType.status	case status
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	ClientWireMessageType.init(rawValue:)	init?(rawValue: String)
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO9heistPlanyA2CmF	swift.enum.case	public	ClientWireMessageType.heistPlan	ClientWireMessageType.heistPlan	case heistPlan
+symbol	TheScore.symbols.json	s:8TheScore21HeistExecutionOutcomeO	swift.enum	public	HeistExecutionOutcome	HeistExecutionOutcome	enum HeistExecutionOutcome
+symbol	TheScore.symbols.json	s:8TheScore21HeistExecutionOutcomeO13abortedAtPathSSSgvp	swift.property	public	abortedAtPath	HeistExecutionOutcome.abortedAtPath	var abortedAtPath: String? { get }
+symbol	TheScore.symbols.json	s:8TheScore21HeistExecutionOutcomeO5stepsSayAA0cD10StepResultVGvp	swift.property	public	steps	HeistExecutionOutcome.steps	var steps: [HeistExecutionStepResult] { get }
+symbol	TheScore.symbols.json	s:8TheScore21HeistExecutionOutcomeO6failedyAcA0cd6FailedE0VcACmF	swift.enum.case	public	HeistExecutionOutcome.failed(_:)	HeistExecutionOutcome.failed(_:)	case failed(HeistExecutionFailedOutcome)
+symbol	TheScore.symbols.json	s:8TheScore21HeistExecutionOutcomeO6passedyAcA0cd6PassedE0VcACmF	swift.enum.case	public	HeistExecutionOutcome.passed(_:)	HeistExecutionOutcome.passed(_:)	case passed(HeistExecutionPassedOutcome)
 symbol	TheScore.symbols.json	s:8TheScore21HeistExecutionWarningV	swift.struct	public	HeistExecutionWarning	HeistExecutionWarning	struct HeistExecutionWarning
 symbol	TheScore.symbols.json	s:8TheScore21HeistExecutionWarningV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistExecutionWarning.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore21HeistExecutionWarningV4path7messageACSS_SStcfc	swift.init	public	init(path:message:)	HeistExecutionWarning.init(path:message:)	init(path: String, message: String)
@@ -803,7 +810,7 @@ symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV17reportComma
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV17reportDisplayNameSSvp	swift.property	public	reportDisplayName	HeistExecutionStepResult.reportDisplayName	var reportDisplayName: String { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV17reportExpectationAA0hF0VSgvp	swift.property	public	reportExpectation	HeistExecutionStepResult.reportExpectation	var reportExpectation: ExpectationResult? { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV17screenshotPayloadAA06ScreenH0VSgvp	swift.property	public	screenshotPayload	HeistExecutionStepResult.screenshotPayload	var screenshotPayload: ScreenPayload? { get }
-symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV18abortedAtChildPathSSSgvp	swift.property	public	abortedAtChildPath	HeistExecutionStepResult.abortedAtChildPath	let abortedAtChildPath: String?
+symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV18abortedAtChildPathSSSgvp	swift.property	public	abortedAtChildPath	HeistExecutionStepResult.abortedAtChildPath	var abortedAtChildPath: String? { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV18invocationEvidenceAA0c10InvocationH0VSgvp	swift.property	public	invocationEvidence	HeistExecutionStepResult.invocationEvidence	var invocationEvidence: HeistInvocationEvidence? { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV19expectationsCheckedSivp	swift.property	public	expectationsChecked	HeistExecutionStepResult.expectationsChecked	var expectationsChecked: Int { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV19repeatUntilEvidenceAA0c6RepeathI0VSgvp	swift.property	public	repeatUntilEvidence	HeistExecutionStepResult.repeatUntilEvidence	var repeatUntilEvidence: HeistRepeatUntilEvidence? { get }
@@ -815,11 +822,13 @@ symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV4fromACs7Deco
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV4kindAA0cdE4KindOvp	swift.property	public	kind	HeistExecutionStepResult.kind	let kind: HeistExecutionStepKind
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV4path4kind6status10durationMs6intent8evidence7failure18abortedAtChildPath8childrenACSS_AA0cdE4KindOAA0cdE6StatusOSiAA0cE6IntentOSgAA0cE8EvidenceOSgAA0C13FailureDetailVSgSSSgSayACGtcfc	swift.init	public	init(path:kind:status:durationMs:intent:evidence:failure:abortedAtChildPath:children:)	HeistExecutionStepResult.init(path:kind:status:durationMs:intent:evidence:failure:abortedAtChildPath:children:)	init(path: String, kind: HeistExecutionStepKind, status: HeistExecutionStepStatus, durationMs: Int, intent: HeistStepIntent? = nil, evidence: HeistStepEvidence? = nil, failure: HeistFailureDetail? = nil, abortedAtChildPath: String? = nil, children: [HeistExecutionStepResult] = [])
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV4pathSSvp	swift.property	public	path	HeistExecutionStepResult.path	let path: String
+symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	HeistExecutionStepResult.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV6intentAA0cE6IntentOSgvp	swift.property	public	intent	HeistExecutionStepResult.intent	let intent: HeistStepIntent?
-symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV6statusAA0cdE6StatusOvp	swift.property	public	status	HeistExecutionStepResult.status	let status: HeistExecutionStepStatus
-symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV7failureAA0C13FailureDetailVSgvp	swift.property	public	failure	HeistExecutionStepResult.failure	let failure: HeistFailureDetail?
-symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV8childrenSayACGvp	swift.property	public	children	HeistExecutionStepResult.children	let children: [HeistExecutionStepResult]
-symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV8evidenceAA0cE8EvidenceOSgvp	swift.property	public	evidence	HeistExecutionStepResult.evidence	let evidence: HeistStepEvidence?
+symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV6statusAA0cdE6StatusOvp	swift.property	public	status	HeistExecutionStepResult.status	var status: HeistExecutionStepStatus { get }
+symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV7failureAA0C13FailureDetailVSgvp	swift.property	public	failure	HeistExecutionStepResult.failure	var failure: HeistFailureDetail? { get }
+symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV7outcomeAA0cdE7OutcomeOvp	swift.property	public	outcome	HeistExecutionStepResult.outcome	let outcome: HeistExecutionStepOutcome
+symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV8childrenSayACGvp	swift.property	public	children	HeistExecutionStepResult.children	var children: [HeistExecutionStepResult] { get }
+symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV8evidenceAA0cE8EvidenceOSgvp	swift.property	public	evidence	HeistExecutionStepResult.evidence	var evidence: HeistStepEvidence? { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepResultV9isFailureSbvp	swift.property	public	isFailure	HeistExecutionStepResult.isFailure	var isFailure: Bool { get }
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepStatusO	swift.enum	public	HeistExecutionStepStatus	HeistExecutionStepStatus	enum HeistExecutionStepStatus
 symbol	TheScore.symbols.json	s:8TheScore24HeistExecutionStepStatusO6failedyA2CmF	swift.enum.case	public	HeistExecutionStepStatus.failed	HeistExecutionStepStatus.failed	case failed
@@ -851,6 +860,15 @@ symbol	TheScore.symbols.json	s:8TheScore25HeistCaseSelectionOutcomeO4fromACs7Dec
 symbol	TheScore.symbols.json	s:8TheScore25HeistCaseSelectionOutcomeO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	HeistCaseSelectionOutcome.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	TheScore.symbols.json	s:8TheScore25HeistCaseSelectionOutcomeO7noMatchyA2CmF	swift.enum.case	public	HeistCaseSelectionOutcome.noMatch	HeistCaseSelectionOutcome.noMatch	case noMatch
 symbol	TheScore.symbols.json	s:8TheScore25HeistCaseSelectionOutcomeO8timedOutyA2CmF	swift.enum.case	public	HeistCaseSelectionOutcome.timedOut	HeistCaseSelectionOutcome.timedOut	case timedOut
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO	swift.enum	public	HeistExecutionStepOutcome	HeistExecutionStepOutcome	enum HeistExecutionStepOutcome
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO18abortedAtChildPathSSSgvp	swift.property	public	abortedAtChildPath	HeistExecutionStepOutcome.abortedAtChildPath	var abortedAtChildPath: String? { get }
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO6failedyAcA0cde6FailedF0VcACmF	swift.enum.case	public	HeistExecutionStepOutcome.failed(_:)	HeistExecutionStepOutcome.failed(_:)	case failed(HeistExecutionStepFailedOutcome)
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO6passedyAcA0cde6PassedF0VcACmF	swift.enum.case	public	HeistExecutionStepOutcome.passed(_:)	HeistExecutionStepOutcome.passed(_:)	case passed(HeistExecutionStepPassedOutcome)
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO6statusAA0cdE6StatusOvp	swift.property	public	status	HeistExecutionStepOutcome.status	var status: HeistExecutionStepStatus { get }
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO7failureAA0C13FailureDetailVSgvp	swift.property	public	failure	HeistExecutionStepOutcome.failure	var failure: HeistFailureDetail? { get }
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO7skippedyAcA0cde7SkippedF0VcACmF	swift.enum.case	public	HeistExecutionStepOutcome.skipped(_:)	HeistExecutionStepOutcome.skipped(_:)	case skipped(HeistExecutionStepSkippedOutcome)
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO8childrenSayAA0cdE6ResultVGvp	swift.property	public	children	HeistExecutionStepOutcome.children	var children: [HeistExecutionStepResult] { get }
+symbol	TheScore.symbols.json	s:8TheScore25HeistExecutionStepOutcomeO8evidenceAA0cE8EvidenceOSgvp	swift.property	public	evidence	HeistExecutionStepOutcome.evidence	var evidence: HeistStepEvidence? { get }
 symbol	TheScore.symbols.json	s:8TheScore25HeistReceiptRecordingModeO	swift.enum	public	HeistReceiptRecordingMode	HeistReceiptRecordingMode	enum HeistReceiptRecordingMode
 symbol	TheScore.symbols.json	s:8TheScore25HeistReceiptRecordingModeO16environmentValueACSSSg_tcfc	swift.init	public	init(environmentValue:)	HeistReceiptRecordingMode.init(environmentValue:)	init(environmentValue: String?)
 symbol	TheScore.symbols.json	s:8TheScore25HeistReceiptRecordingModeO17failingAndPassingyA2CmF	swift.enum.case	public	HeistReceiptRecordingMode.failingAndPassing	HeistReceiptRecordingMode.failingAndPassing	case failingAndPassing
@@ -921,6 +939,11 @@ symbol	TheScore.symbols.json	s:8TheScore26SettledObservationSequenceV6encode2toy
 symbol	TheScore.symbols.json	s:8TheScore26SettledObservationSequenceV8rawValueACs6UInt64V_tcfc	swift.init	public	init(rawValue:)	SettledObservationSequence.init(rawValue:)	init(rawValue: UInt64)
 symbol	TheScore.symbols.json	s:8TheScore26SettledObservationSequenceV8rawValues6UInt64Vvp	swift.property	public	rawValue	SettledObservationSequence.rawValue	let rawValue: UInt64
 symbol	TheScore.symbols.json	s:8TheScore26SettledObservationSequenceVyACs6UInt64Vcfc	swift.init	public	init(_:)	SettledObservationSequence.init(_:)	init(_ rawValue: UInt64)
+symbol	TheScore.symbols.json	s:8TheScore27HeistExecutionFailedOutcomeV	swift.struct	public	HeistExecutionFailedOutcome	HeistExecutionFailedOutcome	struct HeistExecutionFailedOutcome
+symbol	TheScore.symbols.json	s:8TheScore27HeistExecutionFailedOutcomeV13abortedAtPathSSvp	swift.property	public	abortedAtPath	HeistExecutionFailedOutcome.abortedAtPath	let abortedAtPath: String
+symbol	TheScore.symbols.json	s:8TheScore27HeistExecutionFailedOutcomeV5stepsSayAA0cD10StepResultVGvp	swift.property	public	steps	HeistExecutionFailedOutcome.steps	let steps: [HeistExecutionStepResult]
+symbol	TheScore.symbols.json	s:8TheScore27HeistExecutionPassedOutcomeV	swift.struct	public	HeistExecutionPassedOutcome	HeistExecutionPassedOutcome	struct HeistExecutionPassedOutcome
+symbol	TheScore.symbols.json	s:8TheScore27HeistExecutionPassedOutcomeV5stepsSayAA0cD10StepResultVGvp	swift.property	public	steps	HeistExecutionPassedOutcome.steps	let steps: [HeistExecutionStepResult]
 symbol	TheScore.symbols.json	s:8TheScore27HeistForEachElementEvidenceV	swift.struct	public	HeistForEachElementEvidence	HeistForEachElementEvidence	struct HeistForEachElementEvidence
 symbol	TheScore.symbols.json	s:8TheScore27HeistForEachElementEvidenceV12matchedCountSivp	swift.property	public	matchedCount	HeistForEachElementEvidence.matchedCount	let matchedCount: Int
 symbol	TheScore.symbols.json	s:8TheScore27HeistForEachElementEvidenceV13failureReasonSSSgvp	swift.property	public	failureReason	HeistForEachElementEvidence.failureReason	let failureReason: String?
@@ -971,6 +994,16 @@ symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV32explor
 symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	InterfaceDiscoveryDiagnostics.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV5state11reasonCodes20includedElementCount14scrollAttempts013maxScrollsPerD00noP9Container018exploredScrollableqK007omittedsqK00T10Containers10nextActionAcA0cD6StatusO_SayAA0cD10ReasonCodeOGS6iSayAA0cd7OmittedQ0VGSSSgtcfc	swift.init	public	init(state:reasonCodes:includedElementCount:scrollAttempts:maxScrollsPerDiscovery:maxScrollsPerContainer:exploredScrollableContainerCount:omittedScrollableContainerCount:omittedContainers:nextAction:)	InterfaceDiscoveryDiagnostics.init(state:reasonCodes:includedElementCount:scrollAttempts:maxScrollsPerDiscovery:maxScrollsPerContainer:exploredScrollableContainerCount:omittedScrollableContainerCount:omittedContainers:nextAction:)	init(state: InterfaceDiscoveryStatus, reasonCodes: [InterfaceDiscoveryReasonCode] = [], includedElementCount: Int, scrollAttempts: Int, maxScrollsPerDiscovery: Int, maxScrollsPerContainer: Int, exploredScrollableContainerCount: Int, omittedScrollableContainerCount: Int, omittedContainers: [InterfaceDiscoveryOmittedContainer] = [], nextAction: String? = nil)
 symbol	TheScore.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV5stateAA0cD6StatusOvp	swift.property	public	state	InterfaceDiscoveryDiagnostics.state	let state: InterfaceDiscoveryStatus
+symbol	TheScore.symbols.json	s:8TheScore31HeistExecutionStepFailedOutcomeV	swift.struct	public	HeistExecutionStepFailedOutcome	HeistExecutionStepFailedOutcome	struct HeistExecutionStepFailedOutcome
+symbol	TheScore.symbols.json	s:8TheScore31HeistExecutionStepFailedOutcomeV18abortedAtChildPathSSSgvp	swift.property	public	abortedAtChildPath	HeistExecutionStepFailedOutcome.abortedAtChildPath	let abortedAtChildPath: String?
+symbol	TheScore.symbols.json	s:8TheScore31HeistExecutionStepFailedOutcomeV7failureAA0C13FailureDetailVvp	swift.property	public	failure	HeistExecutionStepFailedOutcome.failure	let failure: HeistFailureDetail
+symbol	TheScore.symbols.json	s:8TheScore31HeistExecutionStepFailedOutcomeV8childrenSayAA0cdE6ResultVGvp	swift.property	public	children	HeistExecutionStepFailedOutcome.children	let children: [HeistExecutionStepResult]
+symbol	TheScore.symbols.json	s:8TheScore31HeistExecutionStepFailedOutcomeV8evidenceAA0cE8EvidenceOSgvp	swift.property	public	evidence	HeistExecutionStepFailedOutcome.evidence	let evidence: HeistStepEvidence?
+symbol	TheScore.symbols.json	s:8TheScore31HeistExecutionStepPassedOutcomeV	swift.struct	public	HeistExecutionStepPassedOutcome	HeistExecutionStepPassedOutcome	struct HeistExecutionStepPassedOutcome
+symbol	TheScore.symbols.json	s:8TheScore31HeistExecutionStepPassedOutcomeV8childrenSayAA0cdE6ResultVGvp	swift.property	public	children	HeistExecutionStepPassedOutcome.children	let children: [HeistExecutionStepResult]
+symbol	TheScore.symbols.json	s:8TheScore31HeistExecutionStepPassedOutcomeV8evidenceAA0cE8EvidenceOSgvp	swift.property	public	evidence	HeistExecutionStepPassedOutcome.evidence	let evidence: HeistStepEvidence?
+symbol	TheScore.symbols.json	s:8TheScore32HeistExecutionStepSkippedOutcomeV	swift.struct	public	HeistExecutionStepSkippedOutcome	HeistExecutionStepSkippedOutcome	struct HeistExecutionStepSkippedOutcome
+symbol	TheScore.symbols.json	s:8TheScore32HeistExecutionStepSkippedOutcomeV8childrenSayAA0cdE6ResultVGvp	swift.property	public	children	HeistExecutionStepSkippedOutcome.children	let children: [HeistExecutionStepResult]
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV	swift.struct	public	HeistReceiptRecordingConfiguration	HeistReceiptRecordingConfiguration	struct HeistReceiptRecordingConfiguration
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV11environmentACSgvpZ	swift.type.property	public	environment	HeistReceiptRecordingConfiguration.environment	static var environment: HeistReceiptRecordingConfiguration? { get }
 symbol	TheScore.symbols.json	s:8TheScore34HeistReceiptRecordingConfigurationV13rootDirectory10Foundation3URLVvp	swift.property	public	rootDirectory	HeistReceiptRecordingConfiguration.rootDirectory	let rootDirectory: URL
@@ -1329,6 +1362,8 @@ relationship	conformsTo	s:8TheScore21ClientWireMessageTypeO	s:Se	ClientWireMessa
 relationship	conformsTo	s:8TheScore21ClientWireMessageTypeO	s:s12CaseIterableP	ClientWireMessageType	Swift.CaseIterable
 relationship	conformsTo	s:8TheScore21ClientWireMessageTypeO	s:s23CustomStringConvertibleP	ClientWireMessageType	Swift.CustomStringConvertible
 relationship	conformsTo	s:8TheScore21ClientWireMessageTypeO	s:s8SendableP	ClientWireMessageType	Swift.Sendable
+relationship	conformsTo	s:8TheScore21HeistExecutionOutcomeO	s:SQ	HeistExecutionOutcome	Swift.Equatable
+relationship	conformsTo	s:8TheScore21HeistExecutionOutcomeO	s:s8SendableP	HeistExecutionOutcome	Swift.Sendable
 relationship	conformsTo	s:8TheScore21HeistExecutionWarningV	s:SE	HeistExecutionWarning	Swift.Encodable
 relationship	conformsTo	s:8TheScore21HeistExecutionWarningV	s:SQ	HeistExecutionWarning	Swift.Equatable
 relationship	conformsTo	s:8TheScore21HeistExecutionWarningV	s:Se	HeistExecutionWarning	Swift.Decodable
@@ -1398,6 +1433,8 @@ relationship	conformsTo	s:8TheScore25HeistCaseSelectionOutcomeO	s:SE	HeistCaseSe
 relationship	conformsTo	s:8TheScore25HeistCaseSelectionOutcomeO	s:SQ	HeistCaseSelectionOutcome	Swift.Equatable
 relationship	conformsTo	s:8TheScore25HeistCaseSelectionOutcomeO	s:Se	HeistCaseSelectionOutcome	Swift.Decodable
 relationship	conformsTo	s:8TheScore25HeistCaseSelectionOutcomeO	s:s8SendableP	HeistCaseSelectionOutcome	Swift.Sendable
+relationship	conformsTo	s:8TheScore25HeistExecutionStepOutcomeO	s:SQ	HeistExecutionStepOutcome	Swift.Equatable
+relationship	conformsTo	s:8TheScore25HeistExecutionStepOutcomeO	s:s8SendableP	HeistExecutionStepOutcome	Swift.Sendable
 relationship	conformsTo	s:8TheScore25HeistReceiptRecordingModeO	s:SH	HeistReceiptRecordingMode	Swift.Hashable
 relationship	conformsTo	s:8TheScore25HeistReceiptRecordingModeO	s:SQ	HeistReceiptRecordingMode	Swift.Equatable
 relationship	conformsTo	s:8TheScore25HeistReceiptRecordingModeO	s:SY	HeistReceiptRecordingMode	Swift.RawRepresentable
@@ -1443,6 +1480,10 @@ relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:Se	SettledObs
 relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:s23CustomStringConvertibleP	SettledObservationSequence	Swift.CustomStringConvertible
 relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:s27ExpressibleByIntegerLiteralP	SettledObservationSequence	Swift.ExpressibleByIntegerLiteral
 relationship	conformsTo	s:8TheScore26SettledObservationSequenceV	s:s8SendableP	SettledObservationSequence	Swift.Sendable
+relationship	conformsTo	s:8TheScore27HeistExecutionFailedOutcomeV	s:SQ	HeistExecutionFailedOutcome	Swift.Equatable
+relationship	conformsTo	s:8TheScore27HeistExecutionFailedOutcomeV	s:s8SendableP	HeistExecutionFailedOutcome	Swift.Sendable
+relationship	conformsTo	s:8TheScore27HeistExecutionPassedOutcomeV	s:SQ	HeistExecutionPassedOutcome	Swift.Equatable
+relationship	conformsTo	s:8TheScore27HeistExecutionPassedOutcomeV	s:s8SendableP	HeistExecutionPassedOutcome	Swift.Sendable
 relationship	conformsTo	s:8TheScore27HeistForEachElementEvidenceV	s:SE	HeistForEachElementEvidence	Swift.Encodable
 relationship	conformsTo	s:8TheScore27HeistForEachElementEvidenceV	s:SQ	HeistForEachElementEvidence	Swift.Equatable
 relationship	conformsTo	s:8TheScore27HeistForEachElementEvidenceV	s:Se	HeistForEachElementEvidence	Swift.Decodable
@@ -1480,6 +1521,12 @@ relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:SE	Interfa
 relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:SQ	InterfaceDiscoveryDiagnostics	Swift.Equatable
 relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:Se	InterfaceDiscoveryDiagnostics	Swift.Decodable
 relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:s8SendableP	InterfaceDiscoveryDiagnostics	Swift.Sendable
+relationship	conformsTo	s:8TheScore31HeistExecutionStepFailedOutcomeV	s:SQ	HeistExecutionStepFailedOutcome	Swift.Equatable
+relationship	conformsTo	s:8TheScore31HeistExecutionStepFailedOutcomeV	s:s8SendableP	HeistExecutionStepFailedOutcome	Swift.Sendable
+relationship	conformsTo	s:8TheScore31HeistExecutionStepPassedOutcomeV	s:SQ	HeistExecutionStepPassedOutcome	Swift.Equatable
+relationship	conformsTo	s:8TheScore31HeistExecutionStepPassedOutcomeV	s:s8SendableP	HeistExecutionStepPassedOutcome	Swift.Sendable
+relationship	conformsTo	s:8TheScore32HeistExecutionStepSkippedOutcomeV	s:SQ	HeistExecutionStepSkippedOutcome	Swift.Equatable
+relationship	conformsTo	s:8TheScore32HeistExecutionStepSkippedOutcomeV	s:s8SendableP	HeistExecutionStepSkippedOutcome	Swift.Sendable
 relationship	conformsTo	s:8TheScore34HeistReceiptRecordingConfigurationV	s:SQ	HeistReceiptRecordingConfiguration	Swift.Equatable
 relationship	conformsTo	s:8TheScore34HeistReceiptRecordingConfigurationV	s:s8SendableP	HeistReceiptRecordingConfiguration	Swift.Sendable
 relationship	conformsTo	s:8TheScore34InterfaceDiscoveryOmittedContainerV	s:SE	InterfaceDiscoveryOmittedContainer	Swift.Encodable

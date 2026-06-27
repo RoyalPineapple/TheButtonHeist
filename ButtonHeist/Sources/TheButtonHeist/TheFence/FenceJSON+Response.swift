@@ -25,17 +25,43 @@ struct PublicStatus: Encodable {
 struct PublicErrorResponse: FencePublicJSONResponse {
     let status = PublicStatus.error
     let message: String
+    let code: String
+    let kind: String
     let errorCode: String?
     let phase: String?
     let retryable: Bool?
     let hint: String?
+    let details: PublicErrorDetails
 
     init(message: String, details: FailureDetails?) {
-        self.message = message
-        self.errorCode = details?.errorCode
-        self.phase = details?.phase.rawValue
-        self.retryable = details?.retryable
-        self.hint = details?.hint
+        self.init(failure: PublicFailure(message: message, details: details))
+    }
+
+    init(failure: PublicFailure) {
+        self.message = failure.message
+        self.code = failure.code
+        self.kind = failure.kind.rawValue
+        self.errorCode = failure.code
+        self.phase = failure.details.phase.rawValue
+        self.retryable = failure.details.retryable
+        self.hint = failure.details.hint
+        self.details = PublicErrorDetails(failure: failure)
+    }
+}
+
+struct PublicErrorDetails: Encodable {
+    let code: String
+    let kind: String
+    let phase: String
+    let retryable: Bool
+    let hint: String?
+
+    init(failure: PublicFailure) {
+        self.code = failure.code
+        self.kind = failure.kind.rawValue
+        self.phase = failure.details.phase.rawValue
+        self.retryable = failure.details.retryable
+        self.hint = failure.details.hint
     }
 }
 
@@ -46,8 +72,12 @@ struct PublicResponseModel: FencePublicJSONResponse {
         switch response {
         case .ok(let message):
             try PublicOKResponse(message: message).encode(to: encoder)
-        case .error(let message, let details):
-            try PublicErrorResponse(message: message, details: details).encode(to: encoder)
+        case .error:
+            guard let failure = response.publicFailure else {
+                try PublicErrorResponse(message: "Unknown error", details: nil).encode(to: encoder)
+                return
+            }
+            try PublicErrorResponse(failure: failure).encode(to: encoder)
         case .status(let connected, let deviceName):
             try PublicStatusResponse(connected: connected, device: deviceName).encode(to: encoder)
         case .pong(let payload):
