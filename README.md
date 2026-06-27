@@ -110,19 +110,37 @@ HeistPlan("checkout") {
 
 Send that source through `run_heist(plan:)`.
 
-The same product capability can live in source control:
+The same product capability can be a test:
 
 ```swift
-func makeCheckoutHeist() throws -> HeistPlan {
-    try HeistPlan("checkout") {
-        Activate(.label("Pay"))
-            .expect(.appeared(.label("Payment Complete")))
+import ButtonHeist
+import Testing
+
+@Suite(.serialized)
+struct CheckoutHeistTests {
+    @ButtonHeistActor
+    @Test("checkout completes through accessibility")
+    func checkoutCompletes() async throws {
+        let config = try EnvironmentConfig.resolve()
+        let fence = TheFence(configuration: config.fenceConfiguration)
+        try await fence.start()
+        defer { fence.stop() }
+
+        let response = try await fence.execute(
+            command: .runHeist,
+            arguments: .init(values: [
+                "plan": .string("""
+                HeistPlan("checkout") {
+                    Activate(.label("Pay"))
+                        .expect(.appeared(.label("Payment Complete")))
+                }
+                """)
+            ])
+        )
+
+        #expect(!response.isFailure)
     }
 }
-```
-
-```bash
-buttonheist run_heist --path Heists/Checkout.swift --entry makeCheckoutHeist
 ```
 
 Different doors. Same runtime. Same evidence.
