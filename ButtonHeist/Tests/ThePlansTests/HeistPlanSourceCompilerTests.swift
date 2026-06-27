@@ -784,7 +784,7 @@ import ThePlans
     #expect(diagnostic.code == "heist.plan.runtime_safety")
     #expect(diagnostic.kind == .error)
     #expect(diagnostic.phase == .planValidation)
-    #expect(diagnostic.path == "$.body[0]")
+    #expect(diagnostic.path == "$.body[0].invoke.path")
 }
 
 @Test func `inline plan source unsupported Swift syntax is rejected`() throws {
@@ -1486,7 +1486,7 @@ import ThePlans
     let typedDiagnostic = compileDiagnostic(source)
     #expect(typedDiagnostic.code == "heist.plan.runtime_safety")
     #expect(typedDiagnostic.phase == .planValidation)
-    #expect(typedDiagnostic.path == "$.definitions")
+    #expect(typedDiagnostic.path == "$.definitions[0].definitions")
     #expect(typedDiagnostic.hint == "Use 250 definitions or fewer.")
 }
 
