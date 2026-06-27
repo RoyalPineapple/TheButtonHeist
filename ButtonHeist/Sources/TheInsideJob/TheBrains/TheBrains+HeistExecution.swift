@@ -8,9 +8,22 @@ import ThePlans
 extension TheBrains {
 
     struct HeistExecutionScope {
+        let rootPlan: HeistPlan
         let plan: HeistPlan
         var definitionPath: [String] = []
         var invocationStack: Set<String> = []
+
+        init(
+            plan: HeistPlan,
+            rootPlan: HeistPlan? = nil,
+            definitionPath: [String] = [],
+            invocationStack: Set<String> = []
+        ) {
+            self.rootPlan = rootPlan ?? plan
+            self.plan = plan
+            self.definitionPath = definitionPath
+            self.invocationStack = invocationStack
+        }
     }
 
     struct HeistExecutionRuntime {
@@ -375,6 +388,7 @@ extension TheBrains {
             environment: environment,
             scope: HeistExecutionScope(
                 plan: plan,
+                rootPlan: plan,
                 definitionPath: scope.definitionPath,
                 invocationStack: scope.invocationStack
             ),
@@ -409,7 +423,13 @@ extension TheBrains {
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         let invocationName = invoke.path.joined(separator: ".")
-        let resolvedInvocationName = (scope.definitionPath + invoke.path).joined(separator: ".")
+        let localDefinition = scope.plan.heistDefinition(at: invoke.path)
+        let rootDefinition = invoke.path.count > 1 ? scope.rootPlan.heistDefinition(at: invoke.path) : nil
+        let definition = localDefinition ?? rootDefinition
+        let resolvedInvocationPath = localDefinition == nil && rootDefinition != nil
+            ? invoke.path
+            : scope.definitionPath + invoke.path
+        let resolvedInvocationName = resolvedInvocationPath.joined(separator: ".")
         let intent = HeistStepIntent.invoke(
             path: invocationName,
             argument: invoke.argument == .none ? nil : invoke.runHeistSummary
@@ -430,7 +450,7 @@ extension TheBrains {
                 )
             )
         }
-        guard let definition = scope.plan.heistDefinition(at: invoke.path) else {
+        guard let definition else {
             let observed = "unknown heist run \(invocationName)"
             return HeistExecutionStepResult(
                 path: path,
@@ -472,7 +492,8 @@ extension TheBrains {
             environment: childEnvironment,
             scope: HeistExecutionScope(
                 plan: definition,
-                definitionPath: scope.definitionPath + invoke.path,
+                rootPlan: scope.rootPlan,
+                definitionPath: resolvedInvocationPath,
                 invocationStack: scope.invocationStack.union([resolvedInvocationName])
             ),
             path: "\(path).invoke.body"

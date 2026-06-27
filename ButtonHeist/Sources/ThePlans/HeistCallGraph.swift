@@ -153,66 +153,121 @@ private struct HeistCallGraphBuilder {
     var edges: Set<HeistCallGraph.Edge> = []
 
     mutating func collect(plan: HeistPlan) {
-        collectDefinitions(plan.definitions, pathPrefix: [])
+        let rootScope = HeistDefinitionScope(definitions: plan.definitions)
+        collectDefinitions(plan.definitions, pathPrefix: [], rootDefinitionScope: rootScope)
         collectAnonymousDefinitionScopes(in: plan.body)
     }
 
-    private mutating func collectDefinitions(_ definitions: [HeistPlan], pathPrefix: [String]) {
+    private mutating func collectDefinitions(
+        _ definitions: [HeistPlan],
+        pathPrefix: [String],
+        rootDefinitionScope: HeistDefinitionScope
+    ) {
         let definitionScope = HeistDefinitionScope(definitions: definitions, pathPrefix: pathPrefix)
-        definitions.forEach { collectDefinition($0, definitionScope: definitionScope) }
+        definitions.forEach {
+            collectDefinition($0, definitionScope: definitionScope, rootDefinitionScope: rootDefinitionScope)
+        }
     }
 
     private mutating func collectDefinition(
         _ definition: HeistPlan,
-        definitionScope: HeistDefinitionScope
+        definitionScope: HeistDefinitionScope,
+        rootDefinitionScope: HeistDefinitionScope
     ) {
         let namePath = definitionScope.pathPrefix + [definition.name ?? ""]
         let qualifiedName = namePath.joined(separator: ".")
         nodes.insert(qualifiedName)
 
         let childScope = HeistDefinitionScope(definitions: definition.definitions, pathPrefix: namePath)
-        collectEdges(in: definition.body, caller: qualifiedName, definitionScope: childScope)
-        collectDefinitions(definition.definitions, pathPrefix: namePath)
+        collectEdges(
+            in: definition.body,
+            caller: qualifiedName,
+            definitionScope: childScope,
+            rootDefinitionScope: rootDefinitionScope
+        )
+        collectDefinitions(definition.definitions, pathPrefix: namePath, rootDefinitionScope: rootDefinitionScope)
     }
 
     private mutating func collectEdges(
         in steps: [HeistStep],
         caller: String,
-        definitionScope: HeistDefinitionScope
+        definitionScope: HeistDefinitionScope,
+        rootDefinitionScope: HeistDefinitionScope
     ) {
-        steps.forEach { collectEdges(in: $0, caller: caller, definitionScope: definitionScope) }
+        steps.forEach {
+            collectEdges(
+                in: $0,
+                caller: caller,
+                definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope
+            )
+        }
     }
 
     private mutating func collectEdges(
         in step: HeistStep,
         caller: String,
-        definitionScope: HeistDefinitionScope
+        definitionScope: HeistDefinitionScope,
+        rootDefinitionScope: HeistDefinitionScope
     ) {
         switch step {
         case .action, .wait, .warn, .fail:
             break
         case .conditional(let conditional):
             conditional.cases.forEach {
-                collectEdges(in: $0.body, caller: caller, definitionScope: definitionScope)
+                collectEdges(
+                    in: $0.body,
+                    caller: caller,
+                    definitionScope: definitionScope,
+                    rootDefinitionScope: rootDefinitionScope
+                )
             }
             if let elseBody = conditional.elseBody {
-                collectEdges(in: elseBody, caller: caller, definitionScope: definitionScope)
+                collectEdges(
+                    in: elseBody,
+                    caller: caller,
+                    definitionScope: definitionScope,
+                    rootDefinitionScope: rootDefinitionScope
+                )
             }
         case .forEachElement(let forEach):
-            collectEdges(in: forEach.body, caller: caller, definitionScope: definitionScope)
+            collectEdges(
+                in: forEach.body,
+                caller: caller,
+                definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope
+            )
         case .forEachString(let forEach):
-            collectEdges(in: forEach.body, caller: caller, definitionScope: definitionScope)
+            collectEdges(
+                in: forEach.body,
+                caller: caller,
+                definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope
+            )
         case .repeatUntil(let repeatUntil):
-            collectEdges(in: repeatUntil.body, caller: caller, definitionScope: definitionScope)
+            collectEdges(
+                in: repeatUntil.body,
+                caller: caller,
+                definitionScope: definitionScope,
+                rootDefinitionScope: rootDefinitionScope
+            )
             if let elseBody = repeatUntil.elseBody {
-                collectEdges(in: elseBody, caller: caller, definitionScope: definitionScope)
+                collectEdges(
+                    in: elseBody,
+                    caller: caller,
+                    definitionScope: definitionScope,
+                    rootDefinitionScope: rootDefinitionScope
+                )
             }
         case .heist(let plan):
             let inlineScope = HeistDefinitionScope(definitions: plan.definitions)
-            collectDefinitions(plan.definitions, pathPrefix: [])
-            collectEdges(in: plan.body, caller: caller, definitionScope: inlineScope)
+            collectDefinitions(plan.definitions, pathPrefix: [], rootDefinitionScope: inlineScope)
+            collectEdges(in: plan.body, caller: caller, definitionScope: inlineScope, rootDefinitionScope: inlineScope)
         case .invoke(let invocation):
-            guard let resolved = definitionScope.resolve(path: invocation.path) else { return }
+            guard let resolved = definitionScope.resolveInvocation(
+                path: invocation.path,
+                rootScope: rootDefinitionScope
+            ) else { return }
             nodes.insert(resolved.qualifiedName)
             edges.insert(HeistCallGraph.Edge(caller: caller, callee: resolved.qualifiedName))
         }

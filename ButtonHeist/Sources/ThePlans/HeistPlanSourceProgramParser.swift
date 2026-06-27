@@ -44,17 +44,37 @@ extension HeistPlanSourceParser {
 
     mutating func parseDefinition() throws -> HeistPlanAdmissionCandidate {
         let callee = try parseCalleeName()
-        guard callee == ["HeistDef"] else {
-            throw error(previous, "heist definitions must use `HeistDef<...>(\"Name\") { ... }`")
+        switch callee {
+        case ["HeistDef"]:
+            let parameterKind = try parseHeistDefGeneric()
+            let header = try parseHeistDefHeader(parameterKind: parameterKind)
+            let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: true)
+            return makeDefinition(
+                path: header.path.split(separator: ".").map(String.init),
+                parameter: header.parameter,
+                definitions: mergeDefinitions(body.definitions),
+                body: body.steps
+            )
+        case ["Namespace"]:
+            return try parseNamespaceDefinition()
+        default:
+            throw error(previous, "heist definitions must use `HeistDef<...>(\"Name\") { ... }` or `Namespace(\"Name\") { ... }`")
         }
-        let parameterKind = try parseHeistDefGeneric()
-        let header = try parseHeistDefHeader(parameterKind: parameterKind)
-        let body = try parseHeistClosureBody(parameter: header.parameter, allowDefinitions: true)
-        return makeDefinition(
-            path: header.path.split(separator: ".").map(String.init),
-            parameter: header.parameter,
+    }
+
+    mutating func parseNamespaceDefinition() throws -> HeistPlanAdmissionCandidate {
+        try expectSymbol("(")
+        let name = try parseStringLiteral()
+        try expectSymbol(")")
+        let body = try parseHeistClosureBody(parameter: .none, allowDefinitions: true)
+        guard body.steps.isEmpty else {
+            throw error(previous, "Namespace blocks may contain HeistDef or Namespace declarations only")
+        }
+        return HeistPlanAdmissionCandidate(
+            name: name,
+            parameter: .none,
             definitions: mergeDefinitions(body.definitions),
-            body: body.steps
+            body: []
         )
     }
 
