@@ -36,7 +36,7 @@ extension Navigation {
                 ? .success(method: .scroll)
                 : .failure(.scroll, message: "scroll failed: observed target already at edge; try the opposite direction")
         case .failed(let message):
-            return .failure(.scroll, message: message)
+            return .failure(.scroll, message: message, failureKind: .targetUnavailable)
         }
     }
 
@@ -60,7 +60,11 @@ extension Navigation {
         ) {
         case .resolved(let scrollTarget):
             guard case .uiScrollView(let scrollView) = scrollTarget else {
-                return .failure(.scrollToEdge, message: "scroll_to_edge failed: selected container has no live UIScrollView")
+                return .failure(
+                    .scrollToEdge,
+                    message: "scroll_to_edge failed: selected container has no live UIScrollView",
+                    failureKind: .targetUnavailable
+                )
             }
             let moved = safecracker.scrollToEdge(scrollView, edge: edge)
             if moved {
@@ -75,7 +79,7 @@ extension Navigation {
                     message: "scroll_to_edge failed: observed target already at requested edge"
                 )
         case .failed(let message):
-            return .failure(.scrollToEdge, message: message)
+            return .failure(.scrollToEdge, message: message, failureKind: .targetUnavailable)
         }
     }
 

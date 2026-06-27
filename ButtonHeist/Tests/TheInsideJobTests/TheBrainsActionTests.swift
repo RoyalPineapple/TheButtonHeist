@@ -957,7 +957,6 @@ final class TheBrainsActionTests: XCTestCase {
         let heist = try XCTUnwrap(result.heistExecutionPayload)
         let step = try XCTUnwrap(heist.steps.first)
         let secondIteration = try XCTUnwrap(step.children.last)
-        let redundantRetry = try XCTUnwrap(secondIteration.children.first)
 
         XCTAssertTrue(result.success, result.message ?? "repeat_until failed")
         XCTAssertNil(heist.abortedAtPath)
@@ -966,9 +965,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
         XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration, .repeatUntilIteration])
         XCTAssertEqual(secondIteration.status, .passed)
-        XCTAssertEqual(redundantRetry.status, .passed)
-        XCTAssertEqual(redundantRetry.actionEvidence?.actionResult?.success, false)
-        XCTAssertNil(redundantRetry.failure)
+        XCTAssertNil(secondIteration.abortedAtChildPath)
+        XCTAssertTrue(secondIteration.children.isEmpty)
     }
 
     func testHeistRepeatUntilBodyActionFailureStillFailsWhenPredicateUnmet() async throws {

@@ -3,7 +3,7 @@ import UIKit
 import XCTest
 @testable import AccessibilitySnapshotParser
 import ThePlans
-@testable import TheScore
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 @testable import TheInsideJob
 
@@ -64,7 +64,7 @@ final class HeistReceiptTests: XCTestCase {
             traits: .header,
             respondsToUserInteraction: false
         )
-        let currentScreen = Screen.makeForTests(elements: [(currentHeader, "buttonheist_demo")])
+        let currentScreen = Screen.makeForTests(elements: [(currentHeader, HeistId(rawValue: "buttonheist_demo"))])
         job.brains.stash.nextVisibleRefreshScreenForTesting = currentScreen
 
         let plan = try HeistPlan {
@@ -135,6 +135,83 @@ final class HeistReceiptTests: XCTestCase {
             return XCTFail("Expected array initializer to build a ForEachString root step")
         }
         XCTAssertEqual(forEach.values, ["milk", "eggs"])
+    }
+
+    func testRepeatUntilSuccessReceiptDoesNotSynthesizeWaitActionResult() async throws {
+        let job = TheInsideJob(token: "in-app-repeat-until-success-receipt-test")
+        let waitScript = ReceiptWaitScript(states: [
+            observedQuantityState(job: job, value: "0"),
+            observedQuantityState(job: job, value: "2"),
+        ])
+        var incrementCount = 0
+        let runtime = repeatUntilRuntime(job: job, waitScript: waitScript) { command in
+            if case .increment = command {
+                incrementCount += 1
+            }
+            return ActionResult(success: true, method: .increment)
+        }
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                timeout: 1,
+                body: [
+                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                ]
+            )),
+        ])
+
+        let result = await job.brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        let evidence = try XCTUnwrap(step.repeatUntilEvidence)
+        let iterationEvidence = try XCTUnwrap(step.children.first?.repeatUntilEvidence)
+
+        XCTAssertTrue(result.success, result.message ?? "repeat_until failed")
+        XCTAssertEqual(incrementCount, 1)
+        XCTAssertEqual(evidence.iterationCount, 1)
+        XCTAssertTrue(evidence.expectation.met)
+        XCTAssertNil(evidence.actionResult)
+        XCTAssertNil(iterationEvidence.actionResult)
+        XCTAssertNil(step.reportActionResult)
+    }
+
+    func testRepeatUntilTimeoutReceiptDoesNotSynthesizeWaitActionResult() async throws {
+        let job = TheInsideJob(token: "in-app-repeat-until-timeout-receipt-test")
+        let waitScript = ReceiptWaitScript(states: [
+            observedQuantityState(job: job, value: "0"),
+        ])
+        var incrementCount = 0
+        let runtime = repeatUntilRuntime(job: job, waitScript: waitScript) { command in
+            if case .increment = command {
+                incrementCount += 1
+            }
+            return ActionResult(success: true, method: .increment)
+        }
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .exists(.element(identifier: "quantity", value: "2")),
+                timeout: 0,
+                body: [
+                    .action(try ActionStep(command: .increment(.predicate(.identifier("quantity"))))),
+                ],
+                elseBody: [
+                    .warn(WarnStep(message: "quantity did not reach 2")),
+                ]
+            )),
+        ])
+
+        let result = await job.brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        let evidence = try XCTUnwrap(step.repeatUntilEvidence)
+
+        XCTAssertTrue(result.success, result.message ?? "repeat_until else failed")
+        XCTAssertEqual(incrementCount, 0)
+        XCTAssertEqual(step.children.map(\.kind), [.warn])
+        XCTAssertFalse(evidence.expectation.met)
+        XCTAssertNil(evidence.actionResult)
+        XCTAssertNil(step.reportActionResult)
+        XCTAssertTrue(evidence.failureReason?.contains("timed out") == true)
     }
 
     func testWarningsRollUpWithRuntimePath() async throws {
@@ -304,6 +381,83 @@ private final class RuntimeCapture {
             return await self.job.executeInAppHeist(plan, argument: argument)
         }
     }
+}
+
+@MainActor
+private final class ReceiptWaitScript {
+    private var states: [PostActionObservation.BeforeState]
+    private var previousCapture: AccessibilityTrace.Capture?
+    private var nextSequence: SettledObservationSequence = 0
+
+    init(states: [PostActionObservation.BeforeState]) {
+        self.states = states
+    }
+
+    func receipt(for step: ResolvedWaitStep) -> HeistWaitReceipt {
+        guard !states.isEmpty else {
+            let expectation = ExpectationResult(
+                met: false,
+                predicate: step.predicate,
+                actual: "no settled semantic observation available"
+            )
+            return HeistWaitReceipt(waitOutcome: HeistWaitOutcome(
+                status: .timedOut,
+                message: expectation.actual,
+                accessibilityTrace: nil,
+                expectation: expectation
+            ))
+        }
+
+        let state = states.removeFirst()
+        nextSequence += 1
+        let trace = previousCapture.map { AccessibilityTrace(captures: [$0, state.capture]) }
+            ?? AccessibilityTrace(capture: state.capture)
+        previousCapture = state.capture
+
+        let expectation = PredicateEvaluation.evaluate(step.predicate, in: trace)
+        return HeistWaitReceipt(waitOutcome: HeistWaitOutcome(
+            status: expectation.met ? .matched : .timedOut,
+            message: expectation.actual,
+            accessibilityTrace: trace,
+            expectation: expectation,
+            observedSequence: nextSequence,
+            observationSummary: "known: \(state.interface.projectedElements.count) elements"
+        ))
+    }
+}
+
+@MainActor
+private func observedQuantityState(
+    job: TheInsideJob,
+    value: String
+) -> PostActionObservation.BeforeState {
+    let element = AccessibilityElement.make(
+        value: value,
+        identifier: "quantity",
+        traits: .staticText
+    )
+    job.brains.stash.installScreenForTesting(.makeForTests(elements: [(element, HeistId(rawValue: "quantity"))]))
+    return job.brains.postActionObservation.captureSemanticState()
+}
+
+@MainActor
+private func repeatUntilRuntime(
+    job _: TheInsideJob,
+    waitScript: ReceiptWaitScript,
+    execute: @escaping @MainActor (RuntimeActionMessage) async -> ActionResult
+) -> TheBrains.HeistExecutionRuntime {
+    TheBrains.HeistExecutionRuntime(
+        execute: execute,
+        wait: { step, _, _ in
+            waitScript.receipt(for: step)
+        },
+        selectPredicateCase: { _, _ in
+            HeistCaseSelectionResult(cases: [], outcome: .noMatch, elapsedMs: 0)
+        },
+        observeSemanticState: { _, _, _ in
+            nil
+        }
+    )
 }
 
 private extension ActionResult {
