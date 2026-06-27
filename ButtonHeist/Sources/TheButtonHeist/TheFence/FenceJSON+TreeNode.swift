@@ -11,24 +11,6 @@ struct PublicInterfaceRendering: Encodable {
     let visibleElementBudget: Int?
     let totalNodeBudget: Int?
 
-    init(
-        state: String,
-        reasonCode: String?,
-        observedElementCount: Int,
-        renderedElementCount: Int,
-        omittedElementCount: Int,
-        visibleElementBudget: Int?,
-        totalNodeBudget: Int?
-    ) {
-        self.state = state
-        self.reasonCode = reasonCode
-        self.observedElementCount = observedElementCount
-        self.renderedElementCount = renderedElementCount
-        self.omittedElementCount = omittedElementCount
-        self.visibleElementBudget = visibleElementBudget
-        self.totalNodeBudget = totalNodeBudget
-    }
-
     init(projection: InterfaceRenderingProjection) {
         self.state = projection.state.rawValue
         self.reasonCode = projection.reason?.rawValue

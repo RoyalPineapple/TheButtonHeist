@@ -25,48 +25,6 @@ struct PublicContainer: Encodable {
     let frameHeight: Double?
     let children: [PublicTreeNode]
 
-    init(
-        container: AccessibilityContainer,
-        annotation: InterfaceContainerAnnotation?,
-        detail: InterfaceDetail,
-        observedElementCount: Int?,
-        truncation: PublicSubtreeTruncation?,
-        children: [PublicTreeNode]
-    ) {
-        let fields = Self.fields(
-            for: container,
-            children: children,
-            observedElementCount: observedElementCount
-        )
-        self.type = fields.type
-        self.label = fields.label
-        self.value = fields.value
-        self.identifier = fields.identifier
-        self.rowCount = fields.rowCount
-        self.columnCount = fields.columnCount
-        self.contentWidth = fields.contentWidth
-        self.contentHeight = fields.contentHeight
-        self.scrollAxis = fields.scrollAxis
-        self.pageScrollsX = fields.pageScrollsX
-        self.pageScrollsY = fields.pageScrollsY
-        self.observedElementCount = fields.observedElementCount
-        self.truncation = truncation
-        self.isModalBoundary = container.isModalBoundary ? true : nil
-        self.containerName = annotation?.containerName?.rawValue
-        self.children = children
-        guard detail == .full else {
-            self.frameX = nil
-            self.frameY = nil
-            self.frameWidth = nil
-            self.frameHeight = nil
-            return
-        }
-        self.frameX = Self.sanitizedDouble(container.frame.origin.x)
-        self.frameY = Self.sanitizedDouble(container.frame.origin.y)
-        self.frameWidth = Self.sanitizedDouble(container.frame.size.width)
-        self.frameHeight = Self.sanitizedDouble(container.frame.size.height)
-    }
-
     init(projection: InterfaceContainerProjection, detail: InterfaceDetail) {
         let children = projection.children.map { PublicTreeNode(projection: $0, detail: detail) }
         let fields = Self.fields(
@@ -219,18 +177,6 @@ struct PublicSubtreeTruncation: Encodable {
     let renderedElementCount: Int
     let omittedElementCount: Int
     let visibleElementBudget: Int
-
-    init(
-        observedElementCount: Int,
-        renderedElementCount: Int,
-        omittedElementCount: Int,
-        visibleElementBudget: Int
-    ) {
-        self.observedElementCount = observedElementCount
-        self.renderedElementCount = renderedElementCount
-        self.omittedElementCount = omittedElementCount
-        self.visibleElementBudget = visibleElementBudget
-    }
 
     init(projection: InterfaceSubtreeTruncationProjection) {
         self.observedElementCount = projection.observedElementCount

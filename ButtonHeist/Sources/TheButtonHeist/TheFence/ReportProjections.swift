@@ -4,23 +4,13 @@ import AccessibilitySnapshotModel
 import ThePlans
 import TheScore
 
-// MARK: - Projection Limits
-
-public struct ProjectionLimit: Sendable, Equatable {
-    public let count: Int
-
-    public init(_ count: Int) {
-        self.count = max(0, count)
-    }
-}
-
 public struct ProjectionLimits: Sendable, Equatable {
-    public let visibleElementBudget: ProjectionLimit
-    public let totalNodeBudget: ProjectionLimit
-    public let deltaElementsPerBucket: ProjectionLimit
-    public let screenPreviewElements: ProjectionLimit
-    public let caseResults: ProjectionLimit
-    public let failureInterfaceElements: ProjectionLimit
+    public let visibleElementBudget: Int
+    public let totalNodeBudget: Int
+    public let deltaElementsPerBucket: Int
+    public let screenPreviewElements: Int
+    public let caseResults: Int
+    public let failureInterfaceElements: Int
 
     public init(
         visibleElementBudget: Int,
@@ -30,12 +20,12 @@ public struct ProjectionLimits: Sendable, Equatable {
         caseResults: Int,
         failureInterfaceElements: Int
     ) {
-        self.visibleElementBudget = ProjectionLimit(visibleElementBudget)
-        self.totalNodeBudget = ProjectionLimit(totalNodeBudget)
-        self.deltaElementsPerBucket = ProjectionLimit(deltaElementsPerBucket)
-        self.screenPreviewElements = ProjectionLimit(screenPreviewElements)
-        self.caseResults = ProjectionLimit(caseResults)
-        self.failureInterfaceElements = ProjectionLimit(failureInterfaceElements)
+        self.visibleElementBudget = max(0, visibleElementBudget)
+        self.totalNodeBudget = max(0, totalNodeBudget)
+        self.deltaElementsPerBucket = max(0, deltaElementsPerBucket)
+        self.screenPreviewElements = max(0, screenPreviewElements)
+        self.caseResults = max(0, caseResults)
+        self.failureInterfaceElements = max(0, failureInterfaceElements)
     }
 
     public static func current(
@@ -112,56 +102,6 @@ public struct ProjectionProfile: Sendable, Equatable {
         kind == .full ? .full : .summary
     }
 }
-
-struct ReportRenderer<Projection, Output>: Sendable {
-    let render: @Sendable (Projection) throws -> Output
-
-    init(_ render: @escaping @Sendable (Projection) throws -> Output) {
-        self.render = render
-    }
-}
-
-protocol ProjectionRenderer {
-    associatedtype Projection
-    associatedtype Output
-
-    func render(_ projection: Projection) throws -> Output
-}
-
-public struct ReportNodePath: RawRepresentable, Hashable, Sendable, Codable {
-    public let rawValue: String
-
-    public init(rawValue: String) {
-        precondition(!rawValue.isEmpty, "ReportNodePath must not be empty")
-        self.rawValue = rawValue
-    }
-}
-
-public struct FailureCode: RawRepresentable, Hashable, Sendable, Codable {
-    public let rawValue: String
-
-    public init(rawValue: String) {
-        precondition(!rawValue.isEmpty, "FailureCode must not be empty")
-        self.rawValue = rawValue
-    }
-}
-
-public enum DiagnosticFieldPrivacy: Sendable, Equatable {
-    case publicValue
-    case sensitive
-}
-
-public struct DiagnosticField<Value: Sendable>: Sendable {
-    public let value: Value
-    public let privacy: DiagnosticFieldPrivacy
-
-    public init(_ value: Value, privacy: DiagnosticFieldPrivacy) {
-        self.value = value
-        self.privacy = privacy
-    }
-}
-
-public typealias DiagnosticFailure = PublicFailure
 
 // MARK: - Interface Projection
 
@@ -280,10 +220,10 @@ struct InterfaceProjection: Sendable {
         elementCount = interface.projectedElements.count
 
         let stats = InterfaceProjectionStats(observedElementCount: elementCount)
-        let totalNodeBudget = InterfaceNodeBudgetTracker(budget: profile.limits.totalNodeBudget.count)
+        let totalNodeBudget = InterfaceNodeBudgetTracker(budget: profile.limits.totalNodeBudget)
         let context = InterfaceProjectionContext(
             detail: profile.interfaceDetail,
-            visibleElementBudget: profile.limits.visibleElementBudget.count,
+            visibleElementBudget: profile.limits.visibleElementBudget,
             totalNodeBudget: totalNodeBudget,
             stats: stats,
             elementAnnotations: interface.annotations.elementByPath,
@@ -301,8 +241,8 @@ struct InterfaceProjection: Sendable {
             )
         }
         rendering = stats.rendering(
-            visibleElementBudget: profile.limits.visibleElementBudget.count,
-            totalNodeBudget: profile.limits.totalNodeBudget.count,
+            visibleElementBudget: profile.limits.visibleElementBudget,
+            totalNodeBudget: profile.limits.totalNodeBudget,
             totalNodeBudgetHit: totalNodeBudget.wasLimited
         )
     }
@@ -533,7 +473,7 @@ struct DeltaEditsProjection: Sendable {
     let updated: ElementUpdateProjectionBucket
 
     init(edits: ElementEdits, profile: ProjectionProfile) {
-        let limit = profile.limits.deltaElementsPerBucket.count
+        let limit = profile.limits.deltaElementsPerBucket
         added = ElementProjectionBucket(elements: edits.added, limit: limit)
         removed = ElementProjectionBucket(elements: edits.removed, limit: limit)
         let meaningfulUpdates = edits.updated.compactMap { update -> ElementUpdate? in
@@ -559,7 +499,7 @@ struct DeltaScreenProjection: Sendable {
 
     init(interface: Interface, profile: ProjectionProfile, includeInterface: Bool) {
         let projectedElements = interface.projectedElements
-        let visible = Array(projectedElements.prefix(max(0, profile.limits.screenPreviewElements.count)))
+        let visible = Array(projectedElements.prefix(max(0, profile.limits.screenPreviewElements)))
         screenDescription = InterfaceSummary.screenDescription(for: interface)
         screenId = InterfaceSummary.screenId(for: interface)
         elementCount = projectedElements.count
@@ -586,7 +526,7 @@ struct DeltaProjection: Sendable {
             captureEdge = payload.captureEdge
             transient = ElementProjectionBucket(
                 elements: payload.transient,
-                limit: profile.limits.deltaElementsPerBucket.count
+                limit: profile.limits.deltaElementsPerBucket
             )
             edits = nil
             screen = nil
@@ -596,7 +536,7 @@ struct DeltaProjection: Sendable {
             captureEdge = payload.captureEdge
             transient = ElementProjectionBucket(
                 elements: payload.transient,
-                limit: profile.limits.deltaElementsPerBucket.count
+                limit: profile.limits.deltaElementsPerBucket
             )
             let editProjection = DeltaEditsProjection(edits: payload.edits, profile: profile)
             edits = editProjection.isEmpty ? nil : editProjection
@@ -607,7 +547,7 @@ struct DeltaProjection: Sendable {
             captureEdge = payload.captureEdge
             transient = ElementProjectionBucket(
                 elements: payload.transient,
-                limit: profile.limits.deltaElementsPerBucket.count
+                limit: profile.limits.deltaElementsPerBucket
             )
             edits = nil
             screen = DeltaScreenProjection(
@@ -791,7 +731,7 @@ struct HeistReportProjection: Sendable {
         failedStepPath = result.failedStepPath
         failureScreenshotSummary = result.failureScreenshotSummary
         failureInterfaceDump = result.failureInterfaceDump(
-            elementLimit: profile.limits.failureInterfaceElements.count
+            elementLimit: profile.limits.failureInterfaceElements
         )
         self.netDelta = netDelta.map { DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true) }
         finalScreenId = result.traceResultsInExecutionOrder
@@ -801,7 +741,7 @@ struct HeistReportProjection: Sendable {
 }
 
 struct HeistReportNodeProjection: Sendable {
-    let path: ReportNodePath
+    let path: String
     let kind: String
     let capability: String?
     let displayName: String
@@ -822,7 +762,7 @@ struct HeistReportNodeProjection: Sendable {
     let children: [HeistReportNodeProjection]
 
     init(step: HeistExecutionStepResult, profile: ProjectionProfile) {
-        path = ReportNodePath(rawValue: step.path)
+        path = step.path
         kind = step.reportStepName
         capability = step.invocationEvidence?.invocation?.capabilityName
         displayName = step.reportDisplayName
@@ -964,7 +904,7 @@ struct HeistCaseSelectionEvidenceProjection: Sendable {
         timeout = selection.timeout
         lastObservedSummary = selection.lastObservedSummary
         caseCount = selection.cases.count
-        let visibleCases = Array(selection.cases.prefix(profile.limits.caseResults.count))
+        let visibleCases = Array(selection.cases.prefix(profile.limits.caseResults))
         cases = visibleCases.map(HeistCaseMatchProjection.init(match:))
         let omitted = selection.cases.count - visibleCases.count
         omittedCaseCount = omitted > 0 ? omitted : nil

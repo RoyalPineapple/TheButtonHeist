@@ -34,21 +34,6 @@ struct PublicActionResponse: FencePublicJSONResponse {
         ))
     }
 
-    init(
-        method: String,
-        result: ActionResult,
-        expectation: ExpectationResult?,
-        expectationHint: String? = nil
-    ) {
-        self.init(projection: ActionProjection(
-            method: method,
-            result: result,
-            expectation: expectation,
-            expectationHint: expectationHint,
-            profile: .summary
-        ))
-    }
-
     init(projection: ActionProjection) {
         self.status = PublicStatus(projection.status)
         self.method = projection.method
@@ -178,13 +163,6 @@ struct PublicExpectationResult: Encodable {
     let expected: AccessibilityPredicate?
     let hint: String?
 
-    init(result: ExpectationResult, hint: String? = nil) {
-        self.met = result.met
-        self.actual = result.actual
-        self.expected = result.predicate
-        self.hint = hint
-    }
-
     init(projection: ExpectationProjection) {
         self.met = projection.met
         self.actual = projection.actual
@@ -200,10 +178,6 @@ struct PublicDelta: Encodable {
     let transient: [PublicElement]?
     let edits: PublicElementEdits?
     let newInterface: PublicInterface?
-
-    init(delta: AccessibilityTrace.Delta) {
-        self.init(projection: DeltaProjection(delta: delta, profile: .summary, includeScreenInterface: true))
-    }
 
     init(projection: DeltaProjection) {
         switch projection.kind {
@@ -251,13 +225,6 @@ struct PublicElementEdits: Encodable {
         added == nil && removed == nil && updated == nil
     }
 
-    init(edits: ElementEdits) {
-        self.added = edits.added.isEmpty ? nil : edits.added.map { PublicElement(element: $0, detail: .summary) }
-        self.removed = edits.removed.isEmpty ? nil : edits.removed.map { PublicElement(element: $0, detail: .summary) }
-        let filteredUpdates = edits.updated.compactMap { PublicElementUpdate(update: $0) }
-        self.updated = filteredUpdates.isEmpty ? nil : filteredUpdates
-    }
-
     init(projection: DeltaEditsProjection) {
         self.added = projection.added.elements.isEmpty
             ? nil
@@ -296,10 +263,6 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let expectations: PublicHeistExpectations?
     let netDelta: PublicDelta?
 
-    init(result: HeistExecutionResult, netDelta: AccessibilityTrace.Delta?) {
-        self.init(projection: HeistReportProjection(result: result, netDelta: netDelta, profile: .mcp))
-    }
-
     init(projection: HeistReportProjection) {
         self.status = PublicStatus(projection.status)
         self.report = PublicHeistReport(projection: projection)
@@ -317,10 +280,6 @@ struct PublicHeistReport: Encodable {
     let summary: PublicHeistReportSummary
     let nodes: [PublicHeistReportNode]
 
-    init(result: HeistExecutionResult) {
-        self.init(projection: HeistReportProjection(result: result, netDelta: nil, profile: .mcp))
-    }
-
     init(projection: HeistReportProjection) {
         self.summary = PublicHeistReportSummary(projection: projection.summary)
         self.nodes = projection.nodes.map { PublicHeistReportNode(projection: $0) }
@@ -334,10 +293,6 @@ struct PublicHeistReportSummary: Encodable {
     let abortedAtPath: String?
     let durationMs: Int
     let expectations: PublicHeistExpectations?
-
-    init(result: HeistExecutionResult) {
-        self.init(projection: HeistReportProjection(result: result, netDelta: nil, profile: .mcp).summary)
-    }
 
     init(projection: HeistReportSummaryProjection) {
         self.executedTopLevelStepCount = projection.executedTopLevelStepCount
@@ -366,12 +321,8 @@ struct PublicHeistReportNode: Encodable {
     let expectation: PublicExpectationResult?
     let children: [PublicHeistReportNode]
 
-    init(step: HeistExecutionStepResult) {
-        self.init(projection: HeistReportNodeProjection(step: step, profile: .mcp))
-    }
-
     init(projection: HeistReportNodeProjection) {
-        self.path = projection.path.rawValue
+        self.path = projection.path
         self.kind = projection.kind
         self.capability = projection.capability
         self.status = projection.status.rawValue
@@ -395,12 +346,6 @@ struct PublicHeistReportEvidence: Encodable {
     let repeatUntil: PublicHeistRepeatUntilEvidence?
     let invocation: PublicHeistInvocationEvidence?
     let warning: PublicHeistWarningEvidence?
-
-    init?(
-        step: HeistExecutionStepResult
-    ) {
-        self.init(projection: HeistReportNodeProjection(step: step, profile: .mcp).evidence)
-    }
 
     init?(projection: HeistReportEvidenceProjection?) {
         guard let projection else { return nil }
@@ -444,10 +389,6 @@ struct PublicHeistActionEvidence: Encodable {
     let expectationResult: PublicHeistReportActionResult?
     let expectation: PublicExpectationResult?
 
-    init(evidence: HeistActionEvidence) {
-        self.init(projection: HeistActionEvidenceProjection(evidence: evidence, profile: .mcp))
-    }
-
     init(projection: HeistActionEvidenceProjection) {
         self.commandName = projection.commandName
         self.target = projection.target
@@ -462,10 +403,6 @@ struct PublicHeistWaitEvidence: Encodable {
     let expectation: PublicExpectationResult
     let baselineSummary: String?
     let finalSummary: String?
-
-    init(evidence: HeistWaitEvidence) {
-        self.init(projection: HeistWaitEvidenceProjection(evidence: evidence, profile: .mcp))
-    }
 
     init(projection: HeistWaitEvidenceProjection) {
         self.result = PublicHeistReportActionResult(projection: projection.result)
@@ -484,10 +421,6 @@ struct PublicHeistCaseSelectionEvidence: Encodable {
     let cases: [PublicHeistCaseMatchResult]?
     let omittedCaseCount: Int?
 
-    init(evidence: HeistCaseSelectionEvidence) {
-        self.init(projection: HeistCaseSelectionEvidenceProjection(evidence: evidence, profile: .mcp))
-    }
-
     init(projection: HeistCaseSelectionEvidenceProjection) {
         self.outcome = projection.outcome
         self.elapsedMs = projection.elapsedMs
@@ -504,10 +437,6 @@ struct PublicHeistCaseMatchResult: Encodable {
     let met: Bool
     let actual: String?
 
-    init(match: HeistCaseMatchResult) {
-        self.init(projection: HeistCaseMatchProjection(match: match))
-    }
-
     init(projection: HeistCaseMatchProjection) {
         self.predicate = projection.predicate
         self.met = projection.met
@@ -522,10 +451,6 @@ struct PublicHeistForEachStringEvidence: Encodable {
     let iterationOrdinal: Int?
     let value: String?
     let failureReason: String?
-
-    init(evidence: HeistForEachStringEvidence) {
-        self.init(projection: HeistForEachStringEvidenceProjection(evidence: evidence))
-    }
 
     init(projection: HeistForEachStringEvidenceProjection) {
         self.parameter = projection.parameter
@@ -547,10 +472,6 @@ struct PublicHeistForEachElementEvidence: Encodable {
     let targetOrdinal: Int?
     let targetSummary: String?
     let failureReason: String?
-
-    init(evidence: HeistForEachElementEvidence) {
-        self.init(projection: HeistForEachElementEvidenceProjection(evidence: evidence))
-    }
 
     init(projection: HeistForEachElementEvidenceProjection) {
         self.parameter = projection.parameter
@@ -575,10 +496,6 @@ struct PublicHeistRepeatUntilEvidence: Encodable {
     let lastObservedSummary: String?
     let failureReason: String?
 
-    init(evidence: HeistRepeatUntilEvidence) {
-        self.init(projection: HeistRepeatUntilEvidenceProjection(evidence: evidence, profile: .mcp))
-    }
-
     init(projection: HeistRepeatUntilEvidenceProjection) {
         self.predicate = projection.predicate
         self.timeout = projection.timeout
@@ -599,10 +516,6 @@ struct PublicHeistInvocationEvidence: Encodable {
     let expectationResult: PublicHeistReportActionResult?
     let expectation: PublicExpectationResult?
 
-    init(evidence: HeistInvocationEvidence) {
-        self.init(projection: HeistInvocationEvidenceProjection(evidence: evidence, profile: .mcp))
-    }
-
     init(projection: HeistInvocationEvidenceProjection) {
         self.capability = projection.capability
         self.name = projection.name
@@ -616,10 +529,6 @@ struct PublicHeistInvocationEvidence: Encodable {
 struct PublicHeistWarningEvidence: Encodable {
     let path: String
     let message: String
-
-    init(warning: HeistExecutionWarning) {
-        self.init(projection: HeistWarningEvidenceProjection(warning: warning))
-    }
 
     init(projection: HeistWarningEvidenceProjection) {
         self.path = projection.path
@@ -644,15 +553,6 @@ struct PublicHeistReportActionResult: Encodable {
     let activationTrace: ActivationTrace?
     let timing: ActionPerformanceTiming?
     let omitted: PublicHeistActionResultOmissions?
-
-    init(method: String, result: ActionResult) {
-        self.init(projection: ActionProjection(
-            method: method,
-            result: result,
-            profile: .mcp,
-            includeOmissions: true
-        ))
-    }
 
     init(projection: ActionProjection) {
         self.status = PublicStatus(projection.status)
@@ -695,10 +595,6 @@ struct PublicHeistActionResultOmissions: Encodable {
         accessibilityTrace == nil && subjectEvidence == nil
     }
 
-    init(result: ActionResult) {
-        self.init(projection: ActionResultOmissionsProjection(result: result))
-    }
-
     init(projection: ActionResultOmissionsProjection) {
         self.accessibilityTrace = projection.accessibilityTrace.map { PublicProjectionOmission(projection: $0) }
         self.subjectEvidence = projection.subjectEvidence.map { PublicProjectionOmission(projection: $0) }
@@ -709,12 +605,6 @@ struct PublicProjectionOmission: Encodable {
     let reason: String
     let projectedAs: String?
     let omittedCount: Int?
-
-    init(reason: String, projectedAs: String?, omittedCount: Int?) {
-        self.reason = reason
-        self.projectedAs = projectedAs
-        self.omittedCount = omittedCount
-    }
 
     init(projection: ProjectionOmission) {
         self.reason = projection.reason
@@ -731,10 +621,6 @@ struct PublicHeistDelta: Encodable {
     let edits: PublicHeistElementEdits?
     let screen: PublicHeistScreenProjection?
     let omitted: PublicHeistDeltaOmissions?
-
-    init(delta: AccessibilityTrace.Delta) {
-        self.init(projection: DeltaProjection(delta: delta, profile: .mcp, includeScreenInterface: false))
-    }
 
     init(projection: DeltaProjection) {
         switch projection.kind {
@@ -789,10 +675,6 @@ struct PublicHeistElementEdits: Encodable {
         added == nil && removed == nil && updated == nil && omitted == nil
     }
 
-    init(edits: ElementEdits) {
-        self.init(projection: DeltaEditsProjection(edits: edits, profile: .mcp))
-    }
-
     init(projection: DeltaEditsProjection) {
         let added = Self.elements(projection.added.elements)
         let removed = Self.elements(projection.removed.elements)
@@ -838,10 +720,6 @@ struct PublicHeistScreenProjection: Encodable {
     let elements: [PublicElement]?
     let omittedElementCount: Int?
 
-    init(interface: Interface) {
-        self.init(projection: DeltaScreenProjection(interface: interface, profile: .mcp, includeInterface: false))
-    }
-
     init(projection: DeltaScreenProjection) {
         self.screenDescription = projection.screenDescription
         self.screenId = projection.screenId
@@ -857,12 +735,6 @@ struct PublicHeistExpectations: Encodable {
     let checked: Int
     let met: Int
     let allMet: Bool
-
-    init(checked: Int, met: Int) {
-        self.checked = checked
-        self.met = met
-        self.allMet = checked == met
-    }
 
     init(projection: HeistExpectationsProjection) {
         self.checked = projection.checked

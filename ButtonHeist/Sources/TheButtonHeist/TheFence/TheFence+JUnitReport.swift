@@ -54,7 +54,7 @@ extension TheFence {
         projection: HeistReportProjection
     ) -> HeistJUnitReport.Outcome {
         if let message = step.failureMessage {
-            let enriched = step.path.rawValue == projection.failedStepPath
+            let enriched = step.path == projection.failedStepPath
                 ? junitFailureMessage(message, projection: projection)
                 : message
             return .failed(message: enriched, errorKind: junitErrorKind(for: step))
