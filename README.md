@@ -6,13 +6,11 @@
 
 # The Button Heist
 
-UI automation often begins with a picture. The machine looks at pixels, finds rectangles, sends an event, waits, and hopes the screen means what it seems to mean.
+The Button Heist makes the iOS accessibility interface programmable.
 
-iOS apps already publish a better surface. Accessibility names controls, values, traits, state, hierarchy, and actions. It is the interface assistive technologies depend on.
+Agents, humans, and tests act through the same contract VoiceOver depends on.
 
-The Button Heist makes that settled accessibility interface executable. Agents and tests act through the contract the app already exposes, then receive evidence that the contract changed as expected.
-
-Product semantics in. Settled evidence out.
+Every action is targeted and precise. The heist goes off clean, always returning with the evidence.
 
 ## One move
 
