@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 import XCTest
-import ThePlans
 
 import ButtonHeistTesting
 import TheInsideJob

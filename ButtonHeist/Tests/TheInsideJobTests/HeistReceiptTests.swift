@@ -3,7 +3,6 @@ import UIKit
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import ButtonHeistTesting
-import ThePlans
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @testable import TheInsideJob
@@ -11,19 +10,7 @@ import ThePlans
 @MainActor
 final class HeistReceiptTests: XCTestCase {
 
-    func testPublicHeistWarnRunsInAppProcess() async throws {
-        let heist = try await Heist {
-            Warn("ok")
-        }
-
-        XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(heist.result.steps.first?.reportMessage, "ok")
-        XCTAssertEqual(heist.result.warnings, [
-            HeistExecutionWarning(path: "$.body[0]", message: "ok"),
-        ])
-    }
-
-    func testPublicRunHeistFacadeWarnRunsInAppProcess() async throws {
+    func testRunHeistFacadeWarnRunsInAppProcess() async throws {
         let heist = try await runHeist("publicFacadeWarn") {
             Warn("ok")
         }
@@ -310,14 +297,13 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testWarningsRollUpWithRuntimePath() async throws {
-        let job = TheInsideJob(token: "in-app-heist-warning-test")
         enum Library {
             static let marker = HeistDef<Void>("Library.marker") {
                 Warn("nested")
             }
         }
 
-        let heist = try await Heist(runtime: .insideJob(job)) {
+        let heist = try await runHeist("warningsRollUp") {
             Warn("root")
             try Library.marker()
         }
@@ -329,10 +315,8 @@ final class HeistReceiptTests: XCTestCase {
     }
 
     func testFailedHeistThrowsFailureWithInspectableResult() async throws {
-        let job = TheInsideJob(token: "in-app-heist-failure-test")
-
         do {
-            _ = try await Heist(runtime: .insideJob(job)) {
+            _ = try await runHeist("failedHeist") {
                 Fail("stop")
             }
             XCTFail("Expected failed heist to throw")
