@@ -61,10 +61,12 @@ HeistPlan("shop") {
     }
 
     RunHeist("Cart.addItem", "Milk")
+    RunHeist("Cart.addItem", "Eggs")
+    RunHeist("Cart.addItem", "Bread")
 }
 ```
 
-`Cart.addItem("Milk")` still runs through accessibility predicates and receipts. But callers can work at the level of the product: search, add to cart, checkout.
+Each `Cart.addItem` call still runs through accessibility predicates and receipts. But callers can work at the level of the product: search, add to cart, checkout.
 
 That is where the tool changes shape. The accessibility interface becomes the language of app interaction.
 
