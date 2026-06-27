@@ -354,12 +354,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         let stringRoot = try await Heist("Grace Hopper") { name in
             try DogfoodHome.openScreen("Controls Demo")
             try ControlsDemoScreen.openScreen("Text Input")
-
-            TypeText(name, into: .value("Name"))
-                .expect(.exists(.value(name)), timeout: .seconds(2))
-
-            DismissKeyboard()
-                .withoutExpectation("Keyboard dismissal only prepares navigation")
+            try TextInputScreen.fillProfile(name)
 
             try DogfoodNavigation.backTo("Controls Demo")
             try DogfoodNavigation.backToRoot()
@@ -368,8 +363,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
         XCTAssertEqual(stringRoot.result.steps.map(\.kind), [
             .invoke,
             .invoke,
-            .action,
-            .action,
+            .invoke,
             .invoke,
             .invoke,
         ])
