@@ -11,6 +11,7 @@ let workspace = Workspace(
             name: "TheInsideJobTests",
             buildAction: .buildAction(targets: [
                 .project(path: ".", target: "TheInsideJobTests"),
+                .project(path: ".", target: "ButtonHeistTesting"),
                 .project(path: ".", target: "TheInsideJob"),
                 .project(path: ".", target: "TheScore"),
                 .project(path: "TestApp", target: "BH Demo"),

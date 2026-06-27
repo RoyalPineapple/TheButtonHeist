@@ -16,6 +16,7 @@ let package = Package(
         .executableTarget(
             name: "ButtonHeistIOSPublicProductsImportContract",
             dependencies: [
+                .product(name: "ButtonHeistTesting", package: "ButtonHeist"),
                 .product(name: "TheInsideJob", package: "ButtonHeist"),
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]

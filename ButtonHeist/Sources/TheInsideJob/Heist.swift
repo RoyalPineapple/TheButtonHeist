@@ -8,8 +8,8 @@ import ThePlans
 /// Completed in-process heist execution receipt for app and UI tests.
 ///
 /// Constructing a `Heist` builds or accepts a runtime-validated `HeistPlan`,
-/// runs it through the same in-app heist executor used by `run_heist`, and then
-/// exposes the execution result for assertions and reporting.
+/// runs it directly against `TheInsideJob` in the app process, and then exposes
+/// the execution result for assertions and reporting.
 public struct Heist: Sendable {
     public let result: HeistExecutionResult
 
@@ -196,104 +196,6 @@ public struct Heist: Sendable {
         return result
     }
 }
-
-// swiftlint:disable identifier_name
-/// Swift/test runner boundary for a parameterless Button Heist plan.
-///
-/// This is host-language sugar: Swift may prepare the call and await the
-/// receipt, while the closure lowers to a validated `HeistPlan` and executes
-/// through the same in-app heist runtime as `run_heist`.
-@MainActor
-public func RunHeist<Content: HeistContent>(
-    _ name: String,
-    @HeistBuilder _ content: () throws -> Content
-) async throws -> Heist {
-    try await RunHeist(name, runtime: .shared, content)
-}
-
-@MainActor
-func RunHeist<Content: HeistContent>(
-    _ name: String,
-    runtime: InAppHeistRuntime,
-    @HeistBuilder _ content: () throws -> Content
-) async throws -> Heist {
-    let plan = try HeistPlan(name, content)
-    return try await Heist(plan, argument: .none, runtime: runtime)
-}
-
-/// Swift/test runner boundary for a one-string-argument Button Heist plan.
-///
-/// The `argument` value belongs to Swift; the closure receives a DSL reference
-/// to the root parameter so durable behavior still lives in the `HeistPlan`.
-@MainActor
-public func RunHeist<Content: HeistContent>(
-    _ name: String,
-    argument input: String,
-    parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: (StringExpr) throws -> Content
-) async throws -> Heist {
-    try await RunHeist(name, argument: input, parameter: parameter, runtime: .shared, content)
-}
-
-@MainActor
-func RunHeist<Content: HeistContent>(
-    _ name: String,
-    argument input: String,
-    parameter: HeistReferenceName = "input",
-    runtime: InAppHeistRuntime,
-    @HeistBuilder _ content: (StringExpr) throws -> Content
-) async throws -> Heist {
-    let plan = try HeistPlan(name, parameter: parameter, content)
-    return try await Heist(plan, argument: .string(.literal(input)), runtime: runtime)
-}
-
-@_disfavoredOverload
-@MainActor
-public func RunHeist<Content: HeistContent>(
-    _ name: String,
-    argument input: ElementTarget,
-    parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-) async throws -> Heist {
-    try await RunHeist(name, argument: .target(input), parameter: parameter, runtime: .shared, content)
-}
-
-@_disfavoredOverload
-@MainActor
-func RunHeist<Content: HeistContent>(
-    _ name: String,
-    argument input: ElementTarget,
-    parameter: HeistReferenceName = "input",
-    runtime: InAppHeistRuntime,
-    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-) async throws -> Heist {
-    try await RunHeist(name, argument: .target(input), parameter: parameter, runtime: runtime, content)
-}
-
-/// Swift/test runner boundary for a one-element-target-argument Button Heist plan.
-@MainActor
-public func RunHeist<Content: HeistContent>(
-    _ name: String,
-    argument input: ElementTargetExpr,
-    parameter: HeistReferenceName = "input",
-    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-) async throws -> Heist {
-    try await RunHeist(name, argument: input, parameter: parameter, runtime: .shared, content)
-}
-
-@MainActor
-func RunHeist<Content: HeistContent>(
-    _ name: String,
-    argument input: ElementTargetExpr,
-    parameter: HeistReferenceName = "input",
-    runtime: InAppHeistRuntime,
-    @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
-) async throws -> Heist {
-    let plan = try HeistPlan(name, targetParameter: parameter, content)
-    let target = try input.resolve(in: .empty)
-    return try await Heist(plan, argument: .elementTarget(.target(target)), runtime: runtime)
-}
-// swiftlint:enable identifier_name
 
 public extension Heist {
     struct Failure: Error, Sendable, LocalizedError, CustomStringConvertible {

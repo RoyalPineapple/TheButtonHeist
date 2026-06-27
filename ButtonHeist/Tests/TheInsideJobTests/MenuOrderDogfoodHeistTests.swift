@@ -1,8 +1,7 @@
 #if canImport(UIKit)
 import XCTest
-import ThePlans
 
-import TheInsideJob
+import ButtonHeistTesting
 
 private enum DemoHome {
     private static let anyBackTarget = ElementPredicateTemplate(traits: [.backButton])
@@ -62,11 +61,6 @@ private enum DemoHome {
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
         try rawAction(
-            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .top)),
-            waiver: "Reanchors the menu before resolving each requested row"
-        )
-
-        try rawAction(
             .viewportScrollToVisible(.label(item)),
             waiver: "scroll_to_visible is the viewport precondition for the row custom action"
         )
@@ -125,7 +119,7 @@ private struct DemoMenuItem {
 final class MenuOrderDogfoodHeistTests: XCTestCase {
 
     func testMenuOrderFlowUsesReusablePublicHeists() async throws {
-        let heist = try await RunHeist("MenuOrderDogfood_orderTwoItems") {
+        let heist = try await runHeist("MenuOrderDogfood_orderTwoItems") {
             try DemoHome.openMenu()
 
             ForEach(DemoOrder.itemLabels) { item in

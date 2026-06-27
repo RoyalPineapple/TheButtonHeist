@@ -44,14 +44,16 @@ for product in ThePlans TheScore ButtonHeistDSL ButtonHeist; do
 done
 
 IOS_PUBLIC_PRODUCT_IMPORTS="$(grep -R -nE '^[[:space:]]*import[[:space:]]+' "$IOS_PUBLIC_PRODUCTS_FIXTURE_DIR/Sources" || true)"
-if ! printf '%s\n' "$IOS_PUBLIC_PRODUCT_IMPORTS" \
-    | grep -Eq '^[^:]+:[0-9]+:[[:space:]]*import[[:space:]]+TheInsideJob([[:space:]]|$)'
-then
-    fail "iOS public products import fixture must import TheInsideJob"
-fi
-if ! grep -Eq '\.product\(name:[[:space:]]*"TheInsideJob"' "$IOS_PUBLIC_PRODUCTS_FIXTURE_DIR/Package.swift"; then
-    fail "iOS public products import fixture must depend on TheInsideJob"
-fi
+for product in TheInsideJob ButtonHeistTesting; do
+    if ! printf '%s\n' "$IOS_PUBLIC_PRODUCT_IMPORTS" \
+        | grep -Eq "^[^:]+:[0-9]+:[[:space:]]*import[[:space:]]+$product([[:space:]]|$)"
+    then
+        fail "iOS public products import fixture must import $product"
+    fi
+    if ! grep -Eq "\\.product\\(name:[[:space:]]*\"$product\"" "$IOS_PUBLIC_PRODUCTS_FIXTURE_DIR/Package.swift"; then
+        fail "iOS public products import fixture must depend on $product"
+    fi
+done
 
 SCRATCH_PATH="$(mktemp -d "${TMPDIR:-/tmp}/buttonheist-import-contract-build.XXXXXX")"
 SWIFT_CACHE_PATH="$(mktemp -d "${TMPDIR:-/tmp}/buttonheist-import-contract-cache.XXXXXX")"
@@ -83,7 +85,7 @@ build_fixture() {
 build_fixture "external ButtonHeist import contract fixture" "$FIXTURE_DIR"
 build_fixture "external public Swift product import contract fixture" "$PUBLIC_PRODUCTS_FIXTURE_DIR"
 build_fixture \
-    "iOS DEBUG TheInsideJob import contract fixture" \
+    "iOS DEBUG public products import contract fixture" \
     "$IOS_PUBLIC_PRODUCTS_FIXTURE_DIR" \
     --triple "$IOS_SIMULATOR_TRIPLE" \
     --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
