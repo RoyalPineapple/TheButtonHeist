@@ -6,28 +6,36 @@
 
 # The Button Heist
 
-The Button Heist makes the settled accessibility interface executable. Agents and tests act through labels, values, traits, state, and declared actions. Each step waits for the interface to settle, then returns evidence that the contract changed as expected.
+Every iOS app already ships with a second interface. It is not drawn in pixels. It is the accessibility interface: labels, values, traits, hierarchy, state, and actions.
 
-That is the project: product semantics in, settled evidence out.
+Assistive technologies depend on that interface. The Button Heist makes it executable for agents and tests.
 
-A UI automation step often starts with an event. The Button Heist starts with the contract the app already exposes to assistive technologies. It asks what exists, what can act, and what must be true afterward.
+Each step names what the app declares, performs the declared action, waits for the interface to settle, and returns evidence of what changed. Product semantics in. Settled evidence out.
 
 ## One move
 
-The whole machine is visible in one move:
+A heist can start as one action:
 
 ```swift
 Activate(.label("Pay"))
     .expect(.appeared(.label("Payment Complete")))
 ```
 
-This is not "tap Pay." It means: resolve the control declared as `Pay`, perform its accessibility activation, wait for the app to settle, prove that `Payment Complete` appeared in the settled accessibility interface, and return the receipt.
+This is not "tap Pay." It is a contract:
+
+- find the control the app declares as `Pay`
+- perform the activation exposed by accessibility
+- wait for the interface to settle
+- prove that `Payment Complete` appeared
+- return the receipt
 
 The important question is not whether an event was delivered. It is whether the interface contract was fulfilled.
 
-## What it unlocks
+## Why it matters
 
-With that loop, The Button Heist can:
+Most UI automation starts with a picture and works backward. The Button Heist starts with the interface contract and works forward.
+
+That lets agents and tests:
 
 - target product semantics, not screen coordinates
 - type into fields and prove the semantic value changed
@@ -36,7 +44,7 @@ With that loop, The Button Heist can:
 - let agents inspect those capabilities before they call them
 - leave CI with a receipt that names the contract that broke
 
-Accessibility is the interface. Strip an app of rendering and it is still talking: labels, values, traits, hierarchy, state, and actions. The Button Heist listens to that interface, makes one declared move, and brings back what changed.
+There is no hidden model to reconcile. The app has already published the contract. The Button Heist runs it.
 
 ## Quick start
 
