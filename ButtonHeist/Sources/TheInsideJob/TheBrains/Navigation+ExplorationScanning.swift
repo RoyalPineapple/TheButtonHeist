@@ -56,8 +56,10 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> ContainerExploration? {
         guard case .scrollable(let contentSize) = container.type else { return nil }
+        let semanticContainer = exploration.screen.orderedContainers.first { $0.container == container }
 
-        if let view = stash.scrollableContainerViews[container],
+        if let path = semanticContainer?.path,
+           let view = stash.liveScrollableContainerView(forPath: path),
            view.window != nil,
            Self.isObscuredByPresentation(view: view) {
             return nil
@@ -66,10 +68,11 @@ extension Navigation {
         let hasHOverflow = contentSize.width > container.frame.width + 1
         let hasVOverflow = contentSize.height > container.frame.height + 1
         guard hasHOverflow || hasVOverflow else { return nil }
-        let semanticContainer = exploration.screen.orderedContainers.first { $0.container == container }
         var ancestorRestorations: [ViewportRestoration] = []
-        if stash.scrollableContainerViews[container] == nil,
-           let semanticContainer {
+        let hasLiveScrollView = semanticContainer
+            .map { stash.liveScrollableContainerView(forPath: $0.path) != nil }
+            ?? false
+        if !hasLiveScrollView, let semanticContainer {
             _ = await revealSemanticContainerForExploration(
                 semanticContainer,
                 exploration: &exploration,
@@ -101,8 +104,7 @@ extension Navigation {
         depth: Int
     ) async -> Bool {
         guard depth < ElementInflation.maxNestedRevealDepth else { return false }
-        if let containerName = container.containerName,
-           stash.capturedLiveScrollView(forContainerName: containerName) != nil {
+        if stash.capturedLiveScrollView(forContainerPath: container.path) != nil {
             return true
         }
         guard let location = container.scrollContentLocation else { return false }
@@ -121,7 +123,7 @@ extension Navigation {
         depth: Int
     ) async -> Bool {
         guard depth < ElementInflation.maxNestedRevealDepth else { return false }
-        if let scrollView = stash.capturedLiveScrollView(forContainerName: location.scrollContainer) {
+        if let scrollView = stash.capturedLiveScrollView(forContainerPath: location.scrollContainerPath) {
             return await revealContentOriginForExploration(
                 location.origin,
                 in: scrollView,
@@ -130,7 +132,7 @@ extension Navigation {
             )
         }
 
-        guard let scrollContainer = stash.uniqueSemanticContainer(named: location.scrollContainer),
+        guard let scrollContainer = exploration.screen.semantic.containers[location.scrollContainerPath],
               scrollContainer.scrollContentLocation != nil
         else { return false }
 
@@ -143,7 +145,7 @@ extension Navigation {
             return false
         }
 
-        guard let scrollView = stash.capturedLiveScrollView(forContainerName: location.scrollContainer) else {
+        guard let scrollView = stash.capturedLiveScrollView(forContainerPath: location.scrollContainerPath) else {
             return false
         }
         return await revealContentOriginForExploration(

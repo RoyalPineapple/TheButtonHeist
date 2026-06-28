@@ -240,7 +240,6 @@ final class ScreenClassifierTests: XCTestCase {
                 (element, HeistId(rawValue: "element_\(index)"))
             }),
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
     }
 

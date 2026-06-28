@@ -71,8 +71,7 @@ final class TheBrainsScrollTests: XCTestCase {
             throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
         }
 
-        let unsafeTargets = brains.stash.scrollableContainerViews.compactMap { entry -> UIScrollView? in
-            let (_, view) = entry
+        let unsafeTargets = brains.stash.scrollableContainerViewsByPath.values.compactMap { view -> UIScrollView? in
             guard let scrollView = view as? UIScrollView,
                   scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return scrollView
@@ -308,7 +307,6 @@ final class TheBrainsScrollTests: XCTestCase {
                 secondEntry.heistId: .init(object: NSObject(), scrollView: nil),
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         XCTAssertEqual(
@@ -333,7 +331,6 @@ final class TheBrainsScrollTests: XCTestCase {
             heistIdsByPath: [TreePath([0]): entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
         object = nil
 
@@ -377,7 +374,8 @@ final class TheBrainsScrollTests: XCTestCase {
     private func installScreenWithKnownOffscreen(
         visible: (AccessibilityElement, HeistId),
         offscreen: (AccessibilityElement, HeistId, CGPoint, UIScrollView),
-        includeLiveScrollAncestor: Bool = true
+        includeLiveScrollAncestor: Bool = true,
+        scrollContainerPath: TreePath = TreePath([0])
     ) {
         let visibleEntry = Screen.ScreenElement(
             heistId: visible.1,
@@ -388,11 +386,11 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: offscreen.3.contentSize,
             frame: offscreen.3.frame
         )
-        let scrollContainerName: ContainerName = "known_offscreen_scroll"
+        let containerName: ContainerName = "known_offscreen_scroll"
         let offscreenEntry = Screen.ScreenElement(
             heistId: offscreen.1,
             contentSpaceOrigin: offscreen.2,
-            scrollContainerName: scrollContainerName,
+            scrollContainerPath: scrollContainerPath,
             element: offscreen.0
         )
         brains.stash.installScreenForTesting(Screen(
@@ -405,14 +403,15 @@ final class TheBrainsScrollTests: XCTestCase {
                     .element(visible.0, traversalIndex: 0)
                 ])
             ],
-            containerNames: [scrollContainer: scrollContainerName],
+            containerNames: [:],
+            containerNamesByPath: [TreePath([0]): containerName],
             heistIdByElement: [visible.0: visible.1],
             elementRefs: includeLiveScrollAncestor ? [
                 offscreenEntry.heistId: .init(object: nil, scrollView: offscreen.3)
             ] : [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: includeLiveScrollAncestor
-                ? [scrollContainer: .init(view: offscreen.3)]
+            scrollableContainerViewsByPath: includeLiveScrollAncestor
+                ? [TreePath([0]): .init(view: offscreen.3)]
                 : [:]
         ))
     }
@@ -423,7 +422,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let visibleEntry = Screen.ScreenElement(
             heistId: "visible_element",
             contentSpaceOrigin: CGPoint(x: 0, y: 120),
-            scrollContainerName: "visible_scroll",
+            scrollContainerPath: TreePath([0]),
             element: makeElement(label: "Visible")
         )
         installLiveScrollTarget(visibleEntry, scrollView: scrollView, containerName: "visible_scroll")
@@ -442,13 +441,13 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset = CGPoint(x: 0, y: 800)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        let scrollContainerName: ContainerName = "reused_cell_scroll"
+        let containerName: ContainerName = "reused_cell_scroll"
         let target = makeElement(label: "Controls Demo", traits: .button)
         let currentlyVisibleReuse = makeElement(label: "Custom Rotors", traits: .button)
         let entry = Screen.ScreenElement(
             heistId: "reused_cell",
             contentSpaceOrigin: CGPoint(x: 0, y: 20),
-            scrollContainerName: scrollContainerName,
+            scrollContainerPath: TreePath([0]),
             element: target
         )
         brains.stash.installScreenForTesting(Screen(
@@ -458,14 +457,15 @@ final class TheBrainsScrollTests: XCTestCase {
                     .element(currentlyVisibleReuse, traversalIndex: 0)
                 ])
             ],
-            containerNames: [container: scrollContainerName],
+            containerNames: [:],
+            containerNamesByPath: [TreePath([0]): containerName],
             heistIdByElement: [currentlyVisibleReuse: entry.heistId],
             elementRefs: [
                 entry.heistId: .init(object: nil, scrollView: scrollView)
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                container: .init(view: scrollView)
+            scrollableContainerViewsByPath: [
+                TreePath([0]): .init(view: scrollView)
             ]
         ))
 
@@ -564,7 +564,11 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(let failure) = result else {
             return XCTFail("Expected element inflation failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.noRevealPath)
+        XCTAssertEqual(
+            failure.failedStep,
+            ElementInflation.ElementInflationFailureStep.noRevealPath,
+            failure.message
+        )
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("has no content-space position"))
     }
@@ -622,7 +626,8 @@ final class TheBrainsScrollTests: XCTestCase {
         installScreenWithKnownOffscreen(
             visible: (visible, "visible_element"),
             offscreen: (offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200), scrollView),
-            includeLiveScrollAncestor: false
+            includeLiveScrollAncestor: false,
+            scrollContainerPath: TreePath([99])
         )
         let result = await brains.navigation.elementInflation.inflate(
             for: .predicate(ElementPredicate(label: "Offscreen")),
@@ -633,7 +638,11 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(let failure) = result else {
             return XCTFail("Expected no-reveal-path inflation failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, ElementInflation.ElementInflationFailureStep.noRevealPath)
+        XCTAssertEqual(
+            failure.failedStep,
+            ElementInflation.ElementInflationFailureStep.noRevealPath,
+            failure.message
+        )
         XCTAssertTrue(failure.message.contains("element inflation failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("no live scrollable ancestor"))
     }
@@ -666,7 +675,6 @@ final class TheBrainsScrollTests: XCTestCase {
             heistIdByElement: [element: entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let result = await brains.navigation.elementInflation.inflate(
@@ -706,7 +714,6 @@ final class TheBrainsScrollTests: XCTestCase {
             heistIdByElement: [element: entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let result = await brains.navigation.elementInflation.inflate(
@@ -880,18 +887,18 @@ final class TheBrainsScrollTests: XCTestCase {
         guard let visibleScreen = brains.stash.refreshLiveCapture() else {
             throw XCTSkip("No live hierarchy available for interface discovery contamination regression test")
         }
-        guard let scrollContainerName = visibleScreen.orderedContainers.compactMap({ container -> ContainerName? in
+        guard let scrollContainerPath = visibleScreen.orderedContainers.compactMap({ container -> TreePath? in
             guard case .scrollable = container.container.type else { return nil }
-            return container.containerName
+            return container.path
         }).first else {
-            throw XCTSkip("Parser did not expose the test scroll view as a named scroll container")
+            throw XCTSkip("Parser did not expose the test scroll view as a scroll container")
         }
 
         let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
         let staleEntry = TheStash.ScreenElement(
             heistId: "stale_auto_settle_fixtures",
             contentSpaceOrigin: CGPoint(x: 0, y: 900),
-            scrollContainerName: scrollContainerName,
+            scrollContainerPath: scrollContainerPath,
             element: staleRootRow
         )
         let staleScreen = Screen(
@@ -1019,7 +1026,6 @@ final class TheBrainsScrollTests: XCTestCase {
                 recoveredEntry.heistId: .init(object: recoveredObject, scrollView: nil)
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         var discoveryAttempts = 0
         brains.navigation.elementInflation.discoverTarget = { _ in
@@ -1101,10 +1107,11 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerNames: [container: "main_scroll"],
+            containerNames: [:],
+            containerNamesByPath: [TreePath([0]): "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [container: .init(view: scrollView)]
+            scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
 
         let result = await brains.navigation.executeScroll(ScrollTarget())
@@ -1121,10 +1128,11 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerNames: [container: "main_scroll"],
+            containerNames: [:],
+            containerNamesByPath: [TreePath([0]): "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [container: .init(view: scrollView)]
+            scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
 
         let result = await brains.navigation.executeScrollToEdge(ScrollToEdgeTarget())
@@ -1140,10 +1148,11 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerNames: [container: "main_scroll"],
+            containerNames: [:],
+            containerNamesByPath: [TreePath([0]): "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [container: .init(view: scrollView)]
+            scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
 
         let result = await brains.navigation.executeScrollToEdge(ScrollToEdgeTarget(edge: .top))
@@ -1165,15 +1174,16 @@ final class TheBrainsScrollTests: XCTestCase {
                 .container(firstContainer, children: []),
                 .container(secondContainer, children: []),
             ],
-            containerNames: [
-                firstContainer: "first_scroll",
-                secondContainer: "second_scroll",
+            containerNames: [:],
+            containerNamesByPath: [
+                TreePath([0]): "first_scroll",
+                TreePath([1]): "second_scroll",
             ],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                firstContainer: .init(view: firstScrollView),
-                secondContainer: .init(view: secondScrollView),
+            scrollableContainerViewsByPath: [
+                TreePath([0]): .init(view: firstScrollView),
+                TreePath([1]): .init(view: secondScrollView),
             ]
         ))
 
@@ -1201,15 +1211,16 @@ final class TheBrainsScrollTests: XCTestCase {
                 .container(firstContainer, children: []),
                 .container(secondContainer, children: []),
             ],
-            containerNames: [
-                firstContainer: "first_scroll",
-                secondContainer: "second_scroll",
+            containerNames: [:],
+            containerNamesByPath: [
+                TreePath([0]): "first_scroll",
+                TreePath([1]): "second_scroll",
             ],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                firstContainer: .init(view: firstScrollView),
-                secondContainer: .init(view: secondScrollView),
+            scrollableContainerViewsByPath: [
+                TreePath([0]): .init(view: firstScrollView),
+                TreePath([1]): .init(view: secondScrollView),
             ]
         ))
 
@@ -1240,16 +1251,13 @@ final class TheBrainsScrollTests: XCTestCase {
                 .container(repeatedContainer, children: []),
                 .container(repeatedContainer, children: []),
             ],
-            containerNames: [repeatedContainer: "collapsed_value_name"],
+            containerNames: [:],
             containerNamesByPath: [
                 firstPath: "first_repeated_scroll",
                 secondPath: "second_repeated_scroll",
             ],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                repeatedContainer: .init(view: firstScrollView),
-            ],
             scrollableContainerViewsByPath: [
                 firstPath: .init(view: firstScrollView),
                 secondPath: .init(view: secondScrollView),
@@ -1281,7 +1289,6 @@ final class TheBrainsScrollTests: XCTestCase {
             ],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let result = await brains.navigation.executeScroll(ScrollTarget())
@@ -1316,7 +1323,6 @@ final class TheBrainsScrollTests: XCTestCase {
                 .element(second, traversalIndex: 1),
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
@@ -1389,7 +1395,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let knownEntry = TheStash.ScreenElement(
             heistId: "known_reveal_target",
             contentSpaceOrigin: CGPoint(x: 40, y: 900),
-            scrollContainerName: "known_scroll",
+            scrollContainerPath: TreePath([0]),
             element: knownElement
         )
         let scrollContainer = makeScrollableContainer(
@@ -1399,14 +1405,15 @@ final class TheBrainsScrollTests: XCTestCase {
         let knownScreen = Screen(
             elements: [knownEntry.heistId: knownEntry],
             hierarchy: [.container(scrollContainer, children: [])],
-            containerNames: [scrollContainer: "known_scroll"],
+            containerNames: [:],
+            containerNamesByPath: [TreePath([0]): "known_scroll"],
             heistIdByElement: [:],
             elementRefs: [
                 knownEntry.heistId: .init(object: nil, scrollView: scrollView)
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                scrollContainer: .init(view: scrollView)
+            scrollableContainerViewsByPath: [
+                TreePath([0]): .init(view: scrollView)
             ]
         )
         brains.stash.installScreenForTesting(knownScreen)
@@ -1445,7 +1452,6 @@ final class TheBrainsScrollTests: XCTestCase {
             containerNames: [:],
             heistIdByElement: [screenElement.element: screenElement.heistId],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let result = await brains.navigation.executeScroll(
@@ -1656,7 +1662,7 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [:],
             hierarchy: [.container(container, children: [])],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [container: .init(view: backingView)]
+            scrollableContainerViewsByPath: [TreePath([0]): .init(view: backingView)]
         ))
 
         let target = try XCTUnwrap(brains.navigation.scrollableTarget(for: container, contentSize: contentSize))
@@ -1683,7 +1689,6 @@ final class TheBrainsScrollTests: XCTestCase {
             containerNamesByPath: [path: "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:],
             scrollableContainerViewsByPath: [path: .init(view: scrollView)]
         ))
 
@@ -1743,7 +1748,6 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [:],
             hierarchy: [.container(tabBarContainer, children: [])],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
         let result = try XCTUnwrap(
             brains.navigation.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
@@ -1791,7 +1795,6 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [:],
             hierarchy: containers.map { .container($0, children: []) },
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
     }
 
@@ -1806,15 +1809,20 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         brains.stash.installScreenForTesting(Screen(
             elements: [screenElement.heistId: screenElement],
-            hierarchy: [.element(screenElement.element, traversalIndex: 0)],
-            containerNames: [container: containerName],
+            hierarchy: [
+                .container(container, children: [
+                    .element(screenElement.element, traversalIndex: 0)
+                ])
+            ],
+            containerNames: [:],
+            containerNamesByPath: [TreePath([0]): containerName],
             heistIdByElement: [screenElement.element: screenElement.heistId],
             elementRefs: [
                 screenElement.heistId: .init(object: nil, scrollView: scrollView)
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                container: .init(view: scrollView)
+            scrollableContainerViewsByPath: [
+                TreePath([0]): .init(view: scrollView)
             ]
         ))
     }

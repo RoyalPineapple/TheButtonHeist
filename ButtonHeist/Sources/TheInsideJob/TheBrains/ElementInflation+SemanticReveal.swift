@@ -43,8 +43,7 @@ extension ElementInflation {
         _ container: SemanticScreen.Container,
         depth: Int
     ) async -> SemanticRevealResult {
-        if let containerName = container.containerName,
-           stash.capturedLiveScrollView(forContainerName: containerName) != nil {
+        if stash.capturedLiveScrollView(forContainerPath: container.path) != nil {
             return .alreadyVisible
         }
         guard let location = container.scrollContentLocation else {
@@ -61,11 +60,12 @@ extension ElementInflation {
             return .failed(.noLiveScrollableAncestor)
         }
 
-        if let scrollView = stash.capturedLiveScrollView(forContainerName: location.scrollContainer) {
+        if let scrollView = stash.capturedLiveScrollView(forContainerPath: location.scrollContainerPath) {
             return await revealContentOrigin(location.origin, in: scrollView)
         }
 
-        guard let scrollContainer = stash.uniqueSemanticContainer(named: location.scrollContainer) else {
+        guard let scrollContainer = stash.settledSemanticScreen.semantic.containers[location.scrollContainerPath]
+            ?? stash.latestObservedSemanticWorld.containers[location.scrollContainerPath] else {
             return .failed(.noLiveScrollableAncestor)
         }
         if scrollContainer.scrollContentLocation != nil {
@@ -75,7 +75,7 @@ extension ElementInflation {
             }
         }
 
-        guard let scrollView = stash.liveScrollView(forContainerName: location.scrollContainer) else {
+        guard let scrollView = stash.capturedLiveScrollView(forContainerPath: location.scrollContainerPath) else {
             return .failed(.noLiveScrollableAncestor)
         }
         return await revealContentOrigin(location.origin, in: scrollView)

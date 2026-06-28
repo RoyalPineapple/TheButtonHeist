@@ -594,7 +594,6 @@ private extension LiveCapture {
             containerContentFramesByPath: containerContentFramesByPath,
             containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
             firstResponderHeistId: firstResponderHeistId.flatMap { removedIds.contains($0) ? nil : $0 },
-            scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
     }

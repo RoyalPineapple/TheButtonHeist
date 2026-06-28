@@ -114,23 +114,23 @@ extension TheStash {
             uniquingKeysWith: { _, latest in latest }
         )
         let liveIds = screen.liveCapture.heistIds
-        let liveContainerNames = Set(containerAnnotations.compactMap(\.containerName))
+        let liveContainerPaths = Set(containerAnnotations.map(\.path))
         var emittedHeistIds = liveIds
-        var emittedContainerNames = liveContainerNames
+        var emittedContainerPaths = liveContainerPaths
         var nextTraversalIndex = (screen.liveCapture.hierarchy.pathIndexedElements.map(\.traversalIndex).max() ?? -1) + 1
 
-        var childrenByContainerName = DiscoveryChildren(
+        var childrenByContainerPath = DiscoveryChildren(
             screen: screen,
             liveIds: liveIds,
-            liveContainerNames: liveContainerNames
+            liveContainerPaths: liveContainerPaths
         )
 
         func appendDiscoveryChildren(
-            for containerName: ContainerName,
+            for containerPath: TreePath,
             to children: inout [AccessibilityHierarchy],
             path: TreePath
         ) {
-            for child in childrenByContainerName.removeChildren(parent: containerName) {
+            for child in childrenByContainerPath.removeChildren(parent: containerPath) {
                 switch child.kind {
                 case .element(let entry):
                     guard emittedHeistIds.insert(entry.heistId).inserted else { continue }
@@ -143,19 +143,16 @@ extension TheStash {
                         contentSpaceOrigin: entry.contentSpaceOrigin.map(AccessibilityPoint.init)
                     ))
                 case .container(let entry):
-                    if let containerName = entry.containerName,
-                       !emittedContainerNames.insert(containerName).inserted {
+                    guard emittedContainerPaths.insert(entry.path).inserted else {
                         continue
                     }
                     let childPath = path.appending(children.count)
                     var nestedChildren: [AccessibilityHierarchy] = []
-                    if let nestedContainerName = entry.containerName {
-                        appendDiscoveryChildren(
-                            for: nestedContainerName,
-                            to: &nestedChildren,
-                            path: childPath
-                        )
-                    }
+                    appendDiscoveryChildren(
+                        for: entry.path,
+                        to: &nestedChildren,
+                        path: childPath
+                    )
                     children.append(.container(entry.container, children: nestedChildren))
                     containerAnnotations.append(InterfaceContainerAnnotation(
                         path: childPath,
@@ -173,8 +170,8 @@ extension TheStash {
                 var convertedChildren = children.enumerated().map { index, child in
                     convert(child, path: path.appending(index))
                 }
-                if let containerName = containerAnnotationsByPath[path]?.containerName {
-                    appendDiscoveryChildren(for: containerName, to: &convertedChildren, path: path)
+                if containerAnnotationsByPath[path] != nil {
+                    appendDiscoveryChildren(for: path, to: &convertedChildren, path: path)
                 }
                 return .container(container, children: convertedChildren)
             }
@@ -269,19 +266,19 @@ private struct DiscoveryChildren {
         }
     }
 
-    private var childrenByParent: [ContainerName: [Child]]
+    private var childrenByParent: [TreePath: [Child]]
 
     init(
         screen: Screen,
         liveIds: Set<HeistId>,
-        liveContainerNames: Set<ContainerName>
+        liveContainerPaths: Set<TreePath>
     ) {
-        var childrenByParent: [ContainerName: [Child]] = [:]
+        var childrenByParent: [TreePath: [Child]] = [:]
         for entry in screen.semantic.elements.values {
             guard !liveIds.contains(entry.heistId),
                   let location = entry.scrollContentLocation
             else { continue }
-            childrenByParent[location.scrollContainer, default: []].append(Child(
+            childrenByParent[location.scrollContainerPath, default: []].append(Child(
                 sortKey: SortKey(
                     y: location.origin.y,
                     x: location.origin.x,
@@ -291,15 +288,15 @@ private struct DiscoveryChildren {
             ))
         }
         for entry in screen.semantic.containers.values {
-            guard let containerName = entry.containerName,
-                  !liveContainerNames.contains(containerName),
+            guard !liveContainerPaths.contains(entry.path),
                   let location = entry.scrollContentLocation
             else { continue }
-            childrenByParent[location.scrollContainer, default: []].append(Child(
+            let stableName = entry.containerName?.rawValue ?? entry.path.indices.map(String.init).joined(separator: ".")
+            childrenByParent[location.scrollContainerPath, default: []].append(Child(
                 sortKey: SortKey(
                     y: location.origin.y,
                     x: location.origin.x,
-                    stableName: containerName.rawValue
+                    stableName: stableName
                 ),
                 kind: .container(entry)
             ))
@@ -309,7 +306,7 @@ private struct DiscoveryChildren {
         }
     }
 
-    mutating func removeChildren(parent: ContainerName) -> [Child] {
+    mutating func removeChildren(parent: TreePath) -> [Child] {
         childrenByParent.removeValue(forKey: parent) ?? []
     }
 }

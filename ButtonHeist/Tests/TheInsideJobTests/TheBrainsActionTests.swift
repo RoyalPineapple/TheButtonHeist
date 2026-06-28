@@ -3057,7 +3057,6 @@ final class TheBrainsActionTests: XCTestCase {
                 resultHeistId: .init(object: resultObject, scrollView: scrollView),
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         XCTAssertEqual(scrollView.contentOffset, .zero)

@@ -33,8 +33,6 @@ final class TheBurglarApplyTests: XCTestCase {
                 .element(elementA, traversalIndex: 0),
                 .element(elementB, traversalIndex: 1),
             ],
-            objects: [:],
-            scrollViews: [:]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -50,8 +48,6 @@ final class TheBurglarApplyTests: XCTestCase {
         let element = makeElement(label: "OK", traits: .button)
         let result = TheBurglar.ParseResult(
             hierarchy: [.element(element, traversalIndex: 0)],
-            objects: [:],
-            scrollViews: [:]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -67,8 +63,6 @@ final class TheBurglarApplyTests: XCTestCase {
                 .element(first, traversalIndex: 0),
                 .element(second, traversalIndex: 1),
             ],
-            objects: [:],
-            scrollViews: [:]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -86,7 +80,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let element = makeElement(label: "Item")
         let hierarchy: [AccessibilityHierarchy] = [.element(element, traversalIndex: 0)]
         let result = TheBurglar.ParseResult(
-            hierarchy: hierarchy, objects: [:], scrollViews: [:]
+            hierarchy: hierarchy
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -103,8 +97,7 @@ final class TheBurglarApplyTests: XCTestCase {
             hierarchy: [
                 .element(header, traversalIndex: 0),
                 .element(button, traversalIndex: 1),
-            ],
-            objects: [:], scrollViews: [:]
+            ]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -115,8 +108,7 @@ final class TheBurglarApplyTests: XCTestCase {
     func testScreenIdIsSlugifiedName() {
         let header = makeElement(label: "My Profile", traits: .header)
         let result = TheBurglar.ParseResult(
-            hierarchy: [.element(header, traversalIndex: 0)],
-            objects: [:], scrollViews: [:]
+            hierarchy: [.element(header, traversalIndex: 0)]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -127,8 +119,7 @@ final class TheBurglarApplyTests: XCTestCase {
     func testScreenNameNilWhenNoHeaders() {
         let button = makeElement(label: "OK", traits: .button)
         let result = TheBurglar.ParseResult(
-            hierarchy: [.element(button, traversalIndex: 0)],
-            objects: [:], scrollViews: [:]
+            hierarchy: [.element(button, traversalIndex: 0)]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -144,8 +135,7 @@ final class TheBurglarApplyTests: XCTestCase {
             hierarchy: [
                 .element(headerNoLabel, traversalIndex: 0),
                 .element(button, traversalIndex: 1),
-            ],
-            objects: [:], scrollViews: [:]
+            ]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -165,8 +155,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let element = makeElement(label: "Email", traits: .none)
         let result = TheBurglar.ParseResult(
             hierarchy: [.element(element, traversalIndex: 0)],
-            objects: [element: textField],
-            scrollViews: [:]
+            objectsByPath: [TreePath([0]): textField],
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -183,8 +172,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let label = UILabel()
         let result = TheBurglar.ParseResult(
             hierarchy: [.element(element, traversalIndex: 0)],
-            objects: [element: label],
-            scrollViews: [:]
+            objectsByPath: [TreePath([0]): label],
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -197,8 +185,7 @@ final class TheBurglarApplyTests: XCTestCase {
     func testHeistIdsAreAssignedDeterministically() {
         let button = makeElement(label: "Submit", traits: .button)
         let result = TheBurglar.ParseResult(
-            hierarchy: [.element(button, traversalIndex: 0)],
-            objects: [:], scrollViews: [:]
+            hierarchy: [.element(button, traversalIndex: 0)]
         )
 
         let first = TheBurglar.buildScreen(from: result)
@@ -221,8 +208,7 @@ final class TheBurglarApplyTests: XCTestCase {
             hierarchy: [
                 .element(buttonA, traversalIndex: 0),
                 .element(buttonB, traversalIndex: 1),
-            ],
-            objects: [:], scrollViews: [:]
+            ]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -242,8 +228,6 @@ final class TheBurglarApplyTests: XCTestCase {
                 .element(second, traversalIndex: 1),
                 .element(first, traversalIndex: 0),
             ],
-            objects: [:],
-            scrollViews: [:]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -270,8 +254,6 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let result = TheBurglar.ParseResult(
             hierarchy: [.element(parsedElement, traversalIndex: 0)],
-            objects: [:],
-            scrollViews: [:],
             screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
         )
 
@@ -317,8 +299,6 @@ final class TheBurglarApplyTests: XCTestCase {
         )
         let result = TheBurglar.ParseResult(
             hierarchy: [.element(pathElement, traversalIndex: 0)],
-            objects: [:],
-            scrollViews: [:],
             screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
         )
 
@@ -347,8 +327,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let result = TheBurglar.ParseResult(
             hierarchy: [.container(scrollableContainer, children: [.element(child, traversalIndex: 0)])],
-            objects: [:],
-            scrollViews: [scrollableContainer: scrollView]
+            scrollViewsByPath: [TreePath([0]): scrollView]
         )
 
         let screen = TheBurglar.buildScreen(from: result)
@@ -365,8 +344,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let element = makeElement(label: "Plain",
                                   frame: CGRect(x: 0, y: 0, width: 10, height: 10))
         let result = TheBurglar.ParseResult(
-            hierarchy: [.element(element, traversalIndex: 0)],
-            objects: [:], scrollViews: [:]
+            hierarchy: [.element(element, traversalIndex: 0)]
         )
 
         let screen = TheBurglar.buildScreen(from: result)

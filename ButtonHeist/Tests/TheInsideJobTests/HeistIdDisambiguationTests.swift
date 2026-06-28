@@ -52,8 +52,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
         }
         return TheBurglar.ParseResult(
             hierarchy: [.container(container, children: children)],
-            objects: [:],
-            scrollViews: [container: scrollView]
+            scrollViewsByPath: [TreePath([0]): scrollView]
         )
     }
 

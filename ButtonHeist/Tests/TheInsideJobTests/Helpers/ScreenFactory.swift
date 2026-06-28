@@ -66,12 +66,12 @@ extension Screen {
             _ element: AccessibilityElement,
             heistId: HeistId,
             contentSpaceOrigin: CGPoint? = nil,
-            scrollContainer: ContainerName = "test_scroll"
+            scrollContainerPath: TreePath = TreePath([0])
         ) {
             self.element = element
             self.heistId = heistId
             self.scrollContentLocation = contentSpaceOrigin.map {
-                ScrollContentLocation(origin: $0, scrollContainer: scrollContainer)
+                ScrollContentLocation(origin: $0, scrollContainerPath: scrollContainerPath)
             }
         }
     }
@@ -129,7 +129,6 @@ extension Screen {
             heistIdByElement: heistIdByElement,
             elementRefs: elementRefs,
             firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViews: [:]
         )
     }
 }

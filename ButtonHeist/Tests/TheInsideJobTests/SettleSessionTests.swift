@@ -38,7 +38,6 @@ final class SettleSessionTests: XCTestCase {
             elements: [:],
             hierarchy: hierarchy,
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
     }
 

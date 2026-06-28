@@ -362,7 +362,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                     discoveredOnly,
                     heistId: HeistId(rawValue: "buttonheist_demo"),
                     contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
-                    scrollContainer: "root_scroll"
+                    scrollContainerPath: TreePath([0])
                 ),
             ]
         )
@@ -835,7 +835,6 @@ final class TheBrainsPipelineTests: XCTestCase {
                 ])
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         var exploration = Navigation.SemanticExploration(baseline: .empty)
 
@@ -862,7 +861,6 @@ final class TheBrainsPipelineTests: XCTestCase {
                 ])
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         var exploration = Navigation.SemanticExploration(baseline: .empty)
         exploration.manifest.addPendingContainers([outer])
@@ -888,10 +886,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         guard brains.stash.refreshLiveCapture() != nil else {
             throw XCTSkip("No live hierarchy available for swipeable explore test")
         }
-        guard let container = brains.stash.latestObservedLiveHierarchy.scrollableContainers.first(where: {
-            guard let view = brains.stash.scrollableContainerViews[$0] else { return true }
+        guard let container = brains.stash.latestObservedLiveHierarchy.containerPaths.first(where: {
+            guard $0.container.isScrollable else { return false }
+            guard let view = brains.stash.liveScrollableContainerView(forPath: $0.path) else { return true }
             return !(view is UIScrollView)
-        }) else {
+        })?.container else {
             throw XCTSkip("No non-UIScrollView scrollable container in host UI")
         }
 

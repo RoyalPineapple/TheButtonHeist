@@ -298,8 +298,7 @@ final class WireConverterTests: XCTestCase {
         let liveObject = WireActivationOverrideView()
         let parse = TheBurglar.ParseResult(
             hierarchy: [.element(element, traversalIndex: 0)],
-            objects: [element: liveObject],
-            scrollViews: [:]
+            objectsByPath: [TreePath([0]): liveObject],
         )
         let screen = TheBurglar.buildScreen(from: parse)
 
@@ -331,8 +330,6 @@ final class WireConverterTests: XCTestCase {
         )
         let parse = TheBurglar.ParseResult(
             hierarchy: [.container(container, children: [.element(element, traversalIndex: 0)])],
-            objects: [:],
-            scrollViews: [:]
         )
         let screen = TheBurglar.buildScreen(from: parse)
 
@@ -370,13 +367,13 @@ final class WireConverterTests: XCTestCase {
                 "aardvark_staticText": Screen.ScreenElement(
                     heistId: "aardvark_staticText",
                     contentSpaceOrigin: CGPoint(x: 0, y: 0),
-                    scrollContainerName: "words_list",
+                    scrollContainerPath: TreePath([0]),
                     element: visible
                 ),
                 "zymurgy_staticText": Screen.ScreenElement(
                     heistId: "zymurgy_staticText",
                     contentSpaceOrigin: CGPoint(x: 0, y: 1_600),
-                    scrollContainerName: "words_list",
+                    scrollContainerPath: TreePath([0]),
                     element: offViewport
                 ),
             ],
@@ -389,7 +386,6 @@ final class WireConverterTests: XCTestCase {
             containerNamesByPath: [TreePath([0]): "words_list"],
             heistIdByElement: [visible: "aardvark_staticText"],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
 
         let interface = WireConversion.toDiscoveryInterface(from: screen)
@@ -440,7 +436,6 @@ final class WireConverterTests: XCTestCase {
             containerNamesByPath: [TreePath([0]): "outer_words"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         var containers = liveScreen.semantic.containers
         containers[TreePath([0, 0])] = SemanticScreen.Container(
@@ -450,7 +445,7 @@ final class WireConverterTests: XCTestCase {
             contentFrame: nil,
             scrollContentLocation: SemanticScreen.ScrollContentLocation(
                 origin: CGPoint(x: 20, y: 700),
-                scrollContainer: "outer_words"
+                scrollContainerPath: TreePath([0])
             )
         )
         let screen = Screen(
@@ -460,7 +455,7 @@ final class WireConverterTests: XCTestCase {
                         heistId: "interstitial_staticText",
                         scrollContentLocation: SemanticScreen.ScrollContentLocation(
                             origin: CGPoint(x: 0, y: 300),
-                            scrollContainer: "inner_words"
+                            scrollContainerPath: TreePath([0, 0])
                         ),
                         element: nestedWord
                     ),
@@ -503,7 +498,7 @@ final class WireConverterTests: XCTestCase {
                         heistId: "recycled_cell",
                         scrollContentLocation: SemanticScreen.ScrollContentLocation(
                             origin: CGPoint(x: 0, y: 724),
-                            scrollContainer: "transactions_list"
+                            scrollContainerPath: TreePath([0])
                         ),
                         element: recycledCell
                     ),
@@ -511,7 +506,7 @@ final class WireConverterTests: XCTestCase {
                         heistId: "recycled_cell",
                         scrollContentLocation: SemanticScreen.ScrollContentLocation(
                             origin: CGPoint(x: 0, y: 724),
-                            scrollContainer: "transactions_list"
+                            scrollContainerPath: TreePath([0])
                         ),
                         element: recycledCell
                     ),
@@ -532,7 +527,6 @@ final class WireConverterTests: XCTestCase {
                 heistIdByElement: [:],
                 elementRefs: [:],
                 firstResponderHeistId: nil,
-                scrollableContainerViews: [:]
             )
         )
 
@@ -575,7 +569,7 @@ final class WireConverterTests: XCTestCase {
                         heistId: "repeat_button",
                         scrollContentLocation: SemanticScreen.ScrollContentLocation(
                             origin: CGPoint(x: 0, y: 724),
-                            scrollContainer: "transactions_list"
+                            scrollContainerPath: TreePath([0])
                         ),
                         element: firstCell
                     ),
@@ -583,7 +577,7 @@ final class WireConverterTests: XCTestCase {
                         heistId: "repeat_button_1",
                         scrollContentLocation: SemanticScreen.ScrollContentLocation(
                             origin: CGPoint(x: 0, y: 788),
-                            scrollContainer: "transactions_list"
+                            scrollContainerPath: TreePath([0])
                         ),
                         element: secondCell
                     ),
@@ -604,7 +598,6 @@ final class WireConverterTests: XCTestCase {
                 heistIdByElement: [:],
                 elementRefs: [:],
                 firstResponderHeistId: nil,
-                scrollableContainerViews: [:]
             )
         )
 
@@ -619,7 +612,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 1])])
     }
 
-    func testDiscoveryInterfaceEmitsDuplicateGraftedContainerNameOnce() throws {
+    func testDiscoveryInterfaceEmitsDuplicateGraftedContainerNamesByPath() throws {
         let rootContainer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 2_000))),
             frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -645,7 +638,7 @@ final class WireConverterTests: XCTestCase {
                         contentFrame: nil,
                         scrollContentLocation: SemanticScreen.ScrollContentLocation(
                             origin: CGPoint(x: 0, y: 640),
-                            scrollContainer: "transactions_list"
+                            scrollContainerPath: TreePath([0])
                         )
                     ),
                     TreePath([0, 1]): SemanticScreen.Container(
@@ -655,7 +648,7 @@ final class WireConverterTests: XCTestCase {
                         contentFrame: nil,
                         scrollContentLocation: SemanticScreen.ScrollContentLocation(
                             origin: CGPoint(x: 0, y: 640),
-                            scrollContainer: "transactions_list"
+                            scrollContainerPath: TreePath([0])
                         )
                     ),
                 ]
@@ -667,7 +660,6 @@ final class WireConverterTests: XCTestCase {
                 heistIdByElement: [:],
                 elementRefs: [:],
                 firstResponderHeistId: nil,
-                scrollableContainerViews: [:]
             )
         )
 
@@ -676,11 +668,13 @@ final class WireConverterTests: XCTestCase {
         guard case .container(_, let children) = interface.tree.first else {
             return XCTFail("Expected root scroll container")
         }
-        XCTAssertEqual(children.count, 1)
+        XCTAssertEqual(children.count, 2)
         XCTAssertEqual(
             interface.annotations.containers.filter { $0.containerName == "saved_carts_group" }.count,
-            1
+            2
         )
+        XCTAssertNotNil(interface.annotations.containerByPath[TreePath([0, 0])])
+        XCTAssertNotNil(interface.annotations.containerByPath[TreePath([0, 1])])
     }
 
     // MARK: - Delta: Identical Snapshots

@@ -17,21 +17,14 @@ extension TheBurglar {
     /// and detects first responder state.
     static func buildScreen(from result: ParseResult) -> Screen {
         let hierarchy = screenCoordinateHierarchy(from: result)
-        let pathScrollViews = scrollViewsByContainerForCurrentCapture(
-            hierarchy: hierarchy,
-            scrollViewsByPath: result.scrollViewsByPath
-        )
-        let scrollViews = result.scrollViews.merging(pathScrollViews) { _, pathView in pathView }
         let indexedElements = hierarchy.pathIndexedElements
         let elements = indexedElements.map(\.element)
         let contextsByPath = buildElementContextsByPath(
             hierarchy: hierarchy,
-            scrollableContainerViews: scrollViews,
             scrollableContainerViewsByPath: result.scrollViewsByPath
         )
         let identityContext = buildContainerIdentityContext(
             hierarchy: hierarchy,
-            scrollableContainerViews: scrollViews,
             scrollableContainerViewsByPath: result.scrollViewsByPath
         )
         let containerNameIndex = buildContainerNameIndex(
@@ -41,8 +34,7 @@ extension TheBurglar {
         let containerNames = containerNameIndex.byContainer
         let containerNamesByPath = containerNameIndex.byPath
         let containerScrollContentLocationsByPath = containerScrollContentLocations(
-            identityContext: identityContext,
-            containerNamesByPath: containerNamesByPath
+            identityContext: identityContext
         )
 
         let baseHeistIds = TheStash.IdAssignment.assign(elements)
@@ -61,7 +53,7 @@ extension TheBurglar {
             let entry = Screen.ScreenElement(
                 heistId: heistId,
                 scrollContentLocation: context.flatMap {
-                    scrollContentLocation(for: $0, containerNamesByPath: containerNamesByPath)
+                    scrollContentLocation(for: $0)
                 },
                 element: parsedElement
             )
@@ -69,20 +61,19 @@ extension TheBurglar {
             heistIdByElement[parsedElement] = heistId
             heistIdsByPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
-                object: result.objectsByPath[path] ?? result.objects[parsedElement],
+                object: result.objectsByPath[path],
                 scrollView: context?.scrollView
             )
         }
 
         let firstResponders = zip(indexedElements, resolvedHeistIds).filter { item, _ in
-            let object = result.objectsByPath[item.path] ?? result.objects[item.element]
+            let object = result.objectsByPath[item.path]
             return (object as? UIView)?.isFirstResponder == true
         }
         if firstResponders.count > 1 {
             insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map { $0.1.description }.joined(separator: ", "))")
         }
 
-        let scrollableViewRefs = result.scrollViews.mapValues { Screen.ScrollableViewRef(view: $0) }
         let scrollableViewRefsByPath = result.scrollViewsByPath.mapValues {
             Screen.ScrollableViewRef(view: $0)
         }
@@ -101,7 +92,6 @@ extension TheBurglar {
             containerContentFramesByPath: identityContext.contentFramesByPath,
             containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
             firstResponderHeistId: firstResponders.first?.1,
-            scrollableContainerViews: scrollableViewRefs,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
         )
     }
@@ -152,33 +142,29 @@ extension TheBurglar {
     }
 
     private static func scrollContentLocation(
-        for context: ElementContext,
-        containerNamesByPath: [TreePath: ContainerName]
+        for context: ElementContext
     ) -> Screen.ScrollContentLocation? {
         guard let origin = context.contentSpaceOrigin,
-              let scrollContainerPath = context.scrollContainerPath,
-              let scrollContainer = containerNamesByPath[scrollContainerPath]
+              let scrollContainerPath = context.scrollContainerPath
         else { return nil }
         return Screen.ScrollContentLocation(
             origin: origin,
-            scrollContainer: scrollContainer
+            scrollContainerPath: scrollContainerPath
         )
     }
 
     private static func containerScrollContentLocations(
-        identityContext: ContainerIdentityContext,
-        containerNamesByPath: [TreePath: ContainerName]
+        identityContext: ContainerIdentityContext
     ) -> [TreePath: Screen.ScrollContentLocation] {
         Dictionary(
             uniqueKeysWithValues: identityContext.scrollContentOriginsByPath.compactMap { path, origin in
-                guard let scrollContainerPath = identityContext.scrollContainerPathsByPath[path],
-                      let scrollContainer = containerNamesByPath[scrollContainerPath]
+                guard let scrollContainerPath = identityContext.scrollContainerPathsByPath[path]
                 else { return nil }
                 return (
                     path,
                     Screen.ScrollContentLocation(
                         origin: origin,
-                        scrollContainer: scrollContainer
+                        scrollContainerPath: scrollContainerPath
                     )
                 )
             }
@@ -194,7 +180,6 @@ extension TheBurglar {
         let candidates = hierarchy.compactMapSubtrees { node, path -> ContainerNameCandidate? in
             guard case .container(let container, _) = node else { return nil }
             let contentFrame = identityContext.contentFramesByPath[path]
-                ?? identityContext.contentFrames[container]
                 ?? container.frame.cgRect
             let readableName = containerName(
                 for: container,
