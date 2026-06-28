@@ -41,6 +41,36 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.transient.map(\.label), ["Loading"])
     }
 
+    func testInteractionDigestRoundTripsOnDeltaPayload() throws {
+        let digest = AccessibilityTrace.InteractionDigest(
+            elementCountBefore: 1,
+            elementCountAfter: 2,
+            elementSetChanged: true,
+            screenIdBefore: "menu",
+            screenIdAfter: "menu",
+            firstResponderChanged: false
+        )
+        let delta = AccessibilityTrace.Delta.elementsChanged(.init(
+            elementCount: 2,
+            edits: ElementEdits(added: [makeElement(label: "Bagel")]),
+            interactionDigest: digest
+        ))
+
+        let data = try encoder.encode(delta)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let digestJSON = try XCTUnwrap(json["interactionDigest"] as? [String: Any])
+        XCTAssertEqual(digestJSON["elementCountBefore"] as? Int, 1)
+        XCTAssertEqual(digestJSON["elementCountAfter"] as? Int, 2)
+        XCTAssertEqual(digestJSON["elementCountChanged"] as? Bool, true)
+        XCTAssertEqual(digestJSON["elementSetChanged"] as? Bool, true)
+
+        let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
+        guard case .elementsChanged(let payload) = decoded else {
+            return XCTFail("Expected .elementsChanged, got \(decoded)")
+        }
+        XCTAssertEqual(payload.interactionDigest, digest)
+    }
+
     func testCaptureEdgeRoundTrips() throws {
         let edge = AccessibilityTrace.CaptureEdge(
             before: AccessibilityTrace.CaptureRef(sequence: 1, hash: "sha256:before"),

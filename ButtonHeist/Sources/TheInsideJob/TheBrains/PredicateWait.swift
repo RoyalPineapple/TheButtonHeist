@@ -592,6 +592,14 @@ private struct WaitAccumulatedTrace {
             captureEdge: AccessibilityTrace.CaptureEdge(before: capture, after: capture),
             screenChanged: nil,
             elementsChanged: nil,
+            interactionDigest: AccessibilityTrace.InteractionDigest(
+                elementCountBefore: capture.interface.projectedElements.count,
+                elementCountAfter: capture.interface.projectedElements.count,
+                elementSetChanged: false,
+                screenIdBefore: capture.context.screenId ?? InterfaceSummary.screenId(for: capture.interface),
+                screenIdAfter: capture.context.screenId ?? InterfaceSummary.screenId(for: capture.interface),
+                firstResponderChanged: false
+            ),
             transient: []
         )
     }

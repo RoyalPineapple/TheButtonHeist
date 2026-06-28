@@ -438,28 +438,49 @@ private final class InterfaceNodeBudgetTracker {
 struct ElementProjectionBucket: Sendable {
     let elements: [HeistElement]
     let omittedCount: Int?
+    let omittedKeys: [String]?
 
     init(elements: [HeistElement], limit: Int) {
         let visible = Array(elements.prefix(max(0, limit)))
         self.elements = visible
-        let omitted = elements.count - visible.count
-        omittedCount = omitted > 0 ? omitted : nil
+        let omittedElements = Array(elements.dropFirst(visible.count))
+        omittedCount = omittedElements.isEmpty ? nil : omittedElements.count
+        omittedKeys = omittedElements.isEmpty
+            ? nil
+            : omittedElements.map(Self.omissionKey(for:))
     }
 
     var isEmpty: Bool {
         elements.isEmpty
+    }
+
+    static func omissionKey(for element: HeistElement) -> String {
+        if let identifier = element.identifier, !identifier.isEmpty {
+            return "identifier:\(identifier)"
+        }
+        if let label = element.label, !label.isEmpty {
+            return "label:\(label)"
+        }
+        if let value = element.value, !value.isEmpty {
+            return "value:\(value)"
+        }
+        return "description:\(element.description)"
     }
 }
 
 struct ElementUpdateProjectionBucket: Sendable {
     let updates: [ElementUpdate]
     let omittedCount: Int?
+    let omittedKeys: [String]?
 
     init(updates: [ElementUpdate], limit: Int) {
         let visible = Array(updates.prefix(max(0, limit)))
         self.updates = visible
-        let omitted = updates.count - visible.count
-        omittedCount = omitted > 0 ? omitted : nil
+        let omittedUpdates = Array(updates.dropFirst(visible.count))
+        omittedCount = omittedUpdates.isEmpty ? nil : omittedUpdates.count
+        omittedKeys = omittedUpdates.isEmpty
+            ? nil
+            : omittedUpdates.map { ElementProjectionBucket.omissionKey(for: $0.after) }
     }
 
     var isEmpty: Bool {
@@ -520,6 +541,7 @@ struct DeltaProjection: Sendable {
     let kind: DeltaProjectionKind
     let elementCount: Int
     let captureEdge: AccessibilityTrace.CaptureEdge?
+    let interactionDigest: AccessibilityTrace.InteractionDigest?
     let transient: ElementProjectionBucket
     let edits: DeltaEditsProjection?
     let screen: DeltaScreenProjection?
@@ -530,6 +552,7 @@ struct DeltaProjection: Sendable {
             kind = .noChange
             elementCount = payload.elementCount
             captureEdge = payload.captureEdge
+            interactionDigest = payload.interactionDigest
             transient = ElementProjectionBucket(
                 elements: payload.transient,
                 limit: profile.limits.deltaElementsPerBucket
@@ -540,6 +563,7 @@ struct DeltaProjection: Sendable {
             kind = .elementsChanged
             elementCount = payload.elementCount
             captureEdge = payload.captureEdge
+            interactionDigest = payload.interactionDigest
             transient = ElementProjectionBucket(
                 elements: payload.transient,
                 limit: profile.limits.deltaElementsPerBucket
@@ -551,6 +575,7 @@ struct DeltaProjection: Sendable {
             kind = .screenChanged
             elementCount = payload.elementCount
             captureEdge = payload.captureEdge
+            interactionDigest = payload.interactionDigest
             transient = ElementProjectionBucket(
                 elements: payload.transient,
                 limit: profile.limits.deltaElementsPerBucket

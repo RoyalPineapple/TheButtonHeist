@@ -175,6 +175,7 @@ struct PublicDelta: Encodable {
     let kind: String
     let elementCount: Int
     let captureEdge: AccessibilityTrace.CaptureEdge?
+    let interactionDigest: AccessibilityTrace.InteractionDigest?
     let transient: [PublicElement]?
     let edits: PublicElementEdits?
     let newInterface: PublicInterface?
@@ -185,6 +186,7 @@ struct PublicDelta: Encodable {
             self.kind = projection.kind.rawValue
             self.elementCount = projection.elementCount
             self.captureEdge = projection.captureEdge
+            self.interactionDigest = projection.interactionDigest
             self.transient = projection.transient.elements.isEmpty
                 ? nil
                 : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
@@ -194,6 +196,7 @@ struct PublicDelta: Encodable {
             self.kind = projection.kind.rawValue
             self.elementCount = projection.elementCount
             self.captureEdge = projection.captureEdge
+            self.interactionDigest = projection.interactionDigest
             self.transient = projection.transient.elements.isEmpty
                 ? nil
                 : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
@@ -207,6 +210,7 @@ struct PublicDelta: Encodable {
             self.kind = projection.kind.rawValue
             self.elementCount = projection.elementCount
             self.captureEdge = projection.captureEdge
+            self.interactionDigest = projection.interactionDigest
             self.transient = projection.transient.elements.isEmpty
                 ? nil
                 : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
@@ -220,9 +224,10 @@ struct PublicElementEdits: Encodable {
     let added: [PublicElement]?
     let removed: [PublicElement]?
     let updated: [PublicElementUpdate]?
+    let omitted: PublicHeistElementEditOmissions?
 
     var isEmpty: Bool {
-        added == nil && removed == nil && updated == nil
+        added == nil && removed == nil && updated == nil && omitted == nil
     }
 
     init(projection: DeltaEditsProjection) {
@@ -235,6 +240,8 @@ struct PublicElementEdits: Encodable {
         self.updated = projection.updated.updates.isEmpty
             ? nil
             : projection.updated.updates.compactMap(PublicElementUpdate.init(update:))
+        let omitted = PublicHeistElementEditOmissions(projection: projection)
+        self.omitted = omitted.isEmpty ? nil : omitted
     }
 }
 
@@ -617,6 +624,7 @@ struct PublicHeistDelta: Encodable {
     let kind: String
     let elementCount: Int
     let captureEdge: AccessibilityTrace.CaptureEdge?
+    let interactionDigest: AccessibilityTrace.InteractionDigest?
     let transient: [PublicElement]?
     let edits: PublicHeistElementEdits?
     let screen: PublicHeistScreenProjection?
@@ -629,10 +637,11 @@ struct PublicHeistDelta: Encodable {
             self.kind = projection.kind.rawValue
             self.elementCount = projection.elementCount
             self.captureEdge = projection.captureEdge
+            self.interactionDigest = projection.interactionDigest
             self.transient = transient.isEmpty ? nil : transient
             self.edits = nil
             self.screen = nil
-            let omitted = PublicHeistDeltaOmissions(transient: projection.transient.omittedCount)
+            let omitted = PublicHeistDeltaOmissions(projection: projection.transient)
             self.omitted = omitted.isEmpty ? nil : omitted
 
         case .elementsChanged:
@@ -641,10 +650,11 @@ struct PublicHeistDelta: Encodable {
             self.kind = projection.kind.rawValue
             self.elementCount = projection.elementCount
             self.captureEdge = projection.captureEdge
+            self.interactionDigest = projection.interactionDigest
             self.transient = transient.isEmpty ? nil : transient
             self.edits = edits?.isEmpty == false ? edits : nil
             self.screen = nil
-            let omitted = PublicHeistDeltaOmissions(transient: projection.transient.omittedCount)
+            let omitted = PublicHeistDeltaOmissions(projection: projection.transient)
             self.omitted = omitted.isEmpty ? nil : omitted
 
         case .screenChanged:
@@ -652,10 +662,11 @@ struct PublicHeistDelta: Encodable {
             self.kind = projection.kind.rawValue
             self.elementCount = projection.elementCount
             self.captureEdge = projection.captureEdge
+            self.interactionDigest = projection.interactionDigest
             self.transient = transient.isEmpty ? nil : transient
             self.edits = nil
             self.screen = projection.screen.map { PublicHeistScreenProjection(projection: $0) }
-            let omitted = PublicHeistDeltaOmissions(transient: projection.transient.omittedCount)
+            let omitted = PublicHeistDeltaOmissions(projection: projection.transient)
             self.omitted = omitted.isEmpty ? nil : omitted
         }
     }
@@ -682,11 +693,7 @@ struct PublicHeistElementEdits: Encodable {
         self.added = added.isEmpty ? nil : added
         self.removed = removed.isEmpty ? nil : removed
         self.updated = updated.isEmpty ? nil : updated
-        let omitted = PublicHeistElementEditOmissions(
-            added: projection.added.omittedCount,
-            removed: projection.removed.omittedCount,
-            updated: projection.updated.omittedCount
-        )
+        let omitted = PublicHeistElementEditOmissions(projection: projection)
         self.omitted = omitted.isEmpty ? nil : omitted
     }
 
@@ -699,17 +706,58 @@ struct PublicHeistElementEditOmissions: Encodable {
     let added: Int?
     let removed: Int?
     let updated: Int?
+    let addedKeys: [String]?
+    let removedKeys: [String]?
+    let updatedKeys: [String]?
+
+    init(
+        added: Int?,
+        removed: Int?,
+        updated: Int?,
+        addedKeys: [String]?,
+        removedKeys: [String]?,
+        updatedKeys: [String]?
+    ) {
+        self.added = added
+        self.removed = removed
+        self.updated = updated
+        self.addedKeys = addedKeys
+        self.removedKeys = removedKeys
+        self.updatedKeys = updatedKeys
+    }
+
+    init(projection: DeltaEditsProjection) {
+        self.init(
+            added: projection.added.omittedCount,
+            removed: projection.removed.omittedCount,
+            updated: projection.updated.omittedCount,
+            addedKeys: projection.added.omittedKeys,
+            removedKeys: projection.removed.omittedKeys,
+            updatedKeys: projection.updated.omittedKeys
+        )
+    }
 
     var isEmpty: Bool {
-        added == nil && removed == nil && updated == nil
+        added == nil
+            && removed == nil
+            && updated == nil
+            && addedKeys == nil
+            && removedKeys == nil
+            && updatedKeys == nil
     }
 }
 
 struct PublicHeistDeltaOmissions: Encodable {
     let transient: Int?
+    let transientKeys: [String]?
+
+    init(projection: ElementProjectionBucket) {
+        self.transient = projection.omittedCount
+        self.transientKeys = projection.omittedKeys
+    }
 
     var isEmpty: Bool {
-        transient == nil
+        transient == nil && transientKeys == nil
     }
 }
 

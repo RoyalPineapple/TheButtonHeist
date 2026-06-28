@@ -8,9 +8,24 @@ enum AccessibilityTraceElementDiff {
         beforeElements: [HeistElement],
         afterElements: [HeistElement]
     ) -> ElementEdits {
+        let edits = projectElementEditsWithoutMoveSuppression(
+            beforeElements: beforeElements,
+            afterElements: afterElements
+        )
+        return AccessibilityTraceMoveInference.suppressElementChurnFromFunctionalMoves(
+            edits: edits,
+            beforeElements: beforeElements,
+            afterElements: afterElements
+        )
+    }
+
+    static func projectElementEditsWithoutMoveSuppression(
+        beforeElements: [HeistElement],
+        afterElements: [HeistElement]
+    ) -> ElementEdits {
         let oldByKey = Dictionary(grouping: beforeElements, by: \.diffPairingKey)
         let newByKey = Dictionary(grouping: afterElements, by: \.diffPairingKey)
-        let allKeys = Set(oldByKey.keys).union(newByKey.keys)
+        let allKeys = Set(oldByKey.keys).union(newByKey.keys).sorted()
 
         var updated: [ElementUpdate] = []
         var added: [HeistElement] = []
@@ -26,11 +41,22 @@ enum AccessibilityTraceElementDiff {
             added += newEls.suffix(from: pairCount)
         }
 
-        return AccessibilityTraceMoveInference.suppressElementChurnFromFunctionalMoves(
-            edits: ElementEdits(added: added, removed: removed, updated: updated),
-            beforeElements: beforeElements,
-            afterElements: afterElements
-        )
+        return ElementEdits(added: added, removed: removed, updated: updated)
+    }
+
+    static func pairingKeyMultisetDiffers(
+        beforeElements: [HeistElement],
+        afterElements: [HeistElement]
+    ) -> Bool {
+        pairingKeyCounts(beforeElements) != pairingKeyCounts(afterElements)
+    }
+
+    private static func pairingKeyCounts(_ elements: [HeistElement]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for element in elements {
+            counts[element.diffPairingKey, default: 0] += 1
+        }
+        return counts
     }
 }
 

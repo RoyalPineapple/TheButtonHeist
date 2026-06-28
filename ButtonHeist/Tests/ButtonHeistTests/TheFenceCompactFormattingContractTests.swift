@@ -229,10 +229,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         let delta = publicJSONProbe(response).object("delta")
         let addedJSON = delta.object("edits").array("added")
+        let digest = delta.object("interactionDigest")
         let compact = response.compactFormatted()
         let human = response.humanFormatted()
 
         XCTAssertEqual(delta.string("kind"), "elementsChanged")
+        XCTAssertEqual(digest.int("elementCountBefore"), 11)
+        XCTAssertEqual(digest.int("elementCountAfter"), 12)
+        XCTAssertEqual(digest.bool("elementCountChanged"), true)
+        XCTAssertEqual(digest.bool("elementSetChanged"), true)
         XCTAssertEqual(addedJSON.first?.string("label"), "Barbaresco")
         XCTAssertEqual(addedJSON.first?.string("identifier"), "wine_barbaresco")
         XCTAssertTrue(compact.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), compact)
@@ -354,6 +359,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let action = try XCTUnwrap(evidence["action"] as? [String: Any])
         let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
         let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
+        let digest = try XCTUnwrap(delta["interactionDigest"] as? [String: Any])
         let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
         let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
         let editOmissions = try XCTUnwrap(edits["omitted"] as? [String: Any])
@@ -362,9 +368,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
 
         XCTAssertNil(node["action"])
+        XCTAssertEqual(digest["elementCountBefore"] as? Int, 0)
+        XCTAssertEqual(digest["elementCountAfter"] as? Int, 8)
+        XCTAssertEqual(digest["elementCountChanged"] as? Bool, true)
+        XCTAssertEqual(digest["elementSetChanged"] as? Bool, true)
         XCTAssertEqual(added.count, 5)
         XCTAssertTrue(added.allSatisfy { ($0["label"] as? String)?.hasPrefix("Lazy Row ") == true }, "\(added)")
         XCTAssertEqual(editOmissions["added"] as? Int, 3)
+        XCTAssertEqual(
+            editOmissions["addedKeys"] as? [String],
+            ["identifier:lazy_row_5", "identifier:lazy_row_6", "identifier:lazy_row_7"]
+        )
         XCTAssertEqual(traceOmission["projectedAs"] as? String, "delta")
         XCTAssertEqual(traceOmission["omittedCount"] as? Int, 2)
         XCTAssertFalse(encoded.contains(#""captures""#), encoded)
