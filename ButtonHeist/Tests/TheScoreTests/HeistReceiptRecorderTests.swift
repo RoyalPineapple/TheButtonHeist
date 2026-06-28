@@ -6,45 +6,45 @@ import Testing
 @Suite(.serialized) struct HeistReceiptRecorderTests {
 
     @Test func `record failing receipt as gzip artifact`() throws {
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let plan = try samplePlan()
-        let result = failedResult()
+        try withTemporaryDirectory(prefix: "heist-receipt-recorder") { directory in
+            let plan = try samplePlan()
+            let result = failedResult()
 
-        let recording = try #require(try HeistReceiptRecorder.write(
-            result,
-            plan: plan,
-            configuration: HeistReceiptRecordingConfiguration(rootDirectory: directory, mode: .failures)
-        ))
+            let recording = try #require(try HeistReceiptRecorder.write(
+                result,
+                plan: plan,
+                configuration: HeistReceiptRecordingConfiguration(rootDirectory: directory, mode: .failures)
+            ))
 
-        #expect(recording.status == .failed)
-        #expect(recording.heistName == "Checkout_Flow")
-        #expect(recording.fingerprint == (try HeistReceiptRecorder.heistFingerprint(for: plan)))
-        #expect(recording.url.pathExtension == "gz")
-        #expect(recording.url.deletingLastPathComponent().lastPathComponent.hasPrefix("checkout-flow-"))
-        #expect(try HeistReceiptCodec.decode(contentsOf: recording.url) == result)
+            #expect(recording.status == .failed)
+            #expect(recording.heistName == "Checkout_Flow")
+            #expect(recording.fingerprint == (try HeistReceiptRecorder.heistFingerprint(for: plan)))
+            #expect(recording.url.pathExtension == "gz")
+            #expect(recording.url.deletingLastPathComponent().lastPathComponent.hasPrefix("checkout-flow-"))
+            #expect(try HeistReceiptCodec.decode(contentsOf: recording.url) == result)
+        }
     }
 
     @Test func `skip passing receipt unless mode records passing`() throws {
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let plan = try samplePlan()
-        let result = passedResult()
+        try withTemporaryDirectory(prefix: "heist-receipt-recorder") { directory in
+            let plan = try samplePlan()
+            let result = passedResult()
 
-        let skipped = try HeistReceiptRecorder.write(
-            result,
-            plan: plan,
-            configuration: HeistReceiptRecordingConfiguration(rootDirectory: directory, mode: .failures)
-        )
-        let recording = try #require(try HeistReceiptRecorder.write(
-            result,
-            plan: plan,
-            configuration: HeistReceiptRecordingConfiguration(rootDirectory: directory, mode: .failingAndPassing)
-        ))
+            let skipped = try HeistReceiptRecorder.write(
+                result,
+                plan: plan,
+                configuration: HeistReceiptRecordingConfiguration(rootDirectory: directory, mode: .failures)
+            )
+            let recording = try #require(try HeistReceiptRecorder.write(
+                result,
+                plan: plan,
+                configuration: HeistReceiptRecordingConfiguration(rootDirectory: directory, mode: .failingAndPassing)
+            ))
 
-        #expect(skipped == nil)
-        #expect(recording.status == .passed)
-        #expect(try HeistReceiptCodec.decode(contentsOf: recording.url) == result)
+            #expect(skipped == nil)
+            #expect(recording.status == .passed)
+            #expect(try HeistReceiptCodec.decode(contentsOf: recording.url) == result)
+        }
     }
 
     @Test func `environment process temporary directory resolves under process temp`() throws {
@@ -105,13 +105,6 @@ import Testing
             ],
             durationMs: 2
         )
-    }
-
-    private func temporaryDirectory() throws -> URL {
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("heist-receipt-recorder-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
     }
 
     private func setEnvironment(_ key: String, _ value: String?) {

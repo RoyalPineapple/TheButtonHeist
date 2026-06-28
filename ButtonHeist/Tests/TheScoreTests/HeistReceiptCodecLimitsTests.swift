@@ -6,13 +6,13 @@ import Testing
 
     @Test func `round trip gzip receipt from file extension`() throws {
         let receipt = sampleReceipt(message: "boom")
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let url = directory.appendingPathComponent("receipt.json.gz")
+        try withTemporaryDirectory(prefix: "heist-receipt-codec") { directory in
+            let url = directory.appendingPathComponent("receipt.json.gz")
 
-        try HeistReceiptCodec.write(receipt, to: url)
+            try HeistReceiptCodec.write(receipt, to: url)
 
-        #expect(try HeistReceiptCodec.decode(contentsOf: url) == receipt)
+            #expect(try HeistReceiptCodec.decode(contentsOf: url) == receipt)
+        }
     }
 
     @Test func `oversized gzip compressed receipt is rejected before decompression`() throws {
@@ -54,18 +54,18 @@ import Testing
             maxGzipCompressedBytes: 1024,
             maxGzipDecompressedBytes: 1024
         )
-        let directory = try temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let url = directory.appendingPathComponent("receipt.json")
-        try Data(repeating: 0x7B, count: limits.maxJSONBytes + 1).write(to: url)
+        try withTemporaryDirectory(prefix: "heist-receipt-codec") { directory in
+            let url = directory.appendingPathComponent("receipt.json")
+            try Data(repeating: 0x7B, count: limits.maxJSONBytes + 1).write(to: url)
 
-        do {
-            _ = try HeistReceiptCodec.decode(contentsOf: url, limits: limits)
-            Issue.record("Expected receipt decode to fail")
-        } catch {
-            let description = String(describing: error)
-            #expect(description.contains("JSON receipt data is too large"), "\(description)")
-            #expect(description.contains("limit 8 bytes"), "\(description)")
+            do {
+                _ = try HeistReceiptCodec.decode(contentsOf: url, limits: limits)
+                Issue.record("Expected receipt decode to fail")
+            } catch {
+                let description = String(describing: error)
+                #expect(description.contains("JSON receipt data is too large"), "\(description)")
+                #expect(description.contains("limit 8 bytes"), "\(description)")
+            }
         }
     }
 
@@ -139,10 +139,4 @@ import Testing
         }
     }
 
-    private func temporaryDirectory() throws -> URL {
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("heist-receipt-codec-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
-    }
 }
