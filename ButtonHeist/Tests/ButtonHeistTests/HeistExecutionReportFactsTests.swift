@@ -634,15 +634,12 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 plan: plan,
                 result: HeistExecutionResult(steps: [testCase.step], durationMs: testCase.step.durationMs)
             )
-            let json = publicJSONObject(response)
-            let report = try XCTUnwrap(json["report"] as? [String: Any], testCase.name)
-            let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]], testCase.name)
-            let node = try XCTUnwrap(nodes.first, testCase.name)
-            let evidence = try XCTUnwrap(node["evidence"] as? [String: Any], testCase.name)
+            let report = try publicHeistReportResponseDTO(response).report
+            let node = try XCTUnwrap(report.nodes.first, testCase.name)
+            let evidence = try XCTUnwrap(node.evidence, testCase.name)
 
-            XCTAssertEqual(Set(evidence.keys), Set([testCase.expectedKey]), testCase.name)
-            let payload = try XCTUnwrap(evidence[testCase.expectedKey] as? [String: Any], testCase.name)
-            try testCase.assertPayload(payload)
+            XCTAssertEqual(evidence.encodedVariantKeys, Set([testCase.expectedKey]), testCase.name)
+            try testCase.assertEvidence(evidence)
         }
     }
 
@@ -652,7 +649,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         name: String,
         step: HeistExecutionStepResult,
         expectedKey: String,
-        assertPayload: ([String: Any]) throws -> Void
+        assertEvidence: (PublicHeistReportEvidenceDTO) throws -> Void
     )
 
     private func evidenceProjectionCases() -> [EvidenceProjectionCase] {
@@ -687,9 +684,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 actionResult: ActionResult(success: true, method: .activate)
             ),
             expectedKey: "action",
-            assertPayload: { payload in
-                XCTAssertEqual(payload["commandName"] as? String, "activate")
-                _ = try XCTUnwrap(payload["result"] as? [String: Any])
+            assertEvidence: { evidence in
+                let action = try XCTUnwrap(evidence.action)
+                XCTAssertEqual(action.commandName, "activate")
+                XCTAssertNotNil(action.result)
             }
         )
     }
@@ -702,9 +700,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 expectation: ExpectationResult(met: true, predicate: evidenceProjectionPredicate())
             ),
             expectedKey: "wait",
-            assertPayload: { payload in
-                _ = try XCTUnwrap(payload["result"] as? [String: Any])
-                _ = try XCTUnwrap(payload["expectation"] as? [String: Any])
+            assertEvidence: { evidence in
+                let wait = try XCTUnwrap(evidence.wait)
+                XCTAssertEqual(wait.result.method, "wait")
+                XCTAssertEqual(wait.expectation.met, true)
             }
         )
     }
@@ -722,9 +721,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 )
             ),
             expectedKey: "caseSelection",
-            assertPayload: { payload in
-                XCTAssertEqual(payload["caseCount"] as? Int, 1)
-                _ = try XCTUnwrap(payload["cases"] as? [[String: Any]])
+            assertEvidence: { evidence in
+                let caseSelection = try XCTUnwrap(evidence.caseSelection)
+                XCTAssertEqual(caseSelection.caseCount, 1)
+                let cases = try XCTUnwrap(caseSelection.cases)
+                XCTAssertEqual(cases.count, 1)
             }
         )
     }
@@ -746,9 +747,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 ))
             ),
             expectedKey: "forEachString",
-            assertPayload: { payload in
-                XCTAssertEqual(payload["parameter"] as? String, "item")
-                XCTAssertEqual(payload["value"] as? String, "Milk")
+            assertEvidence: { evidence in
+                let forEachString = try XCTUnwrap(evidence.forEachString)
+                XCTAssertEqual(forEachString.parameter, "item")
+                XCTAssertEqual(forEachString.value, "Milk")
             }
         )
     }
@@ -773,10 +775,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 ))
             ),
             expectedKey: "forEachElement",
-            assertPayload: { payload in
-                XCTAssertEqual(payload["parameter"] as? String, "row")
-                XCTAssertEqual(payload["matchedCount"] as? Int, 2)
-                XCTAssertEqual(payload["targetSummary"] as? String, "\"Row\" staticText")
+            assertEvidence: { evidence in
+                let forEachElement = try XCTUnwrap(evidence.forEachElement)
+                XCTAssertEqual(forEachElement.parameter, "row")
+                XCTAssertEqual(forEachElement.matchedCount, 2)
+                XCTAssertEqual(forEachElement.targetSummary, "\"Row\" staticText")
             }
         )
     }
@@ -801,10 +804,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 ))
             ),
             expectedKey: "repeatUntil",
-            assertPayload: { payload in
-                XCTAssertEqual((payload["timeout"] as? NSNumber)?.doubleValue, 2.0)
-                XCTAssertEqual(payload["iterationCount"] as? Int, 1)
-                XCTAssertEqual(payload["lastObservedSummary"] as? String, "Ready")
+            assertEvidence: { evidence in
+                let repeatUntil = try XCTUnwrap(evidence.repeatUntil)
+                XCTAssertEqual(repeatUntil.timeout, 2.0)
+                XCTAssertEqual(repeatUntil.iterationCount, 1)
+                XCTAssertEqual(repeatUntil.lastObservedSummary, "Ready")
             }
         )
     }
@@ -821,8 +825,9 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 evidence: .invocation(HeistInvocationEvidence(name: "Nested"))
             ),
             expectedKey: "invocation",
-            assertPayload: { payload in
-                XCTAssertEqual(payload["name"] as? String, "Nested")
+            assertEvidence: { evidence in
+                let invocation = try XCTUnwrap(evidence.invocation)
+                XCTAssertEqual(invocation.name, "Nested")
             }
         )
     }
@@ -847,9 +852,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 ))
             ),
             expectedKey: "invocation",
-            assertPayload: { payload in
-                XCTAssertEqual(payload["capability"] as? String, "LibraryScreen.addToCart")
-                XCTAssertEqual(payload["argument"] as? String, "Milk")
+            assertEvidence: { evidence in
+                let invocation = try XCTUnwrap(evidence.invocation)
+                XCTAssertEqual(invocation.capability, "LibraryScreen.addToCart")
+                XCTAssertEqual(invocation.argument, "Milk")
             }
         )
     }
@@ -859,9 +865,10 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             name: "warning",
             step: warnStep(message: "Heads up"),
             expectedKey: "warning",
-            assertPayload: { payload in
-                XCTAssertEqual(payload["path"] as? String, "$.body[0]")
-                XCTAssertEqual(payload["message"] as? String, "Heads up")
+            assertEvidence: { evidence in
+                let warning = try XCTUnwrap(evidence.warning)
+                XCTAssertEqual(warning.path, "$.body[0]")
+                XCTAssertEqual(warning.message, "Heads up")
             }
         )
     }
