@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 
 enum JSONValue: Decodable, Equatable {
     case object([String: JSONValue])
@@ -79,17 +80,13 @@ struct JSONProbe {
 
     func object(_ key: String? = nil) throws -> JSONProbe {
         let probe = try key.map(child) ?? self
-        guard case .object = probe.value else {
-            throw probe.typeMismatch(expected: "object")
-        }
+        _ = try probe.requireObject()
         return probe
     }
 
     func array(_ key: String? = nil) throws -> [JSONProbe] {
         let probe = try key.map(child) ?? self
-        guard case .array(let values) = probe.value else {
-            throw probe.typeMismatch(expected: "array")
-        }
+        let values = try probe.requireArray()
         return values.enumerated().map { index, value in
             JSONProbe(value, path: "\(probe.path)[\(index)]")
         }
@@ -97,37 +94,22 @@ struct JSONProbe {
 
     func string(_ key: String? = nil) throws -> String {
         let probe = try key.map(child) ?? self
-        guard case .string(let value) = probe.value else {
-            throw probe.typeMismatch(expected: "string")
-        }
-        return value
+        return try probe.requireString()
     }
 
     func assertPresent(_ key: String) throws {
-        guard case .object(let object) = value else {
-            throw typeMismatch(expected: "object")
-        }
-        guard object[key] != nil else {
-            throw JSONProbeFailure(path: childPath(for: key), reason: "Expected value to be present")
-        }
+        let object = try requireObject()
+        #expect(object[key] != nil, "Expected value to be present at \(childPath(for: key))")
     }
 
     func assertMissing(_ key: String) throws {
-        guard case .object(let object) = value else {
-            throw typeMismatch(expected: "object")
-        }
-        guard object[key] == nil else {
-            throw JSONProbeFailure(path: childPath(for: key), reason: "Expected value to be absent")
-        }
+        let object = try requireObject()
+        #expect(object[key] == nil, "Expected value to be absent at \(childPath(for: key))")
     }
 
     private func child(_ key: String) throws -> JSONProbe {
-        guard case .object(let object) = value else {
-            throw typeMismatch(expected: "object")
-        }
-        guard let value = object[key] else {
-            throw JSONProbeFailure(path: childPath(for: key), reason: "Missing JSON value")
-        }
+        let object = try requireObject()
+        let value = try #require(object[key], "Missing JSON value at \(childPath(for: key))")
         return JSONProbe(value, path: childPath(for: key))
     }
 
@@ -135,11 +117,41 @@ struct JSONProbe {
         path + Self.pathComponent(forKey: key)
     }
 
-    private func typeMismatch(expected: String) -> JSONProbeFailure {
-        JSONProbeFailure(
-            path: path,
-            reason: "Expected \(expected), got \(value.typeDescription)"
-        )
+    private func requireObject() throws -> [String: JSONValue] {
+        try #require(objectValue, "\(typeMismatchDescription(expected: "object"))")
+    }
+
+    private func requireArray() throws -> [JSONValue] {
+        try #require(arrayValue, "\(typeMismatchDescription(expected: "array"))")
+    }
+
+    private func requireString() throws -> String {
+        try #require(stringValue, "\(typeMismatchDescription(expected: "string"))")
+    }
+
+    private var objectValue: [String: JSONValue]? {
+        guard case .object(let object) = value else {
+            return nil
+        }
+        return object
+    }
+
+    private var arrayValue: [JSONValue]? {
+        guard case .array(let array) = value else {
+            return nil
+        }
+        return array
+    }
+
+    private var stringValue: String? {
+        guard case .string(let string) = value else {
+            return nil
+        }
+        return string
+    }
+
+    private func typeMismatchDescription(expected: String) -> String {
+        "Expected \(expected), got \(value.typeDescription) at \(path)"
     }
 
     private static func pathComponent(forKey key: String) -> String {
