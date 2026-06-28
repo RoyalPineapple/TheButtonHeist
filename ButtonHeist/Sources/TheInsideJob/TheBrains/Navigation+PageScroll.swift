@@ -66,18 +66,19 @@ extension Navigation {
                     failureKind: .targetUnavailable
                 )
             }
-            let moved = safecracker.scrollToEdge(scrollView, edge: edge)
-            if moved {
+            switch safecracker.scrollToEdge(scrollView, edge: edge) {
+            case .moved:
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 stash.refreshTreeAfterViewportMove()
-            }
-
-            return moved
-                ? .success(method: .scrollToEdge)
-                : .failure(
+                return .success(method: .scrollToEdge)
+            case .alreadyAtEdge:
+                return .success(method: .scrollToEdge)
+            case .unavailable:
+                return .failure(
                     .scrollToEdge,
-                    message: "scroll_to_edge failed: observed target already at requested edge"
+                    message: "scroll_to_edge failed: selected container cannot be scrolled programmatically"
                 )
+            }
         case .failed(let message):
             return .failure(.scrollToEdge, message: message, failureKind: .targetUnavailable)
         }

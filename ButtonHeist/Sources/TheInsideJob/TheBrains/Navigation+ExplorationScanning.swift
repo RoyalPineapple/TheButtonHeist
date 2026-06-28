@@ -285,7 +285,7 @@ extension Navigation {
             if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.container) {
                 return .omitted(reason)
             }
-            if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) {
+            if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) == .moved {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 absorbExplorationPage(in: &exploration)
             }

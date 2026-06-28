@@ -87,22 +87,22 @@ final class TheSafecrackerScrollTests: XCTestCase {
 
     func testScrollToEdgeBottom() {
         let sv = makeScrollView()
-        let moved = safecracker.scrollToEdge(sv, edge: .bottom)
-        XCTAssertTrue(moved)
+        let result = safecracker.scrollToEdge(sv, edge: .bottom)
+        XCTAssertEqual(result, .moved)
         XCTAssertEqual(sv.contentOffset.y, 3000 - 800, accuracy: 0.01)
     }
 
     func testScrollToEdgeTop() {
         let sv = makeScrollView(contentOffset: CGPoint(x: 0, y: 1000))
-        let moved = safecracker.scrollToEdge(sv, edge: .top)
-        XCTAssertTrue(moved)
+        let result = safecracker.scrollToEdge(sv, edge: .top)
+        XCTAssertEqual(result, .moved)
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01)
     }
 
-    func testScrollToEdgeReturnsFalseWhenAlreadyAtEdge() {
+    func testScrollToEdgeReportsAlreadyAtEdge() {
         let sv = makeScrollView(contentOffset: .zero)
-        let moved = safecracker.scrollToEdge(sv, edge: .top)
-        XCTAssertFalse(moved, "Already at edge should return false (no scroll needed)")
+        let result = safecracker.scrollToEdge(sv, edge: .top)
+        XCTAssertEqual(result, .alreadyAtEdge)
     }
 
     // MARK: - scrollByPage: overlap verification

@@ -10,6 +10,12 @@ import ThePlans
 /// entering this file.
 extension TheSafecracker {
 
+    enum EdgeScrollResult: Equatable {
+        case moved
+        case alreadyAtEdge
+        case unavailable
+    }
+
     /// Scroll by one page in the given direction with a 44pt overlap.
     /// Returns false if already at the edge (no movement possible).
     func scrollByPage(
@@ -132,8 +138,8 @@ extension TheSafecracker {
     }
 
     /// Scroll to an absolute edge.
-    func scrollToEdge(_ scrollView: UIScrollView, edge: ScrollEdge, animated: Bool = true) -> Bool {
-        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
+    func scrollToEdge(_ scrollView: UIScrollView, edge: ScrollEdge, animated: Bool = true) -> EdgeScrollResult {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return .unavailable }
 
         let insets = scrollView.adjustedContentInset
         var newOffset = scrollView.contentOffset
@@ -149,11 +155,12 @@ extension TheSafecracker {
             newOffset.x = scrollView.contentSize.width + insets.right - scrollView.frame.width
         }
 
-        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
-            return false
+        if newOffset.x == scrollView.contentOffset.x,
+           newOffset.y == scrollView.contentOffset.y {
+            return .alreadyAtEdge
         }
         scrollView.setContentOffset(newOffset, animated: animated)
-        return true
+        return .moved
     }
 
     /// Scroll a region by one page using a synthetic swipe gesture.

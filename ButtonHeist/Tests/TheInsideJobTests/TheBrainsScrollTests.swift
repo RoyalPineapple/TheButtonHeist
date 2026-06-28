@@ -1133,6 +1133,25 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
     }
 
+    func testScrollToEdgeAlreadyAtRequestedEdgeSucceeds() async {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
+        brains.stash.installScreenForTesting(Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerNames: [container: "main_scroll"],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [container: .init(view: scrollView)]
+        ))
+
+        let result = await brains.navigation.executeScrollToEdge(ScrollToEdgeTarget(edge: .top))
+
+        XCTAssertTrue(result.success, "Expected already-at-edge scroll to be idempotent: \(String(describing: result.message))")
+        XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
+    }
+
     func testScrollUsesNamedContainer() async {
         let firstScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
