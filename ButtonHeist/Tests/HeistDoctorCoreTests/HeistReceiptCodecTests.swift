@@ -43,19 +43,19 @@ import TheScore
     @Test func `valid success receipt keeps stable external JSON shape`() throws {
         let data = try HeistReceiptCodec.encode(sampleReceipt(), format: .json)
 
-        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let steps = try #require(object["steps"] as? [[String: Any]])
+        let object = try JSONProbe(data: data)
+        let steps = try object.array("steps")
         let step = try #require(steps.first)
 
-        #expect(object.keys.contains("outcome") == false)
-        #expect(object.keys.contains("abortedAtPath") == false)
-        #expect(step["path"] as? String == "$.body[0]")
-        #expect(step["kind"] as? String == "action")
-        #expect(step["status"] as? String == "passed")
-        #expect(step.keys.contains("outcome") == false)
-        #expect(step.keys.contains("failure") == false)
-        #expect(step["evidence"] != nil)
-        #expect((step["children"] as? [Any])?.isEmpty == true)
+        try object.assertMissing("outcome")
+        try object.assertMissing("abortedAtPath")
+        #expect(try step.string("path") == "$.body[0]")
+        #expect(try step.string("kind") == "action")
+        #expect(try step.string("status") == "passed")
+        try step.assertMissing("outcome")
+        try step.assertMissing("failure")
+        try step.assertPresent("evidence")
+        #expect(try step.array("children").isEmpty)
     }
 
     @Test func `valid failure receipt decodes with required failure facts`() throws {
@@ -63,16 +63,16 @@ import TheScore
         let data = try HeistReceiptCodec.encode(receipt, format: .json)
 
         let decoded = try HeistReceiptCodec.decode(data, format: .json)
-        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let steps = try #require(object["steps"] as? [[String: Any]])
+        let object = try JSONProbe(data: data)
+        let steps = try object.array("steps")
         let step = try #require(steps.first)
 
         #expect(decoded == receipt)
         #expect(decoded.abortedAtPath == "$.body[0]")
         #expect(decoded.steps.first?.failure?.observed == "stop")
-        #expect(object["abortedAtPath"] as? String == "$.body[0]")
-        #expect(step["status"] as? String == "failed")
-        #expect(step["failure"] != nil)
+        #expect(try object.string("abortedAtPath") == "$.body[0]")
+        #expect(try step.string("status") == "failed")
+        try step.assertPresent("failure")
     }
 
     @Test func `decode rejects passed step with failure facts`() throws {
