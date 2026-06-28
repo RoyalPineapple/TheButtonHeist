@@ -317,24 +317,24 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(try typed.jsonData(), try legacy.jsonData())
 
-        let json = publicJSONObject(typed)
+        let json = try publicJSONProbe(typed).object()
         XCTAssertEqual(failure.failureCode, FailureCode(.requestInvalid))
         XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
-        XCTAssertEqual(json["status"] as? String, "error")
-        XCTAssertEqual(json["message"] as? String, failure.displayMessage)
-        XCTAssertEqual(json["code"] as? String, failure.code)
-        XCTAssertEqual(json["kind"] as? String, failure.kind.rawValue)
-        XCTAssertEqual(json["errorCode"] as? String, failure.code)
-        XCTAssertEqual(json["phase"] as? String, failure.phase.rawValue)
-        XCTAssertEqual(json["retryable"] as? Bool, failure.retryable)
-        XCTAssertEqual(json["hint"] as? String, failure.hint)
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("message"), failure.displayMessage)
+        XCTAssertEqual(try json.string("code"), failure.code)
+        XCTAssertEqual(try json.string("kind"), failure.kind.rawValue)
+        XCTAssertEqual(try json.string("errorCode"), failure.code)
+        XCTAssertEqual(try json.string("phase"), failure.phase.rawValue)
+        XCTAssertEqual(try json.bool("retryable"), failure.retryable)
+        XCTAssertEqual(try json.string("hint"), failure.hint)
 
-        let detailsJSON = try XCTUnwrap(json["details"] as? [String: Any])
-        XCTAssertEqual(detailsJSON["code"] as? String, failure.code)
-        XCTAssertEqual(detailsJSON["kind"] as? String, failure.kind.rawValue)
-        XCTAssertEqual(detailsJSON["phase"] as? String, failure.phase.rawValue)
-        XCTAssertEqual(detailsJSON["retryable"] as? Bool, failure.retryable)
-        XCTAssertEqual(detailsJSON["hint"] as? String, failure.hint)
+        let detailsJSON = try json.object("details")
+        XCTAssertEqual(try detailsJSON.string("code"), failure.code)
+        XCTAssertEqual(try detailsJSON.string("kind"), failure.kind.rawValue)
+        XCTAssertEqual(try detailsJSON.string("phase"), failure.phase.rawValue)
+        XCTAssertEqual(try detailsJSON.bool("retryable"), failure.retryable)
+        XCTAssertEqual(try detailsJSON.string("hint"), failure.hint)
     }
 
     func testKnownFailureCodesExposeTypedClassification() {
@@ -417,20 +417,20 @@ final class TheFenceHandlerTests: XCTestCase {
 
         for (name, response, knownCode, kind, phase) in cases {
             let failure = try XCTUnwrap(response.publicFailure, name)
-            let json = publicJSONObject(response)
-            let detailsJSON = try XCTUnwrap(json["details"] as? [String: Any], name)
+            let json = try publicJSONProbe(response).object()
+            let detailsJSON = try json.object("details")
 
             XCTAssertEqual(failure.failureCode, FailureCode(knownCode), name)
             XCTAssertEqual(failure.code, knownCode.rawValue, name)
             XCTAssertEqual(failure.kind, kind, name)
             XCTAssertEqual(failure.phase, phase, name)
-            XCTAssertEqual(json["code"] as? String, knownCode.rawValue, name)
-            XCTAssertEqual(json["errorCode"] as? String, knownCode.rawValue, name)
-            XCTAssertEqual(json["kind"] as? String, kind.rawValue, name)
-            XCTAssertEqual(json["phase"] as? String, phase.rawValue, name)
-            XCTAssertEqual(detailsJSON["code"] as? String, knownCode.rawValue, name)
-            XCTAssertEqual(detailsJSON["kind"] as? String, kind.rawValue, name)
-            XCTAssertEqual(detailsJSON["phase"] as? String, phase.rawValue, name)
+            XCTAssertEqual(try json.string("code"), knownCode.rawValue, name)
+            XCTAssertEqual(try json.string("errorCode"), knownCode.rawValue, name)
+            XCTAssertEqual(try json.string("kind"), kind.rawValue, name)
+            XCTAssertEqual(try json.string("phase"), phase.rawValue, name)
+            XCTAssertEqual(try detailsJSON.string("code"), knownCode.rawValue, name)
+            XCTAssertEqual(try detailsJSON.string("kind"), kind.rawValue, name)
+            XCTAssertEqual(try detailsJSON.string("phase"), phase.rawValue, name)
         }
     }
 
@@ -730,14 +730,14 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(result.steps.map(\.kind), [.action])
         XCTAssertFalse(result.isFailure)
 
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        XCTAssertNil(json["method"])
-        XCTAssertEqual(nodes.first?["kind"] as? String, "action")
-        XCTAssertNil(nodes.first?["action"])
-        let evidence = try XCTUnwrap(nodes.first?["evidence"] as? [String: Any])
-        XCTAssertNotNil(evidence["action"])
+        let json = try publicJSONProbe(response).object()
+        try json.assertMissing("method")
+        let report = try publicHeistReportResponseDTO(response).report
+        let firstNode = try XCTUnwrap(report.nodes.first)
+        XCTAssertEqual(firstNode.kind, "action")
+        XCTAssertFalse(firstNode.containsKey("action"))
+        let evidence = try XCTUnwrap(firstNode.evidence)
+        XCTAssertNotNil(evidence.action)
     }
 
     @ButtonHeistActor
@@ -2484,9 +2484,9 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
 
         assertDirectCommandHeistExecution(response, command: .activate, stepKind: .action)
-        let json = publicJSONObject(response)
-        XCTAssertNil(json["method"])
-        XCTAssertNotNil(json["report"])
+        let json = try publicJSONProbe(response).object()
+        try json.assertMissing("method")
+        try json.assertPresent("report")
         XCTAssertEqual(response.compactFormatted(), "heist: 1 top-level steps in 0ms\n  [0] activate")
     }
 
@@ -2865,9 +2865,9 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
 
         assertDirectCommandHeistExecution(response, command: .wait, stepKind: .wait)
-        let json = publicJSONObject(response)
-        XCTAssertNil(json["method"])
-        XCTAssertNotNil(json["report"])
+        let json = try publicJSONProbe(response).object()
+        try json.assertMissing("method")
+        try json.assertPresent("report")
     }
 
     @ButtonHeistActor
