@@ -6,6 +6,76 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
+    private struct ForEachLoopOutcome {
+        let totalCount: Int
+        let termination: ForEachLoopTermination
+        let iterationNodes: [HeistExecutionStepResult]
+
+        var iterationCount: Int {
+            iterationNodes.count
+        }
+
+        var status: HeistExecutionStepStatus {
+            termination.status
+        }
+
+        var failureReason: String? {
+            termination.failureReason
+        }
+
+        var abortedAtChildPath: String? {
+            termination.abortedAtChildPath
+        }
+    }
+
+    private enum ForEachLoopTermination {
+        case completed
+        case childFailed(ForEachLoopChildFailure)
+        case postObservationUnavailable(iterationIndex: Int)
+
+        var status: HeistExecutionStepStatus {
+            switch self {
+            case .completed:
+                return .passed
+            case .childFailed, .postObservationUnavailable:
+                return .failed
+            }
+        }
+
+        var failureReason: String? {
+            switch self {
+            case .completed:
+                return nil
+            case .childFailed(let failure):
+                return failure.reason
+            case .postObservationUnavailable(let iterationIndex):
+                return "iteration \(iterationIndex) post-observation unavailable"
+            }
+        }
+
+        var abortedAtChildPath: String? {
+            switch self {
+            case .completed, .postObservationUnavailable:
+                return nil
+            case .childFailed(let failure):
+                return failure.childPath
+            }
+        }
+    }
+
+    private struct ForEachLoopChildFailure {
+        let iterationIndex: Int
+        let value: String?
+        let childPath: String
+
+        var reason: String {
+            if let value {
+                return "iteration \(iterationIndex) failed for value \"\(value)\" at \(childPath)"
+            }
+            return "iteration \(iterationIndex) failed at \(childPath)"
+        }
+    }
+
     func executeForEachElementStep(
         _ step: ForEachElementStep,
         index: Int,
@@ -26,7 +96,7 @@ extension TheBrains {
             )
         }
 
-        var matchSignature = ForEachMatchSignature(
+        let matchSignature = ForEachMatchSignature(
             matching: step.matching,
             elements: observation.state.interface.projectedElements
         )
@@ -43,14 +113,41 @@ extension TheBrains {
             )
         }
 
-        var iterationNodes: [HeistExecutionStepResult] = []
-        var failureReason: String?
-        var iterationCount = 0
-        var nextOrdinal = 0
-        var observedSequence = observation.event.sequence
+        let outcome = await forEachElementLoopOutcome(
+            step: step,
+            path: path,
+            runtime: runtime,
+            environment: environment,
+            scope: scope,
+            initialMatchSignature: matchSignature,
+            initialObservedSequence: observation.event.sequence
+        )
 
-        while iterationCount < matchedCount {
-            let iterationIndex = iterationCount
+        return forEachElementResult(
+            path: path,
+            start: start,
+            step: step,
+            outcome: outcome
+        )
+    }
+
+    private func forEachElementLoopOutcome(
+        step: ForEachElementStep,
+        path: String,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope,
+        initialMatchSignature: ForEachMatchSignature,
+        initialObservedSequence: SettledObservationSequence
+    ) async -> ForEachLoopOutcome {
+        var matchSignature = initialMatchSignature
+        var iterationNodes: [HeistExecutionStepResult] = []
+        var nextOrdinal = 0
+        var observedSequence = initialObservedSequence
+        let matchedCount = initialMatchSignature.count
+
+        while iterationNodes.count < matchedCount {
+            let iterationIndex = iterationNodes.count
             let iterationStart = CFAbsoluteTimeGetCurrent()
             let iterationPath = "\(path).for_each_element.iterations[\(iterationIndex)]"
             let currentElement = ElementTarget.predicate(step.matching, ordinal: nextOrdinal)
@@ -62,7 +159,6 @@ extension TheBrains {
                 scope: scope,
                 path: "\(iterationPath).body"
             )
-            iterationCount += 1
 
             let abortedAtChildPath = iterationResults.firstFailedStep?.path
             iterationNodes.append(forEachElementIterationResult(
@@ -77,18 +173,28 @@ extension TheBrains {
             ))
 
             if let abortedAtChildPath {
-                failureReason = "iteration \(iterationIndex) failed at \(abortedAtChildPath)"
-                break
+                return ForEachLoopOutcome(
+                    totalCount: matchedCount,
+                    termination: .childFailed(ForEachLoopChildFailure(
+                        iterationIndex: iterationIndex,
+                        value: nil,
+                        childPath: abortedAtChildPath
+                    )),
+                    iterationNodes: iterationNodes
+                )
             }
 
-            guard iterationCount < matchedCount else { break }
+            guard iterationNodes.count < matchedCount else { break }
             guard let afterObservation = await runtime.observeSemanticState(
                 .discovery,
                 observedSequence,
                 nil
             ) else {
-                failureReason = "iteration \(iterationIndex) post-observation unavailable"
-                break
+                return ForEachLoopOutcome(
+                    totalCount: matchedCount,
+                    termination: .postObservationUnavailable(iterationIndex: iterationIndex),
+                    iterationNodes: iterationNodes
+                )
             }
             observedSequence = afterObservation.event.sequence
             let nextSignature = ForEachMatchSignature(
@@ -103,13 +209,9 @@ extension TheBrains {
             }
         }
 
-        return forEachElementResult(
-            path: path,
-            start: start,
-            step: step,
-            matchedCount: matchedCount,
-            iterationCount: iterationCount,
-            failureReason: failureReason,
+        return ForEachLoopOutcome(
+            totalCount: matchedCount,
+            termination: .completed,
             iterationNodes: iterationNodes
         )
     }
@@ -154,36 +256,32 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime,
         step: ForEachElementStep,
-        matchedCount: Int,
-        iterationCount: Int,
-        failureReason: String?,
-        iterationNodes: [HeistExecutionStepResult]
+        outcome: ForEachLoopOutcome
     ) -> HeistExecutionStepResult {
-        let abortedAtChildPath = iterationNodes.firstFailedStep?.path
         return HeistExecutionStepResult(
             path: path,
             kind: .forEachElement,
-            status: failureReason == nil ? .passed : .failed,
+            status: outcome.status,
             durationMs: elapsedMilliseconds(since: start),
             intent: .forEachElement(parameter: step.parameter, matching: step.matching.description, limit: step.limit),
             evidence: .forEachElement(HeistForEachElementEvidence(
                 parameter: step.parameter,
                 matching: step.matching,
                 limit: step.limit,
-                matchedCount: matchedCount,
-                iterationCount: iterationCount,
-                failureReason: failureReason
+                matchedCount: outcome.totalCount,
+                iterationCount: outcome.iterationCount,
+                failureReason: outcome.failureReason
             )),
-            failure: failureReason.map {
+            failure: outcome.failureReason.map {
                 HeistFailureDetail(
                     category: .loop,
                     contract: "for_each_element completes all matched iterations",
                     observed: $0,
-                    expected: "\(matchedCount) iteration(s)"
+                    expected: "\(outcome.totalCount) iteration(s)"
                 )
             },
-            abortedAtChildPath: abortedAtChildPath,
-            children: iterationNodes
+            abortedAtChildPath: outcome.abortedAtChildPath,
+            children: outcome.iterationNodes
         )
     }
 
@@ -196,9 +294,29 @@ extension TheBrains {
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
+        let outcome = await forEachStringLoopOutcome(
+            step: step,
+            path: path,
+            runtime: runtime,
+            environment: environment,
+            scope: scope
+        )
+        return forEachStringResult(
+            path: path,
+            start: start,
+            step: step,
+            outcome: outcome
+        )
+    }
+
+    private func forEachStringLoopOutcome(
+        step: ForEachStringStep,
+        path: String,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
+    ) async -> ForEachLoopOutcome {
         var iterationNodes: [HeistExecutionStepResult] = []
-        var failureReason: String?
-        var iterationCount = 0
 
         for (valueIndex, value) in step.values.enumerated() {
             let iterationStart = CFAbsoluteTimeGetCurrent()
@@ -211,7 +329,6 @@ extension TheBrains {
                 scope: scope,
                 path: "\(iterationPath).body"
             )
-            iterationCount += 1
 
             let abortedAtChildPath = iterationResults.firstFailedStep?.path
             iterationNodes.append(HeistExecutionStepResult(
@@ -223,7 +340,7 @@ extension TheBrains {
                 evidence: .forEachString(HeistForEachStringEvidence(
                     parameter: step.parameter,
                     count: step.values.count,
-                    iterationCount: iterationCount,
+                    iterationCount: valueIndex + 1,
                     iterationOrdinal: valueIndex,
                     value: value,
                     failureReason: abortedAtChildPath.map { "child failed at \($0)" }
@@ -236,34 +353,53 @@ extension TheBrains {
             ))
 
             if let abortedAtChildPath {
-                failureReason = "iteration \(valueIndex) failed for value \"\(value)\" at \(abortedAtChildPath)"
-                break
+                return ForEachLoopOutcome(
+                    totalCount: step.values.count,
+                    termination: .childFailed(ForEachLoopChildFailure(
+                        iterationIndex: valueIndex,
+                        value: value,
+                        childPath: abortedAtChildPath
+                    )),
+                    iterationNodes: iterationNodes
+                )
             }
         }
 
-        let abortedAtChildPath = iterationNodes.firstFailedStep?.path
+        return ForEachLoopOutcome(
+            totalCount: step.values.count,
+            termination: .completed,
+            iterationNodes: iterationNodes
+        )
+    }
+
+    private func forEachStringResult(
+        path: String,
+        start: CFAbsoluteTime,
+        step: ForEachStringStep,
+        outcome: ForEachLoopOutcome
+    ) -> HeistExecutionStepResult {
         return HeistExecutionStepResult(
             path: path,
             kind: .forEachString,
-            status: failureReason == nil ? .passed : .failed,
+            status: outcome.status,
             durationMs: elapsedMilliseconds(since: start),
-            intent: .forEachString(parameter: step.parameter, count: step.values.count),
+            intent: .forEachString(parameter: step.parameter, count: outcome.totalCount),
             evidence: .forEachString(HeistForEachStringEvidence(
                 parameter: step.parameter,
-                count: step.values.count,
-                iterationCount: iterationCount,
-                failureReason: failureReason
+                count: outcome.totalCount,
+                iterationCount: outcome.iterationCount,
+                failureReason: outcome.failureReason
             )),
-            failure: failureReason.map {
+            failure: outcome.failureReason.map {
                 HeistFailureDetail(
                     category: .loop,
                     contract: "for_each_string completes all values",
                     observed: $0,
-                    expected: "\(step.values.count) value(s)"
+                    expected: "\(outcome.totalCount) value(s)"
                 )
             },
-            abortedAtChildPath: abortedAtChildPath,
-            children: iterationNodes
+            abortedAtChildPath: outcome.abortedAtChildPath,
+            children: outcome.iterationNodes
         )
     }
 

@@ -17,14 +17,12 @@ extension TheBrains {
     ) async -> HeistExecutionStepResult {
         // A wait is a step with no command: just the predicate wait.
         await executeStep(
-            command: nil,
-            wait: step,
+            .wait(step, scope: scope),
             index: index,
             path: path,
             start: start,
             runtime: runtime,
-            environment: environment,
-            scope: scope
+            environment: environment
         )
     }
 }

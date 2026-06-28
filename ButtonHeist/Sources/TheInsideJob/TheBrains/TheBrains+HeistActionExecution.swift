@@ -6,46 +6,44 @@ import ThePlans
 import TheScore
 
 extension TheBrains {
+    enum HeistStepExecutionUnit {
+        case action(command: HeistActionCommand, expectation: WaitStep?)
+        case wait(WaitStep, scope: HeistExecutionScope)
+    }
+
     func executeActionStep(
         _ step: ActionStep,
         index: Int,
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment,
-        scope: HeistExecutionScope? = nil
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
         await executeStep(
-            command: step.command,
-            wait: step.expectation,
+            .action(command: step.command, expectation: step.expectation),
             index: index,
             path: path,
             start: start,
             runtime: runtime,
-            environment: environment,
-            scope: scope
+            environment: environment
         )
     }
 
     /// The one execution path behind both an action step and a wait step.
     ///
-    /// A step is an optional command followed by an optional predicate wait. An
-    /// action step has a command and an optional expectation; a wait step has no
-    /// command and the wait is the whole step.
+    /// `HeistStepExecutionUnit` is the runtime transition boundary: an action
+    /// always has a command, while a wait always has the scope needed to run an
+    /// else body. There is no nil/nil execution state.
     func executeStep(
-        command: HeistActionCommand?,
-        wait: WaitStep?,
+        _ unit: HeistStepExecutionUnit,
         index _: Int,
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment,
-        scope: HeistExecutionScope? = nil
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
-        let kind: HeistExecutionStepKind = command == nil ? .wait : .action
-
-        var actionResult: ActionResult?
-        if let command {
+        switch unit {
+        case .action(let command, let expectation):
             let resolvedCommand: RuntimeActionMessage
             do {
                 resolvedCommand = try command.resolveForRuntimeDispatch(in: environment)
@@ -66,31 +64,51 @@ extension TheBrains {
                     )
                 )
             }
-            actionResult = await runtime.execute(resolvedCommand)
-        }
-
-        // No predicate to wait on, or the command already failed: return the
-        // action outcome as-is. A failed action is not re-checked.
-        guard let wait, actionResult?.success != false else {
-            let failure = actionDispatchFailure(command: command, result: actionResult)
-            return HeistExecutionStepResult(
+            let actionResult = await runtime.execute(resolvedCommand)
+            guard actionResult.success, let expectation else {
+                return actionResultNode(
+                    command: command,
+                    actionResult: actionResult,
+                    path: path,
+                    start: start
+                )
+            }
+            return await actionExpectationResult(
+                command: command,
+                actionResult: actionResult,
+                wait: expectation,
                 path: path,
-                kind: kind,
-                status: failure == nil ? .passed : .failed,
-                durationMs: elapsedMilliseconds(since: start),
-                intent: command.map(actionIntent) ?? wait.map(waitIntent),
-                evidence: command.map {
-                    .action(HeistActionEvidence(command: $0, actionResult: actionResult))
-                },
-                failure: failure
+                start: start,
+                runtime: runtime,
+                environment: environment
+            )
+
+        case .wait(let wait, let scope):
+            return await waitStepResult(
+                wait: wait,
+                path: path,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
             )
         }
+    }
 
+    private func actionExpectationResult(
+        command: HeistActionCommand,
+        actionResult: ActionResult,
+        wait: WaitStep,
+        path: String,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
+    ) async -> HeistExecutionStepResult {
         let resolvedWait: ResolvedWaitStep
         do {
             resolvedWait = try wait.resolve(in: environment)
         } catch {
-            return waitResolutionFailure(
+            return expectationResolutionFailure(
                 command: command,
                 actionResult: actionResult,
                 wait: wait,
@@ -99,31 +117,68 @@ extension TheBrains {
                 error: error
             )
         }
+        let receipt = await runtime.wait(resolvedWait, actionResult.accessibilityTrace, nil)
+        let failure = expectationFailure(
+            wait: wait,
+            receipt: receipt
+        )
+        return HeistExecutionStepResult(
+            path: path,
+            kind: .action,
+            status: failure == nil ? .passed : .failed,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: actionIntent(command),
+            evidence: .action(HeistActionEvidence(
+                command: command,
+                actionResult: actionResult,
+                expectationActionResult: receipt.actionResult,
+                expectation: receipt.expectation
+            )),
+            failure: failure
+        )
+    }
 
-        let receipt = await runtime.wait(resolvedWait, actionResult?.accessibilityTrace, nil)
-        if let command {
-            let failure = expectationFailure(
+    private func actionResultNode(
+        command: HeistActionCommand,
+        actionResult: ActionResult,
+        path: String,
+        start: CFAbsoluteTime
+    ) -> HeistExecutionStepResult {
+        let failure = actionDispatchFailure(command: command, result: actionResult)
+        return HeistExecutionStepResult(
+            path: path,
+            kind: .action,
+            status: failure == nil ? .passed : .failed,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: actionIntent(command),
+            evidence: .action(HeistActionEvidence(command: command, actionResult: actionResult)),
+            failure: failure
+        )
+    }
+
+    private func waitStepResult(
+        wait: WaitStep,
+        path: String,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
+    ) async -> HeistExecutionStepResult {
+        let resolvedWait: ResolvedWaitStep
+        do {
+            resolvedWait = try wait.resolve(in: environment)
+        } catch {
+            return waitResolutionFailure(
                 wait: wait,
-                receipt: receipt
-            )
-            return HeistExecutionStepResult(
                 path: path,
-                kind: .action,
-                status: failure == nil ? .passed : .failed,
-                durationMs: elapsedMilliseconds(since: start),
-                intent: actionIntent(command),
-                evidence: .action(HeistActionEvidence(
-                    command: command,
-                    actionResult: actionResult,
-                    expectationActionResult: receipt.actionResult,
-                    expectation: receipt.expectation
-                )),
-                failure: failure
+                start: start,
+                error: error
             )
         }
 
+        let receipt = await runtime.wait(resolvedWait, nil, nil)
         let failure = waitFailure(wait: wait, receipt: receipt)
-        if failure != nil, let elseBody = wait.elseBody, let scope {
+        if failure != nil, let elseBody = wait.elseBody {
             return await waitElseResult(
                 elseBody: elseBody,
                 wait: wait,
@@ -205,30 +260,35 @@ extension TheBrains {
     }
 
     private func waitResolutionFailure(
-        command: HeistActionCommand?,
-        actionResult: ActionResult?,
         wait: WaitStep,
         path: String,
         start: CFAbsoluteTime,
         error: Error
     ) -> HeistExecutionStepResult {
-        guard let command else {
-            let observed = "could not resolve heist wait predicate: \(error)"
-            return HeistExecutionStepResult(
-                path: path,
-                kind: .wait,
-                status: .failed,
-                durationMs: elapsedMilliseconds(since: start),
-                intent: waitIntent(wait),
-                failure: HeistFailureDetail(
-                    category: .wait,
-                    contract: "wait predicate resolves before evaluation",
-                    observed: observed,
-                    expected: wait.predicate.description
-                )
+        let observed = "could not resolve heist wait predicate: \(error)"
+        return HeistExecutionStepResult(
+            path: path,
+            kind: .wait,
+            status: .failed,
+            durationMs: elapsedMilliseconds(since: start),
+            intent: waitIntent(wait),
+            failure: HeistFailureDetail(
+                category: .wait,
+                contract: "wait predicate resolves before evaluation",
+                observed: observed,
+                expected: wait.predicate.description
             )
-        }
+        )
+    }
 
+    private func expectationResolutionFailure(
+        command: HeistActionCommand,
+        actionResult: ActionResult,
+        wait: WaitStep,
+        path: String,
+        start: CFAbsoluteTime,
+        error: Error
+    ) -> HeistExecutionStepResult {
         let expectationActionResult = ActionResultBuilder(method: .wait).failure(errorKind: .actionFailed)
         let expectation = ExpectationResult(
             met: false,
@@ -268,18 +328,9 @@ extension TheBrains {
     }
 
     private func actionDispatchFailure(
-        command: HeistActionCommand?,
-        result: ActionResult?
+        command: HeistActionCommand,
+        result: ActionResult
     ) -> HeistFailureDetail? {
-        guard let command else { return nil }
-        guard let result else {
-            return HeistFailureDetail(
-                category: .action,
-                contract: "action dispatch returns a result",
-                observed: "no action result returned",
-                expected: command.wireType.rawValue
-            )
-        }
         guard !result.success else { return nil }
         return HeistFailureDetail(
             category: result.errorKind == .elementNotFound ? .targetResolution : .action,
