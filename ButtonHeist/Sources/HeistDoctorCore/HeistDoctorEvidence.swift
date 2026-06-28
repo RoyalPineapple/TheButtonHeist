@@ -38,7 +38,6 @@ extension HeistDoctor {
         return HeistStepRepairEvidence(
             stepPath: step.path,
             actionIdentity: HeistRepairActionIdentity(command: command),
-            actionKind: command.wireType.rawValue,
             target: target,
             beforeSnapshot: before,
             afterDelta: trace.meaningfulEndpointDelta,

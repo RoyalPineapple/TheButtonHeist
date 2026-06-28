@@ -23,9 +23,7 @@ enum HeistRepairSuggestionRenderer {
         }
 
         let actionFamily = RepairActionFamily(
-            actionIdentity: request.currentFailure.actionIdentity ?? request.lastSuccess.actionIdentity,
-            actionKind: request.currentFailure.actionKind,
-            method: request.currentFailure.result.method ?? request.lastSuccess.result.method
+            actionIdentity: request.currentFailure.actionIdentity
         )
         switch currentScreen.resolve(request.lastSuccess.target) {
         case .resolved(let element, _):
