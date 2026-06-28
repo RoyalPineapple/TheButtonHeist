@@ -324,6 +324,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     result: PublicHeistActionResultDTO(
                         status: "ok",
                         method: "activate",
+                        screenId: "screen",
                         delta: PublicHeistDeltaDTO(
                             kind: "elementsChanged",
                             elementCount: 4,
@@ -394,6 +395,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
             status: "ok",
             method: "activate",
+            screenId: "screen",
             delta: PublicHeistDeltaDTO(
                 kind: "elementsChanged",
                 elementCount: 8,
@@ -494,7 +496,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                     firstResponderChanged: false
                 ),
                 screen: PublicHeistScreenDTO(
-                    screenId: "checkout",
                     elementCount: 8,
                     elements: (0..<5).map { index in
                         PublicHeistElementDTO(
