@@ -3517,7 +3517,7 @@ final class TheBrainsActionTests: XCTestCase {
         unavailableObservationCount: Int = 0,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) -> any TheBrains.HeistExecutionRuntime {
+    ) -> TheBrains.HeistExecutionRuntime {
         let observationSource = ScriptedHeistObservationSource(
             observations: observations,
             unavailableObservationCount: unavailableObservationCount,
@@ -3527,7 +3527,7 @@ final class TheBrainsActionTests: XCTestCase {
             line: line
         )
 
-        return TheBrains.ClosureHeistExecutionRuntime(
+        return TheBrains.HeistExecutionRuntime(
             execute: { command in
                 if let execute {
                     return await execute(command)
