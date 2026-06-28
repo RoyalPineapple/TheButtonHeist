@@ -507,7 +507,7 @@ private struct ThePlansBuildArtifacts {
                 || FileManager.default.fileExists(atPath: textualModuleInterface.path) else {
             return nil
         }
-        let objectFiles = try activeSwiftObjectFiles(
+        let objectFiles = try SwiftPMBuildDescription.activeSwiftObjectFiles(
             in: buildDirectory,
             moduleName: "ThePlans"
         ) ?? swiftObjectFiles(in: objectsDirectory)
@@ -630,21 +630,36 @@ private struct ThePlansBuildArtifacts {
             .sorted { $0.path < $1.path }
     }
 
-    private static func activeSwiftObjectFiles(
+}
+
+struct SwiftPMBuildDescription: Decodable {
+    let swiftCommands: [String: SwiftPMBuildCommand]
+
+    private enum CodingKeys: String, CodingKey {
+        case swiftCommands
+    }
+
+    init(from decoder: Decoder) throws {
+        guard let container = try? decoder.container(keyedBy: CodingKeys.self) else {
+            swiftCommands = [:]
+            return
+        }
+        swiftCommands = (try? container.decode([String: SwiftPMBuildCommand].self, forKey: .swiftCommands)) ?? [:]
+    }
+
+    static func activeSwiftObjectFiles(
         in buildDirectory: URL,
         moduleName: String
     ) throws -> [URL]? {
         let descriptionURL = buildDirectory.appendingPathComponent("description.json")
-        guard let data = try? Data(contentsOf: descriptionURL),
-              let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let swiftCommands = root["swiftCommands"] as? [String: Any] else {
+        guard let data = try? Data(contentsOf: descriptionURL) else {
             return nil
         }
 
-        for commandValue in swiftCommands.values {
-            guard let command = commandValue as? [String: Any],
-                  command["moduleName"] as? String == moduleName,
-                  let objectPaths = command["objects"] as? [String] else {
+        let description = try JSONDecoder().decode(SwiftPMBuildDescription.self, from: data)
+        for command in description.swiftCommands.values {
+            guard command.moduleName == moduleName,
+                  let objectPaths = command.objects else {
                 continue
             }
 
@@ -665,6 +680,26 @@ private struct ThePlansBuildArtifacts {
         }
 
         return nil
+    }
+}
+
+struct SwiftPMBuildCommand: Decodable {
+    let moduleName: String?
+    let objects: [String]?
+
+    private enum CodingKeys: String, CodingKey {
+        case moduleName
+        case objects
+    }
+
+    init(from decoder: Decoder) throws {
+        guard let container = try? decoder.container(keyedBy: CodingKeys.self) else {
+            moduleName = nil
+            objects = nil
+            return
+        }
+        moduleName = try? container.decode(String.self, forKey: .moduleName)
+        objects = try? container.decode([String].self, forKey: .objects)
     }
 }
 
