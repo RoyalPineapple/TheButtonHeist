@@ -336,7 +336,7 @@ public struct HeistDef<Input>: Sendable {
     }
 
     private static func pathComponents(_ path: String) -> [String] {
-        path.split(separator: ".").map(String.init)
+        HeistInvocationPath.components(fromDottedName: path)
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
@@ -458,7 +458,7 @@ extension HeistDef: HeistContent {
         case .success:
             return []
         case .failure(let message):
-            return ["HeistDef \(path.joined(separator: ".")) is invalid: \(message)"]
+            return ["HeistDef \(HeistInvocationPath.render(path)) is invalid: \(message)"]
         }
     }
 }
@@ -516,7 +516,7 @@ public func RunHeist(_ name: String, _ input: ElementTargetExpr) -> HeistInvocat
 private func runHeistInvocation(_ name: String, argument: HeistArgument) -> HeistInvocationContent {
     HeistInvocationContent(
         invocation: HeistInvocationStep(
-            path: name.split(separator: ".").map(String.init),
+            path: HeistInvocationPath.components(fromDottedName: name),
             argument: argument
         ),
         heistDefinitions: []

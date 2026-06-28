@@ -1,5 +1,52 @@
 import Foundation
 
+struct HeistInvocationPath: Sendable, Equatable, Hashable {
+    enum ValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+        case emptyPath
+        case emptyComponent(index: Int)
+
+        var description: String {
+            switch self {
+            case .emptyPath:
+                return "heist invocation path must not be empty"
+            case .emptyComponent(let index):
+                return "heist invocation path component at index \(index) must not be empty"
+            }
+        }
+    }
+
+    let components: [String]
+
+    init(components: [String]) throws {
+        guard !components.isEmpty else { throw ValidationError.emptyPath }
+        for (index, component) in components.enumerated() where component.isEmpty {
+            throw ValidationError.emptyComponent(index: index)
+        }
+        self.components = components
+    }
+
+    init(dottedName: String) throws {
+        guard !dottedName.isEmpty else { throw ValidationError.emptyPath }
+        try self.init(components: Self.strictComponents(fromDottedName: dottedName))
+    }
+
+    var dottedName: String {
+        Self.render(components)
+    }
+
+    static func render(_ components: [String]) -> String {
+        components.joined(separator: ".")
+    }
+
+    static func components(fromDottedName dottedName: String) -> [String] {
+        dottedName.split(separator: ".").map(String.init)
+    }
+
+    private static func strictComponents(fromDottedName dottedName: String) -> [String] {
+        dottedName.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+    }
+}
+
 public struct HeistInvocationStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case path, argument, expectation
@@ -8,6 +55,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
     public let path: [String]
     public let argument: HeistArgument
     public let expectation: WaitStep?
+    let invocationPath: HeistInvocationPath?
 
     public init(
         path: [String],
@@ -17,13 +65,36 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
         self.path = path
         self.argument = argument
         self.expectation = expectation
+        self.invocationPath = try? HeistInvocationPath(components: path)
+    }
+
+    init(
+        invocationPath: HeistInvocationPath,
+        argument: HeistArgument = .none,
+        expectation: WaitStep? = nil
+    ) {
+        self.path = invocationPath.components
+        self.argument = argument
+        self.expectation = expectation
+        self.invocationPath = invocationPath
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist invocation step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let pathComponents = try container.decode([String].self, forKey: .path)
+        let invocationPath: HeistInvocationPath
+        do {
+            invocationPath = try HeistInvocationPath(components: pathComponents)
+        } catch let error as HeistInvocationPath.ValidationError {
+            throw DecodingError.dataCorruptedError(
+                forKey: .path,
+                in: container,
+                debugDescription: error.description
+            )
+        }
         self.init(
-            path: try container.decode([String].self, forKey: .path),
+            invocationPath: invocationPath,
             argument: try container.decodeIfPresent(HeistArgument.self, forKey: .argument) ?? .none,
             expectation: try container.decodeIfPresent(WaitStep.self, forKey: .expectation)
         )
@@ -38,7 +109,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
 
     /// Dotted capability name, e.g. `LibraryScreen.addToCart`.
     public var capabilityName: String {
-        path.joined(separator: ".")
+        invocationPath?.dottedName ?? HeistInvocationPath.render(path)
     }
 
     /// Report/display summary of this run as `RunHeist("Name", argument)`.
