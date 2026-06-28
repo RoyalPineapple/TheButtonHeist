@@ -67,9 +67,9 @@ final class SemanticObservationSettledWaiters {
         }
     }
 
-    func completeWaiters(with event: SettledSemanticObservationEvent) {
+    func completeWaiters(with eventsByFulfilledScope: [SemanticObservationScope: SettledSemanticObservationEvent]) {
         for (id, waiter) in waitersByID {
-            guard event.scope.satisfies(requested: waiter.scope) else { continue }
+            guard let event = eventsByFulfilledScope[waiter.scope] else { continue }
             guard event.sequence > (waiter.afterSequence ?? 0) else { continue }
             complete(id, returning: event)
         }
