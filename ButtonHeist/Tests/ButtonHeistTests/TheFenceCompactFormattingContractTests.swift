@@ -42,7 +42,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(output, "one_finger_tap: ok")
     }
 
-    func testActionFailureWinsOverAttachedExpectationResult() {
+    func testActionFailureWinsOverAttachedExpectationResult() throws {
         let expectation = ExpectationResult(
             met: false,
             predicate: .state(.exists(ElementPredicate(label: "Done"))),
@@ -59,17 +59,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             expectation: expectation
         )
 
-        let json = publicJSONProbe(response)
+        let json = try publicJSONProbe(response)
 
-        XCTAssertEqual(json.string("status"), "error")
-        XCTAssertEqual(json.string("errorClass"), "elementNotFound")
-        json.assertMissing("expectation")
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("errorClass"), "elementNotFound")
+        try json.assertMissing("expectation")
         XCTAssertEqual(response.compactFormatted(), "activate: error[elementNotFound]: button disabled")
         XCTAssertEqual(response.humanFormatted(), "Error: button disabled")
         XCTAssertTrue(response.isFailure)
     }
 
-    func testActionFailureProjectionFeedsJSONAndCompactRendering() {
+    func testActionFailureProjectionFeedsJSONAndCompactRendering() throws {
         let response = FenceResponse.action(
             command: .wait,
             result: makeTestActionResult(
@@ -80,15 +80,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
+        let json = try publicJSONProbe(response)
 
-        XCTAssertEqual(json.string("status"), "error")
-        XCTAssertEqual(json.string("errorClass"), "timeout")
-        json.assertMissing("errorCode")
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("errorClass"), "timeout")
+        try json.assertMissing("errorCode")
         XCTAssertEqual(response.compactFormatted(), "wait: error[timeout]: timed out after 2s")
     }
 
-    func testActionFailureCodeAndClassAgreeAcrossPublicFormats() {
+    func testActionFailureCodeAndClassAgreeAcrossPublicFormats() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(
@@ -99,16 +99,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
+        let json = try publicJSONProbe(response)
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json.string("status"), "error")
-        XCTAssertEqual(json.string("errorClass"), "actionFailed")
-        XCTAssertEqual(json.string("errorCode"), "request.accessibility_tree_unavailable")
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("errorClass"), "actionFailed")
+        XCTAssertEqual(try json.string("errorCode"), "request.accessibility_tree_unavailable")
         XCTAssertTrue(compact.contains("error[request.accessibility_tree_unavailable]"), compact)
     }
 
-    func testExpectationFailureStatusAndHintAgreeAcrossJSONAndCompact() {
+    func testExpectationFailureStatusAndHintAgreeAcrossJSONAndCompact() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(),
@@ -119,20 +119,20 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
-        let expectation = json.object("expectation")
+        let json = try publicJSONProbe(response)
+        let expectation = try json.object("expectation")
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json.string("status"), "expectation_failed")
-        json.assertMissing("errorClass")
-        XCTAssertEqual(expectation.bool("met"), false)
-        XCTAssertEqual(expectation.string("actual"), "elementsChanged")
+        XCTAssertEqual(try json.string("status"), "expectation_failed")
+        try json.assertMissing("errorClass")
+        XCTAssertEqual(try expectation.bool("met"), false)
+        XCTAssertEqual(try expectation.string("actual"), "elementsChanged")
         XCTAssertTrue(compact.contains("[expectation FAILED: got elementsChanged]"), compact)
         XCTAssertTrue(compact.contains(".change(.screen()) requires a screen-level transition"), compact)
         XCTAssertTrue(response.isFailure)
     }
 
-    func testActivateNoChangeExpectationFailureExplainsSemanticActivationPath() {
+    func testActivateNoChangeExpectationFailureExplainsSemanticActivationPath() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(),
@@ -143,16 +143,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
-        let expectation = json.object("expectation")
+        let json = try publicJSONProbe(response)
+        let expectation = try json.object("expectation")
         let compact = response.compactFormatted()
         let human = response.humanFormatted()
 
-        XCTAssertEqual(json.string("status"), "expectation_failed")
-        XCTAssertEqual(expectation.string("actual"), "noChange")
+        XCTAssertEqual(try json.string("status"), "expectation_failed")
+        XCTAssertEqual(try expectation.string("actual"), "noChange")
+        let hint = try expectation.string("hint")
         XCTAssertTrue(
-            expectation.string("hint")?.contains("accessibilityActivate()") == true,
-            "\(String(describing: expectation.string("hint")))"
+            hint.contains("accessibilityActivate()"),
+            hint
         )
         XCTAssertTrue(compact.contains("[expectation FAILED: got noChange]"), compact)
         XCTAssertTrue(compact.contains("does not send activation-point tap dispatch"), compact)
@@ -161,22 +162,22 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.isFailure)
     }
 
-    func testActivateNoChangeWithoutExpectationRemainsSuccessful() {
+    func testActivateNoChangeWithoutExpectationRemainsSuccessful() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult()
         )
 
-        let json = publicJSONProbe(response)
+        let json = try publicJSONProbe(response)
 
-        XCTAssertEqual(json.string("status"), "ok")
-        json.assertMissing("expectation")
+        XCTAssertEqual(try json.string("status"), "ok")
+        try json.assertMissing("expectation")
         XCTAssertEqual(response.compactFormatted(), "activate: ok")
         XCTAssertTrue(response.humanFormatted().contains("✓ activate"))
         XCTAssertFalse(response.isFailure)
     }
 
-    func testActivateNoChangeCarriesActivationTraceWithoutFailingAction() {
+    func testActivateNoChangeCarriesActivationTraceWithoutFailingAction() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(
@@ -194,21 +195,21 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
-        let activationTrace = json.object("activationTrace")
+        let json = try publicJSONProbe(response)
+        let activationTrace = try json.object("activationTrace")
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json.string("status"), "ok")
-        XCTAssertEqual(activationTrace.bool("axActivateReturned"), false)
-        XCTAssertEqual(activationTrace.bool("tapActivationDispatched"), true)
-        XCTAssertEqual(activationTrace.bool("tapActivationSucceeded"), true)
+        XCTAssertEqual(try json.string("status"), "ok")
+        XCTAssertEqual(try activationTrace.bool("axActivateReturned"), false)
+        XCTAssertEqual(try activationTrace.bool("tapActivationDispatched"), true)
+        XCTAssertEqual(try activationTrace.bool("tapActivationSucceeded"), true)
         XCTAssertEqual(response.isFailure, false)
         XCTAssertTrue(compact.contains("activate: no change"), compact)
         XCTAssertTrue(compact.contains("tapActivationDispatched=true"), compact)
         XCTAssertTrue(compact.contains("tapActivationPoint=point(888,372)"), compact)
     }
 
-    func testElementsChangedActionOutputIncludesConcreteElementDelta() {
+    func testElementsChangedActionOutputIncludesConcreteElementDelta() throws {
         let added = makeReceiptTestElement(
             label: "Barbaresco",
             value: "$55.00",
@@ -227,19 +228,19 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: makeTestActionResult(accessibilityTrace: trace)
         )
 
-        let delta = publicJSONProbe(response).object("delta")
-        let addedJSON = delta.object("edits").array("added")
-        let digest = delta.object("interactionDigest")
+        let delta = try publicJSONProbe(response).object("delta")
+        let addedJSON = try delta.object("edits").array("added")
+        let digest = try delta.object("interactionDigest")
         let compact = response.compactFormatted()
         let human = response.humanFormatted()
 
-        XCTAssertEqual(delta.string("kind"), "elementsChanged")
-        XCTAssertEqual(digest.int("elementCountBefore"), 11)
-        XCTAssertEqual(digest.int("elementCountAfter"), 12)
-        XCTAssertEqual(digest.bool("elementCountChanged"), true)
-        XCTAssertEqual(digest.bool("elementSetChanged"), true)
-        XCTAssertEqual(addedJSON.first?.string("label"), "Barbaresco")
-        XCTAssertEqual(addedJSON.first?.string("identifier"), "wine_barbaresco")
+        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
+        XCTAssertEqual(try digest.int("elementCountBefore"), 11)
+        XCTAssertEqual(try digest.int("elementCountAfter"), 12)
+        XCTAssertEqual(try digest.bool("elementCountChanged"), true)
+        XCTAssertEqual(try digest.bool("elementSetChanged"), true)
+        XCTAssertEqual(try addedJSON.first?.string("label"), "Barbaresco")
+        XCTAssertEqual(try addedJSON.first?.string("identifier"), "wine_barbaresco")
         XCTAssertTrue(compact.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), compact)
         XCTAssertTrue(human.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), human)
     }

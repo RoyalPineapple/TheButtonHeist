@@ -353,7 +353,7 @@ final class TargetConfigTests: XCTestCase {
         XCTAssertEqual(response.humanFormatted(), "No targets configured")
     }
 
-    func testTargetsResponseJSON() {
+    func testTargetsResponseJSON() throws {
         let response = FenceResponse.targets(
             [
                 "sim1": TargetConfig(device: "127.0.0.1:1455", token: "tok"),
@@ -361,13 +361,13 @@ final class TargetConfigTests: XCTestCase {
             ],
             defaultTarget: "sim1"
         )
-        let json = publicJSONProbe(response)
-        XCTAssertEqual(json.string("status"), "ok")
-        XCTAssertEqual(json.string("default"), "sim1")
-        let targets = json.object("targets")
-        XCTAssertEqual(targets.object("sim1").string("device"), "127.0.0.1:1455")
-        XCTAssertEqual(targets.object("sim1").bool("hasToken"), true)
-        targets.object("sim2").assertMissing("hasToken")
+        let json = try publicJSONProbe(response)
+        XCTAssertEqual(try json.string("status"), "ok")
+        XCTAssertEqual(try json.string("default"), "sim1")
+        let targets = try json.object("targets")
+        XCTAssertEqual(try targets.object("sim1").string("device"), "127.0.0.1:1455")
+        XCTAssertEqual(try targets.object("sim1").bool("hasToken"), true)
+        try targets.object("sim2").assertMissing("hasToken")
     }
 
     func testTargetsResponseCompactFormatting() {

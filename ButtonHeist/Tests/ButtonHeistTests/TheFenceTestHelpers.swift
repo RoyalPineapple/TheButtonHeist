@@ -586,8 +586,8 @@ func publicJSONProbe(
     _ response: FenceResponse,
     file: StaticString = #filePath,
     line: UInt = #line
-) -> JSONProbe {
-    JSONProbe(publicJSONObject(response, file: file, line: line))
+) throws -> JSONProbe {
+    try JSONProbe(data: try response.jsonData())
 }
 
 func publicInterfaceJSONObject(
@@ -596,11 +596,12 @@ func publicInterfaceJSONObject(
     line: UInt = #line
 ) throws -> [String: Any] {
     let object = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(interface))
-    guard let dict = object as? [String: Any] else {
-        XCTFail("Expected public interface JSON object", file: file, line: line)
-        return [:]
-    }
-    return dict
+    return try XCTUnwrap(
+        object as? [String: Any],
+        "Expected public interface JSON object",
+        file: file,
+        line: line
+    )
 }
 
 func publicInterfaceJSONProbe(
@@ -608,7 +609,7 @@ func publicInterfaceJSONProbe(
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws -> JSONProbe {
-    JSONProbe(try publicInterfaceJSONObject(interface, file: file, line: line))
+    try JSONProbe(data: try JSONEncoder().encode(interface))
 }
 
 struct HeistInspection {

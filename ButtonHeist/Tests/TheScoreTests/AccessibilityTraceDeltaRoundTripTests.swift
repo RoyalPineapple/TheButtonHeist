@@ -16,10 +16,10 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     func testNoChangeSparseRoundTrip() throws {
         let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 12))
         let data = try encoder.encode(delta)
-        let json = JSONProbe(data: data)
-        XCTAssertEqual(json.string("kind"), "noChange")
-        XCTAssertEqual(json.int("elementCount"), 12)
-        json.assertMissing("transient")
+        let json = try JSONProbe(data: data)
+        XCTAssertEqual(try json.string("kind"), "noChange")
+        XCTAssertEqual(try json.int("elementCount"), 12)
+        try json.assertMissing("transient")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .noChange(let payload) = decoded else {
@@ -57,12 +57,12 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         ))
 
         let data = try encoder.encode(delta)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let digestJSON = try XCTUnwrap(json["interactionDigest"] as? [String: Any])
-        XCTAssertEqual(digestJSON["elementCountBefore"] as? Int, 1)
-        XCTAssertEqual(digestJSON["elementCountAfter"] as? Int, 2)
-        XCTAssertEqual(digestJSON["elementCountChanged"] as? Bool, true)
-        XCTAssertEqual(digestJSON["elementSetChanged"] as? Bool, true)
+        let json = try JSONProbe(data: data)
+        let digestJSON = try json.object("interactionDigest")
+        XCTAssertEqual(try digestJSON.int("elementCountBefore"), 1)
+        XCTAssertEqual(try digestJSON.int("elementCountAfter"), 2)
+        XCTAssertEqual(try digestJSON.bool("elementCountChanged"), true)
+        XCTAssertEqual(try digestJSON.bool("elementSetChanged"), true)
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -78,13 +78,13 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         )
         let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 4, captureEdge: edge))
         let data = try encoder.encode(delta)
-        let edgeJson = JSONProbe(data: data).object("captureEdge")
-        let beforeJson = edgeJson.object("before")
-        let afterJson = edgeJson.object("after")
-        XCTAssertEqual(beforeJson.int("sequence"), 1)
-        XCTAssertEqual(beforeJson.string("hash"), "sha256:before")
-        XCTAssertEqual(afterJson.int("sequence"), 2)
-        XCTAssertEqual(afterJson.string("hash"), "sha256:after")
+        let edgeJson = try JSONProbe(data: data).object("captureEdge")
+        let beforeJson = try edgeJson.object("before")
+        let afterJson = try edgeJson.object("after")
+        XCTAssertEqual(try beforeJson.int("sequence"), 1)
+        XCTAssertEqual(try beforeJson.string("hash"), "sha256:before")
+        XCTAssertEqual(try afterJson.int("sequence"), 2)
+        XCTAssertEqual(try afterJson.string("hash"), "sha256:after")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .noChange(let payload) = decoded else {
@@ -100,19 +100,19 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         let edits = ElementEdits(added: [added])
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(elementCount: 14, edits: edits))
         let data = try encoder.encode(delta)
-        let json = JSONProbe(data: data)
-        XCTAssertEqual(json.string("kind"), "elementsChanged")
-        XCTAssertEqual(json.int("elementCount"), 14)
+        let json = try JSONProbe(data: data)
+        XCTAssertEqual(try json.string("kind"), "elementsChanged")
+        XCTAssertEqual(try json.int("elementCount"), 14)
         // edits live nested under "edits" — never flat at the top level.
-        json.assertMissing("added")
-        json.assertMissing("removed")
-        json.assertMissing("updated")
-        json.assertMissing("treeInserted")
-        json.assertMissing("transient")
-        let editsJson = json.object("edits")
-        editsJson.assertPresent("added")
-        editsJson.assertMissing("removed")
-        editsJson.assertMissing("updated")
+        try json.assertMissing("added")
+        try json.assertMissing("removed")
+        try json.assertMissing("updated")
+        try json.assertMissing("treeInserted")
+        try json.assertMissing("transient")
+        let editsJson = try json.object("edits")
+        try editsJson.assertPresent("added")
+        try editsJson.assertMissing("removed")
+        try editsJson.assertMissing("updated")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -127,7 +127,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     func testElementsChangedEmptyEditsOmitsKey() throws {
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(elementCount: 3, edits: ElementEdits()))
         let data = try encoder.encode(delta)
-        JSONProbe(data: data).assertMissing("edits")
+        try JSONProbe(data: data).assertMissing("edits")
 
         // Missing edits key must decode as an empty ElementEdits.
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
@@ -156,14 +156,14 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         let data = try encoder.encode(delta)
 
         // heistId is excluded from the wire — the delta is self-describing by label.
-        let editsJSON = JSONProbe(data: data).object("edits")
-        let removedJSON = editsJSON.array("removed")
-        XCTAssertEqual(removedJSON.first?.string("label"), "Old")
-        removedJSON.first?.assertMissing("heistId")
-        let updatedJSON = editsJSON.array("updated")
-        updatedJSON.first?.assertMissing("element")
-        XCTAssertEqual(updatedJSON.first?.object("before").string("value"), "1")
-        XCTAssertEqual(updatedJSON.first?.object("after").string("value"), "2")
+        let editsJSON = try JSONProbe(data: data).object("edits")
+        let removedJSON = try editsJSON.array("removed")
+        XCTAssertEqual(try removedJSON.first?.string("label"), "Old")
+        try removedJSON.first?.assertMissing("heistId")
+        let updatedJSON = try editsJSON.array("updated")
+        try updatedJSON.first?.assertMissing("element")
+        XCTAssertEqual(try updatedJSON.first?.object("before").string("value"), "1")
+        XCTAssertEqual(try updatedJSON.first?.object("after").string("value"), "2")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -192,12 +192,12 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             elementCount: 8, newInterface: interface
         ))
         let data = try encoder.encode(delta)
-        let json = JSONProbe(data: data)
-        XCTAssertEqual(json.string("kind"), "screenChanged")
-        XCTAssertEqual(json.int("elementCount"), 8)
-        json.assertPresent("newInterface")
-        json.assertMissing("postEdits")
-        json.assertMissing("transient")
+        let json = try JSONProbe(data: data)
+        XCTAssertEqual(try json.string("kind"), "screenChanged")
+        XCTAssertEqual(try json.int("elementCount"), 8)
+        try json.assertPresent("newInterface")
+        try json.assertMissing("postEdits")
+        try json.assertMissing("transient")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .screenChanged(let payload) = decoded else {
@@ -216,7 +216,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             transient: [transient]
         ))
         let data = try encoder.encode(delta)
-        JSONProbe(data: data).assertPresent("transient")
+        try JSONProbe(data: data).assertPresent("transient")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .screenChanged(let payload) = decoded else {
@@ -263,16 +263,16 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
 
     func testEmptyElementEditsEncodesEmptyObject() throws {
         let data = try encoder.encode(ElementEdits())
-        XCTAssertTrue(JSONProbe(data: data).isEmptyObject())
+        XCTAssertTrue(try JSONProbe(data: data).isEmptyObject())
     }
 
     func testElementEditsRoundTripDropsEmptyArrays() throws {
         let edits = ElementEdits(added: [makeElement(label: "X")])
         let data = try encoder.encode(edits)
-        let json = JSONProbe(data: data)
-        json.assertPresent("added")
-        json.assertMissing("removed")
-        json.assertMissing("updated")
+        let json = try JSONProbe(data: data)
+        try json.assertPresent("added")
+        try json.assertMissing("removed")
+        try json.assertMissing("updated")
 
         let decoded = try decoder.decode(ElementEdits.self, from: data)
         XCTAssertEqual(decoded.added.map(\.label), ["X"])

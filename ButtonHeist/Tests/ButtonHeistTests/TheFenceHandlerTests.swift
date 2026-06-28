@@ -3273,18 +3273,18 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(command: .getInterface)
 
-        let interface = publicJSONProbe(response).object("interface")
-        XCTAssertEqual(interface.string("screenDescription"), "Menu — 2 buttons")
-        XCTAssertEqual(interface.string("screenId"), "menu")
-        let navigation = interface.object("navigation")
-        XCTAssertEqual(navigation.string("screenTitle"), "Menu")
-        navigation.assertMissing("backButton")
-        navigation.assertMissing("tabBarItems")
-        let tree = interface.array("tree")
+        let interface = try publicJSONProbe(response).object("interface")
+        XCTAssertEqual(try interface.string("screenDescription"), "Menu — 2 buttons")
+        XCTAssertEqual(try interface.string("screenId"), "menu")
+        let navigation = try interface.object("navigation")
+        XCTAssertEqual(try navigation.string("screenTitle"), "Menu")
+        try navigation.assertMissing("backButton")
+        try navigation.assertMissing("tabBarItems")
+        let tree = try interface.array("tree")
         XCTAssertEqual(tree.count, 3)
-        let container = tree[1].object("container")
-        XCTAssertEqual(container.string("containerName"), "semantic_actions__actions")
-        let children = container.array("children")
+        let container = try tree[1].object("container")
+        XCTAssertEqual(try container.string("containerName"), "semantic_actions__actions")
+        let children = try container.array("children")
         XCTAssertEqual(children.count, 2)
     }
 
@@ -3327,15 +3327,15 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(query.maxScrollsPerContainer, 25)
         XCTAssertEqual(query.maxScrollsPerDiscovery, 40)
 
-        let tree = publicJSONProbe(response).object("interface").array("tree")
+        let tree = try publicJSONProbe(response).object("interface").array("tree")
         XCTAssertEqual(tree.count, 1)
-        let container = tree[0].object("container")
-        XCTAssertEqual(container.string("containerName"), "semantic_actions__actions")
-        let children = container.array("children")
+        let container = try tree[0].object("container")
+        XCTAssertEqual(try container.string("containerName"), "semantic_actions__actions")
+        let children = try container.array("children")
         XCTAssertEqual(children.count, 2)
-        XCTAssertEqual(children[0].object("element").string("label"), "Submit")
-        children[0].object("element").assertMissing("heistId")
-        XCTAssertEqual(children[1].object("element").string("label"), "Cancel")
+        XCTAssertEqual(try children[0].object("element").string("label"), "Submit")
+        try children[0].object("element").assertMissing("heistId")
+        XCTAssertEqual(try children[1].object("element").string("label"), "Cancel")
     }
 
     @ButtonHeistActor
@@ -3368,15 +3368,15 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    func testContainerNameAppearsInSummaryJsonAndCompactOutput() {
+    func testContainerNameAppearsInSummaryJsonAndCompactOutput() throws {
         let response = FenceResponse.interface(selectionTestInterface(), detail: .summary)
 
-        let container = publicJSONProbe(response)
+        let tree = try publicJSONProbe(response)
             .object("interface")
-            .array("tree")[1]
-            .object("container")
-        XCTAssertEqual(container.string("containerName"), "semantic_actions__actions")
-        container.assertMissing("frameX")
+            .array("tree")
+        let container = try tree[1].object("container")
+        XCTAssertEqual(try container.string("containerName"), "semantic_actions__actions")
+        try container.assertMissing("frameX")
 
         let compact = response.compactFormatted()
         XCTAssertTrue(
@@ -3411,11 +3411,11 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(query.matcher.checks, [.label(.exact("Submit"))])
 
-        let tree = publicJSONProbe(response).object("interface").array("tree")
+        let tree = try publicJSONProbe(response).object("interface").array("tree")
         XCTAssertEqual(tree.count, 1)
-        let element = tree[0].object("element")
-        XCTAssertEqual(element.string("label"), "Submit")
-        element.assertMissing("heistId")
+        let element = try tree[0].object("element")
+        XCTAssertEqual(try element.string("label"), "Submit")
+        try element.assertMissing("heistId")
     }
 
     @ButtonHeistActor
