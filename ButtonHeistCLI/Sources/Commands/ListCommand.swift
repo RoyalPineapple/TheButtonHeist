@@ -8,9 +8,6 @@ struct ListCommand: AsyncParsableCommand, CLICommandContract {
         abstract: "List available iOS apps with Button Heist enabled"
     )
 
-    @Option(name: .shortAndLong, help: "Discovery timeout in seconds")
-    var timeout: Double = 3.0
-
     @OptionGroup var output: OutputOptions
 
     @ButtonHeistActor

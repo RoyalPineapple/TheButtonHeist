@@ -71,15 +71,34 @@ struct LiveCaptureTests {
 
         #expect(capture.heistIds == ["cancel_button", "save_button"])
         #expect(capture.contains(heistId: "save_button"))
-        #expect(capture.heistId(for: save) == "save_button")
-        #expect(capture.heistId(for: cancel) == "cancel_button")
         #expect(capture.heistId(forPath: TreePath([0])) == "save_button")
+        #expect(capture.heistId(forPath: TreePath([1])) == "cancel_button")
         #expect(capture.element(for: "cancel_button") == cancel)
         #expect(capture.object(for: "save_button") === saveObject)
         #expect(capture.heistId(matching: saveObject) == "save_button")
         #expect(capture.scrollView(for: "save_button") === saveScrollView)
         #expect(capture.orderedElementEntries().map(\.heistId) == ["cancel_button", "save_button"])
         #expect(capture.firstResponderHeistId == "save_button")
+    }
+
+    @Test func `duplicate equal elements keep separate live entries by path`() {
+        let repeated = AccessibilityElement.make(label: "Repeat", traits: .button)
+        let capture = LiveCapture(
+            hierarchy: [
+                .element(repeated, traversalIndex: 0),
+                .element(repeated, traversalIndex: 1),
+            ],
+            heistIdsByPath: [
+                TreePath([0]): "repeat_button_1",
+                TreePath([1]): "repeat_button_2",
+            ],
+            elementRefs: [:],
+            firstResponderHeistId: nil
+        )
+
+        #expect(capture.heistId(forPath: TreePath([0])) == "repeat_button_1")
+        #expect(capture.heistId(forPath: TreePath([1])) == "repeat_button_2")
+        #expect(capture.orderedElementEntries().map(\.heistId) == ["repeat_button_1", "repeat_button_2"])
     }
 }
 

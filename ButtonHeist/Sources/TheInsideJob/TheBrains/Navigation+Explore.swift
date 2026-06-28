@@ -32,11 +32,11 @@ extension Navigation {
         exploration.absorb(stash.refreshLiveCapture())
 
         if let target, hasVisibleTerminalExplorationResolution(target) {
-            exploration.manifest.pendingContainers.removeAll()
+            exploration.manifest.pendingContainerPaths.removeAll()
             return exploration.finish(startTime: startTime)
         }
 
-        exploration.manifest.addPendingContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
+        exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
         if await scanPendingContainers(target: target, exploration: &exploration) {
             return exploration.finish(startTime: startTime)
         }

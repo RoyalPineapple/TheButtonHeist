@@ -40,6 +40,13 @@ enum PredicateEvaluation {
 
     static func evaluate(
         _ predicate: AccessibilityPredicate,
+        in evidence: PredicateObservationEvidence
+    ) -> ExpectationResult {
+        evidence.evaluate(predicate)
+    }
+
+    static func evaluate(
+        _ predicate: AccessibilityPredicate,
         in observation: HeistSemanticObservation,
         changeBaselineSequence: SettledObservationSequence? = nil
     ) -> ExpectationResult {
@@ -75,6 +82,16 @@ enum PredicateEvaluation {
                 in: observation,
                 changeBaselineSequence: changeBaselineSequence
             )
+        )
+    }
+
+    static func caseMatch(
+        _ predicateCase: ResolvedPredicateCase,
+        in evidence: PredicateObservationEvidence
+    ) -> HeistCaseMatchResult {
+        HeistCaseMatchResult(
+            predicate: predicateCase.predicate,
+            result: evaluate(predicateCase.predicate, in: evidence)
         )
     }
 }

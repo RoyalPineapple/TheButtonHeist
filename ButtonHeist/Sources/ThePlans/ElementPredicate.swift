@@ -407,7 +407,7 @@ public extension ElementPredicate {
 /// fields are read directly; trait inclusion/exclusion is delegated so each
 /// subject keeps its own trait representation (client `Set<HeistTrait>` vs
 /// server UIKit bitmask) while the predicate walk lives in one place.
-public protocol ElementPredicateSubject {
+package protocol ElementPredicateSubject {
     var predicateLabel: String? { get }
     var predicateIdentifier: String? { get }
     var predicateValue: String? { get }
@@ -418,7 +418,7 @@ public protocol ElementPredicateSubject {
     func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool
 }
 
-public extension ElementPredicate {
+package extension ElementPredicate {
     /// The single source of truth for predicate evaluation.
     func matches(_ subject: some ElementPredicateSubject) -> Bool {
         guard hasPredicates else { return false }
@@ -551,7 +551,7 @@ extension ElementPredicateCheck: Codable where Value: Codable {
     }
 }
 
-public extension ElementPredicateCheck where Value == String {
+package extension ElementPredicateCheck where Value == String {
     func matches(_ subject: some ElementPredicateSubject) -> Bool {
         switch self {
         case .label(let match):

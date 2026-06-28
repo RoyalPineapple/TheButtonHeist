@@ -1,4 +1,3 @@
-import ArgumentParser
 import ButtonHeist
 import Foundation
 
@@ -11,6 +10,17 @@ struct CLIParsedRequest {
 struct CLIRequestBuildError: Error, CustomStringConvertible {
     let message: String
     let requestId: PublicRequestId?
+    let publicFailure: PublicFailure
+
+    init(
+        message: String,
+        requestId: PublicRequestId?,
+        details: FailureDetails = FailureDetails(code: .requestInvalid)
+    ) {
+        self.message = message
+        self.requestId = requestId
+        self.publicFailure = PublicFailure(message: message, details: details)
+    }
 
     var description: String { message }
 }
@@ -26,7 +36,7 @@ enum CLIRequestBuilder {
             uniquingKeysWith: { _, newest in newest }
         )
         if let target {
-            values[FenceParameterKey.target.rawValue] = targetArgumentValue(target)
+            values[FenceParameterKey.target.rawValue] = targetValue(target)
         }
         return TheFence.CommandArgumentEnvelope(values: values)
     }
@@ -42,7 +52,15 @@ enum CLIRequestBuilder {
         } catch let error as CLIRequestBuildError {
             throw error
         } catch let error as DecodingError {
-            throw ValidationError(diagnosticMessage(for: error))
+            throw CLIRequestBuildError(
+                message: diagnosticMessage(for: error),
+                requestId: nil
+            )
+        } catch {
+            throw CLIRequestBuildError(
+                message: diagnosticMessage(for: error),
+                requestId: nil
+            )
         }
         let requestId = envelope.requestId
         do {
@@ -54,10 +72,20 @@ enum CLIRequestBuilder {
                     requestId: requestId
                 )
             case .failure(let error):
-                throw ValidationError(error.message)
+                throw CLIRequestBuildError(
+                    message: error.message,
+                    requestId: requestId,
+                    details: error.details
+                )
             }
         } catch let error as CLIRequestBuildError {
             throw error
+        } catch let error as SchemaValidationError {
+            throw CLIRequestBuildError(
+                message: error.message,
+                requestId: requestId,
+                details: FailureDetails(code: .requestValidationError)
+            )
         } catch {
             throw CLIRequestBuildError(
                 message: diagnosticMessage(for: error),
@@ -71,14 +99,18 @@ enum CLIRequestBuilder {
         return description.isEmpty ? error.localizedDescription : description
     }
 
-    private static func targetArgumentValue(_ target: ElementTarget) -> HeistValue {
+    static func targetValue(_ target: ElementTarget) -> HeistValue {
+        .object(targetObject(target))
+    }
+
+    static func targetObject(_ target: ElementTarget) -> [String: HeistValue] {
         switch target {
         case .predicate(let predicate, let ordinal):
             var object = predicateArgumentValues(predicate)
             if let ordinal {
                 object[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
             }
-            return .object(object)
+            return object
         }
     }
 
@@ -162,6 +194,11 @@ private struct CLIMachineRequestEnvelope: Decodable {
                 rootMismatchMessage: "Expected JSON object input"
             )
         } catch let error as DecodingError {
+            throw CLIRequestBuildError(
+                message: CLIRequestBuilder.diagnosticMessage(for: error),
+                requestId: nil
+            )
+        } catch {
             throw CLIRequestBuildError(
                 message: CLIRequestBuilder.diagnosticMessage(for: error),
                 requestId: nil

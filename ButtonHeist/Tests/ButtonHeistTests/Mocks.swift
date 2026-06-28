@@ -138,7 +138,7 @@ func connectPendingMockHandoff(
 // MARK: - Mock Implementations for DeviceConnecting / DeviceDiscovering
 
 @ButtonHeistActor
-final class MockConnection: TransportReachabilityConnecting {
+final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
     var isConnected = false
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var onTransportReady: (@ButtonHeistActor () -> Void)?

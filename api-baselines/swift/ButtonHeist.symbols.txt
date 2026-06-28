@@ -1065,7 +1065,6 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans16ElementPredicateV6encode2toys7Encod
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ElementPredicateV6traitsyACSayAA10HeistTraitOGFZ	swift.type.method	public	traits(_:)	ElementPredicate.traits(_:)	static func traits(_ traits: [HeistTrait]) -> ElementPredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ElementPredicateV7element5label10identifier5value6traits13excludeTraitsAcA11StringMatchOySSGSg_A2MSayAA10HeistTraitOGAPtFZ	swift.type.method	public	element(label:identifier:value:traits:excludeTraits:)	ElementPredicate.element(label:identifier:value:traits:excludeTraits:)	static func element(label: StringMatch<String>? = nil, identifier: StringMatch<String>? = nil, value: StringMatch<String>? = nil, traits: [HeistTrait] = [], excludeTraits: [HeistTrait] = []) -> ElementPredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ElementPredicateV7element_6traits13excludeTraitsAcA0cD5CheckOySSGd_SayAA10HeistTraitOGALtFZ	swift.type.method	public	element(_:traits:excludeTraits:)	ElementPredicate.element(_:traits:excludeTraits:)	static func element(_ checks: ElementPredicateCheck<String>..., traits: [HeistTrait] = [], excludeTraits: [HeistTrait] = []) -> ElementPredicate
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ElementPredicateV7matchesySbxAA0cD7SubjectRzlF	swift.method	public	matches(_:)	ElementPredicate.matches(_:)	func matches(_ subject: some ElementPredicateSubject) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ElementPredicateV8nonEmptyACSgvp	swift.property	public	nonEmpty	ElementPredicate.nonEmpty	var nonEmpty: ElementPredicate? { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ElementPredicateV_6traits13excludeTraitsACSayAA0cD5CheckOySSGG_SayAA10HeistTraitOGALtcfc	swift.init	public	init(_:traits:excludeTraits:)	ElementPredicate.init(_:traits:excludeTraits:)	init(_ checks: [ElementPredicateCheck<String>], traits: [HeistTrait] = [], excludeTraits: [HeistTrait] = [])
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ElementPredicateVyACSayAA0cD5CheckOySSGGcfc	swift.init	public	init(_:)	ElementPredicate.init(_:)	init(_ checks: [ElementPredicateCheck<String>] = [])
@@ -1088,21 +1087,6 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans16ResolvedWaitStepV	swift.struct	publ
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ResolvedWaitStepV7timeoutSdvp	swift.property	public	timeout	ResolvedWaitStep.timeout	let timeout: Double
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ResolvedWaitStepV9predicate7timeoutAcA22AccessibilityPredicateO_Sdtcfc	swift.init	public	init(predicate:timeout:)	ResolvedWaitStep.init(predicate:timeout:)	init(predicate: AccessibilityPredicate, timeout: Double = defaultWaitTimeout)
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ResolvedWaitStepV9predicateAA22AccessibilityPredicateOvp	swift.property	public	predicate	ResolvedWaitStep.predicate	let predicate: AccessibilityPredicate
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO	swift.enum	public	ScoreDescription	ScoreDescription	enum ScoreDescription
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO10quotedListySSSaySSGFZ	swift.type.method	public	quotedList(_:)	ScoreDescription.quotedList(_:)	static func quotedList(_ values: [String]) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO10valueFieldySSSgSS_xSgtlFZ	swift.type.method	public	valueField(_:_:)	ScoreDescription.valueField(_:_:)	static func valueField<T>(_ name: String, _ value: T?) -> String?
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO11stringFieldySSSgSS_AEtFZ	swift.type.method	public	stringField(_:_:)	ScoreDescription.stringField(_:_:)	static func stringField(_ name: String, _ value: String?) -> String?
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO11stringMatchySSAA06StringF0OySSGFZ	swift.type.method	public	stringMatch(_:)	ScoreDescription.stringMatch(_:)	static func stringMatch(_ value: StringMatch<String>) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO15quotedListFieldySSSgSS_SaySSGSgtFZ	swift.type.method	public	quotedListField(_:_:)	ScoreDescription.quotedListField(_:_:)	static func quotedListField(_ name: String, _ values: [String]?) -> String?
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO16stringMatchFieldySSSgSS_AA06StringF0OySSGSgtFZ	swift.type.method	public	stringMatchField(_:_:)	ScoreDescription.stringMatchField(_:_:)	static func stringMatchField(_ name: String, _ value: StringMatch<String>?) -> String?
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO17stringMatchFieldsySSSgSS_SayAA06StringF0OySSGGtFZ	swift.type.method	public	stringMatchFields(_:_:)	ScoreDescription.stringMatchFields(_:_:)	static func stringMatchFields(_ name: String, _ values: [StringMatch<String>]) -> String?
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO19predicateCheckFieldySSSgAA016ElementPredicateF0OySSGFZ	swift.type.method	public	predicateCheckField(_:)	ScoreDescription.predicateCheckField(_:)	static func predicateCheckField(_ check: ElementPredicateCheck<String>) -> String?
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO4callyS2S_SaySSGtFZ	swift.type.method	public	call(_:_:)	ScoreDescription.call(_:_:)	static func call(_ name: String, _ fields: [String]) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO4listySSSayxGlFZ	swift.type.method	public	list(_:)	ScoreDescription.list(_:)	static func list<T>(_ values: [T]) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO6quotedyS2SFZ	swift.type.method	public	quoted(_:)	ScoreDescription.quoted(_:)	static func quoted(_ value: String) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO7decimalySSSdFZ	swift.type.method	public	decimal(_:)	ScoreDescription.decimal(_:)	static func decimal(_ value: Double) -> String
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO8nonEmptyySSSgAEFZ	swift.type.method	public	nonEmpty(_:)	ScoreDescription.nonEmpty(_:)	static func nonEmpty(_ value: String?) -> String?
-symbol	ButtonHeist.symbols.json	s:8ThePlans16ScoreDescriptionO9listFieldySSSgSS_SayxGSgtlFZ	swift.type.method	public	listField(_:_:)	ScoreDescription.listField(_:_:)	static func listField<T>(_ name: String, _ values: [T]?) -> String?
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO	swift.enum	public	ValidationResult	ValidationResult	enum ValidationResult<Value, Diagnostic> where Value : Sendable, Diagnostic : Sendable
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO7failureyACyxq_GSayq_GcAEms8SendableRzsAGR_r0_lF	swift.enum.case	public	ValidationResult.failure(_:)	ValidationResult.failure(_:)	case failure([Diagnostic])
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO7successyACyxq_Gx_Sayq_GtcAEms8SendableRzsAGR_r0_lF	swift.enum.case	public	ValidationResult.success(_:diagnostics:)	ValidationResult.success(_:diagnostics:)	case success(Value, diagnostics: [Diagnostic])
@@ -1498,7 +1482,6 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckO3mapyACyqd__G
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckO5labelyACyxGAA11StringMatchOyxGcAEmAA0gH7PayloadRzlF	swift.enum.case	public	ElementPredicateCheck.label(_:)	ElementPredicateCheck.label(_:)	case label(StringMatch<Value>)
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckO5valueyACyxGAA11StringMatchOyxGcAEmAA0gH7PayloadRzlF	swift.enum.case	public	ElementPredicateCheck.value(_:)	ElementPredicateCheck.value(_:)	case value(StringMatch<Value>)
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckO6traitsyACyxGSayAA10HeistTraitOGcAEmAA18StringMatchPayloadRzlF	swift.enum.case	public	ElementPredicateCheck.traits(_:)	ElementPredicateCheck.traits(_:)	case traits([HeistTrait])
-symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckOAASSRszrlE7matchesySbqd__AA0cD7SubjectRd__lF	swift.method	public	matches(_:)	ElementPredicateCheck.matches(_:)	func matches(_ subject: some ElementPredicateSubject) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckOAASeRzSERzrlE4fromACyxGs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementPredicateCheck.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPredicateCheckOAASeRzSERzrlE6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ElementPredicateCheck.encode(to:)	func encode(to encoder: any Encoder) throws
 symbol	ButtonHeist.symbols.json	s:8ThePlans21ElementPropertyChangeV	swift.struct	public	ElementPropertyChange	ElementPropertyChange	struct ElementPropertyChange<P> where P : ElementPropertyKind
@@ -1663,12 +1646,6 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO	swift.enum
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO11ExprCheckera	swift.typealias	public	ActivationPointProperty.ExprChecker	ActivationPointProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO7Checkera	swift.typealias	public	ActivationPointProperty.Checker	ActivationPointProperty.Checker	typealias Checker = StringMatch<String>
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ActivationPointPropertyO8propertyAA07ElementE0OvpZ	swift.type.property	public	property	ActivationPointProperty.property	static let property: ElementProperty
-symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP	swift.protocol	public	ElementPredicateSubject	ElementPredicateSubject	protocol ElementPredicateSubject
-symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP14predicateLabelSSSgvp	swift.property	public	predicateLabel	ElementPredicateSubject.predicateLabel	var predicateLabel: String? { get }
-symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP14predicateValueSSSgvp	swift.property	public	predicateValue	ElementPredicateSubject.predicateValue	var predicateValue: String? { get }
-symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP19predicateIdentifierSSSgvp	swift.property	public	predicateIdentifier	ElementPredicateSubject.predicateIdentifier	var predicateIdentifier: String? { get }
-symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP22violatesExcludedTraitsySbSayAA10HeistTraitOGF	swift.method	public	violatesExcludedTraits(_:)	ElementPredicateSubject.violatesExcludedTraits(_:)	func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool
-symbol	ButtonHeist.symbols.json	s:8ThePlans23ElementPredicateSubjectP23satisfiesRequiredTraitsySbSayAA10HeistTraitOGF	swift.method	public	satisfiesRequiredTraits(_:)	ElementPredicateSubject.satisfiesRequiredTraits(_:)	func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool
 symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO	swift.enum	public	HeistArtifactCodecError	HeistArtifactCodecError	enum HeistArtifactCodecError
 symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO011unsupportedD7VersionyACSS_SitcACmF	swift.enum.case	public	HeistArtifactCodecError.unsupportedArtifactVersion(path:observed:)	HeistArtifactCodecError.unsupportedArtifactVersion(path:observed:)	case unsupportedArtifactVersion(path: String, observed: Int)
 symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO11descriptionSSvp	swift.property	public	description	HeistArtifactCodecError.description	var description: String { get }
@@ -2251,13 +2228,8 @@ symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV11description5label5va
 symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV11descriptionSSvp	swift.property	public	description	HeistElement.description	let description: String
 symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV11frameHeightSdvp	swift.property	public	frameHeight	HeistElement.frameHeight	let frameHeight: Double
 symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV13customContentSayAA0c6CustomF0VGSgvp	swift.property	public	customContent	HeistElement.customContent	let customContent: [HeistCustomContent]?
-symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV14predicateLabelSSSgvp	swift.property	public	predicateLabel	HeistElement.predicateLabel	var predicateLabel: String? { get }
-symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV14predicateValueSSSgvp	swift.property	public	predicateValue	HeistElement.predicateValue	var predicateValue: String? { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV16activationPointXSdvp	swift.property	public	activationPointX	HeistElement.activationPointX	let activationPointX: Double
 symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV16activationPointYSdvp	swift.property	public	activationPointY	HeistElement.activationPointY	let activationPointY: Double
-symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV19predicateIdentifierSSSgvp	swift.property	public	predicateIdentifier	HeistElement.predicateIdentifier	var predicateIdentifier: String? { get }
-symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV22violatesExcludedTraitsySbSay0A5Plans0C5TraitOGF	swift.method	public	violatesExcludedTraits(_:)	HeistElement.violatesExcludedTraits(_:)	func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool
-symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV23satisfiesRequiredTraitsySbSay0A5Plans0C5TraitOGF	swift.method	public	satisfiesRequiredTraits(_:)	HeistElement.satisfiesRequiredTraits(_:)	func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool
 symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV25respondsToUserInteractionSbvp	swift.property	public	respondsToUserInteraction	HeistElement.respondsToUserInteraction	let respondsToUserInteraction: Bool
 symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistElement.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8TheScore12HeistElementV4hintSSSgvp	swift.property	public	hint	HeistElement.hint	let hint: String?
@@ -4070,7 +4042,6 @@ relationship	conformsTo	s:8TheScore12ElementEditsV	s:SE	ElementEdits	Swift.Encod
 relationship	conformsTo	s:8TheScore12ElementEditsV	s:SQ	ElementEdits	Swift.Equatable
 relationship	conformsTo	s:8TheScore12ElementEditsV	s:Se	ElementEdits	Swift.Decodable
 relationship	conformsTo	s:8TheScore12ElementEditsV	s:s8SendableP	ElementEdits	Swift.Sendable
-relationship	conformsTo	s:8TheScore12HeistElementV	s:8ThePlans23ElementPredicateSubjectP	HeistElement	ElementPredicateSubject
 relationship	conformsTo	s:8TheScore12HeistElementV	s:SE	HeistElement	Swift.Encodable
 relationship	conformsTo	s:8TheScore12HeistElementV	s:SH	HeistElement	Swift.Hashable
 relationship	conformsTo	s:8TheScore12HeistElementV	s:SQ	HeistElement	Swift.Equatable
@@ -4540,9 +4511,4 @@ relationship	requirementOf	s:8ThePlans18StringMatchPayloadP06stringD14LiteralIsE
 relationship	requirementOf	s:8ThePlans19ElementPropertyKindP11ExprCheckerQa	s:8ThePlans19ElementPropertyKindP	ExprChecker	ElementPropertyKind
 relationship	requirementOf	s:8ThePlans19ElementPropertyKindP7CheckerQa	s:8ThePlans19ElementPropertyKindP	Checker	ElementPropertyKind
 relationship	requirementOf	s:8ThePlans19ElementPropertyKindP8propertyAA0cD0OvpZ	s:8ThePlans19ElementPropertyKindP	property	ElementPropertyKind
-relationship	requirementOf	s:8ThePlans23ElementPredicateSubjectP14predicateLabelSSSgvp	s:8ThePlans23ElementPredicateSubjectP	predicateLabel	ElementPredicateSubject
-relationship	requirementOf	s:8ThePlans23ElementPredicateSubjectP14predicateValueSSSgvp	s:8ThePlans23ElementPredicateSubjectP	predicateValue	ElementPredicateSubject
-relationship	requirementOf	s:8ThePlans23ElementPredicateSubjectP19predicateIdentifierSSSgvp	s:8ThePlans23ElementPredicateSubjectP	predicateIdentifier	ElementPredicateSubject
-relationship	requirementOf	s:8ThePlans23ElementPredicateSubjectP22violatesExcludedTraitsySbSayAA10HeistTraitOGF	s:8ThePlans23ElementPredicateSubjectP	violatesExcludedTraits(_:)	ElementPredicateSubject
-relationship	requirementOf	s:8ThePlans23ElementPredicateSubjectP23satisfiesRequiredTraitsySbSayAA10HeistTraitOGF	s:8ThePlans23ElementPredicateSubjectP	satisfiesRequiredTraits(_:)	ElementPredicateSubject
 relationship	requirementOf	s:8TheScore26DirectionalWireMessageTypeP13directionNameSSvpZ	s:8TheScore26DirectionalWireMessageTypeP	directionName	DirectionalWireMessageType

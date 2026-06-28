@@ -74,13 +74,16 @@ final class JSONLinesSession {
         let parsedRequest: CLIParsedRequest
         do {
             parsedRequest = try CLIRequestBuilder.parsedRequest(from: line)
+        } catch let error as CLIRequestBuildError {
+            let requestId = error.requestId
+            let message = isMachineInput ? "Invalid JSON: \(error.message)" : error.message
+            return (
+                .error(PublicFailure(message: message, details: error.publicFailure.details)),
+                requestId
+            )
         } catch {
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
-            let requestId = (error as? CLIRequestBuildError)?.requestId
-            if isMachineInput {
-                return (.error("Invalid JSON: \(message)"), requestId)
-            }
-            return (.error(message), nil)
+            return (.failure(FenceError.invalidRequest(message)), nil)
         }
 
         do {

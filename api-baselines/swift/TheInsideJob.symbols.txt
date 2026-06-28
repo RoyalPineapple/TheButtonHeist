@@ -7,7 +7,6 @@
 # Format: symbol<TAB>graph<TAB>precise-id<TAB>kind<TAB>access<TAB>title<TAB>path<TAB>declaration
 # Format: relationship<TAB>kind<TAB>source-id<TAB>target-id<TAB>source<TAB>target
 
-symbol	TheInsideJob.symbols.json	c:(cm)theInsideJobAutoStartFromLoad	swift.func	public	theInsideJobAutoStartFromLoad()	theInsideJobAutoStartFromLoad()	func theInsideJobAutoStartFromLoad()
 symbol	TheInsideJob.symbols.json	s:12TheInsideJob5HeistV	swift.struct	public	Heist	Heist	struct Heist
 symbol	TheInsideJob.symbols.json	s:12TheInsideJob5HeistV6result0A5Score0D15ExecutionResultVvp	swift.property	public	result	Heist.result	let result: HeistExecutionResult
 symbol	TheInsideJob.symbols.json	s:12TheInsideJob5HeistV7FailureV	swift.struct	public	Heist.Failure	Heist.Failure	struct Failure
@@ -31,11 +30,6 @@ symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC5startyyYaKF	swift.method	pu
 symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC5token10instanceId13allowedScopes4portABSSSg_AGShy0A5Score15ConnectionScopeOGSgs6UInt16Vtcfc	swift.init	public	init(token:instanceId:allowedScopes:port:)	TheInsideJob.init(token:instanceId:allowedScopes:port:)	@MainActor convenience init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0)
 symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC6sharedABvpZ	swift.type.property	public	shared	TheInsideJob.shared	@MainActor static var shared: TheInsideJob { get }
 symbol	TheInsideJob.symbols.json	s:12TheInsideJobAAC9configure5token10instanceId13allowedScopes4portySSSg_AHShy0A5Score15ConnectionScopeOGSgs6UInt16VtFZ	swift.type.method	public	configure(token:instanceId:allowedScopes:port:)	TheInsideJob.configure(token:instanceId:allowedScopes:port:)	@MainActor static func configure(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0)
-symbol	TheInsideJob@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A7ElementV12TheInsideJobE14predicateLabelSSSgvp	swift.property	public	predicateLabel	AccessibilityElement.predicateLabel	var predicateLabel: String? { get }
-symbol	TheInsideJob@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A7ElementV12TheInsideJobE14predicateValueSSSgvp	swift.property	public	predicateValue	AccessibilityElement.predicateValue	var predicateValue: String? { get }
-symbol	TheInsideJob@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A7ElementV12TheInsideJobE19predicateIdentifierSSSgvp	swift.property	public	predicateIdentifier	AccessibilityElement.predicateIdentifier	var predicateIdentifier: String? { get }
-symbol	TheInsideJob@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A7ElementV12TheInsideJobE22violatesExcludedTraitsySbSay0E5Plans10HeistTraitOGF	swift.method	public	violatesExcludedTraits(_:)	AccessibilityElement.violatesExcludedTraits(_:)	func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool
-symbol	TheInsideJob@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A7ElementV12TheInsideJobE23satisfiesRequiredTraitsySbSay0E5Plans10HeistTraitOGF	swift.method	public	satisfiesRequiredTraits(_:)	AccessibilityElement.satisfiesRequiredTraits(_:)	func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool
 
 relationship	conformsTo	s:12TheInsideJob5HeistV	s:s8SendableP	Heist	Swift.Sendable
 relationship	conformsTo	s:12TheInsideJob5HeistV7FailureV	s:10Foundation14LocalizedErrorP	Heist.Failure	Foundation.LocalizedError
@@ -43,4 +37,3 @@ relationship	conformsTo	s:12TheInsideJob5HeistV7FailureV	s:s23CustomStringConver
 relationship	conformsTo	s:12TheInsideJob5HeistV7FailureV	s:s5ErrorP	Heist.Failure	Swift.Error
 relationship	conformsTo	s:12TheInsideJob5HeistV7FailureV	s:s8SendableP	Heist.Failure	Swift.Sendable
 relationship	conformsTo	s:12TheInsideJobAAC	s:s8SendableP	TheInsideJob	Swift.Sendable
-relationship	conformsTo	s:26AccessibilitySnapshotModel0A7ElementV	s:8ThePlans23ElementPredicateSubjectP	s:26AccessibilitySnapshotModel0A7ElementV	ThePlans.ElementPredicateSubject

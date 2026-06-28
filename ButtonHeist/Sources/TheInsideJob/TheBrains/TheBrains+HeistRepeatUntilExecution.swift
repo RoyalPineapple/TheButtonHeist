@@ -9,7 +9,7 @@ extension TheBrains {
     private struct RepeatUntilExecutionContext {
         let path: String
         let start: CFAbsoluteTime
-        let runtime: HeistExecutionRuntime
+        let runtime: any HeistExecutionRuntime
         let environment: HeistExecutionEnvironment
         let scope: HeistExecutionScope
     }
@@ -173,7 +173,7 @@ extension TheBrains {
         index _: Int,
         path: String,
         start: CFAbsoluteTime,
-        runtime: HeistExecutionRuntime,
+        runtime: any HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -457,7 +457,12 @@ extension TheBrains {
         switch failedStep.actionEvidence?.actionResult?.errorKind {
         case nil, .some(.actionFailed):
             return true
-        case .some(.elementNotFound), .some(.timeout), .some(.validationError), .some(.authFailure), .some(.general):
+        case .some(.accessibilityTreeUnavailable),
+             .some(.elementNotFound),
+             .some(.timeout),
+             .some(.validationError),
+             .some(.authFailure),
+             .some(.general):
             return false
         }
     }

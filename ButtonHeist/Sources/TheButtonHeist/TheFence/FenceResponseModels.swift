@@ -94,7 +94,7 @@ enum FenceRequestErrorCode {
     static let missingTarget = "request.missing_target"
 }
 
-private enum PublicFailureMapper {
+enum PublicFailureMapper {
     static func map(_ error: Error) -> PublicFailure {
         switch error {
         case let fenceError as FenceError:
@@ -107,11 +107,19 @@ private enum PublicFailureMapper {
                 details: configError.failureDetails
             )
         case let validationError as SchemaValidationError:
-            return map(FenceError.invalidRequest(validationError.message))
+            return PublicFailure(
+                message: validationError.message,
+                details: FailureDetails(code: .requestValidationError)
+            )
+        case let adapterError as PublicAdapterInputError:
+            return PublicFailure(
+                message: adapterError.message,
+                details: FailureDetails(code: .requestInvalid)
+            )
         case let missingTarget as TheFence.MissingElementTarget:
             return missingElementTargetFailure(command: missingTarget.command)
         case let routingError as FenceOperationRoutingError:
-            return map(FenceError.invalidRequest(routingError.message))
+            return PublicFailure(message: routingError.message, details: routingError.details)
         default:
             return PublicFailure(message: error.displayMessage, details: nil)
         }
@@ -123,6 +131,40 @@ private enum PublicFailureMapper {
 
     static func map(message: String, details: FailureDetails?) -> PublicFailure {
         PublicFailure(message: message, details: details)
+    }
+
+    static func map(errorKind: ErrorKind, message: String) -> PublicFailure {
+        PublicFailure(message: message, details: failureDetails(for: errorKind))
+    }
+
+    static func map(reportFailure: HeistFailureDetail, message: String? = nil) -> PublicFailure {
+        PublicFailure(
+            message: message ?? reportFailure.observed,
+            details: failureDetails(for: reportFailure)
+        )
+    }
+
+    static func failureDetails(for errorKind: ErrorKind) -> FailureDetails {
+        errorKind.failureDetails
+    }
+
+    static func failureDetails(for reportFailure: HeistFailureDetail) -> FailureDetails {
+        switch reportFailure.category {
+        case .validation:
+            return FailureDetails(code: .requestValidationError)
+        case .runtimeUnavailable:
+            return FailureDetails(code: .connectionNotConnected)
+        case .targetResolution:
+            return FailureDetails(code: .requestElementNotFound)
+        case .wait:
+            return FailureDetails(code: .requestTimeout)
+        case .action,
+             .expectation,
+             .invocation,
+             .loop,
+             .explicitFailure:
+            return FailureDetails(code: .requestActionFailed)
+        }
     }
 
     private static func missingElementTargetFailure(command: String) -> PublicFailure {

@@ -23,7 +23,7 @@ final class RuntimeActionMessageSPITests: XCTestCase {
         )
     }
 
-    func testRuntimeActionMessageIsAvailableThroughButtonHeistInternalsSPI() throws {
+    func testRuntimeActionMessageIsHiddenFromExternalButtonHeistInternalsSPIImports() throws {
         let moduleSearchPath = try theScoreModuleSearchPath()
 
         let result = try typecheck(
@@ -35,7 +35,11 @@ final class RuntimeActionMessageSPITests: XCTestCase {
             moduleSearchPath: moduleSearchPath
         )
 
-        XCTAssertEqual(result.terminationStatus, 0, result.combinedOutput)
+        XCTAssertNotEqual(result.terminationStatus, 0, result.combinedOutput)
+        XCTAssertTrue(
+            result.combinedOutput.contains("cannot find type 'RuntimeActionMessage' in scope"),
+            result.combinedOutput
+        )
     }
 }
 

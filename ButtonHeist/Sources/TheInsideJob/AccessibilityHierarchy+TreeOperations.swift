@@ -211,6 +211,11 @@ extension Array where Element == AccessibilityHierarchy {
         containers.filter(\.isScrollable)
     }
 
+    /// Scrollable containers paired with capture-local tree paths.
+    var scrollableContainerPaths: [(container: AccessibilityContainer, path: TreePath)] {
+        containerPaths.filter(\.container.isScrollable)
+    }
+
     /// Each container mapped to its subtree content fingerprint.
     /// Uses a direct recursive walk with a single shared dictionary —
     /// no intermediate allocations at leaf nodes or dictionary merges.

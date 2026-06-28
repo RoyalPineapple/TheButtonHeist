@@ -183,8 +183,8 @@ enum HeistRepairSuggestionRenderer {
             if let valueChange = payload.edits.updated
                 .flatMap(\.changes)
                 .first(where: { $0.property == .value }) {
-                let old = valueChange.old ?? "nil"
-                let new = valueChange.new ?? "nil"
+                let old = valueChange.oldValue?.displayText ?? "nil"
+                let new = valueChange.newValue?.displayText ?? "nil"
                 return "\(prefix) observed value change from \(old) to \(new)."
             }
             if !payload.edits.added.isEmpty {

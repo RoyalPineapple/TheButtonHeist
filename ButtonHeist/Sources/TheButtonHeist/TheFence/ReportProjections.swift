@@ -701,6 +701,20 @@ struct ProjectionOmission: Sendable {
     let omittedCount: Int?
 }
 
+struct HeistReportFailureProjection: Sendable {
+    let detail: HeistFailureDetail
+    let publicFailure: PublicFailure
+
+    init(detail: HeistFailureDetail, message: String, actionErrorKind: ErrorKind?) {
+        self.detail = detail
+        if let actionErrorKind {
+            publicFailure = PublicFailureMapper.map(errorKind: actionErrorKind, message: message)
+        } else {
+            publicFailure = PublicFailureMapper.map(reportFailure: detail, message: message)
+        }
+    }
+}
+
 // MARK: - Heist Report Projection
 
 struct HeistReportSummaryProjection: Sendable {
@@ -785,7 +799,7 @@ struct HeistReportNodeProjection: Sendable {
     let durationMs: Int
     let intent: HeistStepIntent?
     let evidence: HeistReportEvidenceProjection?
-    let failure: HeistFailureDetail?
+    let failure: HeistReportFailureProjection?
     let failureMessage: String?
     let failureCategory: HeistFailureCategory?
     let abortedAtChildPath: String?
@@ -795,6 +809,9 @@ struct HeistReportNodeProjection: Sendable {
     let children: [HeistReportNodeProjection]
 
     init(step: HeistExecutionStepResult, profile: ProjectionProfile) {
+        let reportedFailureMessage = step.reportFailureMessage
+        let reportedActionErrorKind = step.reportActionResult?.success == false ? step.reportActionResult?.errorKind : nil
+
         path = step.path
         kind = step.reportStepName
         capability = step.invocationEvidence?.invocation?.capabilityName
@@ -806,12 +823,18 @@ struct HeistReportNodeProjection: Sendable {
         durationMs = step.durationMs
         intent = step.intent
         evidence = HeistReportEvidenceProjection(step: step, profile: profile)
-        failure = step.failure
-        failureMessage = step.reportFailureMessage
+        failureMessage = reportedFailureMessage
+        failure = step.failure.map {
+            HeistReportFailureProjection(
+                detail: $0,
+                message: reportedFailureMessage ?? $0.observed,
+                actionErrorKind: reportedActionErrorKind
+            )
+        }
         failureCategory = step.failure?.category
         abortedAtChildPath = step.abortedAtChildPath
         expectation = step.reportExpectation.map { ExpectationProjection(result: $0) }
-        actionErrorKind = step.reportActionResult?.success == false ? step.reportActionResult?.errorKind : nil
+        actionErrorKind = reportedActionErrorKind
         traceDelta = step.traceEvidenceResult?.accessibilityTrace?.endpointDelta.map {
             DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true)
         }

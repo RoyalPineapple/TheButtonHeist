@@ -74,6 +74,10 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try ConnectCommand.parse(["127.0.0.1:1455"]))
     }
 
+    func testListDevicesRejectsTimeoutOption() {
+        XCTAssertThrowsError(try ListCommand.parse(["--timeout", "1"]))
+    }
+
     func testWaitCommandDefaultTimeoutIsTenSeconds() throws {
         let command = try WaitCommand.parse(["--change", "screen"])
 
@@ -417,11 +421,64 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testSharedRequestBuilderMalformedJSONFailureIsTyped() {
+        assertJSONLinesBuildFailure(
+            #"{"command":"ping","#,
+            code: "request.invalid",
+            kind: .request,
+            phase: .request,
+            retryable: false
+        )
+    }
+
+    func testSharedRequestBuilderUnknownCommandFailureIsTyped() {
+        assertJSONLinesBuildFailure(
+            #"{"id":"r1","command":"not_a_command"}"#,
+            requestId: .string("r1"),
+            code: "request.invalid",
+            kind: .request,
+            phase: .request,
+            retryable: false
+        )
+    }
+
+    func testSharedRequestBuilderBadSchemaFailureIsTyped() {
+        assertJSONLinesBuildFailure(
+            #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":0}"#,
+            code: "request.validation_error",
+            kind: .request,
+            phase: .request,
+            retryable: false
+        )
+    }
+
     func testSharedRequestBuilderAcceptsValidPingRequest() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"ping"}"#)
 
         XCTAssertEqual(parsed.command, .ping)
         XCTAssertNil(parsed.requestId)
+    }
+
+    private func assertJSONLinesBuildFailure(
+        _ line: String,
+        requestId: PublicRequestId? = nil,
+        code: String,
+        kind: PublicFailureKind,
+        phase: FailurePhase,
+        retryable: Bool,
+        file: StaticString = #filePath,
+        line sourceLine: UInt = #line
+    ) {
+        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line), file: file, line: sourceLine) { error in
+            guard let buildError = error as? CLIRequestBuildError else {
+                return XCTFail("Expected CLIRequestBuildError, got \(error)", file: file, line: sourceLine)
+            }
+            XCTAssertEqual(buildError.requestId, requestId, file: file, line: sourceLine)
+            XCTAssertEqual(buildError.publicFailure.code, code, file: file, line: sourceLine)
+            XCTAssertEqual(buildError.publicFailure.kind, kind, file: file, line: sourceLine)
+            XCTAssertEqual(buildError.publicFailure.phase, phase, file: file, line: sourceLine)
+            XCTAssertEqual(buildError.publicFailure.retryable, retryable, file: file, line: sourceLine)
+        }
     }
 
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONLinesMode() throws {

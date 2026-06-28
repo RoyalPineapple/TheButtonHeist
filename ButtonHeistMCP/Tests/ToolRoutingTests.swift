@@ -60,6 +60,20 @@ struct ToolRoutingTests {
         #expect(error.message == "Unknown tool: not_a_tool")
     }
 
+    @Test("unknown tool routes before walking invalid arguments")
+    func unknownToolRoutesBeforeWalkingInvalidArguments() throws {
+        let result = try ButtonHeistMCPServer.routedToolRequest(
+            name: "not_a_tool",
+            arguments: ["argument": Self.nestedMCPValueOverLimit()]
+        )
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected routing failure")
+            return
+        }
+        #expect(error.message == "Unknown tool: not_a_tool")
+    }
+
     @Test("routing errors map to canonical public failures")
     func routingErrorsMapToCanonicalPublicFailures() throws {
         let result = routeToolRequest(name: "not_a_tool")

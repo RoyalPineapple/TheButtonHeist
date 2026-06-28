@@ -54,9 +54,10 @@ extension TheFence {
         projection: HeistReportProjection
     ) -> HeistJUnitReport.Outcome {
         if let message = step.failureMessage {
+            let failure = step.failure?.publicFailure
             let enriched = step.path == projection.failedStepPath
-                ? junitFailureMessage(message, projection: projection)
-                : message
+                ? junitFailureMessage(message, projection: projection, failure: failure)
+                : junitFailureMessage(message, failure: failure)
             return .failed(message: enriched, errorKind: junitErrorKind(for: step))
         }
         return step.status == .skipped ? .skipped : .passed
@@ -64,13 +65,20 @@ extension TheFence {
 
     private static func junitFailureMessage(
         _ message: String,
-        projection: HeistReportProjection
+        projection: HeistReportProjection? = nil,
+        failure: PublicFailure?
     ) -> String {
         var lines = [message]
-        if let screenshot = projection.failureScreenshotSummary {
+        if let failure {
+            lines.append("code: \(failure.code)")
+            lines.append("kind: \(failure.kind.rawValue)")
+            lines.append("phase: \(failure.phase.rawValue)")
+            lines.append("retryable: \(failure.retryable)")
+        }
+        if let screenshot = projection?.failureScreenshotSummary {
             lines.append(screenshot)
         }
-        if let interfaceDump = projection.failureInterfaceDump {
+        if let interfaceDump = projection?.failureInterfaceDump {
             lines.append(interfaceDump)
         }
         return lines.joined(separator: "\n")

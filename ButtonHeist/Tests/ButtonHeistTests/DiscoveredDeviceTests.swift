@@ -532,10 +532,4 @@ private final class ReachabilityProbeConnection: TransportReachabilityConnecting
     }
 
     func disconnect() {}
-
-    @discardableResult
-    func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome {
-        XCTFail("Reachability should not send \(message.wireType.rawValue)")
-        return .enqueued
-    }
 }

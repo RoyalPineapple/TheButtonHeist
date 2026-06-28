@@ -63,8 +63,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("errorClass"), "elementNotFound")
+        XCTAssertEqual(try json.string("errorCode"), "request.element_not_found")
+        XCTAssertEqual(try json.string("kind"), "request")
+        XCTAssertEqual(try json.string("phase"), "request")
+        XCTAssertEqual(try json.bool("retryable"), false)
         try json.assertMissing("expectation")
-        XCTAssertEqual(response.compactFormatted(), "activate: error[elementNotFound]: button disabled")
+        XCTAssertEqual(response.compactFormatted(), "activate: error[request.element_not_found]: button disabled")
         XCTAssertEqual(response.humanFormatted(), "Error: button disabled")
         XCTAssertTrue(response.isFailure)
     }
@@ -84,8 +88,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("errorClass"), "timeout")
-        try json.assertMissing("errorCode")
-        XCTAssertEqual(response.compactFormatted(), "wait: error[timeout]: timed out after 2s")
+        XCTAssertEqual(try json.string("errorCode"), "request.timeout")
+        XCTAssertEqual(try json.string("kind"), "request")
+        XCTAssertEqual(try json.string("phase"), "request")
+        XCTAssertEqual(try json.bool("retryable"), true)
+        XCTAssertEqual(response.compactFormatted(), "wait: error[request.timeout]: timed out after 2s")
     }
 
     func testActionFailureCodeAndClassAgreeAcrossPublicFormats() throws {
@@ -95,7 +102,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 success: false,
                 method: .activate,
                 message: "Could not access accessibility tree: no traversable app windows",
-                errorKind: .actionFailed
+                errorKind: .accessibilityTreeUnavailable
             )
         )
 
@@ -103,8 +110,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let compact = response.compactFormatted()
 
         XCTAssertEqual(try json.string("status"), "error")
-        XCTAssertEqual(try json.string("errorClass"), "actionFailed")
+        XCTAssertEqual(try json.string("errorClass"), "accessibilityTreeUnavailable")
         XCTAssertEqual(try json.string("errorCode"), "request.accessibility_tree_unavailable")
+        XCTAssertEqual(try json.string("kind"), "request")
+        XCTAssertEqual(try json.string("phase"), "request")
+        XCTAssertEqual(try json.bool("retryable"), true)
         XCTAssertTrue(compact.contains("error[request.accessibility_tree_unavailable]"), compact)
     }
 

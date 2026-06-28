@@ -69,7 +69,7 @@ extension FenceResponse {
         for update in edits.updated {
             let name = nonEmptyDescription(update.after)
             for change in update.changes where !change.property.isGeometry {
-                lines.append("  ~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
+                lines.append(compactChangeLine(name: name, change: change))
             }
         }
         return lines
@@ -92,13 +92,21 @@ extension FenceResponse {
         for update in edits.updated.updates {
             let name = nonEmptyDescription(update.after)
             for change in update.changes {
-                lines.append("  ~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
+                lines.append(compactChangeLine(name: name, change: change))
             }
         }
         if let omitted = edits.updated.omittedCount {
             lines.append("  ... updated omitted \(omitted) observed elements")
         }
         return lines
+    }
+
+    private static func compactChangeLine(name: String, change: PropertyChange) -> String {
+        "  ~ \(name): \(change.property.rawValue) \"\(display(change.oldValue))\" → \"\(display(change.newValue))\""
+    }
+
+    private static func display(_ value: ElementPropertyValue?) -> String {
+        value?.displayText ?? "nil"
     }
 
     private static func nonEmptyDescription(_ element: HeistElement) -> String {

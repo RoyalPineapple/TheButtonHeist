@@ -1031,7 +1031,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - PropertyChange / ElementUpdate
 
     func testPropertyChangeRoundTrip() throws {
-        let change = PropertyChange(property: .value, old: "OK", new: "Cancel")
+        let change = PropertyChange(property: .value, oldValue: .text("OK"), newValue: .text("Cancel"))
         let data = try encoder.encode(change)
         let decoded = try decoder.decode(PropertyChange.self, from: data)
         XCTAssertEqual(decoded, change)
@@ -1077,8 +1077,8 @@ final class WireTypeRoundTripTests: XCTestCase {
             before: before,
             after: after,
             changes: [
-                PropertyChange(property: .value, old: "A", new: "B"),
-                PropertyChange(property: .value, old: nil, new: "active"),
+                PropertyChange(property: .value, oldValue: .text("A"), newValue: .text("B")),
+                PropertyChange(property: .value, oldValue: nil, newValue: .text("active")),
             ]
         )
         let data = try encoder.encode(update)

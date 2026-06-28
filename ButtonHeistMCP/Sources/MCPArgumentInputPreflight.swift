@@ -1,6 +1,7 @@
 import Foundation
 import MCP
-import ButtonHeist
+@_spi(ButtonHeistInternals) import ButtonHeist
+import TheScore
 
 enum MCPArgumentInputPreflight {
     static func validate(
@@ -18,6 +19,19 @@ enum MCPArgumentInputPreflight {
                 maxTotalObjectKeys: maxTotalObjectKeys
             ),
             context: context,
+            node: jsonValueNode
+        )
+    }
+
+    static func heistValues(_ arguments: [String: Value]?) throws -> [String: HeistValue] {
+        try PublicHeistValueAdapter.convertObject(
+            arguments ?? [:],
+            policy: PublicJSONInputPolicy(
+                maxBytes: PublicAdapterInputLimits.maxRequestBytes,
+                maxNestingDepth: PublicAdapterInputLimits.maxNestingDepth,
+                maxTotalObjectKeys: PublicAdapterInputLimits.maxTotalObjectKeys
+            ),
+            context: "MCP arguments",
             node: jsonValueNode
         )
     }

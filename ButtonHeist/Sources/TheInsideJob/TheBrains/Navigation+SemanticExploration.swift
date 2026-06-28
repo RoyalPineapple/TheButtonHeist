@@ -10,14 +10,33 @@ import ThePlans
 extension Navigation {
 
     struct ContainerPage {
-        let elements: [AccessibilityElement]
-        let origins: [CGPoint?]
+        let entries: [ContainerPageEntry]
+
+        var elements: [AccessibilityElement] {
+            entries.map(\.element)
+        }
+
+        var origins: [CGPoint?] {
+            entries.map(\.origin)
+        }
+    }
+
+    struct ContainerPageEntry: Equatable {
+        let path: TreePath
+        let heistId: HeistId
+        let element: AccessibilityElement
+        let origin: CGPoint?
     }
 
     struct ContainerScan {
-        var accumulated: [AccessibilityElement]
-        var accumulatedOrigins: [CGPoint?]
-        var originByElement: [AccessibilityElement: CGPoint?]
+        var accumulated: [ContainerPageEntry]
+    }
+
+    struct ContainerPageReconciliation: Equatable {
+        let entries: [ContainerPageEntry]
+        let overlap: OverlapResult
+        let inserted: [ContainerPageEntry]
+        let previousCount: Int
     }
 
     enum ContainerScanResult: Equatable {
@@ -27,11 +46,15 @@ extension Navigation {
     }
 
     struct ContainerExploration {
-        let container: AccessibilityContainer
+        let semanticContainer: SemanticScreen.Container
         let scrollTarget: ScrollableTarget
         let hasHOverflow: Bool
         let hasVOverflow: Bool
         let ancestorRestorations: [ViewportRestoration]
+
+        var container: AccessibilityContainer { semanticContainer.container }
+
+        var path: TreePath { semanticContainer.path }
 
         var direction: UIAccessibilityScrollDirection { hasHOverflow ? .right : .down }
 
@@ -76,17 +99,17 @@ extension Navigation {
         mutating func absorb(_ parsed: Screen?) {
             guard let parsed else { return }
             screen = screen.merging(parsed)
-            addDiscoveredContainers(parsed.liveCapture.hierarchy.scrollableContainers)
+            addDiscoveredContainers(parsed.orderedContainers.filter { $0.container.isScrollable })
         }
 
-        mutating func markExplored(_ container: AccessibilityContainer) {
-            manifest.markExplored(container)
+        mutating func markExplored(_ container: SemanticScreen.Container) {
+            manifest.markExplored(container.path)
         }
 
-        mutating func addDiscoveredContainers(_ containers: [AccessibilityContainer]) {
+        mutating func addDiscoveredContainers(_ containers: [SemanticScreen.Container]) {
             let newContainers = containers.filter {
-                !manifest.exploredContainers.contains($0)
-                    && !manifest.pendingContainers.contains($0)
+                !manifest.exploredContainerPaths.contains($0.path)
+                    && !manifest.pendingContainerPaths.contains($0.path)
             }
             manifest.addPendingContainers(newContainers)
         }

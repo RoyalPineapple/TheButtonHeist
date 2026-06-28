@@ -562,27 +562,69 @@ final class PostActionObservation {
     }
 }
 
-private extension Screen {
+extension Screen {
     func removingElements(withIds removedIds: Set<HeistId>) -> Screen {
         guard !removedIds.isEmpty else { return self }
+        let removal = liveCapture.removingElementsWithPathMap(withIds: removedIds)
         return Screen(
-            semantic: SemanticScreen(
-                elements: semantic.elements.filter { !removedIds.contains($0.key) },
-                containers: semantic.containers
-            ),
-            liveCapture: liveCapture.removingElements(withIds: removedIds)
+            semantic: semantic.removingElements(withIds: removedIds, using: removal.pathMap),
+            liveCapture: removal.liveCapture
+        )
+    }
+}
+
+private extension SemanticScreen {
+    func removingElements(
+        withIds removedIds: Set<HeistId>,
+        using pathMap: [TreePath: TreePath]
+    ) -> SemanticScreen {
+        var remappedElements: [HeistId: Element] = [:]
+        remappedElements.reserveCapacity(elements.count)
+        for (heistId, entry) in elements where !removedIds.contains(heistId) {
+            remappedElements[heistId] = Element(
+                heistId: entry.heistId,
+                scrollContentLocation: remap(entry.scrollContentLocation, using: pathMap),
+                element: entry.element
+            )
+        }
+
+        var remappedContainers: [TreePath: Container] = [:]
+        remappedContainers.reserveCapacity(containers.count)
+        for entry in containers.values.sorted(by: { $0.path < $1.path }) {
+            let remappedPath = pathMap[entry.path] ?? entry.path
+            remappedContainers[remappedPath] = Container(
+                container: entry.container,
+                path: remappedPath,
+                containerName: entry.containerName,
+                contentFrame: entry.contentFrame,
+                scrollContentLocation: remap(entry.scrollContentLocation, using: pathMap)
+            )
+        }
+        return SemanticScreen(elements: remappedElements, containers: remappedContainers)
+    }
+
+    private func remap(
+        _ location: ScrollContentLocation?,
+        using pathMap: [TreePath: TreePath]
+    ) -> ScrollContentLocation? {
+        guard let location else { return nil }
+        return ScrollContentLocation(
+            origin: location.origin,
+            scrollContainerPath: pathMap[location.scrollContainerPath] ?? location.scrollContainerPath
         )
     }
 }
 
 private extension LiveCapture {
-    func removingElements(withIds removedIds: Set<HeistId>) -> LiveCapture {
-        guard !removedIds.isEmpty else { return self }
+    func removingElementsWithPathMap(
+        withIds removedIds: Set<HeistId>
+    ) -> (liveCapture: LiveCapture, pathMap: [TreePath: TreePath]) {
+        guard !removedIds.isEmpty else { return (self, [:]) }
         let filteredLiveTree = hierarchy.removingElements(
             withIds: removedIds,
             heistIdsByPath: heistIdsByPath
         )
-        return LiveCapture(
+        let liveCapture = LiveCapture(
             hierarchy: filteredLiveTree.hierarchy,
             containerNamesByPath: Self.remap(containerNamesByPath, using: filteredLiveTree.pathMap),
             heistIdsByPath: filteredLiveTree.heistIdsByPath,
@@ -596,6 +638,7 @@ private extension LiveCapture {
             firstResponderHeistId: firstResponderHeistId.flatMap { removedIds.contains($0) ? nil : $0 },
             scrollableContainerViewsByPath: Self.remap(scrollableContainerViewsByPath, using: filteredLiveTree.pathMap)
         )
+        return (liveCapture, filteredLiveTree.pathMap)
     }
 
     private static func remap<Value>(

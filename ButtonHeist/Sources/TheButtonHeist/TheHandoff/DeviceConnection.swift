@@ -16,7 +16,7 @@ enum DeviceConnectionEvent: Sendable {
 
 /// Connection client using Network framework.
 @ButtonHeistActor
-final class DeviceConnection: TransportReachabilityConnecting {
+final class DeviceConnection: DeviceConnecting, TransportReachabilityConnecting {
 
     struct ActiveConnection {
         let connection: NWConnection

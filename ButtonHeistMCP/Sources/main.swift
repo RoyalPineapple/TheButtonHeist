@@ -45,70 +45,35 @@ struct ButtonHeistMCPServer {
     ) async -> CallTool.Result {
         defer { idleMonitor.resetTimer() }
         do {
-            let arguments = try decodeArguments(params.arguments)
-            let routed = TheFence.Command.routeToolCall(named: params.name)
-            let command: TheFence.Command
-            switch routed {
-            case .success(let value):
-                command = value
+            switch try routedToolRequest(name: params.name, arguments: params.arguments) {
+            case .success(let request):
+                let response = try await fence.execute(command: request.command, arguments: request.arguments)
+                return renderResponse(response)
             case .failure(let error):
                 return renderResponse(.failure(error))
             }
-
-            let response = try await fence.execute(command: command, arguments: arguments)
-            return renderResponse(response)
         } catch {
             let response = FenceResponse.failure(error)
             return renderResponse(response)
         }
     }
 
+    static func routedToolRequest(
+        name: String,
+        arguments: [String: Value]?
+    ) throws -> Result<(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
+        switch TheFence.Command.routeToolCall(named: name) {
+        case .success(let command):
+            return .success((command: command, arguments: try decodeArguments(arguments)))
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
     static func decodeArguments(
         _ arguments: [String: Value]?
     ) throws -> TheFence.CommandArgumentEnvelope {
-        try MCPArgumentInputPreflight.validate(arguments)
-        var values: [String: HeistValue] = [:]
-        for (key, value) in arguments ?? [:] {
-            values[key] = try heistValue(from: value, field: key)
-        }
-        return TheFence.CommandArgumentEnvelope(values: values)
-    }
-
-    private static func heistValue(
-        from value: Value,
-        field: String
-    ) throws -> HeistValue {
-        switch value {
-        case .null:
-            throw SchemaValidationError(field: field, observed: "null", expected: "JSON scalar, array, or object")
-        case .bool(let bool):
-            return .bool(bool)
-        case .int(let int):
-            return .int(int)
-        case .double(let double):
-            guard double.isFinite else {
-                throw SchemaValidationError(field: field, observed: double, expected: "finite number")
-            }
-            return .double(double)
-        case .string(let string):
-            return .string(string)
-        case .data:
-            throw SchemaValidationError(
-                field: field,
-                observed: "data",
-                expected: "JSON boolean, number, string, array, or object"
-            )
-        case .array(let values):
-            return .array(try values.enumerated().map { index, nested in
-                try heistValue(from: nested, field: "\(field)[\(index)]")
-            })
-        case .object(let object):
-            var result: [String: HeistValue] = [:]
-            for (key, nested) in object {
-                result[key] = try heistValue(from: nested, field: "\(field).\(key)")
-            }
-            return .object(result)
-        }
+        TheFence.CommandArgumentEnvelope(values: try MCPArgumentInputPreflight.heistValues(arguments))
     }
 
     static func renderResponse(_ response: FenceResponse) -> CallTool.Result {
@@ -138,11 +103,37 @@ struct ButtonHeistMCPServer {
             let data = try presenter.jsonData(for: response, outputFormatting: [])
             return try JSONDecoder().decode(Value.self, from: data)
         } catch {
-            return .object([
-                "status": .string("error"),
-                "message": .string("Failed to encode structured tool response: \(error.localizedDescription)"),
-            ])
+            return structuredEncodingFailureValue(error)
         }
+    }
+
+    static func structuredEncodingFailureValue(_ error: Error) -> Value {
+        let failure = PublicFailure(
+            message: "Failed to encode structured tool response: \(error.localizedDescription)",
+            details: FailureDetails(code: .formattingJSONEncodingFailed)
+        )
+        return structuredErrorValue(failure)
+    }
+
+    private static func structuredErrorValue(_ failure: PublicFailure) -> Value {
+        let details: Value = .object([
+            "code": .string(failure.code),
+            "kind": .string(failure.kind.rawValue),
+            "phase": .string(failure.phase.rawValue),
+            "retryable": .bool(failure.retryable),
+            "hint": failure.hint.map(Value.string) ?? .null,
+        ])
+        return .object([
+            "status": .string("error"),
+            "message": .string(failure.message),
+            "code": .string(failure.code),
+            "kind": .string(failure.kind.rawValue),
+            "errorCode": .string(failure.code),
+            "phase": .string(failure.phase.rawValue),
+            "retryable": .bool(failure.retryable),
+            "hint": failure.hint.map(Value.string) ?? .null,
+            "details": details,
+        ])
     }
 
 }

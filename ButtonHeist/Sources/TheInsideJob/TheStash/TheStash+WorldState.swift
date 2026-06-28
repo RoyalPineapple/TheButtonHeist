@@ -164,9 +164,9 @@ extension TheStash {
         return settledBaseline
     }
 
-    func knownContentOriginIndex() -> [AccessibilityElement: CGPoint?] {
+    func knownContentOriginsByHeistId() -> [HeistId: CGPoint?] {
         Dictionary(
-            selectElements().map { ($0.element, $0.contentSpaceOrigin) },
+            selectElements().map { ($0.heistId, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
     }

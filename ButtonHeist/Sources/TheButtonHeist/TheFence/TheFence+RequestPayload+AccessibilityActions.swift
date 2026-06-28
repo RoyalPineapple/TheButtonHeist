@@ -1,4 +1,4 @@
-@_spi(ButtonHeistInternals) import TheScore
+import TheScore
 import ThePlans
 
 extension TheFence {
@@ -12,7 +12,7 @@ extension TheFence {
         let target = try input.requiredElementTarget(command: .activate)
         let actionName = try input.optionalNonEmptyString("action")
         return appInteractionDispatch(
-            SemanticActionCommand.activate,
+            SemanticActionCommand.activate.command,
             Self.accessibilityRuntimeActions(target: target, actionName: actionName)
         )
     }

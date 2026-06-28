@@ -45,6 +45,19 @@ struct PredicateCaseSelection {
         )
     }
 
+    static func evaluate(
+        _ cases: [ResolvedPredicateCase],
+        evidence: PredicateObservationEvidence
+    ) -> PredicateCaseSelection {
+        let evaluatedCases = cases.map {
+            PredicateEvaluation.caseMatch($0, in: evidence)
+        }
+        return PredicateCaseSelection(
+            cases: evaluatedCases,
+            selectedCaseIndex: evaluatedCases.firstIndex(where: \.result.met)
+        )
+    }
+
     @MainActor static func waitFor(
         _ cases: [ResolvedPredicateCase],
         timeout rawTimeout: Double,
@@ -53,6 +66,7 @@ struct PredicateCaseSelection {
         let start = CFAbsoluteTimeGetCurrent()
         let scope = cases.observationScope
         let requiresChangeBaseline = cases.contains { $0.predicate.requiresChangeBaseline }
+        var stream = PredicateObservationStreamState()
         let pollResult = await PredicatePollingEngine<PredicateCaseSelection>(
             observeSemanticState: observeSemanticState
         ).poll(
@@ -60,11 +74,21 @@ struct PredicateCaseSelection {
             timeout: rawTimeout,
             start: start,
             requiresChangeBaseline: requiresChangeBaseline,
-            evaluate: { observation, changeBaselineSequence in
-                PredicateCaseSelection.evaluate(
+            evaluate: { observation, _ in
+                let baselineSeed: PredicateObservationBaselineSeed =
+                    requiresChangeBaseline && stream.changeBaseline == nil
+                        ? .previousObservationIfAvailable
+                        : .preserve
+                let reduced = stream.reducing(
+                    observation,
+                    predicate: cases.first?.predicate
+                        ?? .state(.missing(ElementPredicate(identifier: "__empty_heist_cases__"))),
+                    baselineSeed: baselineSeed
+                )
+                stream = reduced.state
+                return PredicateCaseSelection.evaluate(
                     cases,
-                    observation: observation,
-                    changeBaselineSequence: changeBaselineSequence
+                    evidence: reduced.reduction.evidence
                 )
             },
             isMatched: { $0.selectedCaseIndex != nil }

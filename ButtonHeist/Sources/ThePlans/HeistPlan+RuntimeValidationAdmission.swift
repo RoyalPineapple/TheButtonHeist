@@ -3,18 +3,18 @@ import Foundation
 // Admission owns the externally submitted plan shape. Decoding this type proves
 // only that source/artifact JSON can be loaded as plan IR; runtime safety is the
 // separate executable-plan boundary.
-@_spi(ButtonHeistInternals) public struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
-    public let version: Int
-    public let name: String?
-    public let parameter: HeistParameter
-    public let definitions: [HeistPlanAdmissionCandidate]
-    public let body: [HeistStepAdmissionCandidate]
+package struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
+    package let version: Int
+    package let name: String?
+    package let parameter: HeistParameter
+    package let definitions: [HeistPlanAdmissionCandidate]
+    package let body: [HeistStepAdmissionCandidate]
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case version, name, parameter, definitions, body
     }
 
-    public init(
+    package init(
         version: Int = HeistPlan.currentVersion,
         name: String? = nil,
         parameter: HeistParameter = .none,
@@ -36,7 +36,7 @@ import Foundation
         body = plan.body.map(HeistStepAdmissionCandidate.init)
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let decodedVersion = try container.decode(Int.self, forKey: .version)
         guard decodedVersion == HeistPlan.currentVersion else {
@@ -62,7 +62,7 @@ import Foundation
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(version, forKey: .version)
         try container.encodeIfPresent(name, forKey: .name)
@@ -86,7 +86,7 @@ import Foundation
     }
 }
 
-@_spi(ButtonHeistInternals) public enum HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
+package enum HeistStepAdmissionCandidate: Codable, Sendable, Equatable {
     case action(ActionStep)
     case wait(WaitStep)
     case conditional(ConditionalStep)
@@ -169,7 +169,7 @@ import Foundation
         }
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(StepType.self, forKey: .type)
         switch type {
@@ -215,7 +215,7 @@ import Foundation
         }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .action(let step):

@@ -1,4 +1,4 @@
-@_spi(ButtonHeistInternals) import TheScore
+import TheScore
 import ThePlans
 
 extension TheFence {
@@ -26,7 +26,7 @@ extension TheFence {
             .automatic
         }
         return try appInteractionDispatch(
-            SemanticActionCommand.rotor,
+            SemanticActionCommand.rotor.command,
             [.rotor(RotorTarget(
                 elementTarget: input.requiredElementTarget(command: .rotor),
                 selection: selection,

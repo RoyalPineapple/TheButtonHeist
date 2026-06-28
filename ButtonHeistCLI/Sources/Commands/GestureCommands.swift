@@ -20,60 +20,12 @@ extension GestureCLICommandContract {
     }
 
     static func elementObject(_ target: ElementTarget) -> [FenceParameterKey: HeistValue] {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            var object: [FenceParameterKey: HeistValue] = [:]
-            if !predicate.checks.isEmpty {
-                object[.checks] = .array(predicate.checks.map(predicateCheckValue))
-            }
-            if let ordinal { object[.ordinal] = .int(ordinal) }
-            return object
-        }
-    }
-
-    static func predicateCheckValue(_ check: ElementPredicateCheck<String>) -> HeistValue {
-        switch check {
-        case .label(let match):
-            return .object([
-                "kind": .string("label"),
-                "match": stringMatchValue(match),
-            ])
-        case .identifier(let match):
-            return .object([
-                "kind": .string("identifier"),
-                "match": stringMatchValue(match),
-            ])
-        case .value(let match):
-            return .object([
-                "kind": .string("value"),
-                "match": stringMatchValue(match),
-            ])
-        case .traits(let traits):
-            return .object([
-                "kind": .string("traits"),
-                "values": .array(traits.map { .string($0.rawValue) }),
-            ])
-        case .excludeTraits(let traits):
-            return .object([
-                "kind": .string("excludeTraits"),
-                "values": .array(traits.map { .string($0.rawValue) }),
-            ])
-        }
-    }
-
-    static func stringMatchValue(_ match: StringMatch<String>) -> HeistValue {
-        switch match {
-        case .exact(let value):
-            return .object([
-                "mode": .string(match.mode.rawValue),
-                "value": .string(value),
-            ])
-        case .contains(let value), .prefix(let value), .suffix(let value):
-            return .object([
-                "mode": .string(match.mode.rawValue),
-                "value": .string(value),
-            ])
-        }
+        Dictionary(
+            CLIRequestBuilder.targetObject(target).compactMap { key, value in
+                FenceParameterKey(rawValue: key).map { ($0, value) }
+            },
+            uniquingKeysWith: { _, newest in newest }
+        )
     }
 
     static func pointObject(x: Double, y: Double) -> [FenceParameterKey: HeistValue] {

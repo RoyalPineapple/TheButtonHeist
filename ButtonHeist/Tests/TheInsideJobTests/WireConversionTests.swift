@@ -742,8 +742,8 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .value)
-        XCTAssertEqual(change?.old, "50%")
-        XCTAssertEqual(change?.new, "75%")
+        XCTAssertEqual(change?.oldValue?.displayText, "50%")
+        XCTAssertEqual(change?.newValue?.displayText, "75%")
     }
 
     func testTraitsChangeProducesUpdate() {
@@ -757,8 +757,8 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .traits)
-        XCTAssertEqual(change?.old, "button")
-        XCTAssertEqual(change?.new, "button, selected")
+        XCTAssertEqual(change?.oldValue?.displayText, "button")
+        XCTAssertEqual(change?.newValue?.displayText, "button, selected")
     }
 
     func testHintChangeProducesUpdate() {
@@ -772,8 +772,8 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .hint)
-        XCTAssertEqual(change?.old, "Tap to continue")
-        XCTAssertEqual(change?.new, "Tap to go back")
+        XCTAssertEqual(change?.oldValue?.displayText, "Tap to continue")
+        XCTAssertEqual(change?.newValue?.displayText, "Tap to go back")
     }
 
     func testActionsChangeProducesUpdate() {
@@ -804,8 +804,8 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .frame)
-        XCTAssertEqual(change?.old, "0,0,100,50")
-        XCTAssertEqual(change?.new, "10,20,100,50")
+        XCTAssertEqual(change?.oldValue?.displayText, "0,0,100,50")
+        XCTAssertEqual(change?.newValue?.displayText, "10,20,100,50")
     }
 
     func testActivationPointChangeProducesUpdate() {
@@ -819,8 +819,8 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .activationPoint)
-        XCTAssertEqual(change?.old, "50,25")
-        XCTAssertEqual(change?.new, "75,40")
+        XCTAssertEqual(change?.oldValue?.displayText, "50,25")
+        XCTAssertEqual(change?.newValue?.displayText, "75,40")
     }
 
     func testMultiplePropertyChangesOnSameElement() {
@@ -1013,7 +1013,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(delta.testEdits.removedOptional)
         let update = delta.testEdits.updatedOptional?.first { $0.after.label == "Favorite" }
         XCTAssertNotNil(update)
-        XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.old == "0" && $0.new == "1" } == true)
+        XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.oldValue?.displayText == "0" && $0.newValue?.displayText == "1" } == true)
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
     }
 
@@ -1245,8 +1245,8 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .rotors)
-        XCTAssertNil(change?.old)
-        XCTAssertEqual(change?.new, "Errors")
+        XCTAssertNil(change?.oldValue?.displayText)
+        XCTAssertEqual(change?.newValue?.displayText, "Errors")
     }
 
     // MARK: - Delta: Custom Content Changes
@@ -1270,8 +1270,8 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
-        XCTAssertEqual(change?.old, "Size: 2.4 MB")
-        XCTAssertEqual(change?.new, "Size: 3.1 MB")
+        XCTAssertEqual(change?.oldValue?.displayText, "Size: 2.4 MB")
+        XCTAssertEqual(change?.newValue?.displayText, "Size: 3.1 MB")
     }
 
     func testCustomContentAddedProducesUpdate() {
@@ -1289,8 +1289,8 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
-        XCTAssertNil(change?.old)
-        XCTAssertEqual(change?.new, "Price: $9.99")
+        XCTAssertNil(change?.oldValue?.displayText)
+        XCTAssertEqual(change?.newValue?.displayText, "Price: $9.99")
     }
 
     func testCustomContentRemovedProducesUpdate() {
@@ -1308,8 +1308,8 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
-        XCTAssertEqual(change?.old, "Price: $9.99")
-        XCTAssertNil(change?.new)
+        XCTAssertEqual(change?.oldValue?.displayText, "Price: $9.99")
+        XCTAssertNil(change?.newValue?.displayText)
     }
 
     func testMultipleCustomContentItemsFormattedCorrectly() {
@@ -1327,7 +1327,7 @@ final class WireConverterTests: XCTestCase {
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         let change = delta.testEdits.updatedOptional?.first?.changes.first
-        XCTAssertEqual(change?.new, "Temperature: 58°F; Humidity: 82%")
+        XCTAssertEqual(change?.newValue?.displayText, "Temperature: 58°F; Humidity: 82%")
     }
 
     // MARK: - Custom Content: Importance Preserved
@@ -1491,7 +1491,7 @@ final class WireConverterTests: XCTestCase {
         )
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
-        XCTAssertEqual(change?.new, "Featured")
+        XCTAssertEqual(change?.newValue?.displayText, "Featured")
     }
 
     func testDeltaFormatWithValueOnly() {
@@ -1507,7 +1507,7 @@ final class WireConverterTests: XCTestCase {
         )
         let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
-        XCTAssertEqual(change?.new, "Available")
+        XCTAssertEqual(change?.newValue?.displayText, "Available")
     }
 }
 

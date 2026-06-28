@@ -2,6 +2,14 @@ import ThePlans
 import AccessibilitySnapshotModel
 
 public extension AccessibilityHierarchy {
+    func node(at path: TreePath) -> AccessibilityHierarchy? {
+        guard let childIndex = path.indices.first else { return self }
+        guard case .container(_, let children) = self,
+              children.indices.contains(childIndex)
+        else { return nil }
+        return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+    }
+
     func pathIndexedElements(path: TreePath = .root) -> [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] {
         switch self {
         case .element(let element, let traversalIndex):
@@ -31,6 +39,14 @@ public extension AccessibilityHierarchy {
 }
 
 public extension Array where Element == AccessibilityHierarchy {
+    func node(at path: TreePath) -> AccessibilityHierarchy? {
+        guard let rootIndex = path.indices.first,
+              indices.contains(rootIndex)
+        else { return nil }
+        guard path.indices.count > 1 else { return self[rootIndex] }
+        return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+    }
+
     var pathIndexedElements: [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] {
         enumerated()
             .flatMap { index, root in root.pathIndexedElements(path: TreePath([index])) }
@@ -48,5 +64,12 @@ public extension Array where Element == AccessibilityHierarchy {
         enumerated().flatMap { index, root in
             root.compactMapSubtrees(path: TreePath([index]), transform)
         }
+    }
+}
+
+public extension TreePath {
+    func hasPrefix(_ prefix: TreePath) -> Bool {
+        guard prefix.indices.count <= indices.count else { return false }
+        return zip(prefix.indices, indices).allSatisfy { $0 == $1 }
     }
 }

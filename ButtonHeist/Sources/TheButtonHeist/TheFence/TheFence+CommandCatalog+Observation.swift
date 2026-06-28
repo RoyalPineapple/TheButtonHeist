@@ -62,7 +62,7 @@ enum ObservationCommand: String, CaseIterable, FenceCommand {
     }
 }
 
-enum AssertionCommand: String, CaseIterable, FenceCommand, HeistPrimitiveCommand {
+enum AssertionCommand: String, CaseIterable, FenceCommand {
     case wait
 
     var descriptor: FenceCommandDescriptor {
@@ -70,6 +70,7 @@ enum AssertionCommand: String, CaseIterable, FenceCommand, HeistPrimitiveCommand
             command, family: .assertion,
             requestDecoder: TheFence.decodeWaitRequest,
             parameters: FenceParameterBlocks.wait,
+            execution: [.heistPrimitive],
             projection: .cliOnly(
                 "Assert that an accessibility predicate is satisfied within timeout "
                     + "by evaluating settled accessibility state.",

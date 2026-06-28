@@ -69,73 +69,46 @@ func projectElementStateChange(
 
     // label is identity (pairing key), not an update property — paired elements
     // share it by construction, so no label PropertyChange is emitted.
-    if old.value != new.value {
-        changes.append(PropertyChange(property: .value, old: old.value, new: new.value))
-    }
-    if old.traits != new.traits {
-        changes.append(PropertyChange(
-            property: .traits,
-            old: old.traits.map(\.rawValue).joined(separator: ", "),
-            new: new.traits.map(\.rawValue).joined(separator: ", ")
-        ))
-    }
-    if old.hint != new.hint {
-        changes.append(PropertyChange(property: .hint, old: old.hint, new: new.hint))
-    }
-    if old.actions != new.actions {
-        changes.append(PropertyChange(
-            property: .actions,
-            old: old.actions.map(\.description).joined(separator: ", "),
-            new: new.actions.map(\.description).joined(separator: ", ")
-        ))
-    }
-    if old.customContent != new.customContent {
-        changes.append(PropertyChange(
-            property: .customContent,
-            old: formatCustomContent(old.customContent),
-            new: formatCustomContent(new.customContent)
-        ))
-    }
-    if old.rotors != new.rotors {
-        changes.append(PropertyChange(
-            property: .rotors,
-            old: formatRotors(old.rotors),
-            new: formatRotors(new.rotors)
-        ))
+    for property in ElementProperty.semanticDiffProperties {
+        appendChangeIfNeeded(property, old: old, new: new, to: &changes)
     }
 
-    let oldFrame = "\(Int(old.frameX)),\(Int(old.frameY)),\(Int(old.frameWidth)),\(Int(old.frameHeight))"
-    let newFrame = "\(Int(new.frameX)),\(Int(new.frameY)),\(Int(new.frameWidth)),\(Int(new.frameHeight))"
-    if includeGeometry && oldFrame != newFrame {
-        changes.append(PropertyChange(property: .frame, old: oldFrame, new: newFrame))
-    }
-
-    let oldActivationPoint = "\(Int(old.activationPointX)),\(Int(old.activationPointY))"
-    let newActivationPoint = "\(Int(new.activationPointX)),\(Int(new.activationPointY))"
-    if includeGeometry && oldActivationPoint != newActivationPoint {
-        changes.append(PropertyChange(property: .activationPoint, old: oldActivationPoint, new: newActivationPoint))
+    if includeGeometry {
+        for property in ElementProperty.geometryDiffProperties {
+            appendChangeIfNeeded(property, old: old, new: new, to: &changes)
+        }
     }
 
     guard !changes.isEmpty else { return nil }
     return ElementUpdate(before: old, after: new, changes: changes)
 }
 
-private func formatCustomContent(_ content: [HeistCustomContent]?) -> String? {
-    let formatted = content?.compactMap { item -> String? in
-        switch (item.label.isEmpty, item.value.isEmpty) {
-        case (false, false): return "\(item.label): \(item.value)"
-        case (false, true): return item.label
-        case (true, false): return item.value
-        case (true, true): return nil
-        }
-    }
-    guard let formatted, !formatted.isEmpty else { return nil }
-    return formatted.joined(separator: "; ")
+private func appendChangeIfNeeded(
+    _ property: ElementProperty,
+    old: HeistElement,
+    new: HeistElement,
+    to changes: inout [PropertyChange]
+) {
+    let oldValue = ElementPropertyValue.value(for: property, in: old)
+    let newValue = ElementPropertyValue.value(for: property, in: new)
+    guard oldValue != newValue else { return }
+    changes.append(PropertyChange(property: property, oldValue: oldValue, newValue: newValue))
 }
 
-private func formatRotors(_ rotors: [HeistRotor]?) -> String? {
-    guard let rotors, !rotors.isEmpty else { return nil }
-    return rotors.map { $0.name }.joined(separator: ", ")
+private extension ElementProperty {
+    static let semanticDiffProperties: [ElementProperty] = [
+        .value,
+        .traits,
+        .hint,
+        .actions,
+        .customContent,
+        .rotors,
+    ]
+
+    static let geometryDiffProperties: [ElementProperty] = [
+        .frame,
+        .activationPoint,
+    ]
 }
 
 // MARK: - Diff Pairing Key

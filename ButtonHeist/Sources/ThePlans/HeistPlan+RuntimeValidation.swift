@@ -1,6 +1,6 @@
 import Foundation
 
-public extension HeistPlanAdmissionCandidate {
+package extension HeistPlanAdmissionCandidate {
     func validatedForRuntimeSafety(
         limits: HeistPlanRuntimeSafetyLimits = .standard
     ) throws -> HeistPlan {

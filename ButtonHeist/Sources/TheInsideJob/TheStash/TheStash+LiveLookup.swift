@@ -17,8 +17,8 @@ extension TheStash {
         liveLookup.contains(heistId: heistId)
     }
 
-    func liveHeistId(for element: AccessibilityElement) -> HeistId? {
-        liveLookup.heistId(for: element)
+    func liveHeistId(forPath path: TreePath) -> HeistId? {
+        liveLookup.heistId(forPath: path)
     }
 
     func liveObject(for heistId: HeistId) -> NSObject? {

@@ -615,7 +615,7 @@ private func repairLabelTargetDTO(_ label: String) -> JSONValue {
                 elementCount: 1,
                 edits: ElementEdits(updated: [
                     ElementUpdate(before: element(label: "Quantity", value: "1", traits: [.button]), after: changed, changes: [
-                        PropertyChange(property: .value, old: "1", new: "2"),
+                        PropertyChange(property: .value, oldValue: .text("1"), newValue: .text("2")),
                     ]),
                 ])
             )),

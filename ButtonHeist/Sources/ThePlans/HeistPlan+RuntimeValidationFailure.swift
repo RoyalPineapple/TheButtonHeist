@@ -1,12 +1,12 @@
 import Foundation
 
-@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyFailure: Sendable, Equatable, CustomStringConvertible {
-    public let path: String
-    public let contract: String
-    public let observed: String
-    public let correction: String
+package struct HeistPlanRuntimeSafetyFailure: Sendable, Equatable, CustomStringConvertible {
+    package let path: String
+    package let contract: String
+    package let observed: String
+    package let correction: String
 
-    public init(
+    package init(
         path: String,
         contract: String,
         observed: String,
@@ -18,19 +18,19 @@ import Foundation
         self.correction = correction
     }
 
-    public var description: String {
+    package var description: String {
         "\(path): \(contract); observed \(observed); \(correction)"
     }
 }
 
-@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let failures: [HeistPlanRuntimeSafetyFailure]
+package struct HeistPlanRuntimeSafetyError: Error, Sendable, Equatable, CustomStringConvertible {
+    package let failures: [HeistPlanRuntimeSafetyFailure]
 
-    public init(failures: [HeistPlanRuntimeSafetyFailure]) {
+    package init(failures: [HeistPlanRuntimeSafetyFailure]) {
         self.failures = failures
     }
 
-    public var description: String {
+    package var description: String {
         guard let first = failures.first else { return "heist plan runtime safety validation failed" }
         let suffix = failures.count > 1 ? " (+\(failures.count - 1) more)" : ""
         return "heist plan runtime safety validation failed: \(first)\(suffix)"

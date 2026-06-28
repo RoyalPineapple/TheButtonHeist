@@ -465,7 +465,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ExpectedDiagnosticFailure(
                 name: "validation",
                 response: FenceResponse.failure(validationError),
-                code: "request.invalid",
+                code: "request.validation_error",
                 kind: .request,
                 phase: .request,
                 message: validationError.message,
@@ -527,6 +527,27 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDefensiveClientActionFallbackUsesTypedFailureDetails() async throws {
+        let fence = TheFence(configuration: .init())
+        let parsed = TheFence.ParsedRequest(
+            command: .activate,
+            requestId: "defensive-fallback-test",
+            arguments: TheFence.CommandArgumentEnvelope(values: [:]),
+            dispatch: TheFence.DecodedRequestDispatch(handler: { _, _ in .ok(message: "unused") }),
+            expectationPayload: TheFence.ExpectationPayload(expectation: nil, timeout: nil)
+        )
+
+        let response = try await fence.handleClientActionRequest(parsed)
+        let failure = try XCTUnwrap(response.publicFailure)
+
+        XCTAssertEqual(failure.code, "request.invalid")
+        XCTAssertEqual(failure.kind, .request)
+        XCTAssertEqual(failure.phase, .request)
+        XCTAssertEqual(failure.retryable, false)
+        XCTAssertEqual(failure.details.errorCode, "request.invalid")
+    }
+
+    @ButtonHeistActor
     func testDispatchSchemaFailureUsesPublicFailureMapper() async throws {
         let fence = TheFence(configuration: .init())
         let validationError = SchemaValidationError(
@@ -547,12 +568,12 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(parsed: parsed)
         let failure = try XCTUnwrap(response.publicFailure)
 
-        XCTAssertEqual(failure.code, "request.invalid")
+        XCTAssertEqual(failure.code, "request.validation_error")
         XCTAssertEqual(failure.kind, .request)
         XCTAssertEqual(failure.message, validationError.message)
         XCTAssertEqual(failure.details.phase, .request)
         XCTAssertEqual(failure.details.retryable, false)
-        XCTAssertEqual(failure.details.hint, "Fix the request shape or arguments before retrying.")
+        XCTAssertEqual(failure.details.hint, "Fix the request so it satisfies the server-side validation rules.")
     }
 
     // MARK: - Connect
@@ -1037,6 +1058,32 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(request.plan, plan)
         XCTAssertEqual(request.argument, .elementTarget(.predicate(.label("Row 1"))))
+    }
+
+    @ButtonHeistActor
+    func testRunHeistRejectsUnknownElementTargetArgumentKey() async throws {
+        let fence = TheFence(configuration: .init())
+        let plan = try HeistPlan(
+            name: "tapRow",
+            parameter: .elementTarget(name: "row"),
+            body: [.action(try ActionStep(command: .activate(.ref("row"))))]
+        )
+        var arguments = try Self.planSourceArguments(for: plan).argumentValues
+        arguments["argument"] = .object([
+            "type": .string("element_target"),
+            "target": .object([
+                "label": stringMatchValue(mode: "exact", value: "Row 1"),
+                "unexpected": .string("ignored before"),
+            ]),
+        ])
+
+        XCTAssertThrowsError(try fence.decodeRunHeistRequest(TheFence.CommandArgumentEnvelope(values: arguments))) { error in
+            guard let error = error as? SchemaValidationError else {
+                return XCTFail("Expected SchemaValidationError, got \(error)")
+            }
+            XCTAssertEqual(error.field, "argument.target.unexpected")
+            XCTAssertEqual(error.expected, "valid argument.target property")
+        }
     }
 
     @ButtonHeistActor
@@ -3226,6 +3273,22 @@ final class TheFenceHandlerTests: XCTestCase {
             result,
             .exists(ElementPredicate(label: "Cart", identifier: "cart.button"))
         )
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationTargetRejectsRawStringMatcherField() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("exists"),
+            "target": .object([
+                "label": .string("Pay"),
+            ]),
+        ]))) { error in
+            guard let error = error as? SchemaValidationError else {
+                return XCTFail("Expected SchemaValidationError, got \(error)")
+            }
+            XCTAssertEqual(error.field, "target.label")
+            XCTAssertEqual(error.expected, "StringMatch object with mode and value, or array of StringMatch objects")
+        }
     }
 
     @ButtonHeistActor

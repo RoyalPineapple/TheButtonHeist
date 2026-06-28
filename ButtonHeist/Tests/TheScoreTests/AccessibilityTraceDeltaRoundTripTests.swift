@@ -147,7 +147,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             updated: [ElementUpdate(
                 before: makeElement(label: "Counter", value: "1"),
                 after: makeElement(label: "Counter", value: "2"),
-                changes: [PropertyChange(property: .value, old: "1", new: "2")]
+                changes: [PropertyChange(property: .value, oldValue: .text("1"), newValue: .text("2"))]
             )]
         )
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(

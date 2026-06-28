@@ -6,7 +6,7 @@ import ThePlans
 /// This type is intentionally not `Codable`: public mutation crosses the
 /// client/server boundary only as `ClientMessage.heistPlan`, then action steps
 /// lower to this type inside the app runtime.
-@_spi(ButtonHeistInternals) public enum RuntimeActionMessage: Sendable, Equatable {
+package enum RuntimeActionMessage: Sendable, Equatable {
     /// Activate an element.
     case activate(ElementTarget)
 
@@ -62,7 +62,7 @@ import ThePlans
     case wait(WaitTarget)
 }
 
-@_spi(ButtonHeistInternals) public enum RuntimeActionType: String, Sendable, Equatable, CaseIterable {
+package enum RuntimeActionType: String, Sendable, Equatable, CaseIterable {
     case activate, increment, decrement, performCustomAction, rotor
     case oneFingerTap, longPress, swipe, drag
     case typeText, editAction, setPasteboard
@@ -71,7 +71,7 @@ import ThePlans
     case wait
 }
 
-@_spi(ButtonHeistInternals) public extension RuntimeActionMessage {
+package extension RuntimeActionMessage {
     var runtimeType: RuntimeActionType {
         switch self {
         case .activate: return .activate

@@ -13,12 +13,16 @@ extension Navigation {
         target: ElementTarget?,
         exploration: inout SemanticExploration
     ) async -> Bool {
-        while !exploration.manifest.pendingContainers.isEmpty {
+        while !exploration.manifest.pendingContainerPaths.isEmpty {
             guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
                 exploration.manifest.discoveryLimitHit = true
                 return false
             }
             let batch = sortedPendingContainers(in: exploration)
+            guard !batch.isEmpty else {
+                exploration.manifest.pendingContainerPaths.removeAll()
+                return false
+            }
 
             for container in batch {
                 guard exploration.manifest.scrollCount < exploration.manifest.maxScrollsPerDiscovery else {
@@ -44,22 +48,22 @@ extension Navigation {
         return false
     }
 
-    private func sortedPendingContainers(in exploration: SemanticExploration) -> [AccessibilityContainer] {
-        exploration.manifest.pendingContainers
-            .map { (container: $0, overflow: totalOverflow(of: $0)) }
+    private func sortedPendingContainers(in exploration: SemanticExploration) -> [SemanticScreen.Container] {
+        exploration.manifest.pendingContainerPaths
+            .compactMap { exploration.screen.semantic.containers[$0] }
+            .map { (container: $0, overflow: totalOverflow(of: $0.container)) }
             .sorted { $0.overflow > $1.overflow }
             .map(\.container)
     }
 
     private func prepareContainerExploration(
-        for container: AccessibilityContainer,
+        for semanticContainer: SemanticScreen.Container,
         exploration: inout SemanticExploration
     ) async -> ContainerExploration? {
+        let container = semanticContainer.container
         guard case .scrollable(let contentSize) = container.type else { return nil }
-        let semanticContainer = exploration.screen.orderedContainers.first { $0.container == container }
 
-        if let path = semanticContainer?.path,
-           let view = stash.liveScrollableContainerView(forPath: path),
+        if let view = stash.liveScrollableContainerView(forPath: semanticContainer.path),
            view.window != nil,
            Self.isObscuredByPresentation(view: view) {
             return nil
@@ -69,10 +73,8 @@ extension Navigation {
         let hasVOverflow = contentSize.height > container.frame.height + 1
         guard hasHOverflow || hasVOverflow else { return nil }
         var ancestorRestorations: [ViewportRestoration] = []
-        let hasLiveScrollView = semanticContainer
-            .map { stash.liveScrollableContainerView(forPath: $0.path) != nil }
-            ?? false
-        if !hasLiveScrollView, let semanticContainer {
+        let hasLiveScrollView = stash.liveScrollableContainerView(forPath: semanticContainer.path) != nil
+        if !hasLiveScrollView {
             _ = await revealSemanticContainerForExploration(
                 semanticContainer,
                 exploration: &exploration,
@@ -82,14 +84,14 @@ extension Navigation {
         }
         guard let scrollTarget = scrollableTarget(
             for: container,
-            path: semanticContainer?.path,
+            path: semanticContainer.path,
             contentSize: contentSize
         ) else {
             await restoreAncestorPositions(ancestorRestorations, ignoring: nil, exploration: &exploration)
             return nil
         }
         return ContainerExploration(
-            container: container,
+            semanticContainer: semanticContainer,
             scrollTarget: scrollTarget,
             hasHOverflow: hasHOverflow,
             hasVOverflow: hasVOverflow,
@@ -192,13 +194,13 @@ extension Navigation {
                 exploration: &exploration
             )
             await restoreAncestorPositions(containerExploration, exploration: &exploration)
-            exploration.manifest.markOmitted(containerExploration.container, reason: reason)
-            exploration.addDiscoveredContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
+            exploration.manifest.markOmitted(containerExploration.path, reason: reason)
+            exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
             return false
         }
 
         if let target, hasVisibleTerminalExplorationResolution(target) {
-            exploration.markExplored(containerExploration.container)
+            exploration.markExplored(containerExploration.semanticContainer)
             return true
         }
 
@@ -211,7 +213,7 @@ extension Navigation {
         )
 
         if scanResult == .foundTarget {
-            exploration.markExplored(containerExploration.container)
+            exploration.markExplored(containerExploration.semanticContainer)
             return true
         }
 
@@ -222,21 +224,19 @@ extension Navigation {
         )
         await restoreAncestorPositions(containerExploration, exploration: &exploration)
         if case .omitted(let reason) = scanResult {
-            exploration.manifest.markOmitted(containerExploration.container, reason: reason)
+            exploration.manifest.markOmitted(containerExploration.path, reason: reason)
         } else {
-            exploration.markExplored(containerExploration.container)
+            exploration.markExplored(containerExploration.semanticContainer)
         }
 
-        exploration.addDiscoveredContainers(stash.latestObservedLiveHierarchy.scrollableContainers)
+        exploration.addDiscoveredContainers(exploration.screen.orderedContainers.filter { $0.container.isScrollable })
         return false
     }
 
     private func preparePageScan(in containerExploration: ContainerExploration) -> ContainerScan {
-        let initialPage = visibleElementsInContainer(containerExploration.container)
+        let initialPage = visibleElementsInContainer(containerExploration.path)
         return ContainerScan(
-            accumulated: initialPage.elements,
-            accumulatedOrigins: initialPage.origins,
-            originByElement: buildOriginIndex()
+            accumulated: initialPage.entries
         )
     }
 
@@ -247,7 +247,7 @@ extension Navigation {
         exploration: inout SemanticExploration
     ) async -> ContainerScanResult {
         for _ in 0..<exploration.manifest.maxScrollsPerContainer {
-            if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.container) {
+            if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.path) {
                 return .omitted(reason)
             }
             let proof = await scrollOnePageAndSettle(
@@ -259,7 +259,6 @@ extension Navigation {
             guard proof.result == .moved else { return .completed }
 
             guard absorbVisiblePage(in: &exploration) else { return .completed }
-            scan.originByElement = buildOriginIndex()
 
             if let target, hasVisibleTerminalExplorationResolution(target) {
                 return .foundTarget
@@ -284,7 +283,7 @@ extension Navigation {
     ) async -> ContainerScanResult {
         switch containerExploration.scrollTarget {
         case .uiScrollView(let scrollView):
-            if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.container) {
+            if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.path) {
                 return .omitted(reason)
             }
             if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) == .moved {
@@ -295,7 +294,7 @@ extension Navigation {
         case .swipeable:
             let toLeading = Self.edgeDirection(for: containerExploration.leadingEdge)
             for _ in 0..<50 {
-                if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.container) {
+                if let reason = exploration.manifest.recordScrollAttempt(in: containerExploration.path) {
                     return .omitted(reason)
                 }
                 let proof = await scrollOnePageAndSettle(
@@ -328,17 +327,14 @@ extension Navigation {
     private func reconcileVisiblePage(
         in containerExploration: ContainerExploration,
         scan: inout ContainerScan
-    ) -> PageReconciliation {
-        let page = visibleElementsInContainer(containerExploration.container)
-        let result = reconcilePage(
+    ) -> ContainerPageReconciliation {
+        let page = visibleElementsInContainer(containerExploration.path)
+        let result = reconcileContainerPage(
             accumulated: scan.accumulated,
-            accumulatedOrigins: scan.accumulatedOrigins,
-            page: page.elements,
-            pageOrigins: page.origins,
+            page: page.entries,
             orderingAxis: containerExploration.hasHOverflow ? .horizontal : .vertical
         )
-        scan.accumulated = result.elements
-        scan.accumulatedOrigins = scan.accumulated.map { scan.originByElement[$0] ?? nil }
+        scan.accumulated = result.entries
         return result
     }
 
@@ -396,21 +392,152 @@ extension Navigation {
         )
     }
 
-    private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
-        let pairs = stash.latestObservedLiveHierarchy.compactMap(
-            context: false,
-            container: { isInside, current in isInside || current == container },
-            element: { element, _, isInside -> (element: AccessibilityElement, origin: CGPoint?)? in
-                guard isInside,
-                      let entry = self.stash.screenElement(for: element, in: .visible) else { return nil }
-                return (element: entry.element, origin: entry.contentSpaceOrigin)
+    private func visibleElementsInContainer(_ containerPath: TreePath) -> ContainerPage {
+        let entries = stash.latestObservedLiveHierarchy.compactMapSubtrees { node, path -> ContainerPageEntry? in
+            guard path != containerPath,
+                  path.hasPrefix(containerPath),
+                  case .element = node,
+                  let heistId = self.stash.liveHeistId(forPath: path),
+                  let entry = self.stash.screenElement(heistId: heistId, in: .visible)
+            else {
+                return nil
             }
-        )
-        return ContainerPage(elements: pairs.map(\.element), origins: pairs.map(\.origin))
+            return ContainerPageEntry(
+                path: path,
+                heistId: heistId,
+                element: entry.element,
+                origin: entry.contentSpaceOrigin
+            )
+        }
+        return ContainerPage(entries: entries)
     }
 
-    private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
-        stash.knownContentOriginIndex()
+    private func reconcileContainerPage(
+        accumulated: [ContainerPageEntry],
+        page: [ContainerPageEntry],
+        orderingAxis: ContentOrderingAxis?
+    ) -> ContainerPageReconciliation {
+        guard !page.isEmpty else {
+            return ContainerPageReconciliation(
+                entries: accumulated,
+                overlap: OverlapResult(accumulatedStart: 0, pageStart: 0, length: 0),
+                inserted: [],
+                previousCount: accumulated.count
+            )
+        }
+
+        guard !accumulated.isEmpty else {
+            return ContainerPageReconciliation(
+                entries: page,
+                overlap: OverlapResult(accumulatedStart: 0, pageStart: 0, length: 0),
+                inserted: page,
+                previousCount: 0
+            )
+        }
+
+        let accumulatedFingerprints = contentFingerprints(for: accumulated.elements, origins: accumulated.origins)
+        let pageFingerprints = contentFingerprints(for: page.elements, origins: page.origins)
+        let overlap = findOverlap(
+            accumulated: accumulatedFingerprints,
+            page: pageFingerprints
+        )
+
+        if let ordered = reconcileContainerPageByContentOrigin(
+            accumulated: accumulated,
+            page: page,
+            overlap: overlap,
+            orderingAxis: orderingAxis
+        ) {
+            return ordered
+        }
+
+        return reconcileContainerPageByOverlap(
+            accumulated: accumulated,
+            page: page,
+            overlap: overlap
+        )
+    }
+
+    private func reconcileContainerPageByContentOrigin(
+        accumulated: [ContainerPageEntry],
+        page: [ContainerPageEntry],
+        overlap: OverlapResult,
+        orderingAxis: ContentOrderingAxis?
+    ) -> ContainerPageReconciliation? {
+        guard let orderingAxis,
+              accumulated.allSatisfy({ $0.origin != nil }),
+              page.allSatisfy({ $0.origin != nil })
+        else { return nil }
+
+        let accumulatedHeistIds = Set(accumulated.map(\.heistId))
+        var entriesByHeistId: [HeistId: (entry: ContainerPageEntry, order: Int)] = [:]
+        for index in accumulated.indices {
+            entriesByHeistId[accumulated[index].heistId] = (accumulated[index], index)
+        }
+
+        var inserted: [ContainerPageEntry] = []
+        for index in page.indices {
+            let entry = page[index]
+            if !accumulatedHeistIds.contains(entry.heistId) {
+                inserted.append(entry)
+            }
+            entriesByHeistId[entry.heistId] = (entry, accumulated.count + index)
+        }
+
+        let orderedEntries = entriesByHeistId.values.sorted { lhs, rhs in
+            guard let leftOrigin = lhs.entry.origin,
+                  let rightOrigin = rhs.entry.origin
+            else { return lhs.order < rhs.order }
+            switch orderingAxis {
+            case .horizontal:
+                if leftOrigin.x != rightOrigin.x { return leftOrigin.x < rightOrigin.x }
+                if leftOrigin.y != rightOrigin.y { return leftOrigin.y < rightOrigin.y }
+            case .vertical:
+                if leftOrigin.y != rightOrigin.y { return leftOrigin.y < rightOrigin.y }
+                if leftOrigin.x != rightOrigin.x { return leftOrigin.x < rightOrigin.x }
+            }
+            return lhs.order < rhs.order
+        }.map(\.entry)
+
+        return ContainerPageReconciliation(
+            entries: orderedEntries,
+            overlap: overlap,
+            inserted: inserted,
+            previousCount: accumulated.count
+        )
+    }
+
+    private func reconcileContainerPageByOverlap(
+        accumulated: [ContainerPageEntry],
+        page: [ContainerPageEntry],
+        overlap: OverlapResult
+    ) -> ContainerPageReconciliation {
+        guard overlap.length > 0 else {
+            return ContainerPageReconciliation(
+                entries: accumulated + page,
+                overlap: overlap,
+                inserted: page,
+                previousCount: accumulated.count
+            )
+        }
+
+        var entries: [ContainerPageEntry] = []
+        entries.reserveCapacity(accumulated.count + page.count - overlap.length)
+        entries.append(contentsOf: accumulated[..<overlap.accumulatedStart])
+        entries.append(contentsOf: page[..<overlap.pageStart])
+        entries.append(contentsOf: page[overlap.pageStart..<overlap.pageEnd])
+        entries.append(contentsOf: page[overlap.pageEnd..<page.endIndex])
+        entries.append(contentsOf: accumulated[overlap.accumulatedEnd..<accumulated.endIndex])
+
+        let inserted = Array(page[..<overlap.pageStart])
+            + Array(page[overlap.pageEnd..<page.endIndex])
+
+        return ContainerPageReconciliation(
+            entries: entries,
+            overlap: overlap,
+            inserted: inserted,
+            previousCount: accumulated.count
+        )
     }
 
     private static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
@@ -446,23 +573,47 @@ extension Navigation {
         in hierarchy: [AccessibilityHierarchy],
         tolerance: CGFloat = 1
     ) -> Bool {
+        guard let path = hierarchy.containerPaths.first(where: { $0.container == container })?.path else {
+            return false
+        }
+        return hasContentBeyondFrame(of: path, in: hierarchy, tolerance: tolerance)
+    }
+
+    static func hasContentBeyondFrame(
+        of containerPath: TreePath,
+        in hierarchy: [AccessibilityHierarchy],
+        tolerance: CGFloat = 1
+    ) -> Bool {
+        guard case .container(let container, _) = hierarchy.node(at: containerPath) else {
+            return false
+        }
         let containerFrame = container.frame
-        let hits: [Bool] = hierarchy.compactMap(
-            first: 1,
-            context: false,
-            container: { isInside, current in isInside || current == container },
-            element: { element, _, isInside -> Bool? in
-                guard isInside else { return nil }
-                let elementFrame = element.shape.frame
-                let extendsBeyond =
-                    elementFrame.minX < containerFrame.minX - tolerance
-                    || elementFrame.minY < containerFrame.minY - tolerance
-                    || elementFrame.maxX > containerFrame.maxX + tolerance
-                    || elementFrame.maxY > containerFrame.maxY + tolerance
-                return extendsBeyond ? true : nil
+        let hits: [Bool] = hierarchy.compactMapSubtrees { node, path -> Bool? in
+            guard path != containerPath,
+                  path.hasPrefix(containerPath),
+                  case .element(let element, _) = node
+            else {
+                return nil
             }
-        )
+            let elementFrame = element.shape.frame
+            let extendsBeyond =
+                elementFrame.minX < containerFrame.minX - tolerance
+                || elementFrame.minY < containerFrame.minY - tolerance
+                || elementFrame.maxX > containerFrame.maxX + tolerance
+                || elementFrame.maxY > containerFrame.maxY + tolerance
+            return extendsBeyond ? true : nil
+        }
         return !hits.isEmpty
+    }
+}
+
+private extension Array where Element == Navigation.ContainerPageEntry {
+    var elements: [AccessibilityElement] {
+        map(\.element)
+    }
+
+    var origins: [CGPoint?] {
+        map(\.origin)
     }
 }
 

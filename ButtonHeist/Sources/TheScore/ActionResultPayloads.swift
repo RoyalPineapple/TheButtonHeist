@@ -6,6 +6,7 @@ import Foundation
 /// Typed error classification used by both `ActionResult.errorKind` and the
 /// server-broadcast `ServerError` payload.
 public enum ErrorKind: String, Codable, Sendable, CaseIterable {
+    case accessibilityTreeUnavailable
     case elementNotFound
     case timeout
     case validationError

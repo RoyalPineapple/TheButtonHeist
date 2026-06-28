@@ -458,10 +458,14 @@ extension FenceResponse {
                 ?? nonEmpty(update.after.identifier)
                 ?? update.after.description
             for change in update.changes where !change.property.isGeometry {
-                lines.append("~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" -> \"\(change.new ?? "nil")\"")
+                lines.append("~ \(name): \(change.property.rawValue) \"\(display(change.oldValue))\" -> \"\(display(change.newValue))\"")
             }
         }
         lines.append(contentsOf: transient.map { "+- \(compactElementLine($0))" })
         return lines
+    }
+
+    private static func display(_ value: ElementPropertyValue?) -> String {
+        value?.displayText ?? "nil"
     }
 }

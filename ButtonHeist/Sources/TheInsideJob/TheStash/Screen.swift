@@ -177,11 +177,6 @@ struct Screen: Equatable {
         knownInterface.findElement(heistId: heistId)
     }
 
-    /// Live parse id lookup for a parsed accessibility element.
-    func findLiveHeistId(for element: AccessibilityElement) -> HeistId? {
-        liveCapture.heistId(for: element)
-    }
-
     /// Semantic containers in deterministic traversal order.
     var orderedContainers: [SemanticScreen.Container] {
         semantic.containers.values

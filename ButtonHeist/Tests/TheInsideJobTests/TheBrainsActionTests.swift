@@ -1114,6 +1114,51 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.children.map(\.kind), [.warn])
     }
 
+    func testPredicateObservationStreamSeparatesStateAndChangeEvidence() async throws {
+        let readyPredicate = ElementPredicate(label: "Ready")
+        let source = ScriptedHeistObservationSource(
+            observations: [
+                observedState(labels: ["Loading"]),
+                observedState(labels: ["Loading", "Ready"]),
+            ],
+            unavailableObservationCount: 0,
+            observedScopes: nil,
+            observedTimeouts: nil,
+            file: #filePath,
+            line: #line
+        )
+        var stream = PredicateObservationStreamState()
+
+        let baselineObservation = try XCTUnwrap(source.next(scope: .visible, timeout: 0))
+        let seeded = stream.reducing(
+            baselineObservation,
+            predicate: .change(.appeared(readyPredicate)),
+            baselineSeed: .previousObservationIfAvailable
+        )
+        stream = seeded.state
+
+        XCTAssertFalse(seeded.reduction.expectation.met)
+        XCTAssertEqual(
+            seeded.reduction.expectation.actual,
+            "change predicate requires future settled observation after baseline"
+        )
+
+        let changedObservation = try XCTUnwrap(source.next(scope: .visible, timeout: 0))
+        let changed = stream.reducing(
+            changedObservation,
+            predicate: .change(.appeared(readyPredicate))
+        )
+        let stateExpectation = PredicateEvaluation.evaluate(
+            .exists(readyPredicate),
+            in: changed.reduction.evidence
+        )
+
+        XCTAssertTrue(stateExpectation.met)
+        XCTAssertTrue(changed.reduction.expectation.met)
+        XCTAssertEqual(changed.reduction.changeBaseline?.sequence, baselineObservation.event.sequence)
+        XCTAssertTrue(changed.reduction.sawObservationAfterBaseline)
+    }
+
     func testHeistIfNoOpsWhenImmediateObservationIsUnavailable() async throws {
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
@@ -3432,7 +3477,7 @@ final class TheBrainsActionTests: XCTestCase {
         unavailableObservationCount: Int = 0,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) -> TheBrains.HeistExecutionRuntime {
+    ) -> any TheBrains.HeistExecutionRuntime {
         let observationSource = ScriptedHeistObservationSource(
             observations: observations,
             unavailableObservationCount: unavailableObservationCount,
@@ -3442,7 +3487,7 @@ final class TheBrainsActionTests: XCTestCase {
             line: line
         )
 
-        return TheBrains.HeistExecutionRuntime(
+        return TheBrains.ClosureHeistExecutionRuntime(
             execute: { command in
                 if let execute {
                     return await execute(command)

@@ -13,8 +13,8 @@ import AccessibilitySnapshotParser
 ///
 /// **Ownership.** Owned by `TheStash` as viewport-tied live state; carried by
 /// `Screen` only as part of an observed capture. Ephemeral index, not source of
-/// truth: keyed by `TreePath` / `AccessibilityElement` / `HeistId`, rebuilt
-/// wholesale on every parse, and invalidated by the next parse (last-read-wins).
+/// truth: keyed by `TreePath` / `HeistId`, rebuilt wholesale on every parse,
+/// and invalidated by the next parse (last-read-wins).
 /// It carries weak UIKit refs, live geometry, and per-path lookups but is
 /// **never** unioned across exploration pages and must never be treated as
 /// stable identity. See `docs/ARCHITECTURE.md#state-has-one-owner`.
@@ -111,10 +111,6 @@ struct LiveCapture: Equatable {
 
     func contains(heistId: HeistId) -> Bool {
         elementIndex.contains(heistId: heistId)
-    }
-
-    func heistId(for element: AccessibilityElement) -> HeistId? {
-        elementIndex.heistId(for: element)
     }
 
     func heistId(forPath path: TreePath) -> HeistId? {
@@ -406,10 +402,6 @@ struct LiveCapture: Equatable {
             pathsByHeistId[heistId] != nil
         }
 
-        func heistId(for element: AccessibilityElement) -> HeistId? {
-            orderedElementEntries.first { $0.element == element }?.heistId
-        }
-
         func heistId(forPath path: TreePath) -> HeistId? {
             entriesByPath[path]?.heistId
         }
@@ -445,27 +437,6 @@ struct LiveCapture: Equatable {
         }
     }
 
-}
-
-private extension Array where Element == AccessibilityHierarchy {
-    func node(at path: TreePath) -> AccessibilityHierarchy? {
-        guard let rootIndex = path.indices.first,
-              indices.contains(rootIndex)
-        else { return nil }
-        guard path.indices.count > 1 else { return self[rootIndex] }
-        return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
-    }
-}
-
-private extension AccessibilityHierarchy {
-    func node(at path: TreePath) -> AccessibilityHierarchy? {
-        guard !path.indices.isEmpty else { return self }
-        guard case .container(_, let children) = self,
-              let childIndex = path.indices.first,
-              children.indices.contains(childIndex)
-        else { return nil }
-        return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
-    }
 }
 
 private extension TreePath {

@@ -196,6 +196,25 @@ struct RenderResponseTests {
         #expect(details["hint"]?.stringValue == expected.details.hint)
     }
 
+    @Test("structured encoding fallback uses typed failure details")
+    func structuredEncodingFallbackUsesTypedFailureDetails() throws {
+        let root = try #require(
+            ButtonHeistMCPServer.structuredEncodingFailureValue(FallbackTestError()).objectValue
+        )
+        let details = try #require(root["details"]?.objectValue)
+
+        #expect(root["status"]?.stringValue == "error")
+        #expect(root["code"]?.stringValue == "formatting.json_encoding_failed")
+        #expect(root["kind"]?.stringValue == "client")
+        #expect(root["errorCode"]?.stringValue == "formatting.json_encoding_failed")
+        #expect(root["phase"]?.stringValue == "client")
+        #expect(root["retryable"] == .bool(false))
+        #expect(details["code"]?.stringValue == "formatting.json_encoding_failed")
+        #expect(details["kind"]?.stringValue == "client")
+        #expect(details["phase"]?.stringValue == "client")
+        #expect(details["retryable"] == .bool(false))
+    }
+
     private static func interfaceFixture() -> Interface {
         var elementAnnotations: [InterfaceElementAnnotation] = []
         let button = AccessibilityElement(
@@ -274,4 +293,8 @@ struct RenderResponseTests {
             respondsToUserInteraction: false
         )
     }
+}
+
+private struct FallbackTestError: LocalizedError {
+    var errorDescription: String? { "fallback failed" }
 }

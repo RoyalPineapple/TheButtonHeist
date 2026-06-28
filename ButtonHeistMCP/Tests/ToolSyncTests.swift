@@ -168,6 +168,12 @@ struct ToolSyncTests {
             .string("string"),
             .string("element_target"),
         ]))
+        #expect(
+            schemaValue(at: ["properties", "argument", "properties", "target", "additionalProperties"], in: tool.inputSchema)
+                == .bool(false)
+        )
+        #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "label"], in: tool.inputSchema) != nil)
+        #expect(schemaValue(at: ["properties", "argument", "properties", "target", "properties", "unexpected"], in: tool.inputSchema) == nil)
 
         #expect(schemaValue(at: ["oneOf"], in: tool.inputSchema) == nil)
         #expect(schemaValue(at: ["anyOf"], in: tool.inputSchema) == nil)

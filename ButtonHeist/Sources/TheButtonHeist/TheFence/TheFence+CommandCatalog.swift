@@ -18,10 +18,6 @@ where RawValue == String, AllCases: Sequence, AllCases.Element == Self {
     var descriptor: FenceCommandDescriptor { get }
 }
 
-protocol AppInteractionCommand: FenceCommand {}
-protocol HeistPrimitiveCommand: FenceCommand {}
-protocol PayloadCheckedHeistPrimitiveCommand: HeistPrimitiveCommand {}
-
 extension FenceCommand {
     var command: TheFence.Command {
         guard let command = TheFence.Command(rawValue: rawValue) else {
@@ -66,24 +62,16 @@ enum FenceCommandRegistry {
         return descriptor
     }
 
-    static func appInteractionCommand(for command: TheFence.Command) -> (any AppInteractionCommand)? {
-        if let command = SemanticActionCommand(rawValue: command.rawValue) { return command }
-        if let command = SpatialActionCommand(rawValue: command.rawValue) { return command }
-        if let command = ViewportDebugCommand(rawValue: command.rawValue) { return command }
-        return nil
+    static func isAppInteractionCommand(_ command: TheFence.Command) -> Bool {
+        descriptor(for: command).execution.contains(.appInteraction)
     }
 
-    static func heistPrimitiveCommand(for command: TheFence.Command) -> (any HeistPrimitiveCommand)? {
-        if let command = AssertionCommand(rawValue: command.rawValue) { return command }
-        if let command = SemanticActionCommand(rawValue: command.rawValue) { return command }
-        if let command = SpatialActionCommand(rawValue: command.rawValue) { return command }
-        return nil
+    static func isHeistPrimitiveCommand(_ command: TheFence.Command) -> Bool {
+        descriptor(for: command).execution.contains(.heistPrimitive)
     }
 
-    static func payloadCheckedHeistPrimitiveCommand(
-        for command: TheFence.Command
-    ) -> (any PayloadCheckedHeistPrimitiveCommand)? {
-        SpatialActionCommand(rawValue: command.rawValue)
+    static func isPayloadCheckedHeistPrimitiveCommand(_ command: TheFence.Command) -> Bool {
+        descriptor(for: command).execution.contains(.payloadCheckedHeistPrimitive)
     }
 
     static func viewportDebugCommand(for command: TheFence.Command) -> ViewportDebugCommand? {
@@ -138,12 +126,21 @@ extension TheFence {
     }
 }
 
+struct FenceCommandExecution: OptionSet, Sendable, Equatable {
+    let rawValue: Int
+
+    static let appInteraction = FenceCommandExecution(rawValue: 1 << 0)
+    static let heistPrimitive = FenceCommandExecution(rawValue: 1 << 1)
+    static let payloadCheckedHeistPrimitive = FenceCommandExecution(rawValue: 1 << 2)
+}
+
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public let family: FenceCommandFamily
     public let requiresConnectionBeforeDispatch: Bool
     public let parameters: [FenceParameterSpec]
     public let projection: FenceCommandProjection
+    let execution: FenceCommandExecution
     let requestDecoder: TheFence.RequestDecoder
 
     public var cliExposure: CLIExposure { projection.cliExposure }
@@ -201,6 +198,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         requestDecoder: @escaping TheFence.RequestDecoder,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec],
+        execution: FenceCommandExecution = [],
         projection: FenceCommandProjection
     ) {
         self.command = command
@@ -208,6 +206,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.requestDecoder = requestDecoder
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.parameters = parameters
+        self.execution = execution
         self.projection = projection
     }
 
@@ -217,6 +216,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
             lhs.family == rhs.family &&
             lhs.requiresConnectionBeforeDispatch == rhs.requiresConnectionBeforeDispatch &&
             lhs.parameters == rhs.parameters &&
+            lhs.execution == rhs.execution &&
             lhs.projection == rhs.projection
     }
 }
@@ -280,16 +280,16 @@ public extension TheFence.Command {
 
 extension TheFence.Command {
 
-    var appInteractionCommand: (any AppInteractionCommand)? {
-        FenceCommandRegistry.appInteractionCommand(for: self)
+    var isAppInteractionCommand: Bool {
+        FenceCommandRegistry.isAppInteractionCommand(self)
     }
 
-    var heistPrimitiveCommand: (any HeistPrimitiveCommand)? {
-        FenceCommandRegistry.heistPrimitiveCommand(for: self)
+    var isHeistPrimitiveCommand: Bool {
+        FenceCommandRegistry.isHeistPrimitiveCommand(self)
     }
 
-    var payloadCheckedHeistPrimitiveCommand: (any PayloadCheckedHeistPrimitiveCommand)? {
-        FenceCommandRegistry.payloadCheckedHeistPrimitiveCommand(for: self)
+    var isPayloadCheckedHeistPrimitiveCommand: Bool {
+        FenceCommandRegistry.isPayloadCheckedHeistPrimitiveCommand(self)
     }
 
     var viewportDebugCommand: ViewportDebugCommand? {
@@ -297,9 +297,9 @@ extension TheFence.Command {
     }
 
     static var heistPrimitiveCases: [Self] {
-        AssertionCommand.allCases.map(\.command)
-            + SemanticActionCommand.allCases.map(\.command)
-            + SpatialActionCommand.allCases.map(\.command)
+        descriptors
+            .filter { $0.execution.contains(.heistPrimitive) }
+            .map(\.command)
     }
 }
 
@@ -314,6 +314,7 @@ extension TheFence.Command {
         requestDecoder: @escaping TheFence.RequestDecoder,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec] = [],
+        execution: FenceCommandExecution = [],
         projection: FenceCommandProjection
     ) -> FenceCommandDescriptor {
         FenceCommandDescriptor(
@@ -322,6 +323,7 @@ extension TheFence.Command {
             requestDecoder: requestDecoder,
             requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
+            execution: execution,
             projection: projection
         )
     }

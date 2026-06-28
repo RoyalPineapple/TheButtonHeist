@@ -87,8 +87,8 @@ struct LiveLookup {
         capture.contains(heistId: heistId)
     }
 
-    func heistId(for element: AccessibilityElement) -> HeistId? {
-        capture.heistId(for: element)
+    func heistId(forPath path: TreePath) -> HeistId? {
+        capture.heistId(forPath: path)
     }
 
     func object(for heistId: HeistId) -> NSObject? {

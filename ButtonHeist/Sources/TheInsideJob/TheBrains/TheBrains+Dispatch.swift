@@ -2,7 +2,7 @@
 #if DEBUG
 import Foundation
 import ThePlans
-@_spi(ButtonHeistInternals) import TheScore
+import TheScore
 
 extension TheBrains {
 
@@ -162,7 +162,7 @@ extension TheBrains {
         guard !result.success else { return nil }
         switch result.failureKind {
         case .treeUnavailable:
-            return .actionFailed
+            return .accessibilityTreeUnavailable
         case .timeout:
             return .timeout
         case .inputValidation:

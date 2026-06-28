@@ -15,6 +15,7 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case screenId
     case errorClass
     case errorCode
+    case kind
     case phase
     case retryable
     case hint
@@ -101,6 +102,7 @@ private struct PublicActionResultModel {
         try container.encodeIfPresent(screenId, forKey: .screenId)
         try container.encodeIfPresent(failure?.errorClass, forKey: .errorClass)
         try container.encodeIfPresent(failure?.errorCode, forKey: .errorCode)
+        try container.encodeIfPresent(failure?.kind, forKey: .kind)
         try container.encodeIfPresent(failure?.phase, forKey: .phase)
         try container.encodeIfPresent(failure?.retryable, forKey: .retryable)
         try container.encodeIfPresent(failure?.hint, forKey: .hint)
@@ -133,14 +135,16 @@ private struct PublicActionPayload {
 
 private struct PublicActionFailure {
     let errorClass: String
-    let errorCode: String?
-    let phase: String?
-    let retryable: Bool?
+    let errorCode: String
+    let kind: String
+    let phase: String
+    let retryable: Bool
     let hint: String?
 
     init(projection: PublicActionFailureProjection) {
         self.errorClass = projection.errorClass
         self.errorCode = projection.errorCode
+        self.kind = projection.kind
         self.phase = projection.phase
         self.retryable = projection.retryable
         self.hint = projection.hint
@@ -172,43 +176,29 @@ extension ActionResult {
     /// Canonical public failure projection shared by JSON and compact renderers.
     func publicFailureProjection(fallbackMessage: String) -> PublicActionFailureProjection? {
         guard !success else { return nil }
+        let resolvedErrorKind = self.errorKind ?? .actionFailed
         return PublicActionFailureProjection(
             message: message ?? fallbackMessage,
-            errorClass: publicErrorClass ?? ErrorKind.actionFailed.rawValue,
-            details: publicFailureDetails
+            errorClass: resolvedErrorKind.rawValue,
+            publicFailure: PublicFailureMapper.map(
+                errorKind: resolvedErrorKind,
+                message: message ?? fallbackMessage
+            )
         )
     }
-
-    /// Structured failure metadata for the diagnosable accessibility-tree case.
-    var publicFailureDetails: FailureDetails? {
-        guard !success else { return nil }
-        guard errorKind == nil || errorKind == .actionFailed,
-              message == Self.accessibilityTreeUnavailableMessage
-        else { return nil }
-        return FailureDetails(
-            errorCode: "request.accessibility_tree_unavailable",
-            phase: .request,
-            retryable: true,
-            hint: "Wait for a traversable app window, then refresh the interface or retry the command."
-        )
-    }
-
-    // Keep in sync with `TheBrains.treeUnavailableMessage`; bridges tree-unavailable
-    // `actionFailed` wire results to local diagnostics.
-    static let accessibilityTreeUnavailableMessage =
-        "Could not access accessibility tree: no traversable app windows"
 }
 
 struct PublicActionFailureProjection {
     let message: String
     let errorClass: String
-    let details: FailureDetails?
+    let publicFailure: PublicFailure
 
-    var errorCode: String? { details?.errorCode }
-    var phase: String? { details?.phase.rawValue }
-    var retryable: Bool? { details?.retryable }
-    var hint: String? { details?.hint }
-    var compactCode: String { errorCode ?? errorClass }
+    var errorCode: String { publicFailure.code }
+    var kind: String { publicFailure.kind.rawValue }
+    var phase: String { publicFailure.phase.rawValue }
+    var retryable: Bool { publicFailure.retryable }
+    var hint: String? { publicFailure.hint }
+    var compactCode: String { errorCode }
 }
 
 struct PublicRotorResult: Encodable {
@@ -261,44 +251,58 @@ struct PublicDelta: Encodable {
     let transient: [PublicElement]?
     let edits: PublicElementEdits?
     let newInterface: PublicInterface?
+    let omitted: PublicHeistDeltaOmissions?
 
     init(projection: DeltaProjection) {
+        let fields = PublicDeltaFields(projection: projection)
+        self.kind = fields.kind
+        self.elementCount = fields.elementCount
+        self.captureEdge = fields.captureEdge
+        self.interactionDigest = fields.interactionDigest
+        self.transient = fields.transient
+        self.edits = fields.edits
+        self.newInterface = fields.screen?.interface.map { PublicInterface(interface: $0, detail: .summary) }
+        self.omitted = fields.omitted
+    }
+}
+
+private struct PublicDeltaFields {
+    let kind: String
+    let elementCount: Int
+    let captureEdge: AccessibilityTrace.CaptureEdge?
+    let interactionDigest: AccessibilityTrace.InteractionDigest?
+    let transient: [PublicElement]?
+    let edits: PublicElementEdits?
+    let screen: DeltaScreenProjection?
+    let omitted: PublicHeistDeltaOmissions?
+
+    init(projection: DeltaProjection) {
+        self.kind = projection.kind.rawValue
+        self.elementCount = projection.elementCount
+        self.captureEdge = projection.captureEdge
+        self.interactionDigest = projection.interactionDigest
+        self.transient = Self.elements(projection.transient.elements)
+
+        let transientOmissions = PublicHeistDeltaOmissions(projection: projection.transient)
+        self.omitted = transientOmissions.isEmpty ? nil : transientOmissions
+
         switch projection.kind {
         case .noChange:
-            self.kind = projection.kind.rawValue
-            self.elementCount = projection.elementCount
-            self.captureEdge = projection.captureEdge
-            self.interactionDigest = projection.interactionDigest
-            self.transient = projection.transient.elements.isEmpty
-                ? nil
-                : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
             self.edits = nil
-            self.newInterface = nil
+            self.screen = nil
         case .elementsChanged:
-            self.kind = projection.kind.rawValue
-            self.elementCount = projection.elementCount
-            self.captureEdge = projection.captureEdge
-            self.interactionDigest = projection.interactionDigest
-            self.transient = projection.transient.elements.isEmpty
-                ? nil
-                : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
-            if let edits = projection.edits.map({ PublicElementEdits(projection: $0) }) {
-                self.edits = edits.isEmpty ? nil : edits
-            } else {
-                self.edits = nil
-            }
-            self.newInterface = nil
+            let edits = projection.edits.map { PublicElementEdits(projection: $0) }
+            self.edits = edits?.isEmpty == false ? edits : nil
+            self.screen = nil
         case .screenChanged:
-            self.kind = projection.kind.rawValue
-            self.elementCount = projection.elementCount
-            self.captureEdge = projection.captureEdge
-            self.interactionDigest = projection.interactionDigest
-            self.transient = projection.transient.elements.isEmpty
-                ? nil
-                : projection.transient.elements.map { PublicElement(element: $0, detail: .summary) }
             self.edits = nil
-            self.newInterface = projection.screen?.interface.map { PublicInterface(interface: $0, detail: .summary) }
+            self.screen = projection.screen
         }
+    }
+
+    private static func elements(_ elements: [HeistElement]) -> [PublicElement]? {
+        guard !elements.isEmpty else { return nil }
+        return elements.map { PublicElement(element: $0, detail: .summary) }
     }
 }
 
@@ -330,14 +334,26 @@ struct PublicElementEdits: Encodable {
 struct PublicElementUpdate: Encodable {
     let before: PublicElement
     let after: PublicElement
-    let changes: [PropertyChange]
+    let changes: [PublicPropertyChange]
 
     init?(update: ElementUpdate) {
         let meaningfulChanges = update.changes.filter { !$0.property.isGeometry }
         guard !meaningfulChanges.isEmpty else { return nil }
         self.before = PublicElement(element: update.before, detail: .summary)
         self.after = PublicElement(element: update.after, detail: .summary)
-        self.changes = meaningfulChanges
+        self.changes = meaningfulChanges.map(PublicPropertyChange.init(change:))
+    }
+}
+
+struct PublicPropertyChange: Encodable {
+    let property: ElementProperty
+    let old: String?
+    let new: String?
+
+    init(change: PropertyChange) {
+        self.property = change.property
+        self.old = change.oldValue?.displayText
+        self.new = change.newValue?.displayText
     }
 }
 
@@ -405,7 +421,7 @@ struct PublicHeistReportNode: Encodable {
     let durationMs: Int
     let intent: HeistStepIntent?
     let evidence: PublicHeistReportEvidence?
-    let failure: HeistFailureDetail?
+    let failure: PublicHeistFailureDetail?
     let abortedAtChildPath: String?
     let expectation: PublicExpectationResult?
     let children: [PublicHeistReportNode]
@@ -419,10 +435,36 @@ struct PublicHeistReportNode: Encodable {
         self.durationMs = projection.durationMs
         self.intent = projection.intent
         self.evidence = projection.evidence.map { PublicHeistReportEvidence(projection: $0) }
-        self.failure = projection.failure
+        self.failure = projection.failure.map { PublicHeistFailureDetail(projection: $0) }
         self.abortedAtChildPath = projection.abortedAtChildPath
         self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
         self.children = projection.children.map { PublicHeistReportNode(projection: $0) }
+    }
+}
+
+struct PublicHeistFailureDetail: Encodable {
+    let category: HeistFailureCategory
+    let contract: String
+    let observed: String
+    let expected: String?
+    let code: String
+    let kind: String
+    let errorCode: String
+    let phase: String
+    let retryable: Bool
+    let hint: String?
+
+    init(projection: HeistReportFailureProjection) {
+        category = projection.detail.category
+        contract = projection.detail.contract
+        observed = projection.detail.observed
+        expected = projection.detail.expected
+        code = projection.publicFailure.code
+        kind = projection.publicFailure.kind.rawValue
+        errorCode = projection.publicFailure.code
+        phase = projection.publicFailure.phase.rawValue
+        retryable = projection.publicFailure.retryable
+        hint = projection.publicFailure.hint
     }
 }
 
@@ -675,79 +717,20 @@ struct PublicHeistDelta: Encodable {
     let captureEdge: AccessibilityTrace.CaptureEdge?
     let interactionDigest: AccessibilityTrace.InteractionDigest?
     let transient: [PublicElement]?
-    let edits: PublicHeistElementEdits?
+    let edits: PublicElementEdits?
     let screen: PublicHeistScreenProjection?
     let omitted: PublicHeistDeltaOmissions?
 
     init(projection: DeltaProjection) {
-        switch projection.kind {
-        case .noChange:
-            let transient = Self.elements(projection.transient.elements)
-            self.kind = projection.kind.rawValue
-            self.elementCount = projection.elementCount
-            self.captureEdge = projection.captureEdge
-            self.interactionDigest = projection.interactionDigest
-            self.transient = transient.isEmpty ? nil : transient
-            self.edits = nil
-            self.screen = nil
-            let omitted = PublicHeistDeltaOmissions(projection: projection.transient)
-            self.omitted = omitted.isEmpty ? nil : omitted
-
-        case .elementsChanged:
-            let transient = Self.elements(projection.transient.elements)
-            let edits = projection.edits.map { PublicHeistElementEdits(projection: $0) }
-            self.kind = projection.kind.rawValue
-            self.elementCount = projection.elementCount
-            self.captureEdge = projection.captureEdge
-            self.interactionDigest = projection.interactionDigest
-            self.transient = transient.isEmpty ? nil : transient
-            self.edits = edits?.isEmpty == false ? edits : nil
-            self.screen = nil
-            let omitted = PublicHeistDeltaOmissions(projection: projection.transient)
-            self.omitted = omitted.isEmpty ? nil : omitted
-
-        case .screenChanged:
-            let transient = Self.elements(projection.transient.elements)
-            self.kind = projection.kind.rawValue
-            self.elementCount = projection.elementCount
-            self.captureEdge = projection.captureEdge
-            self.interactionDigest = projection.interactionDigest
-            self.transient = transient.isEmpty ? nil : transient
-            self.edits = nil
-            self.screen = projection.screen.map { PublicHeistScreenProjection(projection: $0) }
-            let omitted = PublicHeistDeltaOmissions(projection: projection.transient)
-            self.omitted = omitted.isEmpty ? nil : omitted
-        }
-    }
-
-    private static func elements(_ elements: [HeistElement]) -> [PublicElement] {
-        elements.map { PublicElement(element: $0, detail: .summary) }
-    }
-}
-
-struct PublicHeistElementEdits: Encodable {
-    let added: [PublicElement]?
-    let removed: [PublicElement]?
-    let updated: [PublicElementUpdate]?
-    let omitted: PublicHeistElementEditOmissions?
-
-    var isEmpty: Bool {
-        added == nil && removed == nil && updated == nil && omitted == nil
-    }
-
-    init(projection: DeltaEditsProjection) {
-        let added = Self.elements(projection.added.elements)
-        let removed = Self.elements(projection.removed.elements)
-        let updated = projection.updated.updates.compactMap(PublicElementUpdate.init(update:))
-        self.added = added.isEmpty ? nil : added
-        self.removed = removed.isEmpty ? nil : removed
-        self.updated = updated.isEmpty ? nil : updated
-        let omitted = PublicHeistElementEditOmissions(projection: projection)
-        self.omitted = omitted.isEmpty ? nil : omitted
-    }
-
-    private static func elements(_ elements: [HeistElement]) -> [PublicElement] {
-        elements.map { PublicElement(element: $0, detail: .summary) }
+        let fields = PublicDeltaFields(projection: projection)
+        self.kind = fields.kind
+        self.elementCount = fields.elementCount
+        self.captureEdge = fields.captureEdge
+        self.interactionDigest = fields.interactionDigest
+        self.transient = fields.transient
+        self.edits = fields.edits
+        self.screen = fields.screen.map { PublicHeistScreenProjection(projection: $0) }
+        self.omitted = fields.omitted
     }
 }
 

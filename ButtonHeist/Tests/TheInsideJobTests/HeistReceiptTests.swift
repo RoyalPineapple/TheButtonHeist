@@ -524,8 +524,8 @@ private func repeatUntilRuntime(
     job _: TheInsideJob,
     waitScript: ReceiptWaitScript,
     execute: @escaping @MainActor (RuntimeActionMessage) async -> ActionResult
-) -> TheBrains.HeistExecutionRuntime {
-    TheBrains.HeistExecutionRuntime(
+) -> any TheBrains.HeistExecutionRuntime {
+    TheBrains.ClosureHeistExecutionRuntime(
         execute: execute,
         wait: { step, _, _ in
             waitScript.receipt(for: step)
