@@ -117,7 +117,10 @@ extension TheBrains {
                 error: error
             )
         }
-        let receipt = await runtime.wait(resolvedWait, actionResult.accessibilityTrace, nil)
+        let receipt = await runtime.wait(.actionEndpoint(
+            resolvedWait,
+            trace: actionResult.accessibilityTrace
+        ))
         let failure = expectationFailure(
             wait: wait,
             receipt: receipt
@@ -176,7 +179,7 @@ extension TheBrains {
             )
         }
 
-        let receipt = await runtime.wait(resolvedWait, nil, nil)
+        let receipt = await runtime.wait(.standalone(resolvedWait))
         let failure = waitFailure(wait: wait, receipt: receipt)
         if failure != nil, let elseBody = wait.elseBody {
             return await waitElseResult(

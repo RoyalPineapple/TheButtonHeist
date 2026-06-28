@@ -408,7 +408,7 @@ public extension HeistInvocationContent {
 
         return HeistInvocationContent(
             invocation: HeistInvocationStep(
-                path: invocation.path,
+                invocationPath: invocation.invocationPath,
                 argument: invocation.argument,
                 expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
             ),
@@ -520,7 +520,7 @@ public func RunHeist(_ name: String, _ input: ElementTargetExpr) -> HeistInvocat
 private func runHeistInvocation(_ name: String, argument: HeistArgument) -> HeistInvocationContent {
     HeistInvocationContent(
         invocation: HeistInvocationStep(
-            path: HeistInvocationPath.components(fromDottedName: name),
+            invocationPath: HeistInvocationPath.preconditionValidated(dottedName: name),
             argument: argument
         ),
         heistDefinitions: []

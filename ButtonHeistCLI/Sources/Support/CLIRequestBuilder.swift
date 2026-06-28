@@ -146,7 +146,7 @@ enum CLIRequestBuilder {
     }
 
     private static func appendTraits(
-        _ traits: [HeistTrait],
+        _ traits: Set<HeistTrait>,
         to key: String,
         in object: inout [String: HeistValue]
     ) {
@@ -157,7 +157,7 @@ enum CLIRequestBuilder {
         } else {
             values = []
         }
-        values.append(contentsOf: traits.map { .string($0.rawValue) })
+        values.append(contentsOf: traits.sorted { $0.rawValue < $1.rawValue }.map { .string($0.rawValue) })
         object[key] = .array(values)
     }
 

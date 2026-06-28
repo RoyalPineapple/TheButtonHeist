@@ -198,10 +198,11 @@ final class WireCommandParityTests: XCTestCase {
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
             let singleStepPlan = try fence.singleStepHeistPlan(for: singleRequest)
 
-            guard let singleMessages = singleRequest.runtimeActionMessages, !singleMessages.isEmpty else {
+            guard let runtimeActionMessages = singleRequest.runtimeActionMessages else {
                 XCTAssertNil(singleStepPlan, command.rawValue)
                 continue
             }
+            let singleMessages = runtimeActionMessages.values
 
             let plan = try XCTUnwrap(singleStepPlan, command.rawValue)
             let heistMessages = plan.body.flatMap(runtimeActions(for:))
@@ -229,7 +230,7 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertFalse(command.usesPayloadCheckedHeistPrimitive, command.rawValue)
 
             let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
-            let singleMessages = try fence.executableRuntimeActions(for: request)
+            let singleMessages = try fence.executableRuntimeActions(for: request).values
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
             let plan = try XCTUnwrap(fence.singleStepHeistPlan(for: request), command.rawValue)

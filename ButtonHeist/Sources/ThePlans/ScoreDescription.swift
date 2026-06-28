@@ -59,9 +59,9 @@ package enum ScoreDescription {
             guard !match.value.isEmpty else { return nil }
             return "value=\(stringMatch(match))"
         case .traits(let traits):
-            return listField("traits", traits.isEmpty ? nil : traits)
+            return listField("traits", traits.isEmpty ? nil : traits.canonicalHeistTraitArray)
         case .excludeTraits(let traits):
-            return listField("excludeTraits", traits.isEmpty ? nil : traits)
+            return listField("excludeTraits", traits.isEmpty ? nil : traits.canonicalHeistTraitArray)
         }
     }
 

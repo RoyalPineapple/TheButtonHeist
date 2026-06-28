@@ -125,26 +125,19 @@ public struct DragTarget: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: DragTargetCodingKeys.self, typeName: "drag target")
         let container = try decoder.container(keyedBy: DragTargetCodingKeys.self)
-        let elementToPoint = try container.decodeIfPresent(DragElementToPointPayload.self, forKey: .elementToPoint)
-        let pointToPoint = try container.decodeIfPresent(DragPointToPointPayload.self, forKey: .pointToPoint)
-        let intentCount = [elementToPoint != nil, pointToPoint != nil].filter { $0 }.count
-        guard intentCount > 0 else {
-            throw GestureProjectionError.missingGesturePoint(field: "drag intent")
-        }
-        guard intentCount == 1 else {
-            throw GestureProjectionError.mixedGestureIntent(kind: "drag")
-        }
-        if let elementToPoint {
-            self.selection = .elementToPoint(
-                elementToPoint.element,
-                start: elementToPoint.start,
-                end: elementToPoint.end
-            )
-        } else if let pointToPoint {
-            self.selection = .pointToPoint(start: pointToPoint.start, end: pointToPoint.end)
-        } else {
-            throw GestureProjectionError.missingGesturePoint(field: "drag intent")
-        }
+        let selectionPayloads: [GesturePayloadCandidate<DragTargetCodingKeys, DragGestureSelection>] = [
+            GesturePayloadCandidate(.elementToPoint, as: DragElementToPointPayload.self) {
+                .elementToPoint($0.element, start: $0.start, end: $0.end)
+            },
+            GesturePayloadCandidate(.pointToPoint, as: DragPointToPointPayload.self) {
+                .pointToPoint(start: $0.start, end: $0.end)
+            },
+        ]
+        self.selection = try container.decodeExactlyOneGesturePayload(
+            kind: "drag",
+            missing: GestureProjectionError.missingGesturePoint(field: "drag intent"),
+            candidates: selectionPayloads
+        )
         self.duration = try container.decodeIfPresent(GestureDuration.self, forKey: .duration)
     }
 

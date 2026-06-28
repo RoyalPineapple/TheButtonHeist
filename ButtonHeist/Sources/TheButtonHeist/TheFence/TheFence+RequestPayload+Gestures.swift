@@ -12,7 +12,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
             SpatialActionCommand.oneFingerTap.command,
-            [.oneFingerTap(try fence.decodeTapTarget(arguments))]
+            .oneFingerTap(try fence.decodeTapTarget(arguments))
         )
     }
 
@@ -24,7 +24,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
             SpatialActionCommand.longPress.command,
-            [.longPress(try fence.decodeLongPressTarget(arguments))]
+            .longPress(try fence.decodeLongPressTarget(arguments))
         )
     }
 
@@ -36,7 +36,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
             SpatialActionCommand.swipe.command,
-            [.swipe(try fence.decodeSwipeTarget(arguments))]
+            .swipe(try fence.decodeSwipeTarget(arguments))
         )
     }
 
@@ -48,7 +48,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
             SpatialActionCommand.drag.command,
-            [.drag(try fence.decodeDragTarget(arguments))]
+            .drag(try fence.decodeDragTarget(arguments))
         )
     }
 }

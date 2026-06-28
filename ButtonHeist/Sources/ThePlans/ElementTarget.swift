@@ -191,10 +191,10 @@ extension ElementTarget: Codable {
             .map(ElementPredicateCheck.identifier)
         checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value).map(ElementPredicateCheck.value)
         if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits), !traits.isEmpty {
-            checks.append(.traits(traits))
+            checks.append(.traits(traits.heistTraitSet))
         }
         if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits), !traits.isEmpty {
-            checks.append(.excludeTraits(traits))
+            checks.append(.excludeTraits(traits.heistTraitSet))
         }
         return checks
     }

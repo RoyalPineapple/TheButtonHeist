@@ -80,11 +80,15 @@ extension FenceResponse {
     private static func compactError(_ failure: DiagnosticFailure) -> String {
         let details = failure.details
         let message = failure.message
-        var text = "error[\(details.errorCode) \(details.phase.rawValue) retryable=\(details.retryable)]: \(message)"
+        var lines = ["error[\(details.errorCode) \(details.phase.rawValue) retryable=\(details.retryable)]: \(message)"]
         if let hint = details.hint {
-            text += "\nhint: \(hint)"
+            lines.append("hint: \(hint)")
         }
-        return text
+        lines.append(contentsOf: failure.buildDiagnostics.map { diagnostic in
+            "diagnostic[\(diagnostic.code.rawValue) \(diagnostic.phase.rawValue) \(diagnostic.kind.rawValue)]: " +
+                diagnostic.message
+        })
+        return lines.joined(separator: "\n")
     }
 
     private static func compactScreenshot(

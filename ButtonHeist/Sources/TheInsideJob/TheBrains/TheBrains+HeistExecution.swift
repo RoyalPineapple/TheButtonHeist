@@ -26,9 +26,56 @@ extension TheBrains {
         }
     }
 
+    enum HeistRuntimeWaitRequest: Equatable, Sendable {
+        case standalone(ResolvedWaitStep)
+        case actionEndpoint(ResolvedWaitStep, trace: AccessibilityTrace?)
+        case immediate(ResolvedWaitStep)
+        case afterObservation(
+            ResolvedWaitStep,
+            baselineTrace: AccessibilityTrace?,
+            sequence: SettledObservationSequence
+        )
+        case baselineTraceOnly(ResolvedWaitStep, trace: AccessibilityTrace?)
+
+        var step: ResolvedWaitStep {
+            switch self {
+            case .standalone(let step),
+                 .actionEndpoint(let step, _),
+                 .immediate(let step),
+                 .afterObservation(let step, _, _),
+                 .baselineTraceOnly(let step, _):
+                return step
+            }
+        }
+
+        var initialTrace: AccessibilityTrace? {
+            switch self {
+            case .standalone,
+                 .immediate:
+                return nil
+            case .actionEndpoint(_, let trace),
+                 .afterObservation(_, let trace, _),
+                 .baselineTraceOnly(_, let trace):
+                return trace
+            }
+        }
+
+        var afterSequence: SettledObservationSequence? {
+            switch self {
+            case .standalone,
+                 .actionEndpoint,
+                 .immediate,
+                 .baselineTraceOnly:
+                return nil
+            case .afterObservation(_, _, let sequence):
+                return sequence
+            }
+        }
+    }
+
     struct HeistExecutionRuntime {
         let execute: @MainActor (RuntimeActionMessage) async -> ActionResult
-        let wait: @MainActor (ResolvedWaitStep, AccessibilityTrace?, SettledObservationSequence?) async -> HeistWaitReceipt
+        let wait: @MainActor (HeistRuntimeWaitRequest) async -> HeistWaitReceipt
         let selectPredicateCase: @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult
         let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
 
@@ -38,11 +85,11 @@ extension TheBrains {
                 execute: { command in
                     await brains.executeRuntimeAction(command)
                 },
-                wait: { waitStep, initialTrace, afterSequence in
+                wait: { request in
                     await brains.interactionObservation.waitForPredicate(
-                        waitStep,
-                        initialTrace: initialTrace,
-                        after: afterSequence
+                        request.step,
+                        initialTrace: request.initialTrace,
+                        after: request.afterSequence
                     )
                 },
                 selectPredicateCase: { cases, timeout in
@@ -636,9 +683,7 @@ extension TheBrains {
             ))
         }
         let baseline = await runtime.wait(
-            ResolvedWaitStep(predicate: resolved.predicate, timeout: immediateTimeout),
-            nil,
-            nil
+            .immediate(ResolvedWaitStep(predicate: resolved.predicate, timeout: immediateTimeout))
         )
         return .prepared(InvocationExpectationContext(
             source: expectation,
@@ -692,11 +737,17 @@ extension TheBrains {
         childFailed: Bool
     ) async -> HeistWaitReceipt? {
         guard !childFailed, let context else { return nil }
-        return await runtime.wait(
+        if let observedSequence = context.baseline.observedSequence {
+            return await runtime.wait(.afterObservation(
+                context.resolved,
+                baselineTrace: context.baseline.actionResult.accessibilityTrace,
+                sequence: observedSequence
+            ))
+        }
+        return await runtime.wait(.baselineTraceOnly(
             context.resolved,
-            context.baseline.actionResult.accessibilityTrace,
-            context.baseline.observedSequence
-        )
+            trace: context.baseline.actionResult.accessibilityTrace
+        ))
     }
 
     private func invocationFailure(

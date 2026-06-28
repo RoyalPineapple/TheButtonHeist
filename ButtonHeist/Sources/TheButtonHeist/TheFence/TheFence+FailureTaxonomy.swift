@@ -1,5 +1,6 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 struct FenceFailureDescriptor: Sendable {
@@ -19,6 +20,13 @@ public extension FenceError {
         case .invalidRequest(let message):
             return FenceFailureDescriptor(
                 details: FailureDetails(code: .requestInvalid),
+                coreMessage: message,
+                displayMessage: message
+            )
+        case .heistBuildDiagnostics(let diagnostics):
+            let message = diagnostics.renderedBuildDiagnosticMessage
+            return FenceFailureDescriptor(
+                details: diagnostics.heistBuildFailureDetails,
                 coreMessage: message,
                 displayMessage: message
             )
@@ -137,5 +145,33 @@ public extension FenceError {
 
     var hint: String? {
         failureDescriptor.hint
+    }
+
+    internal var buildDiagnostics: [HeistBuildDiagnostic] {
+        guard case .heistBuildDiagnostics(let diagnostics) = self else { return [] }
+        return diagnostics
+    }
+}
+
+private extension Array where Element == HeistBuildDiagnostic {
+    var primaryBuildDiagnostic: HeistBuildDiagnostic? {
+        first(where: { $0.kind == .error }) ?? first
+    }
+
+    var renderedBuildDiagnosticMessage: String {
+        guard !isEmpty else { return "Heist planning failed." }
+        return map(\.renderedMessage).joined(separator: "\n")
+    }
+
+    var heistBuildFailureDetails: FailureDetails {
+        guard let primary = primaryBuildDiagnostic else {
+            return FailureDetails(code: .requestInvalid)
+        }
+        return FailureDetails(
+            code: FailureCode(rawValue: primary.code.rawValue),
+            phase: .request,
+            retryable: false,
+            hint: primary.hint
+        )
     }
 }

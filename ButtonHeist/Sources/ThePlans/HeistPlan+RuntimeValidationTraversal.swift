@@ -212,34 +212,25 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func validateInvocation(_ step: HeistInvocationStep, context: HeistTraversalContext) {
-        guard !step.path.isEmpty else {
-            fail(
-                path: "\(context.path).path",
-                contract: "heist run path must not be empty",
-                observed: "empty path",
-                correction: "Run a named local capability."
-            )
-            return
-        }
-        for (index, component) in step.path.enumerated() {
+        let invocationPath = step.invocationPath
+        for (index, component) in invocationPath.components.enumerated() {
             validateParameter(component, path: "\(context.path).path[\(index)]", role: "heist run path component")
         }
         validateArgument(step.argument, path: "\(context.path).argument", scope: context.scope)
-        guard let resolved = context.resolveInvocation(path: step.path) else {
-            if step.path.count > 1 {
-                let displayPath = step.path.joined(separator: ".")
+        guard let resolved = context.resolveInvocation(path: invocationPath.components) else {
+            if invocationPath.components.count > 1 {
                 fail(
                     path: "\(context.path).path",
                     contract: "heist run path must resolve to a declared exported capability",
-                    observed: displayPath,
-                    correction: "No export named '\(displayPath)' in this plan; declare it in a Namespace block or use a local nested capability."
+                    observed: invocationPath.dottedName,
+                    correction: "No export named '\(invocationPath.dottedName)' in this plan; declare it in a Namespace block or use a local nested capability."
                 )
                 return
             }
             fail(
                 path: "\(context.path).path",
                 contract: "heist run path must resolve to a local capability",
-                observed: step.path.joined(separator: "."),
+                observed: invocationPath.dottedName,
                 correction: "Define this heist in the current scope or qualify it through an exported namespace."
             )
             return

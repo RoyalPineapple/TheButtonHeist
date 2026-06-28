@@ -338,6 +338,83 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(try detailsJSON.string("phase"), failure.phase.rawValue)
         XCTAssertEqual(try detailsJSON.bool("retryable"), failure.retryable)
         XCTAssertEqual(try detailsJSON.string("hint"), failure.hint)
+        try detailsJSON.assertMissing("buildDiagnostics")
+    }
+
+    func testHeistBuildDiagnosticsPreservedThroughFailurePipeline() throws {
+        let diagnostics = [
+            HeistBuildDiagnostic(
+                code: .sourceInvalidSyntax,
+                phase: .sourceCompilation,
+                sourceSpan: HeistBuildSourceSpan(
+                    sourceName: "inline.heist",
+                    offset: 12,
+                    line: 2,
+                    column: 5,
+                    length: 3
+                ),
+                message: "expected an identifier",
+                hint: "Use valid ButtonHeist DSL."
+            ),
+            HeistBuildDiagnostic(
+                code: .planRuntimeSafety,
+                kind: .warning,
+                phase: .planValidation,
+                path: "flow.heist",
+                message: "runtime safety warning"
+            ),
+        ]
+        let response = FenceResponse.failure(FenceError.heistBuildDiagnostics(diagnostics))
+        let failure = try XCTUnwrap(response.diagnosticFailure)
+
+        XCTAssertEqual(failure.failureCode.rawValue, diagnostics[0].code.rawValue)
+        XCTAssertNil(failure.failureCode.knownCode)
+        XCTAssertEqual(failure.code, diagnostics[0].code.rawValue)
+        XCTAssertEqual(failure.kind, .request)
+        XCTAssertEqual(failure.phase, .request)
+        XCTAssertFalse(failure.retryable)
+        XCTAssertEqual(failure.hint, diagnostics[0].hint)
+        XCTAssertEqual(failure.buildDiagnostics, diagnostics)
+        XCTAssertTrue(failure.message.contains("expected an identifier"), failure.message)
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("code"), diagnostics[0].code.rawValue)
+        XCTAssertEqual(try json.string("errorCode"), diagnostics[0].code.rawValue)
+        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.request.rawValue)
+        XCTAssertEqual(try json.string("phase"), FailurePhase.request.rawValue)
+        XCTAssertFalse(try json.bool("retryable"))
+        XCTAssertEqual(try json.string("hint"), diagnostics[0].hint)
+
+        let detailsJSON = try json.object("details")
+        XCTAssertEqual(try detailsJSON.string("code"), diagnostics[0].code.rawValue)
+        XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.request.rawValue)
+        XCTAssertFalse(try detailsJSON.bool("retryable"))
+
+        let buildDiagnostics = try detailsJSON.array("buildDiagnostics")
+        XCTAssertEqual(buildDiagnostics.count, 2)
+
+        let first = try buildDiagnostics[0].object()
+        XCTAssertEqual(try first.string("code"), diagnostics[0].code.rawValue)
+        XCTAssertEqual(try first.string("kind"), HeistBuildDiagnosticKind.error.rawValue)
+        XCTAssertEqual(try first.string("phase"), HeistBuildPhase.sourceCompilation.rawValue)
+        XCTAssertEqual(try first.string("message"), diagnostics[0].message)
+        XCTAssertEqual(try first.string("hint"), diagnostics[0].hint)
+        try first.assertMissing("path")
+        let sourceSpan = try first.object("sourceSpan")
+        XCTAssertEqual(try sourceSpan.string("sourceName"), "inline.heist")
+        XCTAssertEqual(try sourceSpan.int("offset"), 12)
+        XCTAssertEqual(try sourceSpan.int("line"), 2)
+        XCTAssertEqual(try sourceSpan.int("column"), 5)
+        XCTAssertEqual(try sourceSpan.int("length"), 3)
+
+        let second = try buildDiagnostics[1].object()
+        XCTAssertEqual(try second.string("code"), diagnostics[1].code.rawValue)
+        XCTAssertEqual(try second.string("kind"), HeistBuildDiagnosticKind.warning.rawValue)
+        XCTAssertEqual(try second.string("phase"), HeistBuildPhase.planValidation.rawValue)
+        XCTAssertEqual(try second.string("message"), diagnostics[1].message)
+        XCTAssertEqual(try second.string("path"), "flow.heist")
+        try second.assertMissing("hint")
+        try second.assertMissing("sourceSpan")
     }
 
     func testKnownFailureCodesExposeTypedClassification() {
@@ -2672,12 +2749,35 @@ final class TheFenceHandlerTests: XCTestCase {
 
     // MARK: - Pasteboard Validation
 
+    func testSetPasteboardCatalogDeclaresNonEmptyText() throws {
+        let parameter = try XCTUnwrap(TheFence.Command.setPasteboard.descriptor.parameters.first { $0.key == "text" })
+
+        XCTAssertEqual(parameter.minLength, 1)
+        guard case .object(let schema) = parameter.jsonSchemaProperty else {
+            return XCTFail("Expected text parameter schema")
+        }
+        XCTAssertEqual(schema["minLength"], .int(1))
+    }
+
     @ButtonHeistActor
     func testSetPasteboardMissingText() async {
         await assertValidationError(
             command: .setPasteboard,
             equals: "schema validation failed for text: observed missing; expected string"
         )
+    }
+
+    @ButtonHeistActor
+    func testSetPasteboardRejectsEmptyTextBeforeRuntimeDispatch() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+
+        let response = try await fence.execute(command: .setPasteboard, values: ["text": .string("")])
+
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected error response, got \(response)")
+        }
+        XCTAssertEqual(failure.message, "schema validation failed for text: observed string \"\"; expected non-empty string")
+        XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
     @ButtonHeistActor

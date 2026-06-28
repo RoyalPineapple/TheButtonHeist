@@ -42,6 +42,22 @@ struct HeistInvocationPath: Sendable, Equatable, Hashable {
         dottedName.split(separator: ".").map(String.init)
     }
 
+    static func preconditionValidated(components: [String]) -> HeistInvocationPath {
+        do {
+            return try HeistInvocationPath(components: components)
+        } catch {
+            preconditionFailure(String(describing: error))
+        }
+    }
+
+    static func preconditionValidated(dottedName: String) -> HeistInvocationPath {
+        do {
+            return try HeistInvocationPath(dottedName: dottedName)
+        } catch {
+            preconditionFailure(String(describing: error))
+        }
+    }
+
     private static func strictComponents(fromDottedName dottedName: String) -> [String] {
         dottedName.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
     }
@@ -55,17 +71,18 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
     public let path: [String]
     public let argument: HeistArgument
     public let expectation: WaitStep?
-    let invocationPath: HeistInvocationPath?
+    let invocationPath: HeistInvocationPath
 
     public init(
         path: [String],
         argument: HeistArgument = .none,
         expectation: WaitStep? = nil
     ) {
-        self.path = path
-        self.argument = argument
-        self.expectation = expectation
-        self.invocationPath = try? HeistInvocationPath(components: path)
+        self.init(
+            invocationPath: HeistInvocationPath.preconditionValidated(components: path),
+            argument: argument,
+            expectation: expectation
+        )
     }
 
     init(
@@ -109,7 +126,7 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
 
     /// Dotted capability name, e.g. `LibraryScreen.addToCart`.
     public var capabilityName: String {
-        invocationPath?.dottedName ?? HeistInvocationPath.render(path)
+        invocationPath.dottedName
     }
 
     /// Report/display summary of this run as `RunHeist("Name", argument)`.

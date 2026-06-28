@@ -121,11 +121,11 @@ extension HeistPlanSourceParser {
                     try expectSymbol(")")
                 case "traits":
                     try expectSymbol("(")
-                    checks.append(.traits(try parseTraitArray(role: "traits")))
+                    checks.append(.traits(try parseTraitArray(role: "traits").heistTraitSet))
                     try expectSymbol(")")
                 case "excludeTraits":
                     try expectSymbol("(")
-                    checks.append(.excludeTraits(try parseTraitArray(role: "excludeTraits")))
+                    checks.append(.excludeTraits(try parseTraitArray(role: "excludeTraits").heistTraitSet))
                     try expectSymbol(")")
                 default:
                     throw error(previous, ".element(...) checks accept .label, .identifier, .value, .traits, and .excludeTraits")
@@ -141,10 +141,10 @@ extension HeistPlanSourceParser {
                 checks.append(.value(try parseStringMatchFieldValue(field: "value")))
             } else if consumeIdentifier("traits") != nil {
                 try expectSymbol(":")
-                checks.append(.traits(try parseTraitArray(role: "traits")))
+                checks.append(.traits(try parseTraitArray(role: "traits").heistTraitSet))
             } else if consumeIdentifier("excludeTraits") != nil {
                 try expectSymbol(":")
-                checks.append(.excludeTraits(try parseTraitArray(role: "excludeTraits")))
+                checks.append(.excludeTraits(try parseTraitArray(role: "excludeTraits").heistTraitSet))
             } else {
                 throw error(currentToken, ".element(...) accepts label, identifier, value, traits, and excludeTraits")
             }

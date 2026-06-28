@@ -581,7 +581,12 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testCLIBuilderCarriesPredicateTargetAsPublicTargetArgument() throws {
         let expectedTarget = ElementTarget.predicate(
-            ElementPredicate(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
+            ElementPredicate(
+                label: "Rotor Host",
+                identifier: "rotor.host",
+                traits: [.selected, .button, .button],
+                excludeTraits: [.notEnabled, .header]
+            ),
             ordinal: 1
         )
         let arguments = CLIRequestBuilder.arguments(
@@ -597,7 +602,8 @@ final class CLICommandSyncTests: XCTestCase {
                 "mode": .string("exact"),
                 "value": .string("rotor.host"),
             ]),
-            "traits": .array([.string("button")]),
+            "traits": .array([.string("button"), .string("selected")]),
+            "excludeTraits": .array([.string("header"), .string("notEnabled")]),
             "ordinal": .int(1),
         ]))
     }

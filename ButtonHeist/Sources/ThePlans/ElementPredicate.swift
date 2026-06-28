@@ -226,8 +226,8 @@ public enum ElementPredicateCheck<Value: StringMatchPayload>: Sendable, Equatabl
     case label(StringMatch<Value>)
     case identifier(StringMatch<Value>)
     case value(StringMatch<Value>)
-    case traits([HeistTrait])
-    case excludeTraits([HeistTrait])
+    case traits(Set<HeistTrait>)
+    case excludeTraits(Set<HeistTrait>)
 
     public var hasPredicateLiteral: Bool {
         switch self {
@@ -324,6 +324,8 @@ public struct ElementPredicate: Sendable, Equatable, Hashable {
         excludeTraits: [HeistTrait]
     ) -> [ElementPredicateCheck<String>] {
         var checks: [ElementPredicateCheck<String>] = []
+        let traits = traits.heistTraitSet
+        let excludeTraits = excludeTraits.heistTraitSet
         if !traits.isEmpty { checks.append(.traits(traits)) }
         if !excludeTraits.isEmpty { checks.append(.excludeTraits(excludeTraits)) }
         return checks
@@ -412,10 +414,10 @@ package protocol ElementPredicateSubject {
     var predicateIdentifier: String? { get }
     var predicateValue: String? { get }
     /// True when every required trait is present (and known) on the subject.
-    func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool
+    func satisfiesRequiredTraits(_ required: Set<HeistTrait>) -> Bool
     /// True when any excluded trait is present (or unknown) on the subject —
     /// i.e. the subject should be rejected.
-    func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool
+    func violatesExcludedTraits(_ excluded: Set<HeistTrait>) -> Bool
 }
 
 package extension ElementPredicate {
@@ -470,10 +472,10 @@ extension ElementPredicate: Codable {
             .map(ElementPredicateCheck.identifier)
         checks += try StringMatch<String>.decodeOneOrMany(from: container, forKey: .value).map(ElementPredicateCheck.value)
         if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits), !traits.isEmpty {
-            checks.append(.traits(traits))
+            checks.append(.traits(traits.heistTraitSet))
         }
         if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits), !traits.isEmpty {
-            checks.append(.excludeTraits(traits))
+            checks.append(.excludeTraits(traits.heistTraitSet))
         }
         return checks
     }
@@ -509,10 +511,10 @@ extension ElementPredicateCheck: Codable where Value: Codable {
             self = .value(try container.decode(StringMatch<Value>.self, forKey: .match))
         case .traits:
             try Self.rejectIrrelevantField(.match, in: container, forKind: .traits)
-            self = .traits(try container.decode([HeistTrait].self, forKey: .values))
+            self = .traits(try container.decode([HeistTrait].self, forKey: .values).heistTraitSet)
         case .excludeTraits:
             try Self.rejectIrrelevantField(.match, in: container, forKind: .excludeTraits)
-            self = .excludeTraits(try container.decode([HeistTrait].self, forKey: .values))
+            self = .excludeTraits(try container.decode([HeistTrait].self, forKey: .values).heistTraitSet)
         }
     }
 
@@ -543,10 +545,10 @@ extension ElementPredicateCheck: Codable where Value: Codable {
             try container.encode(match, forKey: .match)
         case .traits(let traits):
             try container.encode(Kind.traits, forKey: .kind)
-            try container.encode(traits, forKey: .values)
+            try container.encode(traits.canonicalHeistTraitArray, forKey: .values)
         case .excludeTraits(let traits):
             try container.encode(Kind.excludeTraits, forKey: .kind)
-            try container.encode(traits, forKey: .values)
+            try container.encode(traits.canonicalHeistTraitArray, forKey: .values)
         }
     }
 }

@@ -99,14 +99,21 @@ extension HeistPlanSourceParser {
 
     mutating func parseRunHeist() throws -> HeistStep {
         try expectSymbol("(")
+        let nameToken = currentToken
         let name = try parseStringLiteral()
+        let invocationPath: HeistInvocationPath
+        do {
+            invocationPath = try HeistInvocationPath(dottedName: name)
+        } catch let validationError {
+            throw error(nameToken, String(describing: validationError))
+        }
         var argument = HeistArgument.none
         if consumeSymbol(",") {
             argument = try parseHeistArgument()
         }
         try expectSymbol(")")
         var invocation = HeistInvocationStep(
-            path: name.split(separator: ".").map(String.init),
+            invocationPath: invocationPath,
             argument: argument
         )
         var explicitExpectationTimeout: Double?
@@ -138,7 +145,7 @@ extension HeistPlanSourceParser {
                     throw error(chainToken, diagnostic.message)
                 }
                 invocation = HeistInvocationStep(
-                    path: invocation.path,
+                    invocationPath: invocation.invocationPath,
                     argument: invocation.argument,
                     expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
                 )
@@ -147,11 +154,7 @@ extension HeistPlanSourceParser {
                 throw error(chainToken, "unsupported RunHeist chain '.\(chain)'")
             }
         }
-        return .invoke(HeistInvocationStep(
-            path: invocation.path,
-            argument: invocation.argument,
-            expectation: invocation.expectation
-        ))
+        return .invoke(invocation)
     }
 
     mutating func parseHeistArgument() throws -> HeistArgument {

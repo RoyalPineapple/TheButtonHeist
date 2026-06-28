@@ -58,9 +58,10 @@ extension TheFence {
     /// action steps carrying the request's `expect` predicate on the final
     /// step. Any non-heist-valid message falls back to the direct path.
     func singleStepHeistPlan(for parsed: ParsedRequest) throws -> HeistPlan? {
-        guard let messages = parsed.runtimeActionMessages, !messages.isEmpty else { return nil }
+        guard let runtimeActionMessages = parsed.runtimeActionMessages else { return nil }
+        let messages = runtimeActionMessages.values
 
-        if messages.count == 1, case .wait(let target) = messages[0] {
+        if messages.count == 1, case .wait(let target) = runtimeActionMessages.first {
             return try HeistPlan(body: [.wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))])
         }
 
@@ -89,7 +90,9 @@ extension TheFence {
     }
 
     private func singleStepTimeout(for parsed: ParsedRequest) -> TimeInterval {
-        let messages = parsed.runtimeActionMessages ?? []
+        guard let messages = parsed.runtimeActionMessages else {
+            preconditionFailure("singleStepTimeout requires executable runtime action dispatch")
+        }
         let actionBudget: TimeInterval
         switch messages.first {
         case .wait(let target):

@@ -208,43 +208,25 @@ public struct SwipeTarget: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: SwipeTargetCodingKeys.self, typeName: "swipe target")
         let container = try decoder.container(keyedBy: SwipeTargetCodingKeys.self)
         self.duration = try container.decodeIfPresent(GestureDuration.self, forKey: .duration)
-        let elementDirection = try container.decodeIfPresent(SwipeElementDirectionPayload.self, forKey: .elementDirection)
-        let elementUnitPoints = try container.decodeIfPresent(SwipeElementUnitPointsPayload.self, forKey: .elementUnitPoints)
-        let pointToPoint = try container.decodeIfPresent(SwipePointToPointPayload.self, forKey: .pointToPoint)
-        let pointDirection = try container.decodeIfPresent(SwipePointDirectionPayload.self, forKey: .pointDirection)
-        let intentCount = [
-            elementDirection != nil,
-            elementUnitPoints != nil,
-            pointToPoint != nil,
-            pointDirection != nil,
-        ].filter { $0 }.count
-        guard intentCount > 0 else {
-            throw GestureProjectionError.missingSwipeIntent
-        }
-        guard intentCount == 1 else {
-            throw GestureProjectionError.mixedGestureIntent(kind: "swipe")
-        }
-        if let elementDirection {
-            self.selection = .elementDirection(elementDirection.element, elementDirection.direction)
-        } else if let elementUnitPoints {
-            self.selection = .unitElement(
-                elementUnitPoints.element,
-                start: elementUnitPoints.start,
-                end: elementUnitPoints.end
-            )
-        } else if let pointToPoint {
-            self.selection = .point(
-                start: .coordinate(pointToPoint.start),
-                destination: .coordinate(pointToPoint.end)
-            )
-        } else if let pointDirection {
-            self.selection = .point(
-                start: .coordinate(pointDirection.start),
-                destination: .direction(pointDirection.direction)
-            )
-        } else {
-            throw GestureProjectionError.missingSwipeIntent
-        }
+        let selectionPayloads: [GesturePayloadCandidate<SwipeTargetCodingKeys, SwipeGestureSelection>] = [
+            GesturePayloadCandidate(.elementDirection, as: SwipeElementDirectionPayload.self) {
+                .elementDirection($0.element, $0.direction)
+            },
+            GesturePayloadCandidate(.elementUnitPoints, as: SwipeElementUnitPointsPayload.self) {
+                .unitElement($0.element, start: $0.start, end: $0.end)
+            },
+            GesturePayloadCandidate(.pointToPoint, as: SwipePointToPointPayload.self) {
+                .point(start: .coordinate($0.start), destination: .coordinate($0.end))
+            },
+            GesturePayloadCandidate(.pointDirection, as: SwipePointDirectionPayload.self) {
+                .point(start: .coordinate($0.start), destination: .direction($0.direction))
+            },
+        ]
+        self.selection = try container.decodeExactlyOneGesturePayload(
+            kind: "swipe",
+            missing: GestureProjectionError.missingSwipeIntent,
+            candidates: selectionPayloads
+        )
     }
 
     public func encode(to encoder: Encoder) throws {

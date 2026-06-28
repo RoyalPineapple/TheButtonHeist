@@ -130,6 +130,44 @@ import Testing
     }
 }
 
+@Test func `empty custom action names are rejected before dispatch`() throws {
+    expectDataCorrupted("plan command payload", contains: "custom action name must not be empty") {
+        _ = try JSONDecoder().decode(HeistActionCommand.self, from: Data("""
+        {
+          "type": "performCustomAction",
+          "payload": {
+            "actionName": "",
+            "label": "Message"
+          }
+        }
+        """.utf8))
+    }
+
+    expectDataCorrupted("runtime action payload", contains: "custom action name must not be empty") {
+        _ = try JSONDecoder().decode(CustomActionTarget.self, from: Data("""
+        {
+          "elementTarget": { "label": "Message" },
+          "actionName": ""
+        }
+        """.utf8))
+    }
+
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .action(try ActionStep(command: .customAction(name: "", target: .label("Message")))),
+    ])
+    let failures = runtimeSafetyFailures(for: raw)
+    #expect(failures.contains {
+        $0.path == "$.body[0].action.command.payload.actionName"
+            && $0.contract == "custom action name must not be empty"
+    }, "\(failures)")
+
+    #expect(throws: HeistPlanRuntimeSafetyError.self) {
+        _ = try HeistPlan {
+            CustomAction("", on: .label("Message"))
+        }
+    }
+}
+
 private struct EncodedCommandType: Decodable {
     let type: String
 }
@@ -270,6 +308,36 @@ private func canonicalPlanSource(_ line: String) -> String {
         \(line)
     }
     """
+}
+
+private func runtimeSafetyFailures(for raw: HeistPlanAdmissionCandidate) -> [HeistPlanRuntimeSafetyFailure] {
+    do {
+        _ = try raw.validatedForRuntimeSafety()
+        return []
+    } catch let error as HeistPlanRuntimeSafetyError {
+        return error.failures
+    } catch {
+        Issue.record("Expected runtime safety error, got \(error)")
+        return []
+    }
+}
+
+private func expectDataCorrupted(
+    _ name: String,
+    contains expectedMessage: String,
+    decode: () throws -> Void
+) {
+    do {
+        try decode()
+        Issue.record("Expected \(name) to reject invalid JSON")
+    } catch DecodingError.dataCorrupted(let context) {
+        #expect(
+            context.debugDescription.contains(expectedMessage),
+            "\(name) error \(context.debugDescription) did not contain \(expectedMessage)"
+        )
+    } catch {
+        Issue.record("Expected \(name) to throw DecodingError.dataCorrupted, got \(error)")
+    }
 }
 
 private extension HeistPlan {

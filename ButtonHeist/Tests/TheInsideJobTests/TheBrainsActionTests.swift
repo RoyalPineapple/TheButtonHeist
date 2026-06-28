@@ -708,15 +708,15 @@ final class TheBrainsActionTests: XCTestCase {
         let observedReady = observedState(labels: ["Ready"])
         let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         var dispatchedTypes: [RuntimeActionType] = []
-        var waitedPredicates: [AccessibilityPredicate] = []
+        var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { command in
                 dispatchedTypes.append(command.runtimeType)
                 return ActionResult(success: true, method: .activate, message: command.runtimeType.rawValue)
             },
-            wait: { waitStep, _, _ in
-                waitedPredicates.append(waitStep.predicate)
+            wait: { request in
+                waitRequests.append(request)
                 return ActionResult(
                     success: true,
                     method: .wait,
@@ -739,7 +739,12 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "heist failed")
         XCTAssertEqual(dispatchedTypes, [.activate])
-        XCTAssertEqual(waitedPredicates.count, 1)
+        XCTAssertEqual(waitRequests.count, 1)
+        if case .standalone(let request)? = waitRequests.first {
+            XCTAssertEqual(request.predicate, .state(.exists(ElementPredicate(label: "Ready"))))
+        } else {
+            XCTFail("Expected standalone wait request")
+        }
         XCTAssertEqual(heist.steps.map(\.kind), [HeistExecutionStepKind.action, .wait])
         XCTAssertNotNil(actionStep.actionEvidence)
         XCTAssertNil(actionStep.waitEvidence)
@@ -1587,14 +1592,14 @@ final class TheBrainsActionTests: XCTestCase {
             predicate: .state(.missing(ElementPredicate(label: "Loading"))),
             timeout: 0
         )
-        var waitedSteps: [ResolvedWaitStep] = []
+        var waitRequests: [TheBrains.HeistRuntimeWaitRequest] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
                 ActionResult(success: true, method: .activate)
             },
-            wait: { waitStep, _, _ in
-                waitedSteps.append(waitStep)
+            wait: { request in
+                waitRequests.append(request)
                 return ActionResult(success: true, method: .wait)
             }
         )
@@ -1610,7 +1615,12 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(waitedSteps, [try expectation.resolve(in: .empty)])
+        XCTAssertEqual(waitRequests.count, 1)
+        if case .actionEndpoint(let request, trace: nil)? = waitRequests.first {
+            XCTAssertEqual(request, try expectation.resolve(in: .empty))
+        } else {
+            XCTFail("Expected action endpoint wait request")
+        }
         XCTAssertEqual(step.actionEvidence?.expectationActionResult?.method, .wait)
         XCTAssertEqual(step.reportExpectation?.met, false)
         XCTAssertEqual(step.reportExpectation?.actual, "no observed accessibility trace")
@@ -1981,7 +1991,7 @@ final class TheBrainsActionTests: XCTestCase {
             execute: { _ in
                 ActionResult(success: true, method: .activate)
             },
-            wait: { _, _, _ in
+            wait: { _ in
                 ActionResult(
                     success: false,
                     method: .wait,
@@ -2551,8 +2561,8 @@ final class TheBrainsActionTests: XCTestCase {
                     accessibilityTrace: AccessibilityTrace(capture: stillPresentState.capture)
                 )
             },
-            wait: { waitStep, _, _ in
-                waitedSteps.append(waitStep)
+            wait: { request in
+                waitedSteps.append(request.step)
                 return ActionResult(
                     success: true,
                     method: .wait,
@@ -3616,7 +3626,7 @@ final class TheBrainsActionTests: XCTestCase {
     private func heistRuntime(
         observations: [PostActionObservation.BeforeState],
         execute: (@MainActor (RuntimeActionMessage) async -> ActionResult)? = nil,
-        wait: (@MainActor (ResolvedWaitStep, AccessibilityTrace?, SettledObservationSequence?) async -> ActionResult)? = nil,
+        wait: (@MainActor (TheBrains.HeistRuntimeWaitRequest) async -> ActionResult)? = nil,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
         unavailableObservationCount: Int = 0,
@@ -3639,9 +3649,12 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 return ActionResult(success: true, method: .heistPlan, message: command.runtimeType.rawValue)
             },
-            wait: { waitStep, initialTrace, afterSequence in
+            wait: { request in
+                let waitStep = request.step
+                let initialTrace = request.initialTrace
+                let afterSequence = request.afterSequence
                 if let wait {
-                    return self.heistWaitReceipt(for: waitStep, result: await wait(waitStep, initialTrace, afterSequence))
+                    return self.heistWaitReceipt(for: waitStep, result: await wait(request))
                 }
                 if let initialTrace, afterSequence == nil {
                     let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: initialTrace)

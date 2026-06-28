@@ -60,13 +60,13 @@ public enum RotorsProperty: ElementPropertyKind {
 }
 
 /// Required and forbidden traits in a property's trait set.
-public struct TraitSetMatch: Codable, Sendable, Equatable {
-    public let include: [HeistTrait]
-    public let exclude: [HeistTrait]
+public struct TraitSetMatch: Sendable, Equatable {
+    public let include: Set<HeistTrait>
+    public let exclude: Set<HeistTrait>
 
     public init(include: [HeistTrait] = [], exclude: [HeistTrait] = []) {
-        self.include = include
-        self.exclude = exclude
+        self.include = include.heistTraitSet
+        self.exclude = exclude.heistTraitSet
     }
 
     public static func include(_ traits: [HeistTrait]) -> Self {
@@ -86,11 +86,28 @@ public struct TraitSetMatch: Codable, Sendable, Equatable {
     }
 }
 
+extension TraitSetMatch: Codable {
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "trait set match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            include: try container.decodeIfPresent([HeistTrait].self, forKey: .include) ?? [],
+            exclude: try container.decodeIfPresent([HeistTrait].self, forKey: .exclude) ?? []
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(include.canonicalHeistTraitArray, forKey: .include)
+        try container.encode(exclude.canonicalHeistTraitArray, forKey: .exclude)
+    }
+}
+
 extension TraitSetMatch: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("traits", [
-            include.isEmpty ? nil : "include=[\(include.map { ".\($0.rawValue)" }.joined(separator: ", "))]",
-            exclude.isEmpty ? nil : "exclude=[\(exclude.map { ".\($0.rawValue)" }.joined(separator: ", "))]",
+            include.isEmpty ? nil : "include=[\(include.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]",
+            exclude.isEmpty ? nil : "exclude=[\(exclude.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]",
         ].compactMap { $0 })
     }
 }

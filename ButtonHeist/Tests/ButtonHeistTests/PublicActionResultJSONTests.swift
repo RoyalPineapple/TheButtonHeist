@@ -20,6 +20,45 @@ final class PublicActionResultJSONTests: XCTestCase {
         XCTAssertNil(result.omitted)
     }
 
+    func testStandaloneActionResponseEncodesValuePayload() throws {
+        let response = FenceResponse.action(
+            command: .typeText,
+            result: ActionResult(
+                success: true,
+                method: .typeText,
+                message: "typed",
+                payload: .value("Hello")
+            )
+        )
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("value"), "Hello")
+        try json.assertMissing("rotor")
+
+        let result = try json.decode(PublicHeistActionResultDTO.self)
+        XCTAssertEqual(result.value, "Hello")
+        XCTAssertNil(result.rotor)
+    }
+
+    func testStandaloneActionResponseOmitsPayloadFieldsWhenAbsent() throws {
+        let response = FenceResponse.action(
+            command: .activate,
+            result: ActionResult(
+                success: true,
+                method: .activate,
+                message: "activated"
+            )
+        )
+
+        let json = try publicJSONProbe(response).object()
+        try json.assertMissing("value")
+        try json.assertMissing("rotor")
+
+        let result = try json.decode(PublicHeistActionResultDTO.self)
+        XCTAssertNil(result.value)
+        XCTAssertNil(result.rotor)
+    }
+
     func testStandaloneActionResponseEncodesStructuredFailure() throws {
         let response = FenceResponse.action(
             command: .activate,

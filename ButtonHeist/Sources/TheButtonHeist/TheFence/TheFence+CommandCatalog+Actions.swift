@@ -180,7 +180,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand {
             return TheFence.Command.commandDescriptor(
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeSetPasteboardRequest,
-                parameters: [param(.text, .string, required: true)] + FenceParameterBlocks.expectation,
+                parameters: [param(.text, .string, required: true, minLength: 1)] + FenceParameterBlocks.expectation,
                 execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Write text to the general pasteboard from within the app.")
             )
