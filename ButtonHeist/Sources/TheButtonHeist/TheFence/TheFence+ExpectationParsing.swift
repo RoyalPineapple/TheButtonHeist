@@ -73,9 +73,6 @@ extension TheFence {
             if let element = object["element"] {
                 try validateElementPredicateStringMatchObjects(element, path: path + ["element"])
             }
-            if let target = object["target"] {
-                try validateElementPredicateStringMatchObjects(target, path: path + ["target"])
-            }
             if let before = object["before"] {
                 try validateElementPredicateStringMatchObjects(before, path: path + ["before"])
             }
@@ -120,7 +117,7 @@ extension TheFence {
                 context: "Expectation JSON",
                 rootMismatchMessage: "Expected expectation JSON object"
             )
-        } catch let error as PublicMachineInputError {
+        } catch let error as PublicJSONInputError {
             throw FenceError.invalidRequest(error.message)
         } catch {
             throw FenceError.invalidRequest("Invalid expectation JSON: \(error.localizedDescription)")

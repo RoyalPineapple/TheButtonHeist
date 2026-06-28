@@ -26,14 +26,14 @@ extension RequestEnvelope {
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
             : nil
-        message = try ClientMessage.decode(from: payloadDecoder, type: type)
+        message = try decodeClientMessage(from: payloadDecoder, type: type)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: RequestEnvelopeCodingKeys.self)
         try container.encode(buttonHeistVersion, forKey: .buttonHeistVersion)
         try container.encodeIfPresent(requestId, forKey: .requestId)
-        let wire = message.wireRepresentation
+        let wire = clientMessageWireRepresentation(message)
         try container.encode(wire.type, forKey: .type)
         if let payload = wire.payload {
             try payload.encode(to: container.superEncoder(forKey: .payload))
@@ -47,58 +47,7 @@ extension RequestEnvelope {
 extension ClientMessage {
     /// Explicit wire discriminator for this typed message.
     public var wireType: ClientWireMessageType {
-        wireRepresentation.type
-    }
-
-    /// Single source of truth mapping each `ClientMessage` case to its wire
-    /// type tag and (optional) payload value. Used by both encode sites in
-    /// this file. Adding a new case requires extending this switch — Swift's
-    /// exhaustivity check is the drift detector.
-    fileprivate var wireRepresentation: (type: ClientWireMessageType, payload: ClientMessageWirePayload?) {
-        switch self {
-        case .clientHello: return (.clientHello, nil)
-        case .requestInterface(let payload): return (.requestInterface, .requestInterface(payload))
-        case .ping: return (.ping, nil)
-        case .status: return (.status, nil)
-        case .getPasteboard: return (.getPasteboard, nil)
-        case .requestScreen: return (.requestScreen, nil)
-        case .authenticate(let payload): return (.authenticate, .authenticate(payload))
-        case .heistPlan(let payload): return (.heistPlan, .heistPlan(payload))
-        }
-    }
-
-    // MARK: - Decoding
-
-    fileprivate static func decode(from payloadDecoder: Decoder?, type: ClientWireMessageType) throws -> ClientMessage {
-        func payload() throws -> Decoder {
-            guard let payloadDecoder else { throw missingClientPayload(type) }
-            return payloadDecoder
-        }
-        func noPayload() throws {
-            if let payloadDecoder {
-                throw unexpectedClientPayload(type, codingPath: payloadDecoder.codingPath)
-            }
-        }
-        switch type {
-        case .clientHello:
-            try noPayload()
-            return .clientHello
-        case .requestInterface: return .requestInterface(try InterfaceQuery(from: try payload()))
-        case .ping:
-            try noPayload()
-            return .ping
-        case .status:
-            try noPayload()
-            return .status
-        case .getPasteboard:
-            try noPayload()
-            return .getPasteboard
-        case .requestScreen:
-            try noPayload()
-            return .requestScreen
-        case .authenticate: return .authenticate(try AuthenticatePayload(from: try payload()))
-        case .heistPlan: return .heistPlan(try HeistPlanRun(from: try payload()))
-        }
+        clientMessageWireRepresentation(self).type
     }
 
     // MARK: - Codable Conformance
@@ -110,12 +59,12 @@ extension ClientMessage {
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
             : nil
-        self = try ClientMessage.decode(from: payloadDecoder, type: type)
+        self = try decodeClientMessage(from: payloadDecoder, type: type)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: ClientMessageCodingKeys.self)
-        let wire = wireRepresentation
+        let wire = clientMessageWireRepresentation(self)
         try container.encode(wire.type, forKey: .type)
         if let payload = wire.payload {
             try payload.encode(to: container.superEncoder(forKey: .payload))
@@ -125,6 +74,59 @@ extension ClientMessage {
 }
 
 // MARK: - Helpers
+
+/// Single source of truth mapping each `ClientMessage` case to its wire type
+/// tag and optional payload value. Adding a new case requires extending this
+/// switch; Swift's exhaustivity check is the drift detector.
+private func clientMessageWireRepresentation(
+    _ message: ClientMessage
+) -> (type: ClientWireMessageType, payload: ClientMessageWirePayload?) {
+    switch message {
+    case .clientHello: return (.clientHello, nil)
+    case .requestInterface(let payload): return (.requestInterface, .requestInterface(payload))
+    case .ping: return (.ping, nil)
+    case .status: return (.status, nil)
+    case .getPasteboard: return (.getPasteboard, nil)
+    case .requestScreen: return (.requestScreen, nil)
+    case .authenticate(let payload): return (.authenticate, .authenticate(payload))
+    case .heistPlan(let payload): return (.heistPlan, .heistPlan(payload))
+    }
+}
+
+private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWireMessageType) throws -> ClientMessage {
+    func payload() throws -> Decoder {
+        guard let payloadDecoder else { throw missingClientPayload(type) }
+        return payloadDecoder
+    }
+    func noPayload() throws {
+        if let payloadDecoder {
+            throw unexpectedClientPayload(type, codingPath: payloadDecoder.codingPath)
+        }
+    }
+    switch type {
+    case .clientHello:
+        try noPayload()
+        return .clientHello
+    case .requestInterface:
+        return .requestInterface(try InterfaceQuery(from: try payload()))
+    case .ping:
+        try noPayload()
+        return .ping
+    case .status:
+        try noPayload()
+        return .status
+    case .getPasteboard:
+        try noPayload()
+        return .getPasteboard
+    case .requestScreen:
+        try noPayload()
+        return .requestScreen
+    case .authenticate:
+        return .authenticate(try AuthenticatePayload(from: try payload()))
+    case .heistPlan:
+        return .heistPlan(try HeistPlanRun(from: try payload()))
+    }
+}
 
 private enum ClientMessageWirePayload {
     case requestInterface(InterfaceQuery)

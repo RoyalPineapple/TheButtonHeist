@@ -7,7 +7,7 @@ import TheScore
 @MainActor
 extension TheInsideJob {
     func startRuntimeLeaseForStartup() async throws -> InsideJobRuntimeLease {
-        let lease = try await startRuntimeLease(phase: "startup", leavesStoppedOnFailure: true)
+        let lease = try await startRuntimeLease(phase: .startup, leavesStoppedOnFailure: true)
         logStartupSummary(
             actualPort: lease.actualPort,
             bonjourServiceName: lease.bonjourServiceName
@@ -16,7 +16,7 @@ extension TheInsideJob {
     }
 
     func startRuntimeLeaseForResume() async throws -> InsideJobRuntimeLease {
-        try await startRuntimeLease(phase: "resume", leavesStoppedOnFailure: false)
+        try await startRuntimeLease(phase: .resume, leavesStoppedOnFailure: false)
     }
 
     func stopRuntime() async {
@@ -38,7 +38,10 @@ extension TheInsideJob {
         serverPhase = .stopped
     }
 
-    private func startRuntimeLease(phase: String, leavesStoppedOnFailure: Bool) async throws -> InsideJobRuntimeLease {
+    private func startRuntimeLease(
+        phase: InsideJobRuntimeStartPhase,
+        leavesStoppedOnFailure: Bool
+    ) async throws -> InsideJobRuntimeLease {
         let token = try requireRuntimeToken(phase: phase)
         insideJobLogger.info("TLS PSK material ready")
 
@@ -67,7 +70,7 @@ extension TheInsideJob {
         }
     }
 
-    func requireRuntimeToken(phase: String) throws -> String {
+    func requireRuntimeToken(phase: InsideJobRuntimeStartPhase) throws -> String {
         guard let token = runtimeConfiguration.token,
               !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             getaway.identity.tlsActive = false

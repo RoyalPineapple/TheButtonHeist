@@ -126,6 +126,12 @@ let package = Package(
             path: "ButtonHeist/Sources/TheButtonHeist",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
+        .target(
+            name: "ButtonHeistTestSupport",
+            dependencies: [],
+            path: "ButtonHeist/Tests/TestSupport",
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
         .testTarget(
             name: "ThePlansTests",
             dependencies: ["ThePlans"],
@@ -135,6 +141,7 @@ let package = Package(
         .testTarget(
             name: "HeistDoctorCoreTests",
             dependencies: [
+                "ButtonHeistTestSupport",
                 "HeistDoctorCore",
                 "TheScore",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),

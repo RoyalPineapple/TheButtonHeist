@@ -3,7 +3,7 @@
 import Foundation
 
 import ThePlans
-import TheScore
+@_spi(ButtonHeistInternals) import TheScore
 
 extension TheBrains {
 
@@ -26,114 +26,32 @@ extension TheBrains {
         }
     }
 
-    @MainActor
-    protocol HeistExecutionRuntime {
-        func execute(_ command: RuntimeActionMessage) async -> ActionResult
-        func wait(
-            _ waitStep: ResolvedWaitStep,
-            _ initialTrace: AccessibilityTrace?,
-            _ afterSequence: SettledObservationSequence?
-        ) async -> HeistWaitReceipt
-        func selectPredicateCase(_ cases: [ResolvedPredicateCase], _ timeout: Double) async -> HeistCaseSelectionResult
-        func observeSemanticState(
-            _ scope: SemanticObservationScope,
-            _ sequence: SettledObservationSequence?,
-            _ timeout: Double?
-        ) async -> HeistSemanticObservation?
-    }
+    struct HeistExecutionRuntime {
+        let execute: @MainActor (RuntimeActionMessage) async -> ActionResult
+        let wait: @MainActor (ResolvedWaitStep, AccessibilityTrace?, SettledObservationSequence?) async -> HeistWaitReceipt
+        let selectPredicateCase: @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult
+        let observeSemanticState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
 
-    struct LiveHeistExecutionRuntime: HeistExecutionRuntime {
-        let brains: TheBrains
-
-        func execute(_ command: RuntimeActionMessage) async -> ActionResult {
-            await brains.executeRuntimeAction(command)
-        }
-
-        func wait(
-            _ waitStep: ResolvedWaitStep,
-            _ initialTrace: AccessibilityTrace?,
-            _ afterSequence: SettledObservationSequence?
-        ) async -> HeistWaitReceipt {
-            await brains.interactionObservation.waitForPredicate(
-                waitStep,
-                initialTrace: initialTrace,
-                after: afterSequence
+        @MainActor
+        static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
+            HeistExecutionRuntime(
+                execute: { command in
+                    await brains.executeRuntimeAction(command)
+                },
+                wait: { waitStep, initialTrace, afterSequence in
+                    await brains.interactionObservation.waitForPredicate(
+                        waitStep,
+                        initialTrace: initialTrace,
+                        after: afterSequence
+                    )
+                },
+                selectPredicateCase: { cases, timeout in
+                    await brains.interactionObservation.waitForPredicateCases(cases, timeout: timeout)
+                },
+                observeSemanticState: { scope, sequence, timeout in
+                    await brains.interactionObservation.observeSemanticState(scope: scope, after: sequence, timeout: timeout)
+                }
             )
-        }
-
-        func selectPredicateCase(_ cases: [ResolvedPredicateCase], _ timeout: Double) async -> HeistCaseSelectionResult {
-            await brains.interactionObservation.waitForPredicateCases(cases, timeout: timeout)
-        }
-
-        func observeSemanticState(
-            _ scope: SemanticObservationScope,
-            _ sequence: SettledObservationSequence?,
-            _ timeout: Double?
-        ) async -> HeistSemanticObservation? {
-            await brains.interactionObservation.observeSemanticState(scope: scope, after: sequence, timeout: timeout)
-        }
-    }
-
-    struct ClosureHeistExecutionRuntime: HeistExecutionRuntime {
-        let executeAction: @MainActor (RuntimeActionMessage) async -> ActionResult
-        let waitForPredicate: @MainActor (ResolvedWaitStep, AccessibilityTrace?, SettledObservationSequence?) async -> HeistWaitReceipt
-        let selectCase: @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult
-        let observeState: @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
-
-        init(
-            execute: @escaping @MainActor (RuntimeActionMessage) async -> ActionResult,
-            wait: @escaping @MainActor (ResolvedWaitStep, AccessibilityTrace?, SettledObservationSequence?) async -> HeistWaitReceipt,
-            selectPredicateCase: @escaping @MainActor ([ResolvedPredicateCase], Double) async -> HeistCaseSelectionResult,
-            observeSemanticState: @escaping @MainActor (SemanticObservationScope, SettledObservationSequence?, Double?) async -> HeistSemanticObservation?
-        ) {
-            self.executeAction = execute
-            self.waitForPredicate = wait
-            self.selectCase = selectPredicateCase
-            self.observeState = observeSemanticState
-        }
-
-        func execute(_ command: RuntimeActionMessage) async -> ActionResult {
-            await executeAction(command)
-        }
-
-        func wait(
-            _ waitStep: ResolvedWaitStep,
-            _ initialTrace: AccessibilityTrace?,
-            _ afterSequence: SettledObservationSequence?
-        ) async -> HeistWaitReceipt {
-            await waitForPredicate(waitStep, initialTrace, afterSequence)
-        }
-
-        func selectPredicateCase(_ cases: [ResolvedPredicateCase], _ timeout: Double) async -> HeistCaseSelectionResult {
-            await selectCase(cases, timeout)
-        }
-
-        func observeSemanticState(
-            _ scope: SemanticObservationScope,
-            _ sequence: SettledObservationSequence?,
-            _ timeout: Double?
-        ) async -> HeistSemanticObservation? {
-            await observeState(scope, sequence, timeout)
-        }
-    }
-
-    private enum HeistStepFlow {
-        case running
-        case skippingAfterFailure
-
-        var shouldExecuteNextStep: Bool {
-            switch self {
-            case .running:
-                return true
-            case .skippingAfterFailure:
-                return false
-            }
-        }
-
-        mutating func record(_ result: HeistExecutionStepResult) {
-            if result.isFailure {
-                self = .skippingAfterFailure
-            }
         }
     }
 
@@ -168,17 +86,27 @@ extension TheBrains {
         case failed(HeistExecutionStepResult)
     }
 
+    private enum HeistStepExecutionPhase {
+        case running
+        case aborted(failedPath: String)
+
+        func reducing(after result: HeistExecutionStepResult) -> HeistStepExecutionPhase {
+            guard case .running = self, result.isFailure else { return self }
+            return .aborted(failedPath: result.path)
+        }
+    }
+
     func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
         guard semanticObservationIsActive else {
             return runtimeInactiveResult(method: .heistPlan)
         }
-        return await executeHeistPlan(plan, argument: argument, runtime: LiveHeistExecutionRuntime(brains: self))
+        return await executeHeistPlan(plan, argument: argument, runtime: .live(self))
     }
 
     func executeHeistPlanForTest(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        runtime: any HeistExecutionRuntime
+        runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         await executeHeistPlan(plan, argument: argument, runtime: runtime)
     }
@@ -186,7 +114,7 @@ extension TheBrains {
     private func executeHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument,
-        runtime: any HeistExecutionRuntime
+        runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let demand = stash.beginSemanticObservationDemand(scope: .visible)
         defer { demand.cancel() }
@@ -234,7 +162,7 @@ extension TheBrains {
     }
 
     private func failureScreenshotStep(
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         failedPath: String
     ) async -> HeistExecutionStepResult? {
         let start = CFAbsoluteTimeGetCurrent()
@@ -264,30 +192,34 @@ extension TheBrains {
 
     func executeHeistSteps(
         _ steps: [HeistStep],
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope,
         path: String = "$.body"
     ) async -> [HeistExecutionStepResult] {
         var stepResults: [HeistExecutionStepResult] = []
-        var flow = HeistStepFlow.running
+        var phase = HeistStepExecutionPhase.running
 
         for (index, step) in steps.enumerated() {
             let stepPath = "\(path)[\(index)]"
-            guard flow.shouldExecuteNextStep else {
+
+            switch phase {
+            case .aborted:
                 stepResults.append(skippedHeistStep(step, path: stepPath, scope: scope))
                 continue
+
+            case .running:
+                let stepResult = await executeHeistStep(
+                    step,
+                    index: index,
+                    path: stepPath,
+                    runtime: runtime,
+                    environment: environment,
+                    scope: scope
+                )
+                stepResults.append(stepResult)
+                phase = phase.reducing(after: stepResult)
             }
-            let stepResult = await executeHeistStep(
-                step,
-                index: index,
-                path: stepPath,
-                runtime: runtime,
-                environment: environment,
-                scope: scope
-            )
-            stepResults.append(stepResult)
-            flow.record(stepResult)
         }
 
         return stepResults
@@ -357,7 +289,7 @@ extension TheBrains {
         _ step: HeistStep,
         index: Int,
         path: String,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -488,7 +420,7 @@ extension TheBrains {
         index _: Int,
         path: String,
         start: CFAbsoluteTime,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -528,7 +460,7 @@ extension TheBrains {
         index _: Int,
         path: String,
         start: CFAbsoluteTime,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -690,7 +622,7 @@ extension TheBrains {
     private func prepareInvocationExpectation(
         context: InvocationExecutionContext,
         environment: HeistExecutionEnvironment,
-        runtime: any HeistExecutionRuntime
+        runtime: HeistExecutionRuntime
     ) async -> InvocationExpectationPreparation {
         guard let expectation = context.invoke.expectation else { return .none }
         let resolved: ResolvedWaitStep
@@ -756,7 +688,7 @@ extension TheBrains {
 
     private func evaluateInvocationExpectation(
         _ context: InvocationExpectationContext?,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         childFailed: Bool
     ) async -> HeistWaitReceipt? {
         guard !childFailed, let context else { return nil }

@@ -1,6 +1,6 @@
 import Foundation
 
-enum JSONValue: Decodable, Equatable {
+public enum JSONValue: Codable, Equatable, Sendable {
     case object([String: JSONValue])
     case array([JSONValue])
     case string(String)
@@ -9,7 +9,7 @@ enum JSONValue: Decodable, Equatable {
     case bool(Bool)
     case null
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         if let object = try? decoder.container(keyedBy: JSONCodingKey.self) {
             var values: [String: JSONValue] = [:]
             for key in object.allKeys {
@@ -47,6 +47,36 @@ enum JSONValue: Decodable, Equatable {
         }
     }
 
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .object(let object):
+            var container = encoder.container(keyedBy: JSONCodingKey.self)
+            for (key, value) in object {
+                try container.encode(value, forKey: JSONCodingKey(stringValue: key))
+            }
+        case .array(let array):
+            var container = encoder.unkeyedContainer()
+            for value in array {
+                try container.encode(value)
+            }
+        case .string(let string):
+            var container = encoder.singleValueContainer()
+            try container.encode(string)
+        case .int(let int):
+            var container = encoder.singleValueContainer()
+            try container.encode(int)
+        case .double(let double):
+            var container = encoder.singleValueContainer()
+            try container.encode(double)
+        case .bool(let bool):
+            var container = encoder.singleValueContainer()
+            try container.encode(bool)
+        case .null:
+            var container = encoder.singleValueContainer()
+            try container.encodeNil()
+        }
+    }
+
     var typeDescription: String {
         switch self {
         case .object: return "object"
@@ -60,16 +90,16 @@ enum JSONValue: Decodable, Equatable {
     }
 }
 
-struct JSONProbe {
+public struct JSONProbe: Sendable {
     private let value: JSONValue
     private let path: String
 
-    init(_ value: JSONValue, path: String = "$") {
+    public init(_ value: JSONValue, path: String = "$") {
         self.value = value
         self.path = path
     }
 
-    init(data: Data, decoder: JSONDecoder = JSONDecoder()) throws {
+    public init(data: Data, decoder: JSONDecoder = JSONDecoder()) throws {
         do {
             self.init(try decoder.decode(JSONValue.self, from: data))
         } catch {
@@ -77,7 +107,25 @@ struct JSONProbe {
         }
     }
 
-    func string(_ key: String? = nil) throws -> String {
+    public func object(_ key: String? = nil) throws -> JSONProbe {
+        let probe = try key.map(child) ?? self
+        guard case .object = probe.value else {
+            throw probe.typeMismatch(expected: "object")
+        }
+        return probe
+    }
+
+    public func array(_ key: String? = nil) throws -> [JSONProbe] {
+        let probe = try key.map(child) ?? self
+        guard case .array(let values) = probe.value else {
+            throw probe.typeMismatch(expected: "array")
+        }
+        return values.enumerated().map { index, value in
+            JSONProbe(value, path: "\(probe.path)[\(index)]")
+        }
+    }
+
+    public func string(_ key: String? = nil) throws -> String {
         let probe = try key.map(child) ?? self
         guard case .string(let value) = probe.value else {
             throw probe.typeMismatch(expected: "string")
@@ -85,7 +133,39 @@ struct JSONProbe {
         return value
     }
 
-    func assertPresent(_ key: String) throws {
+    public func strings(_ key: String? = nil) throws -> [String] {
+        try array(key).map { try $0.string() }
+    }
+
+    public func bool(_ key: String? = nil) throws -> Bool {
+        let probe = try key.map(child) ?? self
+        guard case .bool(let value) = probe.value else {
+            throw probe.typeMismatch(expected: "bool")
+        }
+        return value
+    }
+
+    public func int(_ key: String? = nil) throws -> Int {
+        let probe = try key.map(child) ?? self
+        guard case .int(let value) = probe.value else {
+            throw probe.typeMismatch(expected: "int")
+        }
+        return value
+    }
+
+    public func double(_ key: String? = nil) throws -> Double {
+        let probe = try key.map(child) ?? self
+        switch probe.value {
+        case .double(let value):
+            return value
+        case .int(let value):
+            return Double(value)
+        default:
+            throw probe.typeMismatch(expected: "double")
+        }
+    }
+
+    public func assertPresent(_ key: String) throws {
         guard case .object(let object) = value else {
             throw typeMismatch(expected: "object")
         }
@@ -94,12 +174,31 @@ struct JSONProbe {
         }
     }
 
-    func assertMissing(_ key: String) throws {
+    public func assertMissing(_ key: String) throws {
         guard case .object(let object) = value else {
             throw typeMismatch(expected: "object")
         }
         guard object[key] == nil else {
             throw JSONProbeFailure(path: childPath(for: key), reason: "Expected value to be absent")
+        }
+    }
+
+    public func isEmptyObject() throws -> Bool {
+        guard case .object(let object) = value else {
+            throw typeMismatch(expected: "object")
+        }
+        return object.isEmpty
+    }
+
+    public func decode<T: Decodable>(
+        _ type: T.Type = T.self,
+        decoder: JSONDecoder = JSONDecoder()
+    ) throws -> T {
+        do {
+            let data = try JSONEncoder().encode(value)
+            return try decoder.decode(type, from: data)
+        } catch {
+            throw JSONProbeFailure(path: path, reason: "Failed to decode \(type): \(error)")
         }
     }
 
@@ -144,15 +243,20 @@ struct JSONProbe {
     }
 }
 
-struct JSONProbeFailure: Error, CustomStringConvertible, LocalizedError, Equatable {
-    let path: String
-    let reason: String
+public struct JSONProbeFailure: Error, CustomStringConvertible, LocalizedError, Equatable, Sendable {
+    public let path: String
+    public let reason: String
 
-    var description: String {
+    public init(path: String, reason: String) {
+        self.path = path
+        self.reason = reason
+    }
+
+    public var description: String {
         "\(reason) at \(path)"
     }
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         description
     }
 }

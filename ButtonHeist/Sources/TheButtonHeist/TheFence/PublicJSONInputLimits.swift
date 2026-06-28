@@ -1,10 +1,10 @@
 import Foundation
 import TheScore
 
-/// Limits for public machine inputs before they materialize recursive JSON
-/// structures. Public users hit these through `buttonheist json_lines` and MCP
-/// tool arguments.
-public enum PublicMachineInputLimits {
+/// Limits for public machine inputs before they materialize recursive
+/// JSON structures. Public users hit these through `buttonheist json_lines` and
+/// MCP tool arguments.
+public enum PublicJSONInputLimits {
     public static let maxRequestBytes = 1_000_000
     public static let maxNestingDepth = 32
     public static let maxTotalObjectKeys = 1_024
@@ -12,7 +12,7 @@ public enum PublicMachineInputLimits {
     public static let maxStringBytes = Int.max
 }
 
-public struct PublicMachineInputError: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
+public struct PublicJSONInputError: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
     public let message: String
 
     public init(_ message: String) {
@@ -39,11 +39,11 @@ public struct PublicJSONInputPolicy: Sendable, Equatable {
     public let nullHandling: NullHandling
 
     public init(
-        maxBytes: Int = PublicMachineInputLimits.maxRequestBytes,
-        maxNestingDepth: Int = PublicMachineInputLimits.maxNestingDepth,
-        maxTotalObjectKeys: Int = PublicMachineInputLimits.maxTotalObjectKeys,
-        maxTotalArrayValues: Int = PublicMachineInputLimits.maxTotalArrayValues,
-        maxStringBytes: Int = PublicMachineInputLimits.maxStringBytes,
+        maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
+        maxNestingDepth: Int = PublicJSONInputLimits.maxNestingDepth,
+        maxTotalObjectKeys: Int = PublicJSONInputLimits.maxTotalObjectKeys,
+        maxTotalArrayValues: Int = PublicJSONInputLimits.maxTotalArrayValues,
+        maxStringBytes: Int = PublicJSONInputLimits.maxStringBytes,
         nullHandling: NullHandling = .allowed
     ) {
         self.maxBytes = maxBytes
@@ -65,7 +65,7 @@ public enum PublicJSONInputViolation: Sendable, Equatable {
     case nullValue(expected: String)
     case nonFiniteNumber(Double)
 
-    public func publicInputMessage(context: String) -> String {
+    public func publicJSONInputMessage(context: String) -> String {
         switch self {
         case .bytes(let max, let observed):
             return "\(context) exceeds \(max) bytes (observed \(observed) bytes)"
@@ -99,74 +99,6 @@ public enum PublicJSONValueNode<Value> {
 
 extension PublicJSONValueNode: Sendable where Value: Sendable {}
 
-/// Converts public JSON-like values into `HeistValue` after applying
-/// the shared public input limits.
-@_spi(ButtonHeistInternals) public enum PublicJSONHeistValueConverter {
-    public typealias NodeProvider<Value> = PublicJSONValuePreflight.NodeProvider<Value>
-
-    public static func convertObject<Value>(
-        _ object: [String: Value],
-        policy: PublicJSONInputPolicy = PublicJSONInputPolicy(),
-        context: String = "Public JSON input",
-        node: @escaping NodeProvider<Value>
-    ) throws -> [String: HeistValue] {
-        try PublicJSONValuePreflight.validateObject(
-            object,
-            policy: policy,
-            context: context,
-            node: node
-        )
-        return try convertObjectUnchecked(object, fieldPrefix: nil, node: node)
-    }
-
-    private static func convertObjectUnchecked<Value>(
-        _ object: [String: Value],
-        fieldPrefix: String?,
-        node: NodeProvider<Value>
-    ) throws -> [String: HeistValue] {
-        var result: [String: HeistValue] = [:]
-        for (key, value) in object {
-            let field = fieldPrefix.map { "\($0).\(key)" } ?? key
-            result[key] = try convertUnchecked(value, field: field, node: node)
-        }
-        return result
-    }
-
-    private static func convertUnchecked<Value>(
-        _ value: Value,
-        field: String,
-        node: NodeProvider<Value>
-    ) throws -> HeistValue {
-        switch node(value) {
-        case .null:
-            throw SchemaValidationError(field: field, observed: "null", expected: "JSON scalar, array, or object")
-        case .bool(let bool):
-            return .bool(bool)
-        case .int(let int):
-            return .int(int)
-        case .double(let double):
-            guard double.isFinite else {
-                throw SchemaValidationError(field: field, observed: double, expected: "finite number")
-            }
-            return .double(double)
-        case .string(let string):
-            return .string(string)
-        case .data:
-            throw SchemaValidationError(
-                field: field,
-                observed: "data",
-                expected: "JSON boolean, number, string, array, or object"
-            )
-        case .array(let values):
-            return .array(try values.enumerated().map { index, nested in
-                try convertUnchecked(nested, field: "\(field)[\(index)]", node: node)
-            })
-        case .object(let object):
-            return .object(try convertObjectUnchecked(object, fieldPrefix: field, node: node))
-        }
-    }
-}
-
 /// Applies a shared recursive input policy to already-materialized JSON-like values.
 public enum PublicJSONValuePreflight {
     public typealias ErrorFactory = @Sendable (PublicJSONInputViolation) -> Error
@@ -179,14 +111,14 @@ public enum PublicJSONValuePreflight {
         makeError: ErrorFactory? = nil,
         node: @escaping NodeProvider<Value>
     ) throws {
-        let errorFactory = makeError ?? publicInputErrorFactory(context: context)
+        let errorFactory = makeError ?? publicJSONInputErrorFactory(context: context)
         var traversal = PublicJSONValueTraversal(policy: policy, makeError: errorFactory, node: node)
         let byteCount = try traversal.jsonEncodedSize(of: object, depth: 1)
         try traversal.validateByteCount(byteCount)
     }
 
-    private static func publicInputErrorFactory(context: String) -> ErrorFactory {
-        { PublicMachineInputError($0.publicInputMessage(context: context)) }
+    private static func publicJSONInputErrorFactory(context: String) -> ErrorFactory {
+        { PublicJSONInputError($0.publicJSONInputMessage(context: context)) }
     }
 }
 
@@ -197,7 +129,7 @@ public enum PublicJSONRoot: Sendable {
     case object
 }
 
-/// Decodes public JSON input after applying machine input size and shape limits.
+/// Decodes public JSON input after applying size and shape limits.
 public enum PublicJSONInputDecoder {
     public static func decode<T: Decodable>(
         _ type: T.Type,
@@ -251,9 +183,9 @@ public enum PublicJSONInputPreflight {
     public static func validateObject(
         _ input: String,
         context: String = "Public JSON request",
-        maxBytes: Int = PublicMachineInputLimits.maxRequestBytes,
-        maxNestingDepth: Int = PublicMachineInputLimits.maxNestingDepth,
-        maxTotalObjectKeys: Int = PublicMachineInputLimits.maxTotalObjectKeys,
+        maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
+        maxNestingDepth: Int = PublicJSONInputLimits.maxNestingDepth,
+        maxTotalObjectKeys: Int = PublicJSONInputLimits.maxTotalObjectKeys,
         rootMismatchMessage: String? = nil
     ) throws {
         try validate(
@@ -270,9 +202,9 @@ public enum PublicJSONInputPreflight {
     public static func validateArray(
         _ data: Data,
         context: String = "Public JSON input",
-        maxBytes: Int = PublicMachineInputLimits.maxRequestBytes,
-        maxNestingDepth: Int = PublicMachineInputLimits.maxNestingDepth,
-        maxTotalObjectKeys: Int = PublicMachineInputLimits.maxTotalObjectKeys,
+        maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
+        maxNestingDepth: Int = PublicJSONInputLimits.maxNestingDepth,
+        maxTotalObjectKeys: Int = PublicJSONInputLimits.maxTotalObjectKeys,
         rootMismatchMessage: String? = nil
     ) throws {
         try validate(
@@ -290,9 +222,9 @@ public enum PublicJSONInputPreflight {
         _ data: Data,
         root: PublicJSONRoot = .any,
         context: String = "Public JSON input",
-        maxBytes: Int = PublicMachineInputLimits.maxRequestBytes,
-        maxNestingDepth: Int = PublicMachineInputLimits.maxNestingDepth,
-        maxTotalObjectKeys: Int = PublicMachineInputLimits.maxTotalObjectKeys,
+        maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
+        maxNestingDepth: Int = PublicJSONInputLimits.maxNestingDepth,
+        maxTotalObjectKeys: Int = PublicJSONInputLimits.maxTotalObjectKeys,
         rootMismatchMessage: String? = nil
     ) throws {
         try validate(
@@ -319,7 +251,7 @@ public enum PublicJSONInputPreflight {
         try PublicJSONInputTraversalState.validateByteCount(
             byteCount,
             policy: policy,
-            makeError: publicInputErrorFactory(context: context)
+            makeError: publicJSONInputErrorFactory(context: context)
         )
 
         var scanner = PublicJSONInputScanner(
@@ -327,13 +259,13 @@ public enum PublicJSONInputPreflight {
             context: context,
             policy: policy,
             rootMismatchMessage: rootMismatchMessage,
-            makeError: publicInputErrorFactory(context: context)
+            makeError: publicJSONInputErrorFactory(context: context)
         )
         try scanner.parseRoot(root)
     }
 
-    private static func publicInputErrorFactory(context: String) -> PublicJSONValuePreflight.ErrorFactory {
-        { PublicMachineInputError($0.publicInputMessage(context: context)) }
+    private static func publicJSONInputErrorFactory(context: String) -> PublicJSONValuePreflight.ErrorFactory {
+        { PublicJSONInputError($0.publicJSONInputMessage(context: context)) }
     }
 }
 
@@ -736,12 +668,12 @@ private struct PublicJSONInputScanner {
         index < bytes.count ? bytes[index] : nil
     }
 
-    private func invalidJSON() -> PublicMachineInputError {
-        PublicMachineInputError("\(context) is not valid JSON")
+    private func invalidJSON() -> PublicJSONInputError {
+        PublicJSONInputError("\(context) is not valid JSON")
     }
 
-    private func rootMismatch() -> PublicMachineInputError {
-        PublicMachineInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
+    private func rootMismatch() -> PublicJSONInputError {
+        PublicJSONInputError(rootMismatchMessage ?? "\(context) is not valid JSON")
     }
 
     private static func isWhitespace(_ byte: UInt8) -> Bool {

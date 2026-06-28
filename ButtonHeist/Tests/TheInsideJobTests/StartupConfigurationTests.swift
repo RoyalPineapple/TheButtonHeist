@@ -115,6 +115,28 @@ final class StartupConfigurationTests: XCTestCase {
         ])
     }
 
+    func testInfoPlistStringArraysOnlyResolveForScope() {
+        let configuration = StartupConfiguration.resolve(
+            env: [:],
+            infoPlist: makeInfoPlist([
+                "InsideJobToken": ["token"],
+                "InsideJobInstanceId": ["instance-id"],
+                "InsideJobScope": ["simulator", "usb"]
+            ])
+        )
+
+        let expected = StartupConfiguration(
+            disableAutoStart: ResolvedStartupValue(value: false, source: .defaultValue),
+            token: ResolvedStartupValue(value: nil, source: .generated),
+            instanceId: ResolvedStartupValue(value: nil, source: .generated),
+            preferredPort: ResolvedStartupValue(value: 0, source: .defaultValue),
+            allowedScopes: ResolvedStartupValue(value: [.simulator, .usb], source: .infoPlist),
+            sessionTimeout: ResolvedStartupValue(value: 30.0, source: .defaultValue),
+            warnings: []
+        )
+        XCTAssertEqual(configuration, expected)
+    }
+
     func testEmptyTokenAndInstanceIdAreIgnoredWithWarnings() {
         let configuration = StartupConfiguration.resolve(
             env: [

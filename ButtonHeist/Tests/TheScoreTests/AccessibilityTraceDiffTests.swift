@@ -340,6 +340,20 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertTrue(edits.isEmpty)
     }
 
+    func testDiffPairingKeyUsesTypedIdentityTraitSet() {
+        let orderedTraits = makeElement(label: "Favorite", traits: [.button, .header])
+        let reorderedTraits = makeElement(label: "Favorite", traits: [.header, .button])
+        let transientStateTrait = makeElement(label: "Favorite", traits: [.selected, .header, .button])
+        let differentIdentityTrait = makeElement(label: "Favorite", traits: [.selected, .staticText])
+        let identified = makeElement(label: "Favorite", identifier: "favorite.button", traits: [.button])
+
+        XCTAssertEqual(orderedTraits.diffPairingKey, reorderedTraits.diffPairingKey)
+        XCTAssertEqual(orderedTraits.diffPairingKey, transientStateTrait.diffPairingKey)
+        XCTAssertEqual(orderedTraits.diffPairingKey.identityTraits, Set<HeistTrait>([.button, .header]))
+        XCTAssertNotEqual(orderedTraits.diffPairingKey, differentIdentityTrait.diffPairingKey)
+        XCTAssertEqual(identified.diffPairingKey.text, "favorite.button")
+    }
+
     func testTypedDiffEqualityUsesDomainValues() throws {
         XCTAssertNil(projectElementStateChange(
             old: makeElement(label: "Favorite", traits: [.button, .selected]),
@@ -365,8 +379,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ))
         XCTAssertEqual(traits.oldValue, .traits([.button]))
         XCTAssertEqual(traits.newValue, .traits([.button, .selected]))
-        XCTAssertEqual(traits.oldValue?.displayText, "button")
-        XCTAssertEqual(traits.newValue?.displayText, "button, selected")
+        XCTAssertEqual(traits.oldDisplayText, "button")
+        XCTAssertEqual(traits.newDisplayText, "button, selected")
 
         let actions = try XCTUnwrap(singleChange(
             property: .actions,
@@ -375,8 +389,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ))
         XCTAssertEqual(actions.oldValue, .actions([.activate]))
         XCTAssertEqual(actions.newValue, .actions([.activate, .custom("Share")]))
-        XCTAssertEqual(actions.oldValue?.displayText, "activate")
-        XCTAssertEqual(actions.newValue?.displayText, "activate, Share")
+        XCTAssertEqual(actions.oldDisplayText, "activate")
+        XCTAssertEqual(actions.newDisplayText, "activate, Share")
 
         let rotors = try XCTUnwrap(singleChange(
             property: .rotors,
@@ -389,8 +403,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ))
         XCTAssertEqual(rotors.oldValue, .rotors([HeistRotor(name: "Headings")]))
         XCTAssertEqual(rotors.newValue, .rotors([HeistRotor(name: "Headings"), HeistRotor(name: "Errors")]))
-        XCTAssertEqual(rotors.oldValue?.displayText, "Headings")
-        XCTAssertEqual(rotors.newValue?.displayText, "Headings, Errors")
+        XCTAssertEqual(rotors.oldDisplayText, "Headings")
+        XCTAssertEqual(rotors.newDisplayText, "Headings, Errors")
 
         let customContent = try XCTUnwrap(singleChange(
             property: .customContent,
@@ -408,8 +422,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
                 ]
             )
         ))
-        XCTAssertEqual(customContent.oldValue?.displayText, "Size: 2.4 MB")
-        XCTAssertEqual(customContent.newValue?.displayText, "Size: 3.1 MB; State: Featured")
+        XCTAssertEqual(customContent.oldDisplayText, "Size: 2.4 MB")
+        XCTAssertEqual(customContent.newDisplayText, "Size: 3.1 MB; State: Featured")
     }
 
     func testTypedDiffRendersFrameAndActivationPoint() throws {
@@ -420,8 +434,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ))
         XCTAssertEqual(frame.oldValue, .frame(ElementPropertyFrame(x: 0, y: 0, width: 100, height: 50)))
         XCTAssertEqual(frame.newValue, .frame(ElementPropertyFrame(x: 10, y: 20, width: 100, height: 50)))
-        XCTAssertEqual(frame.oldValue?.displayText, "0,0,100,50")
-        XCTAssertEqual(frame.newValue?.displayText, "10,20,100,50")
+        XCTAssertEqual(frame.oldDisplayText, "0,0,100,50")
+        XCTAssertEqual(frame.newDisplayText, "10,20,100,50")
 
         let activationPoint = try XCTUnwrap(singleChange(
             property: .activationPoint,
@@ -440,8 +454,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ))
         XCTAssertEqual(activationPoint.oldValue, .activationPoint(ElementPropertyPoint(x: 50, y: 25)))
         XCTAssertEqual(activationPoint.newValue, .activationPoint(ElementPropertyPoint(x: 75, y: 40)))
-        XCTAssertEqual(activationPoint.oldValue?.displayText, "50,25")
-        XCTAssertEqual(activationPoint.newValue?.displayText, "75,40")
+        XCTAssertEqual(activationPoint.oldDisplayText, "50,25")
+        XCTAssertEqual(activationPoint.newDisplayText, "75,40")
     }
 
     private func makeInterface() -> Interface {

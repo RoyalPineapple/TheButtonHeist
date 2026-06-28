@@ -51,8 +51,8 @@ enum AccessibilityTraceElementDiff {
         pairingKeyCounts(beforeElements) != pairingKeyCounts(afterElements)
     }
 
-    private static func pairingKeyCounts(_ elements: [HeistElement]) -> [String: Int] {
-        var counts: [String: Int] = [:]
+    private static func pairingKeyCounts(_ elements: [HeistElement]) -> [ElementDiffPairingKey: Int] {
+        var counts: [ElementDiffPairingKey: Int] = [:]
         for element in elements {
             counts[element.diffPairingKey, default: 0] += 1
         }
@@ -89,10 +89,36 @@ private func appendChangeIfNeeded(
     new: HeistElement,
     to changes: inout [PropertyChange]
 ) {
-    let oldValue = ElementPropertyValue.value(for: property, in: old)
-    let newValue = ElementPropertyValue.value(for: property, in: new)
-    guard oldValue != newValue else { return }
-    changes.append(PropertyChange(property: property, oldValue: oldValue, newValue: newValue))
+    switch property {
+    case .value:
+        appendChangeIfNeeded(ValueProperty.self, old: old, new: new, to: &changes)
+    case .traits:
+        appendChangeIfNeeded(TraitsProperty.self, old: old, new: new, to: &changes)
+    case .hint:
+        appendChangeIfNeeded(HintProperty.self, old: old, new: new, to: &changes)
+    case .actions:
+        appendChangeIfNeeded(ActionsProperty.self, old: old, new: new, to: &changes)
+    case .frame:
+        appendChangeIfNeeded(FrameProperty.self, old: old, new: new, to: &changes)
+    case .activationPoint:
+        appendChangeIfNeeded(ActivationPointProperty.self, old: old, new: new, to: &changes)
+    case .customContent:
+        appendChangeIfNeeded(CustomContentProperty.self, old: old, new: new, to: &changes)
+    case .rotors:
+        appendChangeIfNeeded(RotorsProperty.self, old: old, new: new, to: &changes)
+    }
+}
+
+private func appendChangeIfNeeded<P: ElementPropertyValueKind>(
+    _ property: P.Type,
+    old: HeistElement,
+    new: HeistElement,
+    to changes: inout [PropertyChange]
+) {
+    let oldValue = P.value(in: old)
+    let newValue = P.value(in: new)
+    guard !P.valuesEqual(oldValue, newValue) else { return }
+    changes.append(P.change(old: oldValue, new: newValue))
 }
 
 private extension ElementProperty {
@@ -113,6 +139,36 @@ private extension ElementProperty {
 
 // MARK: - Diff Pairing Key
 
+struct ElementDiffPairingKey: Hashable, Sendable, Comparable {
+    let text: String
+    let identityTraits: Set<HeistTrait>
+
+    init(element: HeistElement) {
+        text = Self.identityText(for: element)
+        identityTraits = Set(element.traits.filter {
+            !AccessibilityPolicy.transientTraits.contains($0)
+        })
+    }
+
+    static func < (lhs: ElementDiffPairingKey, rhs: ElementDiffPairingKey) -> Bool {
+        guard lhs.text == rhs.text else { return lhs.text < rhs.text }
+        return lhs.orderedIdentityTraitRawValues
+            .lexicographicallyPrecedes(rhs.orderedIdentityTraitRawValues)
+    }
+
+    private var orderedIdentityTraitRawValues: [String] {
+        identityTraits.map(\.rawValue).sorted()
+    }
+
+    private static func identityText(for element: HeistElement) -> String {
+        [element.identifier, element.label]
+            .compactMap { value in
+                (value?.isEmpty == false) ? value : nil
+            }
+            .first ?? element.description
+    }
+}
+
 extension HeistElement {
     /// Content-derived key used to pair before/after elements across a
     /// transition. Replaces the removed internal element id: the diff has no
@@ -120,15 +176,7 @@ extension HeistElement {
     /// Mirrors the old identity synthesis — the first non-empty of
     /// `identifier`/`label`/`description`, plus non-transient (identity) traits —
     /// so transient state changes (selected, focused) don't break pairing.
-    var diffPairingKey: String {
-        let base = [identifier, label].compactMap { value in
-            (value?.isEmpty == false) ? value : nil
-        }.first ?? description
-        let identityTraits = traits
-            .filter { !AccessibilityPolicy.transientTraits.contains($0) }
-            .map(\.rawValue)
-            .sorted()
-            .joined(separator: ",")
-        return base + "\u{1F}" + identityTraits
+    var diffPairingKey: ElementDiffPairingKey {
+        ElementDiffPairingKey(element: self)
     }
 }

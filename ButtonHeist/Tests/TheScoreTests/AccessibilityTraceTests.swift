@@ -272,16 +272,8 @@ final class AccessibilityTraceTests: XCTestCase {
         let updates = try XCTUnwrap(accumulated.elementsChanged?.edits.updated)
         let valueChanges = updates.flatMap(\.changes).filter { $0.property == .value }
 
-        XCTAssertTrue(valueChanges.contains(PropertyChange(
-            property: .value,
-            oldValue: .text("0"),
-            newValue: .text("50")
-        )))
-        XCTAssertTrue(valueChanges.contains(PropertyChange(
-            property: .value,
-            oldValue: .text("50"),
-            newValue: .text("100")
-        )))
+        XCTAssertTrue(valueChanges.contains(.value(old: "0", new: "50")))
+        XCTAssertTrue(valueChanges.contains(.value(old: "50", new: "100")))
 
         let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
             element: .label("Save"),

@@ -167,7 +167,7 @@ HeistPlan("shop") {
 
 Do not author heists as raw `version`/`name`/`parameter`/`definitions`/`body` JSON. That shape is internal IR for generated artifacts, storage, wire transport, and debugging.
 
-MCP tool arguments are preflighted before The Button Heist converts them into command values. Public machine input is bounded by `PublicMachineInputLimits.maxRequestBytes`, `PublicMachineInputLimits.maxNestingDepth`, and `PublicMachineInputLimits.maxTotalObjectKeys`; the same limits apply to JSON-lines input.
+MCP tool arguments are preflighted before The Button Heist converts them into command values. Public machine input is bounded by `PublicJSONInputLimits.maxRequestBytes`, `PublicJSONInputLimits.maxNestingDepth`, and `PublicJSONInputLimits.maxTotalObjectKeys`; the same limits apply to JSON-lines input.
 
 ## Trace semantics
 

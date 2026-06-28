@@ -749,6 +749,46 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(payload, screenshot)
     }
 
+    func testHeistFailurePhaseSkipsRemainingStepsWithoutDispatchingActions() async throws {
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        var dispatchedTypes: [RuntimeActionType] = []
+        let runtime = heistRuntime(observations: []) { command in
+            dispatchedTypes.append(command.runtimeType)
+            if case .takeScreenshot = command {
+                return ActionResult(success: true, method: .takeScreenshot)
+            }
+            return ActionResult(
+                success: false,
+                method: .activate,
+                message: "activate failed",
+                errorKind: .actionFailed
+            )
+        }
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.target(target)))),
+            .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "not dispatched")))),
+            .heist(try HeistPlan(body: [
+                .action(try ActionStep(command: .dismissKeyboard)),
+            ])),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(dispatchedTypes, [.activate, .takeScreenshot])
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        XCTAssertEqual(heist.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(heist.steps.map(\.path), [
+            "$.body[0]",
+            "$.body[1]",
+            "$.body[2]",
+            "$.body[0].failure.actions[0]",
+        ])
+        XCTAssertEqual(heist.steps.map(\.status), [.failed, .skipped, .skipped, .passed])
+        let skippedInlineHeist = try XCTUnwrap(heist.steps.dropFirst(2).first)
+        XCTAssertEqual(skippedInlineHeist.children.map(\.status), [.skipped])
+    }
+
     func testHeistConditionalSelectsFirstMatchingCaseOnce() async throws {
         let runtime = heistRuntime(observations: [
             observedState(labels: ["Home", "Login"]),

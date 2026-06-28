@@ -1,15 +1,14 @@
 import Foundation
 import MCP
-@_spi(ButtonHeistInternals) import ButtonHeist
-import TheScore
+import ButtonHeist
 
 enum MCPArgumentInputPreflight {
     static func validate(
         _ arguments: [String: Value]?,
         context: String = "MCP arguments",
-        maxBytes: Int = PublicMachineInputLimits.maxRequestBytes,
-        maxNestingDepth: Int = PublicMachineInputLimits.maxNestingDepth,
-        maxTotalObjectKeys: Int = PublicMachineInputLimits.maxTotalObjectKeys
+        maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
+        maxNestingDepth: Int = PublicJSONInputLimits.maxNestingDepth,
+        maxTotalObjectKeys: Int = PublicJSONInputLimits.maxTotalObjectKeys
     ) throws {
         try PublicJSONValuePreflight.validateObject(
             arguments ?? [:],
@@ -19,19 +18,6 @@ enum MCPArgumentInputPreflight {
                 maxTotalObjectKeys: maxTotalObjectKeys
             ),
             context: context,
-            node: jsonValueNode
-        )
-    }
-
-    static func heistValues(_ arguments: [String: Value]?) throws -> [String: HeistValue] {
-        try PublicJSONHeistValueConverter.convertObject(
-            arguments ?? [:],
-            policy: PublicJSONInputPolicy(
-                maxBytes: PublicMachineInputLimits.maxRequestBytes,
-                maxNestingDepth: PublicMachineInputLimits.maxNestingDepth,
-                maxTotalObjectKeys: PublicMachineInputLimits.maxTotalObjectKeys
-            ),
-            context: "MCP arguments",
             node: jsonValueNode
         )
     }

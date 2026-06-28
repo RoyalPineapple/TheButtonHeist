@@ -60,7 +60,8 @@ struct StartupInfoPlist: Equatable, Sendable {
 
     init(bundle: Bundle) {
         self.init { key in
-            bundle.object(forInfoDictionaryKey: key) as? NSObject
+            guard let object = bundle.object(forInfoDictionaryKey: key) else { return nil }
+            return InfoPlistValue(object: object as AnyObject)
         }
     }
 
@@ -77,15 +78,16 @@ struct StartupInfoPlist: Equatable, Sendable {
         }
 
         self.init { key in
-            dictionary.object(forKey: key) as? NSObject
+            guard let object = dictionary.object(forKey: key) else { return nil }
+            return InfoPlistValue(object: object as AnyObject)
         }
     }
 
-    private init(valueForKey: (String) -> NSObject?) {
+    private init(valueForKey: (String) -> InfoPlistValue?) {
         var values: [StartupInfoPlistKey: InfoPlistValue] = [:]
         for key in StartupInfoPlistKey.allCases {
             if let value = valueForKey(key.rawValue) {
-                values[key] = InfoPlistValue(object: value)
+                values[key] = value
             }
         }
         self.init(values: values)
@@ -100,61 +102,82 @@ struct StartupInfoPlist: Equatable, Sendable {
     }
 }
 
-struct InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
-    let bool: Bool?
-    let string: String?
-    let integer: Int?
-    let double: Double?
-    let stringArray: [String]?
+enum InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
+    case bool(Bool)
+    case string(String)
+    case integer(Int)
+    case double(Double)
+    case stringArray([String])
+    case unsupported(String)
 
-    private let displayValue: String
-
-    init(object: NSObject) {
+    init(object: AnyObject) {
         if let string = object as? String {
-            bool = nil
-            self.string = string
-            integer = nil
-            double = nil
-            stringArray = nil
-            displayValue = string
+            self = .string(string)
         } else if let strings = object as? [String] {
-            bool = nil
-            string = nil
-            integer = nil
-            double = nil
-            stringArray = strings
-            displayValue = Self.describe(strings)
+            self = .stringArray(strings)
         } else if let number = object as? NSNumber {
-            string = nil
-            stringArray = nil
             if number.isBooleanPropertyListValue {
-                bool = number.boolValue
-                integer = nil
-                double = nil
-                displayValue = String(number.boolValue)
+                self = .bool(number.boolValue)
             } else if CFNumberIsFloatType(number as CFNumber) {
-                bool = nil
-                integer = nil
-                double = number.doubleValue
-                displayValue = String(number.doubleValue)
+                self = .double(number.doubleValue)
             } else {
-                bool = nil
-                integer = Int(truncating: number)
-                double = nil
-                displayValue = String(Int(truncating: number))
+                self = .integer(Int(truncating: number))
             }
         } else {
-            bool = nil
-            string = nil
-            integer = nil
-            double = nil
-            stringArray = nil
-            displayValue = String(describing: object)
+            self = .unsupported(String(describing: object))
         }
     }
 
+    var bool: Bool? {
+        if case .bool(let value) = self {
+            return value
+        }
+        return nil
+    }
+
+    var string: String? {
+        if case .string(let value) = self {
+            return value
+        }
+        return nil
+    }
+
+    var integer: Int? {
+        if case .integer(let value) = self {
+            return value
+        }
+        return nil
+    }
+
+    var double: Double? {
+        if case .double(let value) = self {
+            return value
+        }
+        return nil
+    }
+
+    var stringArray: [String]? {
+        if case .stringArray(let value) = self {
+            return value
+        }
+        return nil
+    }
+
     var description: String {
-        displayValue
+        switch self {
+        case .bool(let value):
+            return String(value)
+        case .string(let value):
+            return value
+        case .integer(let value):
+            return String(value)
+        case .double(let value):
+            return String(value)
+        case .stringArray(let value):
+            return Self.describe(value)
+        case .unsupported(let value):
+            return value
+        }
     }
 
     private static func describe(_ strings: [String]) -> String {
