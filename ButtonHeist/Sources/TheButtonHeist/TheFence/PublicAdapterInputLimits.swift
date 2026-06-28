@@ -99,6 +99,74 @@ public enum PublicJSONValueNode<Value> {
 
 extension PublicJSONValueNode: Sendable where Value: Sendable {}
 
+/// Converts public JSON-like adapter values into `HeistValue` after applying
+/// the shared public input limits.
+@_spi(ButtonHeistInternals) public enum PublicHeistValueAdapter {
+    public typealias NodeProvider<Value> = PublicJSONValuePreflight.NodeProvider<Value>
+
+    public static func convertObject<Value>(
+        _ object: [String: Value],
+        policy: PublicJSONInputPolicy = PublicJSONInputPolicy(),
+        context: String = "Public JSON input",
+        node: @escaping NodeProvider<Value>
+    ) throws -> [String: HeistValue] {
+        try PublicJSONValuePreflight.validateObject(
+            object,
+            policy: policy,
+            context: context,
+            node: node
+        )
+        return try convertObjectUnchecked(object, fieldPrefix: nil, node: node)
+    }
+
+    private static func convertObjectUnchecked<Value>(
+        _ object: [String: Value],
+        fieldPrefix: String?,
+        node: NodeProvider<Value>
+    ) throws -> [String: HeistValue] {
+        var result: [String: HeistValue] = [:]
+        for (key, value) in object {
+            let field = fieldPrefix.map { "\($0).\(key)" } ?? key
+            result[key] = try convertUnchecked(value, field: field, node: node)
+        }
+        return result
+    }
+
+    private static func convertUnchecked<Value>(
+        _ value: Value,
+        field: String,
+        node: NodeProvider<Value>
+    ) throws -> HeistValue {
+        switch node(value) {
+        case .null:
+            throw SchemaValidationError(field: field, observed: "null", expected: "JSON scalar, array, or object")
+        case .bool(let bool):
+            return .bool(bool)
+        case .int(let int):
+            return .int(int)
+        case .double(let double):
+            guard double.isFinite else {
+                throw SchemaValidationError(field: field, observed: double, expected: "finite number")
+            }
+            return .double(double)
+        case .string(let string):
+            return .string(string)
+        case .data:
+            throw SchemaValidationError(
+                field: field,
+                observed: "data",
+                expected: "JSON boolean, number, string, array, or object"
+            )
+        case .array(let values):
+            return .array(try values.enumerated().map { index, nested in
+                try convertUnchecked(nested, field: "\(field)[\(index)]", node: node)
+            })
+        case .object(let object):
+            return .object(try convertObjectUnchecked(object, fieldPrefix: field, node: node))
+        }
+    }
+}
+
 /// Applies a shared recursive input policy to already-materialized JSON-like values.
 public enum PublicJSONValuePreflight {
     public typealias ErrorFactory = @Sendable (PublicJSONInputViolation) -> Error

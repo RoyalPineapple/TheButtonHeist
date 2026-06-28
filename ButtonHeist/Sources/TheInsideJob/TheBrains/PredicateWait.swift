@@ -81,17 +81,17 @@ enum PredicateObservationDiagnostics {
         }
 
         var state = WaitPredicateState(predicate: step.predicate)
-        var accumulatedTrace: WaitAccumulatedTrace?
+        var stream = PredicateObservationStreamState()
 
         if step.predicate.requiresChangeBaseline,
            let suppliedBaseline = Self.suppliedChangeBaseline(from: initialTrace, entry: entry.event) {
-            state.recordActionChangeBaseline(suppliedBaseline)
-            accumulatedTrace = WaitAccumulatedTrace(baseline: suppliedBaseline)
-            accumulatedTrace?.append(entry)
-            state.record(
-                waitEvaluation(for: step.predicate, observation: entry, accumulatedTrace: accumulatedTrace),
-                traceOverride: accumulatedTrace?.trace
+            let reduced = stream.reducing(
+                entry,
+                predicate: step.predicate,
+                baselineSeed: .supplied(suppliedBaseline)
             )
+            stream = reduced.state
+            state.record(reduced.reduction)
             if state.lastEvaluation.met || timeout == 0 {
                 return waitReceipt(
                     for: step,
@@ -101,10 +101,13 @@ enum PredicateObservationDiagnostics {
                 )
             }
         } else if step.predicate.requiresChangeBaseline {
-            state.recordChangeBaseline(entry)
-            if let baseline = state.changeBaseline {
-                accumulatedTrace = WaitAccumulatedTrace(baseline: baseline)
-            }
+            let reduced = stream.reducing(
+                entry,
+                predicate: step.predicate,
+                baselineSeed: .currentObservation
+            )
+            stream = reduced.state
+            state.recordBaseline(reduced.reduction)
             if timeout == 0 {
                 return waitReceipt(
                     for: step,
@@ -114,7 +117,9 @@ enum PredicateObservationDiagnostics {
                 )
             }
         } else {
-            state.record(waitEvaluation(for: step.predicate, observation: entry, accumulatedTrace: nil))
+            let reduced = stream.reducing(entry, predicate: step.predicate)
+            stream = reduced.state
+            state.record(reduced.reduction)
             if state.lastEvaluation.met || timeout == 0 {
                 return waitReceipt(
                     for: step,
@@ -140,23 +145,17 @@ enum PredicateObservationDiagnostics {
             requiresChangeBaseline: step.predicate.requiresChangeBaseline,
             pollWhenTimeoutZero: false,
             evaluate: { observation, _ in
-                accumulatedTrace?.append(observation)
-                return waitEvaluation(
-                    for: step.predicate,
-                    observation: observation,
-                    accumulatedTrace: accumulatedTrace
-                ).expectation
+                let reduced = stream.reducing(observation, predicate: step.predicate)
+                stream = reduced.state
+                return reduced.reduction.expectation
             },
             isMatched: { $0.met }
         )
 
-        if let observation = pollResult.lastObservation,
-           let expectation = pollResult.lastEvaluation {
-            state.record(
-                (observation, expectation),
-                traceOverride: accumulatedTrace?.trace
-            )
-            if expectation.met {
+        if let reduction = stream.latestReduction,
+           pollResult.lastEvaluation != nil {
+            state.record(reduction)
+            if reduction.expectation.met {
                 return waitReceipt(for: step, state: state, start: start, success: true)
             }
         }
@@ -189,7 +188,7 @@ enum PredicateObservationDiagnostics {
         shouldPoll: Bool
     ) async -> HeistWaitReceipt {
         var state = WaitPredicateState(predicate: step.predicate)
-        var accumulatedTrace: WaitAccumulatedTrace?
+        var stream = PredicateObservationStreamState()
 
         if shouldPoll {
             let pollResult = await PredicatePollingEngine<ExpectationResult>(
@@ -202,41 +201,26 @@ enum PredicateObservationDiagnostics {
                 changeBaselineSequence: nil,
                 requiresChangeBaseline: step.predicate.requiresChangeBaseline,
                 pollWhenTimeoutZero: false,
-                evaluate: { observation, changeBaselineSequence in
-                    if step.predicate.requiresChangeBaseline,
-                       state.changeBaseline == nil {
-                        state.recordChangeBaseline(
-                            observation,
-                            usingEventPreviousWhenAvailable: true
-                        )
-                        accumulatedTrace = state.changeBaseline.flatMap(WaitAccumulatedTrace.init(baseline:))
-                    }
-                    guard !step.predicate.requiresChangeBaseline ||
-                          observation.event.sequence > (changeBaselineSequence ?? 0)
-                    else {
-                        return ExpectationResult(
-                            met: false,
-                            predicate: step.predicate,
-                            actual: Self.changePredicateNeedsFutureObservationMessage
-                        )
-                    }
-                    accumulatedTrace?.append(observation)
-                    return waitEvaluation(
-                        for: step.predicate,
-                        observation: observation,
-                        accumulatedTrace: accumulatedTrace
-                    ).expectation
+                evaluate: { observation, _ in
+                    let baselineSeed: PredicateObservationBaselineSeed =
+                        step.predicate.requiresChangeBaseline && stream.changeBaseline == nil
+                            ? .previousObservationIfAvailable
+                            : .preserve
+                    let reduced = stream.reducing(
+                        observation,
+                        predicate: step.predicate,
+                        baselineSeed: baselineSeed
+                    )
+                    stream = reduced.state
+                    return reduced.reduction.expectation
                 },
                 isMatched: { $0.met }
             )
 
-            if let observation = pollResult.lastObservation,
-               let expectation = pollResult.lastEvaluation {
-                state.record(
-                    (observation, expectation),
-                    traceOverride: accumulatedTrace?.trace
-                )
-                if expectation.met {
+            if let reduction = stream.latestReduction,
+               pollResult.lastEvaluation != nil {
+                state.record(reduction)
+                if reduction.expectation.met {
                     return waitReceipt(for: step, state: state, start: start, success: true)
                 }
             }
@@ -256,21 +240,6 @@ enum PredicateObservationDiagnostics {
             )
         }
         return waitReceipt(for: step, state: state, start: start, success: false)
-    }
-
-    private func waitEvaluation(
-        for predicate: AccessibilityPredicate,
-        observation: HeistSemanticObservation,
-        accumulatedTrace: WaitAccumulatedTrace?
-    ) -> WaitEvaluation {
-        return (
-            observation,
-            PredicateEvaluation.evaluate(
-                predicate,
-                currentElements: observation.state.interface.projectedElements,
-                accumulatedDelta: accumulatedTrace?.delta
-            )
-        )
     }
 
     private func initialTraceChangeEvaluation(
@@ -527,8 +496,6 @@ enum PredicateObservationDiagnostics {
     }
 }
 
-private typealias WaitEvaluation = (observation: HeistSemanticObservation, expectation: ExpectationResult)
-
 struct WaitChangeBaseline {
     let sequence: SettledObservationSequence
     let capture: AccessibilityTrace.Capture?
@@ -613,6 +580,272 @@ private extension AccessibilityTrace.Delta {
         case .noChange, .elementsChanged, .screenChanged:
             return self
         }
+    }
+}
+
+enum PredicateObservationBaselineSeed {
+    case preserve
+    case supplied(WaitChangeBaseline)
+    case currentObservation
+    case previousObservationIfAvailable
+}
+
+/// Reduces a settled observation stream into current-state match evidence and
+/// baseline-to-current transition evidence without reading mutable runtime state.
+struct PredicateObservationStreamState {
+    let changeBaseline: WaitChangeBaseline?
+    let latestReduction: PredicateObservationReduction?
+    private let accumulatedTrace: WaitAccumulatedTrace?
+
+    init() {
+        self.init(changeBaseline: nil, accumulatedTrace: nil, latestReduction: nil)
+    }
+
+    private init(
+        changeBaseline: WaitChangeBaseline?,
+        accumulatedTrace: WaitAccumulatedTrace?,
+        latestReduction: PredicateObservationReduction?
+    ) {
+        self.changeBaseline = changeBaseline
+        self.accumulatedTrace = accumulatedTrace
+        self.latestReduction = latestReduction
+    }
+
+    func reducing(
+        _ observation: HeistSemanticObservation,
+        predicate: AccessibilityPredicate,
+        baselineSeed: PredicateObservationBaselineSeed = .preserve
+    ) -> (state: PredicateObservationStreamState, reduction: PredicateObservationReduction) {
+        var baseline = changeBaseline
+        var trace = accumulatedTrace
+        var shouldAppendToChangeWindow = baseline != nil
+
+        if baseline == nil {
+            switch baselineSeed {
+            case .preserve:
+                shouldAppendToChangeWindow = false
+            case .supplied(let suppliedBaseline):
+                baseline = suppliedBaseline
+                trace = WaitAccumulatedTrace(baseline: suppliedBaseline)
+                shouldAppendToChangeWindow = true
+            case .currentObservation:
+                let currentBaseline = WaitChangeBaseline(event: observation.event)
+                baseline = currentBaseline
+                trace = WaitAccumulatedTrace(baseline: currentBaseline)
+                shouldAppendToChangeWindow = false
+            case .previousObservationIfAvailable:
+                let inferredBaseline = WaitChangeBaseline(previousOf: observation.event)
+                    ?? WaitChangeBaseline(event: observation.event)
+                baseline = inferredBaseline
+                trace = WaitAccumulatedTrace(baseline: inferredBaseline)
+                shouldAppendToChangeWindow = true
+            }
+        }
+
+        if shouldAppendToChangeWindow {
+            trace?.append(observation)
+        }
+
+        let evidence = PredicateObservationEvidence(
+            snapshot: PredicateObservationSnapshot(observation),
+            transition: baseline.map {
+                PredicateTransitionEvidence(
+                    baseline: $0,
+                    observedSequence: observation.event.sequence,
+                    accumulatedTrace: trace
+                )
+            }
+        )
+        let reduction = PredicateObservationReduction(
+            evidence: evidence,
+            expectation: PredicateEvaluation.evaluate(predicate, in: evidence)
+        )
+        return (
+            PredicateObservationStreamState(
+                changeBaseline: baseline,
+                accumulatedTrace: trace,
+                latestReduction: reduction
+            ),
+            reduction
+        )
+    }
+}
+
+struct PredicateObservationReduction {
+    let evidence: PredicateObservationEvidence
+    let expectation: ExpectationResult
+
+    var observation: HeistSemanticObservation {
+        evidence.observation
+    }
+
+    var trace: AccessibilityTrace? {
+        evidence.trace
+    }
+
+    var changeBaseline: WaitChangeBaseline? {
+        evidence.changeBaseline
+    }
+
+    var sawObservationAfterBaseline: Bool {
+        evidence.sawObservationAfterBaseline
+    }
+}
+
+struct PredicateObservationEvidence {
+    private let snapshot: PredicateObservationSnapshot
+    private let stateMatches: PredicateStateMatchSet
+    private let transition: PredicateTransitionEvidence?
+
+    fileprivate init(
+        snapshot: PredicateObservationSnapshot,
+        transition: PredicateTransitionEvidence?
+    ) {
+        self.snapshot = snapshot
+        self.stateMatches = PredicateStateMatchSet(elements: snapshot.elements)
+        self.transition = transition
+    }
+
+    var observation: HeistSemanticObservation {
+        snapshot.observation
+    }
+
+    var trace: AccessibilityTrace? {
+        transition?.trace ?? snapshot.trace
+    }
+
+    var changeBaseline: WaitChangeBaseline? {
+        transition?.baseline
+    }
+
+    var sawObservationAfterBaseline: Bool {
+        transition?.sawObservationAfterBaseline ?? false
+    }
+
+    func evaluate(_ predicate: AccessibilityPredicate) -> ExpectationResult {
+        switch predicate {
+        case .state(let state):
+            return stateMatches.evaluate(state, predicate: predicate)
+        case .changePredicate, .noChangePredicate:
+            guard let transition else {
+                return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
+            }
+            guard transition.sawObservationAfterBaseline else {
+                return ExpectationResult(
+                    met: false,
+                    predicate: predicate,
+                    actual: PredicateObservationDiagnostics.changePredicateNeedsFutureObservationMessage
+                )
+            }
+            return PredicateChangeMatchSet(
+                currentElements: stateMatches.elements,
+                transition: transition
+            ).evaluate(predicate)
+        }
+    }
+}
+
+private struct PredicateObservationSnapshot {
+    let observation: HeistSemanticObservation
+    let sequence: SettledObservationSequence
+    let elements: [HeistElement]
+    let trace: AccessibilityTrace
+    let summary: String
+
+    init(_ observation: HeistSemanticObservation) {
+        self.observation = observation
+        self.sequence = observation.event.sequence
+        self.elements = observation.state.interface.projectedElements
+        self.trace = observation.accessibilityTrace
+        self.summary = observation.summary
+    }
+}
+
+private struct PredicateStateMatchSet {
+    let elements: [HeistElement]
+
+    func evaluate(
+        _ state: AccessibilityPredicate.State,
+        predicate: AccessibilityPredicate?
+    ) -> ExpectationResult {
+        let outcome = evaluate(state)
+        return ExpectationResult(met: outcome.met, predicate: predicate, actual: outcome.actual)
+    }
+
+    private func evaluate(_ state: AccessibilityPredicate.State) -> (met: Bool, actual: String?) {
+        switch state.contract {
+        case .element(let requirement, let predicate):
+            let isPresent = !matchingElements(predicate).isEmpty
+            let met = requirement.isMet(isPresent: isPresent)
+            return (met, met ? nil : requirement.failureDescription(for: predicate))
+        case .target(let requirement, let target):
+            let isPresent = !matchingElements(target).isEmpty
+            let met = requirement.isMet(isPresent: isPresent)
+            return (met, met ? nil : requirement.failureDescription(for: target))
+        case .all(let states):
+            guard !states.isEmpty else {
+                return (false, AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription)
+            }
+            let failures = states.compactMap { state -> String? in
+                let outcome = evaluate(state)
+                return outcome.met ? nil : (outcome.actual ?? state.description)
+            }
+            return (failures.isEmpty, failures.isEmpty ? nil : failures.joined(separator: "; "))
+        }
+    }
+
+    private func matchingElements(_ predicate: ElementPredicate) -> [HeistElement] {
+        elements.filter { predicate.matches($0) }
+    }
+
+    private func matchingElements(_ target: ElementTarget) -> [HeistElement] {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            let matches = matchingElements(predicate)
+            guard let ordinal else { return matches }
+            guard matches.indices.contains(ordinal) else { return [] }
+            return [matches[ordinal]]
+        }
+    }
+}
+
+private struct PredicateChangeMatchSet {
+    let currentElements: [HeistElement]
+    let transition: PredicateTransitionEvidence
+
+    func evaluate(_ predicate: AccessibilityPredicate) -> ExpectationResult {
+        predicate.evaluate(
+            currentElements: currentElements,
+            accumulatedDelta: transition.accumulatedDelta
+        )
+    }
+}
+
+private struct PredicateTransitionEvidence {
+    let baseline: WaitChangeBaseline
+    let observedSequence: SettledObservationSequence
+    private let accumulatedTrace: WaitAccumulatedTrace?
+
+    init(
+        baseline: WaitChangeBaseline,
+        observedSequence: SettledObservationSequence,
+        accumulatedTrace: WaitAccumulatedTrace?
+    ) {
+        self.baseline = baseline
+        self.observedSequence = observedSequence
+        self.accumulatedTrace = accumulatedTrace
+    }
+
+    var trace: AccessibilityTrace? {
+        accumulatedTrace?.trace
+    }
+
+    var accumulatedDelta: AccessibilityTrace.AccumulatedDelta? {
+        accumulatedTrace?.delta
+    }
+
+    var sawObservationAfterBaseline: Bool {
+        observedSequence > baseline.sequence
     }
 }
 
@@ -716,33 +949,21 @@ private struct WaitPredicateState {
         )
     }
 
-    mutating func record(_ evaluation: WaitEvaluation, traceOverride: AccessibilityTrace? = nil) {
-        lastTrace = traceOverride ?? evaluation.observation.accessibilityTrace
-        lastObservationSummary = evaluation.observation.summary
-        lastEvaluation = evaluation.expectation
-        observedSequence = evaluation.observation.event.sequence
-        sawObservationAfterBaseline = changeBaseline
-            .map { evaluation.observation.event.sequence > $0.sequence } ?? false
+    mutating func record(_ reduction: PredicateObservationReduction) {
+        lastTrace = reduction.trace ?? reduction.observation.accessibilityTrace
+        lastObservationSummary = reduction.observation.summary
+        lastEvaluation = reduction.expectation
+        observedSequence = reduction.observation.event.sequence
+        changeBaseline = reduction.changeBaseline
+        sawObservationAfterBaseline = reduction.sawObservationAfterBaseline
     }
 
-    mutating func recordChangeBaseline(
-        _ observation: HeistSemanticObservation,
-        usingEventPreviousWhenAvailable: Bool = false
-    ) {
-        changeBaseline = if usingEventPreviousWhenAvailable,
-                            let previousBaseline = WaitChangeBaseline(previousOf: observation.event) {
-            previousBaseline
-        } else {
-            WaitChangeBaseline(event: observation.event)
-        }
-        lastTrace = observation.accessibilityTrace
-        lastObservationSummary = observation.summary
-        observedSequence = observation.event.sequence
-    }
-
-    mutating func recordActionChangeBaseline(_ baseline: WaitChangeBaseline) {
-        changeBaseline = baseline
-        observedSequence = baseline.sequence
+    mutating func recordBaseline(_ reduction: PredicateObservationReduction) {
+        lastTrace = reduction.observation.accessibilityTrace
+        lastObservationSummary = reduction.observation.summary
+        observedSequence = reduction.observation.event.sequence
+        changeBaseline = reduction.changeBaseline
+        sawObservationAfterBaseline = reduction.sawObservationAfterBaseline
     }
 }
 

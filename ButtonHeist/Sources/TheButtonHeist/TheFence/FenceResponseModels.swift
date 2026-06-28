@@ -94,38 +94,80 @@ enum FenceRequestErrorCode {
     static let missingTarget = "request.missing_target"
 }
 
-private enum PublicFailureMapper {
-    static func map(_ error: Error) -> PublicFailure {
+enum DiagnosticFailureMapper {
+    static func map(_ error: Error) -> DiagnosticFailure {
         switch error {
         case let fenceError as FenceError:
             return map(fenceError)
         case let connectionError as HandoffConnectionError:
             return map(FenceError(connectionError))
         case let configError as TargetConfigLoadError:
-            return PublicFailure(
+            return DiagnosticFailure(
                 message: configError.displayMessage,
                 details: configError.failureDetails
             )
         case let validationError as SchemaValidationError:
-            return map(FenceError.invalidRequest(validationError.message))
+            return DiagnosticFailure(
+                message: validationError.message,
+                details: FailureDetails(code: .requestValidationError)
+            )
+        case let adapterError as PublicAdapterInputError:
+            return DiagnosticFailure(
+                message: adapterError.message,
+                details: FailureDetails(code: .requestInvalid)
+            )
         case let missingTarget as TheFence.MissingElementTarget:
             return missingElementTargetFailure(command: missingTarget.command)
         case let routingError as FenceOperationRoutingError:
-            return map(FenceError.invalidRequest(routingError.message))
+            return DiagnosticFailure(message: routingError.message, details: routingError.details)
         default:
-            return PublicFailure(message: error.displayMessage, details: nil)
+            return DiagnosticFailure(message: error.displayMessage, details: nil)
         }
     }
 
-    static func map(_ fenceError: FenceError) -> PublicFailure {
-        PublicFailure(message: fenceError.coreMessage, details: fenceError.failureDetails)
+    static func map(_ fenceError: FenceError) -> DiagnosticFailure {
+        DiagnosticFailure(message: fenceError.coreMessage, details: fenceError.failureDetails)
     }
 
-    static func map(message: String, details: FailureDetails?) -> PublicFailure {
-        PublicFailure(message: message, details: details)
+    static func map(message: String, details: FailureDetails?) -> DiagnosticFailure {
+        DiagnosticFailure(message: message, details: details)
     }
 
-    private static func missingElementTargetFailure(command: String) -> PublicFailure {
+    static func map(errorKind: ErrorKind, message: String) -> DiagnosticFailure {
+        DiagnosticFailure(message: message, details: failureDetails(for: errorKind))
+    }
+
+    static func map(reportFailure: HeistFailureDetail, message: String? = nil) -> DiagnosticFailure {
+        DiagnosticFailure(
+            message: message ?? reportFailure.observed,
+            details: failureDetails(for: reportFailure)
+        )
+    }
+
+    static func failureDetails(for errorKind: ErrorKind) -> FailureDetails {
+        errorKind.failureDetails
+    }
+
+    static func failureDetails(for reportFailure: HeistFailureDetail) -> FailureDetails {
+        switch reportFailure.category {
+        case .validation:
+            return FailureDetails(code: .requestValidationError)
+        case .runtimeUnavailable:
+            return FailureDetails(code: .connectionNotConnected)
+        case .targetResolution:
+            return FailureDetails(code: .requestElementNotFound)
+        case .wait:
+            return FailureDetails(code: .requestTimeout)
+        case .action,
+             .expectation,
+             .invocation,
+             .loop,
+             .explicitFailure:
+            return FailureDetails(code: .requestActionFailed)
+        }
+    }
+
+    private static func missingElementTargetFailure(command: String) -> DiagnosticFailure {
         let contract = "requires target object with predicate fields"
         let next = "get_interface()"
         let matcherFields = ElementTarget.predicateFieldNames.map { "target.\($0)" }
@@ -138,7 +180,7 @@ private enum PublicFailureMapper {
         let targetHint = matcherHint
         let message = "\(command) request contract failed: missing target; \(contract). " +
             "Next: \(next) to inspect the current app accessibility state, then retry \(command) with \(targetHint)."
-        return PublicFailure(
+        return DiagnosticFailure(
             message: message,
             details: FailureDetails(
                 errorCode: FenceRequestErrorCode.missingTarget,
@@ -187,19 +229,19 @@ public enum FenceResponse {
 
     /// Builds an error response with typed metadata when the error belongs to TheFence.
     public static func failure(_ error: Error) -> FenceResponse {
-        let failure = PublicFailureMapper.map(error)
+        let failure = DiagnosticFailureMapper.map(error)
         return .error(failure)
     }
 
     /// Builds an error response from the canonical public failure value.
-    public static func error(_ failure: PublicFailure) -> FenceResponse {
+    public static func error(_ failure: DiagnosticFailure) -> FenceResponse {
         .error(failure.message, details: failure.details)
     }
 
     /// Canonical public failure payload when this response is an error.
-    public var publicFailure: PublicFailure? {
+    public var diagnosticFailure: DiagnosticFailure? {
         guard case .error(let message, let details) = self else { return nil }
-        return PublicFailureMapper.map(message: message, details: details)
+        return DiagnosticFailureMapper.map(message: message, details: details)
     }
 
     /// Whether callers should treat this response as a failed command.

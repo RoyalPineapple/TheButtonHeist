@@ -344,10 +344,10 @@ public extension AccessibilityPredicate.Change {
         matches change: ElementPropertyChange<P>
     ) -> Bool where P.Checker == StringMatch<String> {
         if let before = change.before {
-            guard before.matchesPropertyValue(propertyChange.old) else { return false }
+            guard before.matchesPropertyValue(propertyChange.oldValue) else { return false }
         }
         if let after = change.after {
-            guard after.matchesPropertyValue(propertyChange.new) else { return false }
+            guard after.matchesPropertyValue(propertyChange.newValue) else { return false }
         }
         return true
     }
@@ -357,24 +357,24 @@ public extension AccessibilityPredicate.Change {
         matches change: ElementPropertyChange<TraitsProperty>
     ) -> Bool {
         if let before = change.before {
-            guard before.matchesTraitPropertyValue(propertyChange.old) else { return false }
+            guard before.matchesTraitPropertyValue(propertyChange.oldValue) else { return false }
         }
         if let after = change.after {
-            guard after.matchesTraitPropertyValue(propertyChange.new) else { return false }
+            guard after.matchesTraitPropertyValue(propertyChange.newValue) else { return false }
         }
         return true
     }
 
     private static func describeUpdate(_ edit: ElementUpdate, changes: [PropertyChange]) -> String {
-        let properties = changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
+        let properties = changes.map { "\($0.property.rawValue): \($0.displayTransition)" }
         let name = edit.after.label ?? edit.before.label ?? edit.after.description
         return "\(name): \(properties.joined(separator: ", "))"
     }
 }
 
 private extension StringMatch where Value == String {
-    func matchesPropertyValue(_ candidate: String?) -> Bool {
-        guard let candidate else { return false }
+    func matchesPropertyValue(_ candidate: ElementPropertyValue?) -> Bool {
+        guard let candidate = candidate?.stringMatchText else { return false }
         switch self {
         case .exact(let pattern):
             return ElementPredicate.stringEquals(candidate, pattern)
@@ -392,10 +392,8 @@ private extension StringMatch where Value == String {
 }
 
 private extension TraitSetMatch {
-    func matchesTraitPropertyValue(_ value: String?) -> Bool {
-        let traits = Set((value ?? "")
-            .split(separator: ",")
-            .compactMap { HeistTrait(rawValue: $0.trimmingCharacters(in: .whitespacesAndNewlines)) })
+    func matchesTraitPropertyValue(_ value: ElementPropertyValue?) -> Bool {
+        guard let traits = value?.traitSet else { return false }
         return include.allSatisfy { traits.contains($0) }
             && exclude.allSatisfy { !traits.contains($0) }
     }

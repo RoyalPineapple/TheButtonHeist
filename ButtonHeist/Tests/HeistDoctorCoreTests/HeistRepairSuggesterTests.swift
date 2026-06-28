@@ -43,79 +43,106 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
     ),
 ])
 
-private let expectedRepairJSONReportJSON = """
-{
-  "featureStatus" : "alpha",
-  "suggestions" : [
-    {
-      "caveats" : [
+private let expectedRepairJSONReportDTO = RepairJSONReportDTO(
+    featureStatus: "alpha",
+    suggestions: [
+        RepairJSONSuggestionDTO(
+            caveats: [],
+            confidence: "medium",
+            failureKind: "missingTarget",
+            newResolvedElement: RepairJSONElementSummaryDTO(
+                actions: ["activate"],
+                description: "Remove",
+                label: "Remove",
+                rotors: [],
+                siblingText: ["Milk"],
+                traits: ["button"],
+                headerText: []
+            ),
+            newTarget: repairLabelTargetDTO("Remove"),
+            oldResolvedElement: RepairJSONElementSummaryDTO(
+                actions: ["activate"],
+                description: "Delete",
+                label: "Delete",
+                rotors: [],
+                siblingText: ["Milk"],
+                traits: ["button"],
+                headerText: []
+            ),
+            oldTarget: repairLabelTargetDTO("Delete"),
+            reasons: [
+                "Old target resolved to one element in the last successful before snapshot.",
+                "Suggested matcher resolves exactly one element in the new before snapshot.",
+            ],
+            stepPath: "$.body[0]"
+        ),
+    ]
+)
 
-      ],
-      "confidence" : "medium",
-      "failureKind" : "missingTarget",
-      "newResolvedElement" : {
-        "actions" : [
-          "activate"
-        ],
-        "description" : "Remove",
-        "headerText" : [
-
-        ],
-        "label" : "Remove",
-        "rotors" : [
-
-        ],
-        "siblingText" : [
-          "Milk"
-        ],
-        "traits" : [
-          "button"
-        ]
-      },
-      "newTarget" : {
-        "checks" : [
-          {
-            "kind" : "label",
-            "match" : "Remove"
-          }
-        ]
-      },
-      "oldResolvedElement" : {
-        "actions" : [
-          "activate"
-        ],
-        "description" : "Delete",
-        "headerText" : [
-
-        ],
-        "label" : "Delete",
-        "rotors" : [
-
-        ],
-        "siblingText" : [
-          "Milk"
-        ],
-        "traits" : [
-          "button"
-        ]
-      },
-      "oldTarget" : {
-        "checks" : [
-          {
-            "kind" : "label",
-            "match" : "Delete"
-          }
-        ]
-      },
-      "reasons" : [
-        "Old target resolved to one element in the last successful before snapshot.",
-        "Suggested matcher resolves exactly one element in the new before snapshot."
-      ],
-      "stepPath" : "$.body[0]"
-    }
-  ]
+private struct RepairJSONReportDTO: Decodable, Equatable {
+    let featureStatus: String
+    let suggestions: [RepairJSONSuggestionDTO]
 }
-"""
+
+private struct RepairJSONSuggestionDTO: Decodable, Equatable {
+    let caveats: [String]
+    let confidence: String
+    let failureKind: String
+    let newResolvedElement: RepairJSONElementSummaryDTO
+    let newTarget: JSONValue
+    let oldResolvedElement: RepairJSONElementSummaryDTO
+    let oldTarget: JSONValue
+    let reasons: [String]
+    let stepPath: String
+}
+
+private struct RepairJSONElementSummaryDTO: Decodable, Equatable {
+    let actions: [String]
+    let description: String
+    let label: String?
+    let value: String?
+    let identifier: String?
+    let hint: String?
+    let rotors: [String]
+    let siblingText: [String]
+    let traits: [String]
+    let headerText: [String]
+
+    init(
+        actions: [String],
+        description: String,
+        label: String? = nil,
+        value: String? = nil,
+        identifier: String? = nil,
+        hint: String? = nil,
+        rotors: [String],
+        siblingText: [String],
+        traits: [String],
+        headerText: [String]
+    ) {
+        self.actions = actions
+        self.description = description
+        self.label = label
+        self.value = value
+        self.identifier = identifier
+        self.hint = hint
+        self.rotors = rotors
+        self.siblingText = siblingText
+        self.traits = traits
+        self.headerText = headerText
+    }
+}
+
+private func repairLabelTargetDTO(_ label: String) -> JSONValue {
+    .object([
+        "checks": .array([
+            .object([
+                "kind": .string("label"),
+                "match": .string(label),
+            ]),
+        ]),
+    ])
+}
 
 @Suite struct HeistRepairSuggesterTests {
 
@@ -409,7 +436,7 @@ private let expectedRepairJSONReportJSON = """
     func wrongActionCapabilityBlocksUnsupportedSuggestions() {
         let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
         let last = evidence(
-            actionKind: "increment",
+            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", traits: [.adjustable], actions: [.increment, .decrement]),
@@ -417,7 +444,7 @@ private let expectedRepairJSONReportJSON = """
             succeeded: true
         )
         let current = evidence(
-            actionKind: "increment",
+            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", traits: [.staticText], actions: []),
@@ -432,7 +459,7 @@ private let expectedRepairJSONReportJSON = """
     func wrongActionCapabilityCanSuggestACompatibleSuccessorWithLoweredConfidence() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
         let last = evidence(
-            actionKind: "increment",
+            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", value: "1", traits: [.adjustable], actions: [.increment, .decrement]),
@@ -440,7 +467,7 @@ private let expectedRepairJSONReportJSON = """
             succeeded: true
         )
         let current = evidence(
-            actionKind: "increment",
+            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", value: "1", traits: [.staticText], actions: []),
@@ -495,14 +522,16 @@ private let expectedRepairJSONReportJSON = """
 
         let suggestion = try #require(HeistRepairSuggester.suggestions(for: request(last, current)).first)
         let data = try JSONEncoder().encode(suggestion)
-        let json = try #require(String(data: data, encoding: .utf8))
+        let json = try JSONProbe(data: data)
 
-        #expect(!json.contains("frameX"))
-        #expect(!json.contains("frameY"))
-        #expect(!json.contains("activationPoint"))
-        #expect(!json.contains("capture"))
-        #expect(!json.contains("containerHandle"))
-        #expect(!json.contains(runtimeIdentifier))
+        try json.assertRecursivelyMissingKeys([
+            "frameX",
+            "frameY",
+            "activationPoint",
+            "capture",
+            "containerHandle",
+        ])
+        try json.assertRecursivelyMissingStringValues([runtimeIdentifier])
         #expect(suggestion.newResolvedElement.identifier == nil)
         #expect(resolvedCount(suggestion.newTarget, in: current.beforeSnapshot) == 1)
     }
@@ -513,10 +542,10 @@ private let expectedRepairJSONReportJSON = """
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
         let data = try encoder.encode(repairJSONReportFixture)
-        let json = try #require(String(data: data, encoding: .utf8))
+        let decodedDTO = try JSONDecoder().decode(RepairJSONReportDTO.self, from: data)
         let decodedReport = try JSONDecoder().decode(HeistDoctorReport.self, from: data)
 
-        #expect(json == expectedRepairJSONReportJSON)
+        #expect(decodedDTO == expectedRepairJSONReportDTO)
         #expect(decodedReport == repairJSONReportFixture)
     }
 
@@ -586,7 +615,7 @@ private let expectedRepairJSONReportJSON = """
                 elementCount: 1,
                 edits: ElementEdits(updated: [
                     ElementUpdate(before: element(label: "Quantity", value: "1", traits: [.button]), after: changed, changes: [
-                        PropertyChange(property: .value, old: "1", new: "2"),
+                        PropertyChange(property: .value, oldValue: .text("1"), newValue: .text("2")),
                     ]),
                 ])
             )),
@@ -818,8 +847,7 @@ private let expectedRepairJSONReportJSON = """
         }
         let currentScreen = RepairScreen(interface: current.beforeSnapshot)
         let actionFamily = RepairActionFamily(
-            actionKind: current.actionKind,
-            method: current.result.method ?? last.result.method
+            actionIdentity: current.actionIdentity
         )
         return RepairCandidateGenerator.rankedSuccessorCandidates(
             oldResolved: oldResolved,
@@ -835,7 +863,7 @@ private let expectedRepairJSONReportJSON = """
     private func evidence(
         heistFingerprint: String? = nil,
         stepPath: String = "$.steps[0]",
-        actionKind: String = "activate",
+        actionIdentity: HeistRepairActionIdentity = HeistRepairActionIdentity(commandType: .activate),
         target: ElementTarget,
         before: Interface,
         afterDelta: AccessibilityTrace.Delta? = nil,
@@ -846,25 +874,25 @@ private let expectedRepairJSONReportJSON = """
         HeistStepRepairEvidence(
             heistFingerprint: heistFingerprint,
             stepPath: stepPath,
-            actionKind: actionKind,
+            actionIdentity: actionIdentity,
             target: target,
             beforeSnapshot: before,
             afterDelta: afterDelta,
             afterSnapshot: afterSnapshot,
             result: HeistStepRepairResult(
                 succeeded: succeeded,
-                method: method(for: actionKind),
+                method: method(for: actionIdentity),
                 errorKind: succeeded ? nil : .elementNotFound,
                 expectation: expectation
             )
         )
     }
 
-    private func method(for actionKind: String) -> ActionMethod? {
-        switch actionKind {
-        case "activate":
+    private func method(for actionIdentity: HeistRepairActionIdentity) -> ActionMethod? {
+        switch actionIdentity.commandType {
+        case .activate:
             return .activate
-        case "increment":
+        case .increment:
             return .increment
         default:
             return nil

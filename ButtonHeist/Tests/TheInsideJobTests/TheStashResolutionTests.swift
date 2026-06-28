@@ -684,6 +684,46 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(semanticInterface.annotations.containers, [])
     }
 
+    func testKnownContentOriginsAreKeyedByHeistIdForEqualElements() {
+        let repeated = AccessibilityElement.make(
+            label: "Repeat",
+            traits: .button,
+            frame: CGRect(x: 0, y: 0, width: 100, height: 44)
+        )
+        let firstOrigin = CGPoint(x: 0, y: 100)
+        let secondOrigin = CGPoint(x: 0, y: 500)
+        bagman.installScreenForTesting(Screen(
+            elements: [
+                "repeat_button_1": Screen.ScreenElement(
+                    heistId: "repeat_button_1",
+                    contentSpaceOrigin: firstOrigin,
+                    scrollContainerPath: TreePath([0]),
+                    element: repeated
+                ),
+                "repeat_button_2": Screen.ScreenElement(
+                    heistId: "repeat_button_2",
+                    contentSpaceOrigin: secondOrigin,
+                    scrollContainerPath: TreePath([0]),
+                    element: repeated
+                ),
+            ],
+            hierarchy: [
+                .element(repeated, traversalIndex: 0),
+                .element(repeated, traversalIndex: 1),
+            ],
+            heistIdsByPath: [
+                TreePath([0]): "repeat_button_1",
+                TreePath([1]): "repeat_button_2",
+            ],
+            firstResponderHeistId: nil,
+        ))
+
+        let origins = bagman.knownContentOriginsByHeistId()
+
+        XCTAssertEqual(origins["repeat_button_1"] ?? nil, firstOrigin)
+        XCTAssertEqual(origins["repeat_button_2"] ?? nil, secondOrigin)
+    }
+
     func testTimeoutZeroTurnsObservationCycleBeforeReturningCleanLatest() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(first)

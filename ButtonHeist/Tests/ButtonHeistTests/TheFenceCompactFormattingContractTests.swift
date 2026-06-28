@@ -63,8 +63,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("errorClass"), "elementNotFound")
+        XCTAssertEqual(try json.string("errorCode"), "request.element_not_found")
+        XCTAssertEqual(try json.string("kind"), "request")
+        XCTAssertEqual(try json.string("phase"), "request")
+        XCTAssertEqual(try json.bool("retryable"), false)
         try json.assertMissing("expectation")
-        XCTAssertEqual(response.compactFormatted(), "activate: error[elementNotFound]: button disabled")
+        XCTAssertEqual(response.compactFormatted(), "activate: error[request.element_not_found]: button disabled")
         XCTAssertEqual(response.humanFormatted(), "Error: button disabled")
         XCTAssertTrue(response.isFailure)
     }
@@ -84,8 +88,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(try json.string("status"), "error")
         XCTAssertEqual(try json.string("errorClass"), "timeout")
-        try json.assertMissing("errorCode")
-        XCTAssertEqual(response.compactFormatted(), "wait: error[timeout]: timed out after 2s")
+        XCTAssertEqual(try json.string("errorCode"), "request.timeout")
+        XCTAssertEqual(try json.string("kind"), "request")
+        XCTAssertEqual(try json.string("phase"), "request")
+        XCTAssertEqual(try json.bool("retryable"), true)
+        XCTAssertEqual(response.compactFormatted(), "wait: error[request.timeout]: timed out after 2s")
     }
 
     func testActionFailureCodeAndClassAgreeAcrossPublicFormats() throws {
@@ -95,7 +102,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 success: false,
                 method: .activate,
                 message: "Could not access accessibility tree: no traversable app windows",
-                errorKind: .actionFailed
+                errorKind: .accessibilityTreeUnavailable
             )
         )
 
@@ -103,8 +110,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let compact = response.compactFormatted()
 
         XCTAssertEqual(try json.string("status"), "error")
-        XCTAssertEqual(try json.string("errorClass"), "actionFailed")
+        XCTAssertEqual(try json.string("errorClass"), "accessibilityTreeUnavailable")
         XCTAssertEqual(try json.string("errorCode"), "request.accessibility_tree_unavailable")
+        XCTAssertEqual(try json.string("kind"), "request")
+        XCTAssertEqual(try json.string("phase"), "request")
+        XCTAssertEqual(try json.bool("retryable"), true)
         XCTAssertTrue(compact.contains("error[request.accessibility_tree_unavailable]"), compact)
     }
 
@@ -390,7 +400,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let action = try XCTUnwrap(node.evidence?.action)
         let actionResult = try XCTUnwrap(action.result)
         let delta = try XCTUnwrap(actionResult.delta)
-        let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
+        let json = try publicJSONProbe(response)
 
         XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
             status: "ok",
@@ -440,7 +450,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 omittedCount: 2
             )
         )
-        XCTAssertFalse(encoded.contains(#""captures""#), encoded)
+        try json.assertRecursivelyMissingKeys(["captures"])
     }
 
     func testPublicHeistJSONUsesBoundedScreenProjectionForActionDelta() throws {
@@ -476,7 +486,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let node = try XCTUnwrap(report.nodes.first)
         let actionResult = try XCTUnwrap(node.evidence?.action?.result)
         let delta = try XCTUnwrap(actionResult.delta)
-        let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
+        let json = try publicJSONProbe(response)
 
         XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
             status: "ok",
@@ -511,8 +521,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ))
         XCTAssertFalse(node.containsKey("action"))
         XCTAssertFalse(delta.containsKey("newInterface"))
-        XCTAssertFalse(encoded.contains(#""tree""#), encoded)
-        XCTAssertFalse(encoded.contains(#""captures""#), encoded)
+        try json.assertRecursivelyMissingKeys(["tree", "captures"])
     }
 
     func testFailedHeistActionCompactOutputIncludesConcreteElementDeltaEvidence() throws {

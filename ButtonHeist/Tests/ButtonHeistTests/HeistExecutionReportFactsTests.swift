@@ -476,7 +476,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         guard case .failed(let message, let errorKind) = rows.first?.outcome else {
             return XCTFail("Expected failed JUnit row, got \(String(describing: rows.first?.outcome))")
         }
-        XCTAssertEqual(message, "Delete not found")
+        XCTAssertTrue(message.hasPrefix("Delete not found"), message)
+        XCTAssertTrue(message.contains("code: request.element_not_found"), message)
+        XCTAssertTrue(message.contains("kind: request"), message)
+        XCTAssertTrue(message.contains("phase: request"), message)
+        XCTAssertTrue(message.contains("retryable: false"), message)
         XCTAssertEqual(errorKind, .action(.elementNotFound))
     }
 
@@ -511,7 +515,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         guard case .failed(let message, let errorKind) = rows.first?.outcome else {
             return XCTFail("Expected failed JUnit row, got \(String(describing: rows.first?.outcome))")
         }
-        XCTAssertEqual(message, "elementsChanged")
+        XCTAssertTrue(message.hasPrefix("elementsChanged"), message)
+        XCTAssertTrue(message.contains("code: request.action_failed"), message)
+        XCTAssertTrue(message.contains("kind: request"), message)
+        XCTAssertTrue(message.contains("phase: request"), message)
+        XCTAssertTrue(message.contains("retryable: false"), message)
         XCTAssertNil(errorKind)
     }
 

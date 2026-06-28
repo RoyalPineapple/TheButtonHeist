@@ -27,8 +27,7 @@ public struct HeistRepairActionIdentity: Codable, Sendable, Equatable {
 public struct HeistStepRepairEvidence: Codable, Sendable, Equatable {
     public let heistFingerprint: String?
     public let stepPath: String
-    public let actionIdentity: HeistRepairActionIdentity?
-    public let actionKind: String
+    public let actionIdentity: HeistRepairActionIdentity
     public let target: ElementTarget
     /// Parsed Interface hierarchy captured before the action. This is the
     /// durable world-model snapshot repair uses to rerun predicates and recover
@@ -43,8 +42,7 @@ public struct HeistStepRepairEvidence: Codable, Sendable, Equatable {
     public init(
         heistFingerprint: String? = nil,
         stepPath: String,
-        actionIdentity: HeistRepairActionIdentity? = nil,
-        actionKind: String,
+        actionIdentity: HeistRepairActionIdentity,
         target: ElementTarget,
         beforeSnapshot: Interface,
         afterDelta: AccessibilityTrace.Delta? = nil,
@@ -54,7 +52,6 @@ public struct HeistStepRepairEvidence: Codable, Sendable, Equatable {
         self.heistFingerprint = heistFingerprint
         self.stepPath = stepPath
         self.actionIdentity = actionIdentity
-        self.actionKind = actionKind
         self.target = target
         self.beforeSnapshot = beforeSnapshot
         self.afterDelta = afterDelta

@@ -311,19 +311,19 @@ final class Navigation {
     /// back when they have a real consumer.
     struct ScreenManifest {
         /// Containers that have been fully explored.
-        var exploredContainers = Set<AccessibilityContainer>()
+        var exploredContainerPaths = Set<TreePath>()
 
         /// Containers discovered but not yet explored.
-        var pendingContainers = Set<AccessibilityContainer>()
+        var pendingContainerPaths = Set<TreePath>()
 
         /// Total scroll attempts during exploration, including edge resets.
         var scrollCount = 0
 
         /// Per-container scroll attempts during exploration, including edge resets.
-        var scrollCountByContainer: [AccessibilityContainer: Int] = [:]
+        var scrollCountByContainerPath: [TreePath: Int] = [:]
 
         /// Containers that may have omitted content because exploration stopped early.
-        var omittedContainers: [AccessibilityContainer: Set<ExplorationOmissionReason>] = [:]
+        var omittedContainerPaths: [TreePath: Set<ExplorationOmissionReason>] = [:]
 
         /// Whether the total discovery scroll-attempt cap stopped exploration.
         var discoveryLimitHit = false
@@ -364,38 +364,42 @@ final class Navigation {
         // MARK: - Building
 
         mutating func recordScrollAttempt(
-            in container: AccessibilityContainer
+            in containerPath: TreePath
         ) -> ExplorationOmissionReason? {
             guard scrollCount < maxScrollsPerDiscovery else {
                 discoveryLimitHit = true
                 return .discoveryScrollLimit
             }
-            let containerScrollCount = scrollCountByContainer[container, default: 0]
+            let containerScrollCount = scrollCountByContainerPath[containerPath, default: 0]
             guard containerScrollCount < maxScrollsPerContainer else {
                 containerLimitHit = true
                 return .containerScrollLimit
             }
-            scrollCountByContainer[container] = containerScrollCount + 1
+            scrollCountByContainerPath[containerPath] = containerScrollCount + 1
             scrollCount += 1
             return nil
         }
 
-        mutating func markExplored(_ container: AccessibilityContainer) {
-            exploredContainers.insert(container)
-            pendingContainers.remove(container)
-            omittedContainers.removeValue(forKey: container)
+        mutating func markExplored(_ containerPath: TreePath) {
+            exploredContainerPaths.insert(containerPath)
+            pendingContainerPaths.remove(containerPath)
+            omittedContainerPaths.removeValue(forKey: containerPath)
         }
 
-        mutating func addPendingContainers(_ containers: [AccessibilityContainer]) {
-            pendingContainers.formUnion(containers.filter { !exploredContainers.contains($0) })
+        mutating func addPendingContainers(_ containers: [SemanticScreen.Container]) {
+            addPendingContainerPaths(containers.map(\.path))
+        }
+
+        mutating func addPendingContainerPaths(_ containerPaths: [TreePath]) {
+            pendingContainerPaths.formUnion(containerPaths.filter { !exploredContainerPaths.contains($0) })
         }
 
         mutating func markOmitted(
-            _ container: AccessibilityContainer,
+            _ containerPath: TreePath,
             reason: ExplorationOmissionReason
         ) {
-            pendingContainers.insert(container)
-            omittedContainers[container, default: []].insert(reason)
+            pendingContainerPaths.insert(containerPath)
+            omittedContainerPaths[containerPath, default: []].insert(reason)
             switch reason {
             case .discoveryScrollLimit:
                 discoveryLimitHit = true
@@ -422,7 +426,7 @@ final class Navigation {
                 scrollAttempts: scrollCount,
                 maxScrollsPerDiscovery: maxScrollsPerDiscovery,
                 maxScrollsPerContainer: maxScrollsPerContainer,
-                exploredScrollableContainerCount: exploredContainers.count,
+                exploredScrollableContainerCount: exploredContainerPaths.count,
                 omittedScrollableContainerCount: omittedContainerDetails.count,
                 omittedContainers: omittedContainerDetails,
                 nextAction: isLimited ? nextAction(for: reasonCodes) : nil
@@ -455,27 +459,29 @@ final class Navigation {
         }
 
         private func omittedContainerDiagnostics(in screen: Screen) -> [InterfaceDiscoveryOmittedContainer] {
-            var containers = omittedContainers
+            var containers = omittedContainerPaths
             let pendingReason: ExplorationOmissionReason = discoveryLimitHit ? .discoveryScrollLimit : .notExplored
-            for container in pendingContainers where !exploredContainers.contains(container) {
-                containers[container, default: []].insert(pendingReason)
+            for containerPath in pendingContainerPaths where !exploredContainerPaths.contains(containerPath) {
+                containers[containerPath, default: []].insert(pendingReason)
             }
 
-            let diagnostics: [InterfaceDiscoveryOmittedContainer] = containers.map { entry in
-                let (container, reasons) = entry
-                return omittedContainerDiagnostic(container, reasons: reasons, screen: screen)
+            let diagnostics: [InterfaceDiscoveryOmittedContainer] = containers.compactMap { entry in
+                let (containerPath, reasons) = entry
+                return omittedContainerDiagnostic(containerPath, reasons: reasons, screen: screen)
             }
 
             return diagnostics.sorted()
         }
 
         private func omittedContainerDiagnostic(
-            _ container: AccessibilityContainer,
+            _ containerPath: TreePath,
             reasons: Set<ExplorationOmissionReason>,
             screen: Screen
-        ) -> InterfaceDiscoveryOmittedContainer {
+        ) -> InterfaceDiscoveryOmittedContainer? {
+            guard let semanticContainer = screen.semantic.containers[containerPath] else { return nil }
+            let container = semanticContainer.container
             let frame = container.frame
-            let containerName = screen.orderedContainers.first { $0.container == container }?.containerName
+            let containerName = semanticContainer.containerName
 
             guard case .scrollable(let contentSize) = container.type else {
                 return InterfaceDiscoveryOmittedContainer(

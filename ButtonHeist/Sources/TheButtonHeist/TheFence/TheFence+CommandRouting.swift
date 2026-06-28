@@ -7,6 +7,12 @@ import TheScore
 /// failures before a concrete Fence command exists.
 public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
     public let message: String
+    public let details: FailureDetails
+
+    public init(message: String, details: FailureDetails = FailureDetails(code: .requestInvalid)) {
+        self.message = message
+        self.details = details
+    }
 
     public var errorDescription: String? { message }
 }
@@ -42,7 +48,10 @@ public extension TheFence.Command {
             try value.command.descriptor.validatePublicRequestArguments(value.arguments)
             return .success(value)
         } catch let error as SchemaValidationError {
-            return .failure(FenceOperationRoutingError(message: error.message))
+            return .failure(FenceOperationRoutingError(
+                message: error.message,
+                details: FailureDetails(code: .requestValidationError)
+            ))
         } catch {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
@@ -60,7 +69,10 @@ private extension TheFence.Command {
         do {
             commandName = try step.requiredSchemaString("command")
         } catch let error as SchemaValidationError {
-            return .failure(FenceOperationRoutingError(message: error.message))
+            return .failure(FenceOperationRoutingError(
+                message: error.message,
+                details: FailureDetails(code: .requestValidationError)
+            ))
         } catch {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }

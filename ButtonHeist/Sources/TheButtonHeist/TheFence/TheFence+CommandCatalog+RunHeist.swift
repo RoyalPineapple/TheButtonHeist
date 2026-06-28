@@ -127,7 +127,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 param(
                     .target,
                     .object,
-                    objectAdditionalProperties: true
+                    objectProperties: FenceParameterBlocks.inlineElementTargetObjectProperties
                 ),
             ],
             objectAdditionalProperties: false

@@ -34,10 +34,10 @@ struct PublicErrorResponse: FencePublicJSONResponse {
     let details: PublicErrorDetails
 
     init(message: String, details: FailureDetails?) {
-        self.init(failure: PublicFailure(message: message, details: details))
+        self.init(failure: DiagnosticFailure(message: message, details: details))
     }
 
-    init(failure: PublicFailure) {
+    init(failure: DiagnosticFailure) {
         self.message = failure.message
         self.code = failure.code
         self.kind = failure.kind.rawValue
@@ -56,7 +56,7 @@ struct PublicErrorDetails: Encodable {
     let retryable: Bool
     let hint: String?
 
-    init(failure: PublicFailure) {
+    init(failure: DiagnosticFailure) {
         self.code = failure.code
         self.kind = failure.kind.rawValue
         self.phase = failure.details.phase.rawValue
@@ -79,7 +79,7 @@ struct PublicResponseModel: FencePublicJSONResponse {
         case .ok(let message):
             try PublicOKResponse(message: message).encode(to: encoder)
         case .error:
-            guard let failure = response.publicFailure else {
+            guard let failure = response.diagnosticFailure else {
                 try PublicErrorResponse(message: "Unknown error", details: nil).encode(to: encoder)
                 return
             }

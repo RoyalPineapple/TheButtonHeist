@@ -19,9 +19,7 @@ public enum HeistRepairSuggester {
         }
 
         let actionFamily = RepairActionFamily(
-            actionIdentity: request.currentFailure.actionIdentity ?? request.lastSuccess.actionIdentity,
-            actionKind: request.currentFailure.actionKind,
-            method: request.currentFailure.result.method ?? request.lastSuccess.result.method
+            actionIdentity: request.currentFailure.actionIdentity
         )
         let currentResolution = currentScreen.resolve(request.lastSuccess.target)
         let failureKind: HeistRepairFailureKind

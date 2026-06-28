@@ -25,6 +25,7 @@ struct PublicHeistReportNodeDTO: Decodable, Equatable {
     let message: String?
     let durationMs: Int
     let evidence: PublicHeistReportEvidenceDTO?
+    let failure: PublicHeistFailureDetailDTO?
     let children: [PublicHeistReportNodeDTO]
 
     private let jsonKeys: Set<String>
@@ -36,6 +37,7 @@ struct PublicHeistReportNodeDTO: Decodable, Equatable {
         message: String? = nil,
         durationMs: Int,
         evidence: PublicHeistReportEvidenceDTO? = nil,
+        failure: PublicHeistFailureDetailDTO? = nil,
         children: [PublicHeistReportNodeDTO] = []
     ) {
         self.path = path
@@ -44,6 +46,7 @@ struct PublicHeistReportNodeDTO: Decodable, Equatable {
         self.message = message
         self.durationMs = durationMs
         self.evidence = evidence
+        self.failure = failure
         self.children = children
         self.jsonKeys = []
     }
@@ -57,6 +60,7 @@ struct PublicHeistReportNodeDTO: Decodable, Equatable {
         self.message = try keyed.decodeIfPresent(String.self, forKey: .message)
         self.durationMs = try keyed.decode(Int.self, forKey: .durationMs)
         self.evidence = try keyed.decodeIfPresent(PublicHeistReportEvidenceDTO.self, forKey: .evidence)
+        self.failure = try keyed.decodeIfPresent(PublicHeistFailureDetailDTO.self, forKey: .failure)
         self.children = try keyed.decodeIfPresent([PublicHeistReportNodeDTO].self, forKey: .children) ?? []
         self.jsonKeys = Set(presence.allKeys.map(\.stringValue))
     }
@@ -72,6 +76,7 @@ struct PublicHeistReportNodeDTO: Decodable, Equatable {
             && lhs.message == rhs.message
             && lhs.durationMs == rhs.durationMs
             && lhs.evidence == rhs.evidence
+            && lhs.failure == rhs.failure
             && lhs.children == rhs.children
     }
 
@@ -82,8 +87,22 @@ struct PublicHeistReportNodeDTO: Decodable, Equatable {
         case message
         case durationMs
         case evidence
+        case failure
         case children
     }
+}
+
+struct PublicHeistFailureDetailDTO: Decodable, Equatable {
+    let category: String
+    let contract: String
+    let observed: String
+    let expected: String?
+    let code: String
+    let kind: String
+    let errorCode: String
+    let phase: String
+    let retryable: Bool
+    let hint: String?
 }
 
 struct PublicHeistReportEvidenceDTO: Decodable, Equatable {
@@ -282,6 +301,7 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
     let screenId: String?
     let errorClass: String?
     let errorCode: String?
+    let kind: String?
     let phase: String?
     let retryable: Bool?
     let hint: String?
@@ -298,6 +318,7 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
         screenId: String? = nil,
         errorClass: String? = nil,
         errorCode: String? = nil,
+        kind: String? = nil,
         phase: String? = nil,
         retryable: Bool? = nil,
         hint: String? = nil,
@@ -313,6 +334,7 @@ struct PublicHeistActionResultDTO: Decodable, Equatable {
         self.screenId = screenId
         self.errorClass = errorClass
         self.errorCode = errorCode
+        self.kind = kind
         self.phase = phase
         self.retryable = retryable
         self.hint = hint

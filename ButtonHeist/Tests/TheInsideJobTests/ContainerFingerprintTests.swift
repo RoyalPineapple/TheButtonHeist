@@ -370,32 +370,26 @@ final class ContainerFingerprintTests: XCTestCase {
     // MARK: - ScreenManifest
 
     func testMarkExploredMovesFromPending() {
-        let container = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
-            frame: .zero
-        )
+        let path = TreePath([0])
 
         var manifest = Navigation.ScreenManifest()
-        manifest.addPendingContainers([container])
-        XCTAssertTrue(manifest.pendingContainers.contains(container))
+        manifest.addPendingContainerPaths([path])
+        XCTAssertTrue(manifest.pendingContainerPaths.contains(path))
 
-        manifest.markExplored(container)
-        XCTAssertFalse(manifest.pendingContainers.contains(container))
-        XCTAssertTrue(manifest.exploredContainers.contains(container))
-        XCTAssertTrue(manifest.pendingContainers.isEmpty)
+        manifest.markExplored(path)
+        XCTAssertFalse(manifest.pendingContainerPaths.contains(path))
+        XCTAssertTrue(manifest.exploredContainerPaths.contains(path))
+        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty)
     }
 
     func testAddPendingSkipsExplored() {
-        let container = AccessibilityContainer(
-            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
-            frame: .zero
-        )
+        let path = TreePath([0])
 
         var manifest = Navigation.ScreenManifest()
-        manifest.markExplored(container)
-        manifest.addPendingContainers([container])
+        manifest.markExplored(path)
+        manifest.addPendingContainerPaths([path])
 
-        XCTAssertTrue(manifest.pendingContainers.isEmpty, "Already-explored container should not be re-added to pending")
+        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty, "Already-explored container should not be re-added to pending")
     }
 
 }

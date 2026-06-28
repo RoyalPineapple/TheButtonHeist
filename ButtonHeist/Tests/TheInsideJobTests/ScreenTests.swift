@@ -97,8 +97,70 @@ final class ScreenTests: XCTestCase {
 
         XCTAssertEqual(merged.knownInterface.heistIds, ["button_first", "button_second"])
         XCTAssertEqual(merged.liveCapture.heistIds, ["button_second"])
-        XCTAssertNil(merged.liveCapture.heistId(for: first))
-        XCTAssertEqual(merged.liveCapture.heistId(for: second), "button_second")
+        XCTAssertNil(merged.liveCapture.element(for: "button_first"))
+        XCTAssertEqual(merged.liveCapture.heistId(forPath: TreePath([0])), "button_second")
+        XCTAssertEqual(merged.liveCapture.element(for: "button_second"), second)
+    }
+
+    func testRemovingElementsRemapsLiveSemanticAndAnnotationPaths() {
+        let removed = makeElement(
+            label: "Old",
+            traits: .button,
+            shape: .frame(AccessibilityRect(x: 0, y: 0, width: 100, height: 44))
+        )
+        let kept = makeElement(
+            label: "Kept",
+            traits: .button,
+            shape: .frame(AccessibilityRect(x: 0, y: 0, width: 100, height: 44))
+        )
+        let container = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_200)),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let keptOrigin = CGPoint(x: 0, y: 600)
+        let screen = Screen(
+            elements: [
+                "old": Screen.ScreenElement(
+                    heistId: "old",
+                    contentSpaceOrigin: nil,
+                    element: removed
+                ),
+                "kept": Screen.ScreenElement(
+                    heistId: "kept",
+                    contentSpaceOrigin: keptOrigin,
+                    scrollContainerPath: TreePath([1]),
+                    element: kept
+                ),
+            ],
+            hierarchy: [
+                .element(removed, traversalIndex: 0),
+                .container(container, children: [
+                    .element(kept, traversalIndex: 1),
+                ]),
+            ],
+            containerNamesByPath: [TreePath([1]): "feed"],
+            heistIdsByPath: [
+                TreePath([0]): "old",
+                TreePath([1, 0]): "kept",
+            ],
+            firstResponderHeistId: nil,
+        )
+
+        let pruned = screen.removingElements(withIds: ["old"])
+        let interface = TheStash.WireConversion.toInterface(from: pruned)
+
+        XCTAssertEqual(pruned.liveCapture.heistId(forPath: TreePath([0, 0])), "kept")
+        XCTAssertNil(pruned.liveCapture.heistId(forPath: TreePath([1, 0])))
+        XCTAssertEqual(pruned.liveCapture.containerNamesByPath[TreePath([0])], "feed")
+        XCTAssertEqual(pruned.semantic.containers[TreePath([0])]?.containerName, "feed")
+        XCTAssertNil(pruned.semantic.containers[TreePath([1])])
+        XCTAssertEqual(pruned.semantic.elements["kept"]?.scrollContentLocation?.scrollContainerPath, TreePath([0]))
+        XCTAssertEqual(interface.annotations.containerByPath[TreePath([0])]?.containerName, "feed")
+        XCTAssertEqual(
+            interface.annotations.elementByPath[TreePath([0, 0])]?.contentSpaceOrigin,
+            AccessibilityPoint(x: Double(keptOrigin.x), y: Double(keptOrigin.y))
+        )
+        XCTAssertNil(interface.annotations.elementByPath[TreePath([1, 0])])
     }
 
     func testVisibleOnlyFiltersKnownEntriesOutsideLatestParse() {

@@ -20,8 +20,8 @@ public enum FailurePhase: String, Sendable, Equatable, CaseIterable {
     case server
 }
 
-/// Stable public category for a command failure.
-public enum PublicFailureKind: String, Sendable, Equatable {
+/// Stable diagnostic category for a command failure.
+public enum DiagnosticFailureKind: String, Sendable, Equatable {
     case request
     case discovery
     case connection
@@ -70,7 +70,7 @@ public enum KnownFailureCode: String, Codable, Sendable, CaseIterable {
     case formattingJSONEncodingFailed = "formatting.json_encoding_failed"
     case screenInlinePayloadTooLarge = "screen.inline_payload_too_large"
 
-    public var kind: PublicFailureKind {
+    public var kind: DiagnosticFailureKind {
         switch self {
         case .requestInvalid,
              .requestMissingTarget,
@@ -272,7 +272,7 @@ public struct FailureCode: RawRepresentable, Codable, Sendable, Equatable, Hasha
         KnownFailureCode(rawValue: rawValue)
     }
 
-    public var kind: PublicFailureKind? {
+    public var kind: DiagnosticFailureKind? {
         knownCode?.kind
     }
 
@@ -338,8 +338,8 @@ public struct DiagnosticFailure: Sendable, Equatable {
     public let failureCode: FailureCode
     /// Stable machine-readable failure code.
     public let code: String
-    /// Broad public category for the failure.
-    public let kind: PublicFailureKind
+    /// Broad diagnostic category for the failure.
+    public let kind: DiagnosticFailureKind
     /// User-facing failure message.
     public let message: String
     /// Lifecycle metadata and recovery hint for the failure.
@@ -363,18 +363,18 @@ public struct DiagnosticFailure: Sendable, Equatable {
     )
 
     /// Creates a diagnostic failure from fully typed metadata.
-    public init(message: String, details: FailureDetails, kind: PublicFailureKind? = nil) {
+    public init(message: String, details: FailureDetails, kind: DiagnosticFailureKind? = nil) {
         self.failureCode = details.code
         self.code = details.code.rawValue
-        self.kind = kind ?? PublicFailureKind(details: details)
+        self.kind = kind ?? DiagnosticFailureKind(details: details)
         self.message = message
         self.details = details
     }
 
     /// Creates a diagnostic failure, falling back to the unknown client error
     /// shape when details are absent.
-    public init(message: String, details: FailureDetails?, kind: PublicFailureKind? = nil) {
-        let resolvedKind: PublicFailureKind?
+    public init(message: String, details: FailureDetails?, kind: DiagnosticFailureKind? = nil) {
+        let resolvedKind: DiagnosticFailureKind?
         if let kind {
             resolvedKind = kind
         } else if details == nil {
@@ -389,9 +389,6 @@ public struct DiagnosticFailure: Sendable, Equatable {
         )
     }
 }
-
-/// Source-compatible public failure name for response/rendering boundaries.
-public typealias PublicFailure = DiagnosticFailure
 
 /// Typed connection-attempt failure preserved from the lower-level disconnect cause.
 public struct ConnectionFailure: Equatable, Sendable {
@@ -446,7 +443,7 @@ extension ConnectionFailure {
     }
 }
 
-private extension PublicFailureKind {
+private extension DiagnosticFailureKind {
     init(details: FailureDetails) {
         if let typedKind = details.code.kind {
             self = typedKind

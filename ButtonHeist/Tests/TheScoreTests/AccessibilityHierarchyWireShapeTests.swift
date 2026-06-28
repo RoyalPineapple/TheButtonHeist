@@ -101,6 +101,45 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         XCTAssertEqual(decoded.projectedElements, [element])
     }
 
+    func testNodeLookupHandlesRootAndInvalidPaths() {
+        let leaf = AccessibilityHierarchy.element(
+            makeTestAccessibilityElement(sampleElement(label: "Leaf")),
+            traversalIndex: 7
+        )
+        let root = AccessibilityHierarchy.container(
+            makeTestAccessibilityContainer(type: .list),
+            children: [leaf]
+        )
+
+        XCTAssertEqual(root.node(at: .root), root)
+        XCTAssertEqual(root.node(at: TreePath([0])), leaf)
+        XCTAssertNil(root.node(at: TreePath([1])))
+        XCTAssertNil(leaf.node(at: TreePath([0])))
+    }
+
+    func testForestNodeLookupHandlesRootsNestedPathsAndInvalidRootPath() {
+        let standalone = AccessibilityHierarchy.element(
+            makeTestAccessibilityElement(sampleElement(label: "Standalone")),
+            traversalIndex: 0
+        )
+        let nestedLeaf = AccessibilityHierarchy.element(
+            makeTestAccessibilityElement(sampleElement(label: "Nested")),
+            traversalIndex: 1
+        )
+        let container = AccessibilityHierarchy.container(
+            makeTestAccessibilityContainer(type: .landmark),
+            children: [nestedLeaf]
+        )
+        let forest = [standalone, container]
+
+        XCTAssertNil(forest.node(at: .root))
+        XCTAssertEqual(forest.node(at: TreePath([0])), standalone)
+        XCTAssertEqual(forest.node(at: TreePath([1])), container)
+        XCTAssertEqual(forest.node(at: TreePath([1, 0])), nestedLeaf)
+        XCTAssertNil(forest.node(at: TreePath([2])))
+        XCTAssertNil(forest.node(at: TreePath([1, 1])))
+    }
+
     func testInterfaceDiagnosticsRoundTripThroughCanonicalWireShape() throws {
         let diagnostics = InterfaceDiagnostics(discovery: InterfaceDiscoveryDiagnostics(
             state: .limited,

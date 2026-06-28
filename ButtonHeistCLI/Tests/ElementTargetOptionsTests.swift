@@ -36,38 +36,33 @@ final class ElementTargetOptionsTests: XCTestCase {
         )
     }
 
-    func testGestureElementObjectEncodesPredicateChecks() {
-        let object = TapSubcommand.elementObject(.predicate(
+    func testGestureElementObjectUsesSharedCLITargetEncoder() {
+        let target = ElementTarget.predicate(
             ElementPredicate(label: "Save", identifier: "saveButton", value: "1", traits: [.button])
-        ))
+        )
+        let object = TapSubcommand.elementObject(target)
+        let semanticArguments = CLIRequestBuilder.arguments(target: target)
+        guard case .object(let semanticObject)? = semanticArguments.argumentValues[FenceParameterKey.target.rawValue] else {
+            return XCTFail("Expected semantic target object")
+        }
 
-        XCTAssertEqual(object[.checks], .array([
-            .object([
-                "kind": .string("label"),
-                "match": .object([
-                    "mode": .string("exact"),
-                    "value": .string("Save"),
-                ]),
-            ]),
-            .object([
-                "kind": .string("identifier"),
-                "match": .object([
-                    "mode": .string("exact"),
-                    "value": .string("saveButton"),
-                ]),
-            ]),
-            .object([
-                "kind": .string("value"),
-                "match": .object([
-                    "mode": .string("exact"),
-                    "value": .string("1"),
-                ]),
-            ]),
-            .object([
-                "kind": .string("traits"),
-                "values": .array([.string("button")]),
-            ]),
+        XCTAssertEqual(
+            Dictionary(object.map { ($0.key.rawValue, $0.value) }, uniquingKeysWith: { _, newest in newest }),
+            semanticObject
+        )
+        XCTAssertEqual(object[.label], .object([
+            "mode": .string("exact"),
+            "value": .string("Save"),
         ]))
+        XCTAssertEqual(object[.identifier], .object([
+            "mode": .string("exact"),
+            "value": .string("saveButton"),
+        ]))
+        XCTAssertEqual(object[.value], .object([
+            "mode": .string("exact"),
+            "value": .string("1"),
+        ]))
+        XCTAssertEqual(object[.traits], .array([.string("button")]))
     }
 
     func testOrdinalOnlyIsRejectedAtTypedTargetBoundary() throws {

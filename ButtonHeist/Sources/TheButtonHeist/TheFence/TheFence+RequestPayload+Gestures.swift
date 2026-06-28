@@ -1,6 +1,6 @@
 import Foundation
 
-@_spi(ButtonHeistInternals) import TheScore
+import TheScore
 
 extension TheFence {
 
@@ -11,7 +11,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
-            SpatialActionCommand.oneFingerTap,
+            SpatialActionCommand.oneFingerTap.command,
             [.oneFingerTap(try fence.decodeTapTarget(arguments))]
         )
     }
@@ -23,7 +23,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
-            SpatialActionCommand.longPress,
+            SpatialActionCommand.longPress.command,
             [.longPress(try fence.decodeLongPressTarget(arguments))]
         )
     }
@@ -35,7 +35,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
-            SpatialActionCommand.swipe,
+            SpatialActionCommand.swipe.command,
             [.swipe(try fence.decodeSwipeTarget(arguments))]
         )
     }
@@ -47,7 +47,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         appInteractionDispatch(
-            SpatialActionCommand.drag,
+            SpatialActionCommand.drag.command,
             [.drag(try fence.decodeDragTarget(arguments))]
         )
     }

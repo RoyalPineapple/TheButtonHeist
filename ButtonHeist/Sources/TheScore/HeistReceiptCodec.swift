@@ -1,18 +1,18 @@
 import Foundation
 import zlib
 
-@_spi(ButtonHeistInternals) public struct HeistReceiptCodecLimits: Sendable, Equatable {
-    public static let `default` = HeistReceiptCodecLimits(
+package struct HeistReceiptCodecLimits: Sendable, Equatable {
+    package static let `default` = HeistReceiptCodecLimits(
         maxJSONBytes: 64 * 1024 * 1024,
         maxGzipCompressedBytes: 16 * 1024 * 1024,
         maxGzipDecompressedBytes: 64 * 1024 * 1024
     )
 
-    public let maxJSONBytes: Int
-    public let maxGzipCompressedBytes: Int
-    public let maxGzipDecompressedBytes: Int
+    package let maxJSONBytes: Int
+    package let maxGzipCompressedBytes: Int
+    package let maxGzipDecompressedBytes: Int
 
-    public init(
+    package init(
         maxJSONBytes: Int = 64 * 1024 * 1024,
         maxGzipCompressedBytes: Int,
         maxGzipDecompressedBytes: Int
@@ -36,7 +36,7 @@ public enum HeistReceiptCodec {
         try decode(contentsOf: url, limits: .default)
     }
 
-    @_spi(ButtonHeistInternals) public static func decode(
+    package static func decode(
         contentsOf url: URL,
         limits: HeistReceiptCodecLimits
     ) throws -> HeistExecutionResult {
@@ -63,7 +63,7 @@ public enum HeistReceiptCodec {
         try decode(data, format: format, limits: .default)
     }
 
-    @_spi(ButtonHeistInternals) public static func decode(
+    package static func decode(
         _ data: Data,
         format: HeistReceiptFormat = .json,
         limits: HeistReceiptCodecLimits

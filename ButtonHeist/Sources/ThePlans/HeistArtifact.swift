@@ -114,8 +114,8 @@ public struct HeistArtifactProducer: Codable, Sendable, Equatable {
 public enum HeistArtifactCodec {
     public static let manifestFileName = "manifest.json"
     public static let planFileName = "plan.json"
-    @_spi(ButtonHeistInternals) public static let manifestMemberSizeLimit = 64 * 1024
-    @_spi(ButtonHeistInternals) public static let planMemberSizeLimit = 8 * 1024 * 1024
+    package static let manifestMemberSizeLimit = 64 * 1024
+    package static let planMemberSizeLimit = 8 * 1024 * 1024
 
     private static let fileReadChunkSize = 64 * 1024
 
@@ -234,7 +234,7 @@ public enum HeistArtifactCodec {
         }
     }
 
-    @_spi(ButtonHeistInternals) public static func decodeAdmissionCandidateJSON(
+    package static func decodeAdmissionCandidateJSON(
         _ data: Data,
         at url: URL
     ) throws -> HeistPlanAdmissionCandidate {

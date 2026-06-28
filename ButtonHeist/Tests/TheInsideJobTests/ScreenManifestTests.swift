@@ -2,6 +2,7 @@
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+import ThePlans
 import TheScore
 
 @MainActor
@@ -19,12 +20,25 @@ final class ScreenManifestTests: XCTestCase {
         )
     }
 
+    private func semanticContainer(
+        _ container: AccessibilityContainer,
+        path: TreePath,
+        containerName: ContainerName? = nil
+    ) -> SemanticScreen.Container {
+        SemanticScreen.Container(
+            container: container,
+            path: path,
+            containerName: containerName,
+            contentFrame: container.frame.cgRect
+        )
+    }
+
     // MARK: - Initial State
 
     func testEmptyManifest() {
         let manifest = Navigation.ScreenManifest()
-        XCTAssertTrue(manifest.pendingContainers.isEmpty)
-        XCTAssertTrue(manifest.exploredContainers.isEmpty)
+        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty)
+        XCTAssertTrue(manifest.exploredContainerPaths.isEmpty)
         XCTAssertEqual(manifest.scrollCount, 0)
         XCTAssertEqual(manifest.maxScrollsPerContainer, Navigation.ScreenManifest.maxScrollsPerContainer)
         XCTAssertEqual(manifest.maxScrollsPerDiscovery, Navigation.ScreenManifest.maxScrollsPerDiscovery)
@@ -45,11 +59,11 @@ final class ScreenManifestTests: XCTestCase {
             maxScrollsPerContainer: 10,
             maxScrollsPerDiscovery: 2
         )
-        let container = makeScrollableContainer()
+        let path = TreePath([0])
 
-        XCTAssertNil(manifest.recordScrollAttempt(in: container))
-        XCTAssertNil(manifest.recordScrollAttempt(in: container))
-        XCTAssertEqual(manifest.recordScrollAttempt(in: container), .discoveryScrollLimit)
+        XCTAssertNil(manifest.recordScrollAttempt(in: path))
+        XCTAssertNil(manifest.recordScrollAttempt(in: path))
+        XCTAssertEqual(manifest.recordScrollAttempt(in: path), .discoveryScrollLimit)
 
         XCTAssertEqual(manifest.scrollCount, 2)
         XCTAssertTrue(manifest.discoveryLimitHit)
@@ -60,14 +74,15 @@ final class ScreenManifestTests: XCTestCase {
     func testMarkExploredMovesFromPendingToExplored() {
         var manifest = Navigation.ScreenManifest()
         let container = makeScrollableContainer()
-        manifest.addPendingContainers([container])
+        let path = TreePath([0])
+        manifest.addPendingContainers([semanticContainer(container, path: path)])
 
-        XCTAssertFalse(manifest.pendingContainers.isEmpty)
+        XCTAssertFalse(manifest.pendingContainerPaths.isEmpty)
 
-        manifest.markExplored(container)
+        manifest.markExplored(path)
 
-        XCTAssertTrue(manifest.pendingContainers.isEmpty)
-        XCTAssertTrue(manifest.exploredContainers.contains(container))
+        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty)
+        XCTAssertTrue(manifest.exploredContainerPaths.contains(path))
     }
 
     // MARK: - addPendingContainers
@@ -75,10 +90,11 @@ final class ScreenManifestTests: XCTestCase {
     func testAddPendingContainersSkipsAlreadyExplored() {
         var manifest = Navigation.ScreenManifest()
         let container = makeScrollableContainer()
-        manifest.markExplored(container)
-        manifest.addPendingContainers([container])
+        let path = TreePath([0])
+        manifest.markExplored(path)
+        manifest.addPendingContainers([semanticContainer(container, path: path)])
 
-        XCTAssertTrue(manifest.pendingContainers.isEmpty,
+        XCTAssertTrue(manifest.pendingContainerPaths.isEmpty,
                       "An already-explored container must not be re-added to pending")
     }
 
@@ -86,9 +102,34 @@ final class ScreenManifestTests: XCTestCase {
         var manifest = Navigation.ScreenManifest()
         let containerA = makeScrollableContainer(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         let containerB = makeScrollableContainer(frame: CGRect(x: 0, y: 100, width: 100, height: 100))
-        manifest.addPendingContainers([containerA, containerB])
+        manifest.addPendingContainers([
+            semanticContainer(containerA, path: TreePath([0])),
+            semanticContainer(containerB, path: TreePath([1])),
+        ])
 
-        XCTAssertEqual(manifest.pendingContainers.count, 2)
+        XCTAssertEqual(manifest.pendingContainerPaths.count, 2)
+    }
+
+    func testEqualContainersAtDifferentPathsHaveIndependentExplorationState() {
+        var manifest = Navigation.ScreenManifest(maxScrollsPerContainer: 1, maxScrollsPerDiscovery: 10)
+        let container = makeScrollableContainer()
+        let firstPath = TreePath([0])
+        let secondPath = TreePath([1])
+        manifest.addPendingContainers([
+            semanticContainer(container, path: firstPath),
+            semanticContainer(container, path: secondPath),
+        ])
+
+        XCTAssertNil(manifest.recordScrollAttempt(in: firstPath))
+        XCTAssertEqual(manifest.recordScrollAttempt(in: firstPath), .containerScrollLimit)
+        XCTAssertNil(manifest.recordScrollAttempt(in: secondPath))
+
+        manifest.markExplored(firstPath)
+
+        XCTAssertTrue(manifest.exploredContainerPaths.contains(firstPath))
+        XCTAssertFalse(manifest.exploredContainerPaths.contains(secondPath))
+        XCTAssertFalse(manifest.pendingContainerPaths.contains(firstPath))
+        XCTAssertTrue(manifest.pendingContainerPaths.contains(secondPath))
     }
 
     // MARK: - Diagnostics
@@ -109,7 +150,7 @@ final class ScreenManifestTests: XCTestCase {
             firstResponderHeistId: nil,
         )
 
-        manifest.markOmitted(container, reason: .discoveryScrollLimit)
+        manifest.markOmitted(TreePath([0]), reason: .discoveryScrollLimit)
 
         let diagnostics = try XCTUnwrap(
             manifest.interfaceDiagnostics(for: screen, includedElementCount: 12).discovery

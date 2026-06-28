@@ -23,7 +23,7 @@ private let autoStartTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialSta
 /// - INSIDEJOB_SCOPE / InsideJobScope: Allowed connection scopes
 /// - INSIDEJOB_SESSION_TIMEOUT / InsideJobSessionTimeout: Session release timeout
 @_cdecl("TheInsideJob_autoStartFromLoad")
-public func theInsideJobAutoStartFromLoad() {
+func theInsideJobAutoStartFromLoad() {
     autoStartLogger.info("========== AUTO-START BEGIN ==========")
     autoStartLogger.info("Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
 

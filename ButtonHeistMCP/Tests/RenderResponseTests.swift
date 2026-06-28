@@ -172,9 +172,9 @@ struct RenderResponseTests {
     }
 
     @Test("error render uses canonical public failure mapping")
-    func errorRenderUsesCanonicalPublicFailureMapping() throws {
+    func errorRenderUsesCanonicalDiagnosticFailureMapping() throws {
         let response = FenceResponse.failure(FenceError.connectionTimeout)
-        let expected = try #require(response.publicFailure)
+        let expected = try #require(response.diagnosticFailure)
 
         let result = ButtonHeistMCPServer.renderResponse(response)
         let root = try #require(result.structuredContent?.objectValue)
@@ -194,6 +194,25 @@ struct RenderResponseTests {
         #expect(details["phase"]?.stringValue == expected.details.phase.rawValue)
         #expect(details["retryable"] == .bool(expected.details.retryable))
         #expect(details["hint"]?.stringValue == expected.details.hint)
+    }
+
+    @Test("structured encoding fallback uses typed failure details")
+    func structuredEncodingFallbackUsesTypedFailureDetails() throws {
+        let root = try #require(
+            ButtonHeistMCPServer.structuredEncodingFailureValue(FallbackTestError()).objectValue
+        )
+        let details = try #require(root["details"]?.objectValue)
+
+        #expect(root["status"]?.stringValue == "error")
+        #expect(root["code"]?.stringValue == "formatting.json_encoding_failed")
+        #expect(root["kind"]?.stringValue == "client")
+        #expect(root["errorCode"]?.stringValue == "formatting.json_encoding_failed")
+        #expect(root["phase"]?.stringValue == "client")
+        #expect(root["retryable"] == .bool(false))
+        #expect(details["code"]?.stringValue == "formatting.json_encoding_failed")
+        #expect(details["kind"]?.stringValue == "client")
+        #expect(details["phase"]?.stringValue == "client")
+        #expect(details["retryable"] == .bool(false))
     }
 
     private static func interfaceFixture() -> Interface {
@@ -274,4 +293,8 @@ struct RenderResponseTests {
             respondsToUserInteraction: false
         )
     }
+}
+
+private struct FallbackTestError: LocalizedError {
+    var errorDescription: String? { "fallback failed" }
 }

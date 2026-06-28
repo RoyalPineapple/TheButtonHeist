@@ -96,15 +96,15 @@ extension AccessibilityElement: ThePlans.ElementPredicateSubject {
     /// Known trait name strings — references the parser's authoritative set directly.
     private static let knownTraitNames = AccessibilityTraits.knownTraitNames
 
-    public var predicateLabel: String? { label }
-    public var predicateIdentifier: String? { identifier }
-    public var predicateValue: String? { value }
+    package var predicateLabel: String? { label }
+    package var predicateIdentifier: String? { identifier }
+    package var predicateValue: String? { value }
 
     /// True when every required trait resolves to a known parser bitmask and is
     /// present on this element. Unknown trait names must cause a miss —
     /// `fromNames` drops them silently and `.contains(.none)` is always true, so
     /// each name is validated against the known set first.
-    public func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool {
+    package func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool {
         let requiredNames = required.map(\.rawValue)
         for name in requiredNames where !Self.knownTraitNames.contains(name) { return false }
         let mask = AccessibilityTraits.fromNames(requiredNames)
@@ -113,7 +113,7 @@ extension AccessibilityElement: ThePlans.ElementPredicateSubject {
 
     /// True when any excluded trait is present (or names an unknown trait — an
     /// unknown exclusion can never be proven absent, so it rejects the subject).
-    public func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool {
+    package func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool {
         let excludedNames = excluded.map(\.rawValue)
         for name in excludedNames where !Self.knownTraitNames.contains(name) { return true }
         let mask = AccessibilityTraits.fromNames(excludedNames)

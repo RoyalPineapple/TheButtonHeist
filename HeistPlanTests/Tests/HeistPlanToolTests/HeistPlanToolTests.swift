@@ -171,16 +171,32 @@ private func writeRuntimeInvalidHeistArtifact(to url: URL) throws {
 }
 
 private func runtimeInvalidPlanJSONData() throws -> Data {
-    let warnStep: [String: Any] = [
-        "type": "warn",
-        "warn": ["message": "too many steps"],
-    ]
-    let payload: [String: Any] = [
-        "version": currentHeistPlanVersion,
-        "name": "tooManySteps",
-        "body": Array(repeating: warnStep, count: 501),
-    ]
-    return try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    return try encoder.encode(RuntimeInvalidPlanFixture(
+        version: currentHeistPlanVersion,
+        name: "tooManySteps",
+        body: Array(repeating: RuntimeInvalidWarnStepFixture(message: "too many steps"), count: 501)
+    ))
+}
+
+private struct RuntimeInvalidPlanFixture: Encodable {
+    let version: Int
+    let name: String
+    let body: [RuntimeInvalidWarnStepFixture]
+}
+
+private struct RuntimeInvalidWarnStepFixture: Encodable {
+    let type = "warn"
+    let warn: RuntimeInvalidWarnPayloadFixture
+
+    init(message: String) {
+        self.warn = RuntimeInvalidWarnPayloadFixture(message: message)
+    }
+}
+
+private struct RuntimeInvalidWarnPayloadFixture: Encodable {
+    let message: String
 }
 
 private final class TemporaryDirectory {

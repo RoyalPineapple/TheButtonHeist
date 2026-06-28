@@ -1,7 +1,7 @@
 import Foundation
 
-public enum ScoreDescription {
-    public static func quoted(_ value: String) -> String {
+package enum ScoreDescription {
+    package static func quoted(_ value: String) -> String {
         // Boundary try?: display-only JSON string escaping, with a local
         // deterministic escape path when Foundation encoding cannot help.
         if let data = try? JSONEncoder().encode(value),
@@ -11,21 +11,21 @@ public enum ScoreDescription {
         return "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 
-    public static func nonEmpty(_ value: String?) -> String? {
+    package static func nonEmpty(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         return value
     }
 
-    public static func stringField(_ name: String, _ value: String?) -> String? {
+    package static func stringField(_ name: String, _ value: String?) -> String? {
         nonEmpty(value).map { "\(name)=\(quoted($0))" }
     }
 
-    public static func stringMatchField(_ name: String, _ value: StringMatch<String>?) -> String? {
+    package static func stringMatchField(_ name: String, _ value: StringMatch<String>?) -> String? {
         guard let value, !value.value.isEmpty else { return nil }
         return "\(name)=\(stringMatch(value))"
     }
 
-    public static func stringMatchFields(_ name: String, _ values: [StringMatch<String>]) -> String? {
+    package static func stringMatchFields(_ name: String, _ values: [StringMatch<String>]) -> String? {
         let fields = values.compactMap { value -> String? in
             guard !value.value.isEmpty else { return nil }
             return "\(name)=\(stringMatch(value))"
@@ -34,7 +34,7 @@ public enum ScoreDescription {
         return fields.joined(separator: " ")
     }
 
-    public static func stringMatch(_ value: StringMatch<String>) -> String {
+    package static func stringMatch(_ value: StringMatch<String>) -> String {
         switch value {
         case .exact(let string):
             return quoted(string)
@@ -47,7 +47,7 @@ public enum ScoreDescription {
         }
     }
 
-    public static func predicateCheckField(_ check: ElementPredicateCheck<String>) -> String? {
+    package static func predicateCheckField(_ check: ElementPredicateCheck<String>) -> String? {
         switch check {
         case .label(let match):
             guard !match.value.isEmpty else { return nil }
@@ -65,33 +65,33 @@ public enum ScoreDescription {
         }
     }
 
-    public static func valueField<T>(_ name: String, _ value: T?) -> String? {
+    package static func valueField<T>(_ name: String, _ value: T?) -> String? {
         value.map { "\(name)=\($0)" }
     }
 
-    public static func listField<T>(_ name: String, _ values: [T]?) -> String? {
+    package static func listField<T>(_ name: String, _ values: [T]?) -> String? {
         guard let values, !values.isEmpty else { return nil }
         return "\(name)=\(list(values))"
     }
 
-    public static func quotedListField(_ name: String, _ values: [String]?) -> String? {
+    package static func quotedListField(_ name: String, _ values: [String]?) -> String? {
         guard let values, !values.isEmpty else { return nil }
         return "\(name)=\(quotedList(values))"
     }
 
-    public static func list<T>(_ values: [T]) -> String {
+    package static func list<T>(_ values: [T]) -> String {
         "[\(values.map { String(describing: $0) }.joined(separator: ", "))]"
     }
 
-    public static func quotedList(_ values: [String]) -> String {
+    package static func quotedList(_ values: [String]) -> String {
         "[\(values.map(quoted).joined(separator: ", "))]"
     }
 
-    public static func call(_ name: String, _ fields: [String]) -> String {
+    package static func call(_ name: String, _ fields: [String]) -> String {
         fields.isEmpty ? "\(name)(*)" : "\(name)(\(fields.joined(separator: " ")))"
     }
 
-    public static func decimal(_ value: Double) -> String {
+    package static func decimal(_ value: Double) -> String {
         guard value.isFinite else { return "\(value)" }
         let rounded = value.rounded()
         if abs(value - rounded) < 0.000_001 {

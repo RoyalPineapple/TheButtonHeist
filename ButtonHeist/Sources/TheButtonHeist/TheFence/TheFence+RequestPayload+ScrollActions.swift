@@ -1,4 +1,4 @@
-@_spi(ButtonHeistInternals) import TheScore
+import TheScore
 import ThePlans
 
 extension TheFence {
@@ -12,7 +12,7 @@ extension TheFence {
         let direction = try input.schemaEnum("direction", as: ScrollDirection.self)
             ?? Command.scroll.descriptor.requiredDefaultEnumValue(for: .direction, as: ScrollDirection.self)
         return try appInteractionDispatch(
-            ViewportDebugCommand.scroll,
+            ViewportDebugCommand.scroll.command,
             [.scroll(ScrollTarget(
                 selection: input.scrollContainerSelection(),
                 direction: direction
@@ -27,7 +27,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            ViewportDebugCommand.scrollToVisible,
+            ViewportDebugCommand.scrollToVisible.command,
             [.scrollToVisible(ScrollToVisibleTarget(
                 elementTarget: input.requiredElementTarget(command: .scrollToVisible)
             ))]
@@ -43,7 +43,7 @@ extension TheFence {
         let edge = try input.schemaEnum("edge", as: ScrollEdge.self)
             ?? Command.scrollToEdge.descriptor.requiredDefaultEnumValue(for: .edge, as: ScrollEdge.self)
         return try appInteractionDispatch(
-            ViewportDebugCommand.scrollToEdge,
+            ViewportDebugCommand.scrollToEdge.command,
             [.scrollToEdge(ScrollToEdgeTarget(
                 selection: input.scrollContainerSelection(),
                 edge: edge

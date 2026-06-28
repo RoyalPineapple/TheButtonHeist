@@ -11,8 +11,7 @@ import TheScore
 @MainActor
 final class TheBrains {
 
-    // Keep this literal in sync with `FenceResponse.accessibilityTreeUnavailableMessage`;
-    // TheFence uses it to enrich wire-shaped `actionFailed` results locally.
+    // User-facing copy for the typed accessibility-tree-unavailable result.
     nonisolated static let treeUnavailableMessage = "Could not access accessibility tree: no traversable app windows"
     nonisolated static let runtimeInactiveMessage = "ButtonHeist runtime is not active; start TheInsideJob before executing commands"
 
@@ -86,7 +85,7 @@ final class TheBrains {
         } else {
             builder.message = TheBrains.treeUnavailableMessage
         }
-        return builder.failure(errorKind: .actionFailed)
+        return builder.failure(errorKind: .accessibilityTreeUnavailable)
     }
 
     func runtimeInactiveResult(method: ActionMethod) -> ActionResult {

@@ -31,9 +31,26 @@ public extension ServerError {
     }
 }
 
-private extension ErrorKind {
+extension ErrorKind {
+    var failureDetails: FailureDetails {
+        let descriptor = failureDescriptor
+        return FailureDetails(
+            errorCode: descriptor.errorCode,
+            phase: descriptor.phase,
+            retryable: descriptor.retryable,
+            hint: descriptor.hint
+        )
+    }
+
     var failureDescriptor: ServerFailureDescriptor {
         switch self {
+        case .accessibilityTreeUnavailable:
+            return ServerFailureDescriptor(
+                errorCode: "request.accessibility_tree_unavailable",
+                phase: .request,
+                retryable: true,
+                hint: "Wait for a traversable app window, then refresh the interface or retry the command."
+            )
         case .elementNotFound:
             return ServerFailureDescriptor(
                 errorCode: "request.element_not_found",

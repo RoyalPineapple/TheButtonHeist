@@ -1,7 +1,7 @@
 import Foundation
 import ThePlans
 
-@_spi(ButtonHeistInternals) import TheScore
+import TheScore
 
 extension TheFence {
     struct DispatchResult {

@@ -1,7 +1,7 @@
 import Foundation
 import ThePlans
 
-@_spi(ButtonHeistInternals) import TheScore
+import TheScore
 
 extension TheFence {
 
@@ -61,11 +61,12 @@ extension TheFence {
         }
     }
 
-    static func appInteractionDispatch<C: AppInteractionCommand>(
-        _: C,
+    static func appInteractionDispatch(
+        _ command: Command,
         _ messages: [RuntimeActionMessage]
     ) -> DecodedRequestDispatch {
-        runtimeActionDispatch(messages)
+        precondition(command.dispatchesAppInteraction, "\(command.rawValue) is not registered as an app interaction command")
+        return runtimeActionDispatch(messages)
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {

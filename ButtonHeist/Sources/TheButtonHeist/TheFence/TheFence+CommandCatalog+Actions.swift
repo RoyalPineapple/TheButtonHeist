@@ -1,7 +1,7 @@
 import TheScore
 import ThePlans
 
-enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCommand, PayloadCheckedHeistPrimitiveCommand {
+enum SpatialActionCommand: String, CaseIterable, FenceCommand {
     case oneFingerTap = "one_finger_tap"
     case longPress = "long_press"
     case swipe
@@ -14,6 +14,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                 command, family: .spatialAction,
                 requestDecoder: TheFence.decodeOneFingerTapRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial tap. Element targets dispatch at their activation point "
                         + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. "
@@ -26,6 +27,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                 requestDecoder: TheFence.decodeLongPressRequest,
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial long press. Element targets dispatch at their activation point "
                         + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate."
@@ -37,6 +39,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                 requestDecoder: TheFence.decodeSwipeRequest,
                 parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial swipe using exactly one typed intent: "
                         + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
@@ -48,6 +51,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                 requestDecoder: TheFence.decodeDragRequest,
                 parameters: FenceParameterBlocks.dragIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive, .payloadCheckedHeistPrimitive],
                 projection: .cliOnly(
                     "Explicit mechanical/spatial drag using exactly one typed intent: "
                         + "elementToPoint (activation point or unit start override) or pointToPoint."
@@ -57,7 +61,7 @@ enum SpatialActionCommand: String, CaseIterable, FenceCommand, AppInteractionCom
     }
 }
 
-enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCommand {
+enum ViewportDebugCommand: String, CaseIterable, FenceCommand {
     case scroll
     case scrollToVisible = "scroll_to_visible"
     case scrollToEdge = "scroll_to_edge"
@@ -72,6 +76,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                     param(.container, .string),
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
                 ] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: scroll one page in the visible viewport, "
                         + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
@@ -83,6 +88,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                 command, family: .viewportDebug,
                 requestDecoder: TheFence.decodeScrollToVisibleRequest,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
+                execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: move the viewport until a "
                         + "semantic target is visible and report its fresh geometry."
@@ -96,6 +102,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCom
                     param(.container, .string),
                     param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
                 ] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction],
                 projection: .cliOnly(
                     "Explicit viewport/debug operation: scroll the visible viewport, "
                         + "a semantic target's owning scroll ancestor, or for direct debug requests, "
@@ -106,7 +113,7 @@ enum ViewportDebugCommand: String, CaseIterable, FenceCommand, AppInteractionCom
     }
 }
 
-enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCommand, HeistPrimitiveCommand {
+enum SemanticActionCommand: String, CaseIterable, FenceCommand {
     case activate
     case rotor
     case typeText = "type_text"
@@ -122,6 +129,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                 requestDecoder: TheFence.decodeActivateRequest,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.action, .string)] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Perform primary accessibility activation on a semantic UI element, "
                         + "or one of its named accessibility actions."
@@ -140,6 +148,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                         defaultValue: .string(RotorDirection.next.rawValue)
                     ),
                 ] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Move through an element rotor by direction. The server holds the rotor cursor "
                         + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
@@ -154,6 +163,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                     param(.text, .string, required: true),
                     param(.replacingExisting, .boolean, defaultValue: .bool(false)),
                 ] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly(
                     "Type text. With replacingExisting=true, The Button Heist clears the focused field before typing."
                 )
@@ -163,6 +173,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeEditActionRequest,
                 parameters: [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Perform an edit action on the current first responder.")
             )
         case .setPasteboard:
@@ -170,6 +181,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeSetPasteboardRequest,
                 parameters: [param(.text, .string, required: true)] + FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Write text to the general pasteboard from within the app.")
             )
         case .dismissKeyboard:
@@ -177,6 +189,7 @@ enum SemanticActionCommand: String, CaseIterable, FenceCommand, AppInteractionCo
                 command, family: .semanticAction,
                 requestDecoder: TheFence.decodeDismissKeyboardRequest,
                 parameters: FenceParameterBlocks.expectation,
+                execution: [.appInteraction, .heistPrimitive],
                 projection: .cliOnly("Dismiss the on-screen keyboard through the current first responder or keyboard action path.")
             )
         }

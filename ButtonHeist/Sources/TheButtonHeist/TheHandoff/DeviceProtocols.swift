@@ -136,8 +136,11 @@ protocol DeviceConnecting: AnyObject {
 /// readiness is intentionally kept out of the authenticated lifecycle event
 /// stream consumed by TheHandoff.
 @ButtonHeistActor
-protocol TransportReachabilityConnecting: DeviceConnecting {
+protocol TransportReachabilityConnecting: AnyObject {
+    var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)? { get set }
     var onTransportReady: (@ButtonHeistActor () -> Void)? { get set }
+    func connect()
+    func disconnect()
 }
 
 /// Discovers Button Heist services on the local network via Bonjour or direct address.

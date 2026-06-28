@@ -1,4 +1,4 @@
-@_spi(ButtonHeistInternals) import TheScore
+import TheScore
 import ThePlans
 
 extension TheFence {
@@ -20,7 +20,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(SemanticActionCommand.dismissKeyboard, [.resignFirstResponder])
+        appInteractionDispatch(SemanticActionCommand.dismissKeyboard.command, [.resignFirstResponder])
     }
 
     static func decodeTypeTextRequest(
@@ -35,7 +35,7 @@ extension TheFence {
             throw SchemaValidationError(field: input.field("text"), observed: "string \"\"", expected: "non-empty string")
         }
         return try appInteractionDispatch(
-            SemanticActionCommand.typeText,
+            SemanticActionCommand.typeText.command,
             [.typeText(TypeTextTarget(
                 text: text,
                 elementTarget: input.decodedElementTarget(),
@@ -51,7 +51,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            SemanticActionCommand.editAction,
+            SemanticActionCommand.editAction.command,
             [.editAction(EditActionTarget(
                 action: input.requiredSchemaEnum("action", as: EditAction.self)
             ))]
@@ -65,7 +65,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
-            SemanticActionCommand.setPasteboard,
+            SemanticActionCommand.setPasteboard.command,
             [.setPasteboard(SetPasteboardTarget(
                 text: input.requiredSchemaString("text")
             ))]

@@ -1,21 +1,21 @@
 import Foundation
 
-@_spi(ButtonHeistInternals) public struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
-    public static let standard = HeistPlanRuntimeSafetyLimits()
-    public static let standardMaxDefinitions = 250
+package struct HeistPlanRuntimeSafetyLimits: Sendable, Equatable {
+    package static let standard = HeistPlanRuntimeSafetyLimits()
+    package static let standardMaxDefinitions = 250
 
-    public let maxTotalSteps: Int
-    public let maxNestedStepDepth: Int
-    public let maxPredicateDepth: Int
-    public let maxAllPredicateChildren: Int
-    public let maxForEachStringValues: Int
-    public let maxForEachElementLimit: Int
-    public let maxStringBytes: Int
-    public let maxTotalStringBytes: Int
-    public let maxParameterBytes: Int
-    public let maxDefinitions: Int
+    package let maxTotalSteps: Int
+    package let maxNestedStepDepth: Int
+    package let maxPredicateDepth: Int
+    package let maxAllPredicateChildren: Int
+    package let maxForEachStringValues: Int
+    package let maxForEachElementLimit: Int
+    package let maxStringBytes: Int
+    package let maxTotalStringBytes: Int
+    package let maxParameterBytes: Int
+    package let maxDefinitions: Int
 
-    public init(
+    package init(
         maxTotalSteps: Int = 500,
         maxNestedStepDepth: Int = 16,
         maxPredicateDepth: Int = 12,
