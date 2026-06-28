@@ -87,7 +87,6 @@ final class TheStashResolutionTests: XCTestCase {
             containerNames: [:],
             heistIdByElement: heistIdByElement,
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
     }
 
@@ -179,7 +178,7 @@ final class TheStashResolutionTests: XCTestCase {
                     staleOffscreen,
                     heistId: "shared_row",
                     contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
-                    scrollContainer: "root_scroll"
+                    scrollContainerPath: TreePath([0])
                 ),
             ]
         )
@@ -207,7 +206,7 @@ final class TheStashResolutionTests: XCTestCase {
                 "words_header": Screen.ScreenElement(
                     heistId: "words_header",
                     contentSpaceOrigin: CGPoint(x: 0, y: 0),
-                    scrollContainerName: "scrollable_0_0_50_109",
+                    scrollContainerPath: TreePath([0]),
                     element: visibleWord
                 ),
             ],
@@ -220,13 +219,12 @@ final class TheStashResolutionTests: XCTestCase {
             containerNamesByPath: [TreePath([0]): "scrollable_0_0_50_109"],
             heistIdByElement: [visibleWord: "words_header"],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         var elements = currentVisible.semantic.elements
         elements["home_button"] = Screen.ScreenElement(
             heistId: "home_button",
             contentSpaceOrigin: CGPoint(x: 0, y: 800),
-            scrollContainerName: "scrollable_0_0_50_109",
+            scrollContainerPath: TreePath([0]),
             element: staleHomeButton
         )
         let pollutedSettledScreen = Screen(
@@ -258,7 +256,7 @@ final class TheStashResolutionTests: XCTestCase {
                     staleOffscreen,
                     heistId: "stale_offscreen",
                     contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
-                    scrollContainer: "root_scroll"
+                    scrollContainerPath: TreePath([0])
                 ),
             ]
         )
@@ -349,7 +347,7 @@ final class TheStashResolutionTests: XCTestCase {
                     discovered,
                     heistId: "buttonheist_demo",
                     contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
-                    scrollContainer: "root_scroll"
+                    scrollContainerPath: TreePath([0])
                 ),
             ]
         )
@@ -409,7 +407,7 @@ final class TheStashResolutionTests: XCTestCase {
         let staleEntry = Screen.ScreenElement(
             heistId: "row",
             contentSpaceOrigin: CGPoint(x: 0, y: 100),
-            scrollContainerName: "menu_scroll",
+            scrollContainerPath: TreePath([0]),
             element: row
         )
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(Screen(
@@ -418,13 +416,12 @@ final class TheStashResolutionTests: XCTestCase {
             containerNames: [:],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let freshEntry = Screen.ScreenElement(
             heistId: "row",
             contentSpaceOrigin: CGPoint(x: 0, y: 500),
-            scrollContainerName: "menu_scroll",
+            scrollContainerPath: TreePath([0]),
             element: row
         )
         bagman.recordParsedObservedEvidence(Screen(
@@ -433,7 +430,6 @@ final class TheStashResolutionTests: XCTestCase {
             containerNames: [:],
             heistIdByElement: [row: "row"],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         XCTAssertEqual(
@@ -451,7 +447,7 @@ final class TheStashResolutionTests: XCTestCase {
         let staleEntry = Screen.ScreenElement(
             heistId: "row",
             contentSpaceOrigin: CGPoint(x: 0, y: 100),
-            scrollContainerName: "menu_scroll",
+            scrollContainerPath: TreePath([0]),
             element: row
         )
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(Screen(
@@ -460,7 +456,6 @@ final class TheStashResolutionTests: XCTestCase {
             containerNames: [:],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let freshEntry = Screen.ScreenElement(
@@ -474,7 +469,6 @@ final class TheStashResolutionTests: XCTestCase {
             containerNames: [:],
             heistIdByElement: [row: "row"],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         XCTAssertNil(bagman.liveVisibleScreen.findElement(heistId: "row")?.contentSpaceOrigin)
@@ -680,7 +674,6 @@ final class TheStashResolutionTests: XCTestCase {
             containerNames: [container: "main_scroll"],
             heistIdByElement: [visible: "visible"],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(screen)
 
@@ -1125,7 +1118,6 @@ final class TheStashResolutionTests: XCTestCase {
                 elementRefs: [:],
                 containerRefsByPath: [:],
                 firstResponderHeistId: nil,
-                scrollableContainerViews: [:]
             )
         )
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(settledObservationScreen)
@@ -1149,7 +1141,6 @@ final class TheStashResolutionTests: XCTestCase {
                 elementRefs: [:],
                 containerRefsByPath: [path: .init(object: liveObject)],
                 firstResponderHeistId: nil,
-                scrollableContainerViews: [:]
             )
         )
         bagman.recordParsedObservedEvidence(liveScreen)
@@ -1178,7 +1169,7 @@ final class TheStashResolutionTests: XCTestCase {
                     controls,
                     heistId: "controls_demo",
                     contentSpaceOrigin: CGPoint(x: 20, y: 120),
-                    scrollContainer: "root_scroll"
+                    scrollContainerPath: TreePath([0])
                 ),
             ]
         )
@@ -1205,7 +1196,7 @@ final class TheStashResolutionTests: XCTestCase {
                     staleOffscreen,
                     heistId: "shared_row",
                     contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
-                    scrollContainer: "root_scroll"
+                    scrollContainerPath: TreePath([0])
                 ),
             ]
         )
@@ -1235,7 +1226,7 @@ final class TheStashResolutionTests: XCTestCase {
                     staleOffscreen,
                     heistId: "stale_offscreen",
                     contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
-                    scrollContainer: "root_scroll"
+                    scrollContainerPath: TreePath([0])
                 ),
             ]
         )
@@ -1699,7 +1690,7 @@ final class TheStashResolutionTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: "below_fold_button",
             contentSpaceOrigin: CGPoint(x: 0, y: 2_000),
-            scrollContainerName: "test_scroll",
+            scrollContainerPath: TreePath([0]),
             element: offScreen
         )
 
@@ -1709,7 +1700,6 @@ final class TheStashResolutionTests: XCTestCase {
             containerNames: [:],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         guard let resolved = bagman.resolveTarget(.predicate(ElementPredicate(label: "Below Fold"))).resolved else {
@@ -1732,7 +1722,6 @@ final class TheStashResolutionTests: XCTestCase {
                 entry.heistId: .init(object: object, scrollView: scrollView)
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let refreshed = bagman.resolveTarget(.predicate(ElementPredicate(label: "Below Fold"))).resolved
@@ -1770,7 +1759,6 @@ final class TheStashResolutionTests: XCTestCase {
                 entry.heistId: .init(object: object, scrollView: scrollView)
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         guard let resolved = bagman.resolveTarget(.predicate(ElementPredicate(label: "Visible"))).resolved else {

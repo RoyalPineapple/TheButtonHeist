@@ -16,24 +16,21 @@ extension TheBurglar {
     /// is semantic parser evidence; live scroll-view conversion is dispatch
     /// evidence and must not feed generated container names or interface hashes.
     struct ContainerIdentityContext {
-        let contentFrames: [AccessibilityContainer: CGRect]
         let contentFramesByPath: [TreePath: CGRect]
         let scrollContentOriginsByPath: [TreePath: CGPoint]
         let scrollContainerPathsByPath: [TreePath: TreePath]
-        let nestedInScrollView: Set<AccessibilityContainer>
+        let nestedInScrollViewPaths: Set<TreePath>
     }
 
     private struct ContainerIdentityAccumulator {
-        var contentFrames: [AccessibilityContainer: CGRect] = [:]
         var contentFramesByPath: [TreePath: CGRect] = [:]
         var scrollContentOriginsByPath: [TreePath: CGPoint] = [:]
         var scrollContainerPathsByPath: [TreePath: TreePath] = [:]
-        var nestedInScrollView = Set<AccessibilityContainer>()
+        var nestedInScrollViewPaths = Set<TreePath>()
     }
 
     static func buildContainerIdentityContext(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViews: [AccessibilityContainer: UIView],
         scrollableContainerViewsByPath: [TreePath: UIView] = [:]
     ) -> ContainerIdentityContext {
         var accumulator = ContainerIdentityAccumulator()
@@ -42,17 +39,15 @@ extension TheBurglar {
                 node: node,
                 path: TreePath([index]),
                 parentScrollContext: nil,
-                scrollableContainerViews: scrollableContainerViews,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                 accumulator: &accumulator
             )
         }
         return ContainerIdentityContext(
-            contentFrames: accumulator.contentFrames,
             contentFramesByPath: accumulator.contentFramesByPath,
             scrollContentOriginsByPath: accumulator.scrollContentOriginsByPath,
             scrollContainerPathsByPath: accumulator.scrollContainerPathsByPath,
-            nestedInScrollView: accumulator.nestedInScrollView
+            nestedInScrollViewPaths: accumulator.nestedInScrollViewPaths
         )
     }
 
@@ -60,7 +55,6 @@ extension TheBurglar {
         node: AccessibilityHierarchy,
         path: TreePath,
         parentScrollContext: ScrollContext?,
-        scrollableContainerViews: [AccessibilityContainer: UIView],
         scrollableContainerViewsByPath: [TreePath: UIView],
         accumulator: inout ContainerIdentityAccumulator
     ) {
@@ -74,19 +68,13 @@ extension TheBurglar {
                 accumulator.scrollContentOriginsByPath[path] = parentScrollContext.view.convert(frame.origin, from: nil)
                 accumulator.scrollContainerPathsByPath[path] = parentScrollContext.containerPath
             }
-            accumulator.nestedInScrollView.insert(container)
+            accumulator.nestedInScrollViewPaths.insert(path)
         } else {
             contentFrame = frame
         }
-        accumulator.contentFrames[container] = contentFrame
         accumulator.contentFramesByPath[path] = contentFrame
 
-        if let scrollView = scrollView(
-            for: container,
-            at: path,
-            scrollableContainerViews: scrollableContainerViews,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
-        ),
+        if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView,
            !scrollView.bhIsUnsafeForProgrammaticScrolling {
             let childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             for (index, child) in children.enumerated() {
@@ -94,7 +82,6 @@ extension TheBurglar {
                     node: child,
                     path: path.appending(index),
                     parentScrollContext: childScrollContext,
-                    scrollableContainerViews: scrollableContainerViews,
                     scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                     accumulator: &accumulator
                 )
@@ -105,7 +92,6 @@ extension TheBurglar {
                     node: child,
                     path: path.appending(index),
                     parentScrollContext: parentScrollContext,
-                    scrollableContainerViews: scrollableContainerViews,
                     scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                     accumulator: &accumulator
                 )
@@ -131,12 +117,10 @@ extension TheBurglar {
     /// parser result while building the current live capture.
     static func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViews: [AccessibilityContainer: UIView],
         scrollableContainerViewsByPath: [TreePath: UIView] = [:]
     ) -> [AccessibilityElement: ElementContext] {
         let byPath = buildElementContextsByPath(
             hierarchy: hierarchy,
-            scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
         return Dictionary(
@@ -150,7 +134,6 @@ extension TheBurglar {
 
     static func buildElementContextsByPath(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViews: [AccessibilityContainer: UIView],
         scrollableContainerViewsByPath: [TreePath: UIView] = [:]
     ) -> [TreePath: ElementContext] {
         var contexts: [AccessibilityElement: ElementContext] = [:]
@@ -160,7 +143,6 @@ extension TheBurglar {
                 node: node,
                 path: TreePath([index]),
                 parentScrollContext: nil,
-                scrollableContainerViews: scrollableContainerViews,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                 into: &contexts,
                 byPath: &contextsByPath
@@ -173,7 +155,6 @@ extension TheBurglar {
         node: AccessibilityHierarchy,
         path: TreePath,
         parentScrollContext: ScrollContext?,
-        scrollableContainerViews: [AccessibilityContainer: UIView],
         scrollableContainerViewsByPath: [TreePath: UIView],
         into contexts: inout [AccessibilityElement: ElementContext],
         byPath contextsByPath: inout [TreePath: ElementContext]
@@ -193,14 +174,9 @@ extension TheBurglar {
             )
             contexts[element] = context
             contextsByPath[path] = context
-        case .container(let container, let children):
+        case .container(_, let children):
             let childScrollContext: ScrollContext?
-            if let scrollView = scrollView(
-                for: container,
-                at: path,
-                scrollableContainerViews: scrollableContainerViews,
-                scrollableContainerViewsByPath: scrollableContainerViewsByPath
-            ),
+            if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView,
                !scrollView.bhIsUnsafeForProgrammaticScrolling {
                 childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             } else {
@@ -212,22 +188,12 @@ extension TheBurglar {
                     node: child,
                     path: path.appending(index),
                     parentScrollContext: childScrollContext,
-                    scrollableContainerViews: scrollableContainerViews,
                     scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                     into: &contexts,
                     byPath: &contextsByPath
                 )
             }
         }
-    }
-
-    private static func scrollView(
-        for container: AccessibilityContainer,
-        at path: TreePath,
-        scrollableContainerViews: [AccessibilityContainer: UIView],
-        scrollableContainerViewsByPath: [TreePath: UIView]
-    ) -> UIScrollView? {
-        (scrollableContainerViewsByPath[path] ?? scrollableContainerViews[container]) as? UIScrollView
     }
 
     // MARK: - Container Naming

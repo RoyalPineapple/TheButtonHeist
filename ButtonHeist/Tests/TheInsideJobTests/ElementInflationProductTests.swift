@@ -210,7 +210,7 @@ final class ElementInflationProductTests: XCTestCase {
             fixture,
             semanticIdentifier: "unrevealable_submit",
             semanticLabel: "Submit Order",
-            scrollContainerOverride: "missing_scroll"
+            scrollContainerPathOverride: TreePath([99])
         )
 
         let result = await brains.executeRuntimeAction(.activate(
@@ -539,7 +539,6 @@ final class ElementInflationProductTests: XCTestCase {
             identifier: identifier,
             label: label,
             knownHeistId: HeistId(rawValue: "known_\(identifier)"),
-            innerContainerPath: TreePath([9_001]),
             innerContentOrigin: innerScrollView.frame.origin,
             targetContentOrigin: target.frame.origin
         )
@@ -570,18 +569,18 @@ final class ElementInflationProductTests: XCTestCase {
         in targetBrains: TheBrains? = nil,
         semanticIdentifier: String? = nil,
         semanticLabel: String? = nil,
-        scrollContainerOverride: ContainerName? = nil
+        scrollContainerPathOverride: TreePath? = nil
     ) throws {
         let targetBrains = targetBrains ?? brains!
         let screen = try XCTUnwrap(targetBrains.stash.refreshLiveCapture())
         let identifier = semanticIdentifier ?? fixture.identifier
         let label = semanticLabel ?? fixture.label
-        let scrollContainerName: ContainerName
-        if let scrollContainerOverride {
-            scrollContainerName = scrollContainerOverride
+        let scrollContainerPath: TreePath
+        if let scrollContainerPathOverride {
+            scrollContainerPath = scrollContainerPathOverride
         } else {
-            scrollContainerName = try XCTUnwrap(
-                firstLiveScrollableContainerName(in: screen),
+            scrollContainerPath = try XCTUnwrap(
+                firstLiveScrollableContainerPath(in: screen),
                 "Expected fixture to expose a live scroll container. \(scrollContainerDiagnostics(in: screen))"
             )
         }
@@ -596,7 +595,7 @@ final class ElementInflationProductTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
             contentSpaceOrigin: fixture.contentOrigin,
-            scrollContainerName: scrollContainerName,
+            scrollContainerPath: scrollContainerPath,
             element: element
         )
         var elements = screen.semantic.elements
@@ -611,7 +610,6 @@ final class ElementInflationProductTests: XCTestCase {
             containerRefsByPath: screen.liveCapture.containerRefsByPath,
             containerScrollContentLocationsByPath: screen.liveCapture.containerScrollContentLocationsByPath,
             firstResponderHeistId: screen.liveCapture.firstResponderHeistId,
-            scrollableContainerViews: screen.liveCapture.scrollableContainerViews,
             scrollableContainerViewsByPath: screen.liveCapture.scrollableContainerViewsByPath
         )
         targetBrains.stash.installScreenForTesting(Screen(
@@ -624,8 +622,8 @@ final class ElementInflationProductTests: XCTestCase {
         _ fixture: TextInputRevealFixture
     ) throws {
         let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
-        let scrollContainerName = try XCTUnwrap(
-            firstLiveScrollableContainerName(in: screen),
+        let scrollContainerPath = try XCTUnwrap(
+            firstLiveScrollableContainerPath(in: screen),
             "Expected fixture to expose a live scroll container. \(scrollContainerDiagnostics(in: screen))"
         )
         let element = makeElement(
@@ -640,7 +638,7 @@ final class ElementInflationProductTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
             contentSpaceOrigin: fixture.contentOrigin,
-            scrollContainerName: scrollContainerName,
+            scrollContainerPath: scrollContainerPath,
             element: element
         )
         var elements = screen.semantic.elements
@@ -675,10 +673,11 @@ final class ElementInflationProductTests: XCTestCase {
         _ fixture: NestedScrollRevealFixture
     ) throws {
         let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
-        let outerContainerName = try XCTUnwrap(
-            firstLiveScrollableContainerName(in: screen),
+        let outerContainerPath = try XCTUnwrap(
+            firstLiveScrollableContainerPath(in: screen),
             "Expected nested fixture to expose a live outer scroll container. \(scrollContainerDiagnostics(in: screen))"
         )
+        let innerContainerPath = outerContainerPath.appending(1)
         let innerContainer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(fixture.innerScrollView.contentSize)),
             frame: AccessibilityRect(fixture.innerScrollView.frame)
@@ -687,11 +686,6 @@ final class ElementInflationProductTests: XCTestCase {
             for: innerContainer,
             contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size)
         )
-        XCTAssertNil(
-            screen.liveCapture.scrollView(forContainer: innerContainerName),
-            "Nested scroll fixture should start with the inner scroll container absent from the live tree"
-        )
-
         let element = makeElement(
             label: fixture.label,
             identifier: fixture.identifier,
@@ -703,21 +697,21 @@ final class ElementInflationProductTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
             contentSpaceOrigin: fixture.targetContentOrigin,
-            scrollContainerName: innerContainerName,
+            scrollContainerPath: innerContainerPath,
             element: element
         )
         var elements = screen.semantic.elements
         elements[entry.heistId] = entry
 
         var containers = screen.semantic.containers
-        containers[fixture.innerContainerPath] = SemanticScreen.Container(
+        containers[innerContainerPath] = SemanticScreen.Container(
             container: innerContainer,
-            path: fixture.innerContainerPath,
+            path: innerContainerPath,
             containerName: innerContainerName,
             contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size),
             scrollContentLocation: Screen.ScrollContentLocation(
                 origin: fixture.innerContentOrigin,
-                scrollContainer: outerContainerName
+                scrollContainerPath: outerContainerPath
             )
         )
 
@@ -727,13 +721,10 @@ final class ElementInflationProductTests: XCTestCase {
         ))
     }
 
-    private func firstLiveScrollableContainerName(in screen: Screen) -> ContainerName? {
+    private func firstLiveScrollableContainerPath(in screen: Screen) -> TreePath? {
         for item in screen.liveCapture.hierarchy.containerPaths where item.container.isScrollable {
-            guard let containerName = screen.liveCapture.containerNamesByPath[item.path]
-                ?? screen.liveCapture.containerNames[item.container],
-                  screen.liveCapture.scrollView(forContainer: containerName) != nil
-            else { continue }
-            return containerName
+            guard screen.liveCapture.scrollView(forContainerPath: item.path) != nil else { continue }
+            return item.path
         }
         return nil
     }
@@ -744,7 +735,7 @@ final class ElementInflationProductTests: XCTestCase {
             .map { item -> String in
                 let name = screen.liveCapture.containerNamesByPath[item.path]
                     ?? screen.liveCapture.containerNames[item.container]
-                let hasLiveScroll = name.flatMap { screen.liveCapture.scrollView(forContainer: $0) } != nil
+                let hasLiveScroll = screen.liveCapture.scrollView(forContainerPath: item.path) != nil
                 return "path=\(item.path.indices) name=\(name ?? "<nil>") liveScroll=\(hasLiveScroll)"
             }
         return "scrollContainers=[\(summaries.joined(separator: "; "))]"
@@ -845,7 +836,6 @@ private struct NestedScrollRevealFixture {
     let identifier: String
     let label: String
     let knownHeistId: HeistId
-    let innerContainerPath: TreePath
     let innerContentOrigin: CGPoint
     let targetContentOrigin: CGPoint
 

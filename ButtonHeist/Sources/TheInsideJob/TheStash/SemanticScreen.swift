@@ -64,7 +64,7 @@ struct SemanticScreen: Sendable, Equatable {
     /// not carry a UIKit object, frame, or activation point.
     struct ScrollContentLocation: Sendable, Equatable {
         let origin: CGPoint
-        let scrollContainer: ContainerName
+        let scrollContainerPath: TreePath
     }
 
     struct Element: Sendable, Equatable {
@@ -91,23 +91,23 @@ struct SemanticScreen: Sendable, Equatable {
         init(
             heistId: HeistId,
             contentSpaceOrigin: CGPoint?,
-            scrollContainerName: ContainerName? = nil,
+            scrollContainerPath: TreePath? = nil,
             element: AccessibilityElement
         ) {
             self.heistId = heistId
             self.scrollContentLocation = Self.scrollContentLocation(
                 origin: contentSpaceOrigin,
-                scrollContainer: scrollContainerName
+                scrollContainerPath: scrollContainerPath
             )
             self.element = element
         }
 
         private static func scrollContentLocation(
             origin: CGPoint?,
-            scrollContainer: ContainerName?
+            scrollContainerPath: TreePath?
         ) -> ScrollContentLocation? {
-            guard let origin, let scrollContainer else { return nil }
-            return ScrollContentLocation(origin: origin, scrollContainer: scrollContainer)
+            guard let origin, let scrollContainerPath else { return nil }
+            return ScrollContentLocation(origin: origin, scrollContainerPath: scrollContainerPath)
         }
     }
 

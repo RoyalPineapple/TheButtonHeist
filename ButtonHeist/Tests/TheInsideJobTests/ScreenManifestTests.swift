@@ -108,7 +108,6 @@ final class ScreenManifestTests: XCTestCase {
             containerNames: [container: "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
 
         manifest.markOmitted(container, reason: .discoveryScrollLimit)

@@ -19,8 +19,8 @@ extension ElementInflation {
             return "known target \(description) has no content-space position"
         case .noLiveScrollableAncestor:
             let scrollContainer: String
-            if let containerName = entry.scrollContentLocation?.scrollContainer {
-                scrollContainer = " expectedScrollContainer=\(containerName.rawValue)"
+            if let path = entry.scrollContentLocation?.scrollContainerPath {
+                scrollContainer = " expectedScrollContainerPath=\(path.indices)"
             } else {
                 scrollContainer = ""
             }

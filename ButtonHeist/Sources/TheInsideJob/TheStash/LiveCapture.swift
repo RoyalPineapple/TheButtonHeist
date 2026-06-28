@@ -18,11 +18,10 @@ import AccessibilitySnapshotParser
 /// It carries weak UIKit refs, live geometry, and per-path lookups but is
 /// **never** unioned across exploration pages and must never be treated as
 /// stable identity. See `docs/ARCHITECTURE.md#state-has-one-owner`.
-struct LiveCapture: Equatable {
-    let snapshot: Snapshot
-    let dispatchReferences: DispatchReferences
-    private let elementIndex: LiveElementIndex
-    private let scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]
+    struct LiveCapture: Equatable {
+        let snapshot: Snapshot
+        let dispatchReferences: DispatchReferences
+        private let elementIndex: LiveElementIndex
 
     var hierarchy: [AccessibilityHierarchy] {
         snapshot.hierarchy
@@ -64,10 +63,6 @@ struct LiveCapture: Equatable {
         dispatchReferences.firstResponderHeistId
     }
 
-    var scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef] {
-        dispatchReferences.scrollableContainerViews
-    }
-
     var scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] {
         dispatchReferences.scrollableContainerViewsByPath
     }
@@ -83,9 +78,7 @@ struct LiveCapture: Equatable {
         containerContentFramesByPath: [TreePath: CGRect] = [:],
         containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] = [:],
         firstResponderHeistId: HeistId?,
-        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
-        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:],
-        scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]? = nil
+        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
         let snapshot = Snapshot(
             hierarchy: hierarchy,
@@ -100,28 +93,21 @@ struct LiveCapture: Equatable {
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
             firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
         self.init(
             snapshot: snapshot,
-            dispatchReferences: dispatchReferences,
-            scrollableViewsByContainerName: scrollableViewsByContainerName
+            dispatchReferences: dispatchReferences
         )
     }
 
     init(
         snapshot: Snapshot,
-        dispatchReferences: DispatchReferences = .empty,
-        scrollableViewsByContainerName: [ContainerName: ScrollableViewRef]? = nil
+        dispatchReferences: DispatchReferences = .empty
     ) {
         self.snapshot = snapshot
         self.dispatchReferences = dispatchReferences
         elementIndex = LiveElementIndex(
-            snapshot: snapshot,
-            dispatchReferences: dispatchReferences
-        )
-        self.scrollableViewsByContainerName = scrollableViewsByContainerName ?? Self.scrollableViewsByContainerName(
             snapshot: snapshot,
             dispatchReferences: dispatchReferences
         )
@@ -171,17 +157,8 @@ struct LiveCapture: Equatable {
         elementIndex.scrollView(for: heistId)
     }
 
-    func scrollView(forContainer containerName: ContainerName) -> UIScrollView? {
-        scrollableViewsByContainerName[containerName]?.view as? UIScrollView
-    }
-
     func scrollView(for container: SemanticScreen.Container) -> UIScrollView? {
-        if let containerName = container.containerName,
-           let scrollView = scrollView(forContainer: containerName) {
-            return scrollView
-        }
-        return elementIndex.scrollableView(forContainerPath: container.path) as? UIScrollView
-            ?? elementIndex.containerObject(forPath: container.path) as? UIScrollView
+        scrollView(forContainerPath: container.path)
     }
 
     func containerObject(forPath path: TreePath) -> NSObject? {
@@ -198,11 +175,15 @@ struct LiveCapture: Equatable {
 
     func scrollView(for element: SemanticScreen.Element) -> UIScrollView? {
         let visibleScrollView = contains(heistId: element.heistId) ? scrollView(for: element.heistId) : nil
-        let namedScrollView = element.scrollContentLocation
-            .map { $0.scrollContainer }
-            .flatMap(scrollView(forContainer:))
+        let pathScrollView = element.scrollContentLocation
+            .flatMap { scrollView(forContainerPath: $0.scrollContainerPath) }
         return visibleScrollView
-            ?? namedScrollView
+            ?? pathScrollView
+    }
+
+    func scrollView(forContainerPath path: TreePath) -> UIScrollView? {
+        elementIndex.scrollableView(forContainerPath: path) as? UIScrollView
+            ?? elementIndex.containerObject(forPath: path) as? UIScrollView
     }
 
     // MARK: - Snapshot
@@ -310,20 +291,17 @@ struct LiveCapture: Equatable {
         let elementRefs: [HeistId: ElementRef]
         let containerRefsByPath: [TreePath: ContainerRef]
         let firstResponderHeistId: HeistId?
-        let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
         let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
 
         init(
             elementRefs: [HeistId: ElementRef] = [:],
             containerRefsByPath: [TreePath: ContainerRef] = [:],
             firstResponderHeistId: HeistId? = nil,
-            scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef] = [:],
             scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
         ) {
             self.elementRefs = elementRefs
             self.containerRefsByPath = containerRefsByPath
             self.firstResponderHeistId = firstResponderHeistId
-            self.scrollableContainerViews = scrollableContainerViews
             self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
         }
 
@@ -463,38 +441,6 @@ struct LiveCapture: Equatable {
         }
     }
 
-    private static func scrollableViewsByContainerName(
-        snapshot: Snapshot,
-        dispatchReferences: DispatchReferences
-    ) -> [ContainerName: ScrollableViewRef] {
-        var result: [ContainerName: ScrollableViewRef] = [:]
-        var ambiguousNames = Set<ContainerName>()
-
-        for (container, path) in snapshot.hierarchy.containerPaths {
-            guard let ref = dispatchReferences.scrollableContainerViewsByPath[path]
-                ?? dispatchReferences.scrollableContainerViews[container]
-                ?? scrollableContainerRefFromContainerObject(dispatchReferences.containerRefsByPath[path])
-            else { continue }
-            guard let containerName = snapshot.containerNamesByPath[path] else {
-                continue
-            }
-            guard !ambiguousNames.contains(containerName) else { continue }
-            if result[containerName] != nil {
-                result[containerName] = nil
-                ambiguousNames.insert(containerName)
-            } else {
-                result[containerName] = ref
-            }
-        }
-        return result
-    }
-
-    private static func scrollableContainerRefFromContainerObject(
-        _ ref: ContainerRef?
-    ) -> ScrollableViewRef? {
-        guard let scrollView = ref?.object as? UIScrollView else { return nil }
-        return ScrollableViewRef(view: scrollView)
-    }
 }
 
 private extension Array where Element == AccessibilityHierarchy {

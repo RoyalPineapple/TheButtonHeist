@@ -28,11 +28,10 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         let result = TheBurglar.buildContainerIdentityContext(
             hierarchy: hierarchy,
-            scrollableContainerViews: [:]
         )
 
-        XCTAssertEqual(result.contentFrames[container], container.frame.cgRect)
-        XCTAssertFalse(result.nestedInScrollView.contains(container))
+        XCTAssertEqual(result.contentFramesByPath[TreePath([0])], container.frame.cgRect)
+        XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
     }
 
     func testNestedContainerExpressedInParentScrollableContentSpace() {
@@ -62,21 +61,21 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         let result = TheBurglar.buildContainerIdentityContext(
             hierarchy: hierarchy,
-            scrollableContainerViews: [outer: scrollView]
+            scrollableContainerViewsByPath: [TreePath([0]): scrollView]
         )
 
-        XCTAssertEqual(result.contentFrames[outer], outer.frame.cgRect,
+        XCTAssertEqual(result.contentFramesByPath[TreePath([0])], outer.frame.cgRect,
                        "Top-level scrollable: no enclosing scrollable, frame stays in screen space")
-        XCTAssertFalse(result.nestedInScrollView.contains(outer))
+        XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
 
-        let innerContent = result.contentFrames[inner]
+        let innerContent = result.contentFramesByPath[TreePath([0, 0])]
         XCTAssertNotNil(innerContent)
         XCTAssertEqual(innerContent?.origin.x ?? .nan, 0, accuracy: 0.5)
         XCTAssertEqual(innerContent?.origin.y ?? .nan, 0, accuracy: 0.5,
                        "Nested container identity drops moving viewport origin")
         XCTAssertEqual(innerContent?.size, inner.frame.size.cgSize,
                        "Size remains parser evidence; origin is capture-local hierarchy evidence")
-        XCTAssertTrue(result.nestedInScrollView.contains(inner))
+        XCTAssertTrue(result.nestedInScrollViewPaths.contains(TreePath([0, 0])))
     }
 
     func testNestedContainerScrollIndependence() {
@@ -103,7 +102,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             hierarchy: [.container(outer, children: [
                 .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
-            scrollableContainerViews: [outer: scrollView]
+            scrollableContainerViewsByPath: [TreePath([0]): scrollView]
         )
 
         // Parse 2: scrolled down by 1000pt. The same logical inner container
@@ -118,14 +117,14 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             hierarchy: [.container(outer, children: [
                 .container(innerParse2, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
-            scrollableContainerViews: [outer: scrollView]
+            scrollableContainerViewsByPath: [TreePath([0]): scrollView]
         )
 
-        XCTAssertEqual(result1.contentFrames[innerParse1]?.origin.y ?? .nan, 0, accuracy: 0.5)
-        XCTAssertEqual(result2.contentFrames[innerParse2]?.origin.y ?? .nan, 0, accuracy: 0.5,
+        XCTAssertEqual(result1.contentFramesByPath[TreePath([0, 0])]?.origin.y ?? .nan, 0, accuracy: 0.5)
+        XCTAssertEqual(result2.contentFramesByPath[TreePath([0, 0])]?.origin.y ?? .nan, 0, accuracy: 0.5,
                        "Inner container identity must be invariant under outer scroll")
-        XCTAssertTrue(result1.nestedInScrollView.contains(innerParse1))
-        XCTAssertTrue(result2.nestedInScrollView.contains(innerParse2))
+        XCTAssertTrue(result1.nestedInScrollViewPaths.contains(TreePath([0, 0])))
+        XCTAssertTrue(result2.nestedInScrollViewPaths.contains(TreePath([0, 0])))
     }
 
     /// `coarseFrameHash` is a wire-format heistId fragment for container
@@ -189,10 +188,9 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                 .container(firstContainer, children: [.element(firstElement, traversalIndex: 0)]),
                 .container(secondContainer, children: [.element(secondElement, traversalIndex: 1)]),
             ],
-            objects: [:],
-            scrollViews: [
-                firstContainer: firstScrollView,
-                secondContainer: secondScrollView,
+            scrollViewsByPath: [
+                TreePath([0]): firstScrollView,
+                TreePath([1]): secondScrollView,
             ]
         ))
         let interface = TheStash.WireConversion.toInterface(from: screen)
@@ -202,8 +200,8 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         XCTAssertEqual(containerNames.count, 2)
         XCTAssertEqual(Set(containerNames).count, 2)
         XCTAssertTrue(containerNames.allSatisfy { $0.rawValue.hasPrefix(repeatedFramePrefix) })
-        XCTAssertTrue(screen.liveCapture.scrollView(forContainer: containerNames[0]) === firstScrollView)
-        XCTAssertTrue(screen.liveCapture.scrollView(forContainer: containerNames[1]) === secondScrollView)
+        XCTAssertTrue(screen.liveCapture.scrollView(forContainerPath: TreePath([0])) === firstScrollView)
+        XCTAssertTrue(screen.liveCapture.scrollView(forContainerPath: TreePath([1])) === secondScrollView)
     }
 
     func testCaptureLocalContainerHashHandlesNonFiniteParserGeometry() {
@@ -270,11 +268,6 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                     ]),
                 ]),
             ],
-            objects: [:],
-            scrollViews: [
-                outer: outerScrollView,
-                pager: pagerScrollView,
-            ],
             scrollViewsByPath: [
                 TreePath([0]): outerScrollView,
                 TreePath([0, 0]): pagerScrollView,
@@ -292,7 +285,11 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         XCTAssertEqual(repeatedFrameIds.count, 3)
         XCTAssertEqual(Set(repeatedFrameIds).count, 3)
         XCTAssertTrue(containerNames.contains(pagerName))
-        let repeatedScrollViews = repeatedFrameIds.compactMap { screen.liveCapture.scrollView(forContainer: $0) }
+        let repeatedScrollViews = [
+            TreePath([0]),
+            TreePath([0, 0, 0]),
+            TreePath([0, 0, 0, 0]),
+        ].compactMap { screen.liveCapture.scrollView(forContainerPath: $0) }
         XCTAssertEqual(repeatedScrollViews.count, 3)
         XCTAssertEqual(Set(repeatedScrollViews.map(ObjectIdentifier.init)).count, 3)
     }
@@ -306,8 +303,6 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             hierarchy: [
                 .container(container, children: [.element(makeElement(), traversalIndex: 0)]),
             ],
-            objects: [:],
-            scrollViews: [:]
         ))
 
         let interface = TheStash.WireConversion.toInterface(from: screen)

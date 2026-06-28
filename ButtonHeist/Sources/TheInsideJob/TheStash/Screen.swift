@@ -44,7 +44,6 @@ struct Screen: Equatable {
         hierarchy: [AccessibilityHierarchy],
         elementRefs: [HeistId: ElementRef] = [:],
         firstResponderHeistId: HeistId?,
-        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
         let liveCapture = LiveCapture(
@@ -56,7 +55,6 @@ struct Screen: Equatable {
             containerContentFramesByPath: [:],
             containerScrollContentLocationsByPath: [:],
             firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
         self.init(
@@ -81,7 +79,6 @@ struct Screen: Equatable {
         containerContentFramesByPath: [TreePath: CGRect] = [:],
         containerScrollContentLocationsByPath: [TreePath: ScrollContentLocation] = [:],
         firstResponderHeistId: HeistId?,
-        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
         let liveCapture = LiveCapture(
@@ -95,7 +92,6 @@ struct Screen: Equatable {
             containerContentFramesByPath: containerContentFramesByPath,
             containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
             firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViews: scrollableContainerViews,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
         self.init(

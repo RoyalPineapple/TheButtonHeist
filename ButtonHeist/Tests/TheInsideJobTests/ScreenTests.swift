@@ -27,7 +27,7 @@ final class ScreenTests: XCTestCase {
         Screen.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: contentSpaceOrigin,
-            scrollContainerName: contentSpaceOrigin.map { _ in "test_scroll" },
+            scrollContainerPath: contentSpaceOrigin.map { _ in TreePath([0]) },
             element: makeElement(label: label ?? heistId.description)
         )
     }
@@ -185,7 +185,6 @@ final class ScreenTests: XCTestCase {
             elements: ["a_button": makeEntry(heistId: "a_button")],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         XCTAssertNil(screen.findElement(heistId: "missing"))
     }
@@ -196,7 +195,6 @@ final class ScreenTests: XCTestCase {
             elements: [entry.heistId: entry],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         XCTAssertEqual(screen.findElement(heistId: "save_button")?.heistId, "save_button")
     }
@@ -213,7 +211,6 @@ final class ScreenTests: XCTestCase {
                 .element(button, traversalIndex: 1),
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         XCTAssertEqual(screen.name, "Controls Demo")
         XCTAssertEqual(screen.id, "controls_demo")
@@ -237,7 +234,6 @@ final class ScreenTests: XCTestCase {
                 .element(navigationTitle, traversalIndex: 1),
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         XCTAssertEqual(screen.name, "Display")
         XCTAssertEqual(screen.id, "display")
@@ -253,7 +249,6 @@ final class ScreenTests: XCTestCase {
                 .element(realHeader, traversalIndex: 1),
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         XCTAssertEqual(screen.name, "Page Title")
     }
@@ -263,7 +258,6 @@ final class ScreenTests: XCTestCase {
             elements: [:],
             hierarchy: [.element(makeElement(label: "Body"), traversalIndex: 0)],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         XCTAssertNil(screen.name)
         XCTAssertNil(screen.id)
@@ -279,7 +273,6 @@ final class ScreenTests: XCTestCase {
             ],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         let rhs = Screen(
             elements: [
@@ -288,7 +281,6 @@ final class ScreenTests: XCTestCase {
             ],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
 
         let merged = lhs.merging(rhs)
@@ -313,13 +305,11 @@ final class ScreenTests: XCTestCase {
             elements: ["save_button": oldEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         let rhs = Screen(
             elements: ["save_button": newEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
 
         let merged = lhs.merging(rhs)
@@ -344,13 +334,11 @@ final class ScreenTests: XCTestCase {
             elements: ["scrolled_row": lhsEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         let rhs = Screen(
             elements: ["scrolled_row": rhsEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
 
         let merged = lhs.merging(rhs)
@@ -372,13 +360,11 @@ final class ScreenTests: XCTestCase {
             elements: ["row": lhsEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         let rhs = Screen(
             elements: ["row": rhsEntry],
             hierarchy: [],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
 
         let merged = lhs.merging(rhs)
@@ -401,13 +387,11 @@ final class ScreenTests: XCTestCase {
             elements: [:],
             hierarchy: oldHierarchy,
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         let rhs = Screen(
             elements: [:],
             hierarchy: newHierarchy,
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
 
         let merged = lhs.merging(rhs)
@@ -425,13 +409,11 @@ final class ScreenTests: XCTestCase {
             elements: [:],
             hierarchy: [],
             firstResponderHeistId: "old_field",
-            scrollableContainerViews: [:]
         )
         let rhs = Screen(
             elements: [:],
             hierarchy: [],
             firstResponderHeistId: "new_field",
-            scrollableContainerViews: [:]
         )
 
         XCTAssertEqual(lhs.merging(rhs).liveCapture.firstResponderHeistId, "new_field")
@@ -575,7 +557,7 @@ final class ScreenTests: XCTestCase {
                 "button_scrolled_away": Screen.ScreenElement(
                     heistId: "button_scrolled_away",
                     contentSpaceOrigin: CGPoint(x: 0, y: 1_000),
-                    scrollContainerName: "test_scroll",
+                    scrollContainerPath: TreePath([0]),
                     element: scrolledAway
                 ),
                 "button_visible": Screen.ScreenElement(
@@ -594,7 +576,6 @@ final class ScreenTests: XCTestCase {
                 visible: "button_visible"
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         )
         let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
 

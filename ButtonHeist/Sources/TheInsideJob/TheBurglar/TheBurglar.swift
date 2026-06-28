@@ -33,27 +33,21 @@ final class TheBurglar {
     /// element lists from it instead of carrying a parallel array.
     struct ParseResult {
         let hierarchy: [AccessibilityHierarchy]
-        let objects: [AccessibilityElement: NSObject]
         let objectsByPath: [TreePath: NSObject]
         let containerObjectsByPath: [TreePath: NSObject]
-        let scrollViews: [AccessibilityContainer: UIView]
         let scrollViewsByPath: [TreePath: UIView]
         let screenCoordinateOffsetsByPath: [TreePath: CGPoint]
 
         init(
             hierarchy: [AccessibilityHierarchy],
-            objects: [AccessibilityElement: NSObject],
             objectsByPath: [TreePath: NSObject] = [:],
             containerObjectsByPath: [TreePath: NSObject] = [:],
-            scrollViews: [AccessibilityContainer: UIView],
             scrollViewsByPath: [TreePath: UIView] = [:],
             screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:]
         ) {
             self.hierarchy = hierarchy
-            self.objects = objects
             self.objectsByPath = objectsByPath
             self.containerObjectsByPath = containerObjectsByPath
-            self.scrollViews = scrollViews
             self.scrollViewsByPath = scrollViewsByPath
             self.screenCoordinateOffsetsByPath = screenCoordinateOffsetsByPath
         }
@@ -85,7 +79,6 @@ final class TheBurglar {
         }
 
         var allHierarchy: [AccessibilityHierarchy] = []
-        var objects: [AccessibilityElement: NSObject] = [:]
         var objectsByPath: [TreePath: NSObject] = [:]
         var containerObjectsByPath: [TreePath: NSObject] = [:]
         var scrollViewsByPath: [TreePath: UIView] = [:]
@@ -138,7 +131,6 @@ final class TheBurglar {
                     Self.collect(
                         root,
                         at: rootPath,
-                        objects: &objects,
                         objectsByPath: &objectsByPath,
                         containerObjectsByPath: &containerObjectsByPath,
                         scrollViewsByPath: &scrollViewsByPath
@@ -155,13 +147,8 @@ final class TheBurglar {
 
         return ParseResult(
             hierarchy: allHierarchy,
-            objects: objects,
             objectsByPath: objectsByPath,
             containerObjectsByPath: containerObjectsByPath,
-            scrollViews: Self.scrollViewsByContainerForCurrentCapture(
-                hierarchy: allHierarchy,
-                scrollViewsByPath: scrollViewsByPath
-            ),
             scrollViewsByPath: scrollViewsByPath,
             screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath
         )
@@ -196,14 +183,12 @@ final class TheBurglar {
     private static func collect(
         _ node: CapturedNode,
         at path: TreePath,
-        objects: inout [AccessibilityElement: NSObject],
         objectsByPath: inout [TreePath: NSObject],
         containerObjectsByPath: inout [TreePath: NSObject],
         scrollViewsByPath: inout [TreePath: UIView]
     ) {
         switch node {
-        case let .element(element, _, source):
-            objects[element] = source
+        case let .element(_, _, source):
             objectsByPath[path] = source
 
         case let .container(container, children, source):
@@ -215,7 +200,6 @@ final class TheBurglar {
                 collect(
                     child,
                     at: path.appending(index),
-                    objects: &objects,
                     objectsByPath: &objectsByPath,
                     containerObjectsByPath: &containerObjectsByPath,
                     scrollViewsByPath: &scrollViewsByPath
@@ -245,18 +229,6 @@ final class TheBurglar {
             return contentSizeMatches[0]
         }
         return candidates.count == 1 ? candidates[0] : nil
-    }
-
-    static func scrollViewsByContainerForCurrentCapture(
-        hierarchy: [AccessibilityHierarchy],
-        scrollViewsByPath: [TreePath: UIView]
-    ) -> [AccessibilityContainer: UIView] {
-        var result: [AccessibilityContainer: UIView] = [:]
-        for (container, path) in hierarchy.containerPaths where container.isScrollable {
-            guard result[container] == nil, let view = scrollViewsByPath[path] else { continue }
-            result[container] = view
-        }
-        return result
     }
 
 }

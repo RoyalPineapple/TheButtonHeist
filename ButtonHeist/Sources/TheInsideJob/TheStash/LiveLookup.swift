@@ -28,11 +28,11 @@ struct LiveLookup {
         capture.firstResponderHeistId
     }
 
-    var scrollableContainerViews: [AccessibilityContainer: UIView] {
-        var result: [AccessibilityContainer: UIView] = [:]
-        for (container, ref) in capture.scrollableContainerViews {
+    var scrollableContainerViewsByPath: [TreePath: UIView] {
+        var result: [TreePath: UIView] = [:]
+        for (path, ref) in capture.scrollableContainerViewsByPath {
             if let view = ref.view {
-                result[container] = view
+                result[path] = view
             }
         }
         return result
@@ -103,23 +103,13 @@ struct LiveLookup {
         capture.scrollView(for: screenElement)
     }
 
-    func scrollView(forContainerName containerName: ContainerName) -> UIScrollView? {
-        capture.scrollView(forContainer: containerName)
-    }
-
-    @MainActor
-    func scrollView(
-        for containerName: ContainerName,
-        semanticContainer: @autoclosure () -> SemanticScreen.Container?,
-        tripwire _: TheTripwire
-    ) -> UIScrollView? {
-        capture.scrollView(forContainer: containerName)
-            ?? semanticContainer().flatMap { capture.scrollView(for: $0) }
-    }
-
     @MainActor
     func scrollView(for container: SemanticScreen.Container, tripwire _: TheTripwire) -> UIScrollView? {
         capture.scrollView(for: container)
+    }
+
+    func scrollView(forContainerPath path: TreePath) -> UIScrollView? {
+        capture.scrollView(forContainerPath: path)
     }
 
     func containerObject(forPath path: TreePath) -> NSObject? {
@@ -139,11 +129,7 @@ struct LiveLookup {
     }
 
     func scrollableContainerView(forPath path: TreePath) -> UIView? {
-        if let view = capture.scrollableContainerViewsByPath[path]?.view {
-            return view
-        }
-        guard let container = container(forPath: path) else { return nil }
-        return capture.scrollableContainerViews[container]?.view
+        capture.scrollableContainerViewsByPath[path]?.view
     }
 
     func scrollContainerDiagnostics() -> String {
@@ -151,9 +137,7 @@ struct LiveLookup {
             .filter { $0.container.isScrollable }
             .map { item -> String in
                 let containerName = capture.containerNamesByPath[item.path]
-                    ?? capture.containerNames[item.container]
-                let hasLiveScrollView = containerName
-                    .flatMap { capture.scrollView(forContainer: $0) } != nil
+                let hasLiveScrollView = capture.scrollView(forContainerPath: item.path) != nil
                 let pathView = capture.scrollableContainerViewsByPath[item.path]?.view
                 let containerObject = capture.containerRefsByPath[item.path]?.object
                 let objectType = containerObject.map { String(describing: type(of: $0)) } ?? "<nil>"

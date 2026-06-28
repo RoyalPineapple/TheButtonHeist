@@ -329,7 +329,6 @@ final class TheStashRotorTests: XCTestCase {
                 screenElement.heistId: .init(object: host, scrollView: nil)
             ],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
         ))
 
         let outcome = stash.performRotor(
