@@ -33,28 +33,29 @@ final class DeviceConnectionTLSTests: XCTestCase {
     }
 
     func testDisconnectReasonTaxonomy() {
-        let cases: [(DisconnectReason, String, FailurePhase, Bool)] = [
-            (.networkError(NSError(domain: "test", code: 1)), "transport.network_error", .transport, true),
-            (.bufferOverflow, "transport.buffer_overflow", .transport, false),
-            (.eventBacklogOverflow(maxEvents: 512), "transport.event_backlog_overflow", .transport, true),
-            (.serverClosed, "transport.server_closed", .transport, true),
-            (.authFailed("bad token"), "auth.failed", .authentication, false),
-            (.sessionLocked("busy"), "session.locked", .session, true),
+        let cases: [(DisconnectReason, KnownFailureCode, FailurePhase, Bool)] = [
+            (.networkError(NSError(domain: "test", code: 1)), .transportNetworkError, .transport, true),
+            (.bufferOverflow, .transportBufferOverflow, .transport, false),
+            (.eventBacklogOverflow(maxEvents: 512), .transportEventBacklogOverflow, .transport, true),
+            (.serverClosed, .transportServerClosed, .transport, true),
+            (.authFailed("bad token"), .authFailed, .authentication, false),
+            (.sessionLocked("busy"), .sessionLocked, .session, true),
             (
                 .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
-                "protocol.mismatch", .protocolNegotiation, false
+                .protocolMismatch, .protocolNegotiation, false
             ),
-            (.localDisconnect, "client.local_disconnect", .client, false),
-            (.certificateMismatch, "tls.certificate_mismatch", .tls, false),
-            (.missingFingerprint, "tls.missing_fingerprint", .tls, false),
-            (.missingToken, "tls.missing_token", .tls, false),
+            (.localDisconnect, .clientLocalDisconnect, .client, false),
+            (.certificateMismatch, .tlsCertificateMismatch, .tls, false),
+            (.missingFingerprint, .tlsMissingFingerprint, .tls, false),
+            (.missingToken, .tlsMissingToken, .tls, false),
         ]
 
-        for (reason, code, phase, retryable) in cases {
-            XCTAssertEqual(reason.failureCode, code)
+        for (reason, knownCode, phase, retryable) in cases {
+            XCTAssertEqual(reason.diagnostic.details.code.knownCode, knownCode)
+            XCTAssertEqual(reason.failureCode, knownCode.rawValue)
             XCTAssertEqual(reason.phase, phase)
             XCTAssertEqual(reason.retryable, retryable)
-            if code != "client.local_disconnect", code != "auth.failed" {
+            if knownCode != .clientLocalDisconnect, knownCode != .authFailed {
                 XCTAssertNotNil(reason.hint, "Expected hint for \(reason)")
             }
         }

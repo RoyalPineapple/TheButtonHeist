@@ -16,8 +16,8 @@ struct JSONLinesCommand: AsyncParsableCommand {
             Maintains a single connection and accepts canonical JSON commands on stdin.
             JSON output mode accepts one JSON object per line (e.g. {"command":"one_finger_tap"}).
             Output is JSON by default; pass --format human only for interactive inspection.
-            Machine JSON is preflighted before decoding with PublicAdapterInputLimits.maxRequestBytes,
-            PublicAdapterInputLimits.maxNestingDepth, and PublicAdapterInputLimits.maxTotalObjectKeys.
+            Machine JSON is preflighted before decoding with PublicMachineInputLimits.maxRequestBytes,
+            PublicMachineInputLimits.maxNestingDepth, and PublicMachineInputLimits.maxTotalObjectKeys.
 
             Examples:
               buttonheist json_lines

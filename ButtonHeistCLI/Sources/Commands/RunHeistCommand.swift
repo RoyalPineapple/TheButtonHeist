@@ -5,7 +5,7 @@ import ThePlans
 import TheScore
 
 struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
-    typealias SwiftHeistCompiler = @Sendable (_ source: URL, _ entry: String) async -> HeistCompilationResult<HeistPlan>
+    typealias SwiftHeistCompiler = @Sendable (_ source: URL, _ entry: String) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -130,7 +130,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         case .success(let compiledPlan, _):
             plan = compiledPlan
         case .failure(let diagnostics):
-            throw ValidationError("failed to compile Swift heist source: \(formatCompilationDiagnostics(diagnostics))")
+            throw ValidationError("failed to compile Swift heist source: \(formatBuildDiagnostics(diagnostics))")
         }
 
         let directory = FileManager.default.temporaryDirectory
@@ -216,7 +216,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
                 context: "--argument",
                 rootMismatchMessage: "--argument must be a JSON object"
             )
-        } catch let error as PublicAdapterInputError {
+        } catch let error as PublicMachineInputError {
             throw ValidationError(error.message)
         } catch {
             throw ValidationError("--argument must be valid JSON: \(error)")
@@ -224,6 +224,6 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     }
 }
 
-private func formatCompilationDiagnostics(_ diagnostics: [HeistCompilationDiagnostic]) -> String {
+private func formatBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
     diagnostics.map(\.description).joined(separator: "\n")
 }

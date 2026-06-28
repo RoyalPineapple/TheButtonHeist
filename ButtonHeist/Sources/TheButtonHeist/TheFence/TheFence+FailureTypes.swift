@@ -433,12 +433,13 @@ public struct ConnectionFailure: Equatable, Sendable {
 
 extension ConnectionFailure {
     init(disconnectReason reason: DisconnectReason) {
+        let details = reason.diagnostic.details
         self.init(
             message: reason.connectionFailureMessage,
-            failureCode: FailureCode(rawValue: reason.failureCode),
-            phase: reason.phase,
-            retryable: reason.retryable,
-            hint: reason.hint
+            failureCode: details.code,
+            phase: details.phase,
+            retryable: details.retryable,
+            hint: details.hint
         )
     }
 }

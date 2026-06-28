@@ -426,6 +426,32 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `heist-plan stdout writes are routed through local output sink`() throws {
+        let root = try repositoryRoot()
+        let files = try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/HeistPlanTool", isDirectory: true))
+        let forbiddenSnippets = [
+            "print(",
+            "FileHandle.standardOutput.write",
+        ]
+        var foundOutputSink = false
+
+        for file in files {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            foundOutputSink = foundOutputSink || source.contains("enum HeistPlanToolOutput")
+            for (lineNumber, line) in sourceLinesOutsideHeistPlanToolOutputSink(source) {
+                for snippet in forbiddenSnippets {
+                    #expect(
+                        line.range(of: snippet) == nil,
+                        "\(file.path):\(lineNumber) contains \(snippet) outside HeistPlanToolOutput"
+                    )
+                }
+            }
+        }
+
+        #expect(foundOutputSink, "HeistPlanToolOutput sink is missing")
+    }
+
+    @Test
     func `untrusted heist planning representations stay behind ThePlans boundary`() throws {
         let root = try repositoryRoot()
         let files = try productionSwiftFilesOutsideThePlans(in: root)
@@ -451,8 +477,8 @@ struct HeistCompilerTests {
 }
 
 private func requireSuccess<Value>(
-    _ result: HeistCompilationResult<Value>
-) async throws -> (Value, [HeistCompilationDiagnostic]) {
+    _ result: ValidationResult<Value, HeistBuildDiagnostic>
+) async throws -> (Value, [HeistBuildDiagnostic]) {
     switch result {
     case .success(let value, let diagnostics):
         return (value, diagnostics)
@@ -462,8 +488,8 @@ private func requireSuccess<Value>(
 }
 
 private func requireFailure<Value>(
-    _ result: HeistCompilationResult<Value>
-) async throws -> [HeistCompilationDiagnostic] {
+    _ result: ValidationResult<Value, HeistBuildDiagnostic>
+) async throws -> [HeistBuildDiagnostic] {
     switch result {
     case .success:
         throw CompilerTestFailure("Expected compilation to fail")
@@ -548,6 +574,42 @@ private func swiftFiles(in root: URL) throws -> [URL] {
         }
     }
     return files
+}
+
+private func sourceLinesOutsideHeistPlanToolOutputSink(_ source: String) -> [(lineNumber: Int, line: Substring)] {
+    var lines: [(lineNumber: Int, line: Substring)] = []
+    var sinkBraceDepth: Int?
+
+    for (index, line) in source.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+        if sinkBraceDepth == nil, line.range(of: "enum HeistPlanToolOutput") != nil {
+            let depth = braceDelta(in: line)
+            sinkBraceDepth = depth > 0 ? depth : nil
+            continue
+        }
+
+        if let currentDepth = sinkBraceDepth {
+            let nextDepth = currentDepth + braceDelta(in: line)
+            sinkBraceDepth = nextDepth > 0 ? nextDepth : nil
+            continue
+        }
+
+        lines.append((lineNumber: index + 1, line: line))
+    }
+
+    return lines
+}
+
+private func braceDelta(in line: Substring) -> Int {
+    line.reduce(0) { result, character in
+        switch character {
+        case "{":
+            return result + 1
+        case "}":
+            return result - 1
+        default:
+            return result
+        }
+    }
 }
 
 private func productionSwiftFilesOutsideThePlans(in root: URL) throws -> [URL] {

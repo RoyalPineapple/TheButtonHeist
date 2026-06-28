@@ -46,10 +46,7 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
                 operation: .connection,
                 target: nil,
                 cause: message,
-                errorCode: "connection.failed",
-                phase: .transport,
-                retryable: true,
-                hint: "Check that the app is running and reachable, then retry."
+                code: .connectionFailed
             )
         case .disconnected(let reason):
             return reason.diagnostic
@@ -58,9 +55,7 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
                 operation: .connection,
                 target: nil,
                 cause: "Connection timed out",
-                errorCode: "setup.timeout",
-                phase: .setup,
-                retryable: true,
+                code: .setupTimeout,
                 hint: "Check that the app is running with Button Heist enabled; use 'buttonheist list_devices' to see available devices."
             )
         case .noDeviceFound:
@@ -68,9 +63,7 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
                 operation: .discovery,
                 target: nil,
                 cause: "No device found",
-                errorCode: "discovery.no_device_found",
-                phase: .discovery,
-                retryable: true,
+                code: .discoveryNoDeviceFound,
                 hint: "Start the app and confirm it advertises a Button Heist session."
             )
         case .noMatchingDevice(let filter, let available):
@@ -78,10 +71,7 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
                 operation: .resolution,
                 target: filter,
                 cause: "No matching device",
-                errorCode: "discovery.no_matching_device",
-                phase: .discovery,
-                retryable: false,
-                hint: "Check the device filter or target name against 'buttonheist list_devices'.",
+                code: .discoveryNoMatchingDevice,
                 candidates: available
             )
         case .ambiguousDeviceTarget(let filter, let matches):
@@ -89,10 +79,7 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
                 operation: .resolution,
                 target: filter,
                 cause: "Ambiguous device target",
-                errorCode: "discovery.ambiguous_device_target",
-                phase: .discovery,
-                retryable: false,
-                hint: "Narrow the device target using a unique app name, device name, instance ID, installation ID, simulator UDID, or direct host:port.",
+                code: .discoveryAmbiguousDeviceTarget,
                 candidates: matches
             )
         }
@@ -110,51 +97,65 @@ struct HandoffFailureDiagnostic: Equatable, Sendable {
     let operation: HandoffFailureOperation
     let target: String?
     let cause: String
-    let errorCode: String
-    let phase: FailurePhase
-    let retryable: Bool
-    let hint: String?
+    let details: FailureDetails
     let candidates: [String]
+
+    var errorCode: String { details.errorCode }
+    var phase: FailurePhase { details.phase }
+    var retryable: Bool { details.retryable }
+    var hint: String? { details.hint }
 
     init(
         operation: HandoffFailureOperation,
         target: String?,
         cause: String,
-        errorCode: String,
-        phase: FailurePhase,
-        retryable: Bool,
+        code: KnownFailureCode,
         hint: String?,
         candidates: [String] = []
     ) {
         self.operation = operation
         self.target = target
         self.cause = cause
-        self.errorCode = errorCode
-        self.phase = phase
-        self.retryable = retryable
-        self.hint = hint
+        self.details = FailureDetails(code: code, hint: hint)
         self.candidates = candidates
+    }
+
+    init(
+        operation: HandoffFailureOperation,
+        target: String?,
+        cause: String,
+        code: KnownFailureCode,
+        candidates: [String] = []
+    ) {
+        self.init(
+            operation: operation,
+            target: target,
+            cause: cause,
+            code: code,
+            hint: nil,
+            candidates: candidates
+        )
     }
 }
 
 enum HandoffFailureFormatter {
     static func message(for diagnostic: HandoffFailureDiagnostic) -> String {
-        switch diagnostic.errorCode {
-        case "connection.failed":
+        switch diagnostic.details.code.knownCode {
+        case .connectionFailed?:
             return diagnostic.cause
-        case "setup.timeout":
+        case .setupTimeout?:
             return "Connection timed out"
-        case "discovery.no_device_found":
+        case .discoveryNoDeviceFound?:
             return "No device found"
-        case "discovery.no_matching_device":
+        case .discoveryNoMatchingDevice?:
             let available = diagnostic.candidates.joined(separator: ", ")
             return "No device matching '\(diagnostic.target ?? "(none)")' (available: \(available))"
-        case "discovery.ambiguous_device_target":
+        case .discoveryAmbiguousDeviceTarget?:
             let matches = diagnostic.candidates.joined(separator: ", ")
             return "Ambiguous device target '\(diagnostic.target ?? "(none)")' (matches: \(matches))"
-        case "auth.failed":
+        case .authFailed?:
             return diagnostic.cause.replacingPrefix("Auth failed:", with: "Authentication failed:")
-        case "session.locked":
+        case .sessionLocked?:
             return diagnostic.cause
         default:
             return connectionFailureMessage(for: diagnostic)

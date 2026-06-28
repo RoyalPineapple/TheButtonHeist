@@ -15,12 +15,7 @@ extension TheFence {
                 return .error(
                     "Inline screenshot payload is too large: \(byteCount) bytes exceeds " +
                         "\(DecodeLimits.maxInlineScreenshotBase64Bytes) bytes",
-                    details: FailureDetails(
-                        errorCode: "screen.inline_payload_too_large",
-                        phase: .client,
-                        retryable: false,
-                        hint: "Omit inlineData or pass output to receive a screenshot artifact path."
-                    )
+                    details: FailureDetails(code: .screenInlinePayloadTooLarge)
                 )
             }
             return .screenshotData(payload: screen, options: options)

@@ -5,7 +5,7 @@ public enum Severity: String, Sendable, Equatable {
     case warning
 }
 
-public struct HeistCompilationSourceLocation: Sendable, Equatable, CustomStringConvertible {
+public struct HeistBuildSourceLocation: Sendable, Equatable, CustomStringConvertible {
     public let url: URL
     public let line: Int?
     public let column: Int?
@@ -27,9 +27,6 @@ public struct HeistCompilationSourceLocation: Sendable, Equatable, CustomStringC
         return result
     }
 }
-
-public typealias HeistCompilationDiagnostic = HeistBuildDiagnostic
-public typealias HeistCompilationResult<Value: Sendable> = ValidationResult<Value, HeistBuildDiagnostic>
 
 public actor HeistCompiler {
     public struct Configuration: Sendable, Equatable {
@@ -56,7 +53,7 @@ public actor HeistCompiler {
     public func compileFile(
         _ url: URL,
         entry: String = "heist"
-    ) async -> HeistCompilationResult<HeistPlan> {
+    ) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
         let source = url.standardizedFileURL
         do {
             try Task.checkCancellation()
@@ -87,7 +84,7 @@ public actor HeistCompiler {
 
     public func compileDirectory(
         _ url: URL
-    ) async -> HeistCompilationResult<HeistCatalog> {
+    ) async -> ValidationResult<HeistCatalog, HeistBuildDiagnostic> {
         let directory = url.standardizedFileURL
         do {
             try Task.checkCancellation()
@@ -104,7 +101,7 @@ public actor HeistCompiler {
             }
 
             var plans: [HeistPlan] = []
-            var diagnostics: [HeistCompilationDiagnostic] = []
+            var diagnostics: [HeistBuildDiagnostic] = []
             for source in sources {
                 try Task.checkCancellation()
                 switch await compileFile(source, entry: configuration.directoryEntry) {
@@ -194,8 +191,8 @@ private extension HeistCompiler {
     static func catalogDiagnostics(
         for plans: [HeistPlan],
         sources: [URL]
-    ) -> [HeistCompilationDiagnostic] {
-        var diagnostics: [HeistCompilationDiagnostic] = []
+    ) -> [HeistBuildDiagnostic] {
+        var diagnostics: [HeistBuildDiagnostic] = []
         var seen: [String: URL] = [:]
 
         for (index, plan) in plans.enumerated() {
@@ -247,7 +244,7 @@ private extension HeistCompiler {
         for error: Error,
         source: URL?,
         entry: String?
-    ) -> [HeistCompilationDiagnostic] {
+    ) -> [HeistBuildDiagnostic] {
 #if os(macOS) || os(Linux)
         if let compilerError = error as? HeistSwiftFileCompilerError {
             return diagnostics(for: compilerError, source: source, entry: entry)
@@ -264,7 +261,7 @@ private extension HeistCompiler {
         for error: HeistSwiftFileCompilerError,
         source: URL?,
         entry: String?
-    ) -> [HeistCompilationDiagnostic] {
+    ) -> [HeistBuildDiagnostic] {
         let entrySuffix = entry.map { " entry \"\($0)\"" } ?? ""
         switch error {
         case .invalidEntry(let invalidEntry):
@@ -320,7 +317,7 @@ private extension HeistCompiler {
     }
 #endif
 
-    static func diagnostics(for error: HeistDirectoryCompilationError) -> [HeistCompilationDiagnostic] {
+    static func diagnostics(for error: HeistDirectoryCompilationError) -> [HeistBuildDiagnostic] {
         switch error {
         case .notDirectory(let url):
             return [diagnostic(
@@ -347,8 +344,8 @@ private extension HeistCompiler {
         severity: Severity = .error,
         phase: HeistBuildPhase = .swiftCompilation,
         source: URL?
-    ) -> HeistCompilationDiagnostic {
-        HeistCompilationDiagnostic(
+    ) -> HeistBuildDiagnostic {
+        HeistBuildDiagnostic(
             code: code,
             kind: severity.diagnosticKind,
             phase: phase,

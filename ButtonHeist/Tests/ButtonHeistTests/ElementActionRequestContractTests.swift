@@ -41,7 +41,7 @@ final class ElementActionRequestContractTests: XCTestCase {
         }
         XCTAssertTrue(message.contains("activate request contract failed: missing target"))
         XCTAssertTrue(message.contains("Next: get_interface()"))
-        XCTAssertEqual(details?.errorCode, "request.missing_target")
+        XCTAssertEqual(details?.code.knownCode, .requestMissingTarget)
         XCTAssertEqual(details?.phase, .request)
         XCTAssertEqual(details?.retryable, false)
         XCTAssertEqual(details?.hint, "get_interface()")

@@ -158,7 +158,6 @@
 		3EE925660094B253E2889E42 /* HeistPlanSourcePrimitiveParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CD9699E9308853FEE555032 /* HeistPlanSourcePrimitiveParser.swift */; };
 		3F45E437D048808E37C101C9 /* SimpleSocketServerIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4678F3C0E9535AC77ABF6CAB /* SimpleSocketServerIntegrationTests.swift */; };
 		3FC90C31B13E7587AF047BC9 /* TheFence+CommandCatalog+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC03A30C236EF36D48BC3AD /* TheFence+CommandCatalog+Session.swift */; };
-		4001AC79306D1D57E6419FC2 /* PublicAdapterInputLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = B475B5E45E2388F8075269DB /* PublicAdapterInputLimits.swift */; };
 		4023A7BB7752BA165F290085 /* TheFence+Formatting+Compact+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC2771DB546DDE036C0782AC /* TheFence+Formatting+Compact+Session.swift */; };
 		404A17F6C4541A3C8E1FA662 /* TheFence+CommandCatalog+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED89E7BA5406C50CCF1B4DD /* TheFence+CommandCatalog+Actions.swift */; };
 		40888A351E80D3B4B46A1003 /* CancellableSleep.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB214DE813D7B7AAC1D5FCA /* CancellableSleep.swift */; };
@@ -288,6 +287,7 @@
 		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
 		7CC18EFE1CB52BF84DEF8842 /* HeistReceiptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A3E7226EE3CB9C966C902DC /* HeistReceiptTests.swift */; };
 		7CF48D906BD4505BC27D934B /* ThePlans.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96D1DF8ADC7876970B2B284F /* ThePlans.framework */; };
+		7DCD0700AEF7C6C96850D8B6 /* PublicMachineInputLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D40526E580672DD5F80945E /* PublicMachineInputLimits.swift */; };
 		7DE9C29580D34C57826B3ED0 /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */; };
 		7E0DBE48EA0C1A4CB250C386 /* TheFence+ScreenHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 403E52C7A12CB836468AA436 /* TheFence+ScreenHandlers.swift */; };
 		7E12A24AF6AB9194E21C2DE2 /* ConnectionScope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B00E3ADE91F58C1FDF40089 /* ConnectionScope.swift */; };
@@ -889,6 +889,7 @@
 		0B05AC474B9C2427612BB9A7 /* AccessibilityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPolicyTests.swift; sourceTree = "<group>"; };
 		0B5C52071043D7EF9CA490A6 /* SocketClientLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClientLifecycle.swift; sourceTree = "<group>"; };
 		0C4781A9F9BB0B3163048425 /* HeistArtifact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistArtifact.swift; sourceTree = "<group>"; };
+		0D40526E580672DD5F80945E /* PublicMachineInputLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicMachineInputLimits.swift; sourceTree = "<group>"; };
 		0D9C421EACCD36A3A4230D1D /* TheFence+CommandPresentation+Adapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandPresentation+Adapters.swift"; sourceTree = "<group>"; };
 		0E70B3ADCA6E79A1A9C7A241 /* TheFence+RequestTargetDecoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestTargetDecoding.swift"; sourceTree = "<group>"; };
 		0F055BCE701FC31BEB4F1464 /* Navigation+ExplorationScanning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Navigation+ExplorationScanning.swift"; sourceTree = "<group>"; };
@@ -1270,7 +1271,6 @@
 		B327E8A00585684B8DF1E7AE /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		B3587AF13D58E9B2840E15D6 /* ButtonHeistDSLTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistDSLTests-Info.plist"; sourceTree = "<group>"; };
 		B3B1A6858B71403D4DBB9655 /* InsideJobRuntimeLease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobRuntimeLease.swift; sourceTree = "<group>"; };
-		B475B5E45E2388F8075269DB /* PublicAdapterInputLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicAdapterInputLimits.swift; sourceTree = "<group>"; };
 		B4897E4AA863E89F16AF10ED /* HeistCanonicalSwiftDSLRenderer+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeistCanonicalSwiftDSLRenderer+Actions.swift"; sourceTree = "<group>"; };
 		B52DC7DFD3B9768E788237C8 /* TheFence+CommandArguments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandArguments.swift"; sourceTree = "<group>"; };
 		B53694BEB710AB8F96BF06A7 /* SimpleSocketServer+ClientState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SimpleSocketServer+ClientState.swift"; sourceTree = "<group>"; };
@@ -1612,8 +1612,8 @@
 				15F4512323FABE5CE4A1B170 /* FenceJSON+TreeNode.swift */,
 				40ECF9E5A1BABA984614D3AC /* FenceResponseModels.swift */,
 				33EED69484A962E235669DB4 /* FenceResponsePresenter.swift */,
-				B475B5E45E2388F8075269DB /* PublicAdapterInputLimits.swift */,
 				F4CC3DD5E8E5DA17F81344C6 /* PublicJSONSerializer.swift */,
+				0D40526E580672DD5F80945E /* PublicMachineInputLimits.swift */,
 				A432AFAAFE2E22F69494CF6A /* ReportProjections.swift */,
 				37797014C48E03154F0FB75C /* SchemaValidationError.swift */,
 				2B92FA5985EAF1A5C7360207 /* TheFence.swift */,
@@ -3125,8 +3125,8 @@
 				212BFCCAC5EA4255D36C2BDC /* FenceJSON+TreeNode.swift in Sources */,
 				EA053394D81ED60D140F6DD2 /* FenceResponseModels.swift in Sources */,
 				F37994C7D20C1C9590216F7A /* FenceResponsePresenter.swift in Sources */,
-				4001AC79306D1D57E6419FC2 /* PublicAdapterInputLimits.swift in Sources */,
 				A49D71A6A794BCDA7B95070A /* PublicJSONSerializer.swift in Sources */,
+				7DCD0700AEF7C6C96850D8B6 /* PublicMachineInputLimits.swift in Sources */,
 				A29094C88F94E6B1B9A4EF56 /* ReportProjections.swift in Sources */,
 				F27830B9AF754EF55A035891 /* SchemaValidationError.swift in Sources */,
 				E1C21596B113413BBFE23F51 /* TheFence+CommandArguments.swift in Sources */,

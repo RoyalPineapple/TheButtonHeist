@@ -39,12 +39,6 @@ extension FenceError {
 
     /// Machine-readable metadata for this failure.
     public var failureDetails: FailureDetails {
-        let descriptor = failureDescriptor
-        return FailureDetails(
-            errorCode: descriptor.errorCode,
-            phase: descriptor.phase,
-            retryable: descriptor.retryable,
-            hint: descriptor.hint
-        )
+        failureDescriptor.details
     }
 }

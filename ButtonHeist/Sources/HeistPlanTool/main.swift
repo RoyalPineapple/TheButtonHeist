@@ -16,6 +16,16 @@ struct HeistPlanTool: AsyncParsableCommand {
     )
 }
 
+enum HeistPlanToolOutput {
+    static func writeLine(_ line: String) {
+        writeData(Data((line + "\n").utf8))
+    }
+
+    static func writeData(_ data: Data) {
+        FileHandle.standardOutput.write(data)
+    }
+}
+
 struct Validate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "validate",
@@ -41,7 +51,7 @@ struct RenderSwift: ParsableCommand {
 
     func run() throws {
         let plan = try HeistPlanIO.readValidatedPlan(from: plan)
-        print(try plan.canonicalSwiftDSL())
+        HeistPlanToolOutput.writeLine(try plan.canonicalSwiftDSL())
     }
 }
 
@@ -97,13 +107,13 @@ struct Compile: AsyncParsableCommand {
         case .success(let compiledPlan, _):
             plan = compiledPlan
         case .failure(let diagnostics):
-            throw ValidationError(formatCompilationDiagnostics(diagnostics))
+            throw ValidationError(formatBuildDiagnostics(diagnostics))
         }
         try HeistPlanIO.writeCanonicalJSON(for: plan, to: output)
     }
 }
 
-private func formatCompilationDiagnostics(_ diagnostics: [HeistCompilationDiagnostic]) -> String {
+private func formatBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
     diagnostics.map(\.description).joined(separator: "\n")
 }
 
@@ -138,7 +148,7 @@ enum HeistPlanIO {
             }
         } else {
             let output = try canonicalJSONData(for: plan) + Data([0x0A])
-            FileHandle.standardOutput.write(output)
+            HeistPlanToolOutput.writeData(output)
         }
     }
 
