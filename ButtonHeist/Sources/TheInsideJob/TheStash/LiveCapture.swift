@@ -301,6 +301,58 @@ struct LiveCapture: Equatable {
         let ref: ElementRef?
     }
 
+    struct LiveElementTable: Equatable {
+        let entries: [LiveElementEntry]
+
+        init(
+            validating snapshot: Snapshot,
+            dispatchReferences: DispatchReferences
+        ) throws {
+            var entries: [LiveElementEntry] = []
+            var pathsByHeistId: [HeistId: TreePath] = [:]
+
+            for item in snapshot.hierarchy.pathIndexedElements {
+                guard let heistId = snapshot.heistIdsByPath[item.path] else { continue }
+                if let firstPath = pathsByHeistId[heistId] {
+                    throw LiveElementTableValidationError.duplicateHeistId(
+                        heistId: heistId,
+                        firstPath: firstPath,
+                        duplicatePath: item.path
+                    )
+                }
+                entries.append(LiveElementEntry(
+                    path: item.path,
+                    heistId: heistId,
+                    element: item.element,
+                    ref: dispatchReferences.elementRefs[heistId]
+                ))
+                pathsByHeistId[heistId] = item.path
+            }
+
+            self.entries = entries
+        }
+    }
+
+    enum LiveElementTableValidationError: Error, Equatable, CustomStringConvertible, LocalizedError {
+        case duplicateHeistId(heistId: HeistId, firstPath: TreePath, duplicatePath: TreePath)
+
+        var description: String {
+            switch self {
+            case .duplicateHeistId(let heistId, let firstPath, let duplicatePath):
+                return """
+                LiveElementIndex cannot index duplicate live HeistId "\(heistId.rawValue)" \
+                at paths \(firstPath.liveCaptureDiagnosticDescription) and \
+                \(duplicatePath.liveCaptureDiagnosticDescription); live HeistIds must be \
+                unique before building lookup indexes.
+                """
+            }
+        }
+
+        var errorDescription: String? {
+            description
+        }
+    }
+
     // MARK: - Live Element Index
 
     struct LiveElementIndex: Equatable {
@@ -314,28 +366,30 @@ struct LiveCapture: Equatable {
             snapshot: Snapshot,
             dispatchReferences: DispatchReferences
         ) {
-            var entriesByPath: [TreePath: LiveElementEntry] = [:]
-            var pathsByHeistId: [HeistId: TreePath] = [:]
-            var orderedPaths: [TreePath] = []
-
-            for item in snapshot.hierarchy.pathIndexedElements {
-                guard let heistId = snapshot.heistIdsByPath[item.path],
-                      pathsByHeistId[heistId] == nil
-                else { continue }
-                let entry = LiveElementEntry(
-                    path: item.path,
-                    heistId: heistId,
-                    element: item.element,
-                    ref: dispatchReferences.elementRefs[heistId]
+            do {
+                let table = try LiveElementTable(
+                    validating: snapshot,
+                    dispatchReferences: dispatchReferences
                 )
-                entriesByPath[item.path] = entry
-                pathsByHeistId[heistId] = item.path
-                orderedPaths.append(item.path)
+                self.init(
+                    validatedTable: table,
+                    dispatchReferences: dispatchReferences
+                )
+            } catch let error as LiveElementTableValidationError {
+                preconditionFailure(error.description)
+            } catch {
+                preconditionFailure("LiveElementIndex failed to validate live element table: \(error)")
             }
+        }
 
-            self.entriesByPath = entriesByPath
-            self.pathsByHeistId = pathsByHeistId
-            self.orderedPaths = orderedPaths
+        private init(
+            validatedTable table: LiveElementTable,
+            dispatchReferences: DispatchReferences
+        ) {
+            let entries = table.entries
+            entriesByPath = Dictionary(uniqueKeysWithValues: entries.map { ($0.path, $0) })
+            pathsByHeistId = Dictionary(uniqueKeysWithValues: entries.map { ($0.heistId, $0.path) })
+            orderedPaths = entries.map(\.path)
             containerRefsByPath = dispatchReferences.containerRefsByPath
             scrollableContainerViewsByPath = dispatchReferences.scrollableContainerViewsByPath
         }
@@ -411,6 +465,12 @@ private extension AccessibilityHierarchy {
               children.indices.contains(childIndex)
         else { return nil }
         return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+    }
+}
+
+private extension TreePath {
+    var liveCaptureDiagnosticDescription: String {
+        "[\(indices.map(String.init).joined(separator: ", "))]"
     }
 }
 
