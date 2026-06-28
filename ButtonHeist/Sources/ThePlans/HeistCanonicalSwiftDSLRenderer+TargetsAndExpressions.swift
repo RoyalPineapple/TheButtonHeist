@@ -117,8 +117,8 @@ extension HeistCanonicalSwiftDSLRenderer {
         }
     }
 
-    func renderTraitArray(_ traits: [HeistTrait]) -> String {
-        "[\(traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
+    func renderTraitArray(_ traits: Set<HeistTrait>) -> String {
+        "[\(traits.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
     }
 
     func renderCallArgument(_ match: StringMatch<String>) -> String {

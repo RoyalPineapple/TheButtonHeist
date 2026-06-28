@@ -21,18 +21,45 @@ public struct CustomActionTarget: Codable, Sendable, Equatable, CustomStringConv
     }
 }
 
+enum CustomActionTargetValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+    case emptyActionName
+
+    var description: String {
+        switch self {
+        case .emptyActionName:
+            return "custom action name must not be empty"
+        }
+    }
+}
+
 extension CustomActionTarget {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case elementTarget
         case actionName
     }
 
+    static func validate(actionName: String) throws {
+        guard !actionName.isEmpty else {
+            throw CustomActionTargetValidationError.emptyActionName
+        }
+    }
+
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "custom action target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let actionName = try container.decode(String.self, forKey: .actionName)
+        do {
+            try Self.validate(actionName: actionName)
+        } catch {
+            throw DecodingError.dataCorruptedError(
+                forKey: .actionName,
+                in: container,
+                debugDescription: String(describing: error)
+            )
+        }
         self.init(
             elementTarget: try container.decode(ElementTarget.self, forKey: .elementTarget),
-            actionName: try container.decode(String.self, forKey: .actionName)
+            actionName: actionName
         )
     }
 

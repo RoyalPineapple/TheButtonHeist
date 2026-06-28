@@ -1,5 +1,6 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 /// Stable client-side phase for connection and request failures.
@@ -344,6 +345,8 @@ public struct DiagnosticFailure: Sendable, Equatable {
     public let message: String
     /// Lifecycle metadata and recovery hint for the failure.
     public let details: FailureDetails
+    /// Structured ButtonHeist build diagnostics, when the failure comes from heist planning.
+    public let buildDiagnostics: [HeistBuildDiagnostic]
 
     /// Display-ready failure message.
     public var displayMessage: String { message }
@@ -363,17 +366,28 @@ public struct DiagnosticFailure: Sendable, Equatable {
     )
 
     /// Creates a diagnostic failure from fully typed metadata.
-    public init(message: String, details: FailureDetails, kind: DiagnosticFailureKind? = nil) {
+    public init(
+        message: String,
+        details: FailureDetails,
+        kind: DiagnosticFailureKind? = nil,
+        buildDiagnostics: [HeistBuildDiagnostic] = []
+    ) {
         self.failureCode = details.code
         self.code = details.code.rawValue
         self.kind = kind ?? DiagnosticFailureKind(details: details)
         self.message = message
         self.details = details
+        self.buildDiagnostics = buildDiagnostics
     }
 
     /// Creates a diagnostic failure, falling back to the unknown client error
     /// shape when details are absent.
-    public init(message: String, details: FailureDetails?, kind: DiagnosticFailureKind? = nil) {
+    public init(
+        message: String,
+        details: FailureDetails?,
+        kind: DiagnosticFailureKind? = nil,
+        buildDiagnostics: [HeistBuildDiagnostic] = []
+    ) {
         let resolvedKind: DiagnosticFailureKind?
         if let kind {
             resolvedKind = kind
@@ -385,7 +399,8 @@ public struct DiagnosticFailure: Sendable, Equatable {
         self.init(
             message: message,
             details: details ?? Self.unknownDetails,
-            kind: resolvedKind
+            kind: resolvedKind,
+            buildDiagnostics: buildDiagnostics
         )
     }
 }

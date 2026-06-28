@@ -27,12 +27,12 @@ extension TheFence {
         }
         return try appInteractionDispatch(
             SemanticActionCommand.rotor.command,
-            [.rotor(RotorTarget(
+            .rotor(RotorTarget(
                 elementTarget: input.requiredElementTarget(command: .rotor),
                 selection: selection,
                 direction: input.schemaEnum("direction", as: RotorDirection.self)
                     ?? Command.rotor.descriptor.requiredDefaultEnumValue(for: .direction, as: RotorDirection.self)
-            ))]
+            ))
         )
     }
 }

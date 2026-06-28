@@ -180,7 +180,7 @@ private enum InterfaceElementMatcherField: CaseIterable {
 
     private func traitCheck(
         in arguments: TheFence.CommandArgumentEnvelope,
-        makeCheck: ([HeistTrait]) -> ElementPredicateCheck<String>
+        makeCheck: (Set<HeistTrait>) -> ElementPredicateCheck<String>
     ) throws -> [ElementPredicateCheck<String>] {
         guard let traits = try TheFence.parseTraitNames(
             try arguments.schemaStringArray(key),
@@ -188,6 +188,6 @@ private enum InterfaceElementMatcherField: CaseIterable {
         ), !traits.isEmpty else {
             return []
         }
-        return [makeCheck(traits)]
+        return [makeCheck(traits.heistTraitSet)]
     }
 }

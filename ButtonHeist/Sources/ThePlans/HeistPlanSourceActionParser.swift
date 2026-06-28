@@ -79,8 +79,8 @@ extension HeistPlanSourceParser {
         }
     }
 
-    func renderTraitArrayCorrection(_ traits: [HeistTrait]) -> String {
-        "[\(traits.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
+    func renderTraitArrayCorrection(_ traits: Set<HeistTrait>) -> String {
+        "[\(traits.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]"
     }
 
     func renderStringMatchCallArgument(_ match: StringMatch<StringExpr>) -> String {
@@ -160,7 +160,13 @@ extension HeistPlanSourceParser {
 
     mutating func parseCustomAction() throws -> HeistActionCommand {
         try expectSymbol("(")
+        let actionNameToken = currentToken
         let actionName = try parseStringLiteral()
+        do {
+            try CustomActionTarget.validate(actionName: actionName)
+        } catch let validationError {
+            throw error(actionNameToken, String(describing: validationError))
+        }
         try expectSymbol(",")
         try expectIdentifier("on")
         try expectSymbol(":")

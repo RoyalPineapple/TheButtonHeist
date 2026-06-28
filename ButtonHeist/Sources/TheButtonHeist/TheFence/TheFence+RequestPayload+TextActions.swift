@@ -20,7 +20,7 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        appInteractionDispatch(SemanticActionCommand.dismissKeyboard.command, [.resignFirstResponder])
+        appInteractionDispatch(SemanticActionCommand.dismissKeyboard.command, .resignFirstResponder)
     }
 
     static func decodeTypeTextRequest(
@@ -36,11 +36,11 @@ extension TheFence {
         }
         return try appInteractionDispatch(
             SemanticActionCommand.typeText.command,
-            [.typeText(TypeTextTarget(
+            .typeText(TypeTextTarget(
                 text: text,
                 elementTarget: input.decodedElementTarget(),
                 replacingExisting: replacingExisting
-            ))]
+            ))
         )
     }
 
@@ -52,9 +52,9 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
             SemanticActionCommand.editAction.command,
-            [.editAction(EditActionTarget(
+            .editAction(EditActionTarget(
                 action: input.requiredSchemaEnum("action", as: EditAction.self)
-            ))]
+            ))
         )
     }
 
@@ -64,11 +64,10 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        try appInteractionDispatch(
+        let text = try input.nonEmptyString("text")
+        return appInteractionDispatch(
             SemanticActionCommand.setPasteboard.command,
-            [.setPasteboard(SetPasteboardTarget(
-                text: input.requiredSchemaString("text")
-            ))]
+            .setPasteboard(SetPasteboardTarget(text: text))
         )
     }
 }

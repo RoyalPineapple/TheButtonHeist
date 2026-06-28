@@ -32,6 +32,61 @@ final class ElementPredicateTests: XCTestCase {
         )
     }
 
+    func testElementPredicateTraitPayloadsAreStoredAsSets() {
+        let first = ElementPredicate(traits: [.selected, .button])
+        let second = ElementPredicate(traits: [.button, .selected, .button])
+
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.description, "predicate(traits=[button, selected])")
+        XCTAssertEqual(first.checks, [.traits([.button, .selected])])
+    }
+
+    func testElementPredicateTraitEncodingUsesCanonicalArrays() throws {
+        let predicate = ElementPredicate.element(
+            .traits([.selected, .button, .button]),
+            .excludeTraits([.notEnabled, .header, .notEnabled])
+        )
+
+        let encoded = try JSONEncoder().encode(predicate)
+        let wire = try JSONDecoder().decode(EncodedPredicateWire.self, from: encoded)
+
+        XCTAssertEqual(wire.checks.map(\.kind), ["traits", "excludeTraits"])
+        XCTAssertEqual(wire.checks[0].values, ["button", "selected"])
+        XCTAssertEqual(wire.checks[1].values, ["header", "notEnabled"])
+        XCTAssertEqual(try JSONDecoder().decode(ElementPredicate.self, from: encoded), predicate)
+    }
+
+    func testElementPredicateTemplateTraitPayloadsAreStoredAsSets() throws {
+        let first = ElementPredicateTemplate(traits: [.selected, .button])
+        let second = ElementPredicateTemplate(traits: [.button, .selected, .button])
+
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.description, "predicate(traits=[button, selected])")
+
+        let encoded = try JSONEncoder().encode(first)
+        let wire = try JSONDecoder().decode(EncodedPredicateWire.self, from: encoded)
+        XCTAssertEqual(wire.checks.first?.values, ["button", "selected"])
+    }
+
+    func testTraitSetMatchStoresSetsAndEncodesCanonicalArrays() throws {
+        let first = TraitSetMatch(
+            include: [.selected, .button, .button],
+            exclude: [.notEnabled, .header, .notEnabled]
+        )
+        let second = TraitSetMatch(
+            include: [.button, .selected],
+            exclude: [.header, .notEnabled]
+        )
+
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.description, "traits(include=[.button, .selected] exclude=[.header, .notEnabled])")
+
+        let encoded = try JSONEncoder().encode(first)
+        let wire = try JSONDecoder().decode(EncodedTraitSetMatchWire.self, from: encoded)
+        XCTAssertEqual(wire.include, ["button", "selected"])
+        XCTAssertEqual(wire.exclude, ["header", "notEnabled"])
+    }
+
     func testElementPredicateDescriptionTreatsEmptyStringsAsUnset() {
         let predicate = ElementPredicate(label: "", identifier: "", value: "", traits: [])
 
@@ -408,4 +463,18 @@ final class ElementPredicateTests: XCTestCase {
         XCTAssertTrue(ElementPredicate.stringContains("Save Draft", "Draft"))
         XCTAssertTrue(ElementPredicate.stringContains("Don\u{2019}t skip", "Don't"))
     }
+}
+
+private struct EncodedPredicateWire: Decodable {
+    let checks: [EncodedPredicateCheckWire]
+}
+
+private struct EncodedPredicateCheckWire: Decodable {
+    let kind: String
+    let values: [String]?
+}
+
+private struct EncodedTraitSetMatchWire: Decodable {
+    let include: [String]?
+    let exclude: [String]?
 }

@@ -65,6 +65,8 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         excludeTraits: [HeistTrait]
     ) -> [ElementPredicateCheck<StringExpr>] {
         var checks: [ElementPredicateCheck<StringExpr>] = []
+        let traits = traits.heistTraitSet
+        let excludeTraits = excludeTraits.heistTraitSet
         if !traits.isEmpty { checks.append(.traits(traits)) }
         if !excludeTraits.isEmpty { checks.append(.excludeTraits(excludeTraits)) }
         return checks
@@ -126,10 +128,10 @@ public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
         checks += try decodeStringMatchExprs(container, literalKey: .value, refKey: .valueRef)
             .map(ElementPredicateCheck.value)
         if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .traits), !traits.isEmpty {
-            checks.append(.traits(traits))
+            checks.append(.traits(traits.heistTraitSet))
         }
         if let traits = try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits), !traits.isEmpty {
-            checks.append(.excludeTraits(traits))
+            checks.append(.excludeTraits(traits.heistTraitSet))
         }
         return checks
     }
@@ -175,8 +177,10 @@ extension ElementPredicateTemplate: CustomStringConvertible {
             guard match.hasPredicateLiteral else { return nil }
             return "value=\(match)"
         case .traits(let traits):
+            let traits = traits.canonicalHeistTraitArray
             return ScoreDescription.listField("traits", traits.isEmpty ? nil : traits)
         case .excludeTraits(let traits):
+            let traits = traits.canonicalHeistTraitArray
             return ScoreDescription.listField("excludeTraits", traits.isEmpty ? nil : traits)
         }
     }

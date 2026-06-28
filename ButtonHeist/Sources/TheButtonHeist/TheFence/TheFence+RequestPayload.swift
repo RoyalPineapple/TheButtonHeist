@@ -18,16 +18,46 @@ extension TheFence {
 
     typealias ParsedRequestHandler = @ButtonHeistActor (TheFence, ParsedRequest) async throws -> FenceResponse
 
-    struct DecodedRequestDispatch {
-        let runtimeActionMessages: [RuntimeActionMessage]?
-        let handler: ParsedRequestHandler
+    struct NonEmptyRuntimeActionMessages {
+        let first: RuntimeActionMessage
+        private let additional: [RuntimeActionMessage]
 
-        init(
-            runtimeActionMessages: [RuntimeActionMessage]? = nil,
-            handler: @escaping ParsedRequestHandler
-        ) {
-            self.runtimeActionMessages = runtimeActionMessages
-            self.handler = handler
+        init(_ first: RuntimeActionMessage, additional: [RuntimeActionMessage] = []) {
+            self.first = first
+            self.additional = additional
+        }
+
+        var count: Int {
+            1 + additional.count
+        }
+
+        var values: [RuntimeActionMessage] {
+            [first] + additional
+        }
+    }
+
+    enum DecodedRequestDispatch {
+        case runtimeActions(NonEmptyRuntimeActionMessages)
+        case handler(ParsedRequestHandler)
+
+        init(handler: @escaping ParsedRequestHandler) {
+            self = .handler(handler)
+        }
+
+        var runtimeActionMessages: NonEmptyRuntimeActionMessages? {
+            guard case .runtimeActions(let messages) = self else { return nil }
+            return messages
+        }
+
+        var handler: ParsedRequestHandler {
+            switch self {
+            case .runtimeActions:
+                return { fence, request in
+                    try await fence.handleClientActionRequest(request)
+                }
+            case .handler(let handler):
+                return handler
+            }
         }
     }
 
@@ -35,8 +65,7 @@ extension TheFence {
         let command: Command
         let requestId: String
         let arguments: CommandArgumentEnvelope
-        let runtimeActionMessages: [RuntimeActionMessage]?
-        let handler: ParsedRequestHandler
+        let dispatch: DecodedRequestDispatch
         let expectationPayload: ExpectationPayload
 
         init(
@@ -49,24 +78,33 @@ extension TheFence {
             self.command = command
             self.requestId = requestId
             self.arguments = arguments
-            self.runtimeActionMessages = dispatch.runtimeActionMessages
-            self.handler = dispatch.handler
+            self.dispatch = dispatch
             self.expectationPayload = expectationPayload
+        }
+
+        var runtimeActionMessages: NonEmptyRuntimeActionMessages? {
+            dispatch.runtimeActionMessages
+        }
+
+        var handler: ParsedRequestHandler {
+            dispatch.handler
         }
     }
 
-    static func runtimeActionDispatch(_ messages: [RuntimeActionMessage]) -> DecodedRequestDispatch {
-        DecodedRequestDispatch(runtimeActionMessages: messages) { fence, request in
-            try await fence.handleClientActionRequest(request)
-        }
+    static func runtimeActionDispatch(
+        _ firstMessage: RuntimeActionMessage,
+        _ additionalMessages: RuntimeActionMessage...
+    ) -> DecodedRequestDispatch {
+        .runtimeActions(NonEmptyRuntimeActionMessages(firstMessage, additional: additionalMessages))
     }
 
     static func appInteractionDispatch(
         _ command: Command,
-        _ messages: [RuntimeActionMessage]
+        _ firstMessage: RuntimeActionMessage,
+        _ additionalMessages: RuntimeActionMessage...
     ) -> DecodedRequestDispatch {
         precondition(command.dispatchesAppInteraction, "\(command.rawValue) is not registered as an app interaction command")
-        return runtimeActionDispatch(messages)
+        return .runtimeActions(NonEmptyRuntimeActionMessages(firstMessage, additional: additionalMessages))
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {

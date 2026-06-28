@@ -262,9 +262,7 @@ extension TheBrains {
         }
 
         let initialReceipt = await runtime.wait(
-            ResolvedWaitStep(predicate: resolved.predicate, timeout: immediateTimeout),
-            nil,
-            nil
+            .immediate(ResolvedWaitStep(predicate: resolved.predicate, timeout: immediateTimeout))
         )
         guard let initialSequence = initialReceipt.observedSequence else {
             let initialProgress = repeatUntilInitialProgress(receipt: initialReceipt)
@@ -561,11 +559,11 @@ extension TheBrains {
             )
         }
         let progressTimeout = min(defaultActionExpectationTimeout, remaining)
-        let receipt = await context.runtime.wait(
+        let receipt = await context.runtime.wait(.afterObservation(
             ResolvedWaitStep(predicate: .change(), timeout: progressTimeout),
-            observedTrace,
-            observedSequence
-        )
+            baselineTrace: observedTrace,
+            sequence: observedSequence
+        ))
         let expectation = repeatUntilStopExpectation(
             step.predicate,
             trace: receipt.waitOutcome.accessibilityTrace,

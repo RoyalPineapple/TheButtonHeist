@@ -272,12 +272,7 @@ private extension TheFence {
     }
 
     func buildDiagnosticFenceError(_ diagnostics: [HeistBuildDiagnostic]) -> FenceError {
-        FenceError.invalidRequest(Self.renderBuildDiagnostics(diagnostics))
-    }
-
-    static func renderBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
-        guard !diagnostics.isEmpty else { return "Heist planning failed." }
-        return diagnostics.map(\.renderedMessage).joined(separator: "\n")
+        FenceError.heistBuildDiagnostics(diagnostics)
     }
 
     static func containsPerformUnsupportedStepDiagnostic(_ diagnostics: [HeistBuildDiagnostic]) -> Bool {

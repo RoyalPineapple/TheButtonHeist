@@ -527,8 +527,8 @@ private func repeatUntilRuntime(
 ) -> TheBrains.HeistExecutionRuntime {
     TheBrains.HeistExecutionRuntime(
         execute: execute,
-        wait: { step, _, _ in
-            waitScript.receipt(for: step)
+        wait: { request in
+            waitScript.receipt(for: request.step)
         },
         selectPredicateCase: { _, _ in
             HeistCaseSelectionResult(cases: [], outcome: .noMatch, elapsedMs: 0)

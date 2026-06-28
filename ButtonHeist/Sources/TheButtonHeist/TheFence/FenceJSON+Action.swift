@@ -95,8 +95,7 @@ private struct PublicActionResultModel {
         try container.encode(status, forKey: .status)
         try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
-        try container.encodeIfPresent(payload.value, forKey: .value)
-        try container.encodeIfPresent(payload.rotor, forKey: .rotor)
+        try payload.encodeFields(to: &container)
         try container.encodeIfPresent(delta, forKey: .delta)
         try container.encodeIfPresent(screenName, forKey: .screenName)
         try container.encodeIfPresent(screenId, forKey: .screenId)
@@ -114,21 +113,30 @@ private struct PublicActionResultModel {
     }
 }
 
-private struct PublicActionPayload {
-    let value: String?
-    let rotor: PublicRotorResult?
+private enum PublicActionPayload {
+    case value(String)
+    case rotor(PublicRotorResult)
+    case none
 
     init(projection: ActionPayloadProjection) {
         switch projection {
         case .value(let value):
-            self.value = value
-            self.rotor = nil
+            self = .value(value)
         case .rotor(let rotor):
-            self.value = nil
-            self.rotor = PublicRotorResult(result: rotor)
+            self = .rotor(PublicRotorResult(result: rotor))
         case .screenshot, .heistExecutionStepCount, .none:
-            self.value = nil
-            self.rotor = nil
+            self = .none
+        }
+    }
+
+    func encodeFields(to container: inout KeyedEncodingContainer<PublicActionResultCodingKey>) throws {
+        switch self {
+        case .value(let value):
+            try container.encode(value, forKey: .value)
+        case .rotor(let rotor):
+            try container.encode(rotor, forKey: .rotor)
+        case .none:
+            break
         }
     }
 }

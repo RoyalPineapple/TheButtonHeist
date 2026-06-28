@@ -567,9 +567,8 @@ private struct HeistSemanticSurfaceBuilder {
         environment: HeistExecutionEnvironment,
         invocationStack: [String]
     ) {
-        guard let invocationPath = invocation.invocationPath else { return }
         guard let resolved = definitionScope.resolveInvocation(
-            path: invocationPath.components,
+            path: invocation.invocationPath.components,
             rootScope: rootDefinitionScope
         ) else { return }
         appendUnique(resolved.qualifiedName, to: &nestedRunHeists)
@@ -696,9 +695,15 @@ private struct HeistSemanticSurfaceBuilder {
             case .value(let value) where value.hasPredicateLiteral:
                 appendUnique("value=\(value)", to: &semanticSurfaces)
             case .traits(let traits) where !traits.isEmpty:
-                appendUnique("traits=\(traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
+                appendUnique(
+                    "traits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))",
+                    to: &semanticSurfaces
+                )
             case .excludeTraits(let traits) where !traits.isEmpty:
-                appendUnique("excludeTraits=\(traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
+                appendUnique(
+                    "excludeTraits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))",
+                    to: &semanticSurfaces
+                )
             case .label, .identifier, .value, .traits, .excludeTraits:
                 break
             }
@@ -715,9 +720,15 @@ private struct HeistSemanticSurfaceBuilder {
             case .value(let value):
                 appendUnique("value=\(semanticString(value))", to: &semanticSurfaces)
             case .traits(let traits) where !traits.isEmpty:
-                appendUnique("traits=\(traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
+                appendUnique(
+                    "traits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))",
+                    to: &semanticSurfaces
+                )
             case .excludeTraits(let traits) where !traits.isEmpty:
-                appendUnique("excludeTraits=\(traits.map(\.rawValue).joined(separator: "|"))", to: &semanticSurfaces)
+                appendUnique(
+                    "excludeTraits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))",
+                    to: &semanticSurfaces
+                )
             case .traits, .excludeTraits:
                 break
             }

@@ -188,3 +188,19 @@ extension HeistTrait: Codable {
         try container.encode(rawValue)
     }
 }
+
+package extension Sequence where Element == HeistTrait {
+    var heistTraitSet: Set<HeistTrait> {
+        Set(self)
+    }
+
+    var canonicalHeistTraitArray: [HeistTrait] {
+        heistTraitSet.canonicalHeistTraitArray
+    }
+}
+
+package extension Set where Element == HeistTrait {
+    var canonicalHeistTraitArray: [HeistTrait] {
+        sorted { $0.rawValue < $1.rawValue }
+    }
+}

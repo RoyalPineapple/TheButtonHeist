@@ -63,6 +63,7 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
         case .decrement(let target):
             try roundTrip(try target.resolve(in: environment))
         case .customAction(let name, let target):
+            try CustomActionTarget.validate(actionName: name)
             try roundTrip(CustomActionTarget(
                 elementTarget: try target.resolve(in: environment),
                 actionName: name
@@ -288,7 +289,17 @@ private struct CustomActionExprPayload: Codable, Sendable, Equatable {
     init(from decoder: Decoder) throws {
         try rejectUnknownTargetExprPayloadKeys(from: decoder, commandFields: CodingKeys.allCases.map(\.stringValue))
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        actionName = try container.decode(String.self, forKey: .actionName)
+        let decodedActionName = try container.decode(String.self, forKey: .actionName)
+        do {
+            try CustomActionTarget.validate(actionName: decodedActionName)
+        } catch {
+            throw DecodingError.dataCorruptedError(
+                forKey: .actionName,
+                in: container,
+                debugDescription: String(describing: error)
+            )
+        }
+        actionName = decodedActionName
         target = try TargetExprPayload.decodeTarget(from: decoder, container: container, nestedKey: .target, refKey: .targetRef)
     }
 

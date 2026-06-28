@@ -11,6 +11,14 @@ extension HeistPlanRuntimeSafetyValidator {
             validateTarget(target, path: "\(path).payload.target", scope: scope)
         case .customAction(let name, let target):
             addString(name, path: "\(path).payload.actionName", role: "custom action name")
+            if name.isEmpty {
+                fail(
+                    path: "\(path).payload.actionName",
+                    contract: "custom action name must not be empty",
+                    observed: "empty string",
+                    correction: "Use the non-empty custom action name exposed by the target element."
+                )
+            }
             validateTarget(target, path: "\(path).payload.target", scope: scope)
         case .rotor(let selection, let target, _):
             if case .named(let name) = selection {

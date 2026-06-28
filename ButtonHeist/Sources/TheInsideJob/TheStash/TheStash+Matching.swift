@@ -104,7 +104,7 @@ extension AccessibilityElement: ThePlans.ElementPredicateSubject {
     /// present on this element. Unknown trait names must cause a miss —
     /// `fromNames` drops them silently and `.contains(.none)` is always true, so
     /// each name is validated against the known set first.
-    package func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool {
+    package func satisfiesRequiredTraits(_ required: Set<HeistTrait>) -> Bool {
         let requiredNames = required.map(\.rawValue)
         for name in requiredNames where !Self.knownTraitNames.contains(name) { return false }
         let mask = AccessibilityTraits.fromNames(requiredNames)
@@ -113,7 +113,7 @@ extension AccessibilityElement: ThePlans.ElementPredicateSubject {
 
     /// True when any excluded trait is present (or names an unknown trait — an
     /// unknown exclusion can never be proven absent, so it rejects the subject).
-    package func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool {
+    package func violatesExcludedTraits(_ excluded: Set<HeistTrait>) -> Bool {
         let excludedNames = excluded.map(\.rawValue)
         for name in excludedNames where !Self.knownTraitNames.contains(name) { return true }
         let mask = AccessibilityTraits.fromNames(excludedNames)

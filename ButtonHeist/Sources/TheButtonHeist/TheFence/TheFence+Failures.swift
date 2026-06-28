@@ -1,10 +1,12 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 /// Errors thrown by TheFence during command dispatch, connection, and action execution.
 public enum FenceError: Error {
     case invalidRequest(String)
+    case heistBuildDiagnostics([HeistBuildDiagnostic])
     case noDeviceFound
     case noMatchingDevice(filter: String, available: [String])
     case connectionTimeout

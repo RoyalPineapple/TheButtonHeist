@@ -1144,6 +1144,15 @@ import ThePlans
     """)
     expect(wrongRunHeistArgument, contains: "heist run argument type must match the target parameter")
 
+    let emptyCustomActionName = compileError(root(#"CustomAction("", on: .label("Message"))"#))
+    expect(emptyCustomActionName, contains: "custom action name must not be empty")
+
+    let emptyRunHeistPath = compileError(root(#"RunHeist("")"#))
+    expect(emptyRunHeistPath, contains: "heist invocation path must not be empty")
+
+    let emptyRunHeistPathComponent = compileError(root(#"RunHeist("lib..checkout")"#))
+    expect(emptyRunHeistPathComponent, contains: "heist invocation path component at index 1 must not be empty")
+
     let bodyTry = compileError(root("""
     try ForEach(["Milk"]) { item in
         Activate(.label(item))

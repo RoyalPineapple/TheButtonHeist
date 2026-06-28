@@ -657,12 +657,6 @@ func runtimeSafetyRejectsInvalidHeistDefinitionsAndInvocations() throws {
             ]),
             "heist run argument type must match"
         ),
-        (
-            HeistPlanAdmissionCandidate(definitions: [definition], body: [
-                .invoke(HeistInvocationStep(path: [], argument: .none)),
-            ]),
-            "heist run path must not be empty"
-        ),
     ]
 
     for (raw, expectedContract) in cases {

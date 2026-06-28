@@ -13,10 +13,10 @@ extension TheFence {
             ?? Command.scroll.descriptor.requiredDefaultEnumValue(for: .direction, as: ScrollDirection.self)
         return try appInteractionDispatch(
             ViewportDebugCommand.scroll.command,
-            [.scroll(ScrollTarget(
+            .scroll(ScrollTarget(
                 selection: input.scrollContainerSelection(),
                 direction: direction
-            ))]
+            ))
         )
     }
 
@@ -28,9 +28,9 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         try appInteractionDispatch(
             ViewportDebugCommand.scrollToVisible.command,
-            [.scrollToVisible(ScrollToVisibleTarget(
+            .scrollToVisible(ScrollToVisibleTarget(
                 elementTarget: input.requiredElementTarget(command: .scrollToVisible)
-            ))]
+            ))
         )
     }
 
@@ -44,10 +44,10 @@ extension TheFence {
             ?? Command.scrollToEdge.descriptor.requiredDefaultEnumValue(for: .edge, as: ScrollEdge.self)
         return try appInteractionDispatch(
             ViewportDebugCommand.scrollToEdge.command,
-            [.scrollToEdge(ScrollToEdgeTarget(
+            .scrollToEdge(ScrollToEdgeTarget(
                 selection: input.scrollContainerSelection(),
                 edge: edge
-            ))]
+            ))
         )
     }
 }

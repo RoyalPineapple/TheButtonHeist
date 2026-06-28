@@ -122,7 +122,11 @@ enum DiagnosticFailureMapper {
     }
 
     static func map(_ fenceError: FenceError) -> DiagnosticFailure {
-        DiagnosticFailure(message: fenceError.coreMessage, details: fenceError.failureDetails)
+        DiagnosticFailure(
+            message: fenceError.coreMessage,
+            details: fenceError.failureDetails,
+            buildDiagnostics: fenceError.buildDiagnostics
+        )
     }
 
     static func map(errorKind: ErrorKind, message: String) -> DiagnosticFailure {
