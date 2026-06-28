@@ -10,8 +10,20 @@ CODE_PATHS=(
   ButtonHeistCLI/Tests
   ButtonHeistMCP/Sources
   ButtonHeistMCP/Tests
+  HeistPlanTests/Sources
+  HeistPlanTests/Tests
+  TestApp/Sources
+  TestApp/UIKitSources
+  TestApp/ResearchSources
+  Tuist/ProjectDescriptionHelpers
   Project.swift
   Package.swift
+  ButtonHeist/Package.swift
+  ButtonHeistCLI/Package.swift
+  ButtonHeistMCP/Package.swift
+  HeistPlanTests/Package.swift
+  TestApp/Project.swift
+  Tuist/Package.swift
 )
 
 EXISTING_PATHS=()
@@ -25,7 +37,8 @@ CHECKS=(
   'retired plan-source request type::\bHeistPlanSourceRequest\b'
   'retired inline plan-source field::\binlineButtonHeistSource\b'
   'retired inline admission compatibility flag::\bacceptsInlineButtonHeistSource\b'
-  'untyped JSON dictionary::\[String:[[:space:]]*Any\]'
+  'untyped JSON dictionary shorthand::\[[[:space:]]*String[[:space:]]*:[[:space:]]*(any[[:space:]]+)?(Any(Object)?|Encodable|Codable)[[:space:]]*\??[[:space:]]*\]'
+  'untyped JSON dictionary generic::\bDictionary[[:space:]]*<[[:space:]]*String[[:space:]]*,[[:space:]]*(any[[:space:]]+)?(Any(Object)?|Encodable|Codable)[[:space:]]*\??[[:space:]]*>'
   'type-erased hash key::\bAnyHashable\b'
   'metatype-as-data expectation::\bAny\.Type\b'
   'Foundation dynamic JSON traversal::\bJSONSerialization\.(jsonObject|data)\b'

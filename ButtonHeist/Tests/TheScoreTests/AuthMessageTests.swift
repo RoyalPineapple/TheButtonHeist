@@ -1,5 +1,5 @@
 import XCTest
- import TheScore
+import TheScore
 
 final class AuthMessageTests: XCTestCase {
 
@@ -19,8 +19,10 @@ final class AuthMessageTests: XCTestCase {
     func testAuthRequiredJSON() throws {
         let message = ServerMessage.authRequired
         let data = try JSONEncoder().encode(message)
-        let json = String(data: data, encoding: .utf8)!
-        XCTAssertTrue(json.contains("authRequired"))
+        let json = try JSONProbe(data: data)
+
+        XCTAssertEqual(try json.string("type"), "authRequired")
+        try json.assertMissing("payload")
     }
 
     // MARK: - error(ServerError) — authFailure
@@ -80,9 +82,10 @@ final class AuthMessageTests: XCTestCase {
         let payload = AuthenticatePayload(token: "my-token")
         let message = ClientMessage.authenticate(payload)
         let data = try JSONEncoder().encode(message)
-        let json = String(data: data, encoding: .utf8)!
-        XCTAssertTrue(json.contains("authenticate"))
-        XCTAssertTrue(json.contains("my-token"))
+        let json = try JSONProbe(data: data)
+
+        XCTAssertEqual(try json.string("type"), "authenticate")
+        XCTAssertEqual(try json.object("payload").string("token"), "my-token")
     }
 
     // MARK: - ServerInfo with instanceIdentifier
@@ -274,7 +277,9 @@ final class AuthMessageTests: XCTestCase {
     func testAuthenticateNilDriverIdOmittedFromJSON() throws {
         let payload = AuthenticatePayload(token: "test")
         let data = try JSONEncoder().encode(payload)
-        let json = String(data: data, encoding: .utf8)!
-        XCTAssertFalse(json.contains("driverId"))
+        let json = try JSONProbe(data: data)
+
+        XCTAssertEqual(try json.string("token"), "test")
+        try json.assertMissing("driverId")
     }
 }

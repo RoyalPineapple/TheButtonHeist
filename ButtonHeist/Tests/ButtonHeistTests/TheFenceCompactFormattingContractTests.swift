@@ -390,7 +390,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let action = try XCTUnwrap(node.evidence?.action)
         let actionResult = try XCTUnwrap(action.result)
         let delta = try XCTUnwrap(actionResult.delta)
-        let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
+        let json = try publicJSONProbe(response)
 
         XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
             status: "ok",
@@ -440,7 +440,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 omittedCount: 2
             )
         )
-        XCTAssertFalse(encoded.contains(#""captures""#), encoded)
+        try json.assertRecursivelyMissingKeys(["captures"])
     }
 
     func testPublicHeistJSONUsesBoundedScreenProjectionForActionDelta() throws {
@@ -476,7 +476,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let node = try XCTUnwrap(report.nodes.first)
         let actionResult = try XCTUnwrap(node.evidence?.action?.result)
         let delta = try XCTUnwrap(actionResult.delta)
-        let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
+        let json = try publicJSONProbe(response)
 
         XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
             status: "ok",
@@ -511,8 +511,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ))
         XCTAssertFalse(node.containsKey("action"))
         XCTAssertFalse(delta.containsKey("newInterface"))
-        XCTAssertFalse(encoded.contains(#""tree""#), encoded)
-        XCTAssertFalse(encoded.contains(#""captures""#), encoded)
+        try json.assertRecursivelyMissingKeys(["tree", "captures"])
     }
 
     func testFailedHeistActionCompactOutputIncludesConcreteElementDeltaEvidence() throws {

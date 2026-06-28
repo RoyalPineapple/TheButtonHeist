@@ -365,11 +365,11 @@ func `string heist search flow preserves query ref in composed post activation e
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     let data = try encoder.encode(heist)
-    let json = String(data: data, encoding: .utf8)!
     let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
+    let encodedJSON = try EncodedJSONValue(data: data)
 
     #expect(decoded == heist)
-    #expect(json.contains(#""checks":[{"kind":"label","match":{"ref":"query"}}]"#))
+    #expect(encodedJSON.containsLabelCheckReference("query"))
 }
 
 @Test
@@ -1081,16 +1081,25 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
     encoder.outputFormatting = [.sortedKeys]
     let data = try encoder.encode(heist)
     let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
-    let json = String(data: data, encoding: .utf8)!
+    let encodedJSON = try EncodedJSONValue(data: data)
 
     #expect(decoded == heist)
-    #expect(!json.contains("Login"))
-    #expect(!json.contains("ForEach"))
-    #expect(!json.contains("function"))
-    #expect(!json.contains("call"))
-    #expect(!json.contains("source"))
-    #expect(!json.contains("source_map"))
-    #expect(!json.contains("static_loop"))
+    try encodedJSON.assertRecursivelyMissingKeys([
+        "function",
+        "call",
+        "source",
+        "source_map",
+        "static_loop",
+    ])
+    try encodedJSON.assertRecursivelyMissingStringValues([
+        "Login",
+        "ForEach",
+        "function",
+        "call",
+        "source",
+        "source_map",
+        "static_loop",
+    ])
 }
 
 @Test
@@ -1127,5 +1136,199 @@ private func loginFlow(email: String, password: String) throws -> some HeistCont
 
         Activate(.label("Sign In"))
             .expect(.exists(.label("Home")), timeout: .seconds(5))
+    }
+}
+
+private enum EncodedJSONValue: Decodable, Equatable {
+    case object([String: EncodedJSONValue])
+    case array([EncodedJSONValue])
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case null
+
+    init(data: Data) throws {
+        self = try JSONDecoder().decode(Self.self, from: data)
+    }
+
+    init(from decoder: Decoder) throws {
+        if let object = try? decoder.container(keyedBy: EncodedJSONCodingKey.self) {
+            var values: [String: EncodedJSONValue] = [:]
+            for key in object.allKeys {
+                values[key.stringValue] = try object.decode(EncodedJSONValue.self, forKey: key)
+            }
+            self = .object(values)
+            return
+        }
+
+        if var array = try? decoder.unkeyedContainer() {
+            var values: [EncodedJSONValue] = []
+            while !array.isAtEnd {
+                values.append(try array.decode(EncodedJSONValue.self))
+            }
+            self = .array(values)
+            return
+        }
+
+        let scalar = try decoder.singleValueContainer()
+        if scalar.decodeNil() {
+            self = .null
+        } else if let value = try? scalar.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? scalar.decode(Int.self) {
+            self = .int(value)
+        } else if let value = try? scalar.decode(Double.self) {
+            self = .double(value)
+        } else if let value = try? scalar.decode(String.self) {
+            self = .string(value)
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: scalar,
+                debugDescription: "Unsupported JSON value"
+            )
+        }
+    }
+
+    func containsLabelCheckReference(_ reference: String) -> Bool {
+        containsCheck(kind: "label", match: .object(["ref": .string(reference)]))
+    }
+
+    func assertRecursivelyMissingKeys(_ keys: [String]) throws {
+        let disallowed = Set(keys)
+        guard let hit = firstPath(containingKeyIn: disallowed) else { return }
+        throw EncodedJSONFailure(path: hit.path, reason: "Expected key '\(hit.key)' to be absent recursively")
+    }
+
+    func assertRecursivelyMissingStringValues(_ values: [String]) throws {
+        let disallowed = Set(values)
+        guard let hit = firstPath(containingStringValueIn: disallowed) else { return }
+        throw EncodedJSONFailure(path: hit.path, reason: "Expected string value '\(hit.value)' to be absent recursively")
+    }
+
+    private func containsCheck(kind: String, match: EncodedJSONValue) -> Bool {
+        switch self {
+        case .object(let object):
+            if case .array(let checks)? = object["checks"],
+               checks.contains(where: { check in
+                   guard case .object(let checkObject) = check else { return false }
+                   return checkObject["kind"] == .string(kind)
+                       && checkObject["match"] == match
+               }) {
+                return true
+            }
+            return object.values.contains { $0.containsCheck(kind: kind, match: match) }
+
+        case .array(let array):
+            return array.contains { $0.containsCheck(kind: kind, match: match) }
+
+        case .string, .int, .double, .bool, .null:
+            return false
+        }
+    }
+
+    private func firstPath(
+        containingKeyIn disallowed: Set<String>,
+        path: String = "$"
+    ) -> (key: String, path: String)? {
+        switch self {
+        case .object(let object):
+            for key in object.keys.sorted() {
+                let childPath = path + Self.pathComponent(forKey: key)
+                if disallowed.contains(key) {
+                    return (key, childPath)
+                }
+                if let child = object[key],
+                   let hit = child.firstPath(containingKeyIn: disallowed, path: childPath) {
+                    return hit
+                }
+            }
+
+        case .array(let array):
+            for (index, value) in array.enumerated() {
+                if let hit = value.firstPath(containingKeyIn: disallowed, path: "\(path)[\(index)]") {
+                    return hit
+                }
+            }
+
+        case .string, .int, .double, .bool, .null:
+            break
+        }
+        return nil
+    }
+
+    private func firstPath(
+        containingStringValueIn disallowed: Set<String>,
+        path: String = "$"
+    ) -> (value: String, path: String)? {
+        switch self {
+        case .object(let object):
+            for key in object.keys.sorted() {
+                let childPath = path + Self.pathComponent(forKey: key)
+                if let child = object[key],
+                   let hit = child.firstPath(containingStringValueIn: disallowed, path: childPath) {
+                    return hit
+                }
+            }
+
+        case .array(let array):
+            for (index, value) in array.enumerated() {
+                if let hit = value.firstPath(containingStringValueIn: disallowed, path: "\(path)[\(index)]") {
+                    return hit
+                }
+            }
+
+        case .string(let string):
+            if disallowed.contains(string) {
+                return (string, path)
+            }
+
+        case .int, .double, .bool, .null:
+            break
+        }
+        return nil
+    }
+
+    private static func pathComponent(forKey key: String) -> String {
+        guard isIdentifier(key) else {
+            let escaped = key
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            return "[\"\(escaped)\"]"
+        }
+        return ".\(key)"
+    }
+
+    private static func isIdentifier(_ key: String) -> Bool {
+        guard let first = key.first, first == "_" || first.isLetter else {
+            return false
+        }
+        return key.dropFirst().allSatisfy { character in
+            character == "_" || character.isLetter || character.isNumber
+        }
+    }
+}
+
+private struct EncodedJSONFailure: Error, CustomStringConvertible {
+    let path: String
+    let reason: String
+
+    var description: String {
+        "\(reason) at \(path)"
+    }
+}
+
+private struct EncodedJSONCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }

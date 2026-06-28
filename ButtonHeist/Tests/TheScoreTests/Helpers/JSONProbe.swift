@@ -153,6 +153,18 @@ struct JSONProbe {
         }
     }
 
+    func assertRecursivelyMissingKeys(_ keys: [String]) throws {
+        let disallowed = Set(keys)
+        guard let hit = firstPath(containingKeyIn: disallowed) else { return }
+        throw JSONProbeFailure(path: hit.path, reason: "Expected key '\(hit.key)' to be absent recursively")
+    }
+
+    func assertRecursivelyMissingStringValues(_ values: [String]) throws {
+        let disallowed = Set(values)
+        guard let hit = firstPath(containingStringValueIn: disallowed) else { return }
+        throw JSONProbeFailure(path: hit.path, reason: "Expected string value '\(hit.value)' to be absent recursively")
+    }
+
     func isEmptyObject() throws -> Bool {
         guard case .object(let object) = value else {
             throw typeMismatch(expected: "object")
@@ -172,6 +184,57 @@ struct JSONProbe {
 
     private func childPath(for key: String) -> String {
         path + Self.pathComponent(forKey: key)
+    }
+
+    private func firstPath(containingKeyIn disallowed: Set<String>) -> (key: String, path: String)? {
+        switch value {
+        case .object(let object):
+            for key in object.keys.sorted() {
+                let nextPath = childPath(for: key)
+                if disallowed.contains(key) {
+                    return (key, nextPath)
+                }
+                if let child = object[key],
+                   let hit = JSONProbe(child, path: nextPath).firstPath(containingKeyIn: disallowed) {
+                    return hit
+                }
+            }
+        case .array(let array):
+            for (index, value) in array.enumerated() {
+                if let hit = JSONProbe(value, path: "\(path)[\(index)]").firstPath(containingKeyIn: disallowed) {
+                    return hit
+                }
+            }
+        case .string, .int, .double, .bool, .null:
+            break
+        }
+        return nil
+    }
+
+    private func firstPath(containingStringValueIn disallowed: Set<String>) -> (value: String, path: String)? {
+        switch value {
+        case .object(let object):
+            for key in object.keys.sorted() {
+                let nextPath = childPath(for: key)
+                if let child = object[key],
+                   let hit = JSONProbe(child, path: nextPath).firstPath(containingStringValueIn: disallowed) {
+                    return hit
+                }
+            }
+        case .array(let array):
+            for (index, value) in array.enumerated() {
+                if let hit = JSONProbe(value, path: "\(path)[\(index)]").firstPath(containingStringValueIn: disallowed) {
+                    return hit
+                }
+            }
+        case .string(let string):
+            if disallowed.contains(string) {
+                return (string, path)
+            }
+        case .int, .double, .bool, .null:
+            break
+        }
+        return nil
     }
 
     private func typeMismatch(expected: String) -> JSONProbeFailure {
