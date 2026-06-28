@@ -166,19 +166,19 @@ actor SimpleSocketServer {
             switch state {
             case .ready:
                 self.spawnTrackedTask { server in
-                    guard admission.shouldAccept else { return }
-                    let clientId = await server.acceptReadyConnection(connection)
-                    if admission.assign(clientId), let clientId {
+                    guard admission.recordReady() == .accept else { return }
+                    let acceptance = await server.acceptReadyConnection(connection)
+                    if case .removeRegisteredClient(let clientId) = admission.recordAcceptance(acceptance) {
                         await server.removeClient(clientId)
                     }
                 }
             case .failed(let error):
                 logger.error("Client connection failed: \(error)")
-                if let clientId = admission.cancel() {
+                if case .removeRegisteredClient(let clientId) = admission.recordCancellation() {
                     self.spawnTrackedTask { server in await server.removeClient(clientId) }
                 }
             case .cancelled:
-                if let clientId = admission.cancel() {
+                if case .removeRegisteredClient(let clientId) = admission.recordCancellation() {
                     self.spawnTrackedTask { server in await server.removeClient(clientId) }
                 }
             default:

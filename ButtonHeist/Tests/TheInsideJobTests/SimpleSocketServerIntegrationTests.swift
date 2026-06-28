@@ -27,22 +27,41 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     func testConnectionAdmissionRejectsReadyAfterEarlyCancel() {
         let admission = ConnectionAdmission()
 
-        XCTAssertNil(admission.cancel())
-        XCTAssertFalse(admission.shouldAccept)
+        XCTAssertEqual(admission.recordCancellation(), .noRegisteredClient)
+        XCTAssertEqual(admission.recordReady(), .ignore)
     }
 
-    func testConnectionAdmissionRequestsCleanupWhenCancelArrivesBeforeAssignCompletes() {
+    func testConnectionAdmissionRequestsCleanupWhenCancelArrivesDuringAcceptance() {
         let admission = ConnectionAdmission()
 
-        XCTAssertNil(admission.cancel())
-        XCTAssertTrue(admission.assign(7))
+        XCTAssertEqual(admission.recordReady(), .accept)
+        XCTAssertEqual(admission.recordCancellation(), .noRegisteredClient)
+        XCTAssertEqual(
+            admission.recordAcceptance(.registered(clientId: 7)),
+            .removeRegisteredClient(7)
+        )
+        XCTAssertEqual(admission.recordCancellation(), .noRegisteredClient)
     }
 
     func testConnectionAdmissionReturnsAcceptedClientForLateCancel() {
         let admission = ConnectionAdmission()
 
-        XCTAssertFalse(admission.assign(7))
-        XCTAssertEqual(admission.cancel(), 7)
+        XCTAssertEqual(admission.recordReady(), .accept)
+        XCTAssertEqual(
+            admission.recordAcceptance(.registered(clientId: 7)),
+            .keepRegisteredClient
+        )
+        XCTAssertEqual(admission.recordCancellation(), .removeRegisteredClient(7))
+        XCTAssertEqual(admission.recordCancellation(), .noRegisteredClient)
+    }
+
+    func testConnectionAdmissionRejectedReadyIsTerminal() {
+        let admission = ConnectionAdmission()
+
+        XCTAssertEqual(admission.recordReady(), .accept)
+        XCTAssertEqual(admission.recordAcceptance(.rejected), .noRegisteredClient)
+        XCTAssertEqual(admission.recordCancellation(), .noRegisteredClient)
+        XCTAssertEqual(admission.recordReady(), .ignore)
     }
 
     // MARK: - ServerPhase transitions
