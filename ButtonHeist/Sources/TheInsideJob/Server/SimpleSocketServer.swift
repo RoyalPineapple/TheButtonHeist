@@ -7,7 +7,7 @@ import TheScore
 /// TCP server using Network framework.
 /// Owns listener lifecycle and bridges Network callbacks into actor isolation.
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
-private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
+private let logger = ButtonHeistLog.logger(.handoff(.server))
 
 actor SimpleSocketServer {
     // MARK: - State Machines

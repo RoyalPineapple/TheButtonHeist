@@ -49,6 +49,13 @@ func `JSONDecoder decode of heist plan still runs runtime safety validation`() {
 }
 
 @Test
+func `for each parameter names reject Swift reserved identifiers including Any`() {
+    #expect(HeistParameterName.isValid("item"))
+    #expect(!HeistParameterName.isValid("Any"))
+    #expect(!HeistParameterName.isValid("class"))
+}
+
+@Test
 func `model Codable boundaries reject unknown fields`() {
     expectUnknownField("plan", contains: #"Unknown heist plan field "unexpected""#) {
         _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""

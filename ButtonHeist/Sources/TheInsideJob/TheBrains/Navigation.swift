@@ -24,7 +24,7 @@ final class Navigation {
     let elementInflation: ElementInflation
 
     /// Last dispatched swipe direction per swipeable target key.
-    var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
+    var lastSwipeDirectionByTarget: [SwipeTargetKey: UIAccessibilityScrollDirection] = [:]
 
     // MARK: - Init
 
@@ -90,6 +90,108 @@ final class Navigation {
     /// caller should feed another frame or treat the swipe as settled.
     enum SettleSwipeStep: Equatable { case `continue`, done }
 
+    /// Stable target identity for swipe-dispatched scrolls.
+    struct SwipeTargetKey: Hashable, Sendable {
+        private let storage: SwipeTargetKeyStorage
+
+        init(containerName: ContainerName) {
+            storage = .containerName(containerName)
+        }
+
+        init(containerPath: TreePath) {
+            storage = .containerPath(containerPath)
+        }
+
+        init(frame: CGRect, contentSize: CGSize) {
+            storage = .geometry(CoarseScrollGeometry(frame: frame, contentSize: contentSize))
+        }
+    }
+
+    /// Stable signature for visible content-space anchors.
+    struct VisibleAnchorSignature: Hashable, Sendable {
+        private let anchors: [VisibleAnchor]
+
+        init(anchors: [(heistId: HeistId, origin: CGPoint)]) {
+            self.anchors = anchors
+                .map { VisibleAnchor(heistId: $0.heistId, origin: $0.origin) }
+                .sorted()
+        }
+    }
+
+    private enum SwipeTargetKeyStorage: Hashable, Sendable {
+        case containerName(ContainerName)
+        case containerPath(TreePath)
+        case geometry(CoarseScrollGeometry)
+    }
+
+    private struct CoarseScrollGeometry: Hashable, Sendable {
+        let frame: CoarseRect
+        let contentSize: CoarseSize
+
+        init(frame: CGRect, contentSize: CGSize) {
+            self.frame = CoarseRect(frame)
+            self.contentSize = CoarseSize(contentSize)
+        }
+    }
+
+    private struct VisibleAnchor: Hashable, Sendable, Comparable {
+        let heistId: HeistId
+        let origin: CoarsePoint
+
+        init(heistId: HeistId, origin: CGPoint) {
+            self.heistId = heistId
+            self.origin = CoarsePoint(origin)
+        }
+
+        static func < (lhs: VisibleAnchor, rhs: VisibleAnchor) -> Bool {
+            if lhs.heistId != rhs.heistId {
+                return lhs.heistId < rhs.heistId
+            }
+            return lhs.origin < rhs.origin
+        }
+    }
+
+    private struct CoarsePoint: Hashable, Sendable, Comparable {
+        let x: Int
+        let y: Int
+
+        init(_ point: CGPoint) {
+            x = Int(point.x.rounded())
+            y = Int(point.y.rounded())
+        }
+
+        static func < (lhs: CoarsePoint, rhs: CoarsePoint) -> Bool {
+            if lhs.x != rhs.x {
+                return lhs.x < rhs.x
+            }
+            return lhs.y < rhs.y
+        }
+    }
+
+    private struct CoarseSize: Hashable, Sendable {
+        let width: Int
+        let height: Int
+
+        init(_ size: CGSize) {
+            width = Int(size.width.rounded())
+            height = Int(size.height.rounded())
+        }
+    }
+
+    private struct CoarseRect: Hashable, Sendable {
+        let minX: Int
+        let minY: Int
+        let width: Int
+        let height: Int
+
+        init(_ rect: CGRect) {
+            minX = Int(rect.minX.rounded())
+            minY = Int(rect.minY.rounded())
+            width = Int(rect.width.rounded())
+            height = Int(rect.height.rounded())
+        }
+    }
+
     /// Pure stepwise driver for the swipe-settle loop. Tracks motion-detected
     /// state, idle/stable counters, and exit conditions given a sequence of
     /// per-frame observations. `moved` only latches from false to true.
@@ -120,7 +222,7 @@ final class Navigation {
     struct SettleSwipeLoopState: Equatable {
         let profile: SettleSwipeProfile
         let previousVisibleIds: Set<HeistId>
-        let previousAnchor: Int?
+        let previousAnchor: VisibleAnchorSignature?
 
         private(set) var moved = false
         private(set) var frame = 0
@@ -131,7 +233,7 @@ final class Navigation {
         init(
             profile: SettleSwipeProfile,
             previousVisibleIds: Set<HeistId>,
-            previousAnchor: Int?
+            previousAnchor: VisibleAnchorSignature?
         ) {
             self.profile = profile
             self.previousVisibleIds = previousVisibleIds
@@ -144,7 +246,7 @@ final class Navigation {
         /// the heistIds newly discovered this frame.
         mutating func advance(
             visibleIds: Set<HeistId>,
-            anchorSignature: Int?,
+            anchorSignature: VisibleAnchorSignature?,
             newHeistIds: Set<HeistId>
         ) -> SettleSwipeStep {
             if let previousAnchor, let anchorSignature {

@@ -41,15 +41,72 @@ public enum HeistParameterName {
             return false
         }
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
-        return parameter.unicodeScalars.allSatisfy { allowed.contains($0) } && !swiftKeywords.contains(parameter)
+        return parameter.unicodeScalars.allSatisfy { allowed.contains($0) }
+            && !SwiftIdentifier.isReserved(parameter)
+    }
+}
+
+private enum SwiftIdentifier {
+    static func isReserved(_ identifier: String) -> Bool {
+        ReservedWord(rawValue: identifier) != nil
     }
 
-    private static let swiftKeywords: Set<String> = [
-        "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import",
-        "init", "inout", "internal", "let", "open", "operator", "private", "precedencegroup", "protocol",
-        "public", "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case",
-        "catch", "continue", "default", "defer", "do", "else", "fallthrough", "for", "guard", "if",
-        "in", "repeat", "return", "throw", "switch", "where", "while", "as", "Any", "catch", "false",
-        "is", "nil", "super", "self", "Self", "throw", "throws", "true", "try",
-    ]
+    enum ReservedWord: String, CaseIterable {
+        case associatedType = "associatedtype"
+        case classDeclaration = "class"
+        case deinitializer = "deinit"
+        case enumeration = "enum"
+        case extensionDeclaration = "extension"
+        case fileprivateAccess = "fileprivate"
+        case functionDeclaration = "func"
+        case importDeclaration = "import"
+        case initializer = "init"
+        case inoutParameter = "inout"
+        case internalAccess = "internal"
+        case letDeclaration = "let"
+        case openAccess = "open"
+        case operatorDeclaration = "operator"
+        case privateAccess = "private"
+        case precedenceGroup = "precedencegroup"
+        case protocolDeclaration = "protocol"
+        case publicAccess = "public"
+        case rethrowsEffect = "rethrows"
+        case staticDeclaration = "static"
+        case structDeclaration = "struct"
+        case subscriptDeclaration = "subscript"
+        case typeAlias = "typealias"
+        case variableDeclaration = "var"
+
+        case breakStatement = "break"
+        case caseStatement = "case"
+        case catchStatement = "catch"
+        case continueStatement = "continue"
+        case defaultStatement = "default"
+        case deferStatement = "defer"
+        case doStatement = "do"
+        case elseBranch = "else"
+        case fallthroughStatement = "fallthrough"
+        case forStatement = "for"
+        case guardStatement = "guard"
+        case ifStatement = "if"
+        case inKeyword = "in"
+        case repeatStatement = "repeat"
+        case returnStatement = "return"
+        case throwStatement = "throw"
+        case switchStatement = "switch"
+        case whereClause = "where"
+        case whileStatement = "while"
+
+        case asCast = "as"
+        case anyExistential = "Any"
+        case falseLiteral = "false"
+        case isTypeCheck = "is"
+        case nilLiteral = "nil"
+        case superReference = "super"
+        case selfValue = "self"
+        case selfType = "Self"
+        case throwsEffect = "throws"
+        case trueLiteral = "true"
+        case tryExpression = "try"
+    }
 }

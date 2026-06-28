@@ -22,26 +22,55 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     try raw.validatedForRuntimeSafety()
 }
 
+private struct EncodedActionStepContract: Decodable {
+    let withoutExpectation: String
+
+    private enum CodingKeys: String, CodingKey {
+        case withoutExpectation = "without_expectation"
+    }
+}
+
+private struct InvalidForEachElementPlanFixture: Encodable {
+    let version = HeistPlan.currentVersion
+    let body: [InvalidForEachElementStepFixture]
+}
+
+private struct InvalidForEachElementStepFixture: Encodable {
+    let type = "for_each_element"
+    let forEachElement: InvalidForEachElementPayloadFixture
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case forEachElement = "for_each_element"
+    }
+}
+
+private struct InvalidForEachElementPayloadFixture: Encodable {
+    let matching = InvalidForEachElementMatcherFixture(label: "Delete")
+    let limit = 1
+    let parameter: String
+    let body = [InvalidForEachElementWarnFixture()]
+}
+
+private struct InvalidForEachElementMatcherFixture: Encodable {
+    let label: String
+}
+
+private struct InvalidForEachElementWarnFixture: Encodable {
+    let type = "warn"
+    let warn = InvalidForEachElementWarningFixture(message: "body")
+}
+
+private struct InvalidForEachElementWarningFixture: Encodable {
+    let message: String
+}
+
 private func invalidForEachElementJSON(parameter: String) throws -> Data {
-    try JSONSerialization.data(withJSONObject: [
-        "version": HeistPlan.currentVersion,
-        "body": [
-            [
-                "type": "for_each_element",
-                "for_each_element": [
-                    "matching": ["label": "Delete"],
-                    "limit": 1,
-                    "parameter": parameter,
-                    "body": [
-                        [
-                            "type": "warn",
-                            "warn": ["message": "body"],
-                        ],
-                    ],
-                ],
-            ],
-        ],
-    ])
+    try JSONEncoder().encode(InvalidForEachElementPlanFixture(
+        body: [InvalidForEachElementStepFixture(
+            forEachElement: InvalidForEachElementPayloadFixture(parameter: parameter)
+        )]
+    ))
 }
 
 @Test
@@ -52,11 +81,10 @@ func actionStepExpectationWaiverRoundTrips() throws {
     )
 
     let data = try JSONEncoder().encode(step)
-    let object = try JSONSerialization.jsonObject(with: data)
-    let json = try #require(object as? [String: Any])
+    let json = try JSONDecoder().decode(EncodedActionStepContract.self, from: data)
     let decoded = try JSONDecoder().decode(ActionStep.self, from: data)
 
-    #expect(json["without_expectation"] as? String == "No durable semantic outcome")
+    #expect(json.withoutExpectation == "No durable semantic outcome")
     #expect(decoded == step)
 }
 

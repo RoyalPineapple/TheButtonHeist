@@ -247,7 +247,7 @@ private extension HeistPlan {
         for definition in definitions {
             guard let localName = definition.name, !localName.isEmpty else { continue }
             let namePath = pathPrefix + [localName]
-            let qualifiedName = namePath.joined(separator: ".")
+            let qualifiedName = HeistInvocationPath.render(namePath)
             let environment = Self.discoveryEnvironment(for: definition.parameter)
             heists.append(ResolvedCatalogHeist(
                 entry: catalogEntry(
@@ -567,8 +567,9 @@ private struct HeistSemanticSurfaceBuilder {
         environment: HeistExecutionEnvironment,
         invocationStack: [String]
     ) {
+        guard let invocationPath = invocation.invocationPath else { return }
         guard let resolved = definitionScope.resolveInvocation(
-            path: invocation.path,
+            path: invocationPath.components,
             rootScope: rootDefinitionScope
         ) else { return }
         appendUnique(resolved.qualifiedName, to: &nestedRunHeists)

@@ -223,10 +223,10 @@ final class TheMuscleTests: XCTestCase {
         guard case .serverHello = envelope.message else {
             return XCTFail("Expected serverHello envelope, got \(envelope.message)")
         }
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: sent.data) as? [String: Any])
-        XCTAssertEqual(object["type"] as? String, ServerWireMessageType.serverHello.rawValue)
-        XCTAssertNil(object["payload"])
-        XCTAssertEqual(object["buttonHeistVersion"] as? String, buttonHeistVersion)
+        let object = try JSONProbe(data: sent.data)
+        XCTAssertEqual(try object.string("type"), ServerWireMessageType.serverHello.rawValue)
+        try object.assertMissing("payload")
+        XCTAssertEqual(try object.string("buttonHeistVersion"), buttonHeistVersion)
     }
 
     func testAdmissionFailureResponseEnvelopeKeepsStableWireShape() async throws {
@@ -243,10 +243,10 @@ final class TheMuscleTests: XCTestCase {
         }
         XCTAssertEqual(error.kind, .authFailure)
         XCTAssertEqual(error.message, "Authentication required before ping.")
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: response) as? [String: Any])
-        XCTAssertEqual(object["type"] as? String, ServerWireMessageType.error.rawValue)
-        XCTAssertNotNil(object["payload"])
-        XCTAssertEqual(object["buttonHeistVersion"] as? String, buttonHeistVersion)
+        let object = try JSONProbe(data: response)
+        XCTAssertEqual(try object.string("type"), ServerWireMessageType.error.rawValue)
+        try object.assertPresent("payload")
+        XCTAssertEqual(try object.string("buttonHeistVersion"), buttonHeistVersion)
     }
 
     // MARK: - Auth Flow Tests

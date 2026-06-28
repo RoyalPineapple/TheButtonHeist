@@ -17,9 +17,9 @@ final class ClientMessageTests: XCTestCase {
     func testRequestSnapshotEncodeDecode() throws {
         let message = ClientMessage.requestInterface(InterfaceQuery())
         let data = try JSONEncoder().encode(message)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(object["type"] as? String, "requestInterface")
-        XCTAssertNotNil(object["payload"] as? [String: Any])
+        let object = try JSONProbe(data: data)
+        XCTAssertEqual(try object.string("type"), "requestInterface")
+        _ = try object.object("payload")
 
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
@@ -286,14 +286,12 @@ final class ClientMessageTests: XCTestCase {
         ])
         let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
         let data = try JSONEncoder().encode(message)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(object["type"] as? String, "heistPlan")
-        let payload = try XCTUnwrap(object["payload"] as? [String: Any])
-        let planObject = try XCTUnwrap(payload["plan"] as? [String: Any])
-        let body = try XCTUnwrap(planObject["body"] as? [[String: Any]])
-        let firstStep: [String: Any] = try XCTUnwrap(body.first)
-        XCTAssertEqual(firstStep["type"] as? String, "action")
+        let object = try JSONProbe(data: data)
+        XCTAssertEqual(try object.string("type"), "heistPlan")
+        let body = try object.object("payload").object("plan").array("body")
+        let firstStep = try XCTUnwrap(body.first)
+        XCTAssertEqual(try firstStep.string("type"), "action")
     }
 
     func testRequestScreenshotEncodeDecode() throws {

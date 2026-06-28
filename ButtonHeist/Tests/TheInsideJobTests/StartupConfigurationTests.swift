@@ -25,14 +25,14 @@ final class StartupConfigurationTests: XCTestCase {
                 "INSIDEJOB_SCOPE": "network",
                 "INSIDEJOB_SESSION_TIMEOUT": "45"
             ],
-            infoDictionary: [
+            infoPlist: makeInfoPlist([
                 "InsideJobDisableAutoStart": true,
                 "InsideJobToken": "plist-token",
                 "InsideJobInstanceId": "plist-id",
                 "InsideJobPort": 5151,
                 "InsideJobScope": "simulator,usb",
                 "InsideJobSessionTimeout": 120.0
-            ]
+            ])
         )
 
         let expected = StartupConfiguration(
@@ -50,14 +50,14 @@ final class StartupConfigurationTests: XCTestCase {
     func testInfoPlistUsedWhenEnvironmentMissing() {
         let configuration = StartupConfiguration.resolve(
             env: [:],
-            infoDictionary: [
+            infoPlist: makeInfoPlist([
                 "InsideJobDisableAutoStart": true,
                 "InsideJobToken": "plist-token",
                 "InsideJobInstanceId": "plist-id",
                 "InsideJobPort": 5151,
                 "InsideJobScope": ["simulator", "usb"],
                 "InsideJobSessionTimeout": 120.0
-            ]
+            ])
         )
 
         let expected = StartupConfiguration(
@@ -72,16 +72,59 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(configuration, expected)
     }
 
+    func testInfoPlistBoundaryParsesTypedShapes() {
+        let configuration = StartupConfiguration.resolve(
+            env: [:],
+            infoPlist: makeInfoPlist([
+                "InsideJobDisableAutoStart": "yes",
+                "InsideJobPort": 5151.0,
+                "InsideJobScope": "simulator,network",
+                "InsideJobSessionTimeout": " 120.5 "
+            ])
+        )
+
+        XCTAssertEqual(configuration.disableAutoStart, ResolvedStartupValue(value: true, source: .infoPlist))
+        XCTAssertEqual(configuration.preferredPort, ResolvedStartupValue(value: 5151, source: .infoPlist))
+        XCTAssertEqual(configuration.allowedScopes, ResolvedStartupValue(value: [.simulator, .network], source: .infoPlist))
+        XCTAssertEqual(configuration.sessionTimeout, ResolvedStartupValue(value: 120.5, source: .infoPlist))
+        XCTAssertEqual(configuration.warnings, [])
+    }
+
+    func testMalformedInfoPlistValuesFallBackWithWarnings() {
+        let configuration = StartupConfiguration.resolve(
+            env: [:],
+            infoPlist: makeInfoPlist([
+                "InsideJobDisableAutoStart": ["true"],
+                "InsideJobToken": 42,
+                "InsideJobPort": 12.5,
+                "InsideJobScope": ["simulator", "bogus"],
+                "InsideJobSessionTimeout": "soon"
+            ])
+        )
+
+        XCTAssertEqual(configuration.disableAutoStart, ResolvedStartupValue(value: false, source: .defaultValue))
+        XCTAssertEqual(configuration.token, ResolvedStartupValue(value: nil, source: .generated))
+        XCTAssertEqual(configuration.preferredPort, ResolvedStartupValue(value: 0, source: .defaultValue))
+        XCTAssertEqual(configuration.allowedScopes, ResolvedStartupValue(value: ConnectionScope.default, source: .defaultValue))
+        XCTAssertEqual(configuration.sessionTimeout, ResolvedStartupValue(value: 30.0, source: .defaultValue))
+        XCTAssertEqual(configuration.warnings, [
+            .invalidValueIgnored(key: "InsideJobDisableAutoStart", source: .infoPlist, value: "[\"true\"]"),
+            .invalidValueIgnored(key: "InsideJobPort", source: .infoPlist, value: "12.5"),
+            .invalidValueIgnored(key: "InsideJobScope", source: .infoPlist, value: "[\"simulator\", \"bogus\"]"),
+            .invalidValueIgnored(key: "InsideJobSessionTimeout", source: .infoPlist, value: "soon")
+        ])
+    }
+
     func testEmptyTokenAndInstanceIdAreIgnoredWithWarnings() {
         let configuration = StartupConfiguration.resolve(
             env: [
                 "INSIDEJOB_TOKEN": "",
                 "INSIDEJOB_ID": "   "
             ],
-            infoDictionary: [
+            infoPlist: makeInfoPlist([
                 "InsideJobToken": "plist-token",
                 "InsideJobInstanceId": "plist-id"
-            ]
+            ])
         )
 
         let expected = StartupConfiguration(
@@ -106,10 +149,10 @@ final class StartupConfigurationTests: XCTestCase {
                 "INSIDEJOB_SCOPE": "bogus",
                 "INSIDEJOB_SESSION_TIMEOUT": "0"
             ],
-            infoDictionary: [
+            infoPlist: makeInfoPlist([
                 "InsideJobPort": 5151,
                 "InsideJobScope": "usb"
-            ]
+            ])
         )
 
         let expected = StartupConfiguration(
@@ -234,6 +277,28 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(knobs.visibleElementBudget, 1_000)
         XCTAssertEqual(knobs.totalNodeBudget, 5_000)
         XCTAssertEqual(knobs.singleTripwireTickSettleTimeout, 2.0, accuracy: 0.001)
+    }
+}
+
+private func makeInfoPlist(
+    _ values: NSDictionary,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) -> StartupInfoPlist {
+    do {
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: values,
+            format: .xml,
+            options: 0
+        )
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("StartupConfigurationTests-\(UUID().uuidString)")
+            .appendingPathExtension("plist")
+        try data.write(to: url)
+        return StartupInfoPlist(contentsOf: url)
+    } catch {
+        XCTFail("Failed to write Info.plist fixture: \(error)", file: file, line: line)
+        return StartupInfoPlist(contentsOf: URL(fileURLWithPath: "/dev/null"))
     }
 }
 #endif

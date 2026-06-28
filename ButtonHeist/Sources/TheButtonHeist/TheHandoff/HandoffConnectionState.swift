@@ -1,7 +1,8 @@
 import Foundation
 import os.log
+import TheScore
 
-private let driverIdentityLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "driver-identity")
+private let driverIdentityLogger = ButtonHeistLog.logger(.handoff(.driverIdentity))
 
 /// Why a connection attempt failed. TheFence maps this domain error at the boundary.
 ///

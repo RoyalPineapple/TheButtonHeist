@@ -79,6 +79,10 @@ jobs:
         timeout-minutes: 5
         run: scripts/check-package-manifest-drift.sh
 
+      - name: Reject invalid Swift pipeline shapes
+        timeout-minutes: 5
+        run: scripts/reject-invalid-swift-shapes.sh
+
       - name: Build TheScore
         timeout-minutes: 5
         run: swift build --target TheScore

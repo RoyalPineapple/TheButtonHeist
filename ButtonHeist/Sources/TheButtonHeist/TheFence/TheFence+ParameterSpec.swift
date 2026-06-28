@@ -331,17 +331,6 @@ enum FenceParameterBlocks: Sendable {
         swipePointDirection,
     ]
 
-    static var swipeIntentKeys: [String] {
-        swipeIntents.map(\.key)
-    }
-
-    static func swipeIntentSpec(_ key: String) -> FenceParameterSpec {
-        guard let spec = swipeIntents.first(where: { $0.key == key }) else {
-            preconditionFailure("Unknown swipe intent \(key)")
-        }
-        return spec
-    }
-
     static let dragElementToPoint = param(
         .elementToPoint,
         .object,
@@ -365,17 +354,6 @@ enum FenceParameterBlocks: Sendable {
         dragElementToPoint,
         dragPointToPoint,
     ]
-
-    static var dragIntentKeys: [String] {
-        dragIntents.map(\.key)
-    }
-
-    static func dragIntentSpec(_ key: String) -> FenceParameterSpec {
-        guard let spec = dragIntents.first(where: { $0.key == key }) else {
-            preconditionFailure("Unknown drag intent \(key)")
-        }
-        return spec
-    }
 
     static let elementFilter = matcherFields
 

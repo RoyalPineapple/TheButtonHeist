@@ -175,7 +175,7 @@ private struct HeistCallGraphBuilder {
         rootDefinitionScope: HeistDefinitionScope
     ) {
         let namePath = definitionScope.pathPrefix + [definition.name ?? ""]
-        let qualifiedName = namePath.joined(separator: ".")
+        let qualifiedName = HeistInvocationPath.render(namePath)
         nodes.insert(qualifiedName)
 
         let childScope = HeistDefinitionScope(definitions: definition.definitions, pathPrefix: namePath)
@@ -264,8 +264,9 @@ private struct HeistCallGraphBuilder {
             collectDefinitions(plan.definitions, pathPrefix: [], rootDefinitionScope: inlineScope)
             collectEdges(in: plan.body, caller: caller, definitionScope: inlineScope, rootDefinitionScope: inlineScope)
         case .invoke(let invocation):
+            guard let invocationPath = invocation.invocationPath else { return }
             guard let resolved = definitionScope.resolveInvocation(
-                path: invocation.path,
+                path: invocationPath.components,
                 rootScope: rootDefinitionScope
             ) else { return }
             nodes.insert(resolved.qualifiedName)

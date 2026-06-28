@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import ThePlans
+@testable import ThePlans
 
 @Suite(.serialized)
 struct HeistCompilerTests {
@@ -374,6 +374,44 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `swiftPM metadata extraction selects active object files`() throws {
+        let temp = try CompilerTemporaryDirectory()
+        let objectDirectory = temp.url.appendingPathComponent("ThePlans.build", isDirectory: true)
+        try FileManager.default.createDirectory(at: objectDirectory, withIntermediateDirectories: true)
+
+        let activeObject = objectDirectory.appendingPathComponent("Active.swift.o")
+        let staleObject = objectDirectory.appendingPathComponent("Stale.swift.o")
+        try Data().write(to: activeObject)
+        try Data().write(to: staleObject)
+
+        let descriptionJSON = """
+        {
+          "swiftCommands": {
+            "broken": [ "ignored" ],
+            "other": {
+              "moduleName": "Other",
+              "objects": [ \(try jsonStringLiteral(staleObject.path)) ]
+            },
+            "theplans": {
+              "moduleName": "ThePlans",
+              "objects": [
+                \(try jsonStringLiteral("/missing/build/Active.swift.o")),
+                \(try jsonStringLiteral("/missing/build/Generated.swift"))
+              ]
+            }
+          }
+        }
+        """
+        try descriptionJSON.write(to: temp.url.appendingPathComponent("description.json"), atomically: true, encoding: .utf8)
+
+        let objectFiles = try #require(try SwiftPMBuildDescription.activeSwiftObjectFiles(
+            in: temp.url,
+            moduleName: "ThePlans"
+        ))
+        #expect(objectFiles == [activeObject])
+    }
+
+    @Test
     func `source compiler remains behind ThePlans boundary`() throws {
         let root = try repositoryRoot()
         let files = try productionSwiftFilesOutsideThePlans(in: root)
@@ -524,6 +562,14 @@ private func productionSwiftFilesOutsideThePlans(in root: URL) throws -> [URL] {
     return try relativeRoots.flatMap { relativeRoot in
         try swiftFiles(in: root.appendingPathComponent(relativeRoot, isDirectory: true))
     }
+}
+
+private func jsonStringLiteral(_ value: String) throws -> String {
+    let data = try JSONEncoder().encode(value)
+    guard let literal = String(data: data, encoding: .utf8) else {
+        throw CompilerTestFailure("could not encode JSON string literal")
+    }
+    return literal
 }
 
 private struct CompilerTestFailure: Error, CustomStringConvertible {

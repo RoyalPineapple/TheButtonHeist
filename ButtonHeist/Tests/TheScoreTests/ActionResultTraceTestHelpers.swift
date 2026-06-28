@@ -1,143 +1,8 @@
 import Foundation
 import XCTest
+import AccessibilitySnapshotModel
 import ThePlans
 @testable import TheScore
-
-struct JSONProbe {
-    private let value: Any?
-    private let path: String
-
-    init(_ value: Any?, path: String = "$") {
-        self.value = value
-        self.path = path
-    }
-
-    init(data: Data, file: StaticString = #filePath, line: UInt = #line) {
-        do {
-            self.init(try JSONSerialization.jsonObject(with: data))
-        } catch {
-            XCTFail("Failed to decode JSON: \(error)", file: file, line: line)
-            self.init(nil)
-        }
-    }
-
-    func object(
-        _ key: String? = nil,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> JSONProbe {
-        let probe = key.map(child) ?? self
-        guard probe.value is [String: Any] else {
-            XCTFail("Expected object at \(probe.path), got \(probe.typeDescription)", file: file, line: line)
-            return JSONProbe([:], path: probe.path)
-        }
-        return probe
-    }
-
-    func array(
-        _ key: String? = nil,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> [JSONProbe] {
-        let probe = key.map(child) ?? self
-        guard let array = probe.value as? [Any] else {
-            XCTFail("Expected array at \(probe.path), got \(probe.typeDescription)", file: file, line: line)
-            return []
-        }
-        return array.enumerated().map { index, value in
-            JSONProbe(value, path: "\(probe.path)[\(index)]")
-        }
-    }
-
-    func string(
-        _ key: String? = nil,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> String? {
-        typedValue(key, as: String.self, file: file, line: line)
-    }
-
-    func bool(
-        _ key: String? = nil,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> Bool? {
-        typedValue(key, as: Bool.self, file: file, line: line)
-    }
-
-    func int(
-        _ key: String? = nil,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> Int? {
-        let probe = key.map(child) ?? self
-        if let value = probe.value as? Int { return value }
-        if let number = probe.value as? NSNumber { return number.intValue }
-        XCTFail("Expected int at \(probe.path), got \(probe.typeDescription)", file: file, line: line)
-        return nil
-    }
-
-    func assertPresent(
-        _ key: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        guard let object = value as? [String: Any] else {
-            XCTFail("Expected object at \(path), got \(typeDescription)", file: file, line: line)
-            return
-        }
-        XCTAssertNotNil(object[key], "Expected \(path).\(key) to be present", file: file, line: line)
-    }
-
-    func assertMissing(
-        _ key: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        guard let object = value as? [String: Any] else {
-            XCTFail("Expected object at \(path), got \(typeDescription)", file: file, line: line)
-            return
-        }
-        XCTAssertNil(object[key], "Expected \(path).\(key) to be absent", file: file, line: line)
-    }
-
-    func isEmptyObject(
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) -> Bool {
-        guard let object = value as? [String: Any] else {
-            XCTFail("Expected object at \(path), got \(typeDescription)", file: file, line: line)
-            return false
-        }
-        return object.isEmpty
-    }
-
-    private func child(_ key: String) -> JSONProbe {
-        guard let object = value as? [String: Any] else {
-            return JSONProbe(nil, path: "\(path).\(key)")
-        }
-        return JSONProbe(object[key], path: "\(path).\(key)")
-    }
-
-    private func typedValue<T>(
-        _ key: String?,
-        as type: T.Type,
-        file: StaticString,
-        line: UInt
-    ) -> T? {
-        let probe = key.map(child) ?? self
-        guard let value = probe.value as? T else {
-            XCTFail("Expected \(type) at \(probe.path), got \(probe.typeDescription)", file: file, line: line)
-            return nil
-        }
-        return value
-    }
-
-    private var typeDescription: String {
-        guard let value else { return "nil" }
-        return String(describing: Swift.type(of: value))
-    }
-}
 
 func assertRoundTrip<T: Codable & Equatable>(
     _ value: T,
@@ -271,15 +136,15 @@ private enum TestActionResultTrace {
     static func projecting(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace {
         switch delta {
         case .noChange(let payload):
-            let interface = makeTestInterface(elements: placeholders(count: payload.elementCount))
+            let interface = interface(elements: placeholders(count: payload.elementCount))
             return AccessibilityTrace(captures: [
                 capture(sequence: 1, interface: interface),
                 capture(sequence: 2, interface: interface),
             ])
 
         case .elementsChanged(let payload):
-            let before = makeTestInterface(elements: beforeElements(for: payload.edits, elementCount: payload.elementCount))
-            let after = makeTestInterface(elements: afterElements(for: payload.edits, elementCount: payload.elementCount))
+            let before = interface(elements: beforeElements(for: payload.edits, elementCount: payload.elementCount))
+            let after = interface(elements: afterElements(for: payload.edits, elementCount: payload.elementCount))
             if payload.edits.isEmpty {
                 return AccessibilityTrace(captures: [
                     capture(sequence: 1, interface: before, context: .empty),
@@ -292,7 +157,7 @@ private enum TestActionResultTrace {
             ])
 
         case .screenChanged(let payload):
-            let before = makeTestInterface(elements: placeholders(count: max(payload.elementCount, 1)))
+            let before = interface(elements: placeholders(count: max(payload.elementCount, 1)))
             return AccessibilityTrace(captures: [
                 capture(sequence: 1, interface: before, context: AccessibilityTrace.Context(screenId: "before")),
                 capture(sequence: 2, interface: payload.newInterface, context: AccessibilityTrace.Context(screenId: "after")),
@@ -306,6 +171,45 @@ private enum TestActionResultTrace {
         context: AccessibilityTrace.Context = .empty
     ) -> AccessibilityTrace.Capture {
         AccessibilityTrace.Capture(sequence: sequence, interface: interface, context: context)
+    }
+
+    private static func interface(elements: [HeistElement]) -> Interface {
+        let annotations = elements.enumerated().map { index, element in
+            InterfaceElementAnnotation(path: TreePath([index]), actions: element.actions)
+        }
+        let tree = elements.enumerated().map { index, element in
+            AccessibilityHierarchy.element(accessibilityElement(element), traversalIndex: index)
+        }
+        return Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: tree,
+            annotations: InterfaceAnnotations(elements: annotations)
+        )
+    }
+
+    private static func accessibilityElement(_ element: HeistElement) -> AccessibilityElement {
+        AccessibilityElement(
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
+            identifier: element.identifier,
+            hint: element.hint,
+            userInputLabels: nil,
+            shape: .frame(AccessibilityRect(
+                x: element.frameX,
+                y: element.frameY,
+                width: element.frameWidth,
+                height: element.frameHeight
+            )),
+            activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: element.respondsToUserInteraction
+        )
     }
 
     private static func beforeElements(for edits: ElementEdits, elementCount: Int) -> [HeistElement] {

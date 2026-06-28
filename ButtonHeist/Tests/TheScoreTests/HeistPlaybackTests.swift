@@ -61,19 +61,19 @@ final class HeistPlanTests: XCTestCase {
         let step = try activateStep(label: "List", traits: [.adjustable])
 
         let data = try JSONEncoder().encode(step)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let json = try JSONProbe(data: data)
 
-        XCTAssertEqual(json["type"] as? String, "action")
-        let action = try XCTUnwrap(json["action"] as? [String: Any])
-        let command = try XCTUnwrap(action["command"] as? [String: Any])
-        XCTAssertEqual(command["type"] as? String, "activate")
-        let target = try XCTUnwrap(command["payload"] as? [String: Any])
-        let checks = try XCTUnwrap(target["checks"] as? [[String: Any]])
+        XCTAssertEqual(try json.string("type"), "action")
+        let action = try json.object("action")
+        let command = try action.object("command")
+        XCTAssertEqual(try command.string("type"), "activate")
+        let target = try command.object("payload")
+        let checks = try target.array("checks")
         XCTAssertEqual(checks.count, 2)
-        XCTAssertEqual(checks[0]["kind"] as? String, "label")
-        XCTAssertEqual(checks[0]["match"] as? String, "List")
-        XCTAssertEqual(checks[1]["kind"] as? String, "traits")
-        XCTAssertEqual(checks[1]["values"] as? [String], ["adjustable"])
+        XCTAssertEqual(try checks[0].string("kind"), "label")
+        XCTAssertEqual(try checks[0].string("match"), "List")
+        XCTAssertEqual(try checks[1].string("kind"), "traits")
+        XCTAssertEqual(try checks[1].strings("values"), ["adjustable"])
     }
 
     func testActionStepRejectsHeistIdAsDurableIdentity() {
@@ -563,15 +563,16 @@ final class HeistPlanTests: XCTestCase {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(heist)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let json = try JSONProbe(data: data)
 
-        XCTAssertEqual(json["version"] as? Int, HeistPlan.currentVersion)
-        XCTAssertNil(json["app"])
-        XCTAssertNil(json["recorded"])
+        XCTAssertEqual(try json.int("version"), HeistPlan.currentVersion)
+        try json.assertMissing("app")
+        try json.assertMissing("recorded")
 
-        let body = try XCTUnwrap(json["body"] as? [[String: Any]])
+        let body = try json.array("body")
         XCTAssertEqual(body.count, 1)
-        XCTAssertEqual(body.first?["type"] as? String, "action")
+        let step = try XCTUnwrap(body.first)
+        XCTAssertEqual(try step.string("type"), "action")
     }
 }
 

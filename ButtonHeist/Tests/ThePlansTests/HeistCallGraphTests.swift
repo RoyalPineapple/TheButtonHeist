@@ -2,6 +2,10 @@ import Foundation
 import Testing
 @_spi(ButtonHeistInternals) @testable import ThePlans
 
+private struct EncodedInvocationStepContract: Decodable {
+    let path: [String]
+}
+
 @Test func `empty call graph is acyclic`() throws {
     let graph = HeistCallGraph(nodes: [], edges: [])
 
@@ -82,10 +86,11 @@ import Testing
 }
 
 @Test func `plan call graph resolves qualified exported namespace invocations from definition bodies`() throws {
+    let typedPath = try HeistInvocationPath(dottedName: "lib.b")
     let raw = HeistPlanAdmissionCandidate(definitions: [
         HeistPlanAdmissionCandidate(name: "lib", definitions: [
             HeistPlanAdmissionCandidate(name: "a", body: [
-                .invoke(HeistInvocationStep(path: ["lib", "b"])),
+                .invoke(HeistInvocationStep(invocationPath: typedPath)),
             ]),
             HeistPlanAdmissionCandidate(name: "b", body: [
                 .warn(WarnStep(message: "b")),
@@ -96,6 +101,51 @@ import Testing
     let graph = HeistCallGraph(plan: raw.uncheckedPlanForRuntimeSafetyValidation())
 
     #expect(graph.edges.contains(HeistCallGraph.Edge(caller: "lib.a", callee: "lib.b")))
+}
+
+@Test func `typed invocation path renders dotted names without changing invoke JSON`() throws {
+    let invocationPath = try HeistInvocationPath(dottedName: "LibraryScreen.addToCart")
+    let invocation = HeistInvocationStep(invocationPath: invocationPath)
+
+    #expect(invocation.path == ["LibraryScreen", "addToCart"])
+    #expect(invocation.capabilityName == "LibraryScreen.addToCart")
+
+    let encoded = try JSONEncoder().encode(invocation)
+    let json = try JSONDecoder().decode(EncodedInvocationStepContract.self, from: encoded)
+    #expect(json.path == ["LibraryScreen", "addToCart"])
+
+    let decoded = try JSONDecoder().decode(HeistInvocationStep.self, from: encoded)
+    #expect(decoded == invocation)
+    #expect(decoded.capabilityName == "LibraryScreen.addToCart")
+}
+
+@Test func `typed invocation path rejects empty path and components`() throws {
+    expectInvocationPathFailure(.emptyPath) {
+        _ = try HeistInvocationPath(components: [])
+    }
+    expectInvocationPathFailure(.emptyPath) {
+        _ = try HeistInvocationPath(dottedName: "")
+    }
+    expectInvocationPathFailure(.emptyComponent(index: 1)) {
+        _ = try HeistInvocationPath(components: ["LibraryScreen", ""])
+    }
+    expectInvocationPathFailure(.emptyComponent(index: 1)) {
+        _ = try HeistInvocationPath(dottedName: "LibraryScreen..addToCart")
+    }
+}
+
+@Test func `invocation step decode rejects empty path and components`() throws {
+    expectDataCorrupted("empty invocation path", contains: "heist invocation path must not be empty") {
+        _ = try JSONDecoder().decode(HeistInvocationStep.self, from: Data("""
+        { "path": [] }
+        """.utf8))
+    }
+
+    expectDataCorrupted("empty invocation path component", contains: "component at index 1 must not be empty") {
+        _ = try JSONDecoder().decode(HeistInvocationStep.self, from: Data("""
+        { "path": [ "LibraryScreen", "" ] }
+        """.utf8))
+    }
 }
 
 @Test func `random generated definition graphs agree with reference cycle checker`() throws {
@@ -217,6 +267,38 @@ private func runtimeSafetyFailures(for raw: HeistPlanAdmissionCandidate) -> [Hei
     } catch {
         Issue.record("Expected runtime safety error, got \(error)")
         return []
+    }
+}
+
+private func expectInvocationPathFailure(
+    _ expected: HeistInvocationPath.ValidationError,
+    _ body: () throws -> Void
+) {
+    do {
+        try body()
+        Issue.record("Expected invocation path construction to fail")
+    } catch let error as HeistInvocationPath.ValidationError {
+        #expect(error == expected)
+    } catch {
+        Issue.record("Expected invocation path validation error, got \(error)")
+    }
+}
+
+private func expectDataCorrupted(
+    _ name: String,
+    contains expectedMessage: String,
+    decode: () throws -> Void
+) {
+    do {
+        try decode()
+        Issue.record("Expected \(name) to reject invalid JSON")
+    } catch DecodingError.dataCorrupted(let context) {
+        #expect(
+            context.debugDescription.contains(expectedMessage),
+            "\(name) error \(context.debugDescription) did not contain \(expectedMessage)"
+        )
+    } catch {
+        Issue.record("Expected \(name) to throw DecodingError.dataCorrupted, got \(error)")
     }
 }
 

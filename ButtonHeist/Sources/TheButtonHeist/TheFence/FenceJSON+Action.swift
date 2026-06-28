@@ -4,23 +4,28 @@ import ThePlans
 import AccessibilitySnapshotModel
 import TheScore
 
+private enum PublicActionResultCodingKey: String, CodingKey {
+    case status
+    case method
+    case message
+    case value
+    case rotor
+    case delta
+    case screenName
+    case screenId
+    case errorClass
+    case errorCode
+    case phase
+    case retryable
+    case hint
+    case expectation
+    case activationTrace
+    case timing
+    case omitted
+}
+
 struct PublicActionResponse: FencePublicJSONResponse {
-    let status: PublicStatus
-    let method: String
-    let message: String?
-    let value: String?
-    let rotor: PublicRotorResult?
-    let delta: PublicDelta?
-    let screenName: String?
-    let screenId: String?
-    let errorClass: String?
-    let errorCode: String?
-    let phase: String?
-    let retryable: Bool?
-    let hint: String?
-    let expectation: PublicExpectationResult?
-    let activationTrace: ActivationTrace?
-    let timing: ActionPerformanceTiming?
+    private let model: PublicActionResultModel
 
     init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
         self.init(projection: ActionProjection(
@@ -35,10 +40,84 @@ struct PublicActionResponse: FencePublicJSONResponse {
     }
 
     init(projection: ActionProjection) {
+        self.model = PublicActionResultModel(projection: projection)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: PublicActionResultCodingKey.self)
+        try model.encodeCommonFields(
+            to: &container,
+            delta: model.delta.map { PublicDelta(projection: $0) }
+        )
+        try container.encodeIfPresent(
+            model.expectation.map { PublicExpectationResult(projection: $0) },
+            forKey: .expectation
+        )
+        try model.encodeExecutionDiagnostics(to: &container)
+    }
+
+}
+
+private struct PublicActionResultModel {
+    let status: PublicStatus
+    let method: String
+    let message: String?
+    let payload: PublicActionPayload
+    let delta: DeltaProjection?
+    let screenName: String?
+    let screenId: String?
+    let failure: PublicActionFailure?
+    let expectation: ExpectationProjection?
+    let activationTrace: ActivationTrace?
+    let timing: ActionPerformanceTiming?
+    let omitted: ActionResultOmissionsProjection?
+
+    init(projection: ActionProjection) {
         self.status = PublicStatus(projection.status)
         self.method = projection.method
         self.message = projection.message
-        switch projection.payload {
+        self.payload = PublicActionPayload(projection: projection.payload)
+        self.delta = projection.delta
+        self.screenName = projection.screenName
+        self.screenId = projection.screenId
+        self.failure = projection.failure.map(PublicActionFailure.init(projection:))
+        self.expectation = projection.expectation
+        self.activationTrace = projection.activationTrace
+        self.timing = projection.timing
+        self.omitted = projection.omitted
+    }
+
+    func encodeCommonFields<Delta: Encodable>(
+        to container: inout KeyedEncodingContainer<PublicActionResultCodingKey>,
+        delta: Delta?
+    ) throws {
+        try container.encode(status, forKey: .status)
+        try container.encode(method, forKey: .method)
+        try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(payload.value, forKey: .value)
+        try container.encodeIfPresent(payload.rotor, forKey: .rotor)
+        try container.encodeIfPresent(delta, forKey: .delta)
+        try container.encodeIfPresent(screenName, forKey: .screenName)
+        try container.encodeIfPresent(screenId, forKey: .screenId)
+        try container.encodeIfPresent(failure?.errorClass, forKey: .errorClass)
+        try container.encodeIfPresent(failure?.errorCode, forKey: .errorCode)
+        try container.encodeIfPresent(failure?.phase, forKey: .phase)
+        try container.encodeIfPresent(failure?.retryable, forKey: .retryable)
+        try container.encodeIfPresent(failure?.hint, forKey: .hint)
+    }
+
+    func encodeExecutionDiagnostics(to container: inout KeyedEncodingContainer<PublicActionResultCodingKey>) throws {
+        try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
+        try container.encodeIfPresent(timing, forKey: .timing)
+    }
+}
+
+private struct PublicActionPayload {
+    let value: String?
+    let rotor: PublicRotorResult?
+
+    init(projection: ActionPayloadProjection) {
+        switch projection {
         case .value(let value):
             self.value = value
             self.rotor = nil
@@ -49,20 +128,23 @@ struct PublicActionResponse: FencePublicJSONResponse {
             self.value = nil
             self.rotor = nil
         }
-        self.delta = projection.delta.map { PublicDelta(projection: $0) }
-        self.screenName = projection.screenName
-        self.screenId = projection.screenId
-        let failure = projection.failure
-        self.errorClass = failure?.errorClass
-        self.errorCode = failure?.errorCode
-        self.phase = failure?.phase
-        self.retryable = failure?.retryable
-        self.hint = failure?.hint
-        self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
-        self.activationTrace = projection.activationTrace
-        self.timing = projection.timing
     }
+}
 
+private struct PublicActionFailure {
+    let errorClass: String
+    let errorCode: String?
+    let phase: String?
+    let retryable: Bool?
+    let hint: String?
+
+    init(projection: PublicActionFailureProjection) {
+        self.errorClass = projection.errorClass
+        self.errorCode = projection.errorCode
+        self.phase = projection.phase
+        self.retryable = projection.retryable
+        self.hint = projection.hint
+    }
 }
 
 /// Status vocabulary for public command responses.
@@ -336,7 +418,7 @@ struct PublicHeistReportNode: Encodable {
         self.message = projection.message
         self.durationMs = projection.durationMs
         self.intent = projection.intent
-        self.evidence = projection.evidence.flatMap { PublicHeistReportEvidence(projection: $0) }
+        self.evidence = projection.evidence.map { PublicHeistReportEvidence(projection: $0) }
         self.failure = projection.failure
         self.abortedAtChildPath = projection.abortedAtChildPath
         self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
@@ -345,47 +427,43 @@ struct PublicHeistReportNode: Encodable {
 }
 
 struct PublicHeistReportEvidence: Encodable {
-    let action: PublicHeistActionEvidence?
-    let wait: PublicHeistWaitEvidence?
-    let caseSelection: PublicHeistCaseSelectionEvidence?
-    let forEachString: PublicHeistForEachStringEvidence?
-    let forEachElement: PublicHeistForEachElementEvidence?
-    let repeatUntil: PublicHeistRepeatUntilEvidence?
-    let invocation: PublicHeistInvocationEvidence?
-    let warning: PublicHeistWarningEvidence?
+    private let projection: HeistReportEvidenceProjection
 
-    init?(projection: HeistReportEvidenceProjection?) {
-        guard let projection else { return nil }
-        self.init(
-            action: projection.action.map { PublicHeistActionEvidence(projection: $0) },
-            wait: projection.wait.map { PublicHeistWaitEvidence(projection: $0) },
-            caseSelection: projection.caseSelection.map { PublicHeistCaseSelectionEvidence(projection: $0) },
-            forEachString: projection.forEachString.map { PublicHeistForEachStringEvidence(projection: $0) },
-            forEachElement: projection.forEachElement.map { PublicHeistForEachElementEvidence(projection: $0) },
-            repeatUntil: projection.repeatUntil.map { PublicHeistRepeatUntilEvidence(projection: $0) },
-            invocation: projection.invocation.map { PublicHeistInvocationEvidence(projection: $0) },
-            warning: projection.warning.map { PublicHeistWarningEvidence(projection: $0) }
-        )
+    init(projection: HeistReportEvidenceProjection) {
+        self.projection = projection
     }
 
-    private init(
-        action: PublicHeistActionEvidence? = nil,
-        wait: PublicHeistWaitEvidence? = nil,
-        caseSelection: PublicHeistCaseSelectionEvidence? = nil,
-        forEachString: PublicHeistForEachStringEvidence? = nil,
-        forEachElement: PublicHeistForEachElementEvidence? = nil,
-        repeatUntil: PublicHeistRepeatUntilEvidence? = nil,
-        invocation: PublicHeistInvocationEvidence? = nil,
-        warning: PublicHeistWarningEvidence? = nil
-    ) {
-        self.action = action
-        self.wait = wait
-        self.caseSelection = caseSelection
-        self.forEachString = forEachString
-        self.forEachElement = forEachElement
-        self.repeatUntil = repeatUntil
-        self.invocation = invocation
-        self.warning = warning
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case wait
+        case caseSelection
+        case forEachString
+        case forEachElement
+        case repeatUntil
+        case invocation
+        case warning
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch projection {
+        case .action(let projection):
+            try container.encode(PublicHeistActionEvidence(projection: projection), forKey: .action)
+        case .wait(let projection):
+            try container.encode(PublicHeistWaitEvidence(projection: projection), forKey: .wait)
+        case .caseSelection(let projection):
+            try container.encode(PublicHeistCaseSelectionEvidence(projection: projection), forKey: .caseSelection)
+        case .forEachString(let projection):
+            try container.encode(PublicHeistForEachStringEvidence(projection: projection), forKey: .forEachString)
+        case .forEachElement(let projection):
+            try container.encode(PublicHeistForEachElementEvidence(projection: projection), forKey: .forEachElement)
+        case .repeatUntil(let projection):
+            try container.encode(PublicHeistRepeatUntilEvidence(projection: projection), forKey: .repeatUntil)
+        case .invocation(let projection):
+            try container.encode(PublicHeistInvocationEvidence(projection: projection), forKey: .invocation)
+        case .warning(let projection):
+            try container.encode(PublicHeistWarningEvidence(projection: projection), forKey: .warning)
+        }
     }
 }
 
@@ -544,53 +622,24 @@ struct PublicHeistWarningEvidence: Encodable {
 }
 
 struct PublicHeistReportActionResult: Encodable {
-    let status: PublicStatus
-    let method: String
-    let message: String?
-    let value: String?
-    let rotor: PublicRotorResult?
-    let delta: PublicHeistDelta?
-    let screenName: String?
-    let screenId: String?
-    let errorClass: String?
-    let errorCode: String?
-    let phase: String?
-    let retryable: Bool?
-    let hint: String?
-    let activationTrace: ActivationTrace?
-    let timing: ActionPerformanceTiming?
-    let omitted: PublicHeistActionResultOmissions?
+    private let model: PublicActionResultModel
 
     init(projection: ActionProjection) {
-        self.status = PublicStatus(projection.status)
-        self.method = projection.method
-        self.message = projection.message
-        switch projection.payload {
-        case .value(let value):
-            self.value = value
-            self.rotor = nil
-        case .rotor(let rotor):
-            self.value = nil
-            self.rotor = PublicRotorResult(result: rotor)
-        case .screenshot, .heistExecutionStepCount, .none:
-            self.value = nil
-            self.rotor = nil
-        }
-        self.delta = projection.delta.map { PublicHeistDelta(projection: $0) }
-        self.screenName = projection.screenName
-        self.screenId = projection.screenId
-        let failure = projection.failure
-        self.errorClass = failure?.errorClass
-        self.errorCode = failure?.errorCode
-        self.phase = failure?.phase
-        self.retryable = failure?.retryable
-        self.hint = failure?.hint
-        self.activationTrace = projection.activationTrace
-        self.timing = projection.timing
-        self.omitted = projection.omitted.flatMap {
+        self.model = PublicActionResultModel(projection: projection)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: PublicActionResultCodingKey.self)
+        try model.encodeCommonFields(
+            to: &container,
+            delta: model.delta.map { PublicHeistDelta(projection: $0) }
+        )
+        try model.encodeExecutionDiagnostics(to: &container)
+        let omitted = model.omitted.flatMap {
             let omissions = PublicHeistActionResultOmissions(projection: $0)
             return omissions.isEmpty ? nil : omissions
         }
+        try container.encodeIfPresent(omitted, forKey: .omitted)
     }
 }
 
@@ -614,7 +663,7 @@ struct PublicProjectionOmission: Encodable {
     let omittedCount: Int?
 
     init(projection: ProjectionOmission) {
-        self.reason = projection.reason
+        self.reason = projection.reason.rawValue
         self.projectedAs = projection.projectedAs
         self.omittedCount = projection.omittedCount
     }

@@ -10,13 +10,26 @@ public enum HeistPlanning {
     ]
 
     public static func readPlan(from url: URL) throws -> HeistPlan {
-        try loadValidatedPlan(from: HeistPlanSourceRequest(
+        try loadValidatedPlan(from: HeistPlanLoadRequest(
             commandName: "heist-plan",
-            path: url.path
+            source: .artifactPath(url.path)
         ))
     }
 
-    public static func loadValidatedPlan(from request: HeistPlanSourceRequest) throws -> HeistPlan {
+    public static func loadValidatedPlan(from request: HeistPlanSourceAdmissionRequest) throws -> HeistPlan {
+        try loadValidatedPlan(from: admitPlanSource(from: request))
+    }
+
+    public static func loadValidatedPlan(from request: HeistPlanLoadRequest) throws -> HeistPlan {
+        switch request.source {
+        case .artifactPath(let path):
+            return try loadValidatedArtifactPlan(path: path, commandName: request.commandName)
+        case .inlineDSL(let source):
+            return try compileInlineButtonHeistSource(source, commandName: request.commandName)
+        }
+    }
+
+    public static func admitPlanSource(from request: HeistPlanSourceAdmissionRequest) throws -> HeistPlanLoadRequest {
         guard request.rawStructuredJSONIRFields.isEmpty else {
             throw HeistPlanningError.rawStructuredJSONIRFields(
                 commandName: request.commandName,
@@ -24,27 +37,19 @@ public enum HeistPlanning {
             )
         }
 
-        let hasPath = request.path != nil
-        let hasInlineSource = request.inlineButtonHeistSource != nil
-        let sourceCount = [hasPath, hasInlineSource].filter { $0 }.count
-        guard sourceCount == 1 else {
-            if sourceCount == 0 {
-                throw HeistPlanningError.missingPlanSource(commandName: request.commandName)
-            }
+        switch (request.path, request.inlineDSL) {
+        case (.some, .some):
             throw HeistPlanningError.multiplePlanSources(commandName: request.commandName)
-        }
-
-        if let path = request.path {
-            return try loadValidatedArtifactPlan(path: path, commandName: request.commandName)
-        }
-
-        guard request.acceptsInlineButtonHeistSource else {
-            throw HeistPlanningError.inlineSourceNotAccepted(commandName: request.commandName)
-        }
-        guard let source = request.inlineButtonHeistSource else {
+        case (.none, .none):
             throw HeistPlanningError.missingPlanSource(commandName: request.commandName)
+        case (.some(let path), .none):
+            return HeistPlanLoadRequest(commandName: request.commandName, source: .artifactPath(path))
+        case (.none, .some(let source)):
+            guard request.sourcePolicy.acceptsInlineDSL else {
+                throw HeistPlanningError.inlineSourceNotAccepted(commandName: request.commandName)
+            }
+            return HeistPlanLoadRequest(commandName: request.commandName, source: .inlineDSL(source))
         }
-        return try compileInlineButtonHeistSource(source, commandName: request.commandName)
     }
 
     public static func decodeArgumentJSON(
@@ -108,25 +113,54 @@ public enum HeistPlanning {
     }
 }
 
-public struct HeistPlanSourceRequest: Sendable, Equatable {
+public enum HeistPlanSource: Sendable, Equatable {
+    case artifactPath(String)
+    case inlineDSL(String)
+}
+
+public struct HeistPlanLoadRequest: Sendable, Equatable {
+    public let commandName: String
+    public let source: HeistPlanSource
+
+    public init(commandName: String, source: HeistPlanSource) {
+        self.commandName = commandName
+        self.source = source
+    }
+}
+
+public enum HeistPlanSourceAdmissionPolicy: Sendable, Equatable {
+    case artifactOrInlineDSL
+    case artifactOnly
+
+    var acceptsInlineDSL: Bool {
+        switch self {
+        case .artifactOrInlineDSL:
+            return true
+        case .artifactOnly:
+            return false
+        }
+    }
+}
+
+public struct HeistPlanSourceAdmissionRequest: Sendable, Equatable {
     public let commandName: String
     public let path: String?
-    public let inlineButtonHeistSource: String?
+    public let inlineDSL: String?
     public let rawStructuredJSONIRFields: Set<String>
-    public let acceptsInlineButtonHeistSource: Bool
+    public let sourcePolicy: HeistPlanSourceAdmissionPolicy
 
     public init(
         commandName: String,
         path: String? = nil,
-        inlineButtonHeistSource: String? = nil,
+        inlineDSL: String? = nil,
         rawStructuredJSONIRFields: Set<String> = [],
-        acceptsInlineButtonHeistSource: Bool = true
+        sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
     ) {
         self.commandName = commandName
         self.path = path
-        self.inlineButtonHeistSource = inlineButtonHeistSource
+        self.inlineDSL = inlineDSL
         self.rawStructuredJSONIRFields = rawStructuredJSONIRFields
-        self.acceptsInlineButtonHeistSource = acceptsInlineButtonHeistSource
+        self.sourcePolicy = sourcePolicy
     }
 }
 

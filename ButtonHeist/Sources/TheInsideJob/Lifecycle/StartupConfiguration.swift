@@ -46,13 +46,126 @@ enum StartupConfigurationWarning: Equatable, Sendable {
     }
 }
 
-enum StartupInfoPlistKey: String {
+enum StartupInfoPlistKey: String, CaseIterable, Sendable {
     case disableAutoStart = "InsideJobDisableAutoStart"
     case token = "InsideJobToken"
     case instanceId = "InsideJobInstanceId"
     case port = "InsideJobPort"
     case scope = "InsideJobScope"
     case sessionTimeout = "InsideJobSessionTimeout"
+}
+
+struct StartupInfoPlist: Equatable, Sendable {
+    private let values: [StartupInfoPlistKey: InfoPlistValue]
+
+    init(bundle: Bundle) {
+        self.init { key in
+            bundle.object(forInfoDictionaryKey: key) as? NSObject
+        }
+    }
+
+    init(contentsOf url: URL) {
+        guard let data = try? Data(contentsOf: url),
+              let propertyList = try? PropertyListSerialization.propertyList(
+                from: data,
+                options: [],
+                format: nil
+              ),
+              let dictionary = propertyList as? NSDictionary else {
+            self.init(values: [:])
+            return
+        }
+
+        self.init { key in
+            dictionary.object(forKey: key) as? NSObject
+        }
+    }
+
+    private init(valueForKey: (String) -> NSObject?) {
+        var values: [StartupInfoPlistKey: InfoPlistValue] = [:]
+        for key in StartupInfoPlistKey.allCases {
+            if let value = valueForKey(key.rawValue) {
+                values[key] = InfoPlistValue(object: value)
+            }
+        }
+        self.init(values: values)
+    }
+
+    private init(values: [StartupInfoPlistKey: InfoPlistValue]) {
+        self.values = values
+    }
+
+    subscript(key: StartupInfoPlistKey) -> InfoPlistValue? {
+        values[key]
+    }
+}
+
+struct InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
+    let bool: Bool?
+    let string: String?
+    let integer: Int?
+    let double: Double?
+    let stringArray: [String]?
+
+    private let displayValue: String
+
+    init(object: NSObject) {
+        if let string = object as? String {
+            bool = nil
+            self.string = string
+            integer = nil
+            double = nil
+            stringArray = nil
+            displayValue = string
+        } else if let strings = object as? [String] {
+            bool = nil
+            string = nil
+            integer = nil
+            double = nil
+            stringArray = strings
+            displayValue = Self.describe(strings)
+        } else if let number = object as? NSNumber {
+            string = nil
+            stringArray = nil
+            if number.isBooleanPropertyListValue {
+                bool = number.boolValue
+                integer = nil
+                double = nil
+                displayValue = String(number.boolValue)
+            } else if CFNumberIsFloatType(number as CFNumber) {
+                bool = nil
+                integer = nil
+                double = number.doubleValue
+                displayValue = String(number.doubleValue)
+            } else {
+                bool = nil
+                integer = Int(truncating: number)
+                double = nil
+                displayValue = String(Int(truncating: number))
+            }
+        } else {
+            bool = nil
+            string = nil
+            integer = nil
+            double = nil
+            stringArray = nil
+            displayValue = String(describing: object)
+        }
+    }
+
+    var description: String {
+        displayValue
+    }
+
+    private static func describe(_ strings: [String]) -> String {
+        "[" + strings.map(\.debugDescription).joined(separator: ", ") + "]"
+    }
+}
+
+private extension NSNumber {
+    var isBooleanPropertyListValue: Bool {
+        CFGetTypeID(self as CFTypeRef) == CFBooleanGetTypeID()
+    }
 }
 
 struct StartupConfiguration: Equatable, Sendable {
@@ -70,10 +183,10 @@ struct StartupConfiguration: Equatable, Sendable {
 
     static func resolve(
         env: [String: String] = ProcessInfo.processInfo.environment,
-        infoDictionary: [String: Any]? = Bundle.main.infoDictionary
+        infoPlist: StartupInfoPlist = StartupInfoPlist(bundle: .main)
     ) -> StartupConfiguration {
         var warnings: [StartupConfigurationWarning] = []
-        let plist = infoDictionary ?? [:]
+        let plist = infoPlist
         let disableAutoStart = resolveBool(
             envKey: .insideJobDisable,
             plistKey: .disableAutoStart,
@@ -125,7 +238,7 @@ struct StartupConfiguration: Equatable, Sendable {
         envKey: EnvironmentKey,
         plistKey: StartupInfoPlistKey,
         env: [String: String],
-        plist: [String: Any],
+        plist: StartupInfoPlist,
         absentSource: StartupConfigurationSource,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<String?> {
@@ -136,7 +249,7 @@ struct StartupConfiguration: Equatable, Sendable {
             warnings.append(.emptyValueIgnored(key: envKey.rawValue, source: .environment))
         }
 
-        if let plistValue = plist[plistKey.rawValue] as? String {
+        if let plistValue = plist[plistKey]?.string {
             if !plistValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return ResolvedStartupValue(value: plistValue, source: .infoPlist)
             }
@@ -148,7 +261,7 @@ struct StartupConfiguration: Equatable, Sendable {
 
     private static func resolvePort(
         env: [String: String],
-        plist: [String: Any],
+        plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<UInt16> {
         if let envValue = env[EnvironmentKey.insideJobPort.rawValue] {
@@ -162,10 +275,10 @@ struct StartupConfiguration: Equatable, Sendable {
             ))
         }
 
-        if let plistValue = plist[StartupInfoPlistKey.port.rawValue],
+        if let plistValue = plist[.port],
            let parsed = parsePort(plistValue) {
             return ResolvedStartupValue(value: parsed, source: .infoPlist)
-        } else if let plistValue = plist[StartupInfoPlistKey.port.rawValue] {
+        } else if let plistValue = plist[.port] {
             warnings.append(.invalidValueIgnored(
                 key: StartupInfoPlistKey.port.rawValue,
                 source: .infoPlist,
@@ -176,14 +289,18 @@ struct StartupConfiguration: Equatable, Sendable {
         return ResolvedStartupValue(value: 0, source: .defaultValue)
     }
 
-    private static func parsePort(_ value: Any) -> UInt16? {
-        if let string = value as? String {
+    private static func parsePort(_ value: String) -> UInt16? {
+        UInt16(value.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func parsePort(_ value: InfoPlistValue) -> UInt16? {
+        if let string = value.string {
             return UInt16(string.trimmingCharacters(in: .whitespacesAndNewlines))
         }
-        if let int = value as? Int, int >= 0, int <= Int(UInt16.max) {
+        if let int = value.integer, int >= 0, int <= Int(UInt16.max) {
             return UInt16(int)
         }
-        if let double = value as? Double,
+        if let double = value.double,
            double.rounded(.towardZero) == double,
            double >= 0,
            double <= Double(UInt16.max) {
@@ -198,7 +315,7 @@ struct StartupConfiguration: Equatable, Sendable {
         defaultValue: TimeInterval,
         clamp: (TimeInterval) -> TimeInterval,
         env: [String: String],
-        plist: [String: Any],
+        plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<TimeInterval> {
         if let envValue = env[envKey.rawValue] {
@@ -208,7 +325,7 @@ struct StartupConfiguration: Equatable, Sendable {
             warnings.append(.invalidValueIgnored(key: envKey.rawValue, source: .environment, value: envValue))
         }
 
-        if let plistValue = plist[plistKey.rawValue] {
+        if let plistValue = plist[plistKey] {
             if let parsed = parseTimeInterval(plistValue) {
                 return ResolvedStartupValue(value: clamp(parsed), source: .infoPlist)
             }
@@ -222,14 +339,18 @@ struct StartupConfiguration: Equatable, Sendable {
         return ResolvedStartupValue(value: defaultValue, source: .defaultValue)
     }
 
-    private static func parseTimeInterval(_ value: Any) -> TimeInterval? {
-        if let string = value as? String {
+    private static func parseTimeInterval(_ value: String) -> TimeInterval? {
+        TimeInterval(value.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private static func parseTimeInterval(_ value: InfoPlistValue) -> TimeInterval? {
+        if let string = value.string {
             return TimeInterval(string.trimmingCharacters(in: .whitespacesAndNewlines))
         }
-        if let double = value as? Double {
+        if let double = value.double {
             return double
         }
-        if let int = value as? Int {
+        if let int = value.integer {
             return TimeInterval(int)
         }
         return nil
@@ -237,7 +358,7 @@ struct StartupConfiguration: Equatable, Sendable {
 
     private static func resolveAllowedScopes(
         env: [String: String],
-        plist: [String: Any],
+        plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<Set<ConnectionScope>> {
         if let envValue = env[EnvironmentKey.insideJobScope.rawValue] {
@@ -251,7 +372,7 @@ struct StartupConfiguration: Equatable, Sendable {
             ))
         }
 
-        if let plistValue = plist[StartupInfoPlistKey.scope.rawValue] {
+        if let plistValue = plist[.scope] {
             if let parsed = parseScopes(plistValue) {
                 return ResolvedStartupValue(value: parsed, source: .infoPlist)
             }
@@ -265,11 +386,11 @@ struct StartupConfiguration: Equatable, Sendable {
         return ResolvedStartupValue(value: ConnectionScope.default, source: .defaultValue)
     }
 
-    private static func parseScopes(_ value: Any) -> Set<ConnectionScope>? {
-        if let string = value as? String {
+    private static func parseScopes(_ value: InfoPlistValue) -> Set<ConnectionScope>? {
+        if let string = value.string {
             return ConnectionScope.parse(string)
         }
-        if let strings = value as? [String] {
+        if let strings = value.stringArray {
             return ConnectionScope.parse(strings.joined(separator: ","))
         }
         return nil
@@ -280,7 +401,7 @@ struct StartupConfiguration: Equatable, Sendable {
         plistKey: StartupInfoPlistKey,
         defaultValue: Bool,
         env: [String: String],
-        plist: [String: Any],
+        plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<Bool> {
         if let envValue = env[envKey.rawValue] {
@@ -290,7 +411,7 @@ struct StartupConfiguration: Equatable, Sendable {
             warnings.append(.invalidValueIgnored(key: envKey.rawValue, source: .environment, value: envValue))
         }
 
-        if let plistValue = plist[plistKey.rawValue] {
+        if let plistValue = plist[plistKey] {
             if let parsed = parseBool(plistValue) {
                 return ResolvedStartupValue(value: parsed, source: .infoPlist)
             }
@@ -304,19 +425,23 @@ struct StartupConfiguration: Equatable, Sendable {
         return ResolvedStartupValue(value: defaultValue, source: .defaultValue)
     }
 
-    private static func parseBool(_ value: Any) -> Bool? {
-        if let bool = value as? Bool {
+    private static func parseBool(_ value: String) -> Bool? {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "true", "1", "yes":
+            return true
+        case "false", "0", "no":
+            return false
+        default:
+            return nil
+        }
+    }
+
+    private static func parseBool(_ value: InfoPlistValue) -> Bool? {
+        if let bool = value.bool {
             return bool
         }
-        if let string = value as? String {
-            switch string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-            case "true", "1", "yes":
-                return true
-            case "false", "0", "no":
-                return false
-            default:
-                return nil
-            }
+        if let string = value.string {
+            return parseBool(string)
         }
         return nil
     }

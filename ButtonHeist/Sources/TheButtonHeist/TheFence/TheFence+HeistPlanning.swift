@@ -44,9 +44,9 @@ extension TheFence {
         var diagnostic: HeistBuildDiagnostic {
             switch self {
             case .wrongStepCount:
-                return Self.diagnostic(code: "heist.perform.wrong_step_count")
+                return Self.diagnostic(code: .performWrongStepCount)
             case .unsupportedStep:
-                return Self.diagnostic(code: "heist.perform.unsupported_step")
+                return Self.diagnostic(code: .performUnsupportedStep)
             }
         }
 
@@ -64,7 +64,7 @@ extension TheFence {
         Use run_heist for branching, loops, reusable heists, warnings, failures, or multiple steps.
         """
 
-        private static func diagnostic(code: String) -> HeistBuildDiagnostic {
+        private static func diagnostic(code: HeistBuildDiagnosticCode) -> HeistBuildDiagnostic {
             HeistBuildDiagnostic(
                 code: code,
                 phase: .planning,
@@ -86,8 +86,7 @@ extension TheFence {
         let plan = try admitRuntimeSafeHeistPlanSource(
             from: arguments,
             commandName: Command.runHeist.rawValue,
-            droppingPlanKeys: ["argument"],
-            acceptsInlinePlanSource: true
+            droppingPlanKeys: ["argument"]
         )
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
@@ -95,23 +94,28 @@ extension TheFence {
     }
 
     func loadInlinePerformStepSource(_ source: String) throws -> HeistPlan {
-        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceRequest(
+        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanLoadRequest(
             commandName: Command.perform.rawValue,
-            inlineButtonHeistSource:
-            """
-            HeistPlan {
-            \(source)
-            }
-            """
+            source: .inlineDSL(
+                """
+                HeistPlan {
+                \(source)
+                }
+                """
+            )
         )) {
         case .success(let plan, _):
             return plan
         case .failure(let diagnostics):
-            guard diagnostics.contains(where: { $0.message.contains("WaitFor is a gate") }) else {
-                throw buildDiagnosticFenceError(diagnostics)
-            }
-            throw buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
+            throw performStepSourceLoadError(for: diagnostics)
         }
+    }
+
+    func performStepSourceLoadError(for diagnostics: [HeistBuildDiagnostic]) -> FenceError {
+        guard Self.containsPerformUnsupportedStepDiagnostic(diagnostics) else {
+            return buildDiagnosticFenceError(diagnostics)
+        }
+        return buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
     }
 
     func performableStep(in plan: HeistPlan) throws -> PerformableHeistStep {
@@ -140,8 +144,7 @@ extension TheFence {
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
                 commandName: Command.listHeists.rawValue,
-                droppingPlanKeys: ["detail"],
-                acceptsInlinePlanSource: true
+                droppingPlanKeys: ["detail"]
             )
             return ListHeistsRequest(catalog: try plan.heistCatalog(detail: detail))
         } catch let error as HeistCatalogError {
@@ -155,8 +158,7 @@ extension TheFence {
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
                 commandName: Command.describeHeist.rawValue,
-                droppingPlanKeys: ["heist"],
-                acceptsInlinePlanSource: true
+                droppingPlanKeys: ["heist"]
             )
             return DescribeHeistRequest(description: try plan.describeHeist(named: requestedName))
         } catch let error as HeistCatalogError {
@@ -186,18 +188,16 @@ private extension TheFence {
     func admitRuntimeSafeHeistPlanSource(
         from arguments: CommandArgumentEnvelope,
         commandName: String,
-        droppingPlanKeys: Set<String> = [],
-        acceptsInlinePlanSource: Bool
+        droppingPlanKeys: Set<String> = []
     ) throws -> HeistPlan {
         // Admission: accept exactly one public source shape for a plan. ThePlans
         // then returns a RuntimeSafety-validated executable `HeistPlan`.
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
-        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceRequest(
+        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceAdmissionRequest(
             commandName: commandName,
             path: try arguments.schemaString("path"),
-            inlineButtonHeistSource: try arguments.schemaString("plan"),
-            rawStructuredJSONIRFields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys),
-            acceptsInlineButtonHeistSource: acceptsInlinePlanSource
+            inlineDSL: try arguments.schemaString("plan"),
+            rawStructuredJSONIRFields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys)
         )) {
         case .success(let plan, _):
             return plan
@@ -207,9 +207,9 @@ private extension TheFence {
     }
 
     func loadInlineButtonHeistSource(_ source: String, commandName: String) throws -> HeistPlan {
-        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceRequest(
+        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanLoadRequest(
             commandName: commandName,
-            inlineButtonHeistSource: source
+            source: .inlineDSL(source)
         )) {
         case .success(let plan, _):
             return plan
@@ -258,6 +258,12 @@ private extension TheFence {
     static func renderBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
         guard !diagnostics.isEmpty else { return "Heist planning failed." }
         return diagnostics.map(\.renderedMessage).joined(separator: "\n")
+    }
+
+    static func containsPerformUnsupportedStepDiagnostic(_ diagnostics: [HeistBuildDiagnostic]) -> Bool {
+        diagnostics.contains { diagnostic in
+            diagnostic.code == .sourceWaitForGate
+        }
     }
 
 }

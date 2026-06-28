@@ -27,31 +27,32 @@ final class DocumentationContractTests: XCTestCase {
 
     func testJSONLinesExamplesUseCLIExposedCommands() throws {
         var failures: [String] = []
-        let rawIRFields = Set(["version", "name", "parameter", "definitions", "body"])
 
         for file in handwrittenMarkdownFiles() {
             let contents = try String(contentsOf: file, encoding: .utf8)
             for example in jsonLinesExamples(in: contents) {
                 let data = Data(example.json.utf8)
-                let decoded = try JSONSerialization.jsonObject(with: data)
-                guard let object = decoded as? [String: Any],
-                      let commandName = object["command"] as? String,
-                      let command = TheFence.Command(rawValue: commandName)
-                else {
+                let decoded: JSONLinesCommandExample
+                do {
+                    decoded = try JSONDecoder().decode(JSONLinesCommandExample.self, from: data)
+                } catch {
+                    failures.append("\(relativePath(file)):\(example.line): invalid JSON-lines command example")
+                    continue
+                }
+
+                guard let command = TheFence.Command(rawValue: decoded.commandName) else {
                     failures.append("\(relativePath(file)):\(example.line): invalid JSON-lines command example")
                     continue
                 }
 
                 if command.descriptor.cliExposure != .directCommand {
                     failures.append(
-                        "\(relativePath(file)):\(example.line): \(commandName) is not CLI-exposed"
+                        "\(relativePath(file)):\(example.line): \(decoded.commandName) is not CLI-exposed"
                     )
                 }
 
                 if command == .runHeist {
-                    let presentRawFields = rawIRFields
-                        .filter { object.keys.contains($0) }
-                        .sorted()
+                    let presentRawFields = decoded.presentRawIRFields
                     if !presentRawFields.isEmpty {
                         let fieldList = presentRawFields.joined(separator: ", ")
                         failures.append(
@@ -230,6 +231,34 @@ final class DocumentationContractTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+}
+
+private struct JSONLinesCommandExample: Decodable {
+    let commandName: String
+    let presentRawIRFields: [String]
+
+    private enum CommandCodingKeys: String, CodingKey {
+        case command
+    }
+
+    private enum RawIRField: String, CodingKey, CaseIterable {
+        case version
+        case name
+        case parameter
+        case definitions
+        case body
+    }
+
+    init(from decoder: Decoder) throws {
+        let commandContainer = try decoder.container(keyedBy: CommandCodingKeys.self)
+        commandName = try commandContainer.decode(String.self, forKey: .command)
+
+        let rawFieldContainer = try decoder.container(keyedBy: RawIRField.self)
+        presentRawIRFields = RawIRField.allCases
+            .filter { rawFieldContainer.contains($0) }
+            .map(\.stringValue)
+            .sorted()
     }
 }
 

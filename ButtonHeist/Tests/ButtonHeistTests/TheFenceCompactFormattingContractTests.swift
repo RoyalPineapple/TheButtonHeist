@@ -42,7 +42,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(output, "one_finger_tap: ok")
     }
 
-    func testActionFailureWinsOverAttachedExpectationResult() {
+    func testActionFailureWinsOverAttachedExpectationResult() throws {
         let expectation = ExpectationResult(
             met: false,
             predicate: .state(.exists(ElementPredicate(label: "Done"))),
@@ -59,17 +59,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             expectation: expectation
         )
 
-        let json = publicJSONProbe(response)
+        let json = try publicJSONProbe(response)
 
-        XCTAssertEqual(json.string("status"), "error")
-        XCTAssertEqual(json.string("errorClass"), "elementNotFound")
-        json.assertMissing("expectation")
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("errorClass"), "elementNotFound")
+        try json.assertMissing("expectation")
         XCTAssertEqual(response.compactFormatted(), "activate: error[elementNotFound]: button disabled")
         XCTAssertEqual(response.humanFormatted(), "Error: button disabled")
         XCTAssertTrue(response.isFailure)
     }
 
-    func testActionFailureProjectionFeedsJSONAndCompactRendering() {
+    func testActionFailureProjectionFeedsJSONAndCompactRendering() throws {
         let response = FenceResponse.action(
             command: .wait,
             result: makeTestActionResult(
@@ -80,15 +80,15 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
+        let json = try publicJSONProbe(response)
 
-        XCTAssertEqual(json.string("status"), "error")
-        XCTAssertEqual(json.string("errorClass"), "timeout")
-        json.assertMissing("errorCode")
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("errorClass"), "timeout")
+        try json.assertMissing("errorCode")
         XCTAssertEqual(response.compactFormatted(), "wait: error[timeout]: timed out after 2s")
     }
 
-    func testActionFailureCodeAndClassAgreeAcrossPublicFormats() {
+    func testActionFailureCodeAndClassAgreeAcrossPublicFormats() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(
@@ -99,16 +99,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
+        let json = try publicJSONProbe(response)
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json.string("status"), "error")
-        XCTAssertEqual(json.string("errorClass"), "actionFailed")
-        XCTAssertEqual(json.string("errorCode"), "request.accessibility_tree_unavailable")
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("errorClass"), "actionFailed")
+        XCTAssertEqual(try json.string("errorCode"), "request.accessibility_tree_unavailable")
         XCTAssertTrue(compact.contains("error[request.accessibility_tree_unavailable]"), compact)
     }
 
-    func testExpectationFailureStatusAndHintAgreeAcrossJSONAndCompact() {
+    func testExpectationFailureStatusAndHintAgreeAcrossJSONAndCompact() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(),
@@ -119,20 +119,20 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
-        let expectation = json.object("expectation")
+        let json = try publicJSONProbe(response)
+        let expectation = try json.object("expectation")
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json.string("status"), "expectation_failed")
-        json.assertMissing("errorClass")
-        XCTAssertEqual(expectation.bool("met"), false)
-        XCTAssertEqual(expectation.string("actual"), "elementsChanged")
+        XCTAssertEqual(try json.string("status"), "expectation_failed")
+        try json.assertMissing("errorClass")
+        XCTAssertEqual(try expectation.bool("met"), false)
+        XCTAssertEqual(try expectation.string("actual"), "elementsChanged")
         XCTAssertTrue(compact.contains("[expectation FAILED: got elementsChanged]"), compact)
         XCTAssertTrue(compact.contains(".change(.screen()) requires a screen-level transition"), compact)
         XCTAssertTrue(response.isFailure)
     }
 
-    func testActivateNoChangeExpectationFailureExplainsSemanticActivationPath() {
+    func testActivateNoChangeExpectationFailureExplainsSemanticActivationPath() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(),
@@ -143,16 +143,17 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
-        let expectation = json.object("expectation")
+        let json = try publicJSONProbe(response)
+        let expectation = try json.object("expectation")
         let compact = response.compactFormatted()
         let human = response.humanFormatted()
 
-        XCTAssertEqual(json.string("status"), "expectation_failed")
-        XCTAssertEqual(expectation.string("actual"), "noChange")
+        XCTAssertEqual(try json.string("status"), "expectation_failed")
+        XCTAssertEqual(try expectation.string("actual"), "noChange")
+        let hint = try expectation.string("hint")
         XCTAssertTrue(
-            expectation.string("hint")?.contains("accessibilityActivate()") == true,
-            "\(String(describing: expectation.string("hint")))"
+            hint.contains("accessibilityActivate()"),
+            hint
         )
         XCTAssertTrue(compact.contains("[expectation FAILED: got noChange]"), compact)
         XCTAssertTrue(compact.contains("does not send activation-point tap dispatch"), compact)
@@ -161,22 +162,22 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(response.isFailure)
     }
 
-    func testActivateNoChangeWithoutExpectationRemainsSuccessful() {
+    func testActivateNoChangeWithoutExpectationRemainsSuccessful() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult()
         )
 
-        let json = publicJSONProbe(response)
+        let json = try publicJSONProbe(response)
 
-        XCTAssertEqual(json.string("status"), "ok")
-        json.assertMissing("expectation")
+        XCTAssertEqual(try json.string("status"), "ok")
+        try json.assertMissing("expectation")
         XCTAssertEqual(response.compactFormatted(), "activate: ok")
         XCTAssertTrue(response.humanFormatted().contains("✓ activate"))
         XCTAssertFalse(response.isFailure)
     }
 
-    func testActivateNoChangeCarriesActivationTraceWithoutFailingAction() {
+    func testActivateNoChangeCarriesActivationTraceWithoutFailingAction() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: makeTestActionResult(
@@ -194,21 +195,21 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONProbe(response)
-        let activationTrace = json.object("activationTrace")
+        let json = try publicJSONProbe(response)
+        let activationTrace = try json.object("activationTrace")
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json.string("status"), "ok")
-        XCTAssertEqual(activationTrace.bool("axActivateReturned"), false)
-        XCTAssertEqual(activationTrace.bool("tapActivationDispatched"), true)
-        XCTAssertEqual(activationTrace.bool("tapActivationSucceeded"), true)
+        XCTAssertEqual(try json.string("status"), "ok")
+        XCTAssertEqual(try activationTrace.bool("axActivateReturned"), false)
+        XCTAssertEqual(try activationTrace.bool("tapActivationDispatched"), true)
+        XCTAssertEqual(try activationTrace.bool("tapActivationSucceeded"), true)
         XCTAssertEqual(response.isFailure, false)
         XCTAssertTrue(compact.contains("activate: no change"), compact)
         XCTAssertTrue(compact.contains("tapActivationDispatched=true"), compact)
         XCTAssertTrue(compact.contains("tapActivationPoint=point(888,372)"), compact)
     }
 
-    func testElementsChangedActionOutputIncludesConcreteElementDelta() {
+    func testElementsChangedActionOutputIncludesConcreteElementDelta() throws {
         let added = makeReceiptTestElement(
             label: "Barbaresco",
             value: "$55.00",
@@ -227,24 +228,24 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: makeTestActionResult(accessibilityTrace: trace)
         )
 
-        let delta = publicJSONProbe(response).object("delta")
-        let addedJSON = delta.object("edits").array("added")
-        let digest = delta.object("interactionDigest")
+        let delta = try publicJSONProbe(response).object("delta")
+        let addedJSON = try delta.object("edits").array("added")
+        let digest = try delta.object("interactionDigest")
         let compact = response.compactFormatted()
         let human = response.humanFormatted()
 
-        XCTAssertEqual(delta.string("kind"), "elementsChanged")
-        XCTAssertEqual(digest.int("elementCountBefore"), 11)
-        XCTAssertEqual(digest.int("elementCountAfter"), 12)
-        XCTAssertEqual(digest.bool("elementCountChanged"), true)
-        XCTAssertEqual(digest.bool("elementSetChanged"), true)
-        XCTAssertEqual(addedJSON.first?.string("label"), "Barbaresco")
-        XCTAssertEqual(addedJSON.first?.string("identifier"), "wine_barbaresco")
+        XCTAssertEqual(try delta.string("kind"), "elementsChanged")
+        XCTAssertEqual(try digest.int("elementCountBefore"), 11)
+        XCTAssertEqual(try digest.int("elementCountAfter"), 12)
+        XCTAssertEqual(try digest.bool("elementCountChanged"), true)
+        XCTAssertEqual(try digest.bool("elementSetChanged"), true)
+        XCTAssertEqual(try addedJSON.first?.string("label"), "Barbaresco")
+        XCTAssertEqual(try addedJSON.first?.string("identifier"), "wine_barbaresco")
         XCTAssertTrue(compact.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), compact)
         XCTAssertTrue(human.contains(#"+ "Barbaresco":"$55.00" staticText id="wine_barbaresco""#), human)
     }
 
-    func testScreenChangedActionOutputIncludesDestinationSummaryTree() {
+    func testScreenChangedActionOutputIncludesDestinationSummaryTree() throws {
         let destination = makeReceiptTestInterface([
             makeReceiptTestElement(label: "Checkout", identifier: "checkout_title", traits: [.header]),
             makeReceiptTestElement(label: "Pay", identifier: "pay_button", traits: [.button], actions: [.activate]),
@@ -260,14 +261,13 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
         )
 
-        let json = publicJSONObject(response)
-        let delta = json["delta"] as? [String: Any]
-        let newInterface = delta?["newInterface"] as? [String: Any]
+        let delta = try publicJSONProbe(response).object("delta")
+        let newInterface = try delta.object("newInterface")
         let compact = response.compactFormatted()
         let human = response.humanFormatted()
 
-        XCTAssertEqual(delta?["kind"] as? String, "screenChanged")
-        XCTAssertNotNil(newInterface)
+        XCTAssertEqual(try delta.string("kind"), "screenChanged")
+        XCTAssertEqual(try newInterface.array("tree").count, 2)
         XCTAssertTrue(compact.contains("activate: screen changed\n2 elements"), compact)
         XCTAssertTrue(compact.contains(#""Checkout" header id="checkout_title""#), compact)
         XCTAssertTrue(compact.contains(#""Pay" button id="pay_button""#), compact)
@@ -303,24 +303,58 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
         let compact = response.compactFormatted()
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let node = try XCTUnwrap(nodes.first)
-        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
-        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
-        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
-        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
-        let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
-        let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
+        let report = try publicHeistReportResponseDTO(response).report
+        let node = try XCTUnwrap(report.nodes.first)
 
-        XCTAssertNil(node["action"])
+        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+            executedTopLevelStepCount: 1,
+            executedNodeCount: 1,
+            outputReceiptNodeCount: 1,
+            durationMs: 8,
+            abortedAtPath: nil
+        ))
+        XCTAssertEqual(report.nodes, [
+            PublicHeistReportNodeDTO(
+                path: "$.body[0]",
+                kind: "action",
+                status: "passed",
+                durationMs: 1,
+                evidence: PublicHeistReportEvidenceDTO(action: PublicHeistActionEvidenceDTO(
+                    commandName: "activate",
+                    result: PublicHeistActionResultDTO(
+                        status: "ok",
+                        method: "activate",
+                        screenId: "screen",
+                        delta: PublicHeistDeltaDTO(
+                            kind: "elementsChanged",
+                            elementCount: 4,
+                            interactionDigest: PublicHeistInteractionDigestDTO(
+                                elementCountBefore: 3,
+                                elementCountAfter: 4,
+                                elementCountChanged: true,
+                                elementSetChanged: true,
+                                screenIdBefore: "screen",
+                                screenIdAfter: "screen",
+                                screenIdChanged: false,
+                                firstResponderChanged: false
+                            ),
+                            edits: PublicHeistElementEditsDTO(added: [
+                                PublicHeistElementDTO(
+                                    traits: ["staticText"],
+                                    label: "Lazy Row",
+                                    value: "Loaded by scroll",
+                                    identifier: "lazy_row"
+                                ),
+                            ])
+                        ),
+                        omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
+                    )
+                ))
+            ),
+        ])
+        XCTAssertFalse(node.containsKey("action"))
         XCTAssertTrue(compact.contains("-> elements changed"), compact)
         XCTAssertFalse(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
-        XCTAssertEqual(delta["kind"] as? String, "elementsChanged")
-        XCTAssertEqual(added.first?["label"] as? String, "Lazy Row")
-        XCTAssertEqual(added.first?["value"] as? String, "Loaded by scroll")
-        XCTAssertEqual(added.first?["identifier"] as? String, "lazy_row")
     }
 
     func testPublicHeistJSONBoundsActionDeltaAndReportsOmissions() throws {
@@ -351,38 +385,62 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let node = try XCTUnwrap(nodes.first)
-        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
-        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
-        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
-        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
-        let digest = try XCTUnwrap(delta["interactionDigest"] as? [String: Any])
-        let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
-        let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
-        let editOmissions = try XCTUnwrap(edits["omitted"] as? [String: Any])
-        let resultOmissions = try XCTUnwrap(actionResult["omitted"] as? [String: Any])
-        let traceOmission = try XCTUnwrap(resultOmissions["accessibilityTrace"] as? [String: Any])
+        let report = try publicHeistReportResponseDTO(response).report
+        let node = try XCTUnwrap(report.nodes.first)
+        let action = try XCTUnwrap(node.evidence?.action)
+        let actionResult = try XCTUnwrap(action.result)
+        let delta = try XCTUnwrap(actionResult.delta)
         let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
 
-        XCTAssertNil(node["action"])
-        XCTAssertEqual(digest["elementCountBefore"] as? Int, 0)
-        XCTAssertEqual(digest["elementCountAfter"] as? Int, 8)
-        XCTAssertEqual(digest["elementCountChanged"] as? Bool, true)
-        XCTAssertEqual(digest["elementSetChanged"] as? Bool, true)
-        XCTAssertEqual(added.count, 5)
-        XCTAssertTrue(added.allSatisfy { ($0["label"] as? String)?.hasPrefix("Lazy Row ") == true }, "\(added)")
-        XCTAssertEqual(editOmissions["added"] as? Int, 3)
+        XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
+            status: "ok",
+            method: "activate",
+            screenId: "screen",
+            delta: PublicHeistDeltaDTO(
+                kind: "elementsChanged",
+                elementCount: 8,
+                interactionDigest: PublicHeistInteractionDigestDTO(
+                    elementCountBefore: 0,
+                    elementCountAfter: 8,
+                    elementCountChanged: true,
+                    elementSetChanged: true,
+                    screenIdBefore: "screen",
+                    screenIdAfter: "screen",
+                    screenIdChanged: false,
+                    firstResponderChanged: false
+                ),
+                edits: PublicHeistElementEditsDTO(
+                    added: (0..<5).map { index in
+                        PublicHeistElementDTO(
+                            traits: ["staticText"],
+                            label: "Lazy Row \(index)",
+                            value: "Loaded \(index)",
+                            identifier: "lazy_row_\(index)"
+                        )
+                    },
+                    omitted: PublicHeistElementEditOmissionsDTO(
+                        added: 3,
+                        addedKeys: [
+                            "identifier:lazy_row_5",
+                            "identifier:lazy_row_6",
+                            "identifier:lazy_row_7",
+                        ]
+                    )
+                )
+            ),
+            omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
+        ))
+        XCTAssertFalse(node.containsKey("action"))
+        XCTAssertFalse(delta.containsKey("newInterface"))
         XCTAssertEqual(
-            editOmissions["addedKeys"] as? [String],
-            ["identifier:lazy_row_5", "identifier:lazy_row_6", "identifier:lazy_row_7"]
+            actionResult.omitted?.accessibilityTrace,
+            PublicHeistProjectionOmissionDTO(
+                reason: "raw accessibility trace omitted from public heist report",
+                projectedAs: "delta",
+                omittedCount: 2
+            )
         )
-        XCTAssertEqual(traceOmission["projectedAs"] as? String, "delta")
-        XCTAssertEqual(traceOmission["omittedCount"] as? Int, 2)
         XCTAssertFalse(encoded.contains(#""captures""#), encoded)
-        XCTAssertFalse(encoded.contains(#""newInterface""#), encoded)
     }
 
     func testPublicHeistJSONUsesBoundedScreenProjectionForActionDelta() throws {
@@ -414,26 +472,45 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let node = try XCTUnwrap(nodes.first)
-        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
-        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
-        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
-        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
-        let screen = try XCTUnwrap(delta["screen"] as? [String: Any])
-        let elements = try XCTUnwrap(screen["elements"] as? [[String: Any]])
+        let report = try publicHeistReportResponseDTO(response).report
+        let node = try XCTUnwrap(report.nodes.first)
+        let actionResult = try XCTUnwrap(node.evidence?.action?.result)
+        let delta = try XCTUnwrap(actionResult.delta)
         let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
 
-        XCTAssertNil(node["action"])
-        XCTAssertEqual(delta["kind"] as? String, "screenChanged")
-        XCTAssertNil(delta["newInterface"])
-        XCTAssertEqual(actionResult["screenId"] as? String, "checkout")
-        XCTAssertEqual(screen["elementCount"] as? Int, 8)
-        XCTAssertEqual(elements.count, 5)
-        XCTAssertEqual(elements.last?["label"] as? String, "Checkout Row 4")
-        XCTAssertEqual(screen["omittedElementCount"] as? Int, 3)
+        XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
+            status: "ok",
+            method: "activate",
+            screenId: "checkout",
+            delta: PublicHeistDeltaDTO(
+                kind: "screenChanged",
+                elementCount: 8,
+                interactionDigest: PublicHeistInteractionDigestDTO(
+                    elementCountBefore: 0,
+                    elementCountAfter: 8,
+                    elementCountChanged: true,
+                    elementSetChanged: true,
+                    screenIdBefore: "before",
+                    screenIdAfter: "checkout",
+                    screenIdChanged: true,
+                    firstResponderChanged: false
+                ),
+                screen: PublicHeistScreenDTO(
+                    elementCount: 8,
+                    elements: (0..<5).map { index in
+                        PublicHeistElementDTO(
+                            traits: ["staticText"],
+                            label: "Checkout Row \(index)",
+                            identifier: "checkout_row_\(index)"
+                        )
+                    },
+                    omittedElementCount: 3
+                )
+            ),
+            omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
+        ))
+        XCTAssertFalse(node.containsKey("action"))
+        XCTAssertFalse(delta.containsKey("newInterface"))
         XCTAssertFalse(encoded.contains(#""tree""#), encoded)
         XCTAssertFalse(encoded.contains(#""captures""#), encoded)
     }
@@ -483,7 +560,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
     }
 
-    func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() {
+    func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: ActionResult(success: true, method: .activate),
@@ -494,11 +571,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONObject(response)
-        let expectation = json["expectation"] as? [String: Any]
+        let json = try publicJSONProbe(response)
+        let expectation = try json.object("expectation")
 
-        XCTAssertEqual(json["status"] as? String, "ok")
-        XCTAssertEqual(expectation?["met"] as? Bool, true)
+        XCTAssertEqual(try json.string("status"), "ok")
+        XCTAssertEqual(try expectation.bool("met"), true)
         XCTAssertEqual(response.compactFormatted(), "activate: ok")
         XCTAssertTrue(response.humanFormatted().contains("[expectation met]"))
         XCTAssertFalse(response.isFailure)
@@ -570,22 +647,25 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
-        let json = publicJSONObject(response)
-        let expectations = json["expectations"] as? [String: Any]
-        let report = json["report"] as? [String: Any]
-        let summary = report?["summary"] as? [String: Any]
-        let reportExpectations = summary?["expectations"] as? [String: Any]
+        let json = try publicJSONProbe(response)
+        let report = try publicHeistReportResponseDTO(response).report
+        let expectations = try json.object("expectations")
+        let reportExpectations = try json.object("report").object("summary").object("expectations")
 
-        XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 2)
-        XCTAssertEqual(json["executedNodeCount"] as? Int, 2)
-        XCTAssertEqual(json["outputReceiptNodeCount"] as? Int, 2)
-        XCTAssertEqual(summary?["executedTopLevelStepCount"] as? Int, 2)
-        XCTAssertEqual(summary?["executedNodeCount"] as? Int, 2)
-        XCTAssertEqual(summary?["outputReceiptNodeCount"] as? Int, 2)
-        XCTAssertEqual(expectations?["checked"] as? Int, 1)
-        XCTAssertEqual(expectations?["met"] as? Int, 1)
-        XCTAssertEqual(reportExpectations?["checked"] as? Int, 1)
-        XCTAssertEqual(reportExpectations?["met"] as? Int, 1)
+        XCTAssertEqual(try json.int("executedTopLevelStepCount"), 2)
+        XCTAssertEqual(try json.int("executedNodeCount"), 2)
+        XCTAssertEqual(try json.int("outputReceiptNodeCount"), 2)
+        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+            executedTopLevelStepCount: 2,
+            executedNodeCount: 2,
+            outputReceiptNodeCount: 2,
+            durationMs: 5,
+            abortedAtPath: nil
+        ))
+        XCTAssertEqual(try expectations.int("checked"), 1)
+        XCTAssertEqual(try expectations.int("met"), 1)
+        XCTAssertEqual(try reportExpectations.int("checked"), 1)
+        XCTAssertEqual(try reportExpectations.int("met"), 1)
         XCTAssertTrue(response.compactFormatted().contains("heist: 2 top-level steps in 5ms"))
         XCTAssertTrue(response.compactFormatted().contains("[expectations: 1/1]"))
         XCTAssertTrue(response.humanFormatted().contains("Heist: 2 top-level step(s) executed in 5ms"))
@@ -607,12 +687,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
-        let json = publicJSONObject(response)
+        let json = try publicJSONProbe(response)
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json["status"] as? String, "ok")
-        XCTAssertNotNil(json["report"])
-        XCTAssertNil(json["method"])
+        XCTAssertEqual(try json.string("status"), "ok")
+        try json.assertPresent("report")
+        try json.assertMissing("method")
         XCTAssertTrue(compact.contains("heist: 1 top-level steps in 3ms"), compact)
         XCTAssertTrue(compact.contains("[0] activate"), compact)
     }
@@ -643,16 +723,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
-        let json = publicJSONObject(response)
-        let report = json["report"] as? [String: Any]
-        let nodes = report?["nodes"] as? [[String: Any]]
+        let json = try publicJSONProbe(response)
+        let report = try publicHeistReportResponseDTO(response).report
+        let node = try XCTUnwrap(report.nodes.first)
 
-        XCTAssertEqual(json["status"] as? String, "partial")
-        XCTAssertNil(json["results"])
-        XCTAssertEqual(nodes?.first?["path"] as? String, "$.body[0]")
-        XCTAssertEqual(nodes?.first?["kind"] as? String, "fail")
-        XCTAssertEqual(nodes?.first?["status"] as? String, "failed")
-        XCTAssertEqual(nodes?.first?["message"] as? String, "Unknown screen")
+        XCTAssertEqual(try json.string("status"), "partial")
+        try json.assertMissing("results")
+        XCTAssertEqual(node.path, "$.body[0]")
+        XCTAssertEqual(node.kind, "fail")
+        XCTAssertEqual(node.status, "failed")
+        XCTAssertEqual(node.message, "Unknown screen")
     }
 
     func testAbortedHeistOutputCountsOnlyReceiptNodes() throws {
@@ -688,21 +768,23 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let summary = try XCTUnwrap(report["summary"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let json = try publicJSONProbe(response)
+        let report = try publicHeistReportResponseDTO(response).report
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 2)
-        XCTAssertEqual(json["executedNodeCount"] as? Int, 2)
-        XCTAssertEqual(json["outputReceiptNodeCount"] as? Int, 3)
-        XCTAssertEqual(summary["executedTopLevelStepCount"] as? Int, 2)
-        XCTAssertEqual(summary["executedNodeCount"] as? Int, 2)
-        XCTAssertEqual(summary["outputReceiptNodeCount"] as? Int, 3)
-        XCTAssertEqual(nodes.count, 3)
-        XCTAssertEqual(nodes.map { $0["path"] as? String }, ["$.body[0]", "$.body[1]", "$.body[2]"])
-        XCTAssertEqual(nodes.map { $0["status"] as? String }, ["passed", "failed", "skipped"])
+        XCTAssertEqual(try json.int("executedTopLevelStepCount"), 2)
+        XCTAssertEqual(try json.int("executedNodeCount"), 2)
+        XCTAssertEqual(try json.int("outputReceiptNodeCount"), 3)
+        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+            executedTopLevelStepCount: 2,
+            executedNodeCount: 2,
+            outputReceiptNodeCount: 3,
+            durationMs: 2,
+            abortedAtPath: "$.body[1]"
+        ))
+        XCTAssertEqual(report.nodes.count, 3)
+        XCTAssertEqual(report.nodes.map(\.path), ["$.body[0]", "$.body[1]", "$.body[2]"])
+        XCTAssertEqual(report.nodes.map(\.status), ["passed", "failed", "skipped"])
         XCTAssertTrue(compact.contains("heist: 2 top-level steps"), compact)
         XCTAssertTrue(compact.contains("[0] warn -> warning: before"), compact)
         XCTAssertTrue(compact.contains("[2] warn -> skipped"), compact)
@@ -765,33 +847,30 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             abortedAtPath: childPath
         )
 
-        let json = publicJSONObject(.heistExecution(plan: plan, result: result))
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let json = try publicJSONProbe(.heistExecution(plan: plan, result: result))
+        let nodes = try json.object("report").array("nodes")
         let root = try XCTUnwrap(nodes.first)
-        let children = try XCTUnwrap(root["children"] as? [[String: Any]])
+        let children = try root.array("children")
         let child = try XCTUnwrap(children.first)
-        let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
-        let caseSelection = try XCTUnwrap(evidence["caseSelection"] as? [String: Any])
-        let childEvidence = try XCTUnwrap(child["evidence"] as? [String: Any])
-        let action = try XCTUnwrap(childEvidence["action"] as? [String: Any])
-        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
+        let caseSelection = try root.object("evidence").object("caseSelection")
+        let action = try child.object("evidence").object("action")
+        let actionResult = try action.object("result")
 
-        XCTAssertNil(json["results"])
-        XCTAssertEqual(root["path"] as? String, "$.body[0]")
-        XCTAssertEqual(root["kind"] as? String, "if")
-        XCTAssertNotNil(caseSelection["outcome"])
-        XCTAssertNil(caseSelection["selectedCaseIndex"])
-        XCTAssertNil(caseSelection["timedOut"])
-        XCTAssertNil(caseSelection["elseRan"])
-        XCTAssertEqual(root["abortedAtChildPath"] as? String, childPath)
-        XCTAssertEqual(child["path"] as? String, "$.body[0].conditional.cases[0].body[0]")
-        XCTAssertEqual(child["kind"] as? String, "action")
-        XCTAssertEqual(child["status"] as? String, "failed")
-        XCTAssertNil(child["action"])
-        XCTAssertEqual(action["commandName"] as? String, "activate")
-        XCTAssertEqual(actionResult["status"] as? String, "error")
-        XCTAssertEqual(actionResult["message"] as? String, "nested button failed")
+        try json.assertMissing("results")
+        XCTAssertEqual(try root.string("path"), "$.body[0]")
+        XCTAssertEqual(try root.string("kind"), "if")
+        try caseSelection.assertPresent("outcome")
+        try caseSelection.assertMissing("selectedCaseIndex")
+        try caseSelection.assertMissing("timedOut")
+        try caseSelection.assertMissing("elseRan")
+        XCTAssertEqual(try root.string("abortedAtChildPath"), childPath)
+        XCTAssertEqual(try child.string("path"), "$.body[0].conditional.cases[0].body[0]")
+        XCTAssertEqual(try child.string("kind"), "action")
+        XCTAssertEqual(try child.string("status"), "failed")
+        try child.assertMissing("action")
+        XCTAssertEqual(try action.string("commandName"), "activate")
+        XCTAssertEqual(try actionResult.string("status"), "error")
+        XCTAssertEqual(try actionResult.string("message"), "nested button failed")
     }
 
     func testPublicHeistJSONReportsSelectedElsePathAsTreeNodes() throws {
@@ -837,18 +916,18 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             durationMs: 3
         )
 
-        let json = publicJSONObject(.heistExecution(plan: plan, result: result))
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
+        let json = try publicJSONProbe(.heistExecution(plan: plan, result: result))
+        let nodes = try json.object("report").array("nodes")
         let root = try XCTUnwrap(nodes.first)
-        let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
-        let children = try XCTUnwrap(root["children"] as? [[String: Any]])
+        let evidence = try root.object("evidence")
+        let children = try root.array("children")
+        let child = try XCTUnwrap(children.first)
         let compact = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
 
-        XCTAssertEqual(root["kind"] as? String, "if")
-        XCTAssertEqual(root["status"] as? String, "passed")
-        XCTAssertNotNil(evidence["caseSelection"])
-        XCTAssertEqual(children.first?["path"] as? String, "$.body[0].conditional.else_body[0]")
+        XCTAssertEqual(try root.string("kind"), "if")
+        XCTAssertEqual(try root.string("status"), "passed")
+        try evidence.assertPresent("caseSelection")
+        XCTAssertEqual(try child.string("path"), "$.body[0].conditional.else_body[0]")
         XCTAssertTrue(compact.contains("[0] if"), compact)
         XCTAssertTrue(compact.contains("[1] activate"), compact)
     }
@@ -923,25 +1002,29 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let summary = try XCTUnwrap(report["summary"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let root = try XCTUnwrap(nodes.first)
-        let evidence = try XCTUnwrap(root["evidence"] as? [String: Any])
-        let children = try XCTUnwrap(root["children"] as? [[String: Any]])
+        let json = try publicJSONProbe(response)
+        let report = try publicHeistReportResponseDTO(response).report
+        let root = try XCTUnwrap(report.nodes.first)
+        let nodeProbes = try json.object("report").array("nodes")
+        let rootProbe = try XCTUnwrap(nodeProbes.first)
+        let evidence = try rootProbe.object("evidence")
+        let children = try rootProbe.array("children")
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(json["executedTopLevelStepCount"] as? Int, 1)
-        XCTAssertEqual(json["executedNodeCount"] as? Int, 5)
-        XCTAssertEqual(json["outputReceiptNodeCount"] as? Int, 5)
-        XCTAssertEqual(summary["executedTopLevelStepCount"] as? Int, 1)
-        XCTAssertEqual(summary["executedNodeCount"] as? Int, 5)
-        XCTAssertEqual(summary["outputReceiptNodeCount"] as? Int, 5)
-        XCTAssertEqual(root["kind"] as? String, "for_each_string")
-        XCTAssertNotNil(evidence["forEachString"])
-        XCTAssertEqual(root["abortedAtChildPath"] as? String, failedActionPath)
-        XCTAssertEqual(children.map { $0["kind"] as? String }, ["for_each_iteration", "for_each_iteration"])
+        XCTAssertEqual(try json.int("executedTopLevelStepCount"), 1)
+        XCTAssertEqual(try json.int("executedNodeCount"), 5)
+        XCTAssertEqual(try json.int("outputReceiptNodeCount"), 5)
+        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+            executedTopLevelStepCount: 1,
+            executedNodeCount: 5,
+            outputReceiptNodeCount: 5,
+            durationMs: 30,
+            abortedAtPath: failedActionPath
+        ))
+        XCTAssertEqual(root.kind, "for_each_string")
+        try evidence.assertPresent("forEachString")
+        XCTAssertEqual(try rootProbe.string("abortedAtChildPath"), failedActionPath)
+        XCTAssertEqual(try children.map { try $0.string("kind") }, ["for_each_iteration", "for_each_iteration"])
         XCTAssertTrue(compact.contains("heist: 1 top-level steps in 30ms"), compact)
         XCTAssertTrue(compact.contains("[0] for_each_string -> error: for_each_string stopped"), compact)
     }
@@ -1182,27 +1265,26 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testPublicInterfaceJSONRendersScrollSummaryFields() throws {
         let response = FenceResponse.interface(formattingFixtureInterface(), detail: .summary)
 
-        let json = publicJSONObject(response)
-        let interface = try XCTUnwrap(json["interface"] as? [String: Any])
-        let rendering = try XCTUnwrap(interface["rendering"] as? [String: Any])
-        let tree = try XCTUnwrap(interface["tree"] as? [[String: Any]])
-        let scrollContainer = try XCTUnwrap(tree[1]["container"] as? [String: Any])
+        let interface = try publicJSONProbe(response).object("interface")
+        let rendering = try interface.object("rendering")
+        let tree = try interface.array("tree")
+        let scrollContainer = try tree[1].object("container")
 
-        XCTAssertEqual(rendering["state"] as? String, "full")
-        XCTAssertNil(rendering["reasonCode"])
-        XCTAssertEqual((rendering["observedElementCount"] as? NSNumber)?.intValue, 4)
-        XCTAssertEqual((rendering["renderedElementCount"] as? NSNumber)?.intValue, 4)
-        XCTAssertEqual((rendering["omittedElementCount"] as? NSNumber)?.intValue, 0)
-        XCTAssertNil(rendering["visibleElementBudget"])
-        XCTAssertNil(rendering["totalNodeBudget"])
-        XCTAssertEqual(scrollContainer["type"] as? String, "scrollable")
-        XCTAssertEqual((scrollContainer["contentWidth"] as? NSNumber)?.doubleValue, 390)
-        XCTAssertEqual((scrollContainer["contentHeight"] as? NSNumber)?.doubleValue, 1200)
-        XCTAssertEqual(scrollContainer["scrollAxis"] as? String, "vertical")
-        XCTAssertNil(scrollContainer["pageScrollsX"])
-        XCTAssertEqual((scrollContainer["pageScrollsY"] as? NSNumber)?.intValue, 3)
-        XCTAssertEqual((scrollContainer["observedElementCount"] as? NSNumber)?.intValue, 1)
-        XCTAssertNil(scrollContainer["truncation"])
+        XCTAssertEqual(try rendering.string("state"), "full")
+        try rendering.assertMissing("reasonCode")
+        XCTAssertEqual(try rendering.int("observedElementCount"), 4)
+        XCTAssertEqual(try rendering.int("renderedElementCount"), 4)
+        XCTAssertEqual(try rendering.int("omittedElementCount"), 0)
+        try rendering.assertMissing("visibleElementBudget")
+        try rendering.assertMissing("totalNodeBudget")
+        XCTAssertEqual(try scrollContainer.string("type"), "scrollable")
+        XCTAssertEqual(try scrollContainer.double("contentWidth"), 390)
+        XCTAssertEqual(try scrollContainer.double("contentHeight"), 1200)
+        XCTAssertEqual(try scrollContainer.string("scrollAxis"), "vertical")
+        try scrollContainer.assertMissing("pageScrollsX")
+        XCTAssertEqual(try scrollContainer.int("pageScrollsY"), 3)
+        XCTAssertEqual(try scrollContainer.int("observedElementCount"), 1)
+        try scrollContainer.assertMissing("truncation")
     }
 
     func testPublicInterfaceOutputIncludesDiscoveryLimitDiagnostics() throws {
@@ -1246,10 +1328,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ]).withDiagnostics(diagnostics)
 
         let compact = FenceResponse.compactInterface(interface, detail: .summary)
-        let json = try publicInterfaceJSONObject(PublicInterface(interface: interface, detail: .summary))
-        let encodedDiagnostics = try XCTUnwrap(json["diagnostics"] as? [String: Any])
-        let discovery = try XCTUnwrap(encodedDiagnostics["discovery"] as? [String: Any])
-        let omittedContainers = try XCTUnwrap(discovery["omittedContainers"] as? [[String: Any]])
+        let json = try publicInterfaceJSONProbe(PublicInterface(interface: interface, detail: .summary))
+        let discovery = try json.object("diagnostics").object("discovery")
+        let omittedContainers = try discovery.array("omittedContainers")
         let omitted = try XCTUnwrap(omittedContainers.first)
 
         XCTAssertTrue(
@@ -1260,16 +1341,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         XCTAssertTrue(compact.contains(#"omitted: scrollable containerName="main_scroll""#), compact)
         XCTAssertTrue(compact.contains("next: Retry get_interface"), compact)
-        XCTAssertEqual(discovery["state"] as? String, "limited")
-        XCTAssertEqual(discovery["reasonCodes"] as? [String], ["scroll-attempt-budget"])
-        XCTAssertEqual((discovery["includedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertEqual((discovery["scrollAttempts"] as? NSNumber)?.intValue, 5)
-        XCTAssertEqual((discovery["maxScrollsPerDiscovery"] as? NSNumber)?.intValue, 5)
-        XCTAssertEqual((discovery["maxScrollsPerContainer"] as? NSNumber)?.intValue, 3)
-        XCTAssertEqual((discovery["omittedScrollableContainerCount"] as? NSNumber)?.intValue, 1)
-        XCTAssertEqual(omitted["containerName"] as? String, "main_scroll")
-        XCTAssertEqual(omitted["scrollAxis"] as? String, "vertical")
-        XCTAssertEqual(omitted["reasonCodes"] as? [String], ["scroll-attempt-budget"])
+        XCTAssertEqual(try discovery.string("state"), "limited")
+        XCTAssertEqual(try discovery.strings("reasonCodes"), ["scroll-attempt-budget"])
+        XCTAssertEqual(try discovery.int("includedElementCount"), 2)
+        XCTAssertEqual(try discovery.int("scrollAttempts"), 5)
+        XCTAssertEqual(try discovery.int("maxScrollsPerDiscovery"), 5)
+        XCTAssertEqual(try discovery.int("maxScrollsPerContainer"), 3)
+        XCTAssertEqual(try discovery.int("omittedScrollableContainerCount"), 1)
+        XCTAssertEqual(try omitted.string("containerName"), "main_scroll")
+        XCTAssertEqual(try omitted.string("scrollAxis"), "vertical")
+        XCTAssertEqual(try omitted.strings("reasonCodes"), ["scroll-attempt-budget"])
     }
 
     func testPublicInterfaceJSONTruncatesScrollableSubtreeAtVisibleElementBudget() throws {
@@ -1290,33 +1371,33 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             .element(makeReceiptTestElement(label: "After")),
         ])
 
-        let json = try publicInterfaceJSONObject(
+        let json = try publicInterfaceJSONProbe(
             PublicInterface(interface: interface, detail: .summary, visibleElementBudget: 2)
         )
-        let rendering = try XCTUnwrap(json["rendering"] as? [String: Any])
-        let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
-        let scrollContainer = try XCTUnwrap(tree[0]["container"] as? [String: Any])
-        let scrollChildren = try XCTUnwrap(scrollContainer["children"] as? [[String: Any]])
-        let truncation = try XCTUnwrap(scrollContainer["truncation"] as? [String: Any])
-        let after = try XCTUnwrap(tree[1]["element"] as? [String: Any])
+        let rendering = try json.object("rendering")
+        let tree = try json.array("tree")
+        let scrollContainer = try tree[0].object("container")
+        let scrollChildren = try scrollContainer.array("children")
+        let truncation = try scrollContainer.object("truncation")
+        let after = try tree[1].object("element")
 
-        XCTAssertEqual(rendering["state"] as? String, "truncated")
-        XCTAssertEqual(rendering["reasonCode"] as? String, "scroll-subtree-element-budget")
-        XCTAssertEqual((rendering["observedElementCount"] as? NSNumber)?.intValue, 5)
-        XCTAssertEqual((rendering["renderedElementCount"] as? NSNumber)?.intValue, 3)
-        XCTAssertEqual((rendering["omittedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertEqual((rendering["visibleElementBudget"] as? NSNumber)?.intValue, 2)
-        XCTAssertNil(rendering["totalNodeBudget"])
+        XCTAssertEqual(try rendering.string("state"), "truncated")
+        XCTAssertEqual(try rendering.string("reasonCode"), "scroll-subtree-element-budget")
+        XCTAssertEqual(try rendering.int("observedElementCount"), 5)
+        XCTAssertEqual(try rendering.int("renderedElementCount"), 3)
+        XCTAssertEqual(try rendering.int("omittedElementCount"), 2)
+        XCTAssertEqual(try rendering.int("visibleElementBudget"), 2)
+        try rendering.assertMissing("totalNodeBudget")
         XCTAssertEqual(scrollChildren.count, 2)
-        XCTAssertEqual((scrollContainer["observedElementCount"] as? NSNumber)?.intValue, 4)
-        XCTAssertEqual(truncation["state"] as? String, "truncated")
-        XCTAssertEqual(truncation["reasonCode"] as? String, "scroll-subtree-element-budget")
-        XCTAssertEqual((truncation["observedElementCount"] as? NSNumber)?.intValue, 4)
-        XCTAssertEqual((truncation["renderedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertEqual((truncation["omittedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertEqual((truncation["visibleElementBudget"] as? NSNumber)?.intValue, 2)
-        XCTAssertEqual(after["label"] as? String, "After")
-        XCTAssertEqual((after["order"] as? NSNumber)?.intValue, 4)
+        XCTAssertEqual(try scrollContainer.int("observedElementCount"), 4)
+        XCTAssertEqual(try truncation.string("state"), "truncated")
+        XCTAssertEqual(try truncation.string("reasonCode"), "scroll-subtree-element-budget")
+        XCTAssertEqual(try truncation.int("observedElementCount"), 4)
+        XCTAssertEqual(try truncation.int("renderedElementCount"), 2)
+        XCTAssertEqual(try truncation.int("omittedElementCount"), 2)
+        XCTAssertEqual(try truncation.int("visibleElementBudget"), 2)
+        XCTAssertEqual(try after.string("label"), "After")
+        XCTAssertEqual(try after.int("order"), 4)
     }
 
     func testPublicInterfaceJSONTruncatesWholeInterfaceAtTotalNodeBudget() throws {
@@ -1325,7 +1406,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         }
         let interface = makeReceiptTestInterface(nodes: rows)
 
-        let json = try publicInterfaceJSONObject(
+        let json = try publicInterfaceJSONProbe(
             PublicInterface(
                 interface: interface,
                 detail: .summary,
@@ -1333,16 +1414,16 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 totalNodeBudget: 2
             )
         )
-        let rendering = try XCTUnwrap(json["rendering"] as? [String: Any])
-        let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
+        let rendering = try json.object("rendering")
+        let tree = try json.array("tree")
 
-        XCTAssertEqual(rendering["state"] as? String, "truncated")
-        XCTAssertEqual(rendering["reasonCode"] as? String, "total-node-budget")
-        XCTAssertEqual((rendering["observedElementCount"] as? NSNumber)?.intValue, 4)
-        XCTAssertEqual((rendering["renderedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertEqual((rendering["omittedElementCount"] as? NSNumber)?.intValue, 2)
-        XCTAssertNil(rendering["visibleElementBudget"])
-        XCTAssertEqual((rendering["totalNodeBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual(try rendering.string("state"), "truncated")
+        XCTAssertEqual(try rendering.string("reasonCode"), "total-node-budget")
+        XCTAssertEqual(try rendering.int("observedElementCount"), 4)
+        XCTAssertEqual(try rendering.int("renderedElementCount"), 2)
+        XCTAssertEqual(try rendering.int("omittedElementCount"), 2)
+        try rendering.assertMissing("visibleElementBudget")
+        XCTAssertEqual(try rendering.int("totalNodeBudget"), 2)
         XCTAssertEqual(tree.count, 2)
     }
 
@@ -1362,29 +1443,29 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             ),
         ])
 
-        let json = try publicInterfaceJSONObject(
+        let json = try publicInterfaceJSONProbe(
             PublicInterface(
                 interface: interface,
                 detail: .summary,
                 totalNodeBudget: 2
             )
         )
-        let rendering = try XCTUnwrap(json["rendering"] as? [String: Any])
-        let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
-        let outer = try XCTUnwrap(tree[0]["container"] as? [String: Any])
-        let children = try XCTUnwrap(outer["children"] as? [[String: Any]])
-        let empty = try XCTUnwrap(children[0]["container"] as? [String: Any])
+        let rendering = try json.object("rendering")
+        let tree = try json.array("tree")
+        let outer = try tree[0].object("container")
+        let children = try outer.array("children")
+        let empty = try children[0].object("container")
 
-        XCTAssertEqual(rendering["state"] as? String, "truncated")
-        XCTAssertEqual(rendering["reasonCode"] as? String, "total-node-budget")
-        XCTAssertEqual((rendering["observedElementCount"] as? NSNumber)?.intValue, 1)
-        XCTAssertEqual((rendering["renderedElementCount"] as? NSNumber)?.intValue, 0)
-        XCTAssertEqual((rendering["omittedElementCount"] as? NSNumber)?.intValue, 1)
-        XCTAssertEqual((rendering["totalNodeBudget"] as? NSNumber)?.intValue, 2)
+        XCTAssertEqual(try rendering.string("state"), "truncated")
+        XCTAssertEqual(try rendering.string("reasonCode"), "total-node-budget")
+        XCTAssertEqual(try rendering.int("observedElementCount"), 1)
+        XCTAssertEqual(try rendering.int("renderedElementCount"), 0)
+        XCTAssertEqual(try rendering.int("omittedElementCount"), 1)
+        XCTAssertEqual(try rendering.int("totalNodeBudget"), 2)
         XCTAssertEqual(tree.count, 1)
-        XCTAssertEqual(outer["containerName"] as? String, "outer")
+        XCTAssertEqual(try outer.string("containerName"), "outer")
         XCTAssertEqual(children.count, 1)
-        XCTAssertEqual(empty["containerName"] as? String, "empty")
+        XCTAssertEqual(try empty.string("containerName"), "empty")
     }
 
     func testPublicInterfaceJSONDoesNotReportScrollBudgetWhenTotalNodeBudgetStopsFirst() throws {
@@ -1404,7 +1485,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             ),
         ])
 
-        let json = try publicInterfaceJSONObject(
+        let json = try publicInterfaceJSONProbe(
             PublicInterface(
                 interface: interface,
                 detail: .summary,
@@ -1412,14 +1493,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 totalNodeBudget: 2
             )
         )
-        let rendering = try XCTUnwrap(json["rendering"] as? [String: Any])
-        let tree = try XCTUnwrap(json["tree"] as? [[String: Any]])
-        let scrollContainer = try XCTUnwrap(tree[0]["container"] as? [String: Any])
+        let rendering = try json.object("rendering")
+        let tree = try json.array("tree")
+        let scrollContainer = try tree[0].object("container")
 
-        XCTAssertEqual(rendering["reasonCode"] as? String, "total-node-budget")
-        XCTAssertNil(rendering["visibleElementBudget"])
-        XCTAssertEqual((rendering["totalNodeBudget"] as? NSNumber)?.intValue, 2)
-        XCTAssertNil(scrollContainer["truncation"])
+        XCTAssertEqual(try rendering.string("reasonCode"), "total-node-budget")
+        try rendering.assertMissing("visibleElementBudget")
+        XCTAssertEqual(try rendering.int("totalNodeBudget"), 2)
+        try scrollContainer.assertMissing("truncation")
     }
 
     func testCompactContainerEscapesLabelsAndContainerNames() {

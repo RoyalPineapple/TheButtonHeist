@@ -564,43 +564,12 @@ func makeBackgroundScreenChangedTrace(elementCount: Int) -> AccessibilityTrace {
     )
 }
 
-func publicJSONObject(
-    _ response: FenceResponse,
-    file: StaticString = #filePath,
-    line: UInt = #line
-) -> [String: Any] {
-    do {
-        let object = try JSONSerialization.jsonObject(with: try response.jsonData())
-        guard let dict = object as? [String: Any] else {
-            XCTFail("Expected public JSON object for \(response)", file: file, line: line)
-            return [:]
-        }
-        return dict
-    } catch {
-        XCTFail("Failed to decode public JSON for \(response): \(error)", file: file, line: line)
-        return [:]
-    }
-}
-
 func publicJSONProbe(
     _ response: FenceResponse,
     file: StaticString = #filePath,
     line: UInt = #line
-) -> JSONProbe {
-    JSONProbe(publicJSONObject(response, file: file, line: line))
-}
-
-func publicInterfaceJSONObject(
-    _ interface: PublicInterface,
-    file: StaticString = #filePath,
-    line: UInt = #line
-) throws -> [String: Any] {
-    let object = try JSONSerialization.jsonObject(with: try JSONEncoder().encode(interface))
-    guard let dict = object as? [String: Any] else {
-        XCTFail("Expected public interface JSON object", file: file, line: line)
-        return [:]
-    }
-    return dict
+) throws -> JSONProbe {
+    try JSONProbe(data: try response.jsonData())
 }
 
 func publicInterfaceJSONProbe(
@@ -608,7 +577,7 @@ func publicInterfaceJSONProbe(
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws -> JSONProbe {
-    JSONProbe(try publicInterfaceJSONObject(interface, file: file, line: line))
+    try JSONProbe(data: try JSONEncoder().encode(interface))
 }
 
 struct HeistInspection {

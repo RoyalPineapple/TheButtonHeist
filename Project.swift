@@ -19,6 +19,7 @@ let project = Project(
     settings: .settings(base: [
         "SWIFT_VERSION": "6",
         "LastSwiftMigration": "2620",
+        "OTHER_SWIFT_FLAGS": "$(inherited) -package-name ButtonHeist",
         "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
     ]),
     targets: [

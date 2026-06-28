@@ -3,7 +3,7 @@ import Foundation
 import OSLog
 import ThePlans
 
-private let heistReceiptLogger = Logger(subsystem: "com.buttonheist.thescore", category: "receipts")
+private let heistReceiptLogger = ButtonHeistLog.logger(.score(.receipts))
 
 public enum HeistReceiptRecordingMode: String, Sendable, Equatable {
     case off

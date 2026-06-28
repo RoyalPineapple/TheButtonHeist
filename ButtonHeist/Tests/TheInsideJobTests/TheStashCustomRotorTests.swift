@@ -9,6 +9,10 @@ import ThePlans
 private final class RotorActivationAccessibilityElement: UIAccessibilityElement {
     private(set) var activationCount = 0
 
+    convenience init(container: UIView) {
+        self.init(accessibilityContainer: container)
+    }
+
     override func accessibilityActivate() -> Bool {
         activationCount += 1
         return true
@@ -181,7 +185,7 @@ final class TheStashRotorTests: XCTestCase {
         rotorHost.accessibilityLabel = "Virtual Activation Results"
         rotorHost.accessibilityIdentifier = "virtual_activation_rotor_host"
 
-        let virtualResult = RotorActivationAccessibilityElement(accessibilityContainer: rootView as Any)
+        let virtualResult = RotorActivationAccessibilityElement(container: rootView)
         virtualResult.accessibilityLabel = "Open virtual result"
         virtualResult.accessibilityTraits = .button
         virtualResult.accessibilityFrameInContainerSpace = CGRect(x: 20, y: 120, width: 280, height: 44)
@@ -243,7 +247,7 @@ final class TheStashRotorTests: XCTestCase {
         rotorHost.accessibilityLabel = "Cached Results"
         rotorHost.accessibilityIdentifier = "cached_rotor_host"
 
-        let cachedResult = RotorActivationAccessibilityElement(accessibilityContainer: rootView as Any)
+        let cachedResult = RotorActivationAccessibilityElement(container: rootView)
         cachedResult.accessibilityLabel = "Cached virtual result"
         cachedResult.accessibilityTraits = .button
         cachedResult.accessibilityFrameInContainerSpace = CGRect(x: 20, y: 120, width: 280, height: 44)
