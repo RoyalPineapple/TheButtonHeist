@@ -160,6 +160,18 @@ struct JSONProbe {
         return object.isEmpty
     }
 
+    func decode<T: Decodable>(
+        _ type: T.Type = T.self,
+        decoder: JSONDecoder = JSONDecoder()
+    ) throws -> T {
+        do {
+            let data = try JSONEncoder().encode(value)
+            return try decoder.decode(type, from: data)
+        } catch {
+            throw JSONProbeFailure(path: path, reason: "Failed to decode \(type): \(error)")
+        }
+    }
+
     private func child(_ key: String) throws -> JSONProbe {
         guard case .object(let object) = value else {
             throw typeMismatch(expected: "object")
@@ -226,5 +238,37 @@ private struct JSONCodingKey: CodingKey {
     init(intValue: Int) {
         self.stringValue = "\(intValue)"
         self.intValue = intValue
+    }
+}
+
+extension JSONValue: Encodable {
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .object(let object):
+            var container = encoder.container(keyedBy: JSONCodingKey.self)
+            for (key, value) in object {
+                try container.encode(value, forKey: JSONCodingKey(stringValue: key))
+            }
+        case .array(let array):
+            var container = encoder.unkeyedContainer()
+            for value in array {
+                try container.encode(value)
+            }
+        case .string(let string):
+            var container = encoder.singleValueContainer()
+            try container.encode(string)
+        case .int(let int):
+            var container = encoder.singleValueContainer()
+            try container.encode(int)
+        case .double(let double):
+            var container = encoder.singleValueContainer()
+            try container.encode(double)
+        case .bool(let bool):
+            var container = encoder.singleValueContainer()
+            try container.encode(bool)
+        case .null:
+            var container = encoder.singleValueContainer()
+            try container.encodeNil()
+        }
     }
 }

@@ -304,24 +304,57 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let response = FenceResponse.heistExecution(plan: plan, result: result)
 
         let compact = response.compactFormatted()
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let node = try XCTUnwrap(nodes.first)
-        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
-        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
-        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
-        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
-        let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
-        let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
+        let report = try publicHeistReportResponseDTO(response).report
+        let node = try XCTUnwrap(report.nodes.first)
 
-        XCTAssertNil(node["action"])
+        XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
+            executedTopLevelStepCount: 1,
+            executedNodeCount: 1,
+            outputReceiptNodeCount: 1,
+            durationMs: 8,
+            abortedAtPath: nil
+        ))
+        XCTAssertEqual(report.nodes, [
+            PublicHeistReportNodeDTO(
+                path: "$.body[0]",
+                kind: "action",
+                status: "passed",
+                durationMs: 1,
+                evidence: PublicHeistReportEvidenceDTO(action: PublicHeistActionEvidenceDTO(
+                    commandName: "activate",
+                    result: PublicHeistActionResultDTO(
+                        status: "ok",
+                        method: "activate",
+                        delta: PublicHeistDeltaDTO(
+                            kind: "elementsChanged",
+                            elementCount: 4,
+                            interactionDigest: PublicHeistInteractionDigestDTO(
+                                elementCountBefore: 3,
+                                elementCountAfter: 4,
+                                elementCountChanged: true,
+                                elementSetChanged: true,
+                                screenIdBefore: "screen",
+                                screenIdAfter: "screen",
+                                screenIdChanged: false,
+                                firstResponderChanged: false
+                            ),
+                            edits: PublicHeistElementEditsDTO(added: [
+                                PublicHeistElementDTO(
+                                    traits: ["staticText"],
+                                    label: "Lazy Row",
+                                    value: "Loaded by scroll",
+                                    identifier: "lazy_row"
+                                ),
+                            ])
+                        ),
+                        omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
+                    )
+                ))
+            ),
+        ])
+        XCTAssertFalse(node.containsKey("action"))
         XCTAssertTrue(compact.contains("-> elements changed"), compact)
         XCTAssertFalse(compact.contains(#"+ "Lazy Row":"Loaded by scroll" staticText id="lazy_row""#), compact)
-        XCTAssertEqual(delta["kind"] as? String, "elementsChanged")
-        XCTAssertEqual(added.first?["label"] as? String, "Lazy Row")
-        XCTAssertEqual(added.first?["value"] as? String, "Loaded by scroll")
-        XCTAssertEqual(added.first?["identifier"] as? String, "lazy_row")
     }
 
     func testPublicHeistJSONBoundsActionDeltaAndReportsOmissions() throws {
@@ -352,38 +385,61 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let node = try XCTUnwrap(nodes.first)
-        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
-        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
-        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
-        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
-        let digest = try XCTUnwrap(delta["interactionDigest"] as? [String: Any])
-        let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
-        let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
-        let editOmissions = try XCTUnwrap(edits["omitted"] as? [String: Any])
-        let resultOmissions = try XCTUnwrap(actionResult["omitted"] as? [String: Any])
-        let traceOmission = try XCTUnwrap(resultOmissions["accessibilityTrace"] as? [String: Any])
+        let report = try publicHeistReportResponseDTO(response).report
+        let node = try XCTUnwrap(report.nodes.first)
+        let action = try XCTUnwrap(node.evidence?.action)
+        let actionResult = try XCTUnwrap(action.result)
+        let delta = try XCTUnwrap(actionResult.delta)
         let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
 
-        XCTAssertNil(node["action"])
-        XCTAssertEqual(digest["elementCountBefore"] as? Int, 0)
-        XCTAssertEqual(digest["elementCountAfter"] as? Int, 8)
-        XCTAssertEqual(digest["elementCountChanged"] as? Bool, true)
-        XCTAssertEqual(digest["elementSetChanged"] as? Bool, true)
-        XCTAssertEqual(added.count, 5)
-        XCTAssertTrue(added.allSatisfy { ($0["label"] as? String)?.hasPrefix("Lazy Row ") == true }, "\(added)")
-        XCTAssertEqual(editOmissions["added"] as? Int, 3)
+        XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
+            status: "ok",
+            method: "activate",
+            delta: PublicHeistDeltaDTO(
+                kind: "elementsChanged",
+                elementCount: 8,
+                interactionDigest: PublicHeistInteractionDigestDTO(
+                    elementCountBefore: 0,
+                    elementCountAfter: 8,
+                    elementCountChanged: true,
+                    elementSetChanged: true,
+                    screenIdBefore: "screen",
+                    screenIdAfter: "screen",
+                    screenIdChanged: false,
+                    firstResponderChanged: false
+                ),
+                edits: PublicHeistElementEditsDTO(
+                    added: (0..<5).map { index in
+                        PublicHeistElementDTO(
+                            traits: ["staticText"],
+                            label: "Lazy Row \(index)",
+                            value: "Loaded \(index)",
+                            identifier: "lazy_row_\(index)"
+                        )
+                    },
+                    omitted: PublicHeistElementEditOmissionsDTO(
+                        added: 3,
+                        addedKeys: [
+                            "identifier:lazy_row_5",
+                            "identifier:lazy_row_6",
+                            "identifier:lazy_row_7",
+                        ]
+                    )
+                )
+            ),
+            omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
+        ))
+        XCTAssertFalse(node.containsKey("action"))
+        XCTAssertFalse(delta.containsKey("newInterface"))
         XCTAssertEqual(
-            editOmissions["addedKeys"] as? [String],
-            ["identifier:lazy_row_5", "identifier:lazy_row_6", "identifier:lazy_row_7"]
+            actionResult.omitted?.accessibilityTrace,
+            PublicHeistProjectionOmissionDTO(
+                reason: "raw accessibility trace omitted from public heist report",
+                projectedAs: "delta",
+                omittedCount: 2
+            )
         )
-        XCTAssertEqual(traceOmission["projectedAs"] as? String, "delta")
-        XCTAssertEqual(traceOmission["omittedCount"] as? Int, 2)
         XCTAssertFalse(encoded.contains(#""captures""#), encoded)
-        XCTAssertFalse(encoded.contains(#""newInterface""#), encoded)
     }
 
     func testPublicHeistJSONUsesBoundedScreenProjectionForActionDelta() throws {
@@ -415,26 +471,46 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             )
         )
 
-        let json = publicJSONObject(response)
-        let report = try XCTUnwrap(json["report"] as? [String: Any])
-        let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]])
-        let node = try XCTUnwrap(nodes.first)
-        let evidence = try XCTUnwrap(node["evidence"] as? [String: Any])
-        let action = try XCTUnwrap(evidence["action"] as? [String: Any])
-        let actionResult = try XCTUnwrap(action["result"] as? [String: Any])
-        let delta = try XCTUnwrap(actionResult["delta"] as? [String: Any])
-        let screen = try XCTUnwrap(delta["screen"] as? [String: Any])
-        let elements = try XCTUnwrap(screen["elements"] as? [[String: Any]])
+        let report = try publicHeistReportResponseDTO(response).report
+        let node = try XCTUnwrap(report.nodes.first)
+        let actionResult = try XCTUnwrap(node.evidence?.action?.result)
+        let delta = try XCTUnwrap(actionResult.delta)
         let encoded = String(data: try response.jsonData(), encoding: .utf8) ?? ""
 
-        XCTAssertNil(node["action"])
-        XCTAssertEqual(delta["kind"] as? String, "screenChanged")
-        XCTAssertNil(delta["newInterface"])
-        XCTAssertEqual(actionResult["screenId"] as? String, "checkout")
-        XCTAssertEqual(screen["elementCount"] as? Int, 8)
-        XCTAssertEqual(elements.count, 5)
-        XCTAssertEqual(elements.last?["label"] as? String, "Checkout Row 4")
-        XCTAssertEqual(screen["omittedElementCount"] as? Int, 3)
+        XCTAssertEqual(actionResult, PublicHeistActionResultDTO(
+            status: "ok",
+            method: "activate",
+            screenId: "checkout",
+            delta: PublicHeistDeltaDTO(
+                kind: "screenChanged",
+                elementCount: 8,
+                interactionDigest: PublicHeistInteractionDigestDTO(
+                    elementCountBefore: 0,
+                    elementCountAfter: 8,
+                    elementCountChanged: true,
+                    elementSetChanged: true,
+                    screenIdBefore: "before",
+                    screenIdAfter: "checkout",
+                    screenIdChanged: true,
+                    firstResponderChanged: false
+                ),
+                screen: PublicHeistScreenDTO(
+                    screenId: "checkout",
+                    elementCount: 8,
+                    elements: (0..<5).map { index in
+                        PublicHeistElementDTO(
+                            traits: ["staticText"],
+                            label: "Checkout Row \(index)",
+                            identifier: "checkout_row_\(index)"
+                        )
+                    },
+                    omittedElementCount: 3
+                )
+            ),
+            omitted: .accessibilityTraceProjectedAsDelta(omittedCount: 2)
+        ))
+        XCTAssertFalse(node.containsKey("action"))
+        XCTAssertFalse(delta.containsKey("newInterface"))
         XCTAssertFalse(encoded.contains(#""tree""#), encoded)
         XCTAssertFalse(encoded.contains(#""captures""#), encoded)
     }
