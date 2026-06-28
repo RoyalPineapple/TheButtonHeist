@@ -55,10 +55,43 @@ enum StartupInfoPlistKey: String, CaseIterable, Sendable {
     case sessionTimeout = "InsideJobSessionTimeout"
 }
 
-private struct StartupInfoPlist: Equatable, Sendable {
+struct StartupInfoPlist: Equatable, Sendable {
     private let values: [StartupInfoPlistKey: InfoPlistValue]
 
-    init(values: [StartupInfoPlistKey: InfoPlistValue]) {
+    init(bundle: Bundle) {
+        self.init { key in
+            bundle.object(forInfoDictionaryKey: key) as? NSObject
+        }
+    }
+
+    init(contentsOf url: URL) {
+        guard let data = try? Data(contentsOf: url),
+              let propertyList = try? PropertyListSerialization.propertyList(
+                from: data,
+                options: [],
+                format: nil
+              ),
+              let dictionary = propertyList as? NSDictionary else {
+            self.init(values: [:])
+            return
+        }
+
+        self.init { key in
+            dictionary.object(forKey: key) as? NSObject
+        }
+    }
+
+    private init(valueForKey: (String) -> NSObject?) {
+        var values: [StartupInfoPlistKey: InfoPlistValue] = [:]
+        for key in StartupInfoPlistKey.allCases {
+            if let value = valueForKey(key.rawValue) {
+                values[key] = InfoPlistValue(object: value)
+            }
+        }
+        self.init(values: values)
+    }
+
+    private init(values: [StartupInfoPlistKey: InfoPlistValue]) {
         self.values = values
     }
 
@@ -67,7 +100,7 @@ private struct StartupInfoPlist: Equatable, Sendable {
     }
 }
 
-private struct InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
+struct InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
     let bool: Bool?
     let string: String?
     let integer: Int?
@@ -76,17 +109,62 @@ private struct InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
 
     private let displayValue: String
 
-    init(_ value: Any) {
-        bool = value as? Bool
-        string = value as? String
-        integer = value as? Int
-        double = value as? Double
-        stringArray = value as? [String]
-        displayValue = String(describing: value)
+    init(object: NSObject) {
+        if let string = object as? String {
+            bool = nil
+            self.string = string
+            integer = nil
+            double = nil
+            stringArray = nil
+            displayValue = string
+        } else if let strings = object as? [String] {
+            bool = nil
+            string = nil
+            integer = nil
+            double = nil
+            stringArray = strings
+            displayValue = Self.describe(strings)
+        } else if let number = object as? NSNumber {
+            string = nil
+            stringArray = nil
+            if number.isBooleanPropertyListValue {
+                bool = number.boolValue
+                integer = nil
+                double = nil
+                displayValue = String(number.boolValue)
+            } else if CFNumberIsFloatType(number as CFNumber) {
+                bool = nil
+                integer = nil
+                double = number.doubleValue
+                displayValue = String(number.doubleValue)
+            } else {
+                bool = nil
+                integer = Int(truncating: number)
+                double = nil
+                displayValue = String(Int(truncating: number))
+            }
+        } else {
+            bool = nil
+            string = nil
+            integer = nil
+            double = nil
+            stringArray = nil
+            displayValue = String(describing: object)
+        }
     }
 
     var description: String {
         displayValue
+    }
+
+    private static func describe(_ strings: [String]) -> String {
+        "[" + strings.map(\.debugDescription).joined(separator: ", ") + "]"
+    }
+}
+
+private extension NSNumber {
+    var isBooleanPropertyListValue: Bool {
+        CFGetTypeID(self as CFTypeRef) == CFBooleanGetTypeID()
     }
 }
 
@@ -105,10 +183,10 @@ struct StartupConfiguration: Equatable, Sendable {
 
     static func resolve(
         env: [String: String] = ProcessInfo.processInfo.environment,
-        infoDictionary: [String: Any]? = Bundle.main.infoDictionary
+        infoPlist: StartupInfoPlist = StartupInfoPlist(bundle: .main)
     ) -> StartupConfiguration {
         var warnings: [StartupConfigurationWarning] = []
-        let plist = makeInfoPlist(from: infoDictionary)
+        let plist = infoPlist
         let disableAutoStart = resolveBool(
             envKey: .insideJobDisable,
             plistKey: .disableAutoStart,
@@ -154,17 +232,6 @@ struct StartupConfiguration: Equatable, Sendable {
             sessionTimeout: sessionTimeout,
             warnings: warnings
         )
-    }
-
-    private static func makeInfoPlist(from infoDictionary: [String: Any]?) -> StartupInfoPlist {
-        // Foundation boundary: normalize Bundle.infoDictionary's Any values once.
-        var values: [StartupInfoPlistKey: InfoPlistValue] = [:]
-        for key in StartupInfoPlistKey.allCases {
-            if let value = infoDictionary?[key.rawValue] {
-                values[key] = InfoPlistValue(value)
-            }
-        }
-        return StartupInfoPlist(values: values)
     }
 
     private static func resolveString(
