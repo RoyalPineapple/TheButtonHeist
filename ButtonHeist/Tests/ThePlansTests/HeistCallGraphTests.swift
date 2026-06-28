@@ -2,6 +2,10 @@ import Foundation
 import Testing
 @_spi(ButtonHeistInternals) @testable import ThePlans
 
+private struct EncodedInvocationStepContract: Decodable {
+    let path: [String]
+}
+
 @Test func `empty call graph is acyclic`() throws {
     let graph = HeistCallGraph(nodes: [], edges: [])
 
@@ -107,8 +111,8 @@ import Testing
     #expect(invocation.capabilityName == "LibraryScreen.addToCart")
 
     let encoded = try JSONEncoder().encode(invocation)
-    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-    #expect(json["path"] as? [String] == ["LibraryScreen", "addToCart"])
+    let json = try JSONDecoder().decode(EncodedInvocationStepContract.self, from: encoded)
+    #expect(json.path == ["LibraryScreen", "addToCart"])
 
     let decoded = try JSONDecoder().decode(HeistInvocationStep.self, from: encoded)
     #expect(decoded == invocation)

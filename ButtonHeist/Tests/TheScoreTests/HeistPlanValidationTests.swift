@@ -22,6 +22,14 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     try raw.validatedForRuntimeSafety()
 }
 
+private struct EncodedActionStepContract: Decodable {
+    let withoutExpectation: String
+
+    private enum CodingKeys: String, CodingKey {
+        case withoutExpectation = "without_expectation"
+    }
+}
+
 private func invalidForEachElementJSON(parameter: String) throws -> Data {
     try JSONSerialization.data(withJSONObject: [
         "version": HeistPlan.currentVersion,
@@ -52,11 +60,10 @@ func actionStepExpectationWaiverRoundTrips() throws {
     )
 
     let data = try JSONEncoder().encode(step)
-    let object = try JSONSerialization.jsonObject(with: data)
-    let json = try #require(object as? [String: Any])
+    let json = try JSONDecoder().decode(EncodedActionStepContract.self, from: data)
     let decoded = try JSONDecoder().decode(ActionStep.self, from: data)
 
-    #expect(json["without_expectation"] as? String == "No durable semantic outcome")
+    #expect(json.withoutExpectation == "No durable semantic outcome")
     #expect(decoded == step)
 }
 

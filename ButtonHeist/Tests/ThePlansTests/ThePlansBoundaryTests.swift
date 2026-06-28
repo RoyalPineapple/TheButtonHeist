@@ -2,6 +2,11 @@ import Foundation
 import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
+private struct EncodedHeistPlanHeaderContract: Decodable {
+    let version: Int
+    let name: String
+}
+
 @Test
 func `representative heist plan encodes decodes validates and renders`() throws {
     let plan = try HeistPlan("loginFlow") {
@@ -63,9 +68,9 @@ func `heist artifact package writes manifest and canonical plan`() throws {
     #expect(manifest.formatVersion == currentHeistArtifactFormatVersion)
     #expect(manifest.planVersion == currentHeistPlanVersion)
 
-    let planObject = try JSONSerialization.jsonObject(with: Data(contentsOf: planURL)) as? [String: Any]
-    #expect(planObject?["version"] as? Int == currentHeistPlanVersion)
-    #expect(planObject?["name"] as? String == "searchFlow")
+    let planObject = try JSONDecoder().decode(EncodedHeistPlanHeaderContract.self, from: Data(contentsOf: planURL))
+    #expect(planObject.version == currentHeistPlanVersion)
+    #expect(planObject.name == "searchFlow")
     #expect(try HeistArtifactCodec.readPlan(from: artifactURL) == plan)
     #expect(try HeistArtifactCodec.read(from: artifactURL).manifest.entry == "searchFlow")
 }
