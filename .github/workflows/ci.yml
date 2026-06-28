@@ -79,6 +79,10 @@ jobs:
         timeout-minutes: 5
         run: scripts/check-package-manifest-drift.sh
 
+      - name: Verify Swift invariant smell guard
+        timeout-minutes: 5
+        run: scripts/check-swift-invariant-smells.sh
+
       - name: Build TheScore
         timeout-minutes: 5
         run: swift build --target TheScore

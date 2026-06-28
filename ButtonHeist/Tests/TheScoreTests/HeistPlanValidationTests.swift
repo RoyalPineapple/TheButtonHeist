@@ -30,26 +30,47 @@ private struct EncodedActionStepContract: Decodable {
     }
 }
 
+private struct InvalidForEachElementPlanFixture: Encodable {
+    let version = HeistPlan.currentVersion
+    let body: [InvalidForEachElementStepFixture]
+}
+
+private struct InvalidForEachElementStepFixture: Encodable {
+    let type = "for_each_element"
+    let forEachElement: InvalidForEachElementPayloadFixture
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case forEachElement = "for_each_element"
+    }
+}
+
+private struct InvalidForEachElementPayloadFixture: Encodable {
+    let matching = InvalidForEachElementMatcherFixture(label: "Delete")
+    let limit = 1
+    let parameter: String
+    let body = [InvalidForEachElementWarnFixture()]
+}
+
+private struct InvalidForEachElementMatcherFixture: Encodable {
+    let label: String
+}
+
+private struct InvalidForEachElementWarnFixture: Encodable {
+    let type = "warn"
+    let warn = InvalidForEachElementWarningFixture(message: "body")
+}
+
+private struct InvalidForEachElementWarningFixture: Encodable {
+    let message: String
+}
+
 private func invalidForEachElementJSON(parameter: String) throws -> Data {
-    try JSONSerialization.data(withJSONObject: [
-        "version": HeistPlan.currentVersion,
-        "body": [
-            [
-                "type": "for_each_element",
-                "for_each_element": [
-                    "matching": ["label": "Delete"],
-                    "limit": 1,
-                    "parameter": parameter,
-                    "body": [
-                        [
-                            "type": "warn",
-                            "warn": ["message": "body"],
-                        ],
-                    ],
-                ],
-            ],
-        ],
-    ])
+    try JSONEncoder().encode(InvalidForEachElementPlanFixture(
+        body: [InvalidForEachElementStepFixture(
+            forEachElement: InvalidForEachElementPayloadFixture(parameter: parameter)
+        )]
+    ))
 }
 
 @Test
