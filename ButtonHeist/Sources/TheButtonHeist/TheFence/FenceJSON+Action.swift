@@ -174,13 +174,13 @@ extension ActionResult {
     }
 
     /// Canonical public failure projection shared by JSON and compact renderers.
-    func publicFailureProjection(fallbackMessage: String) -> PublicActionFailureProjection? {
+    func diagnosticFailureProjection(fallbackMessage: String) -> PublicActionFailureProjection? {
         guard !success else { return nil }
         let resolvedErrorKind = self.errorKind ?? .actionFailed
         return PublicActionFailureProjection(
             message: message ?? fallbackMessage,
             errorClass: resolvedErrorKind.rawValue,
-            publicFailure: PublicFailureMapper.map(
+            diagnosticFailure: DiagnosticFailureMapper.map(
                 errorKind: resolvedErrorKind,
                 message: message ?? fallbackMessage
             )
@@ -191,13 +191,13 @@ extension ActionResult {
 struct PublicActionFailureProjection {
     let message: String
     let errorClass: String
-    let publicFailure: PublicFailure
+    let diagnosticFailure: DiagnosticFailure
 
-    var errorCode: String { publicFailure.code }
-    var kind: String { publicFailure.kind.rawValue }
-    var phase: String { publicFailure.phase.rawValue }
-    var retryable: Bool { publicFailure.retryable }
-    var hint: String? { publicFailure.hint }
+    var errorCode: String { diagnosticFailure.code }
+    var kind: String { diagnosticFailure.kind.rawValue }
+    var phase: String { diagnosticFailure.phase.rawValue }
+    var retryable: Bool { diagnosticFailure.retryable }
+    var hint: String? { diagnosticFailure.hint }
     var compactCode: String { errorCode }
 }
 
@@ -459,12 +459,12 @@ struct PublicHeistFailureDetail: Encodable {
         contract = projection.detail.contract
         observed = projection.detail.observed
         expected = projection.detail.expected
-        code = projection.publicFailure.code
-        kind = projection.publicFailure.kind.rawValue
-        errorCode = projection.publicFailure.code
-        phase = projection.publicFailure.phase.rawValue
-        retryable = projection.publicFailure.retryable
-        hint = projection.publicFailure.hint
+        code = projection.diagnosticFailure.code
+        kind = projection.diagnosticFailure.kind.rawValue
+        errorCode = projection.diagnosticFailure.code
+        phase = projection.diagnosticFailure.phase.rawValue
+        retryable = projection.diagnosticFailure.retryable
+        hint = projection.diagnosticFailure.hint
     }
 }
 

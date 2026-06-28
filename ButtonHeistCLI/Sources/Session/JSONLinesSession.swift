@@ -78,7 +78,7 @@ final class JSONLinesSession {
             let requestId = error.requestId
             let message = isMachineInput ? "Invalid JSON: \(error.message)" : error.message
             return (
-                .error(PublicFailure(message: message, details: error.publicFailure.details)),
+                .error(DiagnosticFailure(message: message, details: error.diagnosticFailure.details)),
                 requestId
             )
         } catch {

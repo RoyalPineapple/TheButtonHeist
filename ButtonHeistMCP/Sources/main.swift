@@ -108,14 +108,14 @@ struct ButtonHeistMCPServer {
     }
 
     static func structuredEncodingFailureValue(_ error: Error) -> Value {
-        let failure = PublicFailure(
+        let failure = DiagnosticFailure(
             message: "Failed to encode structured tool response: \(error.localizedDescription)",
             details: FailureDetails(code: .formattingJSONEncodingFailed)
         )
         return structuredErrorValue(failure)
     }
 
-    private static func structuredErrorValue(_ failure: PublicFailure) -> Value {
+    private static func structuredErrorValue(_ failure: DiagnosticFailure) -> Value {
         let details: Value = .object([
             "code": .string(failure.code),
             "kind": .string(failure.kind.rawValue),

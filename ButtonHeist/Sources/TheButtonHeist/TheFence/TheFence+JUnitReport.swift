@@ -54,7 +54,7 @@ extension TheFence {
         projection: HeistReportProjection
     ) -> HeistJUnitReport.Outcome {
         if let message = step.failureMessage {
-            let failure = step.failure?.publicFailure
+            let failure = step.failure?.diagnosticFailure
             let enriched = step.path == projection.failedStepPath
                 ? junitFailureMessage(message, projection: projection, failure: failure)
                 : junitFailureMessage(message, failure: failure)
@@ -66,7 +66,7 @@ extension TheFence {
     private static func junitFailureMessage(
         _ message: String,
         projection: HeistReportProjection? = nil,
-        failure: PublicFailure?
+        failure: DiagnosticFailure?
     ) -> String {
         var lines = [message]
         if let failure {

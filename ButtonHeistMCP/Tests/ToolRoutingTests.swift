@@ -75,7 +75,7 @@ struct ToolRoutingTests {
     }
 
     @Test("routing errors map to canonical public failures")
-    func routingErrorsMapToCanonicalPublicFailures() throws {
+    func routingErrorsMapToCanonicalDiagnosticFailures() throws {
         let result = routeToolRequest(name: "not_a_tool")
 
         guard case .failure(let error) = result else {
@@ -83,7 +83,7 @@ struct ToolRoutingTests {
             return
         }
 
-        let failure = try #require(FenceResponse.failure(error).publicFailure)
+        let failure = try #require(FenceResponse.failure(error).diagnosticFailure)
         #expect(failure.code == "request.invalid")
         #expect(failure.kind == .request)
         #expect(failure.message == "Unknown tool: not_a_tool")

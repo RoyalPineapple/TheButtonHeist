@@ -10,7 +10,7 @@ struct CLIParsedRequest {
 struct CLIRequestBuildError: Error, CustomStringConvertible {
     let message: String
     let requestId: PublicRequestId?
-    let publicFailure: PublicFailure
+    let diagnosticFailure: DiagnosticFailure
 
     init(
         message: String,
@@ -19,7 +19,7 @@ struct CLIRequestBuildError: Error, CustomStringConvertible {
     ) {
         self.message = message
         self.requestId = requestId
-        self.publicFailure = PublicFailure(message: message, details: details)
+        self.diagnosticFailure = DiagnosticFailure(message: message, details: details)
     }
 
     var description: String { message }

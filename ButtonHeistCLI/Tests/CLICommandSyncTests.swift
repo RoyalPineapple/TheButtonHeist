@@ -463,7 +463,7 @@ final class CLICommandSyncTests: XCTestCase {
         _ line: String,
         requestId: PublicRequestId? = nil,
         code: String,
-        kind: PublicFailureKind,
+        kind: DiagnosticFailureKind,
         phase: FailurePhase,
         retryable: Bool,
         file: StaticString = #filePath,
@@ -474,10 +474,10 @@ final class CLICommandSyncTests: XCTestCase {
                 return XCTFail("Expected CLIRequestBuildError, got \(error)", file: file, line: sourceLine)
             }
             XCTAssertEqual(buildError.requestId, requestId, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.publicFailure.code, code, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.publicFailure.kind, kind, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.publicFailure.phase, phase, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.publicFailure.retryable, retryable, file: file, line: sourceLine)
+            XCTAssertEqual(buildError.diagnosticFailure.code, code, file: file, line: sourceLine)
+            XCTAssertEqual(buildError.diagnosticFailure.kind, kind, file: file, line: sourceLine)
+            XCTAssertEqual(buildError.diagnosticFailure.phase, phase, file: file, line: sourceLine)
+            XCTAssertEqual(buildError.diagnosticFailure.retryable, retryable, file: file, line: sourceLine)
         }
     }
 

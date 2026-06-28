@@ -659,7 +659,7 @@ struct ActionProjection: Sendable {
         }
         screenName = result.accessibilityTrace?.endpointScreenName
         screenId = result.accessibilityTrace?.endpointScreenId
-        failure = result.publicFailureProjection(fallbackMessage: method)
+        failure = result.diagnosticFailureProjection(fallbackMessage: method)
         self.expectation = surfacedExpectation.map {
             ExpectationProjection(result: $0, hint: expectationHint)
         }
@@ -703,14 +703,14 @@ struct ProjectionOmission: Sendable {
 
 struct HeistReportFailureProjection: Sendable {
     let detail: HeistFailureDetail
-    let publicFailure: PublicFailure
+    let diagnosticFailure: DiagnosticFailure
 
     init(detail: HeistFailureDetail, message: String, actionErrorKind: ErrorKind?) {
         self.detail = detail
         if let actionErrorKind {
-            publicFailure = PublicFailureMapper.map(errorKind: actionErrorKind, message: message)
+            diagnosticFailure = DiagnosticFailureMapper.map(errorKind: actionErrorKind, message: message)
         } else {
-            publicFailure = PublicFailureMapper.map(reportFailure: detail, message: message)
+            diagnosticFailure = DiagnosticFailureMapper.map(reportFailure: detail, message: message)
         }
     }
 }
