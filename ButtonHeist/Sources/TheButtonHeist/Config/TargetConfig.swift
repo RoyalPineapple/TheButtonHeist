@@ -1,7 +1,8 @@
 import Foundation
 import os.log
+import TheScore
 
-private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "config")
+private let logger = ButtonHeistLog.logger(.handoff(.config))
 
 /// A named connection target: device address + optional auth token.
 public struct TargetConfig: Codable, Sendable, Equatable {
