@@ -6,23 +6,72 @@ import Foundation
 /// Compact description of what changed in the accessibility hierarchy after
 /// an action. Each case carries exactly the data valid for that phase.
 public extension AccessibilityTrace {
+    /// Capture-level facts that can be trusted without consulting bounded
+    /// render projections or element edit pairing.
+    struct InteractionDigest: Codable, Sendable, Equatable {
+        public let elementCountBefore: Int
+        public let elementCountAfter: Int
+        public let elementCountChanged: Bool
+        public let elementSetChanged: Bool
+        public let screenIdBefore: String?
+        public let screenIdAfter: String?
+        public let screenIdChanged: Bool
+        public let firstResponderChanged: Bool
+
+        public init(
+            elementCountBefore: Int,
+            elementCountAfter: Int,
+            elementSetChanged: Bool,
+            screenIdBefore: String?,
+            screenIdAfter: String?,
+            firstResponderChanged: Bool
+        ) {
+            self.elementCountBefore = elementCountBefore
+            self.elementCountAfter = elementCountAfter
+            self.elementCountChanged = elementCountBefore != elementCountAfter
+            self.elementSetChanged = elementSetChanged
+            self.screenIdBefore = screenIdBefore
+            self.screenIdAfter = screenIdAfter
+            self.screenIdChanged = screenIdBefore != screenIdAfter
+            self.firstResponderChanged = firstResponderChanged
+        }
+    }
+
     /// Payload for `.noChange`.
     struct NoChange: Sendable, Equatable {
         public let elementCount: Int
         /// Capture edge this delta was derived from. nil only for standalone
         /// projection values that are not stored as action-result truth.
         public let captureEdge: CaptureEdge?
+        /// Stable before/after facts derived from raw captures, before any
+        /// renderer limits or element edit omission.
+        public let interactionDigest: InteractionDigest?
         /// Compact projection of `Capture.transition.transient`.
         public let transient: [HeistElement]
 
         public init(
             elementCount: Int,
             captureEdge: CaptureEdge? = nil,
+            interactionDigest: InteractionDigest? = nil,
             transient: [HeistElement] = []
         ) {
             self.elementCount = elementCount
             self.captureEdge = captureEdge
+            self.interactionDigest = interactionDigest
             self.transient = transient
+        }
+
+        public init(
+            elementCount: Int,
+            captureEdge: CaptureEdge? = nil,
+            transient: [HeistElement] = []
+        ) {
+            self.init(
+                elementCount: elementCount,
+                captureEdge: captureEdge,
+                interactionDigest: nil,
+                transient: transient
+            )
         }
     }
 
@@ -33,6 +82,9 @@ public extension AccessibilityTrace {
         /// Capture edge this delta was derived from. nil only for standalone
         /// projection values that are not stored as action-result truth.
         public let captureEdge: CaptureEdge?
+        /// Stable before/after facts derived from raw captures, before any
+        /// renderer limits or element edit omission.
+        public let interactionDigest: InteractionDigest?
         /// Compact projection of `Capture.transition.transient`.
         public let transient: [HeistElement]
 
@@ -40,12 +92,29 @@ public extension AccessibilityTrace {
             elementCount: Int,
             edits: ElementEdits,
             captureEdge: CaptureEdge? = nil,
+            interactionDigest: InteractionDigest? = nil,
             transient: [HeistElement] = []
         ) {
             self.elementCount = elementCount
             self.edits = edits
             self.captureEdge = captureEdge
+            self.interactionDigest = interactionDigest
             self.transient = transient
+        }
+
+        public init(
+            elementCount: Int,
+            edits: ElementEdits,
+            captureEdge: CaptureEdge? = nil,
+            transient: [HeistElement] = []
+        ) {
+            self.init(
+                elementCount: elementCount,
+                edits: edits,
+                captureEdge: captureEdge,
+                interactionDigest: nil,
+                transient: transient
+            )
         }
     }
 
@@ -57,6 +126,9 @@ public extension AccessibilityTrace {
         public let captureEdge: CaptureEdge?
         /// Interface snapshot after the screen change.
         public let newInterface: Interface
+        /// Stable before/after facts derived from raw captures, before any
+        /// renderer limits or element edit omission.
+        public let interactionDigest: InteractionDigest?
         /// Compact projection of `Capture.transition.transient`.
         public let transient: [HeistElement]
 
@@ -64,12 +136,29 @@ public extension AccessibilityTrace {
             elementCount: Int,
             captureEdge: CaptureEdge? = nil,
             newInterface: Interface,
+            interactionDigest: InteractionDigest? = nil,
             transient: [HeistElement] = []
         ) {
             self.elementCount = elementCount
             self.captureEdge = captureEdge
             self.newInterface = newInterface
+            self.interactionDigest = interactionDigest
             self.transient = transient
+        }
+
+        public init(
+            elementCount: Int,
+            captureEdge: CaptureEdge? = nil,
+            newInterface: Interface,
+            transient: [HeistElement] = []
+        ) {
+            self.init(
+                elementCount: elementCount,
+                captureEdge: captureEdge,
+                newInterface: newInterface,
+                interactionDigest: nil,
+                transient: transient
+            )
         }
     }
 
@@ -99,6 +188,7 @@ public extension AccessibilityTrace {
         public let captureEdge: CaptureEdge
         public let screenChanged: ScreenChanged?
         public let elementsChanged: ElementsChanged?
+        public let interactionDigest: InteractionDigest?
         public let transient: [HeistElement]
 
         public var isNoChange: Bool {
@@ -120,13 +210,32 @@ public extension AccessibilityTrace {
             captureEdge: CaptureEdge,
             screenChanged: ScreenChanged?,
             elementsChanged: ElementsChanged?,
+            interactionDigest: InteractionDigest?,
             transient: [HeistElement]
         ) {
             self.elementCount = elementCount
             self.captureEdge = captureEdge
             self.screenChanged = screenChanged
             self.elementsChanged = elementsChanged
+            self.interactionDigest = interactionDigest
             self.transient = transient
+        }
+
+        public init(
+            elementCount: Int,
+            captureEdge: CaptureEdge,
+            screenChanged: ScreenChanged?,
+            elementsChanged: ElementsChanged?,
+            transient: [HeistElement]
+        ) {
+            self.init(
+                elementCount: elementCount,
+                captureEdge: captureEdge,
+                screenChanged: screenChanged,
+                elementsChanged: elementsChanged,
+                interactionDigest: nil,
+                transient: transient
+            )
         }
 
         public var projectedDelta: Delta {
@@ -135,6 +244,7 @@ public extension AccessibilityTrace {
             return .noChange(NoChange(
                 elementCount: elementCount,
                 captureEdge: captureEdge,
+                interactionDigest: interactionDigest,
                 transient: transient
             ))
         }
@@ -221,6 +331,7 @@ extension AccessibilityTrace.Delta: Codable {
         case kind
         case elementCount
         case captureEdge
+        case interactionDigest
         case transient
         case edits
         case newInterface
@@ -232,6 +343,10 @@ extension AccessibilityTrace.Delta: Codable {
         let kind = try container.decode(AccessibilityTrace.DeltaKind.self, forKey: .kind)
         let elementCount = try container.decode(Int.self, forKey: .elementCount)
         let captureEdge = try container.decodeIfPresent(AccessibilityTrace.CaptureEdge.self, forKey: .captureEdge)
+        let interactionDigest = try container.decodeIfPresent(
+            AccessibilityTrace.InteractionDigest.self,
+            forKey: .interactionDigest
+        )
         let transient = try container.decodeIfPresent([HeistElement].self, forKey: .transient) ?? []
 
         switch kind {
@@ -239,6 +354,7 @@ extension AccessibilityTrace.Delta: Codable {
             self = .noChange(AccessibilityTrace.NoChange(
                 elementCount: elementCount,
                 captureEdge: captureEdge,
+                interactionDigest: interactionDigest,
                 transient: transient
             ))
 
@@ -248,6 +364,7 @@ extension AccessibilityTrace.Delta: Codable {
                 elementCount: elementCount,
                 edits: edits,
                 captureEdge: captureEdge,
+                interactionDigest: interactionDigest,
                 transient: transient
             ))
 
@@ -257,6 +374,7 @@ extension AccessibilityTrace.Delta: Codable {
                 elementCount: elementCount,
                 captureEdge: captureEdge,
                 newInterface: newInterface,
+                interactionDigest: interactionDigest,
                 transient: transient
             ))
         }
@@ -269,6 +387,7 @@ extension AccessibilityTrace.Delta: Codable {
             try container.encode(AccessibilityTrace.DeltaKind.noChange, forKey: .kind)
             try container.encode(payload.elementCount, forKey: .elementCount)
             try container.encodeIfPresent(payload.captureEdge, forKey: .captureEdge)
+            try container.encodeIfPresent(payload.interactionDigest, forKey: .interactionDigest)
             if !payload.transient.isEmpty {
                 try container.encode(payload.transient, forKey: .transient)
             }
@@ -277,6 +396,7 @@ extension AccessibilityTrace.Delta: Codable {
             try container.encode(AccessibilityTrace.DeltaKind.elementsChanged, forKey: .kind)
             try container.encode(payload.elementCount, forKey: .elementCount)
             try container.encodeIfPresent(payload.captureEdge, forKey: .captureEdge)
+            try container.encodeIfPresent(payload.interactionDigest, forKey: .interactionDigest)
             if !payload.edits.isEmpty {
                 try container.encode(payload.edits, forKey: .edits)
             }
@@ -288,6 +408,7 @@ extension AccessibilityTrace.Delta: Codable {
             try container.encode(AccessibilityTrace.DeltaKind.screenChanged, forKey: .kind)
             try container.encode(payload.elementCount, forKey: .elementCount)
             try container.encodeIfPresent(payload.captureEdge, forKey: .captureEdge)
+            try container.encodeIfPresent(payload.interactionDigest, forKey: .interactionDigest)
             try container.encode(payload.newInterface, forKey: .newInterface)
             if !payload.transient.isEmpty {
                 try container.encode(payload.transient, forKey: .transient)
@@ -309,12 +430,14 @@ private enum AccessibilityTraceAccumulatedDelta {
         let allDeltas = zip(captures, captures.dropFirst()).map(AccessibilityTrace.Delta.between)
         let transient = allDeltas.flatMap(\.transientElements)
         let captureEdge = AccessibilityTrace.CaptureEdge(before: first, after: last)
+        let interactionDigest = AccessibilityTrace.InteractionDigest(between: first, and: last)
 
         let screenChanged = allDeltas.contains(where: \.isScreenChange)
             ? AccessibilityTrace.ScreenChanged(
                 elementCount: last.interface.projectedElements.count,
                 captureEdge: captureEdge,
                 newInterface: last.interface,
+                interactionDigest: interactionDigest,
                 transient: transient
             )
             : nil
@@ -330,6 +453,7 @@ private enum AccessibilityTraceAccumulatedDelta {
                 elementCount: last.interface.projectedElements.count,
                 edits: edits,
                 captureEdge: captureEdge,
+                interactionDigest: interactionDigest,
                 transient: transient
             )
             : nil
@@ -339,7 +463,29 @@ private enum AccessibilityTraceAccumulatedDelta {
             captureEdge: captureEdge,
             screenChanged: screenChanged,
             elementsChanged: elementsChanged,
+            interactionDigest: interactionDigest,
             transient: transient
+        )
+    }
+}
+
+extension AccessibilityTrace.InteractionDigest {
+    init(
+        between before: AccessibilityTrace.Capture,
+        and after: AccessibilityTrace.Capture
+    ) {
+        let beforeElements = before.interface.projectedElements
+        let afterElements = after.interface.projectedElements
+        self.init(
+            elementCountBefore: beforeElements.count,
+            elementCountAfter: afterElements.count,
+            elementSetChanged: AccessibilityTraceElementDiff.pairingKeyMultisetDiffers(
+                beforeElements: beforeElements,
+                afterElements: afterElements
+            ),
+            screenIdBefore: before.screenId,
+            screenIdAfter: after.screenId,
+            firstResponderChanged: before.context.firstResponder != after.context.firstResponder
         )
     }
 }
