@@ -826,6 +826,16 @@ private struct PredicateTransitionEvidence {
     let observedSequence: SettledObservationSequence
     private let accumulatedTrace: WaitAccumulatedTrace?
 
+    init(
+        baseline: WaitChangeBaseline,
+        observedSequence: SettledObservationSequence,
+        accumulatedTrace: WaitAccumulatedTrace?
+    ) {
+        self.baseline = baseline
+        self.observedSequence = observedSequence
+        self.accumulatedTrace = accumulatedTrace
+    }
+
     var trace: AccessibilityTrace? {
         accumulatedTrace?.trace
     }

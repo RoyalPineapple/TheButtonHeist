@@ -244,11 +244,13 @@ symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV7matcher0A5Plans16Eleme
 symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV7subtree7matcher22maxScrollsPerContainer0ghI9DiscoveryAcA15SubtreeSelectorOSg_0A5Plans16ElementPredicateVSiSgANtcfc	swift.init	public	init(subtree:matcher:maxScrollsPerContainer:maxScrollsPerDiscovery:)	InterfaceQuery.init(subtree:matcher:maxScrollsPerContainer:maxScrollsPerDiscovery:)	init(subtree: SubtreeSelector? = nil, matcher: ElementPredicate = ElementPredicate(), maxScrollsPerContainer: Int? = nil, maxScrollsPerDiscovery: Int? = nil)
 symbol	TheScore.symbols.json	s:8TheScore14InterfaceQueryV7subtreeAA15SubtreeSelectorOSgvp	swift.property	public	subtree	InterfaceQuery.subtree	let subtree: SubtreeSelector?
 symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV	swift.struct	public	PropertyChange	PropertyChange	struct PropertyChange
-symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV3newSSSgvp	swift.property	public	new	PropertyChange.new	let new: String?
-symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV3oldSSSgvp	swift.property	public	old	PropertyChange.old	let old: String?
+symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV17displayTransitionSSvp	swift.property	public	displayTransition	PropertyChange.displayTransition	var displayTransition: String { get }
 symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	PropertyChange.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	PropertyChange.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV8newValueAA07ElementcF0OSgvp	swift.property	public	newValue	PropertyChange.newValue	let newValue: ElementPropertyValue?
+symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV8oldValueAA07ElementcF0OSgvp	swift.property	public	oldValue	PropertyChange.oldValue	let oldValue: ElementPropertyValue?
 symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV8property0A5Plans07ElementC0Ovp	swift.property	public	property	PropertyChange.property	let property: ElementProperty
-symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV8property3old3newAC0A5Plans07ElementC0O_SSSgAJtcfc	swift.init	public	init(property:old:new:)	PropertyChange.init(property:old:new:)	init(property: ElementProperty, old: String?, new: String?)
+symbol	TheScore.symbols.json	s:8TheScore14PropertyChangeV8property8oldValue03newG0AC0A5Plans07ElementC0O_AA0jcG0OSgALtcfc	swift.init	public	init(property:oldValue:newValue:)	PropertyChange.init(property:oldValue:newValue:)	init(property: ElementProperty, oldValue: ElementPropertyValue?, newValue: ElementPropertyValue?)
 symbol	TheScore.symbols.json	s:8TheScore14RotorTextRangeV	swift.struct	public	RotorTextRange	RotorTextRange	struct RotorTextRange
 symbol	TheScore.symbols.json	s:8TheScore14RotorTextRangeV11startOffsetSiSgvp	swift.property	public	startOffset	RotorTextRange.startOffset	let startOffset: Int?
 symbol	TheScore.symbols.json	s:8TheScore14RotorTextRangeV16rangeDescriptionSSvp	swift.property	public	rangeDescription	RotorTextRange.rangeDescription	let rangeDescription: String
@@ -588,6 +590,32 @@ symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO4noneyA2CmF	swift.
 symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	ScrollContainerAxis.init(rawValue:)	init?(rawValue: String)
 symbol	TheScore.symbols.json	s:8TheScore19ScrollContainerAxisO8verticalyA2CmF	swift.enum.case	public	ScrollContainerAxis.vertical	ScrollContainerAxis.vertical	case vertical
 symbol	TheScore.symbols.json	s:8TheScore19predicateCandidates3forSayAA18PredicateCandidateVGAA12HeistElementV_tF	swift.func	public	predicateCandidates(for:)	predicateCandidates(for:)	func predicateCandidates(for element: HeistElement) -> [PredicateCandidate]
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyFrameV	swift.struct	public	ElementPropertyFrame	ElementPropertyFrame	struct ElementPropertyFrame
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyFrameV11displayTextSSvp	swift.property	public	displayText	ElementPropertyFrame.displayText	var displayText: String { get }
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyFrameV1x1y5width6heightACSi_S3itcfc	swift.init	public	init(x:y:width:height:)	ElementPropertyFrame.init(x:y:width:height:)	init(x: Int, y: Int, width: Int, height: Int)
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyFrameV1xSivp	swift.property	public	x	ElementPropertyFrame.x	let x: Int
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyFrameV1ySivp	swift.property	public	y	ElementPropertyFrame.y	let y: Int
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyFrameV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementPropertyFrame.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyFrameV5widthSivp	swift.property	public	width	ElementPropertyFrame.width	let width: Int
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyFrameV6heightSivp	swift.property	public	height	ElementPropertyFrame.height	let height: Int
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyPointV	swift.struct	public	ElementPropertyPoint	ElementPropertyPoint	struct ElementPropertyPoint
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyPointV11displayTextSSvp	swift.property	public	displayText	ElementPropertyPoint.displayText	var displayText: String { get }
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyPointV1x1yACSi_Sitcfc	swift.init	public	init(x:y:)	ElementPropertyPoint.init(x:y:)	init(x: Int, y: Int)
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyPointV1xSivp	swift.property	public	x	ElementPropertyPoint.x	let x: Int
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyPointV1ySivp	swift.property	public	y	ElementPropertyPoint.y	let y: Int
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyPointV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementPropertyPoint.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO	swift.enum	public	ElementPropertyValue	ElementPropertyValue	enum ElementPropertyValue
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO11displayTextSSvp	swift.property	public	displayText	ElementPropertyValue.displayText	var displayText: String { get }
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO13customContentyACSayAA011HeistCustomG0VGcACmF	swift.enum.case	public	ElementPropertyValue.customContent(_:)	ElementPropertyValue.customContent(_:)	case customContent([HeistCustomContent])
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO15activationPointyAcA0cdG0VcACmF	swift.enum.case	public	ElementPropertyValue.activationPoint(_:)	ElementPropertyValue.activationPoint(_:)	case activationPoint(ElementPropertyPoint)
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO2eeoiySbAC_ACtFZ	swift.func.op	public	==(_:_:)	ElementPropertyValue.==(_:_:)	static func == (lhs: ElementPropertyValue, rhs: ElementPropertyValue) -> Bool
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ElementPropertyValue.init(from:)	init(from decoder: any Decoder) throws
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO4textyACSScACmF	swift.enum.case	public	ElementPropertyValue.text(_:)	ElementPropertyValue.text(_:)	case text(String)
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO5frameyAcA0cD5FrameVcACmF	swift.enum.case	public	ElementPropertyValue.frame(_:)	ElementPropertyValue.frame(_:)	case frame(ElementPropertyFrame)
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	ElementPropertyValue.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO6rotorsyACSayAA10HeistRotorVGcACmF	swift.enum.case	public	ElementPropertyValue.rotors(_:)	ElementPropertyValue.rotors(_:)	case rotors([HeistRotor])
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO6traitsyACSay0A5Plans10HeistTraitOGcACmF	swift.enum.case	public	ElementPropertyValue.traits(_:)	ElementPropertyValue.traits(_:)	case traits([HeistTrait])
+symbol	TheScore.symbols.json	s:8TheScore20ElementPropertyValueO7actionsyACSay0A5Plans0C6ActionOGcACmF	swift.enum.case	public	ElementPropertyValue.actions(_:)	ElementPropertyValue.actions(_:)	case actions([ElementAction])
 symbol	TheScore.symbols.json	s:8TheScore20HeistCaseMatchResultV	swift.struct	public	HeistCaseMatchResult	HeistCaseMatchResult	struct HeistCaseMatchResult
 symbol	TheScore.symbols.json	s:8TheScore20HeistCaseMatchResultV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistCaseMatchResult.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore20HeistCaseMatchResultV6resultAA011ExpectationF0Vvp	swift.property	public	result	HeistCaseMatchResult.result	let result: ExpectationResult
@@ -1045,12 +1073,14 @@ symbol	TheScore.symbols.json	s:8TheScore8TreePathV4fromACs7Decoder_p_tKcfc	swift
 symbol	TheScore.symbols.json	s:8TheScore8TreePathV4rootACvpZ	swift.type.property	public	root	TreePath.root	static let root: TreePath
 symbol	TheScore.symbols.json	s:8TheScore8TreePathV7indicesSaySiGvp	swift.property	public	indices	TreePath.indices	let indices: [Int]
 symbol	TheScore.symbols.json	s:8TheScore8TreePathV9appendingyACSiF	swift.method	public	appending(_:)	TreePath.appending(_:)	func appending(_ index: Int) -> TreePath
+symbol	TheScore.symbols.json	s:8TheScore8TreePathV9hasPrefixySbACF	swift.method	public	hasPrefix(_:)	TreePath.hasPrefix(_:)	func hasPrefix(_ prefix: TreePath) -> Bool
 symbol	TheScore.symbols.json	s:8TheScore8TreePathVyACSaySiGcfc	swift.init	public	init(_:)	TreePath.init(_:)	init(_ indices: [Int])
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO	swift.enum	public	ErrorKind	ErrorKind	enum ErrorKind
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO010validationC0yA2CmF	swift.enum.case	public	ErrorKind.validationError	ErrorKind.validationError	case validationError
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO11authFailureyA2CmF	swift.enum.case	public	ErrorKind.authFailure	ErrorKind.authFailure	case authFailure
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO12actionFailedyA2CmF	swift.enum.case	public	ErrorKind.actionFailed	ErrorKind.actionFailed	case actionFailed
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO15elementNotFoundyA2CmF	swift.enum.case	public	ErrorKind.elementNotFound	ErrorKind.elementNotFound	case elementNotFound
+symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO28accessibilityTreeUnavailableyA2CmF	swift.enum.case	public	ErrorKind.accessibilityTreeUnavailable	ErrorKind.accessibilityTreeUnavailable	case accessibilityTreeUnavailable
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO7generalyA2CmF	swift.enum.case	public	ErrorKind.general	ErrorKind.general	case general
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO7timeoutyA2CmF	swift.enum.case	public	ErrorKind.timeout	ErrorKind.timeout	case timeout
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	ErrorKind.init(rawValue:)	init?(rawValue: String)
@@ -1071,8 +1101,10 @@ symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapsho
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A6TraitsV8TheScoreE9fromNamesyACSaySSGFZ	swift.type.method	public	fromNames(_:)	AccessibilityTraits.fromNames(_:)	static func fromNames(_ names: [String]) -> AccessibilityTraits
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A9HierarchyO8TheScoreE18compactMapSubtrees4path_SayxGAD8TreePathV_xSgAC_AItXEtlF	swift.method	public	compactMapSubtrees(path:_:)	AccessibilityHierarchy.compactMapSubtrees(path:_:)	func compactMapSubtrees<Result>(path: TreePath = .root, _ transform: (AccessibilityHierarchy, TreePath) -> Result?) -> [Result]
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A9HierarchyO8TheScoreE19pathIndexedElements0G0SayAA0A7ElementV7element_AD8TreePathVAFSi14traversalIndextGAK_tF	swift.method	public	pathIndexedElements(path:)	AccessibilityHierarchy.pathIndexedElements(path:)	func pathIndexedElements(path: TreePath = .root) -> [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)]
+symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A9HierarchyO8TheScoreE4node2atACSgAD8TreePathV_tF	swift.method	public	node(at:)	AccessibilityHierarchy.node(at:)	func node(at path: TreePath) -> AccessibilityHierarchy?
 symbol	TheScore@Swift.symbols.json	s:Sa8TheScore26AccessibilitySnapshotModel0C9HierarchyORszlE18compactMapSubtreesySayqd__Gqd__SgAD_AA8TreePathVtXElF	swift.method	public	compactMapSubtrees(_:)	Array.compactMapSubtrees(_:)	func compactMapSubtrees<Result>(_ transform: (AccessibilityHierarchy, TreePath) -> Result?) -> [Result]
 symbol	TheScore@Swift.symbols.json	s:Sa8TheScore26AccessibilitySnapshotModel0C9HierarchyORszlE19pathIndexedElementsSayAB0C7ElementV7element_AA8TreePathV0G0Si14traversalIndextGvp	swift.property	public	pathIndexedElements	Array.pathIndexedElements	var pathIndexedElements: [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] { get }
+symbol	TheScore@Swift.symbols.json	s:Sa8TheScore26AccessibilitySnapshotModel0C9HierarchyORszlE4node2atADSgAA8TreePathV_tF	swift.method	public	node(at:)	Array.node(at:)	func node(at path: TreePath) -> AccessibilityHierarchy?
 symbol	TheScore@Swift.symbols.json	s:Sa8TheScoreAA24HeistExecutionStepResultVRszlE011firstFailedE0ACSgvp	swift.property	public	firstFailedStep	Array.firstFailedStep	var firstFailedStep: HeistExecutionStepResult? { get }
 symbol	TheScore@ThePlans.symbols.json	s:8ThePlans16ElementPredicateV0A5ScoreE8anyMatch2inSbSayAD05HeistC0VG_tF	swift.method	public	anyMatch(in:)	ElementPredicate.anyMatch(in:)	func anyMatch(in elements: [HeistElement]) -> Bool
 symbol	TheScore@ThePlans.symbols.json	s:8ThePlans22AccessibilityPredicateO0A5ScoreE8evaluate15currentElements16accumulatedDeltaAD17ExpectationResultVSayAD12HeistElementVG_AD0C5TraceV011AccumulatedJ0VSgtF	swift.method	public	evaluate(currentElements:accumulatedDelta:)	AccessibilityPredicate.evaluate(currentElements:accumulatedDelta:)	func evaluate(currentElements: [HeistElement], accumulatedDelta: AccessibilityTrace.AccumulatedDelta?) -> ExpectationResult
@@ -1330,6 +1362,20 @@ relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SQ	ScrollContainerAx
 relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:SY	ScrollContainerAxis	Swift.RawRepresentable
 relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:Se	ScrollContainerAxis	Swift.Decodable
 relationship	conformsTo	s:8TheScore19ScrollContainerAxisO	s:s8SendableP	ScrollContainerAxis	Swift.Sendable
+relationship	conformsTo	s:8TheScore20ElementPropertyFrameV	s:SE	ElementPropertyFrame	Swift.Encodable
+relationship	conformsTo	s:8TheScore20ElementPropertyFrameV	s:SH	ElementPropertyFrame	Swift.Hashable
+relationship	conformsTo	s:8TheScore20ElementPropertyFrameV	s:SQ	ElementPropertyFrame	Swift.Equatable
+relationship	conformsTo	s:8TheScore20ElementPropertyFrameV	s:Se	ElementPropertyFrame	Swift.Decodable
+relationship	conformsTo	s:8TheScore20ElementPropertyFrameV	s:s8SendableP	ElementPropertyFrame	Swift.Sendable
+relationship	conformsTo	s:8TheScore20ElementPropertyPointV	s:SE	ElementPropertyPoint	Swift.Encodable
+relationship	conformsTo	s:8TheScore20ElementPropertyPointV	s:SH	ElementPropertyPoint	Swift.Hashable
+relationship	conformsTo	s:8TheScore20ElementPropertyPointV	s:SQ	ElementPropertyPoint	Swift.Equatable
+relationship	conformsTo	s:8TheScore20ElementPropertyPointV	s:Se	ElementPropertyPoint	Swift.Decodable
+relationship	conformsTo	s:8TheScore20ElementPropertyPointV	s:s8SendableP	ElementPropertyPoint	Swift.Sendable
+relationship	conformsTo	s:8TheScore20ElementPropertyValueO	s:SE	ElementPropertyValue	Swift.Encodable
+relationship	conformsTo	s:8TheScore20ElementPropertyValueO	s:SQ	ElementPropertyValue	Swift.Equatable
+relationship	conformsTo	s:8TheScore20ElementPropertyValueO	s:Se	ElementPropertyValue	Swift.Decodable
+relationship	conformsTo	s:8TheScore20ElementPropertyValueO	s:s8SendableP	ElementPropertyValue	Swift.Sendable
 relationship	conformsTo	s:8TheScore20HeistCaseMatchResultV	s:SE	HeistCaseMatchResult	Swift.Encodable
 relationship	conformsTo	s:8TheScore20HeistCaseMatchResultV	s:SQ	HeistCaseMatchResult	Swift.Equatable
 relationship	conformsTo	s:8TheScore20HeistCaseMatchResultV	s:Se	HeistCaseMatchResult	Swift.Decodable

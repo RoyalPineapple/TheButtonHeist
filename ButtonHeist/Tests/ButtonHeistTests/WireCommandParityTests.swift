@@ -40,22 +40,22 @@ final class WireCommandParityTests: XCTestCase {
 
         XCTAssertNil(ObservationCommand(rawValue: TheFence.Command.wait.rawValue))
         XCTAssertEqual(AssertionCommand.wait.command, .wait)
-        XCTAssertTrue(TheFence.Command.wait.isHeistPrimitiveCommand)
-        XCTAssertFalse(TheFence.Command.wait.isAppInteractionCommand)
-        XCTAssertFalse(TheFence.Command.wait.isPayloadCheckedHeistPrimitiveCommand)
+        XCTAssertTrue(TheFence.Command.wait.lowersToHeistPrimitive)
+        XCTAssertFalse(TheFence.Command.wait.dispatchesAppInteraction)
+        XCTAssertFalse(TheFence.Command.wait.usesPayloadCheckedHeistPrimitive)
 
-        XCTAssertTrue(TheFence.Command.activate.isAppInteractionCommand)
-        XCTAssertTrue(TheFence.Command.activate.isHeistPrimitiveCommand)
-        XCTAssertFalse(TheFence.Command.activate.isPayloadCheckedHeistPrimitiveCommand)
+        XCTAssertTrue(TheFence.Command.activate.dispatchesAppInteraction)
+        XCTAssertTrue(TheFence.Command.activate.lowersToHeistPrimitive)
+        XCTAssertFalse(TheFence.Command.activate.usesPayloadCheckedHeistPrimitive)
 
-        XCTAssertTrue(TheFence.Command.oneFingerTap.isAppInteractionCommand)
-        XCTAssertTrue(TheFence.Command.oneFingerTap.isHeistPrimitiveCommand)
-        XCTAssertTrue(TheFence.Command.oneFingerTap.isPayloadCheckedHeistPrimitiveCommand)
+        XCTAssertTrue(TheFence.Command.oneFingerTap.dispatchesAppInteraction)
+        XCTAssertTrue(TheFence.Command.oneFingerTap.lowersToHeistPrimitive)
+        XCTAssertTrue(TheFence.Command.oneFingerTap.usesPayloadCheckedHeistPrimitive)
 
-        XCTAssertTrue(TheFence.Command.scroll.isAppInteractionCommand)
+        XCTAssertTrue(TheFence.Command.scroll.dispatchesAppInteraction)
         XCTAssertNotNil(TheFence.Command.scroll.viewportDebugCommand)
-        XCTAssertFalse(TheFence.Command.scroll.isHeistPrimitiveCommand)
-        XCTAssertFalse(TheFence.Command.scroll.isPayloadCheckedHeistPrimitiveCommand)
+        XCTAssertFalse(TheFence.Command.scroll.lowersToHeistPrimitive)
+        XCTAssertFalse(TheFence.Command.scroll.usesPayloadCheckedHeistPrimitive)
     }
 
     func testDescriptorDoesNotExposeBehaviorCapabilityFlags() throws {
@@ -223,10 +223,10 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertEqual(descriptor.family, .viewportDebug, command.rawValue)
             XCTAssertEqual(descriptor.cliExposure, .directCommand, command.rawValue)
             XCTAssertEqual(descriptor.mcpExposure, .notExposed, command.rawValue)
-            XCTAssertTrue(command.isAppInteractionCommand, command.rawValue)
+            XCTAssertTrue(command.dispatchesAppInteraction, command.rawValue)
             XCTAssertNotNil(command.viewportDebugCommand, command.rawValue)
-            XCTAssertFalse(command.isHeistPrimitiveCommand, command.rawValue)
-            XCTAssertFalse(command.isPayloadCheckedHeistPrimitiveCommand, command.rawValue)
+            XCTAssertFalse(command.lowersToHeistPrimitive, command.rawValue)
+            XCTAssertFalse(command.usesPayloadCheckedHeistPrimitive, command.rawValue)
 
             let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
             let singleMessages = try fence.executableRuntimeActions(for: request)

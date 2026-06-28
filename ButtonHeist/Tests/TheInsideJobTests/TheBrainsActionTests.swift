@@ -211,7 +211,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.errorKind, .accessibilityTreeUnavailable)
         XCTAssertDiagnostic(result.message, contains: [
             "Could not observe accessibility tree",
             "last parsed: no accessibility tree",

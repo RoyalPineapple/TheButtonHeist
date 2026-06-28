@@ -65,7 +65,7 @@ extension TheFence {
         _ command: Command,
         _ messages: [RuntimeActionMessage]
     ) -> DecodedRequestDispatch {
-        precondition(command.isAppInteractionCommand, "\(command.rawValue) is not registered as an app interaction command")
+        precondition(command.dispatchesAppInteraction, "\(command.rawValue) is not registered as an app interaction command")
         return runtimeActionDispatch(messages)
     }
 

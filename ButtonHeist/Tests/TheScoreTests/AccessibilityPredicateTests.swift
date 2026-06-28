@@ -672,7 +672,7 @@ final class AccessibilityPredicateTests: XCTestCase {
     ) -> ElementUpdate {
         let before = makeElementForUpdate(label: label, property: property, value: old, traits: beforeTraits)
         let after = makeElementForUpdate(label: label, property: property, value: new, traits: afterTraits)
-        ElementUpdate(
+        return ElementUpdate(
             before: before,
             after: after,
             changes: [PropertyChange(
@@ -688,14 +688,16 @@ final class AccessibilityPredicateTests: XCTestCase {
         beforeTraits: [HeistTrait],
         afterTraits: [HeistTrait]
     ) -> ElementUpdate {
-        ElementUpdate(
-            before: makeElement(label: label, traits: beforeTraits),
-            after: makeElement(label: label, traits: afterTraits),
+        let before = makeElement(label: label, traits: beforeTraits)
+        let after = makeElement(label: label, traits: afterTraits)
+        return ElementUpdate(
+            before: before,
+            after: after,
             changes: [
                 PropertyChange(
                     property: .traits,
-                    old: beforeTraits.map(\.rawValue).joined(separator: ", "),
-                    new: afterTraits.map(\.rawValue).joined(separator: ", ")
+                    oldValue: ElementPropertyValue.value(for: .traits, in: before),
+                    newValue: ElementPropertyValue.value(for: .traits, in: after)
                 ),
             ]
         )

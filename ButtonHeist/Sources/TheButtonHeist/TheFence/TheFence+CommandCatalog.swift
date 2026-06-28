@@ -62,15 +62,15 @@ enum FenceCommandRegistry {
         return descriptor
     }
 
-    static func isAppInteractionCommand(_ command: TheFence.Command) -> Bool {
+    static func dispatchesAppInteraction(_ command: TheFence.Command) -> Bool {
         descriptor(for: command).execution.contains(.appInteraction)
     }
 
-    static func isHeistPrimitiveCommand(_ command: TheFence.Command) -> Bool {
+    static func lowersToHeistPrimitive(_ command: TheFence.Command) -> Bool {
         descriptor(for: command).execution.contains(.heistPrimitive)
     }
 
-    static func isPayloadCheckedHeistPrimitiveCommand(_ command: TheFence.Command) -> Bool {
+    static func usesPayloadCheckedHeistPrimitive(_ command: TheFence.Command) -> Bool {
         descriptor(for: command).execution.contains(.payloadCheckedHeistPrimitive)
     }
 
@@ -280,16 +280,16 @@ public extension TheFence.Command {
 
 extension TheFence.Command {
 
-    var isAppInteractionCommand: Bool {
-        FenceCommandRegistry.isAppInteractionCommand(self)
+    var dispatchesAppInteraction: Bool {
+        FenceCommandRegistry.dispatchesAppInteraction(self)
     }
 
-    var isHeistPrimitiveCommand: Bool {
-        FenceCommandRegistry.isHeistPrimitiveCommand(self)
+    var lowersToHeistPrimitive: Bool {
+        FenceCommandRegistry.lowersToHeistPrimitive(self)
     }
 
-    var isPayloadCheckedHeistPrimitiveCommand: Bool {
-        FenceCommandRegistry.isPayloadCheckedHeistPrimitiveCommand(self)
+    var usesPayloadCheckedHeistPrimitive: Bool {
+        FenceCommandRegistry.usesPayloadCheckedHeistPrimitive(self)
     }
 
     var viewportDebugCommand: ViewportDebugCommand? {
