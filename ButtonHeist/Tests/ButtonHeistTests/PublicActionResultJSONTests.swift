@@ -56,7 +56,97 @@ final class PublicActionResultJSONTests: XCTestCase {
         try assertTreeUnavailableFailure(json, method: "activate")
         let omitted = try XCTUnwrap(json["omitted"] as? [String: Any])
         let accessibilityTrace = try XCTUnwrap(omitted["accessibilityTrace"] as? [String: Any])
+        XCTAssertEqual(accessibilityTrace["reason"] as? String, ProjectionOmissionReason.rawAccessibilityTrace.rawValue)
         XCTAssertEqual(accessibilityTrace["projectedAs"] as? String, "delta")
+        XCTAssertEqual(accessibilityTrace["omittedCount"] as? Int, 2)
+    }
+
+    func testNestedHeistActionResultEncodesSubjectEvidenceOmissionReason() throws {
+        let subject = makeReceiptTestElement(label: "Pay", identifier: "pay")
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            subjectEvidence: ActionSubjectEvidence(
+                source: .resolvedSemanticTarget,
+                target: .predicate(ElementPredicate(label: "Pay")),
+                element: subject
+            )
+        )
+
+        let json = try nestedHeistActionResultJSON(result: result, status: .passed)
+
+        let omitted = try XCTUnwrap(json["omitted"] as? [String: Any])
+        let subjectEvidence = try XCTUnwrap(omitted["subjectEvidence"] as? [String: Any])
+        XCTAssertEqual(subjectEvidence["reason"] as? String, ProjectionOmissionReason.rawSubjectEvidence.rawValue)
+        XCTAssertNil(subjectEvidence["projectedAs"])
+        XCTAssertNil(subjectEvidence["omittedCount"])
+    }
+
+    func testNestedHeistActionResultEncodesElementEditOmissions() throws {
+        let addedRows = (0..<8).map { index in
+            makeReceiptTestElement(label: "Lazy Row \(index)", identifier: "lazy_row_\(index)")
+        }
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityTrace: makeReceiptTestTrace(
+                before: makeReceiptTestInterface([]),
+                after: makeReceiptTestInterface(addedRows)
+            )
+        )
+
+        let json = try nestedHeistActionResultJSON(result: result, status: .passed)
+
+        let delta = try XCTUnwrap(json["delta"] as? [String: Any])
+        let edits = try XCTUnwrap(delta["edits"] as? [String: Any])
+        let added = try XCTUnwrap(edits["added"] as? [[String: Any]])
+        let omitted = try XCTUnwrap(edits["omitted"] as? [String: Any])
+        XCTAssertEqual(delta["kind"] as? String, "elementsChanged")
+        XCTAssertEqual(added.count, 5)
+        XCTAssertEqual(omitted["added"] as? Int, 3)
+        XCTAssertEqual(
+            omitted["addedKeys"] as? [String],
+            ["identifier:lazy_row_5", "identifier:lazy_row_6", "identifier:lazy_row_7"]
+        )
+    }
+
+    func testNestedHeistActionResultEncodesTransientOmissions() throws {
+        let interface = makeReceiptTestInterface([
+            makeReceiptTestElement(label: "Ready", identifier: "ready"),
+        ])
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: interface,
+            context: AccessibilityTrace.Context(screenId: "home")
+        )
+        let transient = (0..<8).map { index in
+            makeReceiptTestElement(label: "Toast \(index)", identifier: "toast_\(index)")
+        }
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: interface,
+            parentHash: before.hash,
+            context: AccessibilityTrace.Context(screenId: "home"),
+            transition: AccessibilityTrace.Transition(transient: transient)
+        )
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityTrace: AccessibilityTrace(captures: [before, after])
+        )
+
+        let json = try nestedHeistActionResultJSON(result: result, status: .passed)
+
+        let delta = try XCTUnwrap(json["delta"] as? [String: Any])
+        let encodedTransient = try XCTUnwrap(delta["transient"] as? [[String: Any]])
+        let omitted = try XCTUnwrap(delta["omitted"] as? [String: Any])
+        XCTAssertEqual(delta["kind"] as? String, "noChange")
+        XCTAssertEqual(encodedTransient.count, 5)
+        XCTAssertEqual(omitted["transient"] as? Int, 3)
+        XCTAssertEqual(
+            omitted["transientKeys"] as? [String],
+            ["identifier:toast_5", "identifier:toast_6", "identifier:toast_7"]
+        )
     }
 
     private func rotorActionResult() -> ActionResult {

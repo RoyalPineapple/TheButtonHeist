@@ -663,7 +663,7 @@ struct PublicProjectionOmission: Encodable {
     let omittedCount: Int?
 
     init(projection: ProjectionOmission) {
-        self.reason = projection.reason
+        self.reason = projection.reason.rawValue
         self.projectedAs = projection.projectedAs
         self.omittedCount = projection.omittedCount
     }

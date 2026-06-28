@@ -111,6 +111,8 @@ enum ProjectionRenderingState: String, Sendable {
 }
 
 enum ProjectionOmissionReason: String, Sendable {
+    case rawAccessibilityTrace = "raw accessibility trace omitted from public heist report"
+    case rawSubjectEvidence = "raw subject evidence omitted from public heist report"
     case scrollSubtreeElementBudget = "scroll-subtree-element-budget"
     case totalNodeBudget = "total-node-budget"
 }
@@ -674,14 +676,14 @@ struct ActionResultOmissionsProjection: Sendable {
     init(result: ActionResult) {
         accessibilityTrace = result.accessibilityTrace.map {
             ProjectionOmission(
-                reason: "raw accessibility trace omitted from public heist report",
+                reason: .rawAccessibilityTrace,
                 projectedAs: "delta",
                 omittedCount: $0.captures.count
             )
         }
         subjectEvidence = result.subjectEvidence.map { _ in
             ProjectionOmission(
-                reason: "raw subject evidence omitted from public heist report",
+                reason: .rawSubjectEvidence,
                 projectedAs: nil,
                 omittedCount: nil
             )
@@ -694,7 +696,7 @@ struct ActionResultOmissionsProjection: Sendable {
 }
 
 struct ProjectionOmission: Sendable {
-    let reason: String
+    let reason: ProjectionOmissionReason
     let projectedAs: String?
     let omittedCount: Int?
 }
