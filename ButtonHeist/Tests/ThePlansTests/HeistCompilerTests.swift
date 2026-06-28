@@ -650,6 +650,9 @@ struct HeistCompilerTests {
         #expect(!source.contains("value(from erasedValue"))
         #expect(!source.contains("ElementPropertyValue.self"))
         #expect(!source.contains("decodeValue("))
+        #expect(source.contains("associatedtype Value: Codable, Sendable, Equatable"))
+        #expect(source.contains("let old = try container.decodeIfPresent(P.Value.self, forKey: .old)"))
+        #expect(source.contains("let new = try container.decodeIfPresent(P.Value.self, forKey: .new)"))
 
         let evaluatorFile = root.appendingPathComponent("ButtonHeist/Sources/TheScore/AccessibilityPredicate+Evaluation.swift")
         let evaluatorSource = try String(contentsOf: evaluatorFile, encoding: .utf8)
@@ -657,6 +660,26 @@ struct HeistCompilerTests {
         #expect(!evaluatorSource.contains("matchesTraitPropertyValue"))
         #expect(!evaluatorSource.contains("propertyChange.oldValue"))
         #expect(!evaluatorSource.contains("propertyChange.newValue"))
+
+        let erasedPropertyValueMatchers = try sourceMatches(
+            in: productionSwiftFiles(in: root),
+            root: root,
+            pattern: #"func\s+\w+\s*\(\s*_\s+\w+:\s*ElementPropertyValue\?\s*,\s*matches\s+\w+:\s*ElementProperty"#
+        )
+        #expect(
+            erasedPropertyValueMatchers.isEmpty,
+            "Unexpected erased property/value matchers:\n\(erasedPropertyValueMatchers.sorted().joined(separator: "\n"))"
+        )
+
+        let propertyValueCompatibilitySwitches = try sourceMatches(
+            in: productionSwiftFiles(in: root),
+            root: root,
+            pattern: #"switch\s*\(\s*property\s*,\s*value\s*\)"#
+        )
+        #expect(
+            propertyValueCompatibilitySwitches.isEmpty,
+            "Unexpected property/value compatibility switches:\n\(propertyValueCompatibilitySwitches.sorted().joined(separator: "\n"))"
+        )
     }
 
     @Test
