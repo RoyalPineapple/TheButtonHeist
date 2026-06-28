@@ -56,6 +56,70 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertFalse(AccessibilityPredicate.State.missing(ElementPredicate(label: "Ready")).evaluatePresence(in: elements))
     }
 
+    func testElementMatchSetKeepsEqualInterfaceElementsDistinctByTreePath() {
+        let duplicate = makeElement(label: "Save", traits: [.button])
+        let interface = makeTestInterface(nodes: [
+            testContainer(makeTestAccessibilityContainer(), children: [
+                testElement(duplicate),
+                testElement(duplicate),
+            ]),
+        ])
+
+        let matches = ElementMatchSet(interface: interface)
+            .matching(ElementPredicate(label: "Save"))
+
+        XCTAssertEqual(matches.count, 2)
+        XCTAssertEqual(matches.orderedPaths, [TreePath([0, 0]), TreePath([0, 1])])
+    }
+
+    func testPredicateResolutionIntersectsCheckMatchSets() {
+        let elements = [
+            makeElement(label: "Save", identifier: "primary", traits: [.button]),
+            makeElement(label: "Save", identifier: "primary", traits: [.staticText]),
+            makeElement(label: "Save", identifier: "secondary", traits: [.button]),
+            makeElement(label: "Cancel", identifier: "primary", traits: [.button]),
+        ]
+
+        let matches = ElementMatchSet(elements: elements).matching(ElementPredicate(
+            label: "Save",
+            identifier: "primary",
+            traits: [.button]
+        ))
+
+        XCTAssertEqual(matches.elements, [elements[0]])
+        XCTAssertEqual(matches.orderedPaths, [TreePath([0])])
+    }
+
+    func testElementMatchSetUnionUsesPathIdentityAndTraversalOrder() {
+        let elements = [
+            makeElement(label: "Save"),
+            makeElement(label: "Other"),
+            makeElement(label: "Cancel"),
+        ]
+        let allMatches = ElementMatchSet(elements: elements)
+        let cancelMatches = allMatches.matching(ElementPredicate(label: "Cancel"))
+        let saveMatches = allMatches.matching(ElementPredicate(label: "Save"))
+
+        XCTAssertEqual(cancelMatches.union(saveMatches).orderedPaths, [TreePath([0]), TreePath([2])])
+    }
+
+    func testTargetOrdinalSelectsFromNarrowedMatchSet() {
+        let elements = [
+            makeElement(label: "Save", traits: [.button]),
+            makeElement(label: "Save", traits: [.staticText]),
+            makeElement(label: "Save", traits: [.button]),
+        ]
+        let matches = ElementMatchSet(elements: elements)
+
+        let selected = matches.matching(.predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1))
+
+        XCTAssertEqual(selected.elements, [elements[2]])
+        XCTAssertEqual(selected.orderedPaths, [TreePath([2])])
+        XCTAssertTrue(AccessibilityPredicate.State.existsTarget(
+            .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 1)
+        ).evaluate(in: matches).met)
+    }
+
     func testStatePredicateRequiresObservedTraceForActionResultValidation() {
         let action = ActionResult(success: true, method: .activate)
         let result = AccessibilityPredicate.state(.missing(ElementPredicate(label: "Loading"))).validate(against: action)

@@ -16,9 +16,26 @@ public extension AccessibilityPredicate {
         currentElements: [HeistElement],
         delta: AccessibilityTrace.Delta? = nil
     ) -> ExpectationResult {
+        evaluate(currentMatches: ElementMatchSet(elements: currentElements), delta: delta)
+    }
+
+    /// Evaluate against an observed interface and cumulative wait-window change facts.
+    func evaluate(
+        currentElements: [HeistElement],
+        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+    ) -> ExpectationResult {
+        evaluate(currentMatches: ElementMatchSet(elements: currentElements), accumulatedDelta: accumulatedDelta)
+    }
+}
+
+private extension AccessibilityPredicate {
+    func evaluate(
+        currentMatches: ElementMatchSet,
+        delta: AccessibilityTrace.Delta?
+    ) -> ExpectationResult {
         switch self {
         case .state(let stateClause):
-            let outcome = stateClause.evaluate(in: currentElements)
+            let outcome = stateClause.evaluate(in: currentMatches)
             return ExpectationResult(met: outcome.met, predicate: self, actual: outcome.actual)
         case .changePredicate(let change):
             return change.evaluate(delta: delta)
@@ -28,14 +45,13 @@ public extension AccessibilityPredicate {
         }
     }
 
-    /// Evaluate against an observed interface and cumulative wait-window change facts.
     func evaluate(
-        currentElements: [HeistElement],
+        currentMatches: ElementMatchSet,
         accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
     ) -> ExpectationResult {
         switch self {
         case .state(let stateClause):
-            let outcome = stateClause.evaluate(in: currentElements)
+            let outcome = stateClause.evaluate(in: currentMatches)
             return ExpectationResult(met: outcome.met, predicate: self, actual: outcome.actual)
         case .changePredicate(let change):
             return change.evaluate(accumulatedDelta: accumulatedDelta)
@@ -63,17 +79,10 @@ public extension AccessibilityPredicate {
                 actual: "no observed accessibility trace"
             )
         }
-        return evaluate(
-            currentElements: trace.endpointCurrentElements,
-            delta: trace.endpointDelta
-        )
-    }
-}
-
-private extension AccessibilityTrace {
-    /// Projected elements of the final capture — the post-action interface.
-    var endpointCurrentElements: [HeistElement] {
-        captures.last?.interface.projectedElements ?? []
+        let currentMatches = trace.captures.last
+            .map { ElementMatchSet(interface: $0.interface) }
+            ?? .empty
+        return evaluate(currentMatches: currentMatches, delta: trace.endpointDelta)
     }
 }
 
@@ -88,13 +97,22 @@ public extension AccessibilityPredicate.State {
     /// Evaluate this state against a single observed interface. For `.all`,
     /// every child state must hold against the same `elements`.
     func evaluate(in elements: [HeistElement]) -> (met: Bool, actual: String?) {
+        evaluate(in: ElementMatchSet(elements: elements))
+    }
+}
+
+extension AccessibilityPredicate.State {
+    /// Evaluate this state against a path-keyed interface projection. Element
+    /// predicates resolve to typed match sets; target ordinals select from the
+    /// narrowed set in traversal order.
+    func evaluate(in matches: ElementMatchSet) -> (met: Bool, actual: String?) {
         switch contract {
         case .element(let requirement, let predicate):
-            let isPresent = predicate.anyMatch(in: elements)
+            let isPresent = !matches.matching(predicate).isEmpty
             let met = requirement.isMet(isPresent: isPresent)
             return (met, met ? nil : requirement.failureDescription(for: predicate))
         case .target(let requirement, let target):
-            let isPresent = target.isPresent(in: elements)
+            let isPresent = !matches.matching(target).isEmpty
             let met = requirement.isMet(isPresent: isPresent)
             return (met, met ? nil : requirement.failureDescription(for: target))
         case .all(let states):
@@ -102,21 +120,10 @@ public extension AccessibilityPredicate.State {
                 return (false, AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription)
             }
             let failures = states.compactMap { state -> String? in
-                let outcome = state.evaluate(in: elements)
+                let outcome = state.evaluate(in: matches)
                 return outcome.met ? nil : (outcome.actual ?? state.description)
             }
             return (failures.isEmpty, failures.isEmpty ? nil : failures.joined(separator: "; "))
-        }
-    }
-}
-
-private extension ElementTarget {
-    func isPresent(in elements: [HeistElement]) -> Bool {
-        switch self {
-        case .predicate(let predicate, let ordinal):
-            let matches = elements.filter { predicate.matches($0) }
-            guard let ordinal else { return !matches.isEmpty }
-            return matches.indices.contains(ordinal)
         }
     }
 }
@@ -201,7 +208,7 @@ public extension AccessibilityPredicate.Change {
             return ExpectationResult(met: true, predicate: nil, actual: AccessibilityTrace.DeltaKind.screenChanged.rawValue)
         }
         let stateClause: AccessibilityPredicate.State = assertions.count == 1 ? assertions[0] : .all(assertions)
-        let outcome = stateClause.evaluate(in: payload.newInterface.projectedElements)
+        let outcome = stateClause.evaluate(in: ElementMatchSet(interface: payload.newInterface))
         return ExpectationResult(
             met: outcome.met,
             predicate: nil,
@@ -220,7 +227,7 @@ public extension AccessibilityPredicate.Change {
             return ExpectationResult(met: true, predicate: nil, actual: AccessibilityTrace.DeltaKind.screenChanged.rawValue)
         }
         let stateClause: AccessibilityPredicate.State = assertions.count == 1 ? assertions[0] : .all(assertions)
-        let outcome = stateClause.evaluate(in: payload.newInterface.projectedElements)
+        let outcome = stateClause.evaluate(in: ElementMatchSet(interface: payload.newInterface))
         return ExpectationResult(
             met: outcome.met,
             predicate: nil,
@@ -268,10 +275,10 @@ public extension AccessibilityPredicate.Change {
     ) -> ExpectationResult {
         switch predicate {
         case .appearedElement(let element):
-            let met = edits.added.contains { element.matches($0) }
+            let met = !ElementMatchSet(elements: edits.added).matching(element).isEmpty
             return ExpectationResult(met: met, predicate: nil, actual: met ? nil : "no appeared element matches \(element)")
         case .disappearedElement(let element):
-            let met = edits.removed.contains { element.matches($0) }
+            let met = !ElementMatchSet(elements: edits.removed).matching(element).isEmpty
             return ExpectationResult(met: met, predicate: nil, actual: met ? nil : "no disappeared element matches \(element)")
         case .updatedElement(let update):
             return evaluateUpdated(update: update, edits: edits)
@@ -318,39 +325,7 @@ public extension AccessibilityPredicate.Change {
         _ observed: PropertyChange,
         matches change: AnyPropertyChange
     ) -> Bool {
-        switch (observed, change) {
-        case (.value(let observed), .value(let change)):
-            return typedPropertyChange(observed, matches: change)
-        case (.traits(let observed), .traits(let change)):
-            return typedPropertyChange(observed, matches: change)
-        case (.hint(let observed), .hint(let change)):
-            return typedPropertyChange(observed, matches: change)
-        case (.actions(let observed), .actions(let change)):
-            return typedPropertyChange(observed, matches: change)
-        case (.frame(let observed), .frame(let change)):
-            return typedPropertyChange(observed, matches: change)
-        case (.activationPoint(let observed), .activationPoint(let change)):
-            return typedPropertyChange(observed, matches: change)
-        case (.customContent(let observed), .customContent(let change)):
-            return typedPropertyChange(observed, matches: change)
-        case (.rotors(let observed), .rotors(let change)):
-            return typedPropertyChange(observed, matches: change)
-        default:
-            return false
-        }
-    }
-
-    private static func typedPropertyChange<P: ElementPropertyValueKind>(
-        _ observed: ElementPropertyValueChange<P>,
-        matches change: ElementPropertyChange<P>
-    ) -> Bool {
-        if let before = change.before {
-            guard P.matches(before, value: observed.old) else { return false }
-        }
-        if let after = change.after {
-            guard P.matches(after, value: observed.new) else { return false }
-        }
-        return true
+        observed.satisfies(change)
     }
 
     private static func describeUpdate(_ edit: ElementUpdate, changes: [PropertyChange]) -> String {

@@ -69,44 +69,36 @@ func projectElementStateChange(
 
     // label is identity (pairing key), not an update property — paired elements
     // share it by construction, so no label PropertyChange is emitted.
-    for property in ElementProperty.semanticDiffProperties {
-        appendChangeIfNeeded(property, old: old, new: new, to: &changes)
-    }
+    appendSemanticChanges(old: old, new: new, to: &changes)
 
     if includeGeometry {
-        for property in ElementProperty.geometryDiffProperties {
-            appendChangeIfNeeded(property, old: old, new: new, to: &changes)
-        }
+        appendGeometryChanges(old: old, new: new, to: &changes)
     }
 
     guard !changes.isEmpty else { return nil }
     return ElementUpdate(before: old, after: new, changes: changes)
 }
 
-private func appendChangeIfNeeded(
-    _ property: ElementProperty,
+private func appendSemanticChanges(
     old: HeistElement,
     new: HeistElement,
     to changes: inout [PropertyChange]
 ) {
-    switch property {
-    case .value:
-        appendChangeIfNeeded(ValueProperty.self, old: old, new: new, to: &changes)
-    case .traits:
-        appendChangeIfNeeded(TraitsProperty.self, old: old, new: new, to: &changes)
-    case .hint:
-        appendChangeIfNeeded(HintProperty.self, old: old, new: new, to: &changes)
-    case .actions:
-        appendChangeIfNeeded(ActionsProperty.self, old: old, new: new, to: &changes)
-    case .frame:
-        appendChangeIfNeeded(FrameProperty.self, old: old, new: new, to: &changes)
-    case .activationPoint:
-        appendChangeIfNeeded(ActivationPointProperty.self, old: old, new: new, to: &changes)
-    case .customContent:
-        appendChangeIfNeeded(CustomContentProperty.self, old: old, new: new, to: &changes)
-    case .rotors:
-        appendChangeIfNeeded(RotorsProperty.self, old: old, new: new, to: &changes)
-    }
+    appendChangeIfNeeded(ValueProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(TraitsProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(HintProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(ActionsProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(CustomContentProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(RotorsProperty.self, old: old, new: new, to: &changes)
+}
+
+private func appendGeometryChanges(
+    old: HeistElement,
+    new: HeistElement,
+    to changes: inout [PropertyChange]
+) {
+    appendChangeIfNeeded(FrameProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(ActivationPointProperty.self, old: old, new: new, to: &changes)
 }
 
 private func appendChangeIfNeeded<P: ElementPropertyValueKind>(
@@ -119,22 +111,6 @@ private func appendChangeIfNeeded<P: ElementPropertyValueKind>(
     let newValue = P.value(in: new)
     guard !P.valuesEqual(oldValue, newValue) else { return }
     changes.append(P.change(old: oldValue, new: newValue))
-}
-
-private extension ElementProperty {
-    static let semanticDiffProperties: [ElementProperty] = [
-        .value,
-        .traits,
-        .hint,
-        .actions,
-        .customContent,
-        .rotors,
-    ]
-
-    static let geometryDiffProperties: [ElementProperty] = [
-        .frame,
-        .activationPoint,
-    ]
 }
 
 // MARK: - Diff Pairing Key
