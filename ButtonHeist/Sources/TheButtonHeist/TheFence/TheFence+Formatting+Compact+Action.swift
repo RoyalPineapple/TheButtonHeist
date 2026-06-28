@@ -4,40 +4,57 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactActionResult(command: TheFence.Command, _ result: ActionResult, expectation: ExpectationResult?) -> String {
+    func compactActionResult(
+        command: TheFence.Command,
+        _ result: ActionResult,
+        expectation: ExpectationResult?,
+        profile: ProjectionProfile = .summary
+    ) -> String {
         let commandName = command.rawValue
-        let screenId = result.accessibilityTrace?.endpointScreenId
-        guard result.success else {
-            return Self.compactActionFailure(commandName: commandName, result: result, screenId: screenId)
+        let projection = ActionProjection(
+            method: commandName,
+            result: result,
+            expectation: expectation,
+            expectationHint: expectation.flatMap {
+                Self.expectationFailureHint($0, command: command, result: result)
+            },
+            profile: profile
+        )
+        return Self.compactActionResult(projection)
+    }
+
+    static func compactActionResult(_ projection: ActionProjection) -> String {
+        guard projection.failure == nil else {
+            return compactActionFailure(projection)
         }
 
         var text: String
-        switch result.payload {
+        switch projection.payload {
         case .rotor(let rotor):
             text = Self.compactRotor(rotor)
-        case .heistExecution(let heist):
-            text = "\(TheFence.Command.runHeist.rawValue): \(heist.steps.count) step(s)"
-        case .screenshot(let payload):
-            text = "screenshot: \(Int(payload.width))x\(Int(payload.height))"
+        case .heistExecutionStepCount(let stepCount):
+            text = "\(TheFence.Command.runHeist.rawValue): \(stepCount) step(s)"
+        case .screenshot(let width, let height):
+            text = "screenshot: \(Int(width))x\(Int(height))"
         case .value, .none:
-            if let delta = result.accessibilityTrace?.endpointDelta {
-                text = Self.compactDelta(delta, method: commandName)
+            if let delta = projection.delta {
+                text = Self.compactDelta(delta, method: projection.method)
             } else {
-                text = "\(commandName): ok"
+                text = "\(projection.method): ok"
             }
         }
-        if let screenId {
+        if let screenId = projection.screenId {
             text = "\(screenId) | \(text)"
         }
-        if case .value(let value) = result.payload {
+        if case .value(let value) = projection.payload {
             text += "\nvalue: \"\(value)\""
         }
-        if let activationTrace = result.activationTrace {
+        if let activationTrace = projection.activationTrace {
             text += "\nactivate: \(Self.compactActivationTrace(activationTrace))"
         }
-        if let expectation, !expectation.met {
+        if let expectation = projection.expectation, !expectation.met {
             text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
-            if let hint = Self.expectationFailureHint(expectation, command: command, result: result) {
+            if let hint = expectation.hint {
                 text += "\nhint: \(hint)"
             }
         }
@@ -114,12 +131,12 @@ extension FenceResponse {
         return text
     }
 
-    private static func compactActionFailure(commandName: String, result: ActionResult, screenId: String?) -> String {
-        guard let failure = result.publicFailureProjection(fallbackMessage: commandName) else {
-            return "\(commandName): ok"
+    private static func compactActionFailure(_ projection: ActionProjection) -> String {
+        guard let failure = projection.failure else {
+            return "\(projection.method): ok"
         }
-        var text = "\(commandName): error[\(failure.compactCode)]: \(failure.message)"
-        if let screenId {
+        var text = "\(projection.method): error[\(failure.compactCode)]: \(failure.message)"
+        if let screenId = projection.screenId {
             text = "\(screenId) | \(text)"
         }
         return text

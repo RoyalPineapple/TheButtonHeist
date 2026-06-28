@@ -67,6 +67,12 @@ struct PublicErrorDetails: Encodable {
 
 struct PublicResponseModel: FencePublicJSONResponse {
     let response: FenceResponse
+    let profile: ProjectionProfile
+
+    init(response: FenceResponse, profile: ProjectionProfile = .summary) {
+        self.response = response
+        self.profile = profile
+    }
 
     func encode(to encoder: Encoder) throws {
         switch response {
@@ -85,13 +91,18 @@ struct PublicResponseModel: FencePublicJSONResponse {
         case .devices(let devices):
             try PublicDevicesResponse(devices: devices).encode(to: encoder)
         case .interface(let interface, let detail):
-            try PublicInterfaceResponse(interface: interface, detail: detail).encode(to: encoder)
+            try PublicInterfaceResponse(interface: interface, detail: detail, profile: profile).encode(to: encoder)
         case .action(let command, let result, let expectation):
-            try PublicActionResponse(
-                command: command,
+            let expectationHint = expectation.flatMap {
+                FenceResponse.expectationFailureHint($0, command: command, result: result)
+            }
+            try PublicActionResponse(projection: ActionProjection(
+                method: command.rawValue,
                 result: result,
-                expectation: expectation
-            ).encode(to: encoder)
+                expectation: expectation,
+                expectationHint: expectationHint,
+                profile: profile
+            )).encode(to: encoder)
         case .screenshot(let path, let payload, let options):
             try PublicScreenshotResponse(
                 path: path,
@@ -107,10 +118,11 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 includeInterface: options.includeInterface
             ).encode(to: encoder)
         case .heistExecution(_, let result, let accessibilityTrace):
-            try PublicHeistExecutionResponse(
+            try PublicHeistExecutionResponse(projection: HeistReportProjection(
                 result: result,
-                netDelta: accessibilityTrace?.meaningfulEndpointDelta
-            ).encode(to: encoder)
+                netDelta: accessibilityTrace?.meaningfulEndpointDelta,
+                profile: profile.kind == .summary ? .mcp : profile
+            )).encode(to: encoder)
         case .heistCatalog(let catalog):
             try PublicHeistCatalogResponse(catalog: catalog).encode(to: encoder)
         case .heistDescription(let description):

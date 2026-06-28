@@ -152,20 +152,28 @@ extension FenceResponse {
     // MARK: - Human Format Helpers
 
     private func formatInterface(_ interface: Interface, detail: InterfaceDetail) -> String {
+        let profile = ProjectionProfile(
+            kind: detail == .full ? .full : .summary,
+            limits: .current()
+        )
+        return formatInterface(InterfaceProjection(interface: interface, profile: profile))
+    }
+
+    private func formatInterface(_ projection: InterfaceProjection) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
 
-        var output = "\(interface.projectedElements.count) elements (\(formatter.string(from: interface.timestamp)))\n"
-        if let discovery = interface.diagnostics?.discovery {
+        var output = "\(projection.elementCount) elements (\(formatter.string(from: projection.timestamp)))\n"
+        if let discovery = projection.diagnostics?.discovery {
             output += formatDiscoveryDiagnostics(discovery).joined(separator: "\n")
             output += "\n"
         }
         output += String(repeating: "-", count: 60) + "\n"
 
-        if interface.projectedElements.isEmpty {
+        if projection.elementCount == 0 {
             output += "  (no elements)\n"
         } else {
-            output += formatTreeLines(interface, detail: detail).joined(separator: "\n")
+            output += formatTreeLines(projection).joined(separator: "\n")
             output += "\n"
         }
         output += String(repeating: "-", count: 60)
@@ -189,61 +197,42 @@ extension FenceResponse {
         return lines
     }
 
-    private final class HumanLineIndexCounter {
-        var value = 0
+    private func formatTreeLines(_ interface: Interface, detail: InterfaceDetail) -> [String] {
+        let profile = ProjectionProfile(
+            kind: detail == .full ? .full : .summary,
+            limits: .current()
+        )
+        return formatTreeLines(InterfaceProjection(interface: interface, profile: profile))
     }
 
-    private func formatTreeLines(_ interface: Interface, detail: InterfaceDetail) -> [String] {
-        let counter = HumanLineIndexCounter()
-        let elementAnnotations = interface.annotations.elementByPath
-        let containerAnnotations = interface.annotations.containerByPath
-        return interface.tree.enumerated().flatMap { index, node in
-            formatTreeLines(
-                node,
-                path: TreePath([index]),
-                depth: 0,
-                detail: detail,
-                counter: counter,
-                elementAnnotations: elementAnnotations,
-                containerAnnotations: containerAnnotations
-            )
-        }
+    private func formatTreeLines(_ projection: InterfaceProjection) -> [String] {
+        projection.tree.flatMap { formatTreeLines($0, depth: 0, detail: projection.detail) }
     }
 
     private func formatTreeLines(
-        _ node: AccessibilityHierarchy,
-        path: TreePath,
+        _ node: InterfaceNodeProjection,
         depth: Int,
-        detail: InterfaceDetail,
-        counter: HumanLineIndexCounter,
-        elementAnnotations: [TreePath: InterfaceElementAnnotation],
-        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+        detail: InterfaceDetail
     ) -> [String] {
         let prefix = String(repeating: "  ", count: depth)
         switch node {
-        case .element(let element, _):
-            let projected = HeistElement(
-                accessibilityElement: element,
-                annotation: elementAnnotations[path]
-            )
-            let displayIndex = counter.value
-            counter.value += 1
-            return [prefix + formatElement(projected, displayIndex: displayIndex, detail: detail)]
-        case .container(let container, let children):
+        case .element(let projection):
+            return [prefix + formatElement(
+                projection.element,
+                displayIndex: projection.order ?? 0,
+                detail: detail
+            )]
+        case .container(let projection):
             let containerLines = formatContainerLines(
-                container,
-                annotation: containerAnnotations[path],
+                projection.container,
+                containerName: projection.containerName,
                 detail: detail
             ).map { prefix + $0 }
-            let childLines = children.enumerated().flatMap { index, child in
+            let childLines = projection.children.flatMap { child in
                 formatTreeLines(
                     child,
-                    path: path.appending(index),
                     depth: depth + 1,
-                    detail: detail,
-                    counter: counter,
-                    elementAnnotations: elementAnnotations,
-                    containerAnnotations: containerAnnotations
+                    detail: detail
                 )
             }
             return containerLines + childLines
@@ -346,6 +335,20 @@ extension FenceResponse {
         return [parts.joined(separator: " ")]
     }
 
+    private func formatContainerLines(
+        _ container: AccessibilityContainer,
+        containerName: String?,
+        detail: InterfaceDetail
+    ) -> [String] {
+        formatContainerLines(
+            container,
+            annotation: containerName.map {
+                InterfaceContainerAnnotation(path: .root, containerName: ContainerName(rawValue: $0))
+            },
+            detail: detail
+        )
+    }
+
     private func formatScreenshot(
         summary: String,
         payload: ScreenPayload,
@@ -363,14 +366,15 @@ extension FenceResponse {
 
     private func formatActionResult(command: TheFence.Command, result: ActionResult) -> String {
         let methodName = command.rawValue
-        guard result.success else {
-            return "Error: \(result.message ?? methodName)"
+        let projection = ActionProjection(method: methodName, result: result, profile: .summary)
+        guard projection.failure == nil else {
+            return "Error: \(projection.message ?? methodName)"
         }
         var output = "✓ \(methodName)"
-        if case .value(let value) = result.payload {
+        if case .value(let value) = projection.payload {
             output += "  value: \"\(value)\""
         }
-        if case .rotor(let search) = result.payload {
+        if case .rotor(let search) = projection.payload {
             output += "  rotor: \"\(search.rotor)\" \(search.direction.rawValue)"
             if let foundElement = search.foundElement {
                 output += " → \(foundElement.label ?? foundElement.description)"
@@ -382,10 +386,10 @@ extension FenceResponse {
                 }
             }
         }
-        if let delta = result.accessibilityTrace?.endpointDelta {
+        if let delta = projection.delta {
             output += "  \(formatDelta(delta))"
         }
-        if let activationTrace = result.activationTrace {
+        if let activationTrace = projection.activationTrace {
             output += "  [activate: \(Self.compactActivationTrace(activationTrace))]"
         }
         return output
@@ -404,37 +408,51 @@ extension FenceResponse {
     }
 
     private func formatDelta(_ delta: AccessibilityTrace.Delta) -> String {
-        switch delta {
-        case .noChange(let payload):
-            guard !payload.transient.isEmpty else {
-                return "[\(payload.elementCount) elements, no change]"
+        formatDelta(DeltaProjection(delta: delta, profile: .summary, includeScreenInterface: true))
+    }
+
+    private func formatDelta(_ projection: DeltaProjection) -> String {
+        switch projection.kind {
+        case .noChange:
+            guard !projection.transient.elements.isEmpty else {
+                return "[\(projection.elementCount) elements, no change]"
             }
-            let transients = payload.transient
+            let transients = projection.transient.elements
                 .map { "+- \(Self.compactElementLine($0))" }
                 .joined(separator: "; ")
-            return "[\(payload.elementCount) elements, no net change: \(transients)]"
-        case .elementsChanged(let payload):
-            let edits = payload.edits
-            var parts: [String] = ["\(payload.elementCount) elements"]
-            if !edits.added.isEmpty { parts.append("+\(edits.added.count) added") }
-            if !edits.removed.isEmpty { parts.append("-\(edits.removed.count) removed") }
-            if !edits.updated.isEmpty { parts.append("~\(edits.updated.count) updated") }
-            let detail = Self.compactElementEditLines(edits: edits, transient: payload.transient)
+            return "[\(projection.elementCount) elements, no net change: \(transients)]"
+        case .elementsChanged:
+            var parts: [String] = ["\(projection.elementCount) elements"]
+            if let addedCount = projection.edits?.added.elements.count, addedCount > 0 {
+                parts.append("+\(addedCount) added")
+            }
+            if let removedCount = projection.edits?.removed.elements.count, removedCount > 0 {
+                parts.append("-\(removedCount) removed")
+            }
+            if let updatedCount = projection.edits?.updated.updates.count, updatedCount > 0 {
+                parts.append("~\(updatedCount) updated")
+            }
+            let detail = Self.compactElementEditLines(
+                edits: projection.edits,
+                transient: projection.transient.elements
+            )
             guard !detail.isEmpty else {
                 return "[" + parts.joined(separator: ", ") + "]"
             }
             return "[" + parts.joined(separator: ", ") + ": " + detail.joined(separator: "; ") + "]"
-        case .screenChanged(let payload):
-            return "[\(payload.elementCount) elements, screen changed]\n" +
-                Self.compactInterface(payload.newInterface, detail: .summary)
+        case .screenChanged:
+            let compactInterface = projection.screen?.interface.map {
+                Self.compactInterface($0, detail: .summary)
+            } ?? ""
+            return "[\(projection.elementCount) elements, screen changed]\n" + compactInterface
         }
     }
 
-    private static func compactElementEditLines(edits: ElementEdits, transient: [HeistElement]) -> [String] {
+    private static func compactElementEditLines(edits: DeltaEditsProjection?, transient: [HeistElement]) -> [String] {
         var lines: [String] = []
-        lines.append(contentsOf: edits.added.map { "+ \(compactElementLine($0))" })
-        lines.append(contentsOf: edits.removed.map { "- \(compactElementLine($0))" })
-        for update in edits.updated {
+        lines.append(contentsOf: edits?.added.elements.map { "+ \(compactElementLine($0))" } ?? [])
+        lines.append(contentsOf: edits?.removed.elements.map { "- \(compactElementLine($0))" } ?? [])
+        for update in edits?.updated.updates ?? [] {
             let name = nonEmpty(update.after.label)
                 ?? nonEmpty(update.after.value)
                 ?? nonEmpty(update.after.identifier)
