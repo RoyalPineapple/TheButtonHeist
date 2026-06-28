@@ -288,15 +288,14 @@ final class TheFenceHandlerTests: XCTestCase {
 
     func testDiagnosticFailureIsPublicFailureBoundaryValue() {
         let details = FailureDetails(
-            errorCode: "request.validation_error",
-            phase: .request,
-            retryable: false,
+            code: .requestValidationError,
             hint: "Fix the request."
         )
 
         let diagnostic = DiagnosticFailure(message: "Invalid request", details: details)
         let publicFailure: PublicFailure = diagnostic
 
+        XCTAssertEqual(publicFailure.failureCode, FailureCode(.requestValidationError))
         XCTAssertEqual(publicFailure.code, "request.validation_error")
         XCTAssertEqual(publicFailure.kind, .request)
         XCTAssertEqual(publicFailure.message, "Invalid request")
@@ -309,10 +308,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     func testTypedErrorConstructorPreservesLegacyJSONShape() throws {
         let details = FailureDetails(
-            errorCode: "request.invalid",
-            phase: .request,
-            retryable: false,
-            hint: "Fix the request shape or arguments before retrying."
+            code: .requestInvalid
         )
         let failure = PublicFailure(message: "schema validation failed", details: details)
 
@@ -322,6 +318,8 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(try typed.jsonData(), try legacy.jsonData())
 
         let json = publicJSONObject(typed)
+        XCTAssertEqual(failure.failureCode, FailureCode(.requestInvalid))
+        XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         XCTAssertEqual(json["status"] as? String, "error")
         XCTAssertEqual(json["message"] as? String, failure.displayMessage)
         XCTAssertEqual(json["code"] as? String, failure.code)
@@ -337,6 +335,103 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(detailsJSON["phase"] as? String, failure.phase.rawValue)
         XCTAssertEqual(detailsJSON["retryable"] as? Bool, failure.retryable)
         XCTAssertEqual(detailsJSON["hint"] as? String, failure.hint)
+    }
+
+    func testKnownFailureCodesExposeTypedClassification() {
+        let cases: [(KnownFailureCode, String, PublicFailureKind, FailurePhase, Bool)] = [
+            (.requestInvalid, "request.invalid", .request, .request, false),
+            (.discoveryNoDeviceFound, "discovery.no_device_found", .discovery, .discovery, true),
+            (.transportNetworkError, "transport.network_error", .connection, .transport, true),
+            (.requestActionFailed, "request.action_failed", .request, .request, false),
+        ]
+
+        for (knownCode, rawValue, kind, phase, retryable) in cases {
+            let code = FailureCode(knownCode)
+            let details = FailureDetails(code: knownCode)
+
+            XCTAssertEqual(code.rawValue, rawValue)
+            XCTAssertEqual(code.knownCode, knownCode)
+            XCTAssertEqual(code.kind, kind)
+            XCTAssertEqual(code.phase, phase)
+            XCTAssertEqual(code.retryable, retryable)
+            XCTAssertEqual(details.code, code)
+            XCTAssertEqual(details.errorCode, rawValue)
+            XCTAssertEqual(details.phase, phase)
+            XCTAssertEqual(details.retryable, retryable)
+        }
+    }
+
+    func testCustomFailureCodeUsesExplicitBoundaryValueAndPhaseFallback() {
+        let details = FailureDetails(
+            code: FailureCode(rawValue: "plugin.custom_failure"),
+            phase: .server,
+            retryable: false,
+            hint: nil
+        )
+        let failure = PublicFailure(message: "Plugin failed", details: details)
+
+        XCTAssertNil(failure.failureCode.knownCode)
+        XCTAssertEqual(failure.failureCode.rawValue, "plugin.custom_failure")
+        XCTAssertEqual(failure.code, "plugin.custom_failure")
+        XCTAssertEqual(failure.kind, .server)
+        XCTAssertEqual(failure.phase, .server)
+    }
+
+    func testPublicFailureJSONPreservesRawKnownCodesAcrossRepresentativeKinds() throws {
+        let cases: [(String, FenceResponse, KnownFailureCode, PublicFailureKind, FailurePhase)] = [
+            (
+                "request",
+                FenceResponse.failure(FenceOperationRoutingError(message: "Unknown tool: warp")),
+                .requestInvalid,
+                .request,
+                .request
+            ),
+            (
+                "discovery",
+                FenceResponse.failure(FenceError.noDeviceFound),
+                .discoveryNoDeviceFound,
+                .discovery,
+                .discovery
+            ),
+            (
+                "transport",
+                FenceResponse.failure(FenceError.connectionFailure(ConnectionFailure(
+                    message: "network down",
+                    failureCode: FailureCode(.transportNetworkError),
+                    phase: .transport,
+                    retryable: true,
+                    hint: "retry"
+                ))),
+                .transportNetworkError,
+                .connection,
+                .transport
+            ),
+            (
+                "action",
+                FenceResponse.failure(FenceError.actionFailed("could not activate target")),
+                .requestActionFailed,
+                .request,
+                .request
+            ),
+        ]
+
+        for (name, response, knownCode, kind, phase) in cases {
+            let failure = try XCTUnwrap(response.publicFailure, name)
+            let json = publicJSONObject(response)
+            let detailsJSON = try XCTUnwrap(json["details"] as? [String: Any], name)
+
+            XCTAssertEqual(failure.failureCode, FailureCode(knownCode), name)
+            XCTAssertEqual(failure.code, knownCode.rawValue, name)
+            XCTAssertEqual(failure.kind, kind, name)
+            XCTAssertEqual(failure.phase, phase, name)
+            XCTAssertEqual(json["code"] as? String, knownCode.rawValue, name)
+            XCTAssertEqual(json["errorCode"] as? String, knownCode.rawValue, name)
+            XCTAssertEqual(json["kind"] as? String, kind.rawValue, name)
+            XCTAssertEqual(json["phase"] as? String, phase.rawValue, name)
+            XCTAssertEqual(detailsJSON["code"] as? String, knownCode.rawValue, name)
+            XCTAssertEqual(detailsJSON["kind"] as? String, kind.rawValue, name)
+            XCTAssertEqual(detailsJSON["phase"] as? String, phase.rawValue, name)
+        }
     }
 
     func testKnownFailuresExposeCompleteDiagnosticFields() throws {
@@ -389,6 +484,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
         for expected in cases {
             let failure = try XCTUnwrap(expected.response.publicFailure, expected.name)
+            XCTAssertNotNil(failure.failureCode.knownCode, expected.name)
+            XCTAssertEqual(failure.failureCode.rawValue, expected.code, expected.name)
             XCTAssertEqual(failure.code, expected.code, expected.name)
             XCTAssertEqual(failure.kind, expected.kind, expected.name)
             XCTAssertEqual(failure.phase, expected.phase, expected.name)
@@ -408,6 +505,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = FenceResponse.failure(FenceError.notConnected)
         let failure = try XCTUnwrap(response.publicFailure)
 
+        XCTAssertEqual(failure.failureCode, FailureCode(.connectionNotConnected))
         XCTAssertEqual(failure.code, "connection.not_connected")
         XCTAssertEqual(failure.kind, .connection)
         XCTAssertEqual(failure.message, "Not connected to device.")
@@ -420,6 +518,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = FenceResponse.failure(HandoffConnectionError.timeout)
         let failure = try XCTUnwrap(response.publicFailure)
 
+        XCTAssertEqual(failure.failureCode, FailureCode(.setupTimeout))
         XCTAssertEqual(failure.code, "setup.timeout")
         XCTAssertEqual(failure.kind, .connection)
         XCTAssertEqual(failure.message, "Connection timed out")
