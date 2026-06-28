@@ -44,9 +44,9 @@ extension TheFence {
         var diagnostic: HeistBuildDiagnostic {
             switch self {
             case .wrongStepCount:
-                return Self.diagnostic(code: "heist.perform.wrong_step_count")
+                return Self.diagnostic(code: .performWrongStepCount)
             case .unsupportedStep:
-                return Self.diagnostic(code: "heist.perform.unsupported_step")
+                return Self.diagnostic(code: .performUnsupportedStep)
             }
         }
 
@@ -64,7 +64,7 @@ extension TheFence {
         Use run_heist for branching, loops, reusable heists, warnings, failures, or multiple steps.
         """
 
-        private static func diagnostic(code: String) -> HeistBuildDiagnostic {
+        private static func diagnostic(code: HeistBuildDiagnosticCode) -> HeistBuildDiagnostic {
             HeistBuildDiagnostic(
                 code: code,
                 phase: .planning,
@@ -107,11 +107,15 @@ extension TheFence {
         case .success(let plan, _):
             return plan
         case .failure(let diagnostics):
-            guard diagnostics.contains(where: { $0.message.contains("WaitFor is a gate") }) else {
-                throw buildDiagnosticFenceError(diagnostics)
-            }
-            throw buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
+            throw performStepSourceLoadError(for: diagnostics)
         }
+    }
+
+    func performStepSourceLoadError(for diagnostics: [HeistBuildDiagnostic]) -> FenceError {
+        guard Self.containsPerformUnsupportedStepDiagnostic(diagnostics) else {
+            return buildDiagnosticFenceError(diagnostics)
+        }
+        return buildDiagnosticFenceError([PerformStepValidationError.unsupportedStep.diagnostic])
     }
 
     func performableStep(in plan: HeistPlan) throws -> PerformableHeistStep {
@@ -254,6 +258,12 @@ private extension TheFence {
     static func renderBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
         guard !diagnostics.isEmpty else { return "Heist planning failed." }
         return diagnostics.map(\.renderedMessage).joined(separator: "\n")
+    }
+
+    static func containsPerformUnsupportedStepDiagnostic(_ diagnostics: [HeistBuildDiagnostic]) -> Bool {
+        diagnostics.contains { diagnostic in
+            diagnostic.code == .sourceWaitForGate
+        }
     }
 
 }

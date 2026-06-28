@@ -12,6 +12,43 @@ public enum HeistBuildPhase: String, Sendable, Equatable {
     case planning
 }
 
+public struct HeistBuildDiagnosticCode: RawRepresentable, Sendable, Hashable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.init(rawValue: value)
+    }
+
+    public var description: String {
+        rawValue
+    }
+}
+
+public extension HeistBuildDiagnosticCode {
+    static let sourceInvalidSyntax: Self = "heist.source.invalid_syntax"
+    static let sourceWaitForGate: Self = "heist.source.wait_for_gate"
+    static let planRuntimeSafety: Self = "heist.plan.runtime_safety"
+
+    static let planningMissingPlanSource: Self = "heist.planning.missing_plan_source"
+    static let planningMultiplePlanSources: Self = "heist.planning.multiple_plan_sources"
+    static let planningInlineSourceNotAccepted: Self = "heist.planning.inline_source_not_accepted"
+    static let planningEmptyPath: Self = "heist.planning.empty_path"
+    static let planningUnsupportedPath: Self = "heist.planning.unsupported_path"
+    static let planningEmptyInlineSource: Self = "heist.planning.empty_inline_source"
+    static let planningRawJSONIRFields: Self = "heist.planning.raw_json_ir_fields"
+    static let planningInvalidPlanSource: Self = "heist.planning.invalid_plan_source"
+    static let planningInvalidArtifact: Self = "heist.planning.invalid_artifact"
+    static let planningInvalidArgument: Self = "heist.planning.invalid_argument"
+    static let planningInvalidRootArgument: Self = "heist.planning.invalid_root_argument"
+
+    static let performWrongStepCount: Self = "heist.perform.wrong_step_count"
+    static let performUnsupportedStep: Self = "heist.perform.unsupported_step"
+}
+
 public struct HeistBuildSourceSpan: Sendable, Equatable, CustomStringConvertible {
     public let sourceName: String
     public let offset: Int
@@ -39,7 +76,7 @@ public struct HeistBuildSourceSpan: Sendable, Equatable, CustomStringConvertible
 }
 
 public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible {
-    public let code: String
+    public let code: HeistBuildDiagnosticCode
     public let kind: HeistBuildDiagnosticKind
     public let phase: HeistBuildPhase
     public let sourceSpan: HeistBuildSourceSpan?
@@ -48,7 +85,7 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
     public let hint: String?
 
     public init(
-        code: String,
+        code: HeistBuildDiagnosticCode,
         kind: HeistBuildDiagnosticKind = .error,
         phase: HeistBuildPhase,
         sourceSpan: HeistBuildSourceSpan? = nil,
@@ -63,6 +100,26 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
         self.path = path
         self.message = message
         self.hint = hint
+    }
+
+    public init(
+        code: String,
+        kind: HeistBuildDiagnosticKind = .error,
+        phase: HeistBuildPhase,
+        sourceSpan: HeistBuildSourceSpan? = nil,
+        path: String? = nil,
+        message: String,
+        hint: String? = nil
+    ) {
+        self.init(
+            code: HeistBuildDiagnosticCode(rawValue: code),
+            kind: kind,
+            phase: phase,
+            sourceSpan: sourceSpan,
+            path: path,
+            message: message,
+            hint: hint
+        )
     }
 
     public var severity: Severity {
@@ -196,38 +253,38 @@ public extension HeistPlanningError {
     var diagnostic: HeistBuildDiagnostic {
         switch self {
         case .missingPlanSource:
-            return planningDiagnostic(code: "heist.planning.missing_plan_source", message: description)
+            return planningDiagnostic(code: .planningMissingPlanSource, message: description)
         case .multiplePlanSources:
-            return planningDiagnostic(code: "heist.planning.multiple_plan_sources", message: description)
+            return planningDiagnostic(code: .planningMultiplePlanSources, message: description)
         case .inlineSourceNotAccepted:
-            return planningDiagnostic(code: "heist.planning.inline_source_not_accepted", message: description)
+            return planningDiagnostic(code: .planningInlineSourceNotAccepted, message: description)
         case .emptyPath:
-            return planningDiagnostic(code: "heist.planning.empty_path", message: description)
+            return planningDiagnostic(code: .planningEmptyPath, message: description)
         case .unsupportedPath(_, let path):
             return planningDiagnostic(
-                code: "heist.planning.unsupported_path",
+                code: .planningUnsupportedPath,
                 path: path,
                 message: description
             )
         case .emptyInlineSource:
-            return planningDiagnostic(code: "heist.planning.empty_inline_source", message: description)
+            return planningDiagnostic(code: .planningEmptyInlineSource, message: description)
         case .rawStructuredJSONIRFields:
-            return planningDiagnostic(code: "heist.planning.raw_json_ir_fields", message: description)
+            return planningDiagnostic(code: .planningRawJSONIRFields, message: description)
         case .invalidPlanSource:
-            return planningDiagnostic(code: "heist.planning.invalid_plan_source", message: description)
+            return planningDiagnostic(code: .planningInvalidPlanSource, message: description)
         case .invalidArgument(let source, _):
             return planningDiagnostic(
-                code: "heist.planning.invalid_argument",
+                code: .planningInvalidArgument,
                 path: source,
                 message: description
             )
         case .invalidRootArgument:
-            return planningDiagnostic(code: "heist.planning.invalid_root_argument", message: description)
+            return planningDiagnostic(code: .planningInvalidRootArgument, message: description)
         }
     }
 
     private func planningDiagnostic(
-        code: String,
+        code: HeistBuildDiagnosticCode,
         path: String? = nil,
         message: String
     ) -> HeistBuildDiagnostic {
@@ -259,14 +316,14 @@ private extension HeistPlanning {
             return .success(try HeistArtifactCodec.read(from: url).plan, diagnostics: [])
         } catch let error as HeistArtifactCodecError {
             return .failure([HeistBuildDiagnostic(
-                code: "heist.planning.invalid_artifact",
+                code: .planningInvalidArtifact,
                 phase: .planning,
                 path: url.path,
                 message: error.description
             )])
         } catch {
             return .failure([HeistBuildDiagnostic(
-                code: "heist.planning.invalid_artifact",
+                code: .planningInvalidArtifact,
                 phase: .planning,
                 path: url.path,
                 message: String(describing: error)
@@ -298,7 +355,7 @@ private extension HeistPlanning {
 private extension HeistPlanRuntimeSafetyFailure {
     var diagnostic: HeistBuildDiagnostic {
         HeistBuildDiagnostic(
-            code: "heist.plan.runtime_safety",
+            code: .planRuntimeSafety,
             phase: .planValidation,
             path: path,
             message: "\(contract); observed \(observed)",

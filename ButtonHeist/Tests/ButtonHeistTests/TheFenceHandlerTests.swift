@@ -656,6 +656,34 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPerformUnsupportedStepDiagnosticBranchUsesCodeNotMessage() async {
+        let fence = TheFence(configuration: .init())
+        let guidance = "perform accepts one action statement or one simple WaitFor statement"
+
+        let codeSelectedError = fence.performStepSourceLoadError(for: [
+            HeistBuildDiagnostic(
+                code: .sourceWaitForGate,
+                phase: .sourceCompilation,
+                message: "compiler wording can change"
+            ),
+        ])
+        let codeSelectedMessage = String(describing: codeSelectedError)
+        XCTAssertTrue(codeSelectedMessage.contains(guidance), codeSelectedMessage)
+        XCTAssertFalse(codeSelectedMessage.contains("compiler wording can change"), codeSelectedMessage)
+
+        let messageOnlyError = fence.performStepSourceLoadError(for: [
+            HeistBuildDiagnostic(
+                code: .sourceInvalidSyntax,
+                phase: .sourceCompilation,
+                message: "WaitFor is a gate"
+            ),
+        ])
+        let messageOnlyMessage = String(describing: messageOnlyError)
+        XCTAssertTrue(messageOnlyMessage.contains("WaitFor is a gate"), messageOnlyMessage)
+        XCTAssertFalse(messageOnlyMessage.contains(guidance), messageOnlyMessage)
+    }
+
+    @ButtonHeistActor
     func testPerformRejectsProgramShapedSource() async throws {
         let fence = TheFence(configuration: .init())
         let invalidSteps = [
