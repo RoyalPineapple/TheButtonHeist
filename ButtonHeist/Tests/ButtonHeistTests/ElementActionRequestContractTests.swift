@@ -36,15 +36,16 @@ final class ElementActionRequestContractTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         let response = try await fence.execute(command: .activate)
 
-        guard case .error(let message, let details) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected error response")
         }
+        let message = failure.message
         XCTAssertTrue(message.contains("activate request contract failed: missing target"))
         XCTAssertTrue(message.contains("Next: get_interface()"))
-        XCTAssertEqual(details?.code.knownCode, .requestMissingTarget)
-        XCTAssertEqual(details?.phase, .request)
-        XCTAssertEqual(details?.retryable, false)
-        XCTAssertEqual(details?.hint, "get_interface()")
+        XCTAssertEqual(failure.details.code.knownCode, .requestMissingTarget)
+        XCTAssertEqual(failure.details.phase, .request)
+        XCTAssertEqual(failure.details.retryable, false)
+        XCTAssertEqual(failure.details.hint, "get_interface()")
     }
 
     @ButtonHeistActor
@@ -90,12 +91,12 @@ final class ElementActionRequestContractTests: XCTestCase {
                 command: command,
                 values: arguments
             )
-            guard case .error(let message, _) = response else {
+            guard case .error(let failure) = response else {
                 return XCTFail("Expected error response", file: file, line: line)
             }
             XCTAssertTrue(
-                message.contains(expected),
-                "Expected error containing '\(expected)', got: \(message)",
+                failure.message.contains(expected),
+                "Expected error containing '\(expected)', got: \(failure.message)",
                 file: file,
                 line: line
             )

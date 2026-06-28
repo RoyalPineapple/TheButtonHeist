@@ -4,13 +4,13 @@ public struct ActionStep: Codable, Sendable, Equatable {
     public let command: HeistActionCommand
     public let expectation: WaitStep?
     public let expectationWaiver: String?
-    let expectationValidationFailure: String?
+    let expectationValidationDiagnostics: [HeistBuildDiagnostic]
 
     public init(
         command: HeistActionCommand,
         expectation: WaitStep? = nil,
         expectationWaiver: String? = nil,
-        expectationValidationFailure: String? = nil
+        expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) throws {
         guard expectation?.elseBody == nil else {
             throw HeistPlanError.expectationElseBodyUnsupported
@@ -26,7 +26,7 @@ public struct ActionStep: Codable, Sendable, Equatable {
         self.command = command
         self.expectation = expectation
         self.expectationWaiver = expectationWaiver
-        self.expectationValidationFailure = expectationValidationFailure
+        self.expectationValidationDiagnostics = expectationValidationDiagnostics
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {

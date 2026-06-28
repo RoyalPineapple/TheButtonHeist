@@ -133,9 +133,9 @@ extension HeistPlanSourceParser {
                 )
                 let predicateResult = invocation.expectation.map {
                     composeExpectationPredicates(existing: $0.predicate, next: predicate)
-                } ?? ExpectationPredicateComposition(predicate: predicate, failure: nil)
-                if let failure = predicateResult.failure ?? timeoutResult.failure {
-                    throw error(chainToken, failure)
+                } ?? ExpectationPredicateComposition(predicate: predicate, diagnostics: [])
+                if let diagnostic = (predicateResult.diagnostics + timeoutResult.diagnostics).first {
+                    throw error(chainToken, diagnostic.message)
                 }
                 invocation = HeistInvocationStep(
                     path: invocation.path,

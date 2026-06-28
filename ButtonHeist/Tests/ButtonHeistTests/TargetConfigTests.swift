@@ -533,9 +533,9 @@ final class TargetConfigTests: XCTestCase {
             "device": .string("127.0.0.1:9999"),
             "token": .string("bad-tok"),
         ])
-        if case .error(let message, _) = response {
-            XCTAssertTrue(message.contains("Connect failed; disconnected from previous target"))
-            XCTAssertTrue(message.contains("denied"))
+        if case .error(let failure) = response {
+            XCTAssertTrue(failure.message.contains("Connect failed; disconnected from previous target"))
+            XCTAssertTrue(failure.message.contains("denied"))
         } else {
             XCTFail("Expected error response, got \(response)")
         }

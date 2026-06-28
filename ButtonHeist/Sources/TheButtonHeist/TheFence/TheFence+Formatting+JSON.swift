@@ -25,9 +25,9 @@ extension FenceResponse {
     }
 
     static func jsonEncodingFailureResponse() -> PublicErrorResponse {
-        PublicErrorResponse(
+        PublicErrorResponse(failure: DiagnosticFailure(
             message: PublicJSONSerializer.encodingFailureMessage,
             details: FailureDetails(code: .formattingJSONEncodingFailed)
-        )
+        ))
     }
 }

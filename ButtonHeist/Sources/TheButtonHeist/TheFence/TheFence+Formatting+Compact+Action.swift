@@ -10,9 +10,8 @@ extension FenceResponse {
         expectation: ExpectationResult?,
         profile: ProjectionProfile = .summary
     ) -> String {
-        let commandName = command.rawValue
         let projection = ActionProjection(
-            method: commandName,
+            actionMethod: .fence(command),
             result: result,
             expectation: expectation,
             expectationHint: expectation.flatMap {
@@ -38,9 +37,9 @@ extension FenceResponse {
             text = "screenshot: \(Int(width))x\(Int(height))"
         case .value, .none:
             if let delta = projection.delta {
-                text = Self.compactDelta(delta, method: projection.method)
+                text = Self.compactDelta(delta, actionMethod: projection.actionMethod)
             } else {
-                text = "\(projection.method): ok"
+                text = "\(projection.actionMethod): ok"
             }
         }
         if let screenId = projection.screenId {
@@ -133,9 +132,9 @@ extension FenceResponse {
 
     private static func compactActionFailure(_ projection: ActionProjection) -> String {
         guard let failure = projection.failure else {
-            return "\(projection.method): ok"
+            return "\(projection.actionMethod): ok"
         }
-        var text = "\(projection.method): error[\(failure.compactCode)]: \(failure.message)"
+        var text = "\(projection.actionMethod): error[\(failure.compactCode)]: \(failure.message)"
         if let screenId = projection.screenId {
             text = "\(screenId) | \(text)"
         }

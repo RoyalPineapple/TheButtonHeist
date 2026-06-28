@@ -413,10 +413,16 @@ extension HeistPlanSourceParser {
             }
         }
         if let repeatedContent {
+            if let diagnostic = repeatedContent.heistBuildDiagnostics.first {
+                throw error(previous, diagnostic.message)
+            }
             guard let step = repeatedContent.heistSteps.first, repeatedContent.heistSteps.count == 1 else {
                 throw error(previous, "action .until statement did not produce exactly one step")
             }
             return step
+        }
+        if let diagnostic = content.heistBuildDiagnostics.first {
+            throw error(previous, diagnostic.message)
         }
         guard let step = content.heistSteps.first, content.heistSteps.count == 1 else {
             throw error(previous, "action statement did not produce exactly one step")

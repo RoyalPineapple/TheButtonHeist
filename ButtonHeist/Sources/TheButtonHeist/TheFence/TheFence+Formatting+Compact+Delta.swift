@@ -15,6 +15,10 @@ extension FenceResponse {
         )
     }
 
+    static func compactDelta(_ projection: DeltaProjection, actionMethod: ActionMethodProjection) -> String {
+        compactDelta(projection, method: actionMethod.rawValue)
+    }
+
     static func compactDelta(_ projection: DeltaProjection, method: String) -> String {
         switch projection.kind {
         case .noChange:

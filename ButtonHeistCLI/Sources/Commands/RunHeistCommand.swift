@@ -69,17 +69,17 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             return
         }
 
-        let (fence, response) = try await CLIRunner.execute(
+        let execution = try await CLIRunner.execute(
             connection: connection,
             command: Self.fenceCommand,
             arguments: Self.fenceArguments(request)
         )
-        defer { fence.stop() }
+        defer { execution.fence.stop() }
 
-        if case .heistExecution(_, let result, _) = response {
+        if case .heistExecution(_, let result, _) = execution.response {
             let name = prepared.path
                 .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
-            let report = fence.junitReport(
+            let report = execution.fence.junitReport(
                 for: result,
                 heistName: name,
                 totalTimeSeconds: Double(result.durationMs) / 1000
@@ -90,8 +90,8 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
             logStatus("Warning: --junit requested but run_heist did not produce a report")
         }
 
-        CLIRunner.outputResponse(response, format: output.format ?? .auto)
-        if response.isFailure {
+        CLIRunner.outputResponse(execution.response, format: output.format ?? .auto)
+        if execution.response.isFailure {
             throw ExitCode.failure
         }
     }

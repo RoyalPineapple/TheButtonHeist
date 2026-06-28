@@ -17,6 +17,17 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
     public var errorDescription: String? { message }
 }
 
+/// Fully routed operation ready to enter TheFence's execution pipeline.
+public struct FenceOperationRequest: Sendable {
+    public let command: TheFence.Command
+    public let arguments: TheFence.CommandArgumentEnvelope
+
+    public init(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope) {
+        self.command = command
+        self.arguments = arguments
+    }
+}
+
 public extension TheFence.Command {
     static func routeToolCall(named name: String) -> Result<Self, FenceOperationRoutingError> {
         guard let command = Self(rawValue: name),
@@ -27,17 +38,29 @@ public extension TheFence.Command {
         return .success(command)
     }
 
+    static func routeToolRequest(
+        named name: String,
+        arguments: TheFence.CommandArgumentEnvelope
+    ) -> Result<FenceOperationRequest, FenceOperationRoutingError> {
+        switch routeToolCall(named: name) {
+        case .success(let command):
+            return .success(FenceOperationRequest(command: command, arguments: arguments))
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
     static func routeCommandEnvelope(
         _ arguments: TheFence.CommandArgumentEnvelope,
         context: String
-    ) -> Result<(command: Self, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
+    ) -> Result<FenceOperationRequest, FenceOperationRoutingError> {
         routeCanonicalStep(arguments, context: context, isExecutable: nil)
     }
 
     static func routeCLICommandEnvelope(
         _ arguments: TheFence.CommandArgumentEnvelope,
         context: String
-    ) -> Result<(command: Self, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
+    ) -> Result<FenceOperationRequest, FenceOperationRoutingError> {
         let routed = routeCanonicalStep(
             arguments,
             context: context,
@@ -64,7 +87,7 @@ private extension TheFence.Command {
         _ step: TheFence.CommandArgumentEnvelope,
         context: String,
         isExecutable: ((Self) -> Bool)?
-    ) -> Result<(command: Self, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
+    ) -> Result<FenceOperationRequest, FenceOperationRoutingError> {
         let commandName: String
         do {
             commandName = try step.requiredSchemaString("command")
@@ -90,7 +113,7 @@ private extension TheFence.Command {
         arguments: TheFence.CommandArgumentEnvelope,
         context: String,
         isExecutable: ((Self) -> Bool)?
-    ) -> Result<(command: Self, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
+    ) -> Result<FenceOperationRequest, FenceOperationRoutingError> {
         guard let command = Self(rawValue: commandName) else {
             return .failure(FenceOperationRoutingError(
                 message: "\(context) command must be a canonical TheFence.Command; unknown command \"\(commandName)\""
@@ -103,6 +126,6 @@ private extension TheFence.Command {
             ))
         }
 
-        return .success((command: command, arguments: arguments))
+        return .success(FenceOperationRequest(command: command, arguments: arguments))
     }
 }

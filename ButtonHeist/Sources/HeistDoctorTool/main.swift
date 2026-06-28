@@ -51,12 +51,12 @@ struct HeistDoctorCommand: ParsableCommand {
             newFail: newFailReceipt,
             stepPath: stepPath
         )
+        let report = HeistDoctorReport(suggestions: suggestions)
 
         switch format {
         case .human:
-            HeistDoctorToolOutput.writeLine(Self.humanReport(suggestions))
+            HeistDoctorToolOutput.writeLine(Self.humanReport(report))
         case .json:
-            let report = HeistDoctorReport(suggestions: suggestions)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(report)
@@ -80,12 +80,13 @@ struct HeistDoctorCommand: ParsableCommand {
         }
     }
 
-    private static func humanReport(_ suggestions: [HeistRepairSuggestion]) -> String {
+    private static func humanReport(_ report: HeistDoctorReport) -> String {
+        let suggestions = report.suggestions
         guard !suggestions.isEmpty else {
             return "No repair suggestions."
         }
 
-        var lines = ["Repair suggestions (alpha, \(suggestions.count))"]
+        var lines = ["Repair suggestions (\(report.status.rawValue), \(suggestions.count))"]
         for (index, suggestion) in suggestions.enumerated() {
             lines.append("")
             lines.append("[\(index + 1)] \(suggestion.failureKind.rawValue) confidence=\(suggestion.confidence.rawValue)")

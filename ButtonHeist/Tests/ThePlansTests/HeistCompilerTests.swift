@@ -256,6 +256,29 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `swift DSL builder failures surface typed build diagnostics`() throws {
+        do {
+            _ = try HeistPlan("InvalidExpectation") {
+                Activate(.label("Pay"))
+                    .expect(.exists(.label("Done")), timeout: 1)
+                    .expect(.missing(.label("Error")), timeout: 2)
+            }
+            Issue.record("Expected invalid expectation composition to fail")
+        } catch let error as HeistPlanBuildError {
+            let diagnostic = try #require(error.diagnostics.first)
+
+            #expect(error.diagnostics.count == 1)
+            #expect(diagnostic.code == .dslInvalidActionExpectation)
+            #expect(diagnostic.phase == .dslBuild)
+            #expect(diagnostic.path == "activate")
+            #expect(diagnostic.message.contains("multiple explicit expectation timeouts"))
+            #expect(diagnostic.hint == "Use one explicit timeout for the composed expectation.")
+        } catch {
+            Issue.record("Expected HeistPlanBuildError, got \(error)")
+        }
+    }
+
+    @Test
     func `result builders do not accept native Swift control flow in heist body`() async throws {
         let temp = try CompilerTemporaryDirectory()
         let source = try temp.writeSwiftSource(
@@ -476,6 +499,38 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `heist DSL build diagnostics stay on the typed diagnostic pipeline`() throws {
+        let root = try repositoryRoot()
+        let checkedFiles = [
+            "ButtonHeist/Sources/ThePlans/ActionStep.swift",
+            "ButtonHeist/Sources/ThePlans/HeistActions.swift",
+            "ButtonHeist/Sources/ThePlans/HeistContent.swift",
+            "ButtonHeist/Sources/ThePlans/HeistControl.swift",
+            "ButtonHeist/Sources/ThePlans/HeistPlanSourceActionParser.swift",
+            "ButtonHeist/Sources/ThePlans/HeistPlanSourceControlFlowParser.swift",
+        ]
+        let forbiddenPatterns = [
+            #"\bheistBuildDiagnostics\s*:\s*\[String\]"#,
+            #"\bvar\s+heistBuildDiagnostics\s*:\s*\[String\]"#,
+            #"\blet\s+heistBuildDiagnostics\s*:\s*\[String\]"#,
+            #"\bHeistDefinitionBuildResult\b"#,
+            #"\bexpectationValidationFailure\b"#,
+            #"\bfailure\s*:\s*String\?"#,
+            #"\bcase\s+failure\s*\(\s*String\s*\)"#,
+        ]
+
+        for path in checkedFiles {
+            let source = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+            for pattern in forbiddenPatterns {
+                #expect(
+                    source.range(of: pattern, options: .regularExpression) == nil,
+                    "\(path) contains retired loose build diagnostic shape \(pattern)"
+                )
+            }
+        }
+    }
+
+    @Test
     func `wire message coding uses concrete payload wrappers`() throws {
         let root = try repositoryRoot()
         let wireCodingFiles = [
@@ -552,6 +607,16 @@ struct HeistCompilerTests {
                 []
             ),
             (
+                "public action failure projection",
+                "\\b" + "Public" + "(ActionFailureProjection|Failure|FailureDetail|FailureDetails)\\b",
+                []
+            ),
+            (
+                "action kind initializer surface",
+                "\\b" + "action" + "Kind\\b",
+                []
+            ),
+            (
                 "compilation",
                 "\\b" + "Heist" + "Compilation(SourceLocation|Diagnostic|Result)\\b",
                 [
@@ -592,6 +657,39 @@ struct HeistCompilerTests {
         #expect(!evaluatorSource.contains("matchesTraitPropertyValue"))
         #expect(!evaluatorSource.contains("propertyChange.oldValue"))
         #expect(!evaluatorSource.contains("propertyChange.newValue"))
+    }
+
+    @Test
+    func `action projection method identity stays typed until JSON encoding`() throws {
+        let root = try repositoryRoot()
+        let projectionFile = root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence/ReportProjections.swift")
+        let projectionSource = try String(contentsOf: projectionFile, encoding: .utf8)
+
+        #expect(projectionSource.contains("enum ActionMethodProjection"))
+        #expect(projectionSource.range(of: #"\bmethod:\s*String\b"#, options: .regularExpression) == nil)
+        #expect(!projectionSource.contains("Public" + "ActionFailureProjection"))
+
+        let actionProjectionCallPattern = #"ActionProjection\s*\(\s*method:"#
+        let callSitePaths = [
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Response.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/ReportProjections.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Action.swift",
+        ]
+        for path in callSitePaths {
+            let source = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+            #expect(
+                source.range(of: actionProjectionCallPattern, options: .regularExpression) == nil,
+                "Unexpected raw ActionProjection method initializer in \(path)"
+            )
+        }
+
+        let jsonSource = try String(
+            contentsOf: root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift"),
+            encoding: .utf8
+        )
+        #expect(jsonSource.contains("self.method = projection.actionMethod.rawValue"))
     }
 
     @Test
@@ -648,6 +746,27 @@ struct HeistCompilerTests {
         let unexpected = observed.subtracting(allowedAnyLines)
 
         #expect(unexpected.isEmpty, "Unexpected broad Any existential uses:\n\(unexpected.sorted().joined(separator: "\n"))")
+    }
+
+    @Test
+    func `MCP SDK Value maps stay at the MCP argument boundary`() throws {
+        let root = try repositoryRoot()
+        let allowedPaths: Set<String> = [
+            "ButtonHeistMCP/Sources/main.swift",
+            "ButtonHeistMCP/Sources/MCPArgumentInputPreflight.swift",
+            "ButtonHeistMCP/Tests/ToolRoutingTests.swift",
+            "ButtonHeistMCP/Tests/ToolSyncTests.swift",
+        ]
+        let mcpFiles = try swiftFiles(in: root.appendingPathComponent("ButtonHeistMCP/Sources", isDirectory: true))
+            + swiftFiles(in: root.appendingPathComponent("ButtonHeistMCP/Tests", isDirectory: true))
+        let unexpected = try sourceMatchFiles(
+            in: mcpFiles,
+            root: root,
+            pattern: #"\[String:\s*Value\]"#
+        )
+        .filter { !allowedPaths.contains($0) }
+
+        #expect(unexpected.isEmpty, "Unexpected MCP SDK Value maps:\n\(unexpected.sorted().joined(separator: "\n"))")
     }
 }
 

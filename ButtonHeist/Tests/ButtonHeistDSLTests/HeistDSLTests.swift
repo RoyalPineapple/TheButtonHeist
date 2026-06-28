@@ -312,12 +312,19 @@ func `different explicit chained expectation timeouts fail validation`() throws 
 
 @Test
 func `unsupported chained change expectations fail validation without replacement`() throws {
+    let diagnostic = HeistBuildDiagnostic(
+        code: .dslInvalidActionExpectation,
+        phase: .dslBuild,
+        path: "activate",
+        message: "unsupported expectation composition: change(elements) + change(screen)",
+        hint: "Use one change predicate plus optional state predicates, or split unrelated waits into explicit WaitFor steps."
+    )
     let step = try ActionStep(
         command: .activate(.label("Save")),
         expectation: WaitStep(predicate: .change(.elements()), timeout: 1),
-        expectationValidationFailure: "unsupported expectation composition: change(elements) + change(screen)"
+        expectationValidationDiagnostics: [diagnostic]
     )
-    #expect(throws: HeistPlanRuntimeSafetyError.self) {
+    #expect(throws: HeistPlanBuildError.self) {
         try HeistPlan {
             Activate(.label("Save"))
                 .expect(.change(.elements()))
@@ -327,7 +334,7 @@ func `unsupported chained change expectations fail validation without replacemen
     #expect(try step == ActionStep(
         command: .activate(.label("Save")),
         expectation: WaitStep(predicate: .change(.elements()), timeout: 1),
-        expectationValidationFailure: "unsupported expectation composition: change(elements) + change(screen)"
+        expectationValidationDiagnostics: [diagnostic]
     ))
 }
 @Test

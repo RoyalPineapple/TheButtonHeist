@@ -50,7 +50,7 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
 
     static func inlineCommandResult(for response: FenceResponse) throws -> CLIRunner.CommandResult {
         guard case .screenshotData(let payload, _) = response else {
-            return .response(response, format: .human)
+            return .response(CLIRunner.FormattedResponse(response: response, format: .human))
         }
         guard let data = Data(base64Encoded: payload.pngData) else {
             throw ValidationError("Failed to decode screenshot data")

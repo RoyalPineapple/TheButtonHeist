@@ -8,21 +8,19 @@ struct CLIParsedRequest {
 }
 
 struct CLIRequestBuildError: Error, CustomStringConvertible {
-    let message: String
-    let requestId: PublicRequestId?
     let diagnosticFailure: DiagnosticFailure
+    let requestId: PublicRequestId?
 
     init(
-        message: String,
-        requestId: PublicRequestId?,
-        details: FailureDetails = FailureDetails(code: .requestInvalid)
+        diagnosticFailure: DiagnosticFailure,
+        requestId: PublicRequestId?
     ) {
-        self.message = message
+        self.diagnosticFailure = diagnosticFailure
         self.requestId = requestId
-        self.diagnosticFailure = DiagnosticFailure(message: message, details: details)
     }
 
-    var description: String { message }
+    var message: String { diagnosticFailure.message }
+    var description: String { diagnosticFailure.displayMessage }
 }
 
 enum CLIRequestBuilder {
@@ -51,14 +49,9 @@ enum CLIRequestBuilder {
             envelope = try CLIMachineRequestEnvelope.decode(from: line)
         } catch let error as CLIRequestBuildError {
             throw error
-        } catch let error as DecodingError {
-            throw CLIRequestBuildError(
-                message: diagnosticMessage(for: error),
-                requestId: nil
-            )
         } catch {
             throw CLIRequestBuildError(
-                message: diagnosticMessage(for: error),
+                diagnosticFailure: diagnosticFailure(for: error),
                 requestId: nil
             )
         }
@@ -73,30 +66,41 @@ enum CLIRequestBuilder {
                 )
             case .failure(let error):
                 throw CLIRequestBuildError(
-                    message: error.message,
-                    requestId: requestId,
-                    details: error.details
+                    diagnosticFailure: DiagnosticFailure(message: error.message, details: error.details),
+                    requestId: requestId
                 )
             }
         } catch let error as CLIRequestBuildError {
             throw error
         } catch let error as SchemaValidationError {
             throw CLIRequestBuildError(
-                message: error.message,
-                requestId: requestId,
-                details: FailureDetails(code: .requestValidationError)
+                diagnosticFailure: DiagnosticFailure(
+                    message: error.message,
+                    details: FailureDetails(code: .requestValidationError)
+                ),
+                requestId: requestId
             )
         } catch {
             throw CLIRequestBuildError(
-                message: diagnosticMessage(for: error),
+                diagnosticFailure: diagnosticFailure(for: error),
                 requestId: requestId
             )
         }
     }
 
-    static func diagnosticMessage(for error: Error) -> String {
+    fileprivate static func diagnosticFailure(
+        for error: Error,
+        details: FailureDetails = FailureDetails(code: .requestInvalid)
+    ) -> DiagnosticFailure {
+        if let buildError = error as? CLIRequestBuildError {
+            return buildError.diagnosticFailure
+        }
+        if let inputError = error as? PublicJSONInputError {
+            return DiagnosticFailure(message: inputError.message, details: details)
+        }
         let description = String(describing: error)
-        return description.isEmpty ? error.localizedDescription : description
+        let message = description.isEmpty ? error.localizedDescription : description
+        return DiagnosticFailure(message: message, details: details)
     }
 
     static func targetValue(_ target: ElementTarget) -> HeistValue {
@@ -195,12 +199,12 @@ private struct CLIMachineRequestEnvelope: Decodable {
             )
         } catch let error as DecodingError {
             throw CLIRequestBuildError(
-                message: CLIRequestBuilder.diagnosticMessage(for: error),
+                diagnosticFailure: CLIRequestBuilder.diagnosticFailure(for: error),
                 requestId: nil
             )
         } catch {
             throw CLIRequestBuildError(
-                message: CLIRequestBuilder.diagnosticMessage(for: error),
+                diagnosticFailure: CLIRequestBuilder.diagnosticFailure(for: error),
                 requestId: nil
             )
         }

@@ -15,8 +15,8 @@ extension FenceResponse {
         switch self {
         case .ok(let message):
             return message
-        case .error(let message, let details):
-            return Self.compactError(message, details: details)
+        case .error(let failure):
+            return Self.compactError(failure)
         case .status(let connected, let deviceName):
             if connected, let name = deviceName { return "connected: \(name)" }
             return "not connected"
@@ -77,10 +77,9 @@ extension FenceResponse {
         }
     }
 
-    private static func compactError(_ message: String, details: FailureDetails?) -> String {
-        guard let details else {
-            return "error: \(message)"
-        }
+    private static func compactError(_ failure: DiagnosticFailure) -> String {
+        let details = failure.details
+        let message = failure.message
         var text = "error[\(details.errorCode) \(details.phase.rawValue) retryable=\(details.retryable)]: \(message)"
         if let hint = details.hint {
             text += "\nhint: \(hint)"

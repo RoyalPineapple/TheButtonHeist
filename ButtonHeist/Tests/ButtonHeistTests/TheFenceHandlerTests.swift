@@ -61,10 +61,10 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let message, _) = response {
+            if case .error(let failure) = response {
                 XCTAssertTrue(
-                    message.contains(substring),
-                    "Expected error containing '\(substring)', got: \(message)",
+                    failure.message.contains(substring),
+                    "Expected error containing '\(substring)', got: \(failure.message)",
                     file: file, line: line
                 )
             } else {
@@ -87,8 +87,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let message, _) = response {
-                XCTAssertEqual(message, expected, file: file, line: line)
+            if case .error(let failure) = response {
+                XCTAssertEqual(failure.message, expected, file: file, line: line)
             } else {
                 XCTFail("Expected .error response, got: \(response)", file: file, line: line)
             }
@@ -110,20 +110,20 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: command, values: arguments)
-            guard case .error(let message, let details) = response else {
+            guard case .error(let failure) = response else {
                 return XCTFail("Expected .error response, got: \(response)", file: file, line: line)
             }
             for substring in expectedSubstrings {
                 XCTAssertTrue(
-                    message.contains(substring),
-                    "Expected error containing '\(substring)', got: \(message)",
+                    failure.message.contains(substring),
+                    "Expected error containing '\(substring)', got: \(failure.message)",
                     file: file, line: line
                 )
             }
-            XCTAssertEqual(details?.code.knownCode, errorCode, file: file, line: line)
-            XCTAssertEqual(details?.phase, .request, file: file, line: line)
-            XCTAssertEqual(details?.retryable, false, file: file, line: line)
-            XCTAssertEqual(details?.hint, nextCommand, file: file, line: line)
+            XCTAssertEqual(failure.details.code.knownCode, errorCode, file: file, line: line)
+            XCTAssertEqual(failure.details.phase, .request, file: file, line: line)
+            XCTAssertEqual(failure.details.retryable, false, file: file, line: line)
+            XCTAssertEqual(failure.details.hint, nextCommand, file: file, line: line)
         } catch {
             XCTFail("Unexpected throw: \(error)", file: file, line: line)
         }
@@ -158,8 +158,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let message, _) = response {
-                XCTFail("Got validation error: \(message)", file: file, line: line)
+            if case .error(let failure) = response {
+                XCTFail("Got validation error: \(failure.message)", file: file, line: line)
             }
         } catch {
             XCTFail("Unexpected throw: \(error)", file: file, line: line)
@@ -177,10 +177,10 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let message, _) = response {
+            if case .error(let failure) = response {
                 XCTAssertTrue(
-                    message.contains(substring),
-                    "Expected error containing '\(substring)', got: \(message)",
+                    failure.message.contains(substring),
+                    "Expected error containing '\(substring)', got: \(failure.message)",
                     file: file,
                     line: line
                 )
@@ -203,8 +203,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let message, _) = response {
-                XCTAssertEqual(message, expected, file: file, line: line)
+            if case .error(let failure) = response {
+                XCTAssertEqual(failure.message, expected, file: file, line: line)
             } else {
                 XCTFail("Expected .error response, got: \(response)", file: file, line: line)
             }
@@ -223,8 +223,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let message, _) = response {
-                XCTFail("Got validation error: \(message)", file: file, line: line)
+            if case .error(let failure) = response {
+                XCTFail("Got validation error: \(failure.message)", file: file, line: line)
             }
         } catch {
             XCTFail("Unexpected throw: \(error)", file: file, line: line)
@@ -306,18 +306,21 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(diagnosticFailure.hint, "Fix the request.")
     }
 
-    func testTypedErrorConstructorPreservesLegacyJSONShape() throws {
+    func testErrorResponseCarriesTypedDiagnosticFailure() throws {
         let details = FailureDetails(
             code: .requestInvalid
         )
         let failure = DiagnosticFailure(message: "schema validation failed", details: details)
 
-        let typed = FenceResponse.error(failure)
-        let legacy = FenceResponse.error(failure.message, details: details)
+        let response = FenceResponse.error(failure)
 
-        XCTAssertEqual(try typed.jsonData(), try legacy.jsonData())
+        guard case .error(let encodedFailure) = response else {
+            return XCTFail("Expected typed error response")
+        }
+        XCTAssertEqual(encodedFailure, failure)
+        XCTAssertEqual(response.diagnosticFailure, failure)
 
-        let json = try publicJSONProbe(typed).object()
+        let json = try publicJSONProbe(response).object()
         XCTAssertEqual(failure.failureCode, FailureCode(.requestInvalid))
         XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         XCTAssertEqual(try json.string("status"), "error")
@@ -1340,9 +1343,10 @@ final class TheFenceHandlerTests: XCTestCase {
             ])
         )
 
-        guard case .error(let message, _) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected error response, got \(response)")
         }
+        let message = failure.message
         XCTAssertTrue(message.contains("duplicate heist definition names"), message)
     }
 
@@ -1361,9 +1365,10 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: TheFence.CommandArgumentEnvelope(values: arguments)
         )
 
-        guard case .error(let message, _) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected error response, got \(response)")
         }
+        let message = failure.message
         XCTAssertTrue(message.contains("detail"), message)
         XCTAssertTrue(message.contains("summary"), message)
         XCTAssertTrue(message.contains("detailed"), message)
@@ -1456,9 +1461,10 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: TheFence.CommandArgumentEnvelope(values: arguments)
         )
 
-        guard case .error(let message, _) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected error response, got \(response)")
         }
+        let message = failure.message
         XCTAssertTrue(message.contains(#"heist "checkout" was not found"#), message)
         XCTAssertTrue(message.contains("shop, openCart"), message)
     }
@@ -2633,10 +2639,10 @@ final class TheFenceHandlerTests: XCTestCase {
             "text": .int(3),
         ])
 
-        guard case .error(let message, _) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected error response, got \(response)")
         }
-        XCTAssertEqual(message, "schema validation failed for text: observed integer 3; expected string")
+        XCTAssertEqual(failure.message, "schema validation failed for text: observed integer 3; expected string")
         XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
@@ -2787,8 +2793,11 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: .wait, values: [:])
-            if case .error(let message, _) = response {
-                XCTAssertTrue(message.contains("predicate"), "Expected predicate error, got: \(message)")
+            if case .error(let failure) = response {
+                XCTAssertTrue(
+                    failure.message.contains("predicate"),
+                    "Expected predicate error, got: \(failure.message)"
+                )
             } else {
                 XCTFail("Expected error response, got \(response)")
             }
@@ -2990,11 +2999,11 @@ final class TheFenceHandlerTests: XCTestCase {
             "expect": .string("change"),
         ])
 
-        guard case .error(let message, let details) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected .error response, got \(response)")
         }
-        XCTAssertEqual(message, "Invalid predicate type: expected object with a \"type\" discriminator")
-        XCTAssertEqual(details?.code.knownCode, .requestInvalid)
+        XCTAssertEqual(failure.message, "Invalid predicate type: expected object with a \"type\" discriminator")
+        XCTAssertEqual(failure.details.code.knownCode, .requestInvalid)
         XCTAssertTrue(mockConn.sent.isEmpty)
     }
 

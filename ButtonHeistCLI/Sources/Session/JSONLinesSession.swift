@@ -50,8 +50,8 @@ final class JSONLinesSession {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
 
-            let (response, requestId) = await processLine(trimmed)
-            outputResponse(response, id: requestId)
+            let envelope = await processLine(trimmed)
+            outputResponse(envelope)
         }
 
         idleMonitor?.stop()
@@ -69,51 +69,30 @@ final class JSONLinesSession {
         return monitor
     }
 
-    private func processLine(_ line: String) async -> (FenceResponse, PublicRequestId?) {
-        let isMachineInput = line.hasPrefix("{")
+    private func processLine(_ line: String) async -> CLIRunner.ResponseEnvelope {
         let parsedRequest: CLIParsedRequest
         do {
             parsedRequest = try CLIRequestBuilder.parsedRequest(from: line)
         } catch let error as CLIRequestBuildError {
-            let requestId = error.requestId
-            let message = isMachineInput ? "Invalid JSON: \(error.message)" : error.message
-            return (
-                .error(DiagnosticFailure(message: message, details: error.diagnosticFailure.details)),
-                requestId
+            return CLIRunner.ResponseEnvelope(
+                response: .error(error.diagnosticFailure),
+                requestId: error.requestId
             )
         } catch {
-            let message = CLIRequestBuilder.diagnosticMessage(for: error)
-            return (.failure(FenceError.invalidRequest(message)), nil)
+            return CLIRunner.ResponseEnvelope(response: .failure(error))
         }
 
         do {
             let response = try await fence.execute(command: parsedRequest.command, arguments: parsedRequest.arguments)
-            return (response, parsedRequest.requestId)
+            return CLIRunner.ResponseEnvelope(response: response, requestId: parsedRequest.requestId)
         } catch {
-            return (.failure(error), parsedRequest.requestId)
+            return CLIRunner.ResponseEnvelope(response: .failure(error), requestId: parsedRequest.requestId)
         }
     }
 
     // MARK: - Output
 
-    private func outputResponse(_ response: FenceResponse, id: PublicRequestId?) {
-        let presenter = FenceResponsePresenter(profile: .summary)
-        switch format {
-        case .human:
-            writeOutput(presenter.humanText(for: response))
-        case .compact:
-            writeOutput(presenter.compactText(for: response))
-        case .json:
-            do {
-                let data = try presenter.jsonData(for: response, requestId: id)
-                if let json = String(data: data, encoding: .utf8) {
-                    writeOutput(json)
-                } else {
-                    logStatus("Failed to encode JSON data as UTF-8")
-                }
-            } catch {
-                logStatus("Failed to serialize response as JSON: \(error.localizedDescription)")
-            }
-        }
+    private func outputResponse(_ envelope: CLIRunner.ResponseEnvelope) {
+        CLIRunner.output(.response(CLIRunner.FormattedResponse(envelope: envelope, format: format)))
     }
 }

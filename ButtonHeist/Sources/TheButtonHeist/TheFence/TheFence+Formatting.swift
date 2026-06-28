@@ -12,8 +12,8 @@ extension FenceResponse {
         switch self {
         case .ok(let message):
             return message
-        case .error(let message, _):
-            return "Error: \(message)"
+        case .error(let failure):
+            return "Error: \(failure.message)"
         case .status(let connected, let deviceName):
             if connected, let name = deviceName {
                 return "Connected to \(name)"
@@ -366,7 +366,7 @@ extension FenceResponse {
 
     private func formatActionResult(command: TheFence.Command, result: ActionResult) -> String {
         let methodName = command.rawValue
-        let projection = ActionProjection(method: methodName, result: result, profile: .summary)
+        let projection = ActionProjection(actionMethod: .fence(command), result: result, profile: .summary)
         guard projection.failure == nil else {
             return "Error: \(projection.message ?? methodName)"
         }

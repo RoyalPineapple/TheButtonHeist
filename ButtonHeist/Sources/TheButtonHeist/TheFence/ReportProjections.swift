@@ -616,22 +616,41 @@ enum ActionPayloadProjection: Sendable {
     case none
 }
 
+enum ActionMethodProjection: Sendable, Equatable, CustomStringConvertible {
+    case fence(TheFence.Command)
+    case heist(HeistActionCommand)
+    case result(ActionMethod)
+
+    var rawValue: String {
+        switch self {
+        case .fence(let command):
+            return command.rawValue
+        case .heist(let command):
+            return command.wireType.rawValue
+        case .result(let method):
+            return method.rawValue
+        }
+    }
+
+    var description: String { rawValue }
+}
+
 struct ActionProjection: Sendable {
     let status: PublicResponseStatus
-    let method: String
+    let actionMethod: ActionMethodProjection
     let message: String?
     let payload: ActionPayloadProjection
     let delta: DeltaProjection?
     let screenName: String?
     let screenId: String?
-    let failure: PublicActionFailureProjection?
+    let failure: ActionFailureProjection?
     let expectation: ExpectationProjection?
     let activationTrace: ActivationTrace?
     let timing: ActionPerformanceTiming?
     let omitted: ActionResultOmissionsProjection?
 
     init(
-        method: String,
+        actionMethod: ActionMethodProjection,
         result: ActionResult,
         expectation: ExpectationResult? = nil,
         expectationHint: String? = nil,
@@ -640,7 +659,7 @@ struct ActionProjection: Sendable {
     ) {
         let surfacedExpectation = result.success ? expectation : nil
         status = result.publicStatus(expectation: surfacedExpectation)
-        self.method = method
+        self.actionMethod = actionMethod
         message = result.message
         switch result.payload {
         case .value(let value):
@@ -659,7 +678,7 @@ struct ActionProjection: Sendable {
         }
         screenName = result.accessibilityTrace?.endpointScreenName
         screenId = result.accessibilityTrace?.endpointScreenId
-        failure = result.diagnosticFailureProjection(fallbackMessage: method)
+        failure = result.diagnosticFailureProjection(fallbackMessage: actionMethod.rawValue)
         self.expectation = surfacedExpectation.map {
             ExpectationProjection(result: $0, hint: expectationHint)
         }
@@ -892,19 +911,18 @@ struct HeistActionEvidenceProjection: Sendable {
     let expectation: ExpectationProjection?
 
     init(evidence: HeistActionEvidence, profile: ProjectionProfile) {
-        let resolvedCommandName = evidence.command?.wireType.rawValue
-        commandName = resolvedCommandName
+        commandName = evidence.command?.wireType.rawValue
         target = evidence.command?.reportTarget
         result = evidence.actionResult.map {
             ActionProjection(
-                method: resolvedCommandName ?? $0.method.rawValue,
+                actionMethod: evidence.command.map(ActionMethodProjection.heist) ?? .result($0.method),
                 result: $0,
                 profile: profile,
                 includeOmissions: true
             )
         }
         expectationResult = evidence.expectationActionResult.map {
-            ActionProjection(method: $0.method.rawValue, result: $0, profile: profile, includeOmissions: true)
+            ActionProjection(actionMethod: .result($0.method), result: $0, profile: profile, includeOmissions: true)
         }
         expectation = evidence.expectation.map { ExpectationProjection(result: $0) }
     }
@@ -918,7 +936,7 @@ struct HeistWaitEvidenceProjection: Sendable {
 
     init(evidence: HeistWaitEvidence, profile: ProjectionProfile) {
         result = ActionProjection(
-            method: evidence.actionResult.method.rawValue,
+            actionMethod: .result(evidence.actionResult.method),
             result: evidence.actionResult,
             profile: profile,
             includeOmissions: true
@@ -1023,7 +1041,7 @@ struct HeistRepeatUntilEvidenceProjection: Sendable {
         iterationOrdinal = evidence.iterationOrdinal
         expectation = ExpectationProjection(result: evidence.expectation)
         result = evidence.actionResult.map {
-            ActionProjection(method: $0.method.rawValue, result: $0, profile: profile, includeOmissions: true)
+            ActionProjection(actionMethod: .result($0.method), result: $0, profile: profile, includeOmissions: true)
         }
         lastObservedSummary = evidence.lastObservedSummary
         failureReason = evidence.failureReason
@@ -1044,7 +1062,7 @@ struct HeistInvocationEvidenceProjection: Sendable {
         argument = evidence.argument
         childFailedPath = evidence.childFailedPath
         expectationResult = evidence.expectationActionResult.map {
-            ActionProjection(method: $0.method.rawValue, result: $0, profile: profile, includeOmissions: true)
+            ActionProjection(actionMethod: .result($0.method), result: $0, profile: profile, includeOmissions: true)
         }
         expectation = evidence.expectation.map { ExpectationProjection(result: $0) }
     }

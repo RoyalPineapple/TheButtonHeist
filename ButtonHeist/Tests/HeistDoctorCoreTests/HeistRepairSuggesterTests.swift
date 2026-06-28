@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import Foundation
 import Testing
 import ThePlans
@@ -45,7 +46,7 @@ private let repairJSONReportFixture = HeistDoctorReport(suggestions: [
 
 private let expectedRepairJSONReportJSON = """
 {
-  "featureStatus" : "alpha",
+  "status" : "alpha",
   "suggestions" : [
     {
       "caveats" : [
@@ -514,10 +515,41 @@ private let expectedRepairJSONReportJSON = """
 
         let data = try encoder.encode(repairJSONReportFixture)
         let json = try #require(String(data: data, encoding: .utf8))
+        let probe = try JSONProbe(data: data).object()
         let decodedReport = try JSONDecoder().decode(HeistDoctorReport.self, from: data)
 
         #expect(json == expectedRepairJSONReportJSON)
+        #expect(try probe.string("status") == HeistDoctorFeatureStatus.alpha.rawValue)
+        try probe.assertRecursivelyMissingKeys(["featureStatus", "action" + "Kind"])
         #expect(decodedReport == repairJSONReportFixture)
+    }
+
+    @Test
+    func `JSON report rejects legacy feature status key`() {
+        let payload = """
+        {
+          "featureStatus" : "alpha",
+          "suggestions" : []
+        }
+        """
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(HeistDoctorReport.self, from: Data(payload.utf8))
+        }
+    }
+
+    @Test
+    func `JSON report rejects unknown feature status`() {
+        let payload = """
+        {
+          "status" : "beta",
+          "suggestions" : []
+        }
+        """
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(HeistDoctorReport.self, from: Data(payload.utf8))
+        }
     }
 
     @Test("Candidate scoring rejects compatible-only successors without continuity")
