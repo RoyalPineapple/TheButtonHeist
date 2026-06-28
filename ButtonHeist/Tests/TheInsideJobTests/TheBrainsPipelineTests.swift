@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import Foundation
 import XCTest
 import ThePlans
 import UIKit
@@ -579,6 +580,15 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(receipt.actionResult.message?.contains("last result:") == true)
     }
 
+    func testPredicateWaitStateMatchingKeepsTypedSetShape() throws {
+        let source = try String(contentsOf: predicateWaitSourceURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private struct PredicateStateMatch: Hashable, Sendable"))
+        XCTAssertTrue(source.contains("private func intersection(_ other: PredicateStateMatchSet) -> PredicateStateMatchSet"))
+        XCTAssertFalse(source.contains("elements.filter { predicate.matches($0) }"))
+        XCTAssertFalse(source.contains("private func evaluate(_ state: AccessibilityPredicate.State) -> (met: Bool, actual: String?)"))
+    }
+
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
         seedScreen(elements: [("Menu", .header, "menu_header")])
         let before = brains.postActionObservation.captureSemanticState()
@@ -931,6 +941,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             await Task.yield()
         }
         XCTAssertEqual(stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
+    }
+
+    private func predicateWaitSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/TheInsideJob/TheBrains/PredicateWait.swift")
     }
 
     private func makeElement(label: String) -> AccessibilityElement {
