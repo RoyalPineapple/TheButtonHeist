@@ -183,6 +183,12 @@ public struct JSONProbe: Sendable {
         }
     }
 
+    public func assertRecursivelyMissingKeys(_ keys: [String]) throws {
+        let disallowed = Set(keys)
+        guard let hit = Self.firstPath(containingKeyIn: disallowed, value: value, path: path) else { return }
+        throw JSONProbeFailure(path: hit.path, reason: "Expected key '\(hit.key)' to be absent recursively")
+    }
+
     public func isEmptyObject() throws -> Bool {
         guard case .object(let object) = value else {
             throw typeMismatch(expected: "object")
@@ -239,6 +245,38 @@ public struct JSONProbe: Sendable {
         }
         return key.dropFirst().allSatisfy { character in
             character == "_" || character.isLetter || character.isNumber
+        }
+    }
+
+    private static func firstPath(
+        containingKeyIn disallowed: Set<String>,
+        value: JSONValue,
+        path: String
+    ) -> (key: String, path: String)? {
+        switch value {
+        case .object(let object):
+            for key in object.keys.sorted() {
+                let childPath = path + pathComponent(forKey: key)
+                if disallowed.contains(key) {
+                    return (key, childPath)
+                }
+                if let child = object[key],
+                   let hit = firstPath(containingKeyIn: disallowed, value: child, path: childPath) {
+                    return hit
+                }
+            }
+            return nil
+
+        case .array(let array):
+            for (index, value) in array.enumerated() {
+                if let hit = firstPath(containingKeyIn: disallowed, value: value, path: "\(path)[\(index)]") {
+                    return hit
+                }
+            }
+            return nil
+
+        case .string, .int, .double, .bool, .null:
+            return nil
         }
     }
 }

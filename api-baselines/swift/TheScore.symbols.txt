@@ -123,13 +123,8 @@ symbol	TheScore.symbols.json	s:8TheScore12HeistElementV11description5label5value
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV11descriptionSSvp	swift.property	public	description	HeistElement.description	let description: String
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV11frameHeightSdvp	swift.property	public	frameHeight	HeistElement.frameHeight	let frameHeight: Double
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV13customContentSayAA0c6CustomF0VGSgvp	swift.property	public	customContent	HeistElement.customContent	let customContent: [HeistCustomContent]?
-symbol	TheScore.symbols.json	s:8TheScore12HeistElementV14predicateLabelSSSgvp	swift.property	public	predicateLabel	HeistElement.predicateLabel	var predicateLabel: String? { get }
-symbol	TheScore.symbols.json	s:8TheScore12HeistElementV14predicateValueSSSgvp	swift.property	public	predicateValue	HeistElement.predicateValue	var predicateValue: String? { get }
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV16activationPointXSdvp	swift.property	public	activationPointX	HeistElement.activationPointX	let activationPointX: Double
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV16activationPointYSdvp	swift.property	public	activationPointY	HeistElement.activationPointY	let activationPointY: Double
-symbol	TheScore.symbols.json	s:8TheScore12HeistElementV19predicateIdentifierSSSgvp	swift.property	public	predicateIdentifier	HeistElement.predicateIdentifier	var predicateIdentifier: String? { get }
-symbol	TheScore.symbols.json	s:8TheScore12HeistElementV22violatesExcludedTraitsySbSay0A5Plans0C5TraitOGF	swift.method	public	violatesExcludedTraits(_:)	HeistElement.violatesExcludedTraits(_:)	func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool
-symbol	TheScore.symbols.json	s:8TheScore12HeistElementV23satisfiesRequiredTraitsySbSay0A5Plans0C5TraitOGF	swift.method	public	satisfiesRequiredTraits(_:)	HeistElement.satisfiesRequiredTraits(_:)	func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV25respondsToUserInteractionSbvp	swift.property	public	respondsToUserInteraction	HeistElement.respondsToUserInteraction	let respondsToUserInteraction: Bool
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistElement.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore12HeistElementV4hintSSSgvp	swift.property	public	hint	HeistElement.hint	let hint: String?
@@ -1115,12 +1110,14 @@ symbol	TheScore.symbols.json	s:8TheScore8TreePathV4fromACs7Decoder_p_tKcfc	swift
 symbol	TheScore.symbols.json	s:8TheScore8TreePathV4rootACvpZ	swift.type.property	public	root	TreePath.root	static let root: TreePath
 symbol	TheScore.symbols.json	s:8TheScore8TreePathV7indicesSaySiGvp	swift.property	public	indices	TreePath.indices	let indices: [Int]
 symbol	TheScore.symbols.json	s:8TheScore8TreePathV9appendingyACSiF	swift.method	public	appending(_:)	TreePath.appending(_:)	func appending(_ index: Int) -> TreePath
+symbol	TheScore.symbols.json	s:8TheScore8TreePathV9hasPrefixySbACF	swift.method	public	hasPrefix(_:)	TreePath.hasPrefix(_:)	func hasPrefix(_ prefix: TreePath) -> Bool
 symbol	TheScore.symbols.json	s:8TheScore8TreePathVyACSaySiGcfc	swift.init	public	init(_:)	TreePath.init(_:)	init(_ indices: [Int])
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO	swift.enum	public	ErrorKind	ErrorKind	enum ErrorKind
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO010validationC0yA2CmF	swift.enum.case	public	ErrorKind.validationError	ErrorKind.validationError	case validationError
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO11authFailureyA2CmF	swift.enum.case	public	ErrorKind.authFailure	ErrorKind.authFailure	case authFailure
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO12actionFailedyA2CmF	swift.enum.case	public	ErrorKind.actionFailed	ErrorKind.actionFailed	case actionFailed
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO15elementNotFoundyA2CmF	swift.enum.case	public	ErrorKind.elementNotFound	ErrorKind.elementNotFound	case elementNotFound
+symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO28accessibilityTreeUnavailableyA2CmF	swift.enum.case	public	ErrorKind.accessibilityTreeUnavailable	ErrorKind.accessibilityTreeUnavailable	case accessibilityTreeUnavailable
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO7generalyA2CmF	swift.enum.case	public	ErrorKind.general	ErrorKind.general	case general
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO7timeoutyA2CmF	swift.enum.case	public	ErrorKind.timeout	ErrorKind.timeout	case timeout
 symbol	TheScore.symbols.json	s:8TheScore9ErrorKindO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	ErrorKind.init(rawValue:)	init?(rawValue: String)
@@ -1141,8 +1138,10 @@ symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapsho
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A6TraitsV8TheScoreE9fromNamesyACSaySSGFZ	swift.type.method	public	fromNames(_:)	AccessibilityTraits.fromNames(_:)	static func fromNames(_ names: [String]) -> AccessibilityTraits
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A9HierarchyO8TheScoreE18compactMapSubtrees4path_SayxGAD8TreePathV_xSgAC_AItXEtlF	swift.method	public	compactMapSubtrees(path:_:)	AccessibilityHierarchy.compactMapSubtrees(path:_:)	func compactMapSubtrees<Result>(path: TreePath = .root, _ transform: (AccessibilityHierarchy, TreePath) -> Result?) -> [Result]
 symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A9HierarchyO8TheScoreE19pathIndexedElements0G0SayAA0A7ElementV7element_AD8TreePathVAFSi14traversalIndextGAK_tF	swift.method	public	pathIndexedElements(path:)	AccessibilityHierarchy.pathIndexedElements(path:)	func pathIndexedElements(path: TreePath = .root) -> [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)]
+symbol	TheScore@AccessibilitySnapshotModel.symbols.json	s:26AccessibilitySnapshotModel0A9HierarchyO8TheScoreE4node2atACSgAD8TreePathV_tF	swift.method	public	node(at:)	AccessibilityHierarchy.node(at:)	func node(at path: TreePath) -> AccessibilityHierarchy?
 symbol	TheScore@Swift.symbols.json	s:Sa8TheScore26AccessibilitySnapshotModel0C9HierarchyORszlE18compactMapSubtreesySayqd__Gqd__SgAD_AA8TreePathVtXElF	swift.method	public	compactMapSubtrees(_:)	Array.compactMapSubtrees(_:)	func compactMapSubtrees<Result>(_ transform: (AccessibilityHierarchy, TreePath) -> Result?) -> [Result]
 symbol	TheScore@Swift.symbols.json	s:Sa8TheScore26AccessibilitySnapshotModel0C9HierarchyORszlE19pathIndexedElementsSayAB0C7ElementV7element_AA8TreePathV0G0Si14traversalIndextGvp	swift.property	public	pathIndexedElements	Array.pathIndexedElements	var pathIndexedElements: [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] { get }
+symbol	TheScore@Swift.symbols.json	s:Sa8TheScore26AccessibilitySnapshotModel0C9HierarchyORszlE4node2atADSgAA8TreePathV_tF	swift.method	public	node(at:)	Array.node(at:)	func node(at path: TreePath) -> AccessibilityHierarchy?
 symbol	TheScore@Swift.symbols.json	s:Sa8TheScoreAA24HeistExecutionStepResultVRszlE011firstFailedE0ACSgvp	swift.property	public	firstFailedStep	Array.firstFailedStep	var firstFailedStep: HeistExecutionStepResult? { get }
 symbol	TheScore@ThePlans.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE11displayText3forS2S_tFZ	swift.type.method	public	displayText(for:)	HintProperty.displayText(for:)	static func displayText(for value: String) -> String
 symbol	TheScore@ThePlans.symbols.json	s:8ThePlans12HintPropertyO0A5ScoreE11erasedValueyAD07ElementdG0OSSFZ	swift.type.method	public	erasedValue(_:)	HintProperty.erasedValue(_:)	static func erasedValue(_ value: String) -> ElementPropertyValue
@@ -1260,7 +1259,6 @@ relationship	conformsTo	s:8TheScore12ElementEditsV	s:SE	ElementEdits	Swift.Encod
 relationship	conformsTo	s:8TheScore12ElementEditsV	s:SQ	ElementEdits	Swift.Equatable
 relationship	conformsTo	s:8TheScore12ElementEditsV	s:Se	ElementEdits	Swift.Decodable
 relationship	conformsTo	s:8TheScore12ElementEditsV	s:s8SendableP	ElementEdits	Swift.Sendable
-relationship	conformsTo	s:8TheScore12HeistElementV	s:8ThePlans23ElementPredicateSubjectP	HeistElement	ThePlans.ElementPredicateSubject
 relationship	conformsTo	s:8TheScore12HeistElementV	s:SE	HeistElement	Swift.Encodable
 relationship	conformsTo	s:8TheScore12HeistElementV	s:SH	HeistElement	Swift.Hashable
 relationship	conformsTo	s:8TheScore12HeistElementV	s:SQ	HeistElement	Swift.Equatable

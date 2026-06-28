@@ -11,7 +11,7 @@ extension TheBrains {
         index: Int,
         path: String,
         start: CFAbsoluteTime,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
@@ -44,7 +44,7 @@ extension TheBrains {
     /// terminal no-match node.
     private func dispatchPredicateCases(
         _ dispatch: PredicateCaseDispatch,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {

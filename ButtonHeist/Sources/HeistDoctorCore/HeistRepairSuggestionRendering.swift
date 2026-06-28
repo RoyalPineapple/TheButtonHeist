@@ -22,11 +22,7 @@ enum HeistRepairSuggestionRenderer {
             return "old target did not resolve exactly once in the last successful before snapshot"
         }
 
-        let actionFamily = RepairActionFamily(
-            actionIdentity: request.currentFailure.actionIdentity ?? request.lastSuccess.actionIdentity,
-            actionKind: request.currentFailure.actionKind,
-            method: request.currentFailure.result.method ?? request.lastSuccess.result.method
-        )
+        let actionFamily = RepairActionFamily(actionIdentity: request.currentFailure.actionIdentity)
         switch currentScreen.resolve(request.lastSuccess.target) {
         case .resolved(let element, _):
             if !actionFamily.isKnown || actionFamily.isSupported(by: element.element) {

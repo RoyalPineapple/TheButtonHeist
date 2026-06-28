@@ -73,6 +73,9 @@ extension TheFence {
             if let element = object["element"] {
                 try validateElementPredicateStringMatchObjects(element, path: path + ["element"])
             }
+            if let target = object["target"] {
+                try validateElementPredicateStringMatchObjects(target, path: path + ["target"])
+            }
             if let before = object["before"] {
                 try validateElementPredicateStringMatchObjects(before, path: path + ["before"])
             }

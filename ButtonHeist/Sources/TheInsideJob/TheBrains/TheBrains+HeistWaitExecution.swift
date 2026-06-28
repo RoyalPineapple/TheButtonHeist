@@ -11,7 +11,7 @@ extension TheBrains {
         index: Int,
         path: String,
         start: CFAbsoluteTime,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {

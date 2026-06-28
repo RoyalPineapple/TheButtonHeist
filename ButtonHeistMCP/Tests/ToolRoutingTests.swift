@@ -69,7 +69,7 @@ struct ToolRoutingTests {
             return
         }
 
-        let failure = try #require(FenceResponse.failure(error).publicFailure)
+        let failure = try #require(FenceResponse.failure(error).diagnosticFailure)
         #expect(failure.code == "request.invalid")
         #expect(failure.kind == .request)
         #expect(failure.message == "Unknown tool: not_a_tool")

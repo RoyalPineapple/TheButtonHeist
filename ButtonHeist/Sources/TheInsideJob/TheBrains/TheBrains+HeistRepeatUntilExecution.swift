@@ -9,7 +9,7 @@ extension TheBrains {
     private struct RepeatUntilExecutionContext {
         let path: String
         let start: CFAbsoluteTime
-        let runtime: any HeistExecutionRuntime
+        let runtime: HeistExecutionRuntime
         let environment: HeistExecutionEnvironment
         let scope: HeistExecutionScope
     }
@@ -173,7 +173,7 @@ extension TheBrains {
         index _: Int,
         path: String,
         start: CFAbsoluteTime,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {

@@ -272,7 +272,7 @@ public enum CLIExposure: Sendable, Equatable {
 
 enum FenceParameterBlocks: Sendable {
     private static let matcherFields = ElementTarget.predicateSchemaFields.map(elementTargetFieldSpec)
-    private static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
+    static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
 
     static let elementTarget: [FenceParameterSpec] = [
         param(.target, .object, objectProperties: inlineElementTargetFields),

@@ -409,7 +409,7 @@ private let expectedRepairJSONReportJSON = """
     func wrongActionCapabilityBlocksUnsupportedSuggestions() {
         let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
         let last = evidence(
-            actionKind: "increment",
+            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", traits: [.adjustable], actions: [.increment, .decrement]),
@@ -417,7 +417,7 @@ private let expectedRepairJSONReportJSON = """
             succeeded: true
         )
         let current = evidence(
-            actionKind: "increment",
+            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", traits: [.staticText], actions: []),
@@ -432,7 +432,7 @@ private let expectedRepairJSONReportJSON = """
     func wrongActionCapabilityCanSuggestACompatibleSuccessorWithLoweredConfidence() throws {
         let target = ElementTarget.predicate(ElementPredicate(label: "Quantity"))
         let last = evidence(
-            actionKind: "increment",
+            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", value: "1", traits: [.adjustable], actions: [.increment, .decrement]),
@@ -440,7 +440,7 @@ private let expectedRepairJSONReportJSON = """
             succeeded: true
         )
         let current = evidence(
-            actionKind: "increment",
+            actionIdentity: HeistRepairActionIdentity(commandType: .increment),
             target: target,
             before: makeTestInterface(elements: [
                 element(label: "Quantity", value: "1", traits: [.staticText], actions: []),
@@ -817,10 +817,7 @@ private let expectedRepairJSONReportJSON = """
             return []
         }
         let currentScreen = RepairScreen(interface: current.beforeSnapshot)
-        let actionFamily = RepairActionFamily(
-            actionKind: current.actionKind,
-            method: current.result.method ?? last.result.method
-        )
+        let actionFamily = RepairActionFamily(actionIdentity: current.actionIdentity)
         return RepairCandidateGenerator.rankedSuccessorCandidates(
             oldResolved: oldResolved,
             currentScreen: currentScreen,
@@ -835,7 +832,7 @@ private let expectedRepairJSONReportJSON = """
     private func evidence(
         heistFingerprint: String? = nil,
         stepPath: String = "$.steps[0]",
-        actionKind: String = "activate",
+        actionIdentity: HeistRepairActionIdentity = HeistRepairActionIdentity(commandType: .activate),
         target: ElementTarget,
         before: Interface,
         afterDelta: AccessibilityTrace.Delta? = nil,
@@ -846,25 +843,25 @@ private let expectedRepairJSONReportJSON = """
         HeistStepRepairEvidence(
             heistFingerprint: heistFingerprint,
             stepPath: stepPath,
-            actionKind: actionKind,
+            actionIdentity: actionIdentity,
             target: target,
             beforeSnapshot: before,
             afterDelta: afterDelta,
             afterSnapshot: afterSnapshot,
             result: HeistStepRepairResult(
                 succeeded: succeeded,
-                method: method(for: actionKind),
+                method: method(for: actionIdentity),
                 errorKind: succeeded ? nil : .elementNotFound,
                 expectation: expectation
             )
         )
     }
 
-    private func method(for actionKind: String) -> ActionMethod? {
-        switch actionKind {
-        case "activate":
+    private func method(for actionIdentity: HeistRepairActionIdentity) -> ActionMethod? {
+        switch actionIdentity.commandType {
+        case .activate:
             return .activate
-        case "increment":
+        case .increment:
             return .increment
         default:
             return nil

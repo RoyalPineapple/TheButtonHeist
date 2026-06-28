@@ -5,7 +5,7 @@ import ThePlans
 import TheScore
 
 struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
-    typealias SwiftHeistCompiler = @Sendable (_ source: URL, _ entry: String) async -> HeistCompilationResult<HeistPlan>
+    typealias SwiftHeistCompiler = @Sendable (_ source: URL, _ entry: String) async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -84,7 +84,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
                 heistName: name,
                 totalTimeSeconds: Double(result.durationMs) / 1000
             )
-            try report.junitXML().write(to: URL(fileURLWithPath: junitPath), atomically: true, encoding: .utf8)
+            try report.junitXML().write(to: URL(fileURLWithPath: junitPath), atomically: true, encoding: String.Encoding.utf8)
             logStatus("JUnit report written to \(junitPath)")
         } else {
             logStatus("Warning: --junit requested but run_heist did not produce a report")
@@ -224,6 +224,6 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     }
 }
 
-private func formatCompilationDiagnostics(_ diagnostics: [HeistCompilationDiagnostic]) -> String {
+private func formatCompilationDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
     diagnostics.map(\.description).joined(separator: "\n")
 }
