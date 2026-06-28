@@ -93,33 +93,15 @@ extension TheFence {
             )
         }
         try validateSubtreeElementStringMatchObjects(subtree, field: arguments.field("subtree"))
-        do {
-            let data = try JSONEncoder().encode(subtree)
-            let selector = try JSONDecoder().decode(SubtreeSelector.self, from: data)
-            guard selector.hasPredicates else {
-                throw SchemaValidationError(
-                    field: arguments.field("subtree"),
-                    observed: subtree.schemaObservedDescription,
-                    expected: "non-empty subtree selector"
-                )
-            }
-            return selector
-        } catch let error as SchemaValidationError {
-            throw error
-        } catch let error as DecodingError {
-            let context = decodingContext(from: error)
-            throw SchemaValidationError(
-                field: subtreeField(arguments, codingPath: context.codingPath),
-                observed: subtree.schemaObservedDescription,
-                expected: context.debugDescription
-            )
-        } catch {
+        let selector = try arguments.decodePayload(subtree, forKey: "subtree", as: SubtreeSelector.self)
+        guard selector.hasPredicates else {
             throw SchemaValidationError(
                 field: arguments.field("subtree"),
                 observed: subtree.schemaObservedDescription,
-                expected: "valid get_interface subtree parameter"
+                expected: "non-empty subtree selector"
             )
         }
+        return selector
     }
 
     private func validateSubtreeElementStringMatchObjects(_ value: HeistValue, field: String) throws {
@@ -130,24 +112,6 @@ extension TheFence {
             return
         }
         try Self.validateElementPredicatePayloadStringMatches(.object(object), field: "\(field).element")
-    }
-
-    private func decodingContext(from error: DecodingError) -> DecodingError.Context {
-        switch error {
-        case .typeMismatch(_, let context),
-             .valueNotFound(_, let context),
-             .keyNotFound(_, let context),
-             .dataCorrupted(let context):
-            return context
-        @unknown default:
-            return DecodingError.Context(codingPath: [], debugDescription: error.localizedDescription)
-        }
-    }
-
-    private func subtreeField(_ arguments: CommandArgumentEnvelope, codingPath: [CodingKey]) -> String {
-        let suffix = codingPath.map(\.stringValue).filter { !$0.isEmpty }.joined(separator: ".")
-        guard !suffix.isEmpty else { return arguments.field("subtree") }
-        return "\(arguments.field("subtree")).\(suffix)"
     }
 
     private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementPredicate {
@@ -164,16 +128,11 @@ extension TheFence {
         }
         if let checksValue = arguments.argumentValues["checks"] {
             try Self.validateElementPredicateChecks(checksValue, field: arguments.field("checks"))
-            do {
-                let data = try JSONEncoder().encode(checksValue)
-                return ElementPredicate(try JSONDecoder().decode([ElementPredicateCheck<String>].self, from: data))
-            } catch let error as DecodingError {
-                throw SchemaValidationError(
-                    field: arguments.field("checks"),
-                    observed: checksValue.schemaObservedDescription,
-                    expected: decodingContext(from: error).debugDescription
-                )
-            }
+            return ElementPredicate(try arguments.decodePayload(
+                checksValue,
+                forKey: "checks",
+                as: [ElementPredicateCheck<String>].self
+            ))
         }
 
         var checks: [ElementPredicateCheck<String>] = []

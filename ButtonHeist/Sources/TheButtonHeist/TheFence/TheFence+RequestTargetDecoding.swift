@@ -78,14 +78,11 @@ extension TheFence.CommandArgumentEnvelope {
     func decodeElementTargetPayload() throws -> ElementTarget {
         try requireObjectStringMatchFields()
         let value = HeistValue.object(argumentValues)
-        do {
-            let data = try JSONEncoder().encode(value)
-            return try JSONDecoder().decode(ElementTarget.self, from: data)
-        } catch let error as DecodingError {
-            throw elementTargetPayloadFailure(error, value: value)
-        } catch {
-            throw FenceError.invalidRequest(String(describing: error))
-        }
+        return try TheFence.HeistValuePayloadDecoder.decode(
+            value,
+            field: argumentFieldPrefix ?? "target",
+            as: ElementTarget.self
+        )
     }
 
     private func requireObjectStringMatchFields() throws {
@@ -93,90 +90,6 @@ extension TheFence.CommandArgumentEnvelope {
             .object(argumentValues),
             field: argumentFieldPrefix ?? "target"
         )
-    }
-
-    private func elementTargetPayloadFailure(_ error: DecodingError, value: HeistValue) -> Error {
-        switch error {
-        case .typeMismatch(let type, let context):
-            return SchemaValidationError(
-                field: field(codingPath: context.codingPath),
-                observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription
-                    ?? value.schemaObservedDescription,
-                expected: expectedDescription(for: type)
-            )
-        case .valueNotFound(let type, let context):
-            return SchemaValidationError(
-                field: field(codingPath: context.codingPath),
-                observed: "missing",
-                expected: expectedDescription(for: type)
-            )
-        case .keyNotFound(let key, let context):
-            return SchemaValidationError(
-                field: field(codingPath: context.codingPath + [key]),
-                observed: "missing",
-                expected: "present"
-            )
-        case .dataCorrupted(let context):
-            let field = field(codingPath: context.codingPath)
-            guard field != "arguments" else {
-                return FenceError.invalidRequest(context.debugDescription)
-            }
-            return SchemaValidationError(
-                field: field,
-                observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription ?? "invalid value",
-                expected: context.debugDescription
-            )
-        @unknown default:
-            return FenceError.invalidRequest(String(describing: error))
-        }
-    }
-
-    private func field(codingPath: [CodingKey]) -> String {
-        var path = ""
-        for key in codingPath {
-            if let index = key.intValue {
-                path += "[\(index)]"
-            } else if path.isEmpty {
-                path = key.stringValue
-            } else {
-                path += ".\(key.stringValue)"
-            }
-        }
-        guard !path.isEmpty else { return "target" }
-        return field(path)
-    }
-
-    private func payloadValue(at codingPath: [CodingKey], in value: HeistValue) -> HeistValue? {
-        codingPath.reduce(Optional(value)) { current, key in
-            guard let current else { return nil }
-            if let index = key.intValue {
-                guard case .array(let values) = current, values.indices.contains(index) else { return nil }
-                return values[index]
-            }
-            guard case .object(let values) = current else { return nil }
-            return values[key.stringValue]
-        }
-    }
-
-    private func expectedDescription(for type: Any.Type) -> String {
-        switch type {
-        case is String.Type:
-            return "string"
-        case is Bool.Type:
-            return "boolean"
-        case is Int.Type:
-            return "integer"
-        case is Double.Type:
-            return "number"
-        default:
-            if String(describing: type).hasPrefix("Array<") {
-                return "array"
-            }
-            if String(describing: type) == "Dictionary<String, Any>" {
-                return "object"
-            }
-            return String(describing: type)
-        }
     }
 
 }

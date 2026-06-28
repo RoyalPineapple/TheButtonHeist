@@ -5,6 +5,15 @@ import XCTest
 
 final class StringMatchCommandSchemaContractTests: XCTestCase {
 
+    func testCommandArgumentEnvelopeDecodesStringMatchPayload() throws {
+        let envelope = TheFence.CommandArgumentEnvelope(values: [
+            "label": stringMatchValue(mode: "contains", value: "Pay"),
+        ])
+
+        let match = try XCTUnwrap(try envelope.schemaStringMatch("label"))
+        XCTAssertEqual(match, .contains("Pay"))
+    }
+
     @ButtonHeistActor
     func testElementTargetAcceptsContainsStringMatchObject() async throws {
         guard let target = try decodedElementTarget(target: elementTargetValue([
@@ -27,6 +36,40 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
         }
 
         XCTAssertEqual(matcher.checks, [.label(.exact("Pay"))])
+    }
+
+    @ButtonHeistActor
+    func testElementTargetReportsNestedStringMatchValueMismatch() async {
+        XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
+            "label": .object([
+                "mode": .string("contains"),
+                "value": .int(7),
+            ]),
+        ]))) { error in
+            guard let error = error as? SchemaValidationError else {
+                return XCTFail("Expected SchemaValidationError, got \(error)")
+            }
+            XCTAssertEqual(error.field, "target.label.value")
+            XCTAssertEqual(error.observed, "integer 7")
+            XCTAssertEqual(error.expected, "string")
+        }
+    }
+
+    @ButtonHeistActor
+    func testElementTargetReportsInvalidStringMatchModeField() async {
+        XCTAssertThrowsError(try decodedElementTarget(target: elementTargetValue([
+            "label": .object([
+                "mode": .string("regex"),
+                "value": .string("Pay"),
+            ]),
+        ]))) { error in
+            guard let error = error as? SchemaValidationError else {
+                return XCTFail("Expected SchemaValidationError, got \(error)")
+            }
+            XCTAssertEqual(error.field, "target.label.mode")
+            XCTAssertEqual(error.observed, #"string "regex""#)
+            XCTAssertTrue(error.expected.contains("Cannot initialize Mode"), error.expected)
+        }
     }
 
     @ButtonHeistActor
@@ -145,6 +188,26 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             .label(.contains("bar")),
             .traits([.button]),
         ])
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceReportsIndexedStringMatchValueMismatch() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        let response = try await fence.execute(command: .getInterface, values: [
+            "checks": .array([
+                predicateCheckValue(kind: "label", match: stringMatchValue(mode: "prefix", value: "foo")),
+                predicateCheckValue(kind: "label", match: .object([
+                    "mode": .string("contains"),
+                    "value": .int(7),
+                ])),
+            ]),
+        ])
+
+        assertError(
+            response,
+            contains: "schema validation failed for checks[1].match.value: observed integer 7; expected string"
+        )
     }
 
     @ButtonHeistActor

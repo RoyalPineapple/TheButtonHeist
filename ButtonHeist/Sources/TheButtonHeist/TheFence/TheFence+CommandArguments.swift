@@ -81,6 +81,153 @@ extension HeistValue {
     }
 }
 
+enum HeistValuePayloadDataCorruptedHandling {
+    case schemaValidation
+    case invalidRequest
+}
+
+extension TheFence {
+    enum HeistValuePayloadDecoder {
+        static func decode<T: Decodable>(
+            _ value: HeistValue,
+            field rootField: String,
+            as type: T.Type,
+            includesRootInField: Bool = true,
+            dataCorruptedHandling: HeistValuePayloadDataCorruptedHandling = .schemaValidation
+        ) throws -> T {
+            do {
+                let data = try JSONEncoder().encode(value)
+                return try JSONDecoder().decode(type, from: data)
+            } catch let error as DecodingError {
+                throw payloadFailure(
+                    error,
+                    value: value,
+                    rootField: rootField,
+                    includesRootInField: includesRootInField,
+                    dataCorruptedHandling: dataCorruptedHandling
+                )
+            } catch {
+                throw FenceError.invalidRequest(String(describing: error))
+            }
+        }
+
+        private static func payloadFailure(
+            _ error: DecodingError,
+            value: HeistValue,
+            rootField: String,
+            includesRootInField: Bool,
+            dataCorruptedHandling: HeistValuePayloadDataCorruptedHandling
+        ) -> Error {
+            switch error {
+            case .typeMismatch(let type, let context):
+                return SchemaValidationError(
+                    field: field(rootField, codingPath: context.codingPath, includesRoot: includesRootInField),
+                    observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription
+                        ?? value.schemaObservedDescription,
+                    expected: expectedDescription(for: type)
+                )
+            case .valueNotFound(let type, let context):
+                return SchemaValidationError(
+                    field: field(rootField, codingPath: context.codingPath, includesRoot: includesRootInField),
+                    observed: "missing",
+                    expected: expectedDescription(for: type)
+                )
+            case .keyNotFound(let key, let context):
+                return SchemaValidationError(
+                    field: field(
+                        rootField,
+                        codingPath: context.codingPath + [key],
+                        includesRoot: includesRootInField
+                    ),
+                    observed: "missing",
+                    expected: "present"
+                )
+            case .dataCorrupted(let context):
+                switch dataCorruptedHandling {
+                case .schemaValidation:
+                    return SchemaValidationError(
+                        field: field(rootField, codingPath: context.codingPath, includesRoot: includesRootInField),
+                        observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription
+                            ?? "invalid value",
+                        expected: context.debugDescription
+                    )
+                case .invalidRequest:
+                    return FenceError.invalidRequest(context.debugDescription)
+                }
+            @unknown default:
+                return FenceError.invalidRequest(String(describing: error))
+            }
+        }
+
+        private static func field(
+            _ rootField: String,
+            codingPath: [CodingKey],
+            includesRoot: Bool
+        ) -> String {
+            let suffix = codingPathString(codingPath)
+            guard !suffix.isEmpty else { return rootField }
+            guard includesRoot else { return suffix }
+            if suffix.hasPrefix("[") {
+                return "\(rootField)\(suffix)"
+            }
+            return "\(rootField).\(suffix)"
+        }
+
+        private static func codingPathString(_ codingPath: [CodingKey]) -> String {
+            codingPath.reduce(into: "") { path, codingKey in
+                if let index = codingKey.intValue {
+                    path += "[\(index)]"
+                } else if path.isEmpty {
+                    path = codingKey.stringValue
+                } else {
+                    path += ".\(codingKey.stringValue)"
+                }
+            }
+        }
+
+        private static func payloadValue(at codingPath: [CodingKey], in value: HeistValue) -> HeistValue? {
+            codingPath.reduce(Optional(value)) { current, key in
+                guard let current else { return nil }
+                if let index = key.intValue {
+                    guard case .array(let values) = current, values.indices.contains(index) else { return nil }
+                    return values[index]
+                }
+                guard case .object(let values) = current else { return nil }
+                return values[key.stringValue]
+            }
+        }
+
+        private static func expectedDescription(for type: Any.Type) -> String {
+            switch type {
+            case is String.Type:
+                return "string"
+            case is Bool.Type:
+                return "boolean"
+            case is Int.Type:
+                return "integer"
+            case is Double.Type:
+                return "number"
+            case is AccessibilityPredicate.Type,
+                 is ElementPredicate.Type,
+                 is ElementTarget.Type,
+                 is SubtreeSelector.Type:
+                return "object"
+            case is [AccessibilityPredicate].Type:
+                return "array of predicate objects"
+            default:
+                let description = String(describing: type)
+                if description.hasPrefix("Array<") {
+                    return "array"
+                }
+                if description.hasPrefix("Dictionary<") {
+                    return "object"
+                }
+                return description
+            }
+        }
+    }
+}
+
 /// Strict typed accessors for command arguments after command routing.
 /// This keeps raw dictionaries at public decode edges while preserving the
 /// field-qualified diagnostics expected by the current command contract.
@@ -143,14 +290,7 @@ extension TheFence.CommandArgumentEnvelope {
             )
         }
 
-        do {
-            let data = try JSONEncoder().encode(value)
-            return try JSONDecoder().decode(StringMatch<String>.self, from: data)
-        } catch let error as DecodingError {
-            throw stringMatchPayloadFailure(error, key: key, value: value)
-        } catch {
-            throw FenceError.invalidRequest(String(describing: error))
-        }
+        return try decodePayload(value, forKey: key, as: StringMatch<String>.self)
     }
 
     func schemaStringMatches(_ key: String) throws -> [StringMatch<String>] {
@@ -169,14 +309,7 @@ extension TheFence.CommandArgumentEnvelope {
                     )
                 }
             }
-            do {
-                let data = try JSONEncoder().encode(value)
-                return try JSONDecoder().decode([StringMatch<String>].self, from: data)
-            } catch let error as DecodingError {
-                throw stringMatchPayloadFailure(error, key: key, value: value)
-            } catch {
-                throw FenceError.invalidRequest(String(describing: error))
-            }
+            return try decodePayload(value, forKey: key, as: [StringMatch<String>].self)
         default:
             throw SchemaValidationError(
                 field: field(key),
@@ -316,80 +449,12 @@ extension TheFence.CommandArgumentEnvelope {
         return "\(argumentFieldPrefix).\(key)"
     }
 
-    private func stringMatchPayloadFailure(_ error: DecodingError, key: String, value: HeistValue) -> Error {
-        switch error {
-        case .typeMismatch(let type, let context):
-            return SchemaValidationError(
-                field: field(key, codingPath: context.codingPath),
-                observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription
-                    ?? value.schemaObservedDescription,
-                expected: expectedDescription(for: type)
-            )
-        case .valueNotFound(let type, let context):
-            return SchemaValidationError(
-                field: field(key, codingPath: context.codingPath),
-                observed: "missing",
-                expected: expectedDescription(for: type)
-            )
-        case .keyNotFound(let missingKey, let context):
-            return SchemaValidationError(
-                field: field(key, codingPath: context.codingPath + [missingKey]),
-                observed: "missing",
-                expected: "present"
-            )
-        case .dataCorrupted(let context):
-            return SchemaValidationError(
-                field: field(key, codingPath: context.codingPath),
-                observed: payloadValue(at: context.codingPath, in: value)?.schemaObservedDescription ?? "invalid value",
-                expected: context.debugDescription
-            )
-        @unknown default:
-            return FenceError.invalidRequest(String(describing: error))
-        }
-    }
-
-    private func field(_ key: String, codingPath: [CodingKey]) -> String {
-        let suffix = codingPath.reduce(into: "") { path, codingKey in
-            if let index = codingKey.intValue {
-                path += "[\(index)]"
-            } else if path.isEmpty {
-                path = codingKey.stringValue
-            } else {
-                path += ".\(codingKey.stringValue)"
-            }
-        }
-        guard !suffix.isEmpty else { return field(key) }
-        return field("\(key).\(suffix)")
-    }
-
-    private func payloadValue(at codingPath: [CodingKey], in value: HeistValue) -> HeistValue? {
-        codingPath.reduce(Optional(value)) { current, key in
-            guard let current else { return nil }
-            if let index = key.intValue {
-                guard case .array(let values) = current, values.indices.contains(index) else { return nil }
-                return values[index]
-            }
-            guard case .object(let values) = current else { return nil }
-            return values[key.stringValue]
-        }
-    }
-
-    private func expectedDescription(for type: Any.Type) -> String {
-        switch type {
-        case is String.Type:
-            return "string"
-        case is Bool.Type:
-            return "boolean"
-        case is Int.Type:
-            return "integer"
-        case is Double.Type:
-            return "number"
-        default:
-            if String(describing: type).hasPrefix("Array<") {
-                return "array"
-            }
-            return String(describing: type)
-        }
+    func decodePayload<T: Decodable>(
+        _ value: HeistValue,
+        forKey key: String,
+        as type: T.Type
+    ) throws -> T {
+        try TheFence.HeistValuePayloadDecoder.decode(value, field: field(key), as: type)
     }
 
 }

@@ -59,12 +59,13 @@ extension TheFence {
                 )
             }
             try validatePredicateStringMatchObjects(value, path: [])
-            do {
-                let data = try JSONEncoder().encode(value)
-                return try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
-            } catch let error as DecodingError {
-                throw Self.expectationDecodingFailure(error, value: value)
-            }
+            return try TheFence.HeistValuePayloadDecoder.decode(
+                value,
+                field: "expect",
+                as: AccessibilityPredicate.self,
+                includesRootInField: false,
+                dataCorruptedHandling: .invalidRequest
+            )
         }
 
         private static func validatePredicateStringMatchObjects(_ value: HeistValue, path: [String]) throws {
@@ -102,81 +103,6 @@ extension TheFence {
             )
         }
 
-        private static func expectationDecodingFailure(_ error: DecodingError, value: HeistValue) -> Error {
-            switch error {
-            case .typeMismatch(let type, let context):
-                return SchemaValidationError(
-                    field: expectationField(codingPath: context.codingPath),
-                    observed: expectationValue(value, at: context.codingPath)?.schemaObservedDescription
-                        ?? value.schemaObservedDescription,
-                    expected: schemaExpectedDescription(for: type)
-                )
-            case .valueNotFound(let type, let context):
-                return SchemaValidationError(
-                    field: expectationField(codingPath: context.codingPath),
-                    observed: "missing",
-                    expected: schemaExpectedDescription(for: type)
-                )
-            case .keyNotFound(let key, let context):
-                return SchemaValidationError(
-                    field: expectationField(codingPath: context.codingPath + [key]),
-                    observed: "missing",
-                    expected: "present"
-                )
-            case .dataCorrupted(let context):
-                return FenceError.invalidRequest(context.debugDescription)
-            @unknown default:
-                return FenceError.invalidRequest(String(describing: error))
-            }
-        }
-
-        private static func expectationField(codingPath: [CodingKey]) -> String {
-            var path = ""
-            for key in codingPath {
-                if let index = key.intValue {
-                    path += "[\(index)]"
-                } else if path.isEmpty {
-                    path = key.stringValue
-                } else {
-                    path += ".\(key.stringValue)"
-                }
-            }
-            return path.isEmpty ? "expect" : path
-        }
-
-        private static func expectationValue(_ value: HeistValue, at codingPath: [CodingKey]) -> HeistValue? {
-            codingPath.reduce(Optional(value)) { current, key in
-                guard let current else { return nil }
-                if let index = key.intValue {
-                    guard case .array(let values) = current, values.indices.contains(index) else { return nil }
-                    return values[index]
-                }
-                guard case .object(let values) = current else { return nil }
-                return values[key.stringValue]
-            }
-        }
-
-        private static func schemaExpectedDescription(for type: Any.Type) -> String {
-            switch type {
-            case is String.Type:
-                return "string"
-            case is Bool.Type:
-                return "boolean"
-            case is Int.Type:
-                return "integer"
-            case is Double.Type:
-                return "number"
-            case is [AccessibilityPredicate].Type:
-                return "array of predicate objects"
-            case is ElementPredicate.Type, is AccessibilityPredicate.Type:
-                return "object"
-            default:
-                if String(describing: type) == "Dictionary<String, Any>" {
-                    return "object"
-                }
-                return String(describing: type)
-            }
-        }
     }
 
     // MARK: - Expectation Parsing
