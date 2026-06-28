@@ -38,14 +38,14 @@ enum PrivateStorage {
 
     static func createPrivateDirectory(at directory: URL) throws {
         let fileManager = FileManager.default
-        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
+        let attributes = PrivateFileAttributes.privateDirectory
         do {
             try fileManager.createDirectory(
                 at: directory,
                 withIntermediateDirectories: true,
-                attributes: attributes
+                attributes: attributes.foundationAttributes
             )
-            try fileManager.setAttributes(attributes, ofItemAtPath: directory.path)
+            try fileManager.setAttributes(attributes.foundationAttributes, ofItemAtPath: directory.path)
         } catch {
             throw StorageError.storage(.directoryCreationFailed(
                 path: directory.path,
@@ -56,10 +56,10 @@ enum PrivateStorage {
 
     static func createPrivateFile(at url: URL, contents: Data? = nil) throws {
         let fileManager = FileManager.default
-        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
+        let attributes = PrivateFileAttributes.privateFile
         if fileManager.fileExists(atPath: url.path) {
             do {
-                try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
+                try fileManager.setAttributes(attributes.foundationAttributes, ofItemAtPath: url.path)
                 if let contents {
                     let handle = try FileHandle(forWritingTo: url)
                     defer { StorageCleanup.close(handle) }
@@ -78,7 +78,7 @@ enum PrivateStorage {
         guard fileManager.createFile(
             atPath: url.path,
             contents: contents,
-            attributes: attributes
+            attributes: attributes.foundationAttributes
         ) else {
             throw StorageError.storage(.privateFileCreationFailed(
                 path: url.path,
@@ -87,7 +87,7 @@ enum PrivateStorage {
         }
 
         do {
-            try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
+            try fileManager.setAttributes(attributes.foundationAttributes, ofItemAtPath: url.path)
         } catch {
             throw StorageError.storage(.privateFileCreationFailed(
                 path: url.path,
@@ -98,7 +98,7 @@ enum PrivateStorage {
 
     static func writePrivateData(_ data: Data, to url: URL) throws {
         let fileManager = FileManager.default
-        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
+        let attributes = PrivateFileAttributes.privateFile
         let temporaryURL = url.deletingLastPathComponent()
             .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
         try createPrivateFile(at: temporaryURL, contents: data)
@@ -116,11 +116,27 @@ enum PrivateStorage {
                 }
             }
             try fileManager.moveItem(at: temporaryURL, to: url)
-            try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
+            try fileManager.setAttributes(attributes.foundationAttributes, ofItemAtPath: url.path)
         } catch {
             StorageCleanup.removeTemporaryItem(at: temporaryURL, operation: .removeTemporaryFile)
             throw error
         }
     }
 
+}
+
+private struct PrivateFileAttributes {
+    let permissions: PrivateFilePermissions
+
+    static let privateDirectory = PrivateFileAttributes(permissions: .ownerOnlyDirectory)
+    static let privateFile = PrivateFileAttributes(permissions: .ownerOnlyFile)
+
+    var foundationAttributes: [FileAttributeKey: Any] {
+        [.posixPermissions: permissions.rawValue]
+    }
+}
+
+private enum PrivateFilePermissions: Int {
+    case ownerOnlyDirectory = 0o700
+    case ownerOnlyFile = 0o600
 }
