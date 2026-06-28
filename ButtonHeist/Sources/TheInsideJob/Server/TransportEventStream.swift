@@ -1,7 +1,9 @@
 import Foundation
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "transport")
+import TheScore
+
+private let logger = ButtonHeistLog.logger(.handoff(.transport))
 
 /// Ordered transport event stream with fail-closed backlog handling.
 final class TransportEventStream: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment

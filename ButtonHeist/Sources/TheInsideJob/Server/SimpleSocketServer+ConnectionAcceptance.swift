@@ -4,7 +4,7 @@ import os
 
 import TheScore
 
-private let connectionLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
+private let connectionLogger = ButtonHeistLog.logger(.handoff(.server))
 
 extension SimpleSocketServer {
     private static let maxConnections = 5

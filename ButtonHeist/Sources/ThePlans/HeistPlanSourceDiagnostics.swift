@@ -131,9 +131,9 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
         }
     }
 
-    public var source: HeistCompilationSourceLocation? {
+    public var source: HeistBuildSourceLocation? {
         guard let sourceSpan else { return nil }
-        return HeistCompilationSourceLocation(
+        return HeistBuildSourceLocation(
             url: URL(fileURLWithPath: sourceSpan.sourceName),
             line: sourceSpan.line,
             column: sourceSpan.column

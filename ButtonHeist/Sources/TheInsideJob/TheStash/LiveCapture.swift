@@ -166,8 +166,7 @@ struct LiveCapture: Equatable {
     }
 
     func scrollView(forContainerPath path: TreePath) -> UIScrollView? {
-        elementIndex.scrollableView(forContainerPath: path) as? UIScrollView
-            ?? elementIndex.containerObject(forPath: path) as? UIScrollView
+        elementIndex.scrollableView(forContainerPath: path)
     }
 
     // MARK: - Snapshot
@@ -257,7 +256,7 @@ struct LiveCapture: Equatable {
     }
 
     struct ScrollableViewRef: Equatable {
-        weak var view: UIView?
+        weak var view: UIScrollView?
 
         static func == (lhs: ScrollableViewRef, rhs: ScrollableViewRef) -> Bool {
             switch (lhs.view, rhs.view) {
@@ -432,7 +431,7 @@ struct LiveCapture: Equatable {
             containerRefsByPath[path]?.object
         }
 
-        func scrollableView(forContainerPath path: TreePath) -> UIView? {
+        func scrollableView(forContainerPath path: TreePath) -> UIScrollView? {
             scrollableContainerViewsByPath[path]?.view
         }
     }

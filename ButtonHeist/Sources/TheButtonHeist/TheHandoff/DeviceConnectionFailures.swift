@@ -62,49 +62,35 @@ enum DisconnectReason: Error, LocalizedError {
                 operation: .transport,
                 target: nil,
                 cause: "Network error: \(error.localizedDescription)",
-                errorCode: "transport.network_error",
-                phase: .transport,
-                retryable: true,
-                hint: "Check that the app is still running and reachable, then retry."
+                code: .transportNetworkError
             )
         case .bufferOverflow:
             return HandoffFailureDiagnostic(
                 operation: .transport,
                 target: nil,
                 cause: "Server exceeded max buffer size",
-                errorCode: "transport.buffer_overflow",
-                phase: .transport,
-                retryable: false,
-                hint: "Request a smaller payload or narrow the interface query before retrying."
+                code: .transportBufferOverflow
             )
         case .eventBacklogOverflow(let maxEvents):
             return HandoffFailureDiagnostic(
                 operation: .transport,
                 target: nil,
                 cause: "Connection event backlog exceeded \(maxEvents) buffered events",
-                errorCode: "transport.event_backlog_overflow",
-                phase: .transport,
-                retryable: true,
-                hint: "Reconnect and retry after reducing event volume or response size."
+                code: .transportEventBacklogOverflow
             )
         case .serverClosed:
             return HandoffFailureDiagnostic(
                 operation: .transport,
                 target: nil,
                 cause: "Connection closed by server",
-                errorCode: "transport.server_closed",
-                phase: .transport,
-                retryable: true,
-                hint: "Check that the app is still running and reachable, then retry."
+                code: .transportServerClosed
             )
         case .authFailed(let reason, let hint):
             return HandoffFailureDiagnostic(
                 operation: .connection,
                 target: nil,
                 cause: "Auth failed: \(reason)",
-                errorCode: "auth.failed",
-                phase: .authentication,
-                retryable: false,
+                code: .authFailed,
                 hint: hint
             )
         case .sessionLocked(let message):
@@ -112,61 +98,42 @@ enum DisconnectReason: Error, LocalizedError {
                 operation: .connection,
                 target: nil,
                 cause: "Session locked: \(message)",
-                errorCode: "session.locked",
-                phase: .session,
-                retryable: true,
-                hint: "Wait for the current driver to disconnect or for the session to time out. " +
-                    "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
+                code: .sessionLocked
             )
         case .protocolMismatch(let message):
             return HandoffFailureDiagnostic(
                 operation: .connection,
                 target: nil,
                 cause: "Protocol mismatch: \(message)",
-                errorCode: "protocol.mismatch",
-                phase: .protocolNegotiation,
-                retryable: false,
-                hint: "Rebuild or reinstall so the CLI, MCP server, and iOS app use the same Button Heist version."
+                code: .protocolMismatch
             )
         case .localDisconnect:
             return HandoffFailureDiagnostic(
                 operation: .connection,
                 target: nil,
                 cause: "Disconnected by client",
-                errorCode: "client.local_disconnect",
-                phase: .client,
-                retryable: false,
-                hint: nil
+                code: .clientLocalDisconnect
             )
         case .certificateMismatch:
             return HandoffFailureDiagnostic(
                 operation: .transport,
                 target: nil,
                 cause: "Legacy TLS certificate fingerprint does not match expected value",
-                errorCode: "tls.certificate_mismatch",
-                phase: .tls,
-                retryable: false,
-                hint: "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
+                code: .tlsCertificateMismatch
             )
         case .missingFingerprint:
             return HandoffFailureDiagnostic(
                 operation: .transport,
                 target: nil,
                 cause: "Legacy TLS certificate fingerprint is unavailable for this device",
-                errorCode: "tls.missing_fingerprint",
-                phase: .tls,
-                retryable: false,
-                hint: "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
+                code: .tlsMissingFingerprint
             )
         case .missingToken:
             return HandoffFailureDiagnostic(
                 operation: .transport,
                 target: nil,
                 cause: "No token available for TLS pre-shared-key authentication",
-                errorCode: "tls.missing_token",
-                phase: .tls,
-                retryable: false,
-                hint: "Set BUTTONHEIST_TOKEN, pass --token, or configure a target token."
+                code: .tlsMissingToken
             )
         }
     }

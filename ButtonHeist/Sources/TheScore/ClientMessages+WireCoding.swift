@@ -54,16 +54,16 @@ extension ClientMessage {
     /// type tag and (optional) payload value. Used by both encode sites in
     /// this file. Adding a new case requires extending this switch — Swift's
     /// exhaustivity check is the drift detector.
-    fileprivate var wireRepresentation: (type: ClientWireMessageType, payload: (any Encodable)?) {
+    fileprivate var wireRepresentation: (type: ClientWireMessageType, payload: ClientMessageWirePayload?) {
         switch self {
         case .clientHello: return (.clientHello, nil)
-        case .requestInterface(let payload): return (.requestInterface, payload)
+        case .requestInterface(let payload): return (.requestInterface, .requestInterface(payload))
         case .ping: return (.ping, nil)
         case .status: return (.status, nil)
         case .getPasteboard: return (.getPasteboard, nil)
         case .requestScreen: return (.requestScreen, nil)
-        case .authenticate(let payload): return (.authenticate, payload)
-        case .heistPlan(let payload): return (.heistPlan, payload)
+        case .authenticate(let payload): return (.authenticate, .authenticate(payload))
+        case .heistPlan(let payload): return (.heistPlan, .heistPlan(payload))
         }
     }
 
@@ -125,6 +125,23 @@ extension ClientMessage {
 }
 
 // MARK: - Helpers
+
+private enum ClientMessageWirePayload {
+    case requestInterface(InterfaceQuery)
+    case authenticate(AuthenticatePayload)
+    case heistPlan(HeistPlanRun)
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .requestInterface(let payload):
+            try payload.encode(to: encoder)
+        case .authenticate(let payload):
+            try payload.encode(to: encoder)
+        case .heistPlan(let payload):
+            try payload.encode(to: encoder)
+        }
+    }
+}
 
 private func missingClientPayload(_ type: ClientWireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
     .missingPayload(key: ClientMessageCodingKeys.payload, type: type, codingPath: codingPath)

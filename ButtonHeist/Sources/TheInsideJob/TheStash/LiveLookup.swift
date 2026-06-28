@@ -28,8 +28,8 @@ struct LiveLookup {
         capture.firstResponderHeistId
     }
 
-    var scrollableContainerViewsByPath: [TreePath: UIView] {
-        var result: [TreePath: UIView] = [:]
+    var scrollableContainerViewsByPath: [TreePath: UIScrollView] {
+        var result: [TreePath: UIScrollView] = [:]
         for (path, ref) in capture.scrollableContainerViewsByPath {
             if let view = ref.view {
                 result[path] = view
@@ -124,7 +124,7 @@ struct LiveLookup {
         capture.containerNamesByPath[path]
     }
 
-    func scrollableContainerView(forPath path: TreePath) -> UIView? {
+    func scrollableContainerView(forPath path: TreePath) -> UIScrollView? {
         capture.scrollableContainerViewsByPath[path]?.view
     }
 

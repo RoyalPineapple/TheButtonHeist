@@ -4,7 +4,7 @@ import os
 
 import TheScore
 
-private let sendLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
+private let sendLogger = ButtonHeistLog.logger(.handoff(.server))
 
 extension SimpleSocketServer {
     /// Send data to a specific client.

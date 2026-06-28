@@ -2,7 +2,9 @@ import Foundation
 import Network
 import os
 
-private let listenerLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
+import TheScore
+
+private let listenerLogger = ButtonHeistLog.logger(.handoff(.server))
 
 struct SocketListenerStartup {
     let listener: NWListener

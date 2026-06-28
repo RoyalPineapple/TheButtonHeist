@@ -327,14 +327,14 @@ symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistArtifactV4planAA0C4Plan
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistArtifactV8manifest4planAcA0cD8ManifestV_AA0C4PlanVtcfc	swift.init	public	init(manifest:plan:)	HeistArtifact.init(manifest:plan:)	init(manifest: HeistArtifactManifest, plan: HeistPlan)
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistArtifactV8manifestAA0cD8ManifestVvp	swift.property	public	manifest	HeistArtifact.manifest	let manifest: HeistArtifactManifest
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC	swift.class	public	HeistCompiler	HeistCompiler	actor HeistCompiler
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC11compileFile_5entryAA16ValidationResultOyAA0C4PlanVAA0C15BuildDiagnosticVG10Foundation3URLV_SStYaF	swift.method	public	compileFile(_:entry:)	HeistCompiler.compileFile(_:entry:)	func compileFile(_ url: URL, entry: String = "heist") async -> HeistCompilationResult<HeistPlan>
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC11compileFile_5entryAA16ValidationResultOyAA0C4PlanVAA0C15BuildDiagnosticVG10Foundation3URLV_SStYaF	swift.method	public	compileFile(_:entry:)	HeistCompiler.compileFile(_:entry:)	func compileFile(_ url: URL, entry: String = "heist") async -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC13ConfigurationV	swift.struct	public	HeistCompiler.Configuration	HeistCompiler.Configuration	struct Configuration
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC13ConfigurationV11packageRoot10Foundation3URLVSgvp	swift.property	public	packageRoot	HeistCompiler.Configuration.packageRoot	let packageRoot: URL?
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC13ConfigurationV11packageRoot14directoryEntryAE10Foundation3URLVSg_SStcfc	swift.init	public	init(packageRoot:directoryEntry:)	HeistCompiler.Configuration.init(packageRoot:directoryEntry:)	init(packageRoot: URL? = nil, directoryEntry: String = "heist")
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC13ConfigurationV14directoryEntrySSvp	swift.property	public	directoryEntry	HeistCompiler.Configuration.directoryEntry	let directoryEntry: String
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC13ConfigurationV7defaultAEvpZ	swift.type.property	public	default	HeistCompiler.Configuration.default	static let `default`: HeistCompiler.Configuration
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC13configurationA2C13ConfigurationV_tcfc	swift.init	public	init(configuration:)	HeistCompiler.init(configuration:)	init(configuration: HeistCompiler.Configuration = .default)
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC16compileDirectoryyAA16ValidationResultOyAA0C7CatalogVAA0C15BuildDiagnosticVG10Foundation3URLVYaF	swift.method	public	compileDirectory(_:)	HeistCompiler.compileDirectory(_:)	func compileDirectory(_ url: URL) async -> HeistCompilationResult<HeistCatalog>
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistCompilerC16compileDirectoryyAA16ValidationResultOyAA0C7CatalogVAA0C15BuildDiagnosticVG10Foundation3URLVYaF	swift.method	public	compileDirectory(_:)	HeistCompiler.compileDirectory(_:)	func compileDirectory(_ url: URL) async -> ValidationResult<HeistCatalog, HeistBuildDiagnostic>
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistPlanningO	swift.enum	public	HeistPlanning	HeistPlanning	enum HeistPlanning
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistPlanningO07compileC10PlanSource_10sourceNameAA0cF0VSS_SStKFZ	swift.type.method	public	compileHeistPlanSource(_:sourceName:)	HeistPlanning.compileHeistPlanSource(_:sourceName:)	static func compileHeistPlanSource(_ source: String, sourceName: String = "inline-heist-plan") throws -> HeistPlan
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans13HeistPlanningO15admitPlanSource4fromAA0cF11LoadRequestVAA0cfg9AdmissionJ0V_tKFZ	swift.type.method	public	admitPlanSource(from:)	HeistPlanning.admitPlanSource(from:)	static func admitPlanSource(from request: HeistPlanSourceAdmissionRequest) throws -> HeistPlanLoadRequest
@@ -889,7 +889,7 @@ symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildDiagnosticV4hintSS
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildDiagnosticV4kindAA0cdE4KindOvp	swift.property	public	kind	HeistBuildDiagnostic.kind	let kind: HeistBuildDiagnosticKind
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildDiagnosticV4pathSSSgvp	swift.property	public	path	HeistBuildDiagnostic.path	let path: String?
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildDiagnosticV5phaseAA0cD5PhaseOvp	swift.property	public	phase	HeistBuildDiagnostic.phase	let phase: HeistBuildPhase
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildDiagnosticV6sourceAA0C25CompilationSourceLocationVSgvp	swift.property	public	source	HeistBuildDiagnostic.source	var source: HeistCompilationSourceLocation? { get }
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildDiagnosticV6sourceAA0cD14SourceLocationVSgvp	swift.property	public	source	HeistBuildDiagnostic.source	var source: HeistBuildSourceLocation? { get }
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildDiagnosticV7messageSSvp	swift.property	public	message	HeistBuildDiagnostic.message	let message: String
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildDiagnosticV8severityAA8SeverityOvp	swift.property	public	severity	HeistBuildDiagnostic.severity	var severity: Severity { get }
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans20HeistBuildSourceSpanV	swift.struct	public	HeistBuildSourceSpan	HeistBuildSourceSpan	struct HeistBuildSourceSpan
@@ -1120,7 +1120,6 @@ symbol	ButtonHeistTesting.symbols.json	s:8ThePlans22HeistActionCommandTypeO8type
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans22HeistActionCommandTypeO9decrementyA2CmF	swift.enum.case	public	HeistActionCommandType.decrement	HeistActionCommandType.decrement	case decrement
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans22HeistActionCommandTypeO9incrementyA2CmF	swift.enum.case	public	HeistActionCommandType.increment	HeistActionCommandType.increment	case increment
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans22HeistActionCommandTypeO9longPressyA2CmF	swift.enum.case	public	HeistActionCommandType.longPress	HeistActionCommandType.longPress	case longPress
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans22HeistCompilationResulta	swift.typealias	public	HeistCompilationResult	HeistCompilationResult	typealias HeistCompilationResult<Value> = ValidationResult<Value, HeistBuildDiagnostic> where Value : Sendable
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans22HeistInvocationContentV	swift.struct	public	HeistInvocationContent	HeistInvocationContent	struct HeistInvocationContent
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans22HeistInvocationContentV10heistStepsSayAA0C4StepOGvp	swift.property	public	heistSteps	HeistInvocationContent.heistSteps	var heistSteps: [HeistStep] { get }
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans22HeistInvocationContentV10invocationAA0cD4StepVvp	swift.property	public	invocation	HeistInvocationContent.invocation	let invocation: HeistInvocationStep
@@ -1218,6 +1217,12 @@ symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildDiagnosticKindO	sw
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildDiagnosticKindO5erroryA2CmF	swift.enum.case	public	HeistBuildDiagnosticKind.error	HeistBuildDiagnosticKind.error	case error
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildDiagnosticKindO7warningyA2CmF	swift.enum.case	public	HeistBuildDiagnosticKind.warning	HeistBuildDiagnosticKind.warning	case warning
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildDiagnosticKindO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	HeistBuildDiagnosticKind.init(rawValue:)	init?(rawValue: String)
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildSourceLocationV	swift.struct	public	HeistBuildSourceLocation	HeistBuildSourceLocation	struct HeistBuildSourceLocation
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildSourceLocationV11descriptionSSvp	swift.property	public	description	HeistBuildSourceLocation.description	var description: String { get }
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildSourceLocationV3url10Foundation3URLVvp	swift.property	public	url	HeistBuildSourceLocation.url	let url: URL
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildSourceLocationV3url4line6columnAC10Foundation3URLV_SiSgAJtcfc	swift.init	public	init(url:line:column:)	HeistBuildSourceLocation.init(url:line:column:)	init(url: URL, line: Int? = nil, column: Int? = nil)
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildSourceLocationV4lineSiSgvp	swift.property	public	line	HeistBuildSourceLocation.line	let line: Int?
+symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24HeistBuildSourceLocationV6columnSiSgvp	swift.property	public	column	HeistBuildSourceLocation.column	let column: Int?
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24RepeatActionUntilContentV	swift.struct	public	RepeatActionUntilContent	RepeatActionUntilContent	struct RepeatActionUntilContent
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24RepeatActionUntilContentV10heistStepsSayAA9HeistStepOGvp	swift.property	public	heistSteps	RepeatActionUntilContent.heistSteps	var heistSteps: [HeistStep] { get }
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans24RepeatActionUntilContentV11expectationAA8WaitStepVSgvp	swift.property	public	expectation	RepeatActionUntilContent.expectation	let expectation: WaitStep?
@@ -1317,7 +1322,6 @@ symbol	ButtonHeistTesting.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV7
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV7elementAA0cE8TemplateVSgvp	swift.property	public	element	ElementUpdatePredicateExpr.element	let element: ElementPredicateTemplate?
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans26ElementUpdatePredicateExprV7resolve2inAA0cdE0VAA25HeistExecutionEnvironmentV_tKF	swift.method	public	resolve(in:)	ElementUpdatePredicateExpr.resolve(in:)	func resolve(in environment: HeistExecutionEnvironment) throws -> ElementUpdatePredicate
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans26ElementUpdatePredicateExprVyAcA0cdE0Vcfc	swift.init	public	init(_:)	ElementUpdatePredicateExpr.init(_:)	init(_ update: ElementUpdatePredicate)
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans26HeistCompilationDiagnostica	swift.typealias	public	HeistCompilationDiagnostic	HeistCompilationDiagnostic	typealias HeistCompilationDiagnostic = HeistBuildDiagnostic
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans27HeistCanonicalSwiftDSLErrorO	swift.enum	public	HeistCanonicalSwiftDSLError	HeistCanonicalSwiftDSLError	enum HeistCanonicalSwiftDSLError
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans27HeistCanonicalSwiftDSLErrorO11descriptionSSvp	swift.property	public	description	HeistCanonicalSwiftDSLError.description	var description: String { get }
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans27HeistCanonicalSwiftDSLErrorO16invalidParameteryACSScACmF	swift.enum.case	public	HeistCanonicalSwiftDSLError.invalidParameter(_:)	HeistCanonicalSwiftDSLError.invalidParameter(_:)	case invalidParameter(String)
@@ -1410,12 +1414,6 @@ symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30AccessibilityPredicateContra
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30AccessibilityPredicateContractO9ViolationO8contractSSvp	swift.property	public	contract	AccessibilityPredicateContract.Violation.contract	var contract: String { get }
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30AccessibilityPredicateContractO9ViolationO8observedSSvp	swift.property	public	observed	AccessibilityPredicateContract.Violation.observed	var observed: String { get }
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30AccessibilityPredicateContractO9violationAC9ViolationOSgvp	swift.property	public	violation	AccessibilityPredicateContract.violation	var violation: AccessibilityPredicateContract.Violation? { get }
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistCompilationSourceLocationV	swift.struct	public	HeistCompilationSourceLocation	HeistCompilationSourceLocation	struct HeistCompilationSourceLocation
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistCompilationSourceLocationV11descriptionSSvp	swift.property	public	description	HeistCompilationSourceLocation.description	var description: String { get }
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistCompilationSourceLocationV3url10Foundation3URLVvp	swift.property	public	url	HeistCompilationSourceLocation.url	let url: URL
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistCompilationSourceLocationV3url4line6columnAC10Foundation3URLV_SiSgAJtcfc	swift.init	public	init(url:line:column:)	HeistCompilationSourceLocation.init(url:line:column:)	init(url: URL, line: Int? = nil, column: Int? = nil)
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistCompilationSourceLocationV4lineSiSgvp	swift.property	public	line	HeistCompilationSourceLocation.line	let line: Int?
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistCompilationSourceLocationV6columnSiSgvp	swift.property	public	column	HeistCompilationSourceLocation.column	let column: Int?
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistPlanSourceAdmissionPolicyO	swift.enum	public	HeistPlanSourceAdmissionPolicy	HeistPlanSourceAdmissionPolicy	enum HeistPlanSourceAdmissionPolicy
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistPlanSourceAdmissionPolicyO12artifactOnlyyA2CmF	swift.enum.case	public	HeistPlanSourceAdmissionPolicy.artifactOnly	HeistPlanSourceAdmissionPolicy.artifactOnly	case artifactOnly
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans30HeistPlanSourceAdmissionPolicyO19artifactOrInlineDSLyA2CmF	swift.enum.case	public	HeistPlanSourceAdmissionPolicy.artifactOrInlineDSL	HeistPlanSourceAdmissionPolicy.artifactOrInlineDSL	case artifactOrInlineDSL
@@ -2143,6 +2141,9 @@ relationship	conformsTo	s:8ThePlans24HeistBuildDiagnosticKindO	s:SH	HeistBuildDi
 relationship	conformsTo	s:8ThePlans24HeistBuildDiagnosticKindO	s:SQ	HeistBuildDiagnosticKind	Swift.Equatable
 relationship	conformsTo	s:8ThePlans24HeistBuildDiagnosticKindO	s:SY	HeistBuildDiagnosticKind	Swift.RawRepresentable
 relationship	conformsTo	s:8ThePlans24HeistBuildDiagnosticKindO	s:s8SendableP	HeistBuildDiagnosticKind	Swift.Sendable
+relationship	conformsTo	s:8ThePlans24HeistBuildSourceLocationV	s:SQ	HeistBuildSourceLocation	Swift.Equatable
+relationship	conformsTo	s:8ThePlans24HeistBuildSourceLocationV	s:s23CustomStringConvertibleP	HeistBuildSourceLocation	Swift.CustomStringConvertible
+relationship	conformsTo	s:8ThePlans24HeistBuildSourceLocationV	s:s8SendableP	HeistBuildSourceLocation	Swift.Sendable
 relationship	conformsTo	s:8ThePlans24RepeatActionUntilContentV	s:8ThePlans12HeistContentP	RepeatActionUntilContent	HeistContent
 relationship	conformsTo	s:8ThePlans24ScrollContainerSelectionO	s:SQ	ScrollContainerSelection	Swift.Equatable
 relationship	conformsTo	s:8ThePlans24ScrollContainerSelectionO	s:s23CustomStringConvertibleP	ScrollContainerSelection	Swift.CustomStringConvertible
@@ -2223,9 +2224,6 @@ relationship	conformsTo	s:8ThePlans30AccessibilityPredicateContractO9ViolationO	
 relationship	conformsTo	s:8ThePlans30AccessibilityPredicateContractO9ViolationO	s:SQ	AccessibilityPredicateContract.Violation	Swift.Equatable
 relationship	conformsTo	s:8ThePlans30AccessibilityPredicateContractO9ViolationO	s:s23CustomStringConvertibleP	AccessibilityPredicateContract.Violation	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans30AccessibilityPredicateContractO9ViolationO	s:s8SendableP	AccessibilityPredicateContract.Violation	Swift.Sendable
-relationship	conformsTo	s:8ThePlans30HeistCompilationSourceLocationV	s:SQ	HeistCompilationSourceLocation	Swift.Equatable
-relationship	conformsTo	s:8ThePlans30HeistCompilationSourceLocationV	s:s23CustomStringConvertibleP	HeistCompilationSourceLocation	Swift.CustomStringConvertible
-relationship	conformsTo	s:8ThePlans30HeistCompilationSourceLocationV	s:s8SendableP	HeistCompilationSourceLocation	Swift.Sendable
 relationship	conformsTo	s:8ThePlans30HeistPlanSourceAdmissionPolicyO	s:SH	HeistPlanSourceAdmissionPolicy	Swift.Hashable
 relationship	conformsTo	s:8ThePlans30HeistPlanSourceAdmissionPolicyO	s:SQ	HeistPlanSourceAdmissionPolicy	Swift.Equatable
 relationship	conformsTo	s:8ThePlans30HeistPlanSourceAdmissionPolicyO	s:s8SendableP	HeistPlanSourceAdmissionPolicy	Swift.Sendable

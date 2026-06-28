@@ -7,7 +7,7 @@ import os
 import TheScore
 
 /// Orchestrates client registration, admission, delivery, and disconnects.
-private let muscleLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
+private let muscleLogger = ButtonHeistLog.logger(.insideJob(.auth))
 
 actor TheMuscle {
 

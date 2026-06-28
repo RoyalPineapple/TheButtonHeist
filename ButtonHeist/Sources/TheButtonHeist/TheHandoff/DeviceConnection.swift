@@ -2,7 +2,9 @@ import Foundation
 import Network
 import os.log
 
-let deviceConnectionLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "connection")
+import TheScore
+
+let deviceConnectionLogger = ButtonHeistLog.logger(.handoff(.connection))
 
 /// Single ordered event emitted from an NWConnection's network-queue
 /// callbacks. Routing both state updates and receive callbacks through one

@@ -58,14 +58,18 @@ public struct TargetConfigLoadError: Error, LocalizedError, Sendable {
         case readFailed = "read_failed"
         case decodeFailed = "decode_failed"
 
-        /// Stable diagnostic error code for this load failure kind.
-        public var errorCode: String {
+        var failureCode: KnownFailureCode {
             switch self {
             case .readFailed:
-                return "config.read_failed"
+                return .configReadFailed
             case .decodeFailed:
-                return "config.decode_failed"
+                return .configDecodeFailed
             }
+        }
+
+        /// Stable diagnostic error code for this load failure kind.
+        public var errorCode: String {
+            failureCode.rawValue
         }
     }
 
@@ -88,12 +92,7 @@ public struct TargetConfigLoadError: Error, LocalizedError, Sendable {
 
     /// Machine-readable failure metadata for formatted diagnostics.
     public var failureDetails: FailureDetails {
-        FailureDetails(
-            errorCode: kind.errorCode,
-            phase: .setup,
-            retryable: false,
-            hint: "Verify the config path points to a readable JSON file matching the Button Heist config schema."
-        )
+        FailureDetails(code: kind.failureCode)
     }
 }
 

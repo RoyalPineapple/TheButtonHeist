@@ -3,12 +3,14 @@ import Foundation
 import TheScore
 
 struct FenceFailureDescriptor: Sendable {
-    let errorCode: String
-    let phase: FailurePhase
-    let retryable: Bool
-    let hint: String?
+    let details: FailureDetails
     let coreMessage: String
     let displayMessage: String
+
+    var errorCode: String { details.errorCode }
+    var phase: FailurePhase { details.phase }
+    var retryable: Bool { details.retryable }
+    var hint: String? { details.hint }
 }
 
 public extension FenceError {
@@ -16,20 +18,14 @@ public extension FenceError {
         switch self {
         case .invalidRequest(let message):
             return FenceFailureDescriptor(
-                errorCode: "request.invalid",
-                phase: .request,
-                retryable: false,
-                hint: "Fix the request shape or arguments before retrying.",
+                details: FailureDetails(code: .requestInvalid),
                 coreMessage: message,
                 displayMessage: message
             )
         case .noDeviceFound:
             let message = "No devices found within timeout. Is the app running?"
             return FenceFailureDescriptor(
-                errorCode: "discovery.no_device_found",
-                phase: .discovery,
-                retryable: true,
-                hint: "Start the app and confirm it advertises a session for The Button Heist.",
+                details: FailureDetails(code: .discoveryNoDeviceFound),
                 coreMessage: message,
                 displayMessage: message
             )
@@ -37,20 +33,14 @@ public extension FenceError {
             let list = available.isEmpty ? "(none)" : available.joined(separator: ", ")
             let message = "No device matching '\(filter)'. Available: \(list)"
             return FenceFailureDescriptor(
-                errorCode: "discovery.no_matching_device",
-                phase: .discovery,
-                retryable: false,
-                hint: "Check the device filter or target name against 'buttonheist list_devices'.",
+                details: FailureDetails(code: .discoveryNoMatchingDevice),
                 coreMessage: message,
                 displayMessage: message
             )
         case .connectionTimeout:
             let hint = "Is the app running? Check 'buttonheist list_devices' to see available devices."
             return FenceFailureDescriptor(
-                errorCode: "setup.timeout",
-                phase: .setup,
-                retryable: true,
-                hint: hint,
+                details: FailureDetails(code: .setupTimeout, hint: hint),
                 coreMessage: "Connection timed out",
                 displayMessage: """
                     Connection timed out
@@ -60,10 +50,7 @@ public extension FenceError {
         case .connectionFailed(let message):
             let hint = "Is the app running? Check 'buttonheist list_devices' to see available devices."
             return FenceFailureDescriptor(
-                errorCode: "connection.failed",
-                phase: .transport,
-                retryable: true,
-                hint: hint,
+                details: FailureDetails(code: .connectionFailed, hint: hint),
                 coreMessage: "Connection failed: \(message)",
                 displayMessage: """
                     Connection failed: \(message)
@@ -72,20 +59,18 @@ public extension FenceError {
             )
         case .connectionFailure(let failure):
             return FenceFailureDescriptor(
-                errorCode: failure.errorCode,
-                phase: failure.phase,
-                retryable: failure.retryable,
-                hint: failure.hint,
+                details: FailureDetails(
+                    code: failure.failureCode,
+                    phase: failure.phase,
+                    retryable: failure.retryable,
+                    hint: failure.hint
+                ),
                 coreMessage: failure.message,
                 displayMessage: failure.message
             )
         case .sessionLocked(let message):
             return FenceFailureDescriptor(
-                errorCode: "session.locked",
-                phase: .session,
-                retryable: true,
-                hint: "Wait for the current driver to disconnect or for the session to time out. " +
-                    "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app.",
+                details: FailureDetails(code: .sessionLocked),
                 coreMessage: "Session locked: \(message)",
                 displayMessage: """
                     Session locked: \(message)
@@ -98,19 +83,13 @@ public extension FenceError {
         case .authFailed(let message):
             let base = "Auth failed: \(message)"
             return FenceFailureDescriptor(
-                errorCode: "auth.failed",
-                phase: .authentication,
-                retryable: false,
-                hint: nil,
+                details: FailureDetails(code: .authFailed),
                 coreMessage: base,
                 displayMessage: base
             )
         case .notConnected:
             return FenceFailureDescriptor(
-                errorCode: "connection.not_connected",
-                phase: .request,
-                retryable: true,
-                hint: "Check that the app is running, then retry the command. Use 'buttonheist list_devices' to see available devices.",
+                details: FailureDetails(code: .connectionNotConnected),
                 coreMessage: "Not connected to device.",
                 displayMessage: """
                     Not connected to device.
@@ -120,10 +99,7 @@ public extension FenceError {
             )
         case .actionTimeout:
             return FenceFailureDescriptor(
-                errorCode: "request.timeout",
-                phase: .request,
-                retryable: true,
-                hint: Self.actionTimeoutRecoveryHint,
+                details: FailureDetails(code: .requestTimeout),
                 coreMessage: "Command timed out waiting for a response from the app.",
                 displayMessage: """
                     Command timed out waiting for a response from the app.
@@ -133,20 +109,14 @@ public extension FenceError {
         case .actionFailed(let message):
             let displayMessage = "Action failed: \(message)"
             return FenceFailureDescriptor(
-                errorCode: "request.action_failed",
-                phase: .request,
-                retryable: false,
-                hint: nil,
+                details: FailureDetails(code: .requestActionFailed),
                 coreMessage: displayMessage,
                 displayMessage: displayMessage
             )
         case .serverError(let serverError):
             let displayMessage = "Action failed: \(serverError.message)"
             return FenceFailureDescriptor(
-                errorCode: serverError.errorCode,
-                phase: serverError.phase,
-                retryable: serverError.retryable,
-                hint: serverError.hint,
+                details: serverError.failureDescriptor.details,
                 coreMessage: displayMessage,
                 displayMessage: displayMessage
             )

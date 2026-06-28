@@ -1,7 +1,9 @@
 import Foundation
 import os.log
 
-private let handoffConnectionLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "connection")
+import TheScore
+
+private let handoffConnectionLogger = ButtonHeistLog.logger(.handoff(.connection))
 
 @ButtonHeistActor
 extension TheHandoff {

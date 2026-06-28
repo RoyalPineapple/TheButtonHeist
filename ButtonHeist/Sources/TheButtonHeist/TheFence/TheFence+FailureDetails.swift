@@ -3,10 +3,12 @@ import Foundation
 import TheScore
 
 struct ServerFailureDescriptor: Sendable {
-    let errorCode: String
-    let phase: FailurePhase
-    let retryable: Bool
-    let hint: String?
+    let details: FailureDetails
+
+    var errorCode: String { details.errorCode }
+    var phase: FailurePhase { details.phase }
+    var retryable: Bool { details.retryable }
+    var hint: String? { details.hint }
 }
 
 public extension ServerError {
@@ -33,65 +35,41 @@ public extension ServerError {
 
 extension ErrorKind {
     var failureDetails: FailureDetails {
-        let descriptor = failureDescriptor
-        return FailureDetails(
-            errorCode: descriptor.errorCode,
-            phase: descriptor.phase,
-            retryable: descriptor.retryable,
-            hint: descriptor.hint
-        )
+        failureDescriptor.details
     }
 
     var failureDescriptor: ServerFailureDescriptor {
         switch self {
         case .accessibilityTreeUnavailable:
             return ServerFailureDescriptor(
-                errorCode: "request.accessibility_tree_unavailable",
-                phase: .request,
-                retryable: true,
-                hint: "Wait for a traversable app window, then refresh the interface or retry the command."
+                details: FailureDetails(code: .requestAccessibilityTreeUnavailable)
             )
         case .elementNotFound:
             return ServerFailureDescriptor(
-                errorCode: "request.element_not_found",
-                phase: .request,
-                retryable: false,
-                hint: "Refresh the interface and verify the target's accessibility properties."
+                details: FailureDetails(code: .requestElementNotFound)
             )
         case .timeout:
             return ServerFailureDescriptor(
-                errorCode: "request.timeout",
-                phase: .request,
-                retryable: true,
-                hint: "The request timed out; retry on the same session if the app is responsive."
+                details: FailureDetails(
+                    code: .requestTimeout,
+                    hint: "The request timed out; retry on the same session if the app is responsive."
+                )
             )
         case .validationError:
             return ServerFailureDescriptor(
-                errorCode: "request.validation_error",
-                phase: .request,
-                retryable: false,
-                hint: "Fix the request so it satisfies the server-side validation rules."
+                details: FailureDetails(code: .requestValidationError)
             )
         case .actionFailed:
             return ServerFailureDescriptor(
-                errorCode: "request.action_failed",
-                phase: .request,
-                retryable: false,
-                hint: nil
+                details: FailureDetails(code: .requestActionFailed)
             )
         case .authFailure:
             return ServerFailureDescriptor(
-                errorCode: "auth.failed",
-                phase: .authentication,
-                retryable: false,
-                hint: nil
+                details: FailureDetails(code: .authFailed)
             )
         case .general:
             return ServerFailureDescriptor(
-                errorCode: "server.general",
-                phase: .server,
-                retryable: false,
-                hint: nil
+                details: FailureDetails(code: .serverGeneral)
             )
         }
     }

@@ -75,12 +75,16 @@ extension TheFence {
         case .failed(let reason):
             throw FenceError(HandoffConnectionError.disconnected(reason))
         case .unavailable:
+            let details = FailureDetails(
+                code: .connectionEndpointUnreachable,
+                hint: "Check that the app is running at \(device.name), then retry the command."
+            )
             throw FenceError.connectionFailure(ConnectionFailure(
                 message: "Could not reach ButtonHeist server at \(device.name)",
-                errorCode: "connection.endpoint_unreachable",
-                phase: .transport,
-                retryable: true,
-                hint: "Check that the app is running at \(device.name), then retry the command."
+                failureCode: details.code,
+                phase: details.phase,
+                retryable: details.retryable,
+                hint: details.hint
             ))
         }
 

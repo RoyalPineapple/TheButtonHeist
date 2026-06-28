@@ -7,9 +7,9 @@ enum MCPArgumentInputPreflight {
     static func validate(
         _ arguments: [String: Value]?,
         context: String = "MCP arguments",
-        maxBytes: Int = PublicAdapterInputLimits.maxRequestBytes,
-        maxNestingDepth: Int = PublicAdapterInputLimits.maxNestingDepth,
-        maxTotalObjectKeys: Int = PublicAdapterInputLimits.maxTotalObjectKeys
+        maxBytes: Int = PublicMachineInputLimits.maxRequestBytes,
+        maxNestingDepth: Int = PublicMachineInputLimits.maxNestingDepth,
+        maxTotalObjectKeys: Int = PublicMachineInputLimits.maxTotalObjectKeys
     ) throws {
         try PublicJSONValuePreflight.validateObject(
             arguments ?? [:],
@@ -24,12 +24,12 @@ enum MCPArgumentInputPreflight {
     }
 
     static func heistValues(_ arguments: [String: Value]?) throws -> [String: HeistValue] {
-        try PublicHeistValueAdapter.convertObject(
+        try PublicJSONHeistValueConverter.convertObject(
             arguments ?? [:],
             policy: PublicJSONInputPolicy(
-                maxBytes: PublicAdapterInputLimits.maxRequestBytes,
-                maxNestingDepth: PublicAdapterInputLimits.maxNestingDepth,
-                maxTotalObjectKeys: PublicAdapterInputLimits.maxTotalObjectKeys
+                maxBytes: PublicMachineInputLimits.maxRequestBytes,
+                maxNestingDepth: PublicMachineInputLimits.maxNestingDepth,
+                maxTotalObjectKeys: PublicMachineInputLimits.maxTotalObjectKeys
             ),
             context: "MCP arguments",
             node: jsonValueNode

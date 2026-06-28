@@ -110,7 +110,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             return XCTFail("Expected oversize inline error, got \(response)")
         }
         XCTAssertTrue(message.contains("Inline screenshot payload is too large"))
-        XCTAssertEqual(details?.errorCode, "screen.inline_payload_too_large")
+        XCTAssertEqual(details?.code.knownCode, .screenInlinePayloadTooLarge)
         XCTAssertEqual(details?.phase, .client)
         XCTAssertEqual(details?.retryable, false)
 

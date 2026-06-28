@@ -1476,7 +1476,8 @@ final class TheHandoffStateTests: XCTestCase {
                 return XCTFail("Expected .disconnected, got \(error)")
             }
             XCTAssertEqual(reason, .missingFingerprint)
-            XCTAssertEqual(error.failureCode, "tls.missing_fingerprint")
+            XCTAssertEqual(error.diagnostic.details.code.knownCode, .tlsMissingFingerprint)
+            XCTAssertEqual(error.failureCode, KnownFailureCode.tlsMissingFingerprint.rawValue)
             XCTAssertEqual(error.phase, .tls)
             XCTAssertFalse(error.retryable)
         } catch {

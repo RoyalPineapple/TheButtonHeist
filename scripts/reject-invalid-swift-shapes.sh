@@ -57,6 +57,14 @@ for check in "${CHECKS[@]}"; do
   fi
 done
 
+raw_logger_matches="$(git grep -n -E '\bLogger[[:space:]]*\([[:space:]]*subsystem[[:space:]]*:' -- "${EXISTING_PATHS[@]}" || true)"
+raw_logger_matches="$(printf '%s\n' "$raw_logger_matches" | grep -v '^ButtonHeist/Sources/TheScore/ButtonHeistLog.swift:' || true)"
+if [[ -n "$raw_logger_matches" ]]; then
+  echo "::error::Invalid Swift pipeline shape rejected: raw OSLog logger construction"
+  printf '%s\n' "$raw_logger_matches"
+  status=1
+fi
+
 if [[ "$status" -ne 0 ]]; then
   cat <<'EOF'
 

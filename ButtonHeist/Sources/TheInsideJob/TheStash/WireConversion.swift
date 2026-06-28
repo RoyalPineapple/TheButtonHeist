@@ -8,7 +8,7 @@ import ThePlans
 
 import AccessibilitySnapshotParser
 
-private let wireConversionLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "wireConversion")
+private let wireConversionLogger = ButtonHeistLog.logger(.insideJob(.wireConversion))
 
 // MARK: - Float Sanitization
 

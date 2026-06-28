@@ -1,7 +1,9 @@
 import Foundation
 import os.log
 
-private let discoveryLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "discovery")
+import TheScore
+
+private let discoveryLogger = ButtonHeistLog.logger(.handoff(.discovery))
 
 /// Discovery lifecycle invariant: only callbacks from the current live discovery session can mutate the discovery projection.
 @ButtonHeistActor

@@ -3,6 +3,12 @@ import Foundation
 import HeistDoctorCore
 import TheScore
 
+enum HeistDoctorToolOutput {
+    static func writeLine(_ line: String) {
+        FileHandle.standardOutput.write(Data((line + "\n").utf8))
+    }
+}
+
 @main
 struct HeistDoctorCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -48,7 +54,7 @@ struct HeistDoctorCommand: ParsableCommand {
 
         switch format {
         case .human:
-            print(Self.humanReport(suggestions))
+            HeistDoctorToolOutput.writeLine(Self.humanReport(suggestions))
         case .json:
             let report = HeistDoctorReport(suggestions: suggestions)
             let encoder = JSONEncoder()
@@ -57,7 +63,7 @@ struct HeistDoctorCommand: ParsableCommand {
             guard let json = String(data: data, encoding: .utf8) else {
                 throw ValidationError("failed to encode heist-doctor JSON report")
             }
-            print(json)
+            HeistDoctorToolOutput.writeLine(json)
         }
     }
 

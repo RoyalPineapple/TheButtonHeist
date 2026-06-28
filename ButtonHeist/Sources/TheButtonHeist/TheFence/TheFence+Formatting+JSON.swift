@@ -27,12 +27,7 @@ extension FenceResponse {
     static func jsonEncodingFailureResponse() -> PublicErrorResponse {
         PublicErrorResponse(
             message: PublicJSONSerializer.encodingFailureMessage,
-            details: FailureDetails(
-                errorCode: "formatting.json_encoding_failed",
-                phase: .client,
-                retryable: false,
-                hint: "Report this diagnostic with the command that produced it."
-            )
+            details: FailureDetails(code: .formattingJSONEncodingFailed)
         )
     }
 }

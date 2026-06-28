@@ -90,10 +90,6 @@ public struct SessionStatePayload: Sendable, Equatable {
     }
 }
 
-enum FenceRequestErrorCode {
-    static let missingTarget = "request.missing_target"
-}
-
 enum DiagnosticFailureMapper {
     static func map(_ error: Error) -> DiagnosticFailure {
         switch error {
@@ -111,9 +107,9 @@ enum DiagnosticFailureMapper {
                 message: validationError.message,
                 details: FailureDetails(code: .requestValidationError)
             )
-        case let adapterError as PublicAdapterInputError:
+        case let inputError as PublicMachineInputError:
             return DiagnosticFailure(
-                message: adapterError.message,
+                message: inputError.message,
                 details: FailureDetails(code: .requestInvalid)
             )
         case let missingTarget as TheFence.MissingElementTarget:
@@ -183,9 +179,7 @@ enum DiagnosticFailureMapper {
         return DiagnosticFailure(
             message: message,
             details: FailureDetails(
-                errorCode: FenceRequestErrorCode.missingTarget,
-                phase: .request,
-                retryable: false,
+                code: .requestMissingTarget,
                 hint: next
             )
         )

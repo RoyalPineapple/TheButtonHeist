@@ -102,7 +102,7 @@ final class TheFenceHandlerTests: XCTestCase {
         command: TheFence.Command,
         arguments: [String: HeistValue] = [:],
         contains expectedSubstrings: [String],
-        errorCode: String,
+        errorCode: KnownFailureCode,
         nextCommand: String,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -120,7 +120,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     file: file, line: line
                 )
             }
-            XCTAssertEqual(details?.errorCode, errorCode, file: file, line: line)
+            XCTAssertEqual(details?.code.knownCode, errorCode, file: file, line: line)
             XCTAssertEqual(details?.phase, .request, file: file, line: line)
             XCTAssertEqual(details?.retryable, false, file: file, line: line)
             XCTAssertEqual(details?.hint, nextCommand, file: file, line: line)
@@ -447,7 +447,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     kind: .general,
                     message: "server crashed"
                 ))),
-                code: "server.general",
+                code: .serverGeneral,
                 kind: .server,
                 phase: .server,
                 message: "Action failed: server crashed",
@@ -456,7 +456,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ExpectedDiagnosticFailure(
                 name: "routing",
                 response: FenceResponse.failure(FenceOperationRoutingError(message: "Unknown tool: warp")),
-                code: "request.invalid",
+                code: .requestInvalid,
                 kind: .request,
                 phase: .request,
                 message: "Unknown tool: warp",
@@ -465,7 +465,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ExpectedDiagnosticFailure(
                 name: "validation",
                 response: FenceResponse.failure(validationError),
-                code: "request.validation_error",
+                code: .requestValidationError,
                 kind: .request,
                 phase: .request,
                 message: validationError.message,
@@ -474,7 +474,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ExpectedDiagnosticFailure(
                 name: "action",
                 response: FenceResponse.failure(FenceError.actionFailed("could not activate target")),
-                code: "request.action_failed",
+                code: .requestActionFailed,
                 kind: .request,
                 phase: .request,
                 message: "Action failed: could not activate target",
@@ -484,15 +484,15 @@ final class TheFenceHandlerTests: XCTestCase {
 
         for expected in cases {
             let failure = try XCTUnwrap(expected.response.diagnosticFailure, expected.name)
-            XCTAssertNotNil(failure.failureCode.knownCode, expected.name)
-            XCTAssertEqual(failure.failureCode.rawValue, expected.code, expected.name)
-            XCTAssertEqual(failure.code, expected.code, expected.name)
+            XCTAssertEqual(failure.failureCode.knownCode, expected.code, expected.name)
+            XCTAssertEqual(failure.failureCode.rawValue, expected.code.rawValue, expected.name)
+            XCTAssertEqual(failure.code, expected.code.rawValue, expected.name)
             XCTAssertEqual(failure.kind, expected.kind, expected.name)
             XCTAssertEqual(failure.phase, expected.phase, expected.name)
             XCTAssertEqual(failure.message, expected.message, expected.name)
             XCTAssertEqual(failure.displayMessage, expected.message, expected.name)
             XCTAssertEqual(failure.retryable, expected.retryable, expected.name)
-            XCTAssertEqual(failure.details.errorCode, expected.code, expected.name)
+            XCTAssertEqual(failure.details.code.knownCode, expected.code, expected.name)
             XCTAssertEqual(failure.details.phase, expected.phase, expected.name)
             XCTAssertEqual(failure.details.retryable, expected.retryable, expected.name)
             XCTAssertFalse(failure.code.isEmpty, expected.name)
@@ -506,10 +506,10 @@ final class TheFenceHandlerTests: XCTestCase {
         let failure = try XCTUnwrap(response.diagnosticFailure)
 
         XCTAssertEqual(failure.failureCode, FailureCode(.connectionNotConnected))
-        XCTAssertEqual(failure.code, "connection.not_connected")
+        XCTAssertEqual(failure.code, KnownFailureCode.connectionNotConnected.rawValue)
         XCTAssertEqual(failure.kind, .connection)
         XCTAssertEqual(failure.message, "Not connected to device.")
-        XCTAssertEqual(failure.details.errorCode, "connection.not_connected")
+        XCTAssertEqual(failure.details.code.knownCode, .connectionNotConnected)
         XCTAssertEqual(failure.details.phase, .request)
         XCTAssertEqual(failure.details.retryable, true)
     }
@@ -519,7 +519,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let failure = try XCTUnwrap(response.diagnosticFailure)
 
         XCTAssertEqual(failure.failureCode, FailureCode(.setupTimeout))
-        XCTAssertEqual(failure.code, "setup.timeout")
+        XCTAssertEqual(failure.code, KnownFailureCode.setupTimeout.rawValue)
         XCTAssertEqual(failure.kind, .connection)
         XCTAssertEqual(failure.message, "Connection timed out")
         XCTAssertEqual(failure.details.phase, .setup)
@@ -540,11 +540,12 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.handleClientActionRequest(parsed)
         let failure = try XCTUnwrap(response.diagnosticFailure)
 
-        XCTAssertEqual(failure.code, "request.invalid")
+        XCTAssertEqual(failure.failureCode.knownCode, .requestInvalid)
+        XCTAssertEqual(failure.code, KnownFailureCode.requestInvalid.rawValue)
         XCTAssertEqual(failure.kind, .request)
         XCTAssertEqual(failure.phase, .request)
         XCTAssertEqual(failure.retryable, false)
-        XCTAssertEqual(failure.details.errorCode, "request.invalid")
+        XCTAssertEqual(failure.details.code.knownCode, .requestInvalid)
     }
 
     @ButtonHeistActor
@@ -568,7 +569,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(parsed: parsed)
         let failure = try XCTUnwrap(response.diagnosticFailure)
 
-        XCTAssertEqual(failure.code, "request.validation_error")
+        XCTAssertEqual(failure.failureCode.knownCode, .requestValidationError)
+        XCTAssertEqual(failure.code, KnownFailureCode.requestValidationError.rawValue)
         XCTAssertEqual(failure.kind, .request)
         XCTAssertEqual(failure.message, validationError.message)
         XCTAssertEqual(failure.details.phase, .request)
@@ -2342,7 +2344,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "requires target object",
                 "Next: get_interface()",
             ],
-            errorCode: "request.missing_target",
+            errorCode: .requestMissingTarget,
             nextCommand: "get_interface()"
         )
     }
@@ -2407,7 +2409,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "requires target object",
                 "Next: get_interface()",
             ],
-            errorCode: "request.missing_target",
+            errorCode: .requestMissingTarget,
             nextCommand: "get_interface()"
         )
     }
@@ -2430,7 +2432,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "requires target object",
                 "Next: get_interface()",
             ],
-            errorCode: "request.missing_target",
+            errorCode: .requestMissingTarget,
             nextCommand: "get_interface()"
         )
     }
@@ -2992,7 +2994,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected .error response, got \(response)")
         }
         XCTAssertEqual(message, "Invalid predicate type: expected object with a \"type\" discriminator")
-        XCTAssertEqual(details?.errorCode, "request.invalid")
+        XCTAssertEqual(details?.code.knownCode, .requestInvalid)
         XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
@@ -3656,7 +3658,7 @@ final class TheFenceHandlerTests: XCTestCase {
 private struct ExpectedDiagnosticFailure {
     let name: String
     let response: FenceResponse
-    let code: String
+    let code: KnownFailureCode
     let kind: DiagnosticFailureKind
     let phase: FailurePhase
     let message: String

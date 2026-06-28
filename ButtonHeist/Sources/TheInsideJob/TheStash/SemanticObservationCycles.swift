@@ -70,7 +70,7 @@ final class SemanticObservationCycles {
 
     private func completeWaiters(scope: SemanticObservationScope) {
         for (id, waiter) in waiters {
-            guard scope >= waiter.scope else { continue }
+            guard scope.canFulfill(waiter.scope) else { continue }
             guard sequence > waiter.afterCycle else { continue }
             completeWaiter(id)
         }

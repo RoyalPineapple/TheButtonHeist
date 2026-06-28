@@ -1,7 +1,9 @@
 import Foundation
 import os.log
 
-private let handoffDiscoveryLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "discovery")
+import TheScore
+
+private let handoffDiscoveryLogger = ButtonHeistLog.logger(.handoff(.discovery))
 
 @ButtonHeistActor
 extension TheHandoff {

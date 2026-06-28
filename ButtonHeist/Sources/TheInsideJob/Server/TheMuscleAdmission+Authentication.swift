@@ -5,7 +5,7 @@ import os
 
 import TheScore
 
-let muscleAuthenticationLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
+let muscleAuthenticationLogger = ButtonHeistLog.logger(.insideJob(.auth))
 
 /// Owns the authentication phases inside TheMuscle admission.
 struct MuscleAuthenticationFlow {

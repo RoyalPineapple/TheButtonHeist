@@ -3,7 +3,9 @@
 import Foundation
 import os
 
-private let accessibilityArmingLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "accessibility")
+import TheScore
+
+private let accessibilityArmingLogger = ButtonHeistLog.logger(.insideJob(.accessibility))
 
 // MARK: - Accessibility Arming
 
