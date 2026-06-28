@@ -190,9 +190,9 @@ final class GesturePayloadDecodingTests: XCTestCase {
     ) async throws -> RuntimeActionMessage {
         let (fence, mockConn) = makeConnectedFence()
         let response = try await fence.execute(command: command, values: arguments)
-        if case .error(let message, _) = response {
-            XCTFail("Got validation error: \(message)", file: file, line: line)
-            throw GesturePayloadDecodingTestError.validationError(message)
+        if case .error(let failure) = response {
+            XCTFail("Got validation error: \(failure.message)", file: file, line: line)
+            throw GesturePayloadDecodingTestError.validationError(failure.message)
         }
         return try XCTUnwrap(mockConn.sent.sentPlanMessages.last, file: file, line: line)
     }
@@ -208,8 +208,8 @@ final class GesturePayloadDecodingTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(command: command, values: arguments)
-            if case .error(let message, _) = response {
-                XCTAssertEqual(message, expected, file: file, line: line)
+            if case .error(let failure) = response {
+                XCTAssertEqual(failure.message, expected, file: file, line: line)
             } else {
                 XCTFail("Expected .error response, got: \(response)", file: file, line: line)
             }

@@ -11,7 +11,7 @@ public extension Double {
 public struct WaitFor: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlan]
-    public let heistBuildDiagnostics: [String]
+    public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
         _ predicate: AccessibilityPredicateExpr,
@@ -53,7 +53,7 @@ public struct WaitFor: HeistContent {
         timeout: Double,
         elseBody: [HeistStep]?,
         definitions: [HeistPlan],
-        diagnostics: [String]
+        diagnostics: [HeistBuildDiagnostic]
     ) {
         heistSteps = [.wait(WaitStep(predicate: predicate, timeout: timeout, elseBody: elseBody))]
         heistDefinitions = definitions
@@ -64,7 +64,7 @@ public struct WaitFor: HeistContent {
 public struct RepeatUntil: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlan]
-    public let heistBuildDiagnostics: [String]
+    public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
         _ predicate: AccessibilityPredicateExpr,
@@ -118,7 +118,7 @@ public struct RepeatUntil: HeistContent {
         body: [HeistStep],
         elseBody: [HeistStep]?,
         definitions: [HeistPlan],
-        diagnostics: [String]
+        diagnostics: [HeistBuildDiagnostic]
     ) {
         do {
             heistSteps = [.repeatUntil(try RepeatUntilStep(
@@ -132,7 +132,10 @@ public struct RepeatUntil: HeistContent {
         } catch {
             heistSteps = []
             heistDefinitions = []
-            heistBuildDiagnostics = diagnostics + ["RepeatUntil loop is invalid: \(String(describing: error))"]
+            heistBuildDiagnostics = diagnostics + [.dslBuild(
+                code: .dslInvalidRepeatUntil,
+                message: "RepeatUntil loop is invalid: \(String(describing: error))"
+            )]
         }
     }
 }
@@ -140,7 +143,7 @@ public struct RepeatUntil: HeistContent {
 public struct If: HeistContent {
     public let heistSteps: [HeistStep]
     public let heistDefinitions: [HeistPlan]
-    public let heistBuildDiagnostics: [String]
+    public let heistBuildDiagnostics: [HeistBuildDiagnostic]
 
     public init(
         @PredicateBranchBuilder _ branches: () -> PredicateBranches
@@ -198,7 +201,7 @@ public struct If: HeistContent {
         cases: [PredicateCase],
         elseBody: [HeistStep]?,
         definitions: [HeistPlan],
-        diagnostics: [String]
+        diagnostics: [HeistBuildDiagnostic]
     ) {
         heistSteps = [.conditional(makeConditionalStep(
             cases: cases,
@@ -267,15 +270,15 @@ public struct Fail: HeistContent {
 }
 
 public enum PredicateBranch {
-    case `case`(PredicateCase, definitions: [HeistPlan], diagnostics: [String])
-    case `else`([HeistStep], definitions: [HeistPlan], diagnostics: [String])
+    case `case`(PredicateCase, definitions: [HeistPlan], diagnostics: [HeistBuildDiagnostic])
+    case `else`([HeistStep], definitions: [HeistPlan], diagnostics: [HeistBuildDiagnostic])
 }
 
 public struct PredicateBranches {
     public let cases: [PredicateCase]
     public let elseBody: [HeistStep]?
     public let definitions: [HeistPlan]
-    public let diagnostics: [String]
+    public let diagnostics: [HeistBuildDiagnostic]
 }
 
 @resultBuilder
@@ -296,7 +299,7 @@ public enum PredicateBranchBuilder {
         var cases: [PredicateCase] = []
         var elseBody: [HeistStep]?
         var definitions: [HeistPlan] = []
-        var diagnostics: [String] = []
+        var diagnostics: [HeistBuildDiagnostic] = []
         for branch in branches {
             switch branch {
             case .case(let predicateCase, let branchDefinitions, let branchDiagnostics):

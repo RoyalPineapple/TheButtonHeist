@@ -243,9 +243,10 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             "label": .string("Pay"),
         ])
 
-        guard case .error(let message, _) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected error response")
         }
+        let message = failure.message
         XCTAssertTrue(message.contains("expected StringMatch object with mode and value"), message)
     }
 
@@ -282,9 +283,10 @@ final class StringMatchCommandSchemaContractTests: XCTestCase {
             ]),
         ])
 
-        guard case .error(let message, _) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected error response")
         }
+        let message = failure.message
         XCTAssertTrue(message.contains("subtree.element.label"), message)
         XCTAssertTrue(message.contains("expected StringMatch object with mode and value"), message)
     }
@@ -418,12 +420,12 @@ private func assertError(
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
-    guard case .error(let message, _) = response else {
+    guard case .error(let failure) = response else {
         return XCTFail("Expected error response", file: file, line: line)
     }
     XCTAssertTrue(
-        message.contains(expected),
-        "Expected error containing '\(expected)', got: \(message)",
+        failure.message.contains(expected),
+        "Expected error containing '\(expected)', got: \(failure.message)",
         file: file,
         line: line
     )

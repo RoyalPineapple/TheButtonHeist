@@ -9,18 +9,58 @@ enum CLIRunner {
 
     typealias CommandResultMapper = (FenceResponse) throws -> CommandResult
 
+    struct CommandExecution {
+        let fence: TheFence
+        let response: FenceResponse
+    }
+
+    struct ResponseEnvelope {
+        let response: FenceResponse
+        let requestId: PublicRequestId?
+
+        init(response: FenceResponse, requestId: PublicRequestId? = nil) {
+            self.response = response
+            self.requestId = requestId
+        }
+    }
+
+    struct FormattedResponse {
+        let envelope: ResponseEnvelope
+        let format: OutputFormat
+
+        init(
+            response: FenceResponse,
+            format: OutputFormat,
+            requestId: PublicRequestId? = nil
+        ) {
+            self.envelope = ResponseEnvelope(response: response, requestId: requestId)
+            self.format = format
+        }
+
+        init(envelope: ResponseEnvelope, format: OutputFormat) {
+            self.envelope = envelope
+            self.format = format
+        }
+    }
+
     enum CommandResult {
-        case response(FenceResponse, format: OutputFormat)
+        case response(FormattedResponse)
         case binary(Data)
 
         var isFailure: Bool {
             switch self {
-            case .response(let response, _):
-                return response.isFailure
+            case .response(let formatted):
+                return formatted.envelope.response.isFailure
             case .binary:
                 return false
             }
         }
+    }
+
+    enum OutputPayload: Equatable {
+        case text(String)
+        case binary(Data)
+        case status(String)
     }
 
     // MARK: - Command Execution
@@ -44,14 +84,16 @@ enum CLIRunner {
         let fence: TheFence
         let response: FenceResponse
         do {
-            (fence, response) = try await execute(
+            let execution = try await execute(
                 connection: connection,
                 command: command,
                 arguments: arguments,
                 statusMessage: statusMessage
             )
+            fence = execution.fence
+            response = execution.response
         } catch {
-            output(.response(.failure(error), format: fallbackFormat))
+            output(.response(FormattedResponse(response: .failure(error), format: fallbackFormat)))
             throw ExitCode.failure
         }
         defer { fence.stop() }
@@ -61,10 +103,10 @@ enum CLIRunner {
             if let result {
                 commandResult = try result(response)
             } else {
-                commandResult = .response(response, format: fallbackFormat)
+                commandResult = .response(FormattedResponse(response: response, format: fallbackFormat))
             }
         } catch {
-            commandResult = .response(.failure(error), format: fallbackFormat)
+            commandResult = .response(FormattedResponse(response: .failure(error), format: fallbackFormat))
         }
 
         output(commandResult)
@@ -84,11 +126,11 @@ enum CLIRunner {
         command: TheFence.Command,
         arguments: TheFence.CommandArgumentEnvelope,
         statusMessage: String? = nil
-    ) async throws -> (fence: TheFence, response: FenceResponse) {
+    ) async throws -> CommandExecution {
         let fence = try await connect(connection: connection, statusMessage: statusMessage)
         do {
             let response = try await fence.execute(command: command, arguments: arguments)
-            return (fence, response)
+            return CommandExecution(fence: fence, response: response)
         } catch {
             fence.stop()
             throw error
@@ -122,37 +164,49 @@ enum CLIRunner {
 
     @ButtonHeistActor
     static func outputResponse(_ response: FenceResponse, format: OutputFormat) {
-        output(.response(response, format: format))
+        output(.response(FormattedResponse(response: response, format: format)))
     }
 
     @ButtonHeistActor
     static func output(_ result: CommandResult) {
-        switch result {
-        case .response(let response, let format):
-            outputResponsePayload(response, format: format)
+        switch renderedOutput(for: result) {
+        case .text(let text):
+            writeOutput(text)
         case .binary(let data):
             writeBinaryOutput(data)
+        case .status(let message):
+            logStatus(message)
         }
     }
 
-    @ButtonHeistActor
-    private static func outputResponsePayload(_ response: FenceResponse, format: OutputFormat) {
+    static func renderedOutput(for result: CommandResult) -> OutputPayload {
+        switch result {
+        case .response(let formatted):
+            return renderedResponsePayload(formatted)
+        case .binary(let data):
+            return .binary(data)
+        }
+    }
+
+    private static func renderedResponsePayload(_ formatted: FormattedResponse) -> OutputPayload {
         let presenter = FenceResponsePresenter(profile: .summary)
-        switch format {
+        switch formatted.format {
         case .human:
-            writeOutput(presenter.humanText(for: response))
+            return .text(presenter.humanText(for: formatted.envelope.response))
         case .compact:
-            writeOutput(presenter.compactText(for: response))
+            return .text(presenter.compactText(for: formatted.envelope.response))
         case .json:
             do {
-                let data = try presenter.jsonData(for: response)
+                let data = try presenter.jsonData(
+                    for: formatted.envelope.response,
+                    requestId: formatted.envelope.requestId
+                )
                 if let json = String(data: data, encoding: .utf8) {
-                    writeOutput(json)
-                } else {
-                    logStatus("Failed to encode JSON data as UTF-8")
+                    return .text(json)
                 }
+                return .status("Failed to encode JSON data as UTF-8")
             } catch {
-                logStatus("Failed to serialize response as JSON: \(error.localizedDescription)")
+                return .status("Failed to serialize response as JSON: \(error.localizedDescription)")
             }
         }
     }

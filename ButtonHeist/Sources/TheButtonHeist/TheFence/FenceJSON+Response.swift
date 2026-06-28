@@ -33,10 +33,6 @@ struct PublicErrorResponse: FencePublicJSONResponse {
     let hint: String?
     let details: PublicErrorDetails
 
-    init(message: String, details: FailureDetails?) {
-        self.init(failure: DiagnosticFailure(message: message, details: details))
-    }
-
     init(failure: DiagnosticFailure) {
         self.message = failure.message
         self.code = failure.code
@@ -78,11 +74,7 @@ struct PublicResponseModel: FencePublicJSONResponse {
         switch response {
         case .ok(let message):
             try PublicOKResponse(message: message).encode(to: encoder)
-        case .error:
-            guard let failure = response.diagnosticFailure else {
-                try PublicErrorResponse(message: "Unknown error", details: nil).encode(to: encoder)
-                return
-            }
+        case .error(let failure):
             try PublicErrorResponse(failure: failure).encode(to: encoder)
         case .status(let connected, let deviceName):
             try PublicStatusResponse(connected: connected, device: deviceName).encode(to: encoder)
@@ -97,7 +89,7 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 FenceResponse.expectationFailureHint($0, command: command, result: result)
             }
             try PublicActionResponse(projection: ActionProjection(
-                method: command.rawValue,
+                actionMethod: .fence(command),
                 result: result,
                 expectation: expectation,
                 expectationHint: expectationHint,

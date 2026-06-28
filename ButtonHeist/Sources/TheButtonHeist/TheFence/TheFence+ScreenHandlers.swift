@@ -12,11 +12,11 @@ extension TheFence {
         if request.inlineData {
             let byteCount = screen.pngData.utf8.count
             guard byteCount <= DecodeLimits.maxInlineScreenshotBase64Bytes else {
-                return .error(
-                    "Inline screenshot payload is too large: \(byteCount) bytes exceeds " +
+                return .error(DiagnosticFailure(
+                    message: "Inline screenshot payload is too large: \(byteCount) bytes exceeds " +
                         "\(DecodeLimits.maxInlineScreenshotBase64Bytes) bytes",
                     details: FailureDetails(code: .screenInlinePayloadTooLarge)
-                )
+                ))
             }
             return .screenshotData(payload: screen, options: options)
         }

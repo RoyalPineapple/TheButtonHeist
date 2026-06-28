@@ -30,7 +30,7 @@ struct PublicActionResponse: FencePublicJSONResponse {
 
     init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
         self.init(projection: ActionProjection(
-            method: command.rawValue,
+            actionMethod: .fence(command),
             result: result,
             expectation: expectation,
             expectationHint: expectation.flatMap {
@@ -75,7 +75,7 @@ private struct PublicActionResultModel {
 
     init(projection: ActionProjection) {
         self.status = PublicStatus(projection.status)
-        self.method = projection.method
+        self.method = projection.actionMethod.rawValue
         self.message = projection.message
         self.payload = PublicActionPayload(projection: projection.payload)
         self.delta = projection.delta
@@ -141,7 +141,7 @@ private struct PublicActionFailure {
     let retryable: Bool
     let hint: String?
 
-    init(projection: PublicActionFailureProjection) {
+    init(projection: ActionFailureProjection) {
         self.errorClass = projection.errorClass
         self.errorCode = projection.errorCode
         self.kind = projection.kind
@@ -174,10 +174,10 @@ extension ActionResult {
     }
 
     /// Canonical public failure projection shared by JSON and compact renderers.
-    func diagnosticFailureProjection(fallbackMessage: String) -> PublicActionFailureProjection? {
+    func diagnosticFailureProjection(fallbackMessage: String) -> ActionFailureProjection? {
         guard !success else { return nil }
         let resolvedErrorKind = self.errorKind ?? .actionFailed
-        return PublicActionFailureProjection(
+        return ActionFailureProjection(
             message: message ?? fallbackMessage,
             errorClass: resolvedErrorKind.rawValue,
             diagnosticFailure: DiagnosticFailureMapper.map(
@@ -188,7 +188,7 @@ extension ActionResult {
     }
 }
 
-struct PublicActionFailureProjection {
+struct ActionFailureProjection {
     let message: String
     let errorClass: String
     let diagnosticFailure: DiagnosticFailure

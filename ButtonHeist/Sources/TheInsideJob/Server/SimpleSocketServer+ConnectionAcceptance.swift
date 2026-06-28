@@ -9,7 +9,7 @@ private let connectionLogger = ButtonHeistLog.logger(.handoff(.server))
 extension SimpleSocketServer {
     private static let maxConnections = 5
 
-    func acceptReadyConnection(_ connection: NWConnection) -> Int? {
+    func acceptReadyConnection(_ connection: NWConnection) -> ReadyConnectionAcceptance {
         if clientRegistry.count >= Self.maxConnections {
             connectionLogger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
             rejectStartedConnectionWithServerError(
@@ -17,7 +17,7 @@ extension SimpleSocketServer {
                 kind: .general,
                 message: "Connection rejected: server already has the maximum number of clients."
             )
-            return nil
+            return .rejected
         }
 
         let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
@@ -29,7 +29,7 @@ extension SimpleSocketServer {
                     kind: .general,
                     message: "Connection rejected: server could not classify the connection scope."
                 )
-                return nil
+                return .rejected
             }
             let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map { $0.name }
             let scope = ConnectionScope.classify(host: host, interfaceNames: interfaceNameList)
@@ -42,7 +42,7 @@ extension SimpleSocketServer {
                     kind: .general,
                     message: "Connection rejected: \(scope.rawValue) connections are not allowed by this server."
                 )
-                return nil
+                return .rejected
             }
             connectionLogger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
         }
@@ -52,7 +52,7 @@ extension SimpleSocketServer {
         connectionLogger.info("Client \(clientId) connected")
         clientLifecycle.clientConnected(clientId, address: remoteAddress)
         startReceiving(clientId: clientId, connection: connection)
-        return clientId
+        return .registered(clientId: clientId)
     }
 
     private func rejectStartedConnectionWithServerError(_ connection: NWConnection, kind: ErrorKind, message: String) {

@@ -16,7 +16,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
         waiters.cancel(id: cancelledID)
         assertCancellation(await cancelledTask.value)
 
-        waiters.resolve(attemptID: attemptID, with: .success(()))
+        waiters.resolve(attemptID: attemptID, with: .connected)
         assertSuccess(await liveTask.value)
     }
 
@@ -32,7 +32,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
         waiters.fail(id: waiterID, attemptID: UUID(), with: HandoffConnectionError.timeout)
         await Task.yield()
 
-        waiters.resolve(attemptID: attemptID, with: .success(()))
+        waiters.resolve(attemptID: attemptID, with: .connected)
         assertSuccess(await waitTask.value)
     }
 
@@ -47,6 +47,19 @@ final class ConnectionResultWaitersTests: XCTestCase {
 
         waiters.fail(id: waiterID, attemptID: attemptID, with: HandoffConnectionError.timeout)
         assertConnectionError(await waitTask.value, .timeout)
+    }
+
+    @ButtonHeistActor
+    func testResolveFailureResumesMatchingWaiterWithConnectionError() async {
+        let waiters = ConnectionResultWaiters()
+        let attemptID = UUID()
+        let waiterID = UUID()
+
+        let waitTask = makeWaitTask(waiters: waiters, id: waiterID, attemptID: attemptID)
+        await Task.yield()
+
+        waiters.resolve(attemptID: attemptID, with: .failed(.disconnected(.serverClosed)))
+        assertConnectionError(await waitTask.value, .disconnected(.serverClosed))
     }
 
     @ButtonHeistActor

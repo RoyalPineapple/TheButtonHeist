@@ -364,10 +364,12 @@ final class CLICommandSyncTests: XCTestCase {
                 from: #"{"id":{"nested":true},"command":"type_text","text":"hello"}"#
             )
         ) { error in
+            let failure = requestBuildFailure(from: error)
             XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Public JSON request id must be string"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
+                failure.message.contains("Public JSON request id must be string"),
+                failure.message
             )
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -377,10 +379,12 @@ final class CLICommandSyncTests: XCTestCase {
                 from: #"{"id":true,"command":"ping"}"#
             )
         ) { error in
+            let failure = requestBuildFailure(from: error)
             XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("does not support bool"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
+                failure.message.contains("does not support bool"),
+                failure.message
             )
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -390,10 +394,12 @@ final class CLICommandSyncTests: XCTestCase {
                 from: #"{"id":["r1"],"command":"ping"}"#
             )
         ) { error in
+            let failure = requestBuildFailure(from: error)
             XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Public JSON request id"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
+                failure.message.contains("Public JSON request id"),
+                failure.message
             )
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -401,10 +407,12 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(from: "activate button_save")
         ) { error in
+            let failure = requestBuildFailure(from: error)
             XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Expected JSON object input"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
+                failure.message.contains("Expected JSON object input"),
+                failure.message
             )
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -412,8 +420,10 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(from: #"{"command":"ping","#)
         ) { error in
-            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            let failure = requestBuildFailure(from: error)
+            let message = failure.message
             XCTAssertTrue(message.contains("Public JSON request is not valid JSON"), message)
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -446,9 +456,11 @@ final class CLICommandSyncTests: XCTestCase {
                     from: #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":\#(timeout)}"#
                 )
             ) { error in
-                let message = CLIRequestBuilder.diagnosticMessage(for: error)
+                let failure = requestBuildFailure(from: error)
+                let message = failure.message
                 XCTAssertTrue(message.contains("schema validation failed for timeout"), message)
                 XCTAssertTrue(message.contains("expected number > 0"), message)
+                XCTAssertEqual(failure.details.code, FailureCode(.requestValidationError))
             }
         }
     }
@@ -459,9 +471,11 @@ final class CLICommandSyncTests: XCTestCase {
                 from: #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":31}"#
             )
         ) { error in
-            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            let failure = requestBuildFailure(from: error)
+            let message = failure.message
             XCTAssertTrue(message.contains("schema validation failed for timeout"), message)
             XCTAssertTrue(message.contains("expected number in 0...30"), message)
+            XCTAssertEqual(failure.details.code, FailureCode(.requestValidationError))
         }
     }
 
@@ -480,11 +494,13 @@ final class CLICommandSyncTests: XCTestCase {
                 from: #"{"command":"perform","step":"Activate(.label(\"Pay\"))"}"#
             )
         ) { error in
-            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            let failure = requestBuildFailure(from: error)
+            let message = failure.message
             XCTAssertTrue(
                 message.contains(#"JSON input command "perform" is not supported"#),
                 message
             )
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -502,11 +518,13 @@ final class CLICommandSyncTests: XCTestCase {
         let line = "{\"command\":\"type_text\",\"text\":\"" + hugeText + "\"}"
 
         XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
-            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            let failure = requestBuildFailure(from: error)
+            let message = failure.message
             XCTAssertTrue(
                 message.contains("Public JSON request exceeds \(PublicJSONInputLimits.maxRequestBytes) bytes"),
                 message
             )
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -522,13 +540,15 @@ final class CLICommandSyncTests: XCTestCase {
         let line = "{\"command\":\"ping\",\"payload\":\(payload)}"
 
         XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
-            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            let failure = requestBuildFailure(from: error)
+            let message = failure.message
             XCTAssertTrue(
                 message.contains(
                     "Public JSON request nesting depth exceeds \(PublicJSONInputLimits.maxNestingDepth)"
                 ),
                 message
             )
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -540,13 +560,15 @@ final class CLICommandSyncTests: XCTestCase {
         let line = "{\(fields.joined(separator: ","))}"
 
         XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
-            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            let failure = requestBuildFailure(from: error)
+            let message = failure.message
             XCTAssertTrue(
                 message.contains(
                     "Public JSON request object key count exceeds \(PublicJSONInputLimits.maxTotalObjectKeys)"
                 ),
                 message
             )
+            XCTAssertEqual(failure.details.code, FailureCode(.requestInvalid))
         }
     }
 
@@ -630,6 +652,21 @@ final class CLICommandSyncTests: XCTestCase {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)
         }
+    }
+
+    private func requestBuildFailure(
+        from error: Error,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> DiagnosticFailure {
+        guard let buildError = error as? CLIRequestBuildError else {
+            XCTFail("expected CLIRequestBuildError, got \(error)", file: file, line: line)
+            return DiagnosticFailure(
+                message: String(describing: error),
+                details: FailureDetails(code: .clientUnknown)
+            )
+        }
+        return buildError.diagnosticFailure
     }
 }
 

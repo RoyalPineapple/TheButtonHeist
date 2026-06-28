@@ -125,10 +125,6 @@ enum DiagnosticFailureMapper {
         DiagnosticFailure(message: fenceError.coreMessage, details: fenceError.failureDetails)
     }
 
-    static func map(message: String, details: FailureDetails?) -> DiagnosticFailure {
-        DiagnosticFailure(message: message, details: details)
-    }
-
     static func map(errorKind: ErrorKind, message: String) -> DiagnosticFailure {
         DiagnosticFailure(message: message, details: failureDetails(for: errorKind))
     }
@@ -194,7 +190,7 @@ enum DiagnosticFailureMapper {
 /// has been written.
 public enum FenceResponse {
     case ok(message: String)
-    case error(String, details: FailureDetails? = nil)
+    case error(DiagnosticFailure)
     case status(connected: Bool, deviceName: String?)
     case pong(PongPayload)
     case devices([DiscoveredDevice])
@@ -227,15 +223,10 @@ public enum FenceResponse {
         return .error(failure)
     }
 
-    /// Builds an error response from the canonical public failure value.
-    public static func error(_ failure: DiagnosticFailure) -> FenceResponse {
-        .error(failure.message, details: failure.details)
-    }
-
     /// Canonical public failure payload when this response is an error.
     public var diagnosticFailure: DiagnosticFailure? {
-        guard case .error(let message, let details) = self else { return nil }
-        return DiagnosticFailureMapper.map(message: message, details: details)
+        guard case .error(let failure) = self else { return nil }
+        return failure
     }
 
     /// Whether callers should treat this response as a failed command.

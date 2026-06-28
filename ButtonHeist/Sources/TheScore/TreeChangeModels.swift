@@ -194,6 +194,10 @@ public struct ElementPropertyValueChange<P: ElementPropertyValueKind>: Codable, 
     public let new: P.Value?
 
     public init(old: P.Value?, new: P.Value?) {
+        precondition(
+            !P.valuesEqual(old, new),
+            "\(P.property.rawValue) property changes must carry different old and new values"
+        )
         self.old = old
         self.new = new
     }
@@ -218,6 +222,18 @@ public struct ElementPropertyValueChange<P: ElementPropertyValueKind>: Codable, 
 extension ElementPropertyValueChange: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         P.valuesEqual(lhs.old, rhs.old) && P.valuesEqual(lhs.new, rhs.new)
+    }
+}
+
+extension ElementPropertyValueChange {
+    func satisfies(_ expected: ElementPropertyChange<P>) -> Bool {
+        if let before = expected.before {
+            guard P.matches(before, value: old) else { return false }
+        }
+        if let after = expected.after {
+            guard P.matches(after, value: new) else { return false }
+        }
+        return true
     }
 }
 
@@ -440,10 +456,82 @@ extension PropertyChange: Codable {
         _ property: P.Type,
         from container: KeyedDecodingContainer<CodingKeys>
     ) throws -> ElementPropertyValueChange<P> {
-        ElementPropertyValueChange(
-            old: try container.decodeIfPresent(P.Value.self, forKey: .old),
-            new: try container.decodeIfPresent(P.Value.self, forKey: .new)
+        let old = try container.decodeIfPresent(P.Value.self, forKey: .old)
+        let new = try container.decodeIfPresent(P.Value.self, forKey: .new)
+        guard !P.valuesEqual(old, new) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .property,
+                in: container,
+                debugDescription: "\(P.property.rawValue) property change must carry different old and new values"
+            )
+        }
+        return ElementPropertyValueChange(
+            old: old,
+            new: new
         )
+    }
+}
+
+extension PropertyChange {
+    func satisfies(_ expected: AnyPropertyChange) -> Bool {
+        switch expected {
+        case .value(let expected):
+            return satisfies(expected)
+        case .traits(let expected):
+            return satisfies(expected)
+        case .hint(let expected):
+            return satisfies(expected)
+        case .actions(let expected):
+            return satisfies(expected)
+        case .frame(let expected):
+            return satisfies(expected)
+        case .activationPoint(let expected):
+            return satisfies(expected)
+        case .customContent(let expected):
+            return satisfies(expected)
+        case .rotors(let expected):
+            return satisfies(expected)
+        }
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<ValueProperty>) -> Bool {
+        guard case .value(let observed) = self else { return false }
+        return observed.satisfies(expected)
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<TraitsProperty>) -> Bool {
+        guard case .traits(let observed) = self else { return false }
+        return observed.satisfies(expected)
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<HintProperty>) -> Bool {
+        guard case .hint(let observed) = self else { return false }
+        return observed.satisfies(expected)
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<ActionsProperty>) -> Bool {
+        guard case .actions(let observed) = self else { return false }
+        return observed.satisfies(expected)
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<FrameProperty>) -> Bool {
+        guard case .frame(let observed) = self else { return false }
+        return observed.satisfies(expected)
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<ActivationPointProperty>) -> Bool {
+        guard case .activationPoint(let observed) = self else { return false }
+        return observed.satisfies(expected)
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<CustomContentProperty>) -> Bool {
+        guard case .customContent(let observed) = self else { return false }
+        return observed.satisfies(expected)
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<RotorsProperty>) -> Bool {
+        guard case .rotors(let observed) = self else { return false }
+        return observed.satisfies(expected)
     }
 }
 

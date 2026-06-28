@@ -202,6 +202,34 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
     }
 
+    func testPropertyChangeRejectsErasedElementPropertyValuePayloads() throws {
+        let json = Data("""
+        {
+          "property": "value",
+          "old": {"kind":"text","value":"1"},
+          "new": {"kind":"text","value":"2"}
+        }
+        """.utf8)
+
+        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
+    }
+
+    func testPropertyChangeRejectsNoOpTransition() throws {
+        let json = Data("""
+        {"property":"value","old":"Ready","new":"Ready"}
+        """.utf8)
+
+        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
+    }
+
+    func testPropertyChangeRejectsEmptyTransition() throws {
+        let json = Data("""
+        {"property":"value"}
+        """.utf8)
+
+        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
+    }
+
     // MARK: - screenChanged
 
     func testScreenChangedCleanRoundTrip() throws {

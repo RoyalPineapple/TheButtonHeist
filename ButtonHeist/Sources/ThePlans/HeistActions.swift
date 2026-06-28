@@ -2,20 +2,24 @@ public protocol HeistActionContent: HeistContent {
     var command: HeistActionCommand { get }
     var expectation: WaitStep? { get }
     var expectationWaiver: String? { get }
-    var expectationValidationFailure: String? { get }
+    var expectationValidationDiagnostics: [HeistBuildDiagnostic] { get }
 }
 
 public let defaultActionExpectationTimeout: Double = 1
 
 public extension HeistActionContent {
-    var expectationValidationFailure: String? { nil }
+    var expectationValidationDiagnostics: [HeistBuildDiagnostic] { [] }
+
+    var heistBuildDiagnostics: [HeistBuildDiagnostic] {
+        expectationValidationDiagnostics
+    }
 
     var heistSteps: [HeistStep] {
-        [makeActionStep(
+        guard expectationValidationDiagnostics.isEmpty else { return [] }
+        return [makeActionStep(
             command,
             expectation: expectation,
-            expectationWaiver: expectationWaiver,
-            expectationValidationFailure: expectationValidationFailure
+            expectationWaiver: expectationWaiver
         )]
     }
 
@@ -31,19 +35,19 @@ public extension HeistActionContent {
         )
         let predicateResult = expectation.map {
             composeExpectationPredicates(existing: $0.predicate, next: predicate)
-        } ?? ExpectationPredicateComposition(predicate: predicate, failure: nil)
-        let validationFailure = [
-            expectationValidationFailure,
-            predicateResult.failure,
-            timeoutResult.failure,
-        ].compactMap { $0 }.joined(separator: "; ")
+        } ?? ExpectationPredicateComposition(predicate: predicate, diagnostics: [])
+        let validationDiagnostics = expectationValidationDiagnostics
+            + predicateResult.diagnostics
+            + timeoutResult.diagnostics
 
         return ActionContent(
             command: command,
             expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout),
             expectationWaiver: nil,
             explicitExpectationTimeout: timeoutResult.explicitTimeout,
-            expectationValidationFailure: validationFailure.isEmpty ? nil : validationFailure
+            expectationValidationDiagnostics: validationDiagnostics.map {
+                $0.withPath(command.wireType.rawValue)
+            }
         )
     }
 
@@ -65,7 +69,7 @@ public extension HeistActionContent {
             expectation: nil,
             expectationWaiver: reason,
             explicitExpectationTimeout: nil,
-            expectationValidationFailure: nil
+            expectationValidationDiagnostics: []
         )
     }
 
@@ -77,7 +81,7 @@ public extension HeistActionContent {
             command: command,
             expectation: expectation,
             expectationWaiver: expectationWaiver,
-            expectationValidationFailure: expectationValidationFailure,
+            expectationValidationDiagnostics: expectationValidationDiagnostics,
             predicate: predicate,
             timeout: timeout
         )
@@ -96,7 +100,7 @@ public struct ActionContent: HeistActionContent {
     public let command: HeistActionCommand
     public let expectation: WaitStep?
     public let expectationWaiver: String?
-    public let expectationValidationFailure: String?
+    public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
     let explicitExpectationTimeout: Double?
 
     init(
@@ -104,13 +108,13 @@ public struct ActionContent: HeistActionContent {
         expectation: WaitStep? = nil,
         expectationWaiver: String? = nil,
         explicitExpectationTimeout: Double? = nil,
-        expectationValidationFailure: String? = nil
+        expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.command = command
         self.expectation = expectation
         self.expectationWaiver = expectationWaiver
         self.explicitExpectationTimeout = explicitExpectationTimeout
-        self.expectationValidationFailure = expectationValidationFailure
+        self.expectationValidationDiagnostics = expectationValidationDiagnostics
     }
 }
 
@@ -118,7 +122,7 @@ public struct RepeatActionUntilContent: HeistContent {
     public let command: HeistActionCommand
     public let expectation: WaitStep?
     public let expectationWaiver: String?
-    public let expectationValidationFailure: String?
+    public let expectationValidationDiagnostics: [HeistBuildDiagnostic]
     public let predicate: AccessibilityPredicateExpr
     public let timeout: Double
 
@@ -137,8 +141,7 @@ public struct RepeatActionUntilContent: HeistContent {
                         makeActionStep(
                             command,
                             expectation: progressExpectation,
-                            expectationWaiver: expectationWaiver,
-                            expectationValidationFailure: expectationValidationFailure
+                            expectationWaiver: expectationWaiver
                         ),
                     ]
                 )),
@@ -148,11 +151,15 @@ public struct RepeatActionUntilContent: HeistContent {
         }
     }
 
-    public var heistBuildDiagnostics: [String] {
+    public var heistBuildDiagnostics: [HeistBuildDiagnostic] {
+        var diagnostics = expectationValidationDiagnostics
         if timeout < 0 {
-            return ["action until timeout must be non-negative"]
+            diagnostics.append(.dslBuild(
+                code: .dslInvalidActionUntil,
+                message: "action until timeout must be non-negative"
+            ))
         }
-        return []
+        return diagnostics
     }
 }
 
@@ -538,15 +545,13 @@ public enum Mechanical {
 private func makeActionStep(
     _ command: HeistActionCommand,
     expectation: WaitStep? = nil,
-    expectationWaiver: String? = nil,
-    expectationValidationFailure: String? = nil
+    expectationWaiver: String? = nil
 ) -> HeistStep {
     do {
         return .action(try ActionStep(
             command: command,
             expectation: expectation,
-            expectationWaiver: expectationWaiver,
-            expectationValidationFailure: expectationValidationFailure
+            expectationWaiver: expectationWaiver
         ))
     } catch {
         preconditionFailure("ButtonHeistDSL constructed unsupported action command: \(command.wireType.rawValue)")
@@ -556,7 +561,7 @@ private func makeActionStep(
 struct ExpectationTimeoutComposition {
     let timeout: Double
     let explicitTimeout: Double?
-    let failure: String?
+    let diagnostics: [HeistBuildDiagnostic]
 }
 
 func composeExpectationTimeout(
@@ -568,32 +573,36 @@ func composeExpectationTimeout(
         return ExpectationTimeoutComposition(
             timeout: nextExplicit ?? defaultActionExpectationTimeout,
             explicitTimeout: nextExplicit,
-            failure: nil
+            diagnostics: []
         )
     }
 
     switch (existingExplicit, nextExplicit) {
     case (nil, nil):
-        return ExpectationTimeoutComposition(timeout: existing.timeout, explicitTimeout: nil, failure: nil)
+        return ExpectationTimeoutComposition(timeout: existing.timeout, explicitTimeout: nil, diagnostics: [])
     case (nil, .some(let timeout)):
-        return ExpectationTimeoutComposition(timeout: timeout, explicitTimeout: timeout, failure: nil)
+        return ExpectationTimeoutComposition(timeout: timeout, explicitTimeout: timeout, diagnostics: [])
     case (.some(let timeout), nil):
-        return ExpectationTimeoutComposition(timeout: existing.timeout, explicitTimeout: timeout, failure: nil)
+        return ExpectationTimeoutComposition(timeout: existing.timeout, explicitTimeout: timeout, diagnostics: [])
     case (.some(let existingTimeout), .some(let nextTimeout)):
         guard existingTimeout == nextTimeout else {
             return ExpectationTimeoutComposition(
                 timeout: existing.timeout,
                 explicitTimeout: existingTimeout,
-                failure: "multiple explicit expectation timeouts in one chain: \(existingTimeout) and \(nextTimeout)"
+                diagnostics: [.dslBuild(
+                    code: .dslInvalidActionExpectation,
+                    message: "multiple explicit expectation timeouts in one chain: \(existingTimeout) and \(nextTimeout)",
+                    hint: "Use one explicit timeout for the composed expectation."
+                )]
             )
         }
-        return ExpectationTimeoutComposition(timeout: nextTimeout, explicitTimeout: nextTimeout, failure: nil)
+        return ExpectationTimeoutComposition(timeout: nextTimeout, explicitTimeout: nextTimeout, diagnostics: [])
     }
 }
 
 struct ExpectationPredicateComposition {
     let predicate: AccessibilityPredicateExpr
-    let failure: String?
+    let diagnostics: [HeistBuildDiagnostic]
 }
 
 func composeExpectationPredicates(
@@ -601,19 +610,25 @@ func composeExpectationPredicates(
     next: AccessibilityPredicateExpr
 ) -> ExpectationPredicateComposition {
     if let composed = composeScreenChangeAndState(existing, next) {
-        return ExpectationPredicateComposition(predicate: composed, failure: nil)
+        return ExpectationPredicateComposition(predicate: composed, diagnostics: [])
     }
 
     if let existingState = stateExpression(existing),
        let nextState = stateExpression(next) {
         return ExpectationPredicateComposition(
             predicate: .state(allState([existingState, nextState])),
-            failure: nil
+            diagnostics: []
         )
     }
 
-    let failure = "unsupported expectation composition: \(existing) + \(next)"
-    return ExpectationPredicateComposition(predicate: existing, failure: failure)
+    return ExpectationPredicateComposition(
+        predicate: existing,
+        diagnostics: [.dslBuild(
+            code: .dslInvalidActionExpectation,
+            message: "unsupported expectation composition: \(existing) + \(next)",
+            hint: "Use one change predicate plus optional state predicates, or split unrelated waits into explicit WaitFor steps."
+        )]
+    )
 }
 
 private func composeScreenChangeAndState(

@@ -80,10 +80,10 @@ extension TheFence {
             handoff.disableAutoReconnect()
             handoff.stopDiscovery()
             clearClientSessionState(error: connectionFailure)
-            return .error(
-                "Connect failed; disconnected from previous target: \(connectionFailure.coreMessage)",
+            return .error(DiagnosticFailure(
+                message: "Connect failed; disconnected from previous target: \(connectionFailure.coreMessage)",
                 details: connectionFailure.failureDetails
-            )
+            ))
         }
 
         return .sessionState(payload: currentSessionState())

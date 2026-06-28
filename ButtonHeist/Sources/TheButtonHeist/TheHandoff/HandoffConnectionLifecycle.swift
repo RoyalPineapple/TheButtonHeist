@@ -80,7 +80,7 @@ final class HandoffConnectionLifecycle {
             device: device,
             keepaliveTask: keepaliveTask
         )))
-        waiters.resolve(attemptID: attemptID, with: .success(()))
+        waiters.resolve(attemptID: attemptID, with: .connected)
         return true
     }
 
@@ -90,7 +90,7 @@ final class HandoffConnectionLifecycle {
         let wasActive = phase.isActive
         setPhase(.failed(failure))
         if wasActive, let attemptID {
-            waiters.resolve(attemptID: attemptID, with: .failure(failure))
+            waiters.resolve(attemptID: attemptID, with: .failed(failure))
         }
     }
 
@@ -109,13 +109,13 @@ final class HandoffConnectionLifecycle {
                 attemptFailure = failure
                 setPhase(.disconnected)
                 if let attemptID {
-                    waiters.resolve(attemptID: attemptID, with: .failure(failure))
+                    waiters.resolve(attemptID: attemptID, with: .failed(failure))
                 }
             } else {
                 let failure = HandoffConnectionError.connectionFailed(Self.disconnectedDuringAttemptMessage)
                 setPhase(.disconnected)
                 if let attemptID {
-                    waiters.resolve(attemptID: attemptID, with: .failure(failure))
+                    waiters.resolve(attemptID: attemptID, with: .failed(failure))
                 }
             }
         } else {
@@ -135,7 +135,7 @@ final class HandoffConnectionLifecycle {
         guard activeAttemptID == attemptID else { return false }
         attemptFailure = failure
         setPhase(.disconnected)
-        waiters.resolve(attemptID: attemptID, with: .failure(failure))
+        waiters.resolve(attemptID: attemptID, with: .failed(failure))
         return true
     }
 

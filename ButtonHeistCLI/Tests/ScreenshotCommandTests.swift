@@ -36,13 +36,18 @@ final class ScreenshotCommandTests: XCTestCase {
     }
 
     func testInlineCommandResultPreservesStructuredFailureResponse() throws {
-        let result = try ScreenshotCommand.inlineCommandResult(for: .error("screenshot failed"))
+        let failure = DiagnosticFailure(
+            message: "screenshot failed",
+            details: FailureDetails(code: .requestActionFailed)
+        )
+        let result = try ScreenshotCommand.inlineCommandResult(for: .error(failure))
 
-        guard case .response(let response, let format) = result else {
+        guard case .response(let formatted) = result else {
             return XCTFail("expected failure to stay on formatted response path")
         }
-        XCTAssertEqual(format, .human)
-        XCTAssertEqual(response.humanFormatted(), "Error: screenshot failed")
+        XCTAssertEqual(formatted.format, .human)
+        XCTAssertEqual(formatted.envelope.response.diagnosticFailure, failure)
+        XCTAssertEqual(CLIRunner.renderedOutput(for: result), .text("Error: screenshot failed"))
         XCTAssertTrue(result.isFailure)
     }
 

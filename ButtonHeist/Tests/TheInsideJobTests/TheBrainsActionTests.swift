@@ -704,6 +704,50 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(heist.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
     }
 
+    func testHeistActionAndWaitStepsUseSeparateRuntimeTransitions() async throws {
+        let observedReady = observedState(labels: ["Ready"])
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        var dispatchedTypes: [RuntimeActionType] = []
+        var waitedPredicates: [AccessibilityPredicate] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                dispatchedTypes.append(command.runtimeType)
+                return ActionResult(success: true, method: .activate, message: command.runtimeType.rawValue)
+            },
+            wait: { waitStep, _, _ in
+                waitedPredicates.append(waitStep.predicate)
+                return ActionResult(
+                    success: true,
+                    method: .wait,
+                    accessibilityTrace: AccessibilityTrace(capture: observedReady.capture)
+                )
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(command: .activate(.target(target)))),
+            .wait(WaitStep(
+                predicate: .state(.exists(ElementPredicate(label: "Ready"))),
+                timeout: 0
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist: HeistExecutionResult = try XCTUnwrap(result.heistExecutionPayload)
+        let actionStep = try XCTUnwrap(heist.steps.first)
+        let waitStep = try XCTUnwrap(heist.steps.dropFirst().first)
+
+        XCTAssertTrue(result.success, result.message ?? "heist failed")
+        XCTAssertEqual(dispatchedTypes, [.activate])
+        XCTAssertEqual(waitedPredicates.count, 1)
+        XCTAssertEqual(heist.steps.map(\.kind), [HeistExecutionStepKind.action, .wait])
+        XCTAssertNotNil(actionStep.actionEvidence)
+        XCTAssertNil(actionStep.waitEvidence)
+        XCTAssertNil(waitStep.actionEvidence)
+        let waitEvidence = try XCTUnwrap(waitStep.waitEvidence)
+        XCTAssertTrue(waitEvidence.expectation.met)
+    }
+
     func testHeistFailureRecordsScreenshotAsActionEvidence() async throws {
         let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         let screenshot = ScreenPayload(
@@ -916,8 +960,11 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "repeat_until failed")
         XCTAssertEqual(incrementCount, 2)
         XCTAssertEqual(step.kind, .repeatUntil)
+        XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, true)
+        XCTAssertNil(step.repeatUntilEvidence?.failureReason)
+        XCTAssertNil(step.failure)
         XCTAssertEqual(step.children.map(\.kind), [.repeatUntilIteration, .repeatUntilIteration])
     }
 
@@ -1047,13 +1094,24 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
         let failedIteration = try XCTUnwrap(step.children.last)
         let failedRetry = try XCTUnwrap(failedIteration.children.first)
+        let failedRetryPath = "$.body[0].repeat_until.iterations[1].body[0]"
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(activationCount, 2)
-        XCTAssertEqual(heist.abortedAtPath, "$.body[0].repeat_until.iterations[1].body[0]")
+        XCTAssertEqual(heist.abortedAtPath, failedRetryPath)
+        XCTAssertEqual(step.status, .failed)
         XCTAssertEqual(step.repeatUntilEvidence?.iterationCount, 2)
         XCTAssertEqual(step.repeatUntilEvidence?.expectation.met, false)
+        XCTAssertEqual(
+            step.repeatUntilEvidence?.failureReason,
+            "iteration 1 failed at \(failedRetryPath)"
+        )
+        XCTAssertEqual(step.failure?.observed, "iteration 1 failed at \(failedRetryPath)")
         XCTAssertEqual(failedIteration.status, .failed)
+        XCTAssertEqual(
+            failedIteration.repeatUntilEvidence?.failureReason,
+            "child failed at \(failedRetryPath)"
+        )
         XCTAssertEqual(failedRetry.status, .failed)
         XCTAssertEqual(failedRetry.actionEvidence?.actionResult?.errorKind, .actionFailed)
     }
@@ -2125,12 +2183,53 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(step.kind, .forEachElement)
+        XCTAssertEqual(step.status, .passed)
         XCTAssertEqual(forEachResult.matchedCount, 0)
         XCTAssertEqual(forEachResult.limit, 20)
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertNil(forEachResult.failureReason)
+        XCTAssertNil(step.failure)
         XCTAssertTrue(step.children.isEmpty)
         XCTAssertEqual(observedScopes, [.discovery])
+    }
+
+    func testHeistForEachStringChildFailureProducesExplicitLoopFailureOutcome() async throws {
+        let runtime = heistRuntime(observations: [])
+        let plan = try HeistPlan(body: [
+            .forEachString(try ForEachStringStep(
+                values: ["milk", "eggs"],
+                parameter: "item",
+                body: [.fail(FailStep(message: "stop loop"))]
+            )),
+            .warn(WarnStep(message: "should not run")),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let forEachStep = try XCTUnwrap(heist.steps.first)
+        let forEachResult = try XCTUnwrap(forEachStep.forEachStringEvidence)
+        let failedChildPath = "$.body[0].for_each_string.iterations[0].body[0]"
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(heist.abortedAtPath, failedChildPath)
+        XCTAssertEqual(heist.steps.map(\.kind), [.forEachString, .warn])
+        XCTAssertEqual(heist.steps.map(\.status), [.failed, .skipped])
+        XCTAssertEqual(forEachStep.status, .failed)
+        XCTAssertEqual(forEachResult.count, 2)
+        XCTAssertEqual(forEachResult.iterationCount, 1)
+        XCTAssertEqual(
+            forEachResult.failureReason,
+            "iteration 0 failed for value \"milk\" at \(failedChildPath)"
+        )
+        XCTAssertEqual(
+            forEachStep.failure?.observed,
+            "iteration 0 failed for value \"milk\" at \(failedChildPath)"
+        )
+        XCTAssertEqual(forEachStep.abortedAtChildPath, failedChildPath)
+        XCTAssertEqual(
+            forEachStep.children.first?.forEachStringEvidence?.failureReason,
+            "child failed at \(failedChildPath)"
+        )
     }
 
     func testHeistForEachFailsBeforeMutationWhenMatchCountExceedsLimit() async throws {
@@ -2416,12 +2515,18 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(heist.abortedAtPath, failedActionPath)
         XCTAssertEqual(heist.steps.map(\.kind), [.forEachElement, .warn])
         XCTAssertEqual(heist.steps.map(\.status), [.failed, .skipped])
+        XCTAssertEqual(forEachStep.status, .failed)
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 1)
         XCTAssertEqual(forEachResult.failureReason, "iteration 0 failed at \(failedActionPath)")
+        XCTAssertEqual(forEachStep.failure?.observed, "iteration 0 failed at \(failedActionPath)")
         XCTAssertEqual(forEachStep.abortedAtChildPath, failedActionPath)
         XCTAssertEqual(forEachStep.children.map(\.kind), [.forEachIteration])
         XCTAssertEqual(forEachStep.children.first?.children.map(\.kind), [.action])
+        XCTAssertEqual(
+            forEachStep.children.first?.forEachElementEvidence?.failureReason,
+            "child failed at \(failedActionPath)"
+        )
     }
 
     func testHeistForEachExpectationUsesCurrentSemanticTarget() async throws {

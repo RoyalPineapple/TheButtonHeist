@@ -2,14 +2,36 @@ import Foundation
 import MCP
 import ButtonHeist
 
-enum MCPArgumentInputPreflight {
-    static func heistValues(_ arguments: [String: Value]?) throws -> [String: HeistValue] {
+typealias MCPRawArgumentObject = [String: Value]
+
+struct MCPToolRequest {
+    let name: String
+    let arguments: MCPToolArguments
+
+    init(name: String, arguments: MCPRawArgumentObject?) throws {
+        self.name = name
+        self.arguments = try MCPToolArguments(arguments)
+    }
+}
+
+struct MCPToolArguments {
+    let commandEnvelope: TheFence.CommandArgumentEnvelope
+
+    init(_ arguments: MCPRawArgumentObject?) throws {
+        commandEnvelope = TheFence.CommandArgumentEnvelope(
+            values: try MCPArgumentInputPreflight.heistValues(arguments)
+        )
+    }
+}
+
+private enum MCPArgumentInputPreflight {
+    static func heistValues(_ arguments: MCPRawArgumentObject?) throws -> [String: HeistValue] {
         try validate(arguments)
         return try (arguments ?? [:]).mapValues(heistValue)
     }
 
-    static func validate(
-        _ arguments: [String: Value]?,
+    private static func validate(
+        _ arguments: MCPRawArgumentObject?,
         context: String = "MCP arguments",
         maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
         maxNestingDepth: Int = PublicJSONInputLimits.maxNestingDepth,

@@ -14,23 +14,95 @@ extension TheBrains {
         let scope: HeistExecutionScope
     }
 
-    private struct RepeatUntilOutcome {
+    private struct RepeatUntilProgress {
         let iterationCount: Int
         let expectation: ExpectationResult
         let waitOutcome: HeistWaitOutcome?
         let lastObservedSummary: String?
-        let failureReason: String?
         let iterationNodes: [HeistExecutionStepResult]
 
-        func withIterationNodes(_ iterationNodes: [HeistExecutionStepResult]) -> RepeatUntilOutcome {
-            RepeatUntilOutcome(
+        func withIterationNodes(_ iterationNodes: [HeistExecutionStepResult]) -> RepeatUntilProgress {
+            RepeatUntilProgress(
                 iterationCount: iterationCount,
                 expectation: expectation,
                 waitOutcome: waitOutcome,
                 lastObservedSummary: lastObservedSummary,
-                failureReason: failureReason,
                 iterationNodes: iterationNodes
             )
+        }
+    }
+
+    private struct RepeatUntilFinalOutcome {
+        let progress: RepeatUntilProgress
+        let termination: RepeatUntilTermination
+
+        var status: HeistExecutionStepStatus {
+            termination.status
+        }
+
+        func failureReason(step: ResolvedRepeatUntilStep) -> String? {
+            termination.failureReason(step: step, expectation: progress.expectation)
+        }
+
+        var abortedAtChildPath: String? {
+            termination.abortedAtChildPath
+        }
+    }
+
+    private enum RepeatUntilTermination {
+        case predicateMet
+        case timedOut
+        case initialObservationUnavailable
+        case bodyFailed(iterationIndex: Int, childPath: String)
+
+        var status: HeistExecutionStepStatus {
+            switch self {
+            case .predicateMet:
+                return .passed
+            case .timedOut, .initialObservationUnavailable, .bodyFailed:
+                return .failed
+            }
+        }
+
+        var abortedAtChildPath: String? {
+            switch self {
+            case .predicateMet, .timedOut, .initialObservationUnavailable:
+                return nil
+            case .bodyFailed(_, let childPath):
+                return childPath
+            }
+        }
+
+        func failureReason(
+            step: ResolvedRepeatUntilStep,
+            expectation: ExpectationResult
+        ) -> String? {
+            switch self {
+            case .predicateMet:
+                return nil
+            case .timedOut:
+                return RepeatUntilTermination.timeoutReason(step: step, expectation: expectation)
+            case .initialObservationUnavailable:
+                return "could not observe settled semantic hierarchy before evaluating repeat_until"
+            case .bodyFailed(let iterationIndex, let childPath):
+                return "iteration \(iterationIndex) failed at \(childPath)"
+            }
+        }
+
+        private static func timeoutReason(
+            step: ResolvedRepeatUntilStep,
+            expectation: ExpectationResult
+        ) -> String {
+            let timeout = String(
+                format: "%.1f",
+                locale: Locale(identifier: "en_US_POSIX"),
+                PredicateWait.clampedWaitTimeout(step.timeout)
+            )
+            return [
+                "timed out after \(timeout)s waiting for repeat_until predicate",
+                "expected: \(step.predicate.description)",
+                "last result: \(expectation.actual ?? "not met")",
+            ].joined(separator: "; ")
         }
     }
 
@@ -108,17 +180,16 @@ extension TheBrains {
         var lastExpectation: ExpectationResult
         var lastWaitOutcome: HeistWaitOutcome?
         var iterationNodes: [HeistExecutionStepResult] = []
-        var iterationCount = 0
 
         init(
             initialObservedSequence: SettledObservationSequence,
-            initialOutcome: RepeatUntilOutcome
+            initialProgress: RepeatUntilProgress
         ) {
             observedSequence = initialObservedSequence
-            observedTrace = initialOutcome.waitOutcome?.accessibilityTrace
-            lastObservedSummary = initialOutcome.lastObservedSummary
-            lastExpectation = initialOutcome.expectation
-            lastWaitOutcome = initialOutcome.waitOutcome
+            observedTrace = initialProgress.waitOutcome?.accessibilityTrace
+            lastObservedSummary = initialProgress.lastObservedSummary
+            lastExpectation = initialProgress.expectation
+            lastWaitOutcome = initialProgress.waitOutcome
         }
 
         mutating func applyPostBody(_ postBody: RepeatUntilPostBodyResult) {
@@ -133,13 +204,12 @@ extension TheBrains {
             lastWaitOutcome = postBody.waitProgress.heistWaitOutcome ?? lastWaitOutcome
         }
 
-        func outcome(failureReason: String? = nil) -> RepeatUntilOutcome {
-            RepeatUntilOutcome(
+        func progress(iterationCount: Int) -> RepeatUntilProgress {
+            RepeatUntilProgress(
                 iterationCount: iterationCount,
                 expectation: lastExpectation,
                 waitOutcome: lastWaitOutcome,
                 lastObservedSummary: lastObservedSummary,
-                failureReason: failureReason,
                 iterationNodes: iterationNodes
             )
         }
@@ -197,27 +267,26 @@ extension TheBrains {
             nil
         )
         guard let initialSequence = initialReceipt.observedSequence else {
-            let failureReason = "could not observe settled semantic hierarchy before evaluating repeat_until"
+            let initialProgress = repeatUntilInitialProgress(receipt: initialReceipt)
             return repeatUntilResult(
                 context: context,
                 step: resolved,
-                outcome: RepeatUntilOutcome(
-                    iterationCount: 0,
-                    expectation: initialReceipt.expectation,
-                    waitOutcome: initialReceipt.waitOutcome,
-                    lastObservedSummary: nil,
-                    failureReason: failureReason,
-                    iterationNodes: []
+                outcome: RepeatUntilFinalOutcome(
+                    progress: initialProgress,
+                    termination: .initialObservationUnavailable
                 )
             )
         }
 
-        let initialOutcome = repeatUntilInitialOutcome(receipt: initialReceipt)
-        guard !initialOutcome.expectation.met else {
+        let initialProgress = repeatUntilInitialProgress(receipt: initialReceipt)
+        guard !initialProgress.expectation.met else {
             return repeatUntilResult(
                 context: context,
                 step: resolved,
-                outcome: initialOutcome
+                outcome: RepeatUntilFinalOutcome(
+                    progress: initialProgress,
+                    termination: .predicateMet
+                )
             )
         }
 
@@ -226,13 +295,9 @@ extension TheBrains {
             return await repeatUntilTimeoutResult(
                 context: context,
                 step: resolved,
-                outcome: RepeatUntilOutcome(
-                    iterationCount: 0,
-                    expectation: initialOutcome.expectation,
-                    waitOutcome: initialOutcome.waitOutcome,
-                    lastObservedSummary: initialOutcome.lastObservedSummary,
-                    failureReason: repeatUntilTimeoutReason(step: resolved, expectation: initialOutcome.expectation),
-                    iterationNodes: []
+                outcome: RepeatUntilFinalOutcome(
+                    progress: initialProgress,
+                    termination: .timedOut
                 )
             )
         }
@@ -241,20 +306,19 @@ extension TheBrains {
             context: context,
             step: resolved,
             initialObservedSequence: initialSequence,
-            initialOutcome: initialOutcome,
+            initialProgress: initialProgress,
             timeout: timeout
         )
     }
 
-    private func repeatUntilInitialOutcome(
+    private func repeatUntilInitialProgress(
         receipt: HeistWaitReceipt
-    ) -> RepeatUntilOutcome {
-        return RepeatUntilOutcome(
+    ) -> RepeatUntilProgress {
+        return RepeatUntilProgress(
             iterationCount: 0,
             expectation: receipt.expectation,
             waitOutcome: receipt.waitOutcome,
             lastObservedSummary: receipt.observationSummary,
-            failureReason: nil,
             iterationNodes: []
         )
     }
@@ -263,17 +327,17 @@ extension TheBrains {
         context: RepeatUntilExecutionContext,
         step: ResolvedRepeatUntilStep,
         initialObservedSequence: SettledObservationSequence,
-        initialOutcome: RepeatUntilOutcome,
+        initialProgress: RepeatUntilProgress,
         timeout: Double
     ) async -> HeistExecutionStepResult {
         let deadline = context.start + timeout
         var state = RepeatUntilLoopState(
             initialObservedSequence: initialObservedSequence,
-            initialOutcome: initialOutcome
+            initialProgress: initialProgress
         )
 
         while CFAbsoluteTimeGetCurrent() < deadline {
-            let iterationIndex = state.iterationCount
+            let iterationIndex = state.iterationNodes.count
             let iterationStart = CFAbsoluteTimeGetCurrent()
             let iterationPath = "\(context.path).repeat_until.iterations[\(iterationIndex)]"
             let iterationResults = await executeHeistSteps(
@@ -283,12 +347,11 @@ extension TheBrains {
                 scope: context.scope,
                 path: "\(iterationPath).body"
             )
-            state.iterationCount += 1
             let frame = RepeatUntilIterationFrame(
                 path: iterationPath,
                 start: iterationStart,
                 index: iterationIndex,
-                count: state.iterationCount
+                count: iterationIndex + 1
             )
 
             if let failedStep = iterationResults.firstFailedStep {
@@ -312,13 +375,13 @@ extension TheBrains {
             )
             state.applyPostBody(postBody)
 
-            let iterationOutcome = state.outcome().withIterationNodes([])
+            let iterationProgress = state.progress(iterationCount: frame.count).withIterationNodes([])
             state.iterationNodes.append(repeatUntilIterationResult(
                 path: frame.path,
                 start: frame.start,
                 step: step,
                 iterationIndex: frame.index,
-                outcome: iterationOutcome,
+                progress: iterationProgress,
                 abortedAtChildPath: nil,
                 children: iterationResults
             ))
@@ -327,7 +390,10 @@ extension TheBrains {
                 return repeatUntilResult(
                     context: context,
                     step: step,
-                    outcome: iterationOutcome.withIterationNodes(state.iterationNodes)
+                    outcome: RepeatUntilFinalOutcome(
+                        progress: iterationProgress.withIterationNodes(state.iterationNodes),
+                        termination: .predicateMet
+                    )
                 )
             }
             if !postBody.waitProgress.shouldContinue {
@@ -341,8 +407,9 @@ extension TheBrains {
         return await repeatUntilTimeoutResult(
             context: context,
             step: step,
-            outcome: state.outcome(
-                failureReason: repeatUntilTimeoutReason(step: step, expectation: state.lastExpectation)
+            outcome: RepeatUntilFinalOutcome(
+                progress: state.progress(iterationCount: state.iterationNodes.count),
+                termination: .timedOut
             )
         )
     }
@@ -367,12 +434,11 @@ extension TheBrains {
             start: frame.start,
             step: step,
             iterationIndex: frame.index,
-            outcome: RepeatUntilOutcome(
+            progress: RepeatUntilProgress(
                 iterationCount: frame.count,
                 expectation: expectation,
                 waitOutcome: nil,
                 lastObservedSummary: lastObservedSummary,
-                failureReason: "child failed at \(abortedAtChildPath)",
                 iterationNodes: []
             ),
             abortedAtChildPath: abortedAtChildPath,
@@ -381,13 +447,15 @@ extension TheBrains {
         return repeatUntilResult(
             context: context,
             step: step,
-            outcome: RepeatUntilOutcome(
-                iterationCount: frame.count,
-                expectation: expectation,
-                waitOutcome: nil,
-                lastObservedSummary: lastObservedSummary,
-                failureReason: "iteration \(frame.index) failed at \(abortedAtChildPath)",
-                iterationNodes: iterationNodes
+            outcome: RepeatUntilFinalOutcome(
+                progress: RepeatUntilProgress(
+                    iterationCount: frame.count,
+                    expectation: expectation,
+                    waitOutcome: nil,
+                    lastObservedSummary: lastObservedSummary,
+                    iterationNodes: iterationNodes
+                ),
+                termination: .bodyFailed(iterationIndex: frame.index, childPath: abortedAtChildPath)
             )
         )
     }
@@ -412,13 +480,13 @@ extension TheBrains {
             state.applyPostBody(postBody)
 
             if state.lastExpectation.met {
-                let iterationOutcome = state.outcome().withIterationNodes([])
+                let iterationProgress = state.progress(iterationCount: frame.count).withIterationNodes([])
                 state.iterationNodes.append(repeatUntilIterationResult(
                     path: frame.path,
                     start: frame.start,
                     step: step,
                     iterationIndex: frame.index,
-                    outcome: iterationOutcome,
+                    progress: iterationProgress,
                     abortedAtChildPath: nil,
                     children: repeatUntilIterationResultsDroppingRedundantFailure(
                         iterationResults,
@@ -428,7 +496,10 @@ extension TheBrains {
                 return repeatUntilResult(
                     context: context,
                     step: step,
-                    outcome: iterationOutcome.withIterationNodes(state.iterationNodes)
+                    outcome: RepeatUntilFinalOutcome(
+                        progress: iterationProgress.withIterationNodes(state.iterationNodes),
+                        termination: .predicateMet
+                    )
                 )
             }
         }
@@ -528,7 +599,7 @@ extension TheBrains {
     private func repeatUntilTimeoutResult(
         context: RepeatUntilExecutionContext,
         step: ResolvedRepeatUntilStep,
-        outcome: RepeatUntilOutcome
+        outcome: RepeatUntilFinalOutcome
     ) async -> HeistExecutionStepResult {
         guard let elseBody = step.elseBody else {
             return repeatUntilResult(context: context, step: step, outcome: outcome)
@@ -553,21 +624,22 @@ extension TheBrains {
                 },
                 abortedAtChildPath: abortedAtChildPath
             ),
-            children: outcome.iterationNodes + elseChildren
+            children: outcome.progress.iterationNodes + elseChildren
         )
     }
 
     private func repeatUntilResult(
         context: RepeatUntilExecutionContext,
         step: ResolvedRepeatUntilStep,
-        outcome: RepeatUntilOutcome,
+        outcome: RepeatUntilFinalOutcome,
         override: RepeatUntilResultOverride = RepeatUntilResultOverride(),
         children explicitChildren: [HeistExecutionStepResult]? = nil
     ) -> HeistExecutionStepResult {
-        let status = override.status ?? (outcome.failureReason == nil ? .passed : .failed)
-        let children = explicitChildren ?? outcome.iterationNodes
-        let abortedAtChildPath = override.abortedAtChildPath ?? children.firstFailedStep?.path
-        let failure = override.failure ?? (status == .failed ? outcome.failureReason.map {
+        let status = override.status ?? outcome.status
+        let failureReason = outcome.failureReason(step: step)
+        let children = explicitChildren ?? outcome.progress.iterationNodes
+        let abortedAtChildPath = override.abortedAtChildPath ?? outcome.abortedAtChildPath
+        let failure = override.failure ?? (status == .failed ? failureReason.map {
             HeistFailureDetail(
                 category: .loop,
                 contract: "repeat_until predicate is met before timeout",
@@ -587,11 +659,11 @@ extension TheBrains {
             evidence: .repeatUntil(HeistRepeatUntilEvidence(
                 predicate: step.predicate,
                 timeout: step.timeout,
-                iterationCount: outcome.iterationCount,
-                expectation: outcome.expectation,
+                iterationCount: outcome.progress.iterationCount,
+                expectation: outcome.progress.expectation,
                 actionResult: nil,
-                lastObservedSummary: outcome.lastObservedSummary,
-                failureReason: outcome.failureReason
+                lastObservedSummary: outcome.progress.lastObservedSummary,
+                failureReason: failureReason
             )),
             failure: failure,
             abortedAtChildPath: abortedAtChildPath,
@@ -604,7 +676,7 @@ extension TheBrains {
         start: CFAbsoluteTime,
         step: ResolvedRepeatUntilStep,
         iterationIndex: Int,
-        outcome: RepeatUntilOutcome,
+        progress: RepeatUntilProgress,
         abortedAtChildPath: String?,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
@@ -620,12 +692,12 @@ extension TheBrains {
             evidence: .repeatUntil(HeistRepeatUntilEvidence(
                 predicate: step.predicate,
                 timeout: step.timeout,
-                iterationCount: outcome.iterationCount,
+                iterationCount: progress.iterationCount,
                 iterationOrdinal: iterationIndex,
-                expectation: outcome.expectation,
+                expectation: progress.expectation,
                 actionResult: nil,
-                lastObservedSummary: outcome.lastObservedSummary,
-                failureReason: outcome.failureReason
+                lastObservedSummary: progress.lastObservedSummary,
+                failureReason: abortedAtChildPath.map { "child failed at \($0)" }
             )),
             failure: abortedAtChildPath.map {
                 childFailureDetail(category: .loop, childPath: $0)
@@ -656,21 +728,6 @@ extension TheBrains {
         )
     }
 
-    private func repeatUntilTimeoutReason(
-        step: ResolvedRepeatUntilStep,
-        expectation: ExpectationResult
-    ) -> String {
-        let timeout = String(
-            format: "%.1f",
-            locale: Locale(identifier: "en_US_POSIX"),
-            PredicateWait.clampedWaitTimeout(step.timeout)
-        )
-        return [
-            "timed out after \(timeout)s waiting for repeat_until predicate",
-            "expected: \(step.predicate.description)",
-            "last result: \(expectation.actual ?? "not met")",
-        ].joined(separator: "; ")
-    }
 }
 
 #endif // DEBUG

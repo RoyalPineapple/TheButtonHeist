@@ -76,11 +76,11 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             "output": .string("/tmp/buttonheist-screen.png"),
         ])
 
-        guard case .error(let message, _) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected inline/output contract error, got \(response)")
         }
         XCTAssertEqual(
-            message,
+            failure.message,
             "schema validation failed for inlineData/output: observed inlineData=true with output; " +
                 "expected choose output for an artifact path or inlineData=true for inline PNG data, not both"
         )
@@ -106,13 +106,13 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             "inlineData": .bool(true),
         ])
 
-        guard case .error(let message, let details) = response else {
+        guard case .error(let failure) = response else {
             return XCTFail("Expected oversize inline error, got \(response)")
         }
-        XCTAssertTrue(message.contains("Inline screenshot payload is too large"))
-        XCTAssertEqual(details?.code.knownCode, .screenInlinePayloadTooLarge)
-        XCTAssertEqual(details?.phase, .client)
-        XCTAssertEqual(details?.retryable, false)
+        XCTAssertTrue(failure.message.contains("Inline screenshot payload is too large"))
+        XCTAssertEqual(failure.details.code.knownCode, .screenInlinePayloadTooLarge)
+        XCTAssertEqual(failure.details.phase, .client)
+        XCTAssertEqual(failure.details.retryable, false)
 
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("status"), "error")

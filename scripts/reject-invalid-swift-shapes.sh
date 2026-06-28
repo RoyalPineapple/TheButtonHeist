@@ -56,6 +56,7 @@ CHECKS=(
   'Foundation dynamic JSON traversal::\bJSONSerialization\.(jsonObject|data)\b'
   'type-erased Encodable payload::\bany[[:space:]]+Encodable\b'
   'visible Any bridge::\bas Any\b'
+  'retired action kind initializer surface::\bactionKind\b'
 )
 
 status=0
@@ -182,6 +183,39 @@ report_matches "broad Any existential outside narrow Foundation bridge allowlist
 
 public_adapter_matches="$(git_grep '\bPublicAdapter(InputLimits|InputError)\b' "${EXISTING_PATHS[@]}")"
 report_matches "retired PublicAdapter naming" "$public_adapter_matches"
+
+public_failure_projection_matches="$(git_grep '\bPublic(ActionFailureProjection|Failure|FailureDetail|FailureDetails)\b' "${EXISTING_PATHS[@]}")"
+report_matches "retired public failure projection naming" "$public_failure_projection_matches"
+
+ACTION_PROJECTION_CALL_SITE_PATHS=(
+  ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Response.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/ReportProjections.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Action.swift
+)
+EXISTING_ACTION_PROJECTION_CALL_SITE_PATHS=()
+for path in "${ACTION_PROJECTION_CALL_SITE_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_ACTION_PROJECTION_CALL_SITE_PATHS+=("$path")
+  fi
+done
+
+action_projection_string_method_matches="$(git_grep '\b(let|var)[[:space:]]+method:[[:space:]]*String\b|^[[:space:]]*method:[[:space:]]*String\b' ButtonHeist/Sources/TheButtonHeist/TheFence/ReportProjections.swift)"
+report_matches "ActionProjection string method storage" "$action_projection_string_method_matches"
+
+action_projection_method_label_matches="$(git_grep 'ActionProjection[[:space:]]*\([[:space:]]*method:|^[[:space:]]*method:[[:space:]]*[^.]' "${EXISTING_ACTION_PROJECTION_CALL_SITE_PATHS[@]}")"
+report_matches "ActionProjection raw method argument label" "$action_projection_method_label_matches"
+
+MCP_VALUE_MAP_ALLOWED_PATHS=(
+  '^ButtonHeistMCP/Sources/main\.swift$'
+  '^ButtonHeistMCP/Sources/MCPArgumentInputPreflight\.swift$'
+  '^ButtonHeistMCP/Tests/ToolRoutingTests\.swift$'
+  '^ButtonHeistMCP/Tests/ToolSyncTests\.swift$'
+)
+mcp_value_map_matches="$(git_grep '\[String:[[:space:]]*Value\]' ButtonHeistMCP/Sources ButtonHeistMCP/Tests)"
+mcp_value_map_matches="$(filter_allowed_paths "$mcp_value_map_matches" "${MCP_VALUE_MAP_ALLOWED_PATHS[@]}")"
+report_matches "MCP SDK Value string map outside MCP argument boundary" "$mcp_value_map_matches"
 
 property_change_string_projection_matches="$(git_grep 'public var (old|new):[[:space:]]*String\?' ButtonHeist/Sources/TheScore/TreeChangeModels.swift)"
 report_matches "PropertyChange string old/new projections" "$property_change_string_projection_matches"

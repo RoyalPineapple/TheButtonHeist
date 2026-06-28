@@ -6,6 +6,7 @@ public enum HeistBuildDiagnosticKind: String, Sendable, Equatable {
 }
 
 public enum HeistBuildPhase: String, Sendable, Equatable {
+    case dslBuild = "dsl_build"
     case sourceCompilation = "source_compilation"
     case swiftCompilation = "swift_compilation"
     case planValidation = "plan_validation"
@@ -29,6 +30,14 @@ public struct HeistBuildDiagnosticCode: RawRepresentable, Sendable, Hashable, Ex
 }
 
 public extension HeistBuildDiagnosticCode {
+    static let dslInvalidActionExpectation: Self = "heist.dsl.invalid_action_expectation"
+    static let dslInvalidActionUntil: Self = "heist.dsl.invalid_action_until"
+    static let dslInvalidDefinition: Self = "heist.dsl.invalid_definition"
+    static let dslInvalidForEachElement: Self = "heist.dsl.invalid_for_each_element"
+    static let dslInvalidForEachString: Self = "heist.dsl.invalid_for_each_string"
+    static let dslInvalidInvocationExpectation: Self = "heist.dsl.invalid_invocation_expectation"
+    static let dslInvalidRepeatUntil: Self = "heist.dsl.invalid_repeat_until"
+
     static let sourceInvalidSyntax: Self = "heist.source.invalid_syntax"
     static let sourceWaitForGate: Self = "heist.source.wait_for_gate"
     static let planRuntimeSafety: Self = "heist.plan.runtime_safety"
@@ -161,6 +170,35 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
 public enum ValidationResult<Value: Sendable, Diagnostic: Sendable>: Sendable {
     case success(Value, diagnostics: [Diagnostic])
     case failure([Diagnostic])
+}
+
+extension HeistBuildDiagnostic {
+    static func dslBuild(
+        code: HeistBuildDiagnosticCode,
+        path: String? = nil,
+        message: String,
+        hint: String? = nil
+    ) -> HeistBuildDiagnostic {
+        HeistBuildDiagnostic(
+            code: code,
+            phase: .dslBuild,
+            path: path,
+            message: message,
+            hint: hint
+        )
+    }
+
+    func withPath(_ path: String) -> HeistBuildDiagnostic {
+        HeistBuildDiagnostic(
+            code: code,
+            kind: kind,
+            phase: phase,
+            sourceSpan: sourceSpan,
+            path: path,
+            message: message,
+            hint: hint
+        )
+    }
 }
 
 extension HeistPlanAdmissionCandidate {
