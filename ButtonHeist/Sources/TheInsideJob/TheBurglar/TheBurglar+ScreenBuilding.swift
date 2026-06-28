@@ -27,12 +27,10 @@ extension TheBurglar {
             hierarchy: hierarchy,
             scrollableContainerViewsByPath: result.scrollViewsByPath
         )
-        let containerNameIndex = buildContainerNameIndex(
+        let containerNamesByPath = buildContainerNamesByPath(
             hierarchy: hierarchy,
             identityContext: identityContext
         )
-        let containerNames = containerNameIndex.byContainer
-        let containerNamesByPath = containerNameIndex.byPath
         let containerScrollContentLocationsByPath = containerScrollContentLocations(
             identityContext: identityContext
         )
@@ -42,8 +40,6 @@ extension TheBurglar {
 
         var screenElements: [HeistId: Screen.ScreenElement] = [:]
         screenElements.reserveCapacity(elements.count)
-        var heistIdByElement: [AccessibilityElement: HeistId] = [:]
-        heistIdByElement.reserveCapacity(elements.count)
         var heistIdsByPath: [TreePath: HeistId] = [:]
         heistIdsByPath.reserveCapacity(elements.count)
         var elementRefs: [HeistId: Screen.ElementRef] = [:]
@@ -58,7 +54,6 @@ extension TheBurglar {
                 element: parsedElement
             )
             screenElements[heistId] = entry
-            heistIdByElement[parsedElement] = heistId
             heistIdsByPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
                 object: result.objectsByPath[path],
@@ -83,9 +78,7 @@ extension TheBurglar {
         return Screen(
             elements: screenElements,
             hierarchy: hierarchy,
-            containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
-            heistIdByElement: heistIdByElement,
             heistIdsByPath: heistIdsByPath,
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
@@ -173,10 +166,10 @@ extension TheBurglar {
 
     // MARK: - Container Name Index
 
-    private static func buildContainerNameIndex(
+    private static func buildContainerNamesByPath(
         hierarchy: [AccessibilityHierarchy],
         identityContext: ContainerIdentityContext
-    ) -> ContainerNameIndex {
+    ) -> [TreePath: ContainerName] {
         let candidates = hierarchy.compactMapSubtrees { node, path -> ContainerNameCandidate? in
             guard case .container(let container, _) = node else { return nil }
             let contentFrame = identityContext.contentFramesByPath[path]
@@ -187,7 +180,6 @@ extension TheBurglar {
             )
             return ContainerNameCandidate(
                 path: path,
-                container: container,
                 node: node,
                 readableName: readableName
             )
@@ -199,7 +191,6 @@ extension TheBurglar {
                 .keys
         )
 
-        var byContainer: [AccessibilityContainer: ContainerName] = [:]
         var byPath: [TreePath: ContainerName] = [:]
         for candidate in candidates {
             let containerName: ContainerName
@@ -212,10 +203,9 @@ extension TheBurglar {
             } else {
                 containerName = candidate.readableName
             }
-            byContainer[candidate.container] = containerName
             byPath[candidate.path] = containerName
         }
-        return ContainerNameIndex(byContainer: byContainer, byPath: byPath)
+        return byPath
     }
 
     static func captureLocalContainerId(
@@ -250,14 +240,8 @@ extension TheBurglar {
 
     private struct ContainerNameCandidate {
         let path: TreePath
-        let container: AccessibilityContainer
         let node: AccessibilityHierarchy
         let readableName: ContainerName
-    }
-
-    private struct ContainerNameIndex {
-        let byContainer: [AccessibilityContainer: ContainerName]
-        let byPath: [TreePath: ContainerName]
     }
 
     private struct ContainerIdentityPayload: Encodable {

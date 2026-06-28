@@ -373,8 +373,7 @@ final class Navigation {
             screen: Screen
         ) -> InterfaceDiscoveryOmittedContainer {
             let frame = container.frame
-            let containerName = screen.liveCapture.containerNames[container]
-                ?? screen.orderedContainers.first { $0.container == container }?.containerName
+            let containerName = screen.orderedContainers.first { $0.container == container }?.containerName
 
             guard case .scrollable(let contentSize) = container.type else {
                 return InterfaceDiscoveryOmittedContainer(

@@ -120,10 +120,6 @@ struct LiveLookup {
         capture.hierarchy.containerPaths.first { $0.path == path }?.container
     }
 
-    func containerName(for container: AccessibilityContainer) -> ContainerName? {
-        capture.containerNames[container]
-    }
-
     func containerName(forPath path: TreePath) -> ContainerName? {
         capture.containerNamesByPath[path]
     }

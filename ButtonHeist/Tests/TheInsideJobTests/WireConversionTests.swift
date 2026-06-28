@@ -382,9 +382,8 @@ final class WireConverterTests: XCTestCase {
                     .element(visible, traversalIndex: 0),
                 ]),
             ],
-            containerNames: [container: "words_list"],
             containerNamesByPath: [TreePath([0]): "words_list"],
-            heistIdByElement: [visible: "aardvark_staticText"],
+            heistIdsByPath: [TreePath([0, 0]): "aardvark_staticText"],
             firstResponderHeistId: nil,
         )
 
@@ -432,9 +431,7 @@ final class WireConverterTests: XCTestCase {
         let liveScreen = Screen(
             elements: [:],
             hierarchy: [.container(outer, children: [])],
-            containerNames: [outer: "outer_words"],
             containerNamesByPath: [TreePath([0]): "outer_words"],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
         )
         var containers = liveScreen.semantic.containers
@@ -522,9 +519,7 @@ final class WireConverterTests: XCTestCase {
             ),
             liveCapture: LiveCapture(
                 hierarchy: [.container(rootContainer, children: [])],
-                containerNames: [rootContainer: "transactions_list"],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
-                heistIdByElement: [:],
                 elementRefs: [:],
                 firstResponderHeistId: nil,
             )
@@ -593,9 +588,7 @@ final class WireConverterTests: XCTestCase {
             ),
             liveCapture: LiveCapture(
                 hierarchy: [.container(rootContainer, children: [])],
-                containerNames: [rootContainer: "transactions_list"],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
-                heistIdByElement: [:],
                 elementRefs: [:],
                 firstResponderHeistId: nil,
             )
@@ -655,9 +648,7 @@ final class WireConverterTests: XCTestCase {
             ),
             liveCapture: LiveCapture(
                 hierarchy: [.container(rootContainer, children: [])],
-                containerNames: [rootContainer: "transactions_list"],
                 containerNamesByPath: [TreePath([0]): "transactions_list"],
-                heistIdByElement: [:],
                 elementRefs: [:],
                 firstResponderHeistId: nil,
             )

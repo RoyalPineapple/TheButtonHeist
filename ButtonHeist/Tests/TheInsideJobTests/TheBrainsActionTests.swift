@@ -3047,10 +3047,9 @@ final class TheBrainsActionTests: XCTestCase {
                 .element(hostElement, traversalIndex: 0),
                 .element(resultElement, traversalIndex: 1),
             ],
-            containerNames: [:],
-            heistIdByElement: [
-                hostElement: hostHeistId,
-                resultElement: resultHeistId,
+            heistIdsByPath: [
+                TreePath([0]): hostHeistId,
+                TreePath([1]): resultHeistId,
             ],
             elementRefs: [
                 hostHeistId: .init(object: hostObject, scrollView: scrollView),

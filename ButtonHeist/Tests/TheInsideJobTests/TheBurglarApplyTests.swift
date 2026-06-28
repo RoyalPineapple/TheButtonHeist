@@ -44,7 +44,7 @@ final class TheBurglarApplyTests: XCTestCase {
         }
     }
 
-    func testBuildScreenPopulatesHeistIdByElement() {
+    func testBuildScreenPopulatesHeistIdsByPath() {
         let element = makeElement(label: "OK", traits: .button)
         let result = TheBurglar.ParseResult(
             hierarchy: [.element(element, traversalIndex: 0)],
@@ -52,7 +52,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.liveCapture.heistIdByElement[element], "ok_button")
+        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0])), "ok_button")
     }
 
     func testBuildScreenKeepsDistinctEntriesForValueEqualElements() {
@@ -68,9 +68,8 @@ final class TheBurglarApplyTests: XCTestCase {
         let screen = TheBurglar.buildScreen(from: result)
         let interface = TheStash.WireConversion.toInterface(from: screen)
 
-        // Value-equal elements collide as `heistIdByElement` keys, but each still
-        // gets a distinct synthesized heistId and a distinct semantic entry and
-        // interface annotation path.
+        // Value-equal elements still get distinct synthesized heistIds because
+        // live identity is keyed by tree path, not element value equality.
         XCTAssertEqual(screen.semantic.elements.count, 2)
         XCTAssertEqual(Set(screen.semantic.elements.keys), ["item_button_1", "item_button_2"])
         XCTAssertEqual(interface.annotations.elements.map(\.path), [TreePath([0]), TreePath([1])])
@@ -232,8 +231,8 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.liveCapture.heistIdByElement[first], "row_button_1")
-        XCTAssertEqual(screen.liveCapture.heistIdByElement[second], "row_button_2")
+        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([1])), "row_button_1")
+        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0])), "row_button_2")
     }
 
     func testBuildScreenRestoresScreenCoordinateGeometryFromParseRootOffset() throws {

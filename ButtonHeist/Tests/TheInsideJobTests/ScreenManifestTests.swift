@@ -105,8 +105,7 @@ final class ScreenManifestTests: XCTestCase {
         let screen = Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerNames: [container: "main_scroll"],
-            heistIdByElement: [:],
+            containerNamesByPath: [TreePath([0]): "main_scroll"],
             firstResponderHeistId: nil,
         )
 

@@ -603,9 +603,8 @@ final class ElementInflationProductTests: XCTestCase {
 
         let liveCapture = LiveCapture(
             hierarchy: screen.liveCapture.hierarchy,
-            containerNames: screen.liveCapture.containerNames,
             containerNamesByPath: screen.liveCapture.containerNamesByPath,
-            heistIdByElement: screen.liveCapture.heistIdByElement,
+            heistIdsByPath: screen.liveCapture.heistIdsByPath,
             elementRefs: screen.liveCapture.elementRefs,
             containerRefsByPath: screen.liveCapture.containerRefsByPath,
             containerScrollContentLocationsByPath: screen.liveCapture.containerScrollContentLocationsByPath,
@@ -734,7 +733,6 @@ final class ElementInflationProductTests: XCTestCase {
             .filter { $0.container.isScrollable }
             .map { item -> String in
                 let name = screen.liveCapture.containerNamesByPath[item.path]
-                    ?? screen.liveCapture.containerNames[item.container]
                 let hasLiveScroll = screen.liveCapture.scrollView(forContainerPath: item.path) != nil
                 return "path=\(item.path.indices) name=\(name ?? "<nil>") liveScroll=\(hasLiveScroll)"
             }

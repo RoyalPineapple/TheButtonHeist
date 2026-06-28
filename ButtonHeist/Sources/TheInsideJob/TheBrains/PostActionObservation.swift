@@ -578,36 +578,118 @@ private extension Screen {
 private extension LiveCapture {
     func removingElements(withIds removedIds: Set<HeistId>) -> LiveCapture {
         guard !removedIds.isEmpty else { return self }
-        let removedElements = Set(heistIdByElement.compactMap { element, heistId in
-            removedIds.contains(heistId) ? element : nil
-        })
-        let filteredHierarchy = hierarchy.compactMap {
-            $0.removingElements(removedElements)
-        }
+        let filteredLiveTree = hierarchy.removingElements(
+            withIds: removedIds,
+            heistIdsByPath: heistIdsByPath
+        )
         return LiveCapture(
-            hierarchy: filteredHierarchy,
-            containerNames: containerNames,
-            containerNamesByPath: containerNamesByPath,
-            heistIdByElement: heistIdByElement.filter { !removedIds.contains($0.value) },
+            hierarchy: filteredLiveTree.hierarchy,
+            containerNamesByPath: Self.remap(containerNamesByPath, using: filteredLiveTree.pathMap),
+            heistIdsByPath: filteredLiveTree.heistIdsByPath,
             elementRefs: elementRefs.filter { !removedIds.contains($0.key) },
-            containerRefsByPath: containerRefsByPath,
-            containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
+            containerRefsByPath: Self.remap(containerRefsByPath, using: filteredLiveTree.pathMap),
+            containerContentFramesByPath: Self.remap(containerContentFramesByPath, using: filteredLiveTree.pathMap),
+            containerScrollContentLocationsByPath: Self.remapScrollContentLocations(
+                containerScrollContentLocationsByPath,
+                using: filteredLiveTree.pathMap
+            ),
             firstResponderHeistId: firstResponderHeistId.flatMap { removedIds.contains($0) ? nil : $0 },
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+            scrollableContainerViewsByPath: Self.remap(scrollableContainerViewsByPath, using: filteredLiveTree.pathMap)
+        )
+    }
+
+    private static func remap<Value>(
+        _ values: [TreePath: Value],
+        using pathMap: [TreePath: TreePath]
+    ) -> [TreePath: Value] {
+        Dictionary(
+            uniqueKeysWithValues: values.compactMap { path, value in
+                pathMap[path].map { ($0, value) }
+            }
+        )
+    }
+
+    private static func remapScrollContentLocations(
+        _ locations: [TreePath: SemanticScreen.ScrollContentLocation],
+        using pathMap: [TreePath: TreePath]
+    ) -> [TreePath: SemanticScreen.ScrollContentLocation] {
+        Dictionary(
+            uniqueKeysWithValues: locations.compactMap { path, location in
+                guard let remappedPath = pathMap[path],
+                      let remappedContainerPath = pathMap[location.scrollContainerPath]
+                else { return nil }
+                return (
+                    remappedPath,
+                    SemanticScreen.ScrollContentLocation(
+                        origin: location.origin,
+                        scrollContainerPath: remappedContainerPath
+                    )
+                )
+            }
         )
     }
 }
 
+private extension Array where Element == AccessibilityHierarchy {
+    func removingElements(
+        withIds removedIds: Set<HeistId>,
+        heistIdsByPath: [TreePath: HeistId]
+    ) -> (hierarchy: [AccessibilityHierarchy], heistIdsByPath: [TreePath: HeistId], pathMap: [TreePath: TreePath]) {
+        var hierarchy: [AccessibilityHierarchy] = []
+        var remappedHeistIdsByPath: [TreePath: HeistId] = [:]
+        var pathMap: [TreePath: TreePath] = [:]
+        for (oldIndex, node) in enumerated() {
+            let oldPath = TreePath([oldIndex])
+            let newPath = TreePath([hierarchy.count])
+            guard let filteredNode = node.removingElements(
+                withIds: removedIds,
+                oldPath: oldPath,
+                newPath: newPath,
+                heistIdsByPath: heistIdsByPath,
+                remappedHeistIdsByPath: &remappedHeistIdsByPath,
+                pathMap: &pathMap
+            ) else { continue }
+            hierarchy.append(filteredNode)
+        }
+        return (hierarchy, remappedHeistIdsByPath, pathMap)
+    }
+}
+
 private extension AccessibilityHierarchy {
-    func removingElements(_ removedElements: Set<AccessibilityElement>) -> AccessibilityHierarchy? {
+    func removingElements(
+        withIds removedIds: Set<HeistId>,
+        oldPath: TreePath,
+        newPath: TreePath,
+        heistIdsByPath: [TreePath: HeistId],
+        remappedHeistIdsByPath: inout [TreePath: HeistId],
+        pathMap: inout [TreePath: TreePath]
+    ) -> AccessibilityHierarchy? {
         switch self {
-        case .element(let element, _):
-            return removedElements.contains(element) ? nil : self
+        case .element(let element, let traversalIndex):
+            guard let heistId = heistIdsByPath[oldPath] else { return self }
+            guard !removedIds.contains(heistId) else { return nil }
+            pathMap[oldPath] = newPath
+            remappedHeistIdsByPath[newPath] = heistId
+            return .element(element, traversalIndex: traversalIndex)
         case .container(let container, let children):
+            pathMap[oldPath] = newPath
+            var filteredChildren: [AccessibilityHierarchy] = []
+            for (oldIndex, child) in children.enumerated() {
+                let oldChildPath = oldPath.appending(oldIndex)
+                let newChildPath = newPath.appending(filteredChildren.count)
+                guard let filteredChild = child.removingElements(
+                    withIds: removedIds,
+                    oldPath: oldChildPath,
+                    newPath: newChildPath,
+                    heistIdsByPath: heistIdsByPath,
+                    remappedHeistIdsByPath: &remappedHeistIdsByPath,
+                    pathMap: &pathMap
+                ) else { continue }
+                filteredChildren.append(filteredChild)
+            }
             return .container(
                 container,
-                children: children.compactMap { $0.removingElements(removedElements) }
+                children: filteredChildren
             )
         }
     }

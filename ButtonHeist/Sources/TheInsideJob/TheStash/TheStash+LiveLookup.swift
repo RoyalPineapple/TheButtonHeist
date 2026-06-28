@@ -45,10 +45,6 @@ extension TheStash {
         liveLookup.container(forPath: path)
     }
 
-    func liveContainerName(for container: AccessibilityContainer) -> ContainerName? {
-        liveLookup.containerName(for: container)
-    }
-
     func liveContainerName(forPath path: TreePath) -> ContainerName? {
         liveLookup.containerName(forPath: path)
     }

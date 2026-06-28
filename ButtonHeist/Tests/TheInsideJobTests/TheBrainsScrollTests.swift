@@ -296,8 +296,6 @@ final class TheBrainsScrollTests: XCTestCase {
                 .element(duplicate, traversalIndex: 0),
                 .element(duplicate, traversalIndex: 1),
             ],
-            containerNames: [:],
-            heistIdByElement: [duplicate: secondEntry.heistId],
             heistIdsByPath: [
                 firstPath: firstEntry.heistId,
                 secondPath: secondEntry.heistId,
@@ -326,8 +324,6 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [element: entry.heistId],
             heistIdsByPath: [TreePath([0]): entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
@@ -403,9 +399,8 @@ final class TheBrainsScrollTests: XCTestCase {
                     .element(visible.0, traversalIndex: 0)
                 ])
             ],
-            containerNames: [:],
             containerNamesByPath: [TreePath([0]): containerName],
-            heistIdByElement: [visible.0: visible.1],
+            heistIdsByPath: [TreePath([0, 0]): visible.1],
             elementRefs: includeLiveScrollAncestor ? [
                 offscreenEntry.heistId: .init(object: nil, scrollView: offscreen.3)
             ] : [:],
@@ -457,9 +452,8 @@ final class TheBrainsScrollTests: XCTestCase {
                     .element(currentlyVisibleReuse, traversalIndex: 0)
                 ])
             ],
-            containerNames: [:],
             containerNamesByPath: [TreePath([0]): containerName],
-            heistIdByElement: [currentlyVisibleReuse: entry.heistId],
+            heistIdsByPath: [TreePath([0, 0]): entry.heistId],
             elementRefs: [
                 entry.heistId: .init(object: nil, scrollView: scrollView)
             ],
@@ -671,8 +665,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [element: entry.heistId],
+            heistIdsByPath: [TreePath([0]): entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
         ))
@@ -710,8 +703,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [element: entry.heistId],
+            heistIdsByPath: [TreePath([0]): entry.heistId],
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
         ))
@@ -1020,8 +1012,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let recoveredScreen = Screen(
             elements: [recoveredEntry.heistId: recoveredEntry],
             hierarchy: [.element(recoveredTarget, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [recoveredTarget: recoveredEntry.heistId],
+            heistIdsByPath: [TreePath([0]): recoveredEntry.heistId],
             elementRefs: [
                 recoveredEntry.heistId: .init(object: recoveredObject, scrollView: nil)
             ],
@@ -1107,9 +1098,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerNames: [:],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
@@ -1128,9 +1117,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerNames: [:],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
@@ -1148,9 +1135,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerNames: [:],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [TreePath([0]): .init(view: scrollView)]
         ))
@@ -1174,12 +1159,10 @@ final class TheBrainsScrollTests: XCTestCase {
                 .container(firstContainer, children: []),
                 .container(secondContainer, children: []),
             ],
-            containerNames: [:],
             containerNamesByPath: [
                 TreePath([0]): "first_scroll",
                 TreePath([1]): "second_scroll",
             ],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [
                 TreePath([0]): .init(view: firstScrollView),
@@ -1211,12 +1194,10 @@ final class TheBrainsScrollTests: XCTestCase {
                 .container(firstContainer, children: []),
                 .container(secondContainer, children: []),
             ],
-            containerNames: [:],
             containerNamesByPath: [
                 TreePath([0]): "first_scroll",
                 TreePath([1]): "second_scroll",
             ],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [
                 TreePath([0]): .init(view: firstScrollView),
@@ -1251,12 +1232,10 @@ final class TheBrainsScrollTests: XCTestCase {
                 .container(repeatedContainer, children: []),
                 .container(repeatedContainer, children: []),
             ],
-            containerNames: [:],
             containerNamesByPath: [
                 firstPath: "first_repeated_scroll",
                 secondPath: "second_repeated_scroll",
             ],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [
                 firstPath: .init(view: firstScrollView),
@@ -1283,11 +1262,10 @@ final class TheBrainsScrollTests: XCTestCase {
                 .container(firstContainer, children: []),
                 .container(secondContainer, children: []),
             ],
-            containerNames: [
-                firstContainer: "first_scroll",
-                secondContainer: "second_scroll",
+            containerNamesByPath: [
+                TreePath([0]): "first_scroll",
+                TreePath([1]): "second_scroll",
             ],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
         ))
 
@@ -1405,9 +1383,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let knownScreen = Screen(
             elements: [knownEntry.heistId: knownEntry],
             hierarchy: [.container(scrollContainer, children: [])],
-            containerNames: [:],
             containerNamesByPath: [TreePath([0]): "known_scroll"],
-            heistIdByElement: [:],
             elementRefs: [
                 knownEntry.heistId: .init(object: nil, scrollView: scrollView)
             ],
@@ -1449,8 +1425,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [screenElement.heistId: screenElement],
             hierarchy: [.element(screenElement.element, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [screenElement.element: screenElement.heistId],
+            heistIdsByPath: [TreePath([0]): screenElement.heistId],
             firstResponderHeistId: nil,
         ))
 
@@ -1685,9 +1660,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            containerNames: [:],
             containerNamesByPath: [path: "main_scroll"],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: scrollView)]
         ))
@@ -1814,9 +1787,8 @@ final class TheBrainsScrollTests: XCTestCase {
                     .element(screenElement.element, traversalIndex: 0)
                 ])
             ],
-            containerNames: [:],
             containerNamesByPath: [TreePath([0]): containerName],
-            heistIdByElement: [screenElement.element: screenElement.heistId],
+            heistIdsByPath: [TreePath([0, 0]): screenElement.heistId],
             elementRefs: [
                 screenElement.heistId: .init(object: nil, scrollView: scrollView)
             ],
