@@ -8,16 +8,13 @@ extension TheFence {
     /// Typed command arguments after external routing has selected a command.
     public struct CommandArgumentEnvelope: Sendable {
         public let argumentValues: [String: HeistValue]
-        public let elementTarget: ElementTarget?
         let argumentFieldPrefix: String?
 
         public init(
             values: [String: HeistValue],
-            elementTarget: ElementTarget? = nil,
             fieldPrefix: String? = nil
         ) {
             self.argumentValues = values
-            self.elementTarget = elementTarget
             argumentFieldPrefix = fieldPrefix
         }
 
@@ -26,7 +23,6 @@ extension TheFence {
             values.removeValue(forKey: key)
             return CommandArgumentEnvelope(
                 values: values,
-                elementTarget: elementTarget,
                 fieldPrefix: argumentFieldPrefix
             )
         }

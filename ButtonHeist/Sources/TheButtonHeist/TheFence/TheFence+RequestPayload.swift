@@ -78,7 +78,6 @@ extension TheFence {
         }
         try validateRequestKeys(command: command, arguments: arguments)
         try command.descriptor.validatePublicRequestArguments(arguments)
-        try validateTypedElementTarget(command: command, arguments: arguments)
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try ExpectationPayload(arguments: arguments)
         let dispatch = try command.descriptor.requestDecoder(self, arguments, requestId, expectationPayload)
@@ -90,17 +89,6 @@ extension TheFence {
             dispatch: dispatch,
             expectationPayload: expectationPayload
         )
-    }
-
-    private func validateTypedElementTarget(command: Command, arguments: CommandArgumentEnvelope) throws {
-        guard let elementTarget = arguments.elementTarget else { return }
-        guard !command.descriptor.elementTargetParameterKeys.isEmpty else {
-            throw SchemaValidationError(
-                field: "target",
-                observed: elementTarget.description,
-                expected: "\(command.rawValue) command without element target"
-            )
-        }
     }
 
     private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {

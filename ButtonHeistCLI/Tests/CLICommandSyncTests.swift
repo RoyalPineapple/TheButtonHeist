@@ -557,7 +557,7 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
-    func testCLIBuilderCarriesPredicateTargetAsTypedTarget() throws {
+    func testCLIBuilderCarriesPredicateTargetAsPublicTargetArgument() throws {
         let expectedTarget = ElementTarget.predicate(
             ElementPredicate(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
             ordinal: 1
@@ -566,8 +566,18 @@ final class CLICommandSyncTests: XCTestCase {
             target: expectedTarget
         )
 
-        XCTAssertEqual(arguments.elementTarget, expectedTarget)
-        XCTAssertNil(arguments.argumentValues[FenceParameterKey.target.rawValue])
+        XCTAssertEqual(arguments.argumentValues[FenceParameterKey.target.rawValue], .object([
+            "label": .object([
+                "mode": .string("exact"),
+                "value": .string("Rotor Host"),
+            ]),
+            "identifier": .object([
+                "mode": .string("exact"),
+                "value": .string("rotor.host"),
+            ]),
+            "traits": .array([.string("button")]),
+            "ordinal": .int(1),
+        ]))
     }
 
     func testScrollCLIAllowsNoElementTarget() throws {

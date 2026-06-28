@@ -1629,6 +1629,40 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testElementTargetPublicPayloadShapesDecodeThroughSamePath() async throws {
+        let expected = ElementTarget.predicate(
+            ElementPredicate(label: "Save", identifier: "saveButton", traits: [.button]),
+            ordinal: 1
+        )
+        let cliBuiltShape = targetValue(
+            label: "Save",
+            identifier: "saveButton",
+            traits: ["button"],
+            ordinal: 1
+        )
+        let jsonMCPShape = elementTargetValue([
+            "checks": .array([
+                .object([
+                    "kind": .string("label"),
+                    "match": stringMatchValue(mode: "exact", value: "Save"),
+                ]),
+                .object([
+                    "kind": .string("identifier"),
+                    "match": stringMatchValue(mode: "exact", value: "saveButton"),
+                ]),
+                .object([
+                    "kind": .string("traits"),
+                    "values": .array([.string("button")]),
+                ]),
+            ]),
+            "ordinal": .int(1),
+        ])
+
+        XCTAssertEqual(try decodedElementTarget(target: cliBuiltShape), expected)
+        XCTAssertEqual(try decodedElementTarget(target: jsonMCPShape), expected)
+    }
+
+    @ButtonHeistActor
     func testElementTargetRejectsUnknownTargetField() async throws {
         XCTAssertThrowsError(
             try decodedElementTarget(
@@ -3249,22 +3283,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypedElementTargetIsRejectedForCommandWithoutTargetParameter() async throws {
-        let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(
+    func testTargetPayloadIsRejectedForCommandWithoutTargetParameter() async throws {
+        await assertValidationError(
             command: .getScreen,
-            arguments: TheFence.CommandArgumentEnvelope(
-                values: [:],
-                elementTarget: ElementTarget.predicate(ElementPredicate(label: "Save"))
-            )
-        )
-
-        guard case .error(let message, _) = response else {
-            return XCTFail("Expected typed element target to be rejected")
-        }
-        XCTAssertEqual(
-            message,
-            #"schema validation failed for target: observed target(predicate(label="Save")); expected get_screen command without element target"#
+            arguments: ["target": targetValue(label: "Save")],
+            equals: "schema validation failed for target: observed object; expected valid get_screen parameter"
         )
     }
 

@@ -21,11 +21,14 @@ enum CLIRequestBuilder {
         parameters: CLIRequestParameters = [:],
         target: ElementTarget? = nil
     ) -> TheFence.CommandArgumentEnvelope {
-        let values = Dictionary(
+        var values = Dictionary(
             parameters.map { ($0.key.rawValue, $0.value) },
             uniquingKeysWith: { _, newest in newest }
         )
-        return TheFence.CommandArgumentEnvelope(values: values, elementTarget: target)
+        if let target {
+            values[FenceParameterKey.target.rawValue] = targetArgumentValue(target)
+        }
+        return TheFence.CommandArgumentEnvelope(values: values)
     }
 
     static func parsedRequest(from line: String) throws -> CLIParsedRequest {
@@ -66,6 +69,82 @@ enum CLIRequestBuilder {
     static func diagnosticMessage(for error: Error) -> String {
         let description = String(describing: error)
         return description.isEmpty ? error.localizedDescription : description
+    }
+
+    private static func targetArgumentValue(_ target: ElementTarget) -> HeistValue {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            var object = predicateArgumentValues(predicate)
+            if let ordinal {
+                object[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
+            }
+            return .object(object)
+        }
+    }
+
+    private static func predicateArgumentValues(_ predicate: ElementPredicate) -> [String: HeistValue] {
+        var object: [String: HeistValue] = [:]
+        for check in predicate.checks {
+            switch check {
+            case .label(let match):
+                appendStringMatch(match, to: FenceParameterKey.label.rawValue, in: &object)
+            case .identifier(let match):
+                appendStringMatch(match, to: FenceParameterKey.identifier.rawValue, in: &object)
+            case .value(let match):
+                appendStringMatch(match, to: FenceParameterKey.value.rawValue, in: &object)
+            case .traits(let traits):
+                appendTraits(traits, to: FenceParameterKey.traits.rawValue, in: &object)
+            case .excludeTraits(let traits):
+                appendTraits(traits, to: FenceParameterKey.excludeTraits.rawValue, in: &object)
+            }
+        }
+        return object
+    }
+
+    private static func appendStringMatch(
+        _ match: StringMatch<String>,
+        to key: String,
+        in object: inout [String: HeistValue]
+    ) {
+        appendOneOrManyValue(stringMatchValue(match), to: key, in: &object)
+    }
+
+    private static func appendTraits(
+        _ traits: [HeistTrait],
+        to key: String,
+        in object: inout [String: HeistValue]
+    ) {
+        guard !traits.isEmpty else { return }
+        var values: [HeistValue]
+        if case .array(let existing)? = object[key] {
+            values = existing
+        } else {
+            values = []
+        }
+        values.append(contentsOf: traits.map { .string($0.rawValue) })
+        object[key] = .array(values)
+    }
+
+    private static func appendOneOrManyValue(
+        _ value: HeistValue,
+        to key: String,
+        in object: inout [String: HeistValue]
+    ) {
+        switch object[key] {
+        case nil:
+            object[key] = value
+        case .array(let existing)?:
+            object[key] = .array(existing + [value])
+        case let existing?:
+            object[key] = .array([existing, value])
+        }
+    }
+
+    private static func stringMatchValue(_ match: StringMatch<String>) -> HeistValue {
+        .object([
+            FenceParameterKey.mode.rawValue: .string(match.mode.rawValue),
+            FenceParameterKey.value.rawValue: .string(match.value),
+        ])
     }
 }
 

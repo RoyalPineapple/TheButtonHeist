@@ -7,16 +7,6 @@ extension TheFence.CommandArgumentEnvelope {
 
     @ButtonHeistActor
     func decodedElementTarget() throws -> ElementTarget? {
-        if let elementTarget {
-            if keys.contains("target") {
-                throw SchemaValidationError(
-                    field: field("target"),
-                    observed: observedDescription(for: "target") ?? "object",
-                    expected: "not present when typed element target is provided"
-                )
-            }
-            return elementTarget
-        }
         guard let target = try schemaDictionary("target") else { return nil }
         return try target.decodeElementTargetPayload()
     }
