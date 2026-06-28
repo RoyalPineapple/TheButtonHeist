@@ -17,10 +17,11 @@ extension TheBurglar {
     /// and detects first responder state.
     static func buildScreen(from result: ParseResult) -> Screen {
         let hierarchy = screenCoordinateHierarchy(from: result)
-        let scrollViews = scrollViewsByContainerForCurrentCapture(
+        let pathScrollViews = scrollViewsByContainerForCurrentCapture(
             hierarchy: hierarchy,
             scrollViewsByPath: result.scrollViewsByPath
         )
+        let scrollViews = result.scrollViews.merging(pathScrollViews) { _, pathView in pathView }
         let indexedElements = hierarchy.pathIndexedElements
         let elements = indexedElements.map(\.element)
         let contextsByPath = buildElementContextsByPath(
@@ -68,13 +69,13 @@ extension TheBurglar {
             heistIdByElement[parsedElement] = heistId
             heistIdsByPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
-                object: result.objectsByPath[path],
+                object: result.objectsByPath[path] ?? result.objects[parsedElement],
                 scrollView: context?.scrollView
             )
         }
 
         let firstResponders = zip(indexedElements, resolvedHeistIds).filter { item, _ in
-            let object = result.objectsByPath[item.path]
+            let object = result.objectsByPath[item.path] ?? result.objects[item.element]
             return (object as? UIView)?.isFirstResponder == true
         }
         if firstResponders.count > 1 {

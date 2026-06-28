@@ -81,7 +81,12 @@ extension TheBurglar {
         accumulator.contentFrames[container] = contentFrame
         accumulator.contentFramesByPath[path] = contentFrame
 
-        if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView,
+        if let scrollView = scrollView(
+            for: container,
+            at: path,
+            scrollableContainerViews: scrollableContainerViews,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+        ),
            !scrollView.bhIsUnsafeForProgrammaticScrolling {
             let childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             for (index, child) in children.enumerated() {
@@ -188,9 +193,14 @@ extension TheBurglar {
             )
             contexts[element] = context
             contextsByPath[path] = context
-        case .container(_, let children):
+        case .container(let container, let children):
             let childScrollContext: ScrollContext?
-            if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView,
+            if let scrollView = scrollView(
+                for: container,
+                at: path,
+                scrollableContainerViews: scrollableContainerViews,
+                scrollableContainerViewsByPath: scrollableContainerViewsByPath
+            ),
                !scrollView.bhIsUnsafeForProgrammaticScrolling {
                 childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             } else {
@@ -209,6 +219,15 @@ extension TheBurglar {
                 )
             }
         }
+    }
+
+    private static func scrollView(
+        for container: AccessibilityContainer,
+        at path: TreePath,
+        scrollableContainerViews: [AccessibilityContainer: UIView],
+        scrollableContainerViewsByPath: [TreePath: UIView]
+    ) -> UIScrollView? {
+        (scrollableContainerViewsByPath[path] ?? scrollableContainerViews[container]) as? UIScrollView
     }
 
     // MARK: - Container Naming

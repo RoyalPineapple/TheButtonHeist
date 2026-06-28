@@ -139,7 +139,11 @@ struct LiveLookup {
     }
 
     func scrollableContainerView(forPath path: TreePath) -> UIView? {
-        capture.scrollableContainerViewsByPath[path]?.view
+        if let view = capture.scrollableContainerViewsByPath[path]?.view {
+            return view
+        }
+        guard let container = container(forPath: path) else { return nil }
+        return capture.scrollableContainerViews[container]?.view
     }
 
     func scrollContainerDiagnostics() -> String {

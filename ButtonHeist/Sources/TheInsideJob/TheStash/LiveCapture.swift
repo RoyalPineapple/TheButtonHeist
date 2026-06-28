@@ -470,8 +470,9 @@ struct LiveCapture: Equatable {
         var result: [ContainerName: ScrollableViewRef] = [:]
         var ambiguousNames = Set<ContainerName>()
 
-        for (_, path) in snapshot.hierarchy.containerPaths {
+        for (container, path) in snapshot.hierarchy.containerPaths {
             guard let ref = dispatchReferences.scrollableContainerViewsByPath[path]
+                ?? dispatchReferences.scrollableContainerViews[container]
                 ?? scrollableContainerRefFromContainerObject(dispatchReferences.containerRefsByPath[path])
             else { continue }
             guard let containerName = snapshot.containerNamesByPath[path] else {
