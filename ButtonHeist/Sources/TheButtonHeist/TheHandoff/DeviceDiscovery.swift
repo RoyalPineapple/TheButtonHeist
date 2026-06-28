@@ -2,7 +2,9 @@ import Foundation
 import Network
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "discovery")
+import TheScore
+
+private let logger = ButtonHeistLog.logger(.handoff(.discovery))
 
 /// Discovers Button Heist services via Bonjour and emits device found/lost events.
 @ButtonHeistActor

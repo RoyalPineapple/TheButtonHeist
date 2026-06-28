@@ -3,7 +3,9 @@
 import Foundation
 import os
 
-private let sessionLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
+import TheScore
+
+private let sessionLogger = ButtonHeistLog.logger(.insideJob(.auth))
 
 /// Owns the runtime lease state for a ButtonHeist session.
 struct TheMuscleSession {

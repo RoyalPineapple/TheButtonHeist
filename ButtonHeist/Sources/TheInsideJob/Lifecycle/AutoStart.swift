@@ -5,7 +5,7 @@ import os
 
 import TheScore
 
-private let autoStartLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "autostart")
+private let autoStartLogger = ButtonHeistLog.logger(.insideJob(.autostart))
 
 /// Holds the auto-start Task handle. Auto-start runs exactly once per
 /// process launch from `@_cdecl` (no actor instance is available at that

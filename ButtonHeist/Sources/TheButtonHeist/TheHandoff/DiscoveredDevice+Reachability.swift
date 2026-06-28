@@ -1,7 +1,9 @@
 import Foundation
 import os
 
-private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "reachability")
+import TheScore
+
+private let reachabilityLogger = ButtonHeistLog.logger(.handoff(.reachability))
 
 extension Array where Element == DiscoveredDevice {
     /// Probe all devices in parallel and return only those that are reachable.

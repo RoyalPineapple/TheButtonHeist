@@ -3,7 +3,7 @@ import os.log
 
 import TheScore
 
-private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "transport")
+private let logger = ButtonHeistLog.logger(.handoff(.transport))
 
 /// Bonjour `NetService` advertisement and TXT record state.
 final class BonjourAdvertisement: NSObject {

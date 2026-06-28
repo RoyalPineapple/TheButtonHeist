@@ -3,7 +3,7 @@ import os
 
 import TheScore
 
-private let clientStateLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
+private let clientStateLogger = ButtonHeistLog.logger(.handoff(.server))
 
 extension SimpleSocketServer {
     private static let errorFlushGracePeriod: Duration = .milliseconds(100)

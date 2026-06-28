@@ -5,7 +5,7 @@ import os.log
 
 import TheScore
 
-let insideJobLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "server")
+let insideJobLogger = ButtonHeistLog.logger(.insideJob(.server))
 
 /// The job itself: resolves startup/runtime configuration, assembles the crew,
 /// and coordinates transport start/stop with the app lifecycle.

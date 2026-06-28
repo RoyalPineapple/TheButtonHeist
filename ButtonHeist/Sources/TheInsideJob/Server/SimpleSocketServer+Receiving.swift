@@ -4,7 +4,7 @@ import os
 
 import TheScore
 
-private let receiveLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
+private let receiveLogger = ButtonHeistLog.logger(.handoff(.server))
 
 extension SimpleSocketServer {
     func startReceiving(clientId: Int, connection: NWConnection) {

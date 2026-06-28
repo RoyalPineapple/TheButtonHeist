@@ -1,7 +1,9 @@
 import Foundation
 import os.log
 
-private let serverMessageLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server-message")
+import TheScore
+
+private let serverMessageLogger = ButtonHeistLog.logger(.handoff(.serverMessage))
 
 struct HandoffServerMessageRouter {
     var admission = HandoffAdmission()
