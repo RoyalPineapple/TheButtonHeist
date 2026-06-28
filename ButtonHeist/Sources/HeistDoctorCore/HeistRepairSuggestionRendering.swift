@@ -22,9 +22,7 @@ enum HeistRepairSuggestionRenderer {
             return "old target did not resolve exactly once in the last successful before snapshot"
         }
 
-        let actionFamily = RepairActionFamily(
-            actionIdentity: request.currentFailure.actionIdentity
-        )
+        let actionFamily = RepairActionFamily(actionIdentity: request.currentFailure.actionIdentity)
         switch currentScreen.resolve(request.lastSuccess.target) {
         case .resolved(let element, _):
             if !actionFamily.isKnown || actionFamily.isSupported(by: element.element) {
@@ -183,8 +181,8 @@ enum HeistRepairSuggestionRenderer {
             if let valueChange = payload.edits.updated
                 .flatMap(\.changes)
                 .first(where: { $0.property == .value }) {
-                let old = valueChange.oldValue?.displayText ?? "nil"
-                let new = valueChange.newValue?.displayText ?? "nil"
+                let old = valueChange.oldDisplayText ?? "nil"
+                let new = valueChange.newDisplayText ?? "nil"
                 return "\(prefix) observed value change from \(old) to \(new)."
             }
             if !payload.edits.added.isEmpty {

@@ -38,9 +38,9 @@ extension TheFence {
 
     enum DecodeLimits {
         static let maxRunHeistSteps = 100
-        static let maxRunHeistRequestBytes = PublicMachineInputLimits.maxRequestBytes
-        static let maxRunHeistNestingDepth = PublicMachineInputLimits.maxNestingDepth
-        static let maxRunHeistObjectKeys = PublicMachineInputLimits.maxTotalObjectKeys
+        static let maxRunHeistRequestBytes = PublicJSONInputLimits.maxRequestBytes
+        static let maxRunHeistNestingDepth = PublicJSONInputLimits.maxNestingDepth
+        static let maxRunHeistObjectKeys = PublicJSONInputLimits.maxTotalObjectKeys
         static let maxHeistResultRows = maxRunHeistSteps
         static let maxInlineScreenshotBase64Bytes = 1_000_000
     }
@@ -272,9 +272,7 @@ public enum CLIExposure: Sendable, Equatable {
 
 enum FenceParameterBlocks: Sendable {
     private static let matcherFields = ElementTarget.predicateSchemaFields.map(elementTargetFieldSpec)
-    private static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
-
-    static let inlineElementTargetObjectProperties = inlineElementTargetFields
+    static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
 
     static let elementTarget: [FenceParameterSpec] = [
         param(.target, .object, objectProperties: inlineElementTargetFields),

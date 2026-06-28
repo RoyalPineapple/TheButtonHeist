@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import Foundation
 import Testing
 @_spi(ButtonHeistInternals) import TheScore

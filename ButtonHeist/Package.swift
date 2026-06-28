@@ -123,9 +123,15 @@ let package = Package(
             path: "Sources/TheButtonHeist",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
+        .target(
+            name: "ButtonHeistTestSupport",
+            dependencies: [],
+            path: "Tests/TestSupport",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
         .testTarget(
             name: "TheScoreTests",
-            dependencies: ["ThePlans", "TheScore"],
+            dependencies: ["ButtonHeistTestSupport", "ThePlans", "TheScore"],
             path: "Tests/TheScoreTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
@@ -138,6 +144,7 @@ let package = Package(
         .testTarget(
             name: "HeistDoctorCoreTests",
             dependencies: [
+                "ButtonHeistTestSupport",
                 "HeistDoctorCore",
                 "TheScore",
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
@@ -154,7 +161,7 @@ let package = Package(
         .testTarget(
             name: "ButtonHeistTests",
             dependencies: [
-                "ButtonHeist", "ThePlans", "TheScore",
+                "ButtonHeistTestSupport", "ButtonHeist", "ThePlans", "TheScore",
             ],
             path: "Tests/ButtonHeistTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
@@ -162,7 +169,7 @@ let package = Package(
         .testTarget(
             name: "TheInsideJobTests",
             dependencies: [
-                "ButtonHeistTesting", "TheInsideJob", "ThePlans", "TheScore",
+                "ButtonHeistTestSupport", "ButtonHeistTesting", "TheInsideJob", "ThePlans", "TheScore",
             ],
             path: "Tests/TheInsideJobTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

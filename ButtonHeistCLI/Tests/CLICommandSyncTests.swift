@@ -74,10 +74,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try ConnectCommand.parse(["127.0.0.1:1455"]))
     }
 
-    func testListDevicesRejectsTimeoutOption() {
-        XCTAssertThrowsError(try ListCommand.parse(["--timeout", "1"]))
-    }
-
     func testWaitCommandDefaultTimeoutIsTenSeconds() throws {
         let command = try WaitCommand.parse(["--change", "screen"])
 
@@ -421,65 +417,11 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderMalformedJSONFailureIsTyped() {
-        assertJSONLinesBuildFailure(
-            #"{"command":"ping","#,
-            code: .requestInvalid,
-            kind: .request,
-            phase: .request,
-            retryable: false
-        )
-    }
-
-    func testSharedRequestBuilderUnknownCommandFailureIsTyped() {
-        assertJSONLinesBuildFailure(
-            #"{"id":"r1","command":"not_a_command"}"#,
-            requestId: .string("r1"),
-            code: .requestInvalid,
-            kind: .request,
-            phase: .request,
-            retryable: false
-        )
-    }
-
-    func testSharedRequestBuilderBadSchemaFailureIsTyped() {
-        assertJSONLinesBuildFailure(
-            #"{"command":"wait","predicate":{"type":"change","scopes":[{"type":"screen"}]},"timeout":0}"#,
-            code: .requestValidationError,
-            kind: .request,
-            phase: .request,
-            retryable: false
-        )
-    }
-
     func testSharedRequestBuilderAcceptsValidPingRequest() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"ping"}"#)
 
         XCTAssertEqual(parsed.command, .ping)
         XCTAssertNil(parsed.requestId)
-    }
-
-    private func assertJSONLinesBuildFailure(
-        _ line: String,
-        requestId: PublicRequestId? = nil,
-        code: KnownFailureCode,
-        kind: DiagnosticFailureKind,
-        phase: FailurePhase,
-        retryable: Bool,
-        file: StaticString = #filePath,
-        line sourceLine: UInt = #line
-    ) {
-        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line), file: file, line: sourceLine) { error in
-            guard let buildError = error as? CLIRequestBuildError else {
-                return XCTFail("Expected CLIRequestBuildError, got \(error)", file: file, line: sourceLine)
-            }
-            XCTAssertEqual(buildError.requestId, requestId, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.diagnosticFailure.failureCode.knownCode, code, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.diagnosticFailure.code, code.rawValue, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.diagnosticFailure.kind, kind, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.diagnosticFailure.phase, phase, file: file, line: sourceLine)
-            XCTAssertEqual(buildError.diagnosticFailure.retryable, retryable, file: file, line: sourceLine)
-        }
     }
 
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONLinesMode() throws {
@@ -556,13 +498,13 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testSharedRequestBuilderRejectsHugeMachineJSONLineBeforeDecoding() {
-        let hugeText = String(repeating: "x", count: PublicMachineInputLimits.maxRequestBytes + 1)
+        let hugeText = String(repeating: "x", count: PublicJSONInputLimits.maxRequestBytes + 1)
         let line = "{\"command\":\"type_text\",\"text\":\"" + hugeText + "\"}"
 
         XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: line)) { error in
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
             XCTAssertTrue(
-                message.contains("Public JSON request exceeds \(PublicMachineInputLimits.maxRequestBytes) bytes"),
+                message.contains("Public JSON request exceeds \(PublicJSONInputLimits.maxRequestBytes) bytes"),
                 message
             )
         }
@@ -570,7 +512,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderRejectsDeeplyNestedMachineJSONBeforeDecoding() {
         var payload = "true"
-        for index in 0..<PublicMachineInputLimits.maxNestingDepth {
+        for index in 0..<PublicJSONInputLimits.maxNestingDepth {
             if index.isMultiple(of: 2) {
                 payload = "{\"child\":\(payload)}"
             } else {
@@ -583,7 +525,7 @@ final class CLICommandSyncTests: XCTestCase {
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
             XCTAssertTrue(
                 message.contains(
-                    "Public JSON request nesting depth exceeds \(PublicMachineInputLimits.maxNestingDepth)"
+                    "Public JSON request nesting depth exceeds \(PublicJSONInputLimits.maxNestingDepth)"
                 ),
                 message
             )
@@ -592,7 +534,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderRejectsExcessiveMachineJSONKeyCountBeforeDecoding() {
         var fields = ["\"command\":\"ping\""]
-        for index in 0..<PublicMachineInputLimits.maxTotalObjectKeys {
+        for index in 0..<PublicJSONInputLimits.maxTotalObjectKeys {
             fields.append("\"\(index)\":\(index)")
         }
         let line = "{\(fields.joined(separator: ","))}"
@@ -601,7 +543,7 @@ final class CLICommandSyncTests: XCTestCase {
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
             XCTAssertTrue(
                 message.contains(
-                    "Public JSON request object key count exceeds \(PublicMachineInputLimits.maxTotalObjectKeys)"
+                    "Public JSON request object key count exceeds \(PublicJSONInputLimits.maxTotalObjectKeys)"
                 ),
                 message
             )

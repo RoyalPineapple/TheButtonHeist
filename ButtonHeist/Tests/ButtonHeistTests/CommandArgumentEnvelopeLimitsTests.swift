@@ -13,9 +13,9 @@ final class CommandArgumentEnvelopeLimitsTests: XCTestCase {
         XCTAssertThrowsError(try CommandArgumentEnvelopeLimits.validate(
             arguments,
             field: "run_heist",
-            maxBytes: PublicMachineInputLimits.maxRequestBytes,
+            maxBytes: PublicJSONInputLimits.maxRequestBytes,
             maxDepth: 2,
-            maxObjectKeys: PublicMachineInputLimits.maxTotalObjectKeys
+            maxObjectKeys: PublicJSONInputLimits.maxTotalObjectKeys
         )) { error in
             assertSchemaError(
                 error,
@@ -33,8 +33,8 @@ final class CommandArgumentEnvelopeLimitsTests: XCTestCase {
             arguments,
             field: "run_heist",
             maxBytes: 5,
-            maxDepth: PublicMachineInputLimits.maxNestingDepth,
-            maxObjectKeys: PublicMachineInputLimits.maxTotalObjectKeys
+            maxDepth: PublicJSONInputLimits.maxNestingDepth,
+            maxObjectKeys: PublicJSONInputLimits.maxTotalObjectKeys
         )) { error in
             assertSchemaError(
                 error,
@@ -54,8 +54,8 @@ final class CommandArgumentEnvelopeLimitsTests: XCTestCase {
         XCTAssertThrowsError(try CommandArgumentEnvelopeLimits.validate(
             arguments,
             field: "run_heist",
-            maxBytes: PublicMachineInputLimits.maxRequestBytes,
-            maxDepth: PublicMachineInputLimits.maxNestingDepth,
+            maxBytes: PublicJSONInputLimits.maxRequestBytes,
+            maxDepth: PublicJSONInputLimits.maxNestingDepth,
             maxObjectKeys: 2
         )) { error in
             let expected = "schema validation failed for run_heist: observed object key count 3; " +
@@ -75,9 +75,9 @@ final class CommandArgumentEnvelopeLimitsTests: XCTestCase {
         XCTAssertThrowsError(try CommandArgumentEnvelopeLimits.validate(
             arguments,
             field: "run_heist",
-            maxBytes: PublicMachineInputLimits.maxRequestBytes,
-            maxDepth: PublicMachineInputLimits.maxNestingDepth,
-            maxObjectKeys: PublicMachineInputLimits.maxTotalObjectKeys
+            maxBytes: PublicJSONInputLimits.maxRequestBytes,
+            maxDepth: PublicJSONInputLimits.maxNestingDepth,
+            maxObjectKeys: PublicJSONInputLimits.maxTotalObjectKeys
         )) { error in
             assertSchemaError(
                 error,

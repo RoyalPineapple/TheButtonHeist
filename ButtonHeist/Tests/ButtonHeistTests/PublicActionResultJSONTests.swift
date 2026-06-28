@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 @_spi(ButtonHeistInternals) @testable import ButtonHeist
 import ThePlans

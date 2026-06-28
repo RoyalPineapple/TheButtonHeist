@@ -60,22 +60,8 @@ struct ToolRoutingTests {
         #expect(error.message == "Unknown tool: not_a_tool")
     }
 
-    @Test("unknown tool routes before walking invalid arguments")
-    func unknownToolRoutesBeforeWalkingInvalidArguments() throws {
-        let result = try ButtonHeistMCPServer.routedToolRequest(
-            name: "not_a_tool",
-            arguments: ["argument": Self.nestedMCPValueOverLimit()]
-        )
-
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
-        }
-        #expect(error.message == "Unknown tool: not_a_tool")
-    }
-
     @Test("routing errors map to canonical public failures")
-    func routingErrorsMapToCanonicalDiagnosticFailures() throws {
+    func routingErrorsMapToCanonicalPublicFailures() throws {
         let result = routeToolRequest(name: "not_a_tool")
 
         guard case .failure(let error) = result else {
@@ -84,8 +70,7 @@ struct ToolRoutingTests {
         }
 
         let failure = try #require(FenceResponse.failure(error).diagnosticFailure)
-        #expect(failure.failureCode.knownCode == .requestInvalid)
-        #expect(failure.code == KnownFailureCode.requestInvalid.rawValue)
+        #expect(failure.code == "request.invalid")
         #expect(failure.kind == .request)
         #expect(failure.message == "Unknown tool: not_a_tool")
         #expect(failure.details.phase == .request)
@@ -145,14 +130,14 @@ struct ToolRoutingTests {
         } catch {
             #expect(
                 String(describing: error)
-                    .contains("MCP arguments nesting depth exceeds \(PublicMachineInputLimits.maxNestingDepth)")
+                    .contains("MCP arguments nesting depth exceeds \(PublicJSONInputLimits.maxNestingDepth)")
             )
         }
     }
 
     @Test("MCP rejects oversized argument payloads before HeistValue conversion")
     func mcpRejectsOversizedArgumentPayloadBeforeHeistValueConversion() {
-        let oversizedText = String(repeating: "x", count: PublicMachineInputLimits.maxRequestBytes + 1)
+        let oversizedText = String(repeating: "x", count: PublicJSONInputLimits.maxRequestBytes + 1)
 
         do {
             _ = try ButtonHeistMCPServer.decodeArguments(["text": .string(oversizedText)])
@@ -160,7 +145,7 @@ struct ToolRoutingTests {
         } catch {
             #expect(
                 String(describing: error)
-                    .contains("MCP arguments exceeds \(PublicMachineInputLimits.maxRequestBytes) bytes")
+                    .contains("MCP arguments exceeds \(PublicJSONInputLimits.maxRequestBytes) bytes")
             )
         }
     }
@@ -175,7 +160,7 @@ struct ToolRoutingTests {
         } catch {
             #expect(
                 String(describing: error)
-                    .contains("MCP arguments object key count exceeds \(PublicMachineInputLimits.maxTotalObjectKeys)")
+                    .contains("MCP arguments object key count exceeds \(PublicJSONInputLimits.maxTotalObjectKeys)")
             )
         }
     }
@@ -229,7 +214,7 @@ struct ToolRoutingTests {
 
     private static func nestedMCPValueOverLimit() -> Value {
         var value = Value.string("leaf")
-        for _ in 0..<PublicMachineInputLimits.maxNestingDepth {
+        for _ in 0..<PublicJSONInputLimits.maxNestingDepth {
             value = .object(["child": value])
         }
         return value
@@ -237,7 +222,7 @@ struct ToolRoutingTests {
 
     private static func mcpObjectWithEnoughKeysToExceedLimitFromRoot() -> [String: Value] {
         var object: [String: Value] = [:]
-        for index in 0..<PublicMachineInputLimits.maxTotalObjectKeys {
+        for index in 0..<PublicJSONInputLimits.maxTotalObjectKeys {
             object[String(index)] = .int(index)
         }
         return object

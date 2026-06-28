@@ -84,7 +84,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
                 heistName: name,
                 totalTimeSeconds: Double(result.durationMs) / 1000
             )
-            try report.junitXML().write(to: URL(fileURLWithPath: junitPath), atomically: true, encoding: .utf8)
+            try report.junitXML().write(to: URL(fileURLWithPath: junitPath), atomically: true, encoding: String.Encoding.utf8)
             logStatus("JUnit report written to \(junitPath)")
         } else {
             logStatus("Warning: --junit requested but run_heist did not produce a report")
@@ -130,7 +130,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         case .success(let compiledPlan, _):
             plan = compiledPlan
         case .failure(let diagnostics):
-            throw ValidationError("failed to compile Swift heist source: \(formatBuildDiagnostics(diagnostics))")
+            throw ValidationError("failed to compile Swift heist source: \(formatCompilationDiagnostics(diagnostics))")
         }
 
         let directory = FileManager.default.temporaryDirectory
@@ -216,7 +216,7 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
                 context: "--argument",
                 rootMismatchMessage: "--argument must be a JSON object"
             )
-        } catch let error as PublicMachineInputError {
+        } catch let error as PublicJSONInputError {
             throw ValidationError(error.message)
         } catch {
             throw ValidationError("--argument must be valid JSON: \(error)")
@@ -224,6 +224,6 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
     }
 }
 
-private func formatBuildDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
+private func formatCompilationDiagnostics(_ diagnostics: [HeistBuildDiagnostic]) -> String {
     diagnostics.map(\.description).joined(separator: "\n")
 }

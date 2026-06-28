@@ -63,7 +63,7 @@ private func parseJSONArray(from data: Data, source: String) throws -> [HeistVal
             root: .array,
             context: source
         )
-    } catch let error as PublicMachineInputError {
+    } catch let error as PublicJSONInputError {
         throw ValidationError(error.message)
     } catch {
         throw ValidationError("\(source) is not valid JSON: \(error.localizedDescription)")
@@ -105,7 +105,7 @@ private func parseJSONObject(from data: Data, source: String) throws -> [String:
             root: .object,
             context: source
         )
-    } catch let error as PublicMachineInputError {
+    } catch let error as PublicJSONInputError {
         throw ValidationError(error.message)
     } catch {
         throw ValidationError("\(source) is not valid JSON object: \(error.localizedDescription)")

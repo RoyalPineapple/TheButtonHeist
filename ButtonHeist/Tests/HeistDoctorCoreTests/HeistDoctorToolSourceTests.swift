@@ -7,16 +7,22 @@ import Testing
     func `heist-doctor stdout writes are routed through local output sink`() throws {
         let root = try repositoryRoot()
         let files = try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/HeistDoctorTool", isDirectory: true))
+        let forbiddenSnippets = [
+            "print(",
+            "FileHandle.standardOutput.write",
+        ]
         var foundOutputSink = false
 
         for file in files {
             let source = try String(contentsOf: file, encoding: .utf8)
             foundOutputSink = foundOutputSink || source.contains("enum HeistDoctorToolOutput")
             for (lineNumber, line) in sourceLinesOutsideHeistDoctorToolOutputSink(source) {
-                #expect(
-                    line.range(of: "print(") == nil,
-                    "\(file.path):\(lineNumber) contains print( outside HeistDoctorToolOutput"
-                )
+                for snippet in forbiddenSnippets {
+                    #expect(
+                        line.range(of: snippet) == nil,
+                        "\(file.path):\(lineNumber) contains \(snippet) outside HeistDoctorToolOutput"
+                    )
+                }
             }
         }
 

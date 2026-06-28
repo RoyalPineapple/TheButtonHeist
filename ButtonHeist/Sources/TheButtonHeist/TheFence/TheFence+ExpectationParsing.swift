@@ -120,7 +120,7 @@ extension TheFence {
                 context: "Expectation JSON",
                 rootMismatchMessage: "Expected expectation JSON object"
             )
-        } catch let error as PublicMachineInputError {
+        } catch let error as PublicJSONInputError {
             throw FenceError.invalidRequest(error.message)
         } catch {
             throw FenceError.invalidRequest("Invalid expectation JSON: \(error.localizedDescription)")

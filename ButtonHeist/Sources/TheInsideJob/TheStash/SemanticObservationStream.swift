@@ -52,12 +52,6 @@ struct VisibleSemanticObservationEvidence {
 private struct SemanticObservationFulfillmentState {
     typealias EventsByFulfilledScope = [SemanticObservationScope: SettledSemanticObservationEvent]
 
-    struct FulfillmentInput {
-        let scope: SemanticObservationScope
-        let observation: SettledSemanticObservation
-        let previous: SettledSemanticObservationEvent?
-    }
-
     private(set) var latestSourceEvent: SettledSemanticObservationEvent?
     private var latestEventsByFulfilledScope: EventsByFulfilledScope = [:]
     private(set) var latestSettledObservationInvalidated = true
@@ -76,41 +70,36 @@ private struct SemanticObservationFulfillmentState {
         latestSettledObservationInvalidated = true
     }
 
-    func fulfillmentInputs(
+    @MainActor
+    mutating func publish(
         sourceScope: SemanticObservationScope,
         sequence: SettledObservationSequence,
         screen: Screen,
-        tripwireSignal: TheTripwire.TripwireSignal
-    ) -> [FulfillmentInput] {
-        sourceScope.fulfilledScopes.map { fulfilledScope in
+        tripwireSignal: TheTripwire.TripwireSignal,
+        stash: TheStash
+    ) -> EventsByFulfilledScope {
+        var events: EventsByFulfilledScope = [:]
+        for fulfilledScope in sourceScope.fulfilledScopes {
             let observation = SettledSemanticObservation(
                 sequence: sequence,
                 scope: fulfilledScope,
                 screen: screen.semanticObservationProjection(for: fulfilledScope),
                 tripwireSignal: tripwireSignal
             )
-            return FulfillmentInput(
-                scope: fulfilledScope,
+            let event = SemanticObservationEventFactory.makeEvent(
                 observation: observation,
-                previous: latestEventsByFulfilledScope[fulfilledScope]
+                previous: latestEventsByFulfilledScope[fulfilledScope],
+                stash: stash
             )
-        }
-    }
-
-    mutating func publish(
-        events: EventsByFulfilledScope,
-        sourceScope: SemanticObservationScope
-    ) {
-        for fulfilledScope in sourceScope.fulfilledScopes {
-            guard let event = events[fulfilledScope] else {
-                preconditionFailure("Semantic observation scope did not publish a fulfilled event")
-            }
             latestEventsByFulfilledScope[fulfilledScope] = event
+            events[fulfilledScope] = event
+
             if fulfilledScope == sourceScope {
                 latestSourceEvent = event
             }
         }
         latestSettledObservationInvalidated = false
+        return events
     }
 
     func cleanEvent(
@@ -439,25 +428,13 @@ final class SemanticObservationStream {
         stash: TheStash
     ) -> SettledSemanticObservationEvent {
         settledSequence += 1
-        let inputs = fulfillmentState.fulfillmentInputs(
+        let events = fulfillmentState.publish(
             sourceScope: scope,
             sequence: settledSequence,
             screen: stash.settledSemanticScreen,
-            tripwireSignal: tripwire.tripwireSignal()
+            tripwireSignal: tripwire.tripwireSignal(),
+            stash: stash
         )
-        let events = Dictionary(
-            uniqueKeysWithValues: inputs.map { input in
-                (
-                    input.scope,
-                    SemanticObservationEventFactory.makeEvent(
-                        observation: input.observation,
-                        previous: input.previous,
-                        stash: stash
-                    )
-                )
-            }
-        )
-        fulfillmentState.publish(events: events, sourceScope: scope)
         guard let sourceEvent = events[scope] else {
             preconditionFailure("Semantic observation scope did not fulfill itself")
         }

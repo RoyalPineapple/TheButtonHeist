@@ -112,10 +112,31 @@ extension TheBurglar {
         let containerPath: TreePath
     }
 
+    /// Walk the hierarchy tree to gather per-element context: content-space origins,
+    /// and scroll view refs. Live element objects are read directly from the
+    /// parser result while building the current live capture.
+    static func buildElementContexts(
+        hierarchy: [AccessibilityHierarchy],
+        scrollableContainerViewsByPath: [TreePath: UIScrollView] = [:]
+    ) -> [AccessibilityElement: ElementContext] {
+        let byPath = buildElementContextsByPath(
+            hierarchy: hierarchy,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+        )
+        return Dictionary(
+            byPath.compactMap { path, context in
+                guard case .element(let element, _) = hierarchy.node(at: path) else { return nil }
+                return (element, context)
+            },
+            uniquingKeysWith: { _, latest in latest }
+        )
+    }
+
     static func buildElementContextsByPath(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViewsByPath: [TreePath: UIScrollView] = [:]
     ) -> [TreePath: ElementContext] {
+        var contexts: [AccessibilityElement: ElementContext] = [:]
         var contextsByPath: [TreePath: ElementContext] = [:]
         for (index, node) in hierarchy.enumerated() {
             collectElementContexts(
@@ -123,6 +144,7 @@ extension TheBurglar {
                 path: TreePath([index]),
                 parentScrollContext: nil,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                into: &contexts,
                 byPath: &contextsByPath
             )
         }
@@ -134,6 +156,7 @@ extension TheBurglar {
         path: TreePath,
         parentScrollContext: ScrollContext?,
         scrollableContainerViewsByPath: [TreePath: UIScrollView],
+        into contexts: inout [AccessibilityElement: ElementContext],
         byPath contextsByPath: inout [TreePath: ElementContext]
     ) {
         switch node {
@@ -149,6 +172,7 @@ extension TheBurglar {
                 scrollContainerPath: parentScrollContext?.containerPath,
                 scrollView: parentScrollContext?.view
             )
+            contexts[element] = context
             contextsByPath[path] = context
         case .container(_, let children):
             let childScrollContext: ScrollContext?
@@ -165,6 +189,7 @@ extension TheBurglar {
                     path: path.appending(index),
                     parentScrollContext: childScrollContext,
                     scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                    into: &contexts,
                     byPath: &contextsByPath
                 )
             }
@@ -208,6 +233,27 @@ extension TheBurglar {
         CoarseFrameComparison.hashFragment(for: frame)
     }
 
+}
+
+private extension Array where Element == AccessibilityHierarchy {
+    func node(at path: TreePath) -> AccessibilityHierarchy? {
+        guard let rootIndex = path.indices.first,
+              indices.contains(rootIndex)
+        else { return nil }
+        guard path.indices.count > 1 else { return self[rootIndex] }
+        return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+    }
+}
+
+private extension AccessibilityHierarchy {
+    func node(at path: TreePath) -> AccessibilityHierarchy? {
+        guard !path.indices.isEmpty else { return self }
+        guard case .container(_, let children) = self,
+              let childIndex = path.indices.first,
+              children.indices.contains(childIndex)
+        else { return nil }
+        return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+    }
 }
 
 #endif // DEBUG

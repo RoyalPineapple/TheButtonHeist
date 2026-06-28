@@ -38,7 +38,7 @@ extension TheFence {
 
     private func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
         GetInterfaceRequest(
-            detail: try arguments.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
+            detail: try arguments.schemaEnum(.detail, as: InterfaceDetail.self) ?? .summary,
             query: InterfaceQuery(
                 subtree: try decodeInterfaceSubtreeSelector(arguments),
                 matcher: try interfaceElementMatcher(arguments),
@@ -52,10 +52,10 @@ extension TheFence {
         _ arguments: CommandArgumentEnvelope,
         _ key: FenceParameterKey
     ) throws -> Int? {
-        guard let value = try arguments.schemaInteger(key.rawValue) else { return nil }
+        guard let value = try arguments.schemaInteger(key) else { return nil }
         guard (1...2_000).contains(value) else {
             throw SchemaValidationError(
-                field: arguments.field(key.rawValue),
+                field: arguments.field(key),
                 observed: value,
                 expected: "integer between 1 and 2000"
             )
@@ -67,8 +67,8 @@ extension TheFence {
         _ arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> ScreenRequest {
-        let outputPath = try arguments.schemaString("output")
-        let inlineData = try arguments.schemaBoolean("inlineData") ?? false
+        let outputPath = try arguments.schemaString(.output)
+        let inlineData = try arguments.schemaBoolean(.inlineData) ?? false
         if inlineData, outputPath != nil {
             throw SchemaValidationError(
                 field: "inlineData/output",
@@ -84,19 +84,19 @@ extension TheFence {
     }
 
     private func decodeInterfaceSubtreeSelector(_ arguments: CommandArgumentEnvelope) throws -> SubtreeSelector? {
-        guard let subtree = arguments.argumentValues["subtree"] else { return nil }
+        guard let subtree = arguments.value(for: .subtree) else { return nil }
         guard case .object = subtree else {
             throw SchemaValidationError(
-                field: arguments.field("subtree"),
+                field: arguments.field(.subtree),
                 observed: subtree.schemaObservedDescription,
                 expected: "object"
             )
         }
-        try validateSubtreeElementStringMatchObjects(subtree, field: arguments.field("subtree"))
-        let selector = try arguments.decodePayload(subtree, forKey: "subtree", as: SubtreeSelector.self)
+        try validateSubtreeElementStringMatchObjects(subtree, field: arguments.field(.subtree))
+        let selector = try arguments.decodePayload(subtree, forKey: .subtree, as: SubtreeSelector.self)
         guard selector.hasPredicates else {
             throw SchemaValidationError(
-                field: arguments.field("subtree"),
+                field: arguments.field(.subtree),
                 observed: subtree.schemaObservedDescription,
                 expected: "non-empty subtree selector"
             )
@@ -115,41 +115,79 @@ extension TheFence {
     }
 
     private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementPredicate {
-        let hasChecks = arguments.argumentValues["checks"] != nil
-        let hasFlatFields = ["label", "identifier", "value", "traits", "excludeTraits"].contains {
-            arguments.argumentValues[$0] != nil
-        }
+        let hasChecks = arguments.contains(.checks)
+        let hasFlatFields = InterfaceElementMatcherField.allCases.contains { arguments.contains($0.key) }
         if hasChecks, hasFlatFields {
             throw SchemaValidationError(
-                field: arguments.field("checks"),
+                field: arguments.field(.checks),
                 observed: "mixed ordered checks and flat predicate fields",
                 expected: "use either checks or flat predicate fields, not both"
             )
         }
-        if let checksValue = arguments.argumentValues["checks"] {
-            try Self.validateElementPredicateChecks(checksValue, field: arguments.field("checks"))
+        if let checksValue = arguments.value(for: .checks) {
+            try Self.validateElementPredicateChecks(checksValue, field: arguments.field(.checks))
             return ElementPredicate(try arguments.decodePayload(
                 checksValue,
-                forKey: "checks",
+                forKey: .checks,
                 as: [ElementPredicateCheck<String>].self
             ))
         }
 
         var checks: [ElementPredicateCheck<String>] = []
-        checks += try arguments.schemaStringMatches("label").map(ElementPredicateCheck.label)
-        checks += try arguments.schemaStringMatches("identifier").map(ElementPredicateCheck.identifier)
-        checks += try arguments.schemaStringMatches("value").map(ElementPredicateCheck.value)
-        if let traits = try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")),
-           !traits.isEmpty {
-            checks.append(.traits(traits))
-        }
-        if let traits = try TheFence.parseTraitNames(
-                try arguments.schemaStringArray("excludeTraits"),
-                field: arguments.field("excludeTraits")
-            ),
-           !traits.isEmpty {
-            checks.append(.excludeTraits(traits))
+        for field in InterfaceElementMatcherField.allCases {
+            checks += try field.checks(in: arguments)
         }
         return ElementPredicate(checks)
+    }
+}
+
+private enum InterfaceElementMatcherField: CaseIterable {
+    case label
+    case identifier
+    case value
+    case traits
+    case excludeTraits
+
+    var key: FenceParameterKey {
+        switch self {
+        case .label:
+            return .label
+        case .identifier:
+            return .identifier
+        case .value:
+            return .value
+        case .traits:
+            return .traits
+        case .excludeTraits:
+            return .excludeTraits
+        }
+    }
+
+    func checks(in arguments: TheFence.CommandArgumentEnvelope) throws -> [ElementPredicateCheck<String>] {
+        switch self {
+        case .label:
+            return try arguments.schemaStringMatches(key).map(ElementPredicateCheck.label)
+        case .identifier:
+            return try arguments.schemaStringMatches(key).map(ElementPredicateCheck.identifier)
+        case .value:
+            return try arguments.schemaStringMatches(key).map(ElementPredicateCheck.value)
+        case .traits:
+            return try traitCheck(in: arguments, makeCheck: ElementPredicateCheck.traits)
+        case .excludeTraits:
+            return try traitCheck(in: arguments, makeCheck: ElementPredicateCheck.excludeTraits)
+        }
+    }
+
+    private func traitCheck(
+        in arguments: TheFence.CommandArgumentEnvelope,
+        makeCheck: ([HeistTrait]) -> ElementPredicateCheck<String>
+    ) throws -> [ElementPredicateCheck<String>] {
+        guard let traits = try TheFence.parseTraitNames(
+            try arguments.schemaStringArray(key),
+            field: arguments.field(key)
+        ), !traits.isEmpty else {
+            return []
+        }
+        return [makeCheck(traits)]
     }
 }

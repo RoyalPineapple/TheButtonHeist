@@ -2,6 +2,11 @@
 #if DEBUG
 import Foundation
 
+enum InsideJobRuntimeStartPhase: Equatable, Sendable {
+    case startup
+    case resume
+}
+
 @MainActor
 extension TheInsideJob {
     enum ServerPhase {

@@ -107,7 +107,7 @@ enum DiagnosticFailureMapper {
                 message: validationError.message,
                 details: FailureDetails(code: .requestValidationError)
             )
-        case let inputError as PublicMachineInputError:
+        case let inputError as PublicJSONInputError:
             return DiagnosticFailure(
                 message: inputError.message,
                 details: FailureDetails(code: .requestInvalid)

@@ -388,8 +388,8 @@ final class AccessibilityPredicateTests: XCTestCase {
                 before: makeElement(label: "Toggle", traits: [.button]),
                 after: makeElement(label: "Toggle", value: "5", traits: [.button, .selected]),
                 changes: [
-                    PropertyChange(property: .traits, oldValue: .traits([]), newValue: .traits([.selected])),
-                    PropertyChange(property: .value, oldValue: .text("3"), newValue: .text("5")),
+                    .traits(old: [.button], new: [.button, .selected]),
+                    .value(old: "3", new: "5"),
                 ]
             ),
         ])))
@@ -670,15 +670,15 @@ final class AccessibilityPredicateTests: XCTestCase {
         beforeTraits: [HeistTrait] = [],
         afterTraits: [HeistTrait] = []
     ) -> ElementUpdate {
-        let before = makeElementForUpdate(label: label, property: property, value: old, traits: beforeTraits)
-        let after = makeElementForUpdate(label: label, property: property, value: new, traits: afterTraits)
-        return ElementUpdate(
-            before: before,
-            after: after,
-            changes: [PropertyChange(
+        ElementUpdate(
+            before: makeElementForUpdate(label: label, property: property, value: old, traits: beforeTraits),
+            after: makeElementForUpdate(label: label, property: property, value: new, traits: afterTraits),
+            changes: [propertyChange(
                 property: property,
-                oldValue: ElementPropertyValue.value(for: property, in: before),
-                newValue: ElementPropertyValue.value(for: property, in: after)
+                old: old,
+                new: new,
+                beforeTraits: beforeTraits,
+                afterTraits: afterTraits
             )]
         )
     }
@@ -688,19 +688,32 @@ final class AccessibilityPredicateTests: XCTestCase {
         beforeTraits: [HeistTrait],
         afterTraits: [HeistTrait]
     ) -> ElementUpdate {
-        let before = makeElement(label: label, traits: beforeTraits)
-        let after = makeElement(label: label, traits: afterTraits)
-        return ElementUpdate(
-            before: before,
-            after: after,
+        ElementUpdate(
+            before: makeElement(label: label, traits: beforeTraits),
+            after: makeElement(label: label, traits: afterTraits),
             changes: [
-                PropertyChange(
-                    property: .traits,
-                    oldValue: ElementPropertyValue.value(for: .traits, in: before),
-                    newValue: ElementPropertyValue.value(for: .traits, in: after)
-                ),
+                .traits(old: beforeTraits, new: afterTraits),
             ]
         )
+    }
+
+    private func propertyChange(
+        property: ElementProperty,
+        old: String?,
+        new: String?,
+        beforeTraits: [HeistTrait],
+        afterTraits: [HeistTrait]
+    ) -> PropertyChange {
+        switch property {
+        case .value:
+            return .value(old: old, new: new)
+        case .hint:
+            return .hint(old: old, new: new)
+        case .traits:
+            return .traits(old: beforeTraits, new: afterTraits)
+        case .actions, .frame, .activationPoint, .customContent, .rotors:
+            fatalError("Unsupported test property \(property)")
+        }
     }
 
     private func makeElementForUpdate(

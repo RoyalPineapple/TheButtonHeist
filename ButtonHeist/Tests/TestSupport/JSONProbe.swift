@@ -1,6 +1,6 @@
 import Foundation
 
-enum JSONValue: Decodable, Equatable {
+public enum JSONValue: Codable, Equatable, Sendable {
     case object([String: JSONValue])
     case array([JSONValue])
     case string(String)
@@ -9,7 +9,7 @@ enum JSONValue: Decodable, Equatable {
     case bool(Bool)
     case null
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         if let object = try? decoder.container(keyedBy: JSONCodingKey.self) {
             var values: [String: JSONValue] = [:]
             for key in object.allKeys {
@@ -47,265 +47,7 @@ enum JSONValue: Decodable, Equatable {
         }
     }
 
-    var typeDescription: String {
-        switch self {
-        case .object: return "object"
-        case .array: return "array"
-        case .string: return "string"
-        case .int: return "int"
-        case .double: return "double"
-        case .bool: return "bool"
-        case .null: return "null"
-        }
-    }
-}
-
-struct JSONProbe {
-    private let value: JSONValue
-    private let path: String
-
-    init(_ value: JSONValue, path: String = "$") {
-        self.value = value
-        self.path = path
-    }
-
-    init(data: Data, decoder: JSONDecoder = JSONDecoder()) throws {
-        do {
-            self.init(try decoder.decode(JSONValue.self, from: data))
-        } catch {
-            throw JSONProbeFailure(path: "$", reason: "Failed to decode JSON: \(error)")
-        }
-    }
-
-    func object(_ key: String? = nil) throws -> JSONProbe {
-        let probe = try key.map(child) ?? self
-        guard case .object = probe.value else {
-            throw probe.typeMismatch(expected: "object")
-        }
-        return probe
-    }
-
-    func array(_ key: String? = nil) throws -> [JSONProbe] {
-        let probe = try key.map(child) ?? self
-        guard case .array(let values) = probe.value else {
-            throw probe.typeMismatch(expected: "array")
-        }
-        return values.enumerated().map { index, value in
-            JSONProbe(value, path: "\(probe.path)[\(index)]")
-        }
-    }
-
-    func string(_ key: String? = nil) throws -> String {
-        let probe = try key.map(child) ?? self
-        guard case .string(let value) = probe.value else {
-            throw probe.typeMismatch(expected: "string")
-        }
-        return value
-    }
-
-    func strings(_ key: String? = nil) throws -> [String] {
-        try array(key).map { try $0.string() }
-    }
-
-    func bool(_ key: String? = nil) throws -> Bool {
-        let probe = try key.map(child) ?? self
-        guard case .bool(let value) = probe.value else {
-            throw probe.typeMismatch(expected: "bool")
-        }
-        return value
-    }
-
-    func int(_ key: String? = nil) throws -> Int {
-        let probe = try key.map(child) ?? self
-        guard case .int(let value) = probe.value else {
-            throw probe.typeMismatch(expected: "int")
-        }
-        return value
-    }
-
-    func double(_ key: String? = nil) throws -> Double {
-        let probe = try key.map(child) ?? self
-        switch probe.value {
-        case .double(let value):
-            return value
-        case .int(let value):
-            return Double(value)
-        default:
-            throw probe.typeMismatch(expected: "double")
-        }
-    }
-
-    func assertPresent(_ key: String) throws {
-        guard case .object(let object) = value else {
-            throw typeMismatch(expected: "object")
-        }
-        guard object[key] != nil else {
-            throw JSONProbeFailure(path: childPath(for: key), reason: "Expected value to be present")
-        }
-    }
-
-    func assertMissing(_ key: String) throws {
-        guard case .object(let object) = value else {
-            throw typeMismatch(expected: "object")
-        }
-        guard object[key] == nil else {
-            throw JSONProbeFailure(path: childPath(for: key), reason: "Expected value to be absent")
-        }
-    }
-
-    func assertRecursivelyMissingKeys(_ keys: [String]) throws {
-        let disallowed = Set(keys)
-        guard let hit = firstPath(containingKeyIn: disallowed) else { return }
-        throw JSONProbeFailure(path: hit.path, reason: "Expected key '\(hit.key)' to be absent recursively")
-    }
-
-    func assertRecursivelyMissingStringValues(_ values: [String]) throws {
-        let disallowed = Set(values)
-        guard let hit = firstPath(containingStringValueIn: disallowed) else { return }
-        throw JSONProbeFailure(path: hit.path, reason: "Expected string value '\(hit.value)' to be absent recursively")
-    }
-
-    func isEmptyObject() throws -> Bool {
-        guard case .object(let object) = value else {
-            throw typeMismatch(expected: "object")
-        }
-        return object.isEmpty
-    }
-
-    func decode<T: Decodable>(
-        _ type: T.Type = T.self,
-        decoder: JSONDecoder = JSONDecoder()
-    ) throws -> T {
-        do {
-            let data = try JSONEncoder().encode(value)
-            return try decoder.decode(type, from: data)
-        } catch {
-            throw JSONProbeFailure(path: path, reason: "Failed to decode \(type): \(error)")
-        }
-    }
-
-    private func child(_ key: String) throws -> JSONProbe {
-        guard case .object(let object) = value else {
-            throw typeMismatch(expected: "object")
-        }
-        guard let value = object[key] else {
-            throw JSONProbeFailure(path: childPath(for: key), reason: "Missing JSON value")
-        }
-        return JSONProbe(value, path: childPath(for: key))
-    }
-
-    private func childPath(for key: String) -> String {
-        path + Self.pathComponent(forKey: key)
-    }
-
-    private func firstPath(containingKeyIn disallowed: Set<String>) -> (key: String, path: String)? {
-        switch value {
-        case .object(let object):
-            for key in object.keys.sorted() {
-                let nextPath = childPath(for: key)
-                if disallowed.contains(key) {
-                    return (key, nextPath)
-                }
-                if let child = object[key],
-                   let hit = JSONProbe(child, path: nextPath).firstPath(containingKeyIn: disallowed) {
-                    return hit
-                }
-            }
-        case .array(let array):
-            for (index, value) in array.enumerated() {
-                if let hit = JSONProbe(value, path: "\(path)[\(index)]").firstPath(containingKeyIn: disallowed) {
-                    return hit
-                }
-            }
-        case .string, .int, .double, .bool, .null:
-            break
-        }
-        return nil
-    }
-
-    private func firstPath(containingStringValueIn disallowed: Set<String>) -> (value: String, path: String)? {
-        switch value {
-        case .object(let object):
-            for key in object.keys.sorted() {
-                let nextPath = childPath(for: key)
-                if let child = object[key],
-                   let hit = JSONProbe(child, path: nextPath).firstPath(containingStringValueIn: disallowed) {
-                    return hit
-                }
-            }
-        case .array(let array):
-            for (index, value) in array.enumerated() {
-                if let hit = JSONProbe(value, path: "\(path)[\(index)]").firstPath(containingStringValueIn: disallowed) {
-                    return hit
-                }
-            }
-        case .string(let string):
-            if disallowed.contains(string) {
-                return (string, path)
-            }
-        case .int, .double, .bool, .null:
-            break
-        }
-        return nil
-    }
-
-    private func typeMismatch(expected: String) -> JSONProbeFailure {
-        JSONProbeFailure(
-            path: path,
-            reason: "Expected \(expected), got \(value.typeDescription)"
-        )
-    }
-
-    private static func pathComponent(forKey key: String) -> String {
-        guard isIdentifier(key) else {
-            let escaped = key
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "\"", with: "\\\"")
-            return "[\"\(escaped)\"]"
-        }
-        return ".\(key)"
-    }
-
-    private static func isIdentifier(_ key: String) -> Bool {
-        guard let first = key.first, first == "_" || first.isLetter else {
-            return false
-        }
-        return key.dropFirst().allSatisfy { character in
-            character == "_" || character.isLetter || character.isNumber
-        }
-    }
-}
-
-struct JSONProbeFailure: Error, CustomStringConvertible, LocalizedError, Equatable {
-    let path: String
-    let reason: String
-
-    var description: String {
-        "\(reason) at \(path)"
-    }
-
-    var errorDescription: String? {
-        description
-    }
-}
-
-private struct JSONCodingKey: CodingKey {
-    let stringValue: String
-    let intValue: Int?
-
-    init(stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init(intValue: Int) {
-        self.stringValue = "\(intValue)"
-        self.intValue = intValue
-    }
-}
-
-extension JSONValue: Encodable {
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         switch self {
         case .object(let object):
             var container = encoder.container(keyedBy: JSONCodingKey.self)
@@ -333,5 +75,241 @@ extension JSONValue: Encodable {
             var container = encoder.singleValueContainer()
             try container.encodeNil()
         }
+    }
+
+    var typeDescription: String {
+        switch self {
+        case .object: return "object"
+        case .array: return "array"
+        case .string: return "string"
+        case .int: return "int"
+        case .double: return "double"
+        case .bool: return "bool"
+        case .null: return "null"
+        }
+    }
+}
+
+public struct JSONProbe: Sendable {
+    private let value: JSONValue
+    private let path: String
+
+    public init(_ value: JSONValue, path: String = "$") {
+        self.value = value
+        self.path = path
+    }
+
+    public init(data: Data, decoder: JSONDecoder = JSONDecoder()) throws {
+        do {
+            self.init(try decoder.decode(JSONValue.self, from: data))
+        } catch {
+            throw JSONProbeFailure(path: "$", reason: "Failed to decode JSON: \(error)")
+        }
+    }
+
+    public func object(_ key: String? = nil) throws -> JSONProbe {
+        let probe = try key.map(child) ?? self
+        guard case .object = probe.value else {
+            throw probe.typeMismatch(expected: "object")
+        }
+        return probe
+    }
+
+    public func array(_ key: String? = nil) throws -> [JSONProbe] {
+        let probe = try key.map(child) ?? self
+        guard case .array(let values) = probe.value else {
+            throw probe.typeMismatch(expected: "array")
+        }
+        return values.enumerated().map { index, value in
+            JSONProbe(value, path: "\(probe.path)[\(index)]")
+        }
+    }
+
+    public func string(_ key: String? = nil) throws -> String {
+        let probe = try key.map(child) ?? self
+        guard case .string(let value) = probe.value else {
+            throw probe.typeMismatch(expected: "string")
+        }
+        return value
+    }
+
+    public func strings(_ key: String? = nil) throws -> [String] {
+        try array(key).map { try $0.string() }
+    }
+
+    public func bool(_ key: String? = nil) throws -> Bool {
+        let probe = try key.map(child) ?? self
+        guard case .bool(let value) = probe.value else {
+            throw probe.typeMismatch(expected: "bool")
+        }
+        return value
+    }
+
+    public func int(_ key: String? = nil) throws -> Int {
+        let probe = try key.map(child) ?? self
+        guard case .int(let value) = probe.value else {
+            throw probe.typeMismatch(expected: "int")
+        }
+        return value
+    }
+
+    public func double(_ key: String? = nil) throws -> Double {
+        let probe = try key.map(child) ?? self
+        switch probe.value {
+        case .double(let value):
+            return value
+        case .int(let value):
+            return Double(value)
+        default:
+            throw probe.typeMismatch(expected: "double")
+        }
+    }
+
+    public func assertPresent(_ key: String) throws {
+        guard case .object(let object) = value else {
+            throw typeMismatch(expected: "object")
+        }
+        guard object[key] != nil else {
+            throw JSONProbeFailure(path: childPath(for: key), reason: "Expected value to be present")
+        }
+    }
+
+    public func assertMissing(_ key: String) throws {
+        guard case .object(let object) = value else {
+            throw typeMismatch(expected: "object")
+        }
+        guard object[key] == nil else {
+            throw JSONProbeFailure(path: childPath(for: key), reason: "Expected value to be absent")
+        }
+    }
+
+    public func assertRecursivelyMissingKeys(_ keys: [String]) throws {
+        let disallowed = Set(keys)
+        guard let hit = Self.firstPath(containingKeyIn: disallowed, value: value, path: path) else { return }
+        throw JSONProbeFailure(path: hit.path, reason: "Expected key '\(hit.key)' to be absent recursively")
+    }
+
+    public func isEmptyObject() throws -> Bool {
+        guard case .object(let object) = value else {
+            throw typeMismatch(expected: "object")
+        }
+        return object.isEmpty
+    }
+
+    public func decode<T: Decodable>(
+        _ type: T.Type = T.self,
+        decoder: JSONDecoder = JSONDecoder()
+    ) throws -> T {
+        do {
+            let data = try JSONEncoder().encode(value)
+            return try decoder.decode(type, from: data)
+        } catch {
+            throw JSONProbeFailure(path: path, reason: "Failed to decode \(type): \(error)")
+        }
+    }
+
+    private func child(_ key: String) throws -> JSONProbe {
+        guard case .object(let object) = value else {
+            throw typeMismatch(expected: "object")
+        }
+        guard let value = object[key] else {
+            throw JSONProbeFailure(path: childPath(for: key), reason: "Missing JSON value")
+        }
+        return JSONProbe(value, path: childPath(for: key))
+    }
+
+    private func childPath(for key: String) -> String {
+        path + Self.pathComponent(forKey: key)
+    }
+
+    private func typeMismatch(expected: String) -> JSONProbeFailure {
+        JSONProbeFailure(
+            path: path,
+            reason: "Expected \(expected), got \(value.typeDescription)"
+        )
+    }
+
+    private static func pathComponent(forKey key: String) -> String {
+        guard isIdentifier(key) else {
+            let escaped = key
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            return "[\"\(escaped)\"]"
+        }
+        return ".\(key)"
+    }
+
+    private static func isIdentifier(_ key: String) -> Bool {
+        guard let first = key.first, first == "_" || first.isLetter else {
+            return false
+        }
+        return key.dropFirst().allSatisfy { character in
+            character == "_" || character.isLetter || character.isNumber
+        }
+    }
+
+    private static func firstPath(
+        containingKeyIn disallowed: Set<String>,
+        value: JSONValue,
+        path: String
+    ) -> (key: String, path: String)? {
+        switch value {
+        case .object(let object):
+            for key in object.keys.sorted() {
+                let childPath = path + pathComponent(forKey: key)
+                if disallowed.contains(key) {
+                    return (key, childPath)
+                }
+                if let child = object[key],
+                   let hit = firstPath(containingKeyIn: disallowed, value: child, path: childPath) {
+                    return hit
+                }
+            }
+            return nil
+
+        case .array(let array):
+            for (index, value) in array.enumerated() {
+                if let hit = firstPath(containingKeyIn: disallowed, value: value, path: "\(path)[\(index)]") {
+                    return hit
+                }
+            }
+            return nil
+
+        case .string, .int, .double, .bool, .null:
+            return nil
+        }
+    }
+}
+
+public struct JSONProbeFailure: Error, CustomStringConvertible, LocalizedError, Equatable, Sendable {
+    public let path: String
+    public let reason: String
+
+    public init(path: String, reason: String) {
+        self.path = path
+        self.reason = reason
+    }
+
+    public var description: String {
+        "\(reason) at \(path)"
+    }
+
+    public var errorDescription: String? {
+        description
+    }
+}
+
+private struct JSONCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }

@@ -315,52 +315,40 @@ public extension AccessibilityPredicate.Change {
     }
 
     private static func propertyChange(
-        _ propertyChange: PropertyChange,
+        _ observed: PropertyChange,
         matches change: AnyPropertyChange
     ) -> Bool {
-        guard propertyChange.property == change.property else { return false }
-        switch change {
-        case .value(let change):
-            return stringPropertyChange(propertyChange, matches: change)
-        case .traits(let change):
-            return traitPropertyChange(propertyChange, matches: change)
-        case .hint(let change):
-            return stringPropertyChange(propertyChange, matches: change)
-        case .actions(let change):
-            return stringPropertyChange(propertyChange, matches: change)
-        case .frame(let change):
-            return stringPropertyChange(propertyChange, matches: change)
-        case .activationPoint(let change):
-            return stringPropertyChange(propertyChange, matches: change)
-        case .customContent(let change):
-            return stringPropertyChange(propertyChange, matches: change)
-        case .rotors(let change):
-            return stringPropertyChange(propertyChange, matches: change)
+        switch (observed, change) {
+        case (.value(let observed), .value(let change)):
+            return typedPropertyChange(observed, matches: change)
+        case (.traits(let observed), .traits(let change)):
+            return typedPropertyChange(observed, matches: change)
+        case (.hint(let observed), .hint(let change)):
+            return typedPropertyChange(observed, matches: change)
+        case (.actions(let observed), .actions(let change)):
+            return typedPropertyChange(observed, matches: change)
+        case (.frame(let observed), .frame(let change)):
+            return typedPropertyChange(observed, matches: change)
+        case (.activationPoint(let observed), .activationPoint(let change)):
+            return typedPropertyChange(observed, matches: change)
+        case (.customContent(let observed), .customContent(let change)):
+            return typedPropertyChange(observed, matches: change)
+        case (.rotors(let observed), .rotors(let change)):
+            return typedPropertyChange(observed, matches: change)
+        default:
+            return false
         }
     }
 
-    private static func stringPropertyChange<P: ElementPropertyKind>(
-        _ propertyChange: PropertyChange,
+    private static func typedPropertyChange<P: ElementPropertyValueKind>(
+        _ observed: ElementPropertyValueChange<P>,
         matches change: ElementPropertyChange<P>
-    ) -> Bool where P.Checker == StringMatch<String> {
-        if let before = change.before {
-            guard before.matchesPropertyValue(propertyChange.oldValue) else { return false }
-        }
-        if let after = change.after {
-            guard after.matchesPropertyValue(propertyChange.newValue) else { return false }
-        }
-        return true
-    }
-
-    private static func traitPropertyChange(
-        _ propertyChange: PropertyChange,
-        matches change: ElementPropertyChange<TraitsProperty>
     ) -> Bool {
         if let before = change.before {
-            guard before.matchesTraitPropertyValue(propertyChange.oldValue) else { return false }
+            guard P.matches(before, value: observed.old) else { return false }
         }
         if let after = change.after {
-            guard after.matchesTraitPropertyValue(propertyChange.newValue) else { return false }
+            guard P.matches(after, value: observed.new) else { return false }
         }
         return true
     }
@@ -369,33 +357,6 @@ public extension AccessibilityPredicate.Change {
         let properties = changes.map { "\($0.property.rawValue): \($0.displayTransition)" }
         let name = edit.after.label ?? edit.before.label ?? edit.after.description
         return "\(name): \(properties.joined(separator: ", "))"
-    }
-}
-
-private extension StringMatch where Value == String {
-    func matchesPropertyValue(_ candidate: ElementPropertyValue?) -> Bool {
-        guard let candidate = candidate?.stringMatchText else { return false }
-        switch self {
-        case .exact(let pattern):
-            return ElementPredicate.stringEquals(candidate, pattern)
-        case .contains(let pattern):
-            guard !pattern.isEmpty else { return false }
-            return ElementPredicate.stringContains(candidate, pattern)
-        case .prefix(let pattern):
-            guard !pattern.isEmpty else { return false }
-            return ElementPredicate.stringHasPrefix(candidate, pattern)
-        case .suffix(let pattern):
-            guard !pattern.isEmpty else { return false }
-            return ElementPredicate.stringHasSuffix(candidate, pattern)
-        }
-    }
-}
-
-private extension TraitSetMatch {
-    func matchesTraitPropertyValue(_ value: ElementPropertyValue?) -> Bool {
-        guard let traits = value?.traitSet else { return false }
-        return include.allSatisfy { traits.contains($0) }
-            && exclude.allSatisfy { !traits.contains($0) }
     }
 }
 

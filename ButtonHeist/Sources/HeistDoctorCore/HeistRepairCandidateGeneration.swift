@@ -48,9 +48,7 @@ private func deltaEvidenceStrings(_ delta: AccessibilityTrace.Delta?) -> Set<Str
         strings.append(contentsOf: payload.edits.removed.flatMap(identityStrings))
         strings.append(contentsOf: payload.edits.updated.flatMap { update in
             identityStrings(update.before) + identityStrings(update.after) +
-                update.changes.flatMap {
-                    [$0.oldValue?.displayText, $0.newValue?.displayText].compactMap { $0 }
-                }
+                update.changes.flatMap { [$0.oldDisplayText, $0.newDisplayText].compactMap { $0 } }
         })
         strings.append(contentsOf: payload.transient.flatMap(identityStrings))
         return normalizedSet(strings)

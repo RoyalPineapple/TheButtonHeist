@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import AccessibilitySnapshotModel
 @testable import TheScore
@@ -147,7 +148,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             updated: [ElementUpdate(
                 before: makeElement(label: "Counter", value: "1"),
                 after: makeElement(label: "Counter", value: "2"),
-                changes: [PropertyChange(property: .value, oldValue: .text("1"), newValue: .text("2"))]
+                changes: [.value(old: "1", new: "2")]
             )]
         )
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(
@@ -168,6 +169,9 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         try updatedElementJSON.assertMissing("element")
         XCTAssertEqual(try updatedElementJSON.object("before").string("value"), "1")
         XCTAssertEqual(try updatedElementJSON.object("after").string("value"), "2")
+        let changeJSON = try XCTUnwrap(try updatedElementJSON.array("changes").first)
+        XCTAssertEqual(try changeJSON.string("old"), "1")
+        XCTAssertEqual(try changeJSON.string("new"), "2")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -188,6 +192,14 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         """.utf8)
 
         XCTAssertThrowsError(try decoder.decode(AccessibilityTrace.Delta.self, from: json))
+    }
+
+    func testPropertyChangeRejectsMismatchedTypedValues() throws {
+        let json = Data("""
+        {"property":"traits","old":"button","new":["button","selected"]}
+        """.utf8)
+
+        XCTAssertThrowsError(try decoder.decode(PropertyChange.self, from: json))
     }
 
     // MARK: - screenChanged

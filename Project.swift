@@ -134,6 +134,18 @@ let project = Project(
             ]
         ),
 
+        // MARK: - Shared Test Support
+        .target(
+            name: "ButtonHeistTestSupport",
+            destinations: [.iPhone, .iPad, .mac],
+            product: .framework,
+            bundleId: "com.buttonheist.testsupport",
+            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Tests/TestSupport/**"],
+            dependencies: []
+        ),
+
         // MARK: - ThePlans Tests
         .target(
             name: "ThePlansTests",
@@ -158,6 +170,7 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TheScoreTests/**"],
             dependencies: [
+                .target(name: "ButtonHeistTestSupport"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
             ]
@@ -189,6 +202,7 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/ButtonHeistTests/**"],
             dependencies: [
+                .target(name: "ButtonHeistTestSupport"),
                 .target(name: "ButtonHeist"),
                 .target(name: "ThePlans"),
                 .target(name: "TheScore"),
@@ -205,6 +219,7 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Tests/TheInsideJobTests/**"],
             dependencies: [
+                .target(name: "ButtonHeistTestSupport"),
                 .target(name: "ButtonHeistTesting"),
                 .target(name: "TheInsideJob"),
                 .target(name: "ThePlans"),
@@ -223,6 +238,7 @@ let project = Project(
         frameworkScheme(name: "ButtonHeistDSL"),
         frameworkScheme(name: "ButtonHeist"),
         frameworkScheme(name: "ButtonHeistTesting"),
+        frameworkScheme(name: "ButtonHeistTestSupport"),
         frameworkScheme(name: "TheInsideJob"),
         .scheme(
             name: "ThePlansTests",
@@ -238,6 +254,7 @@ let project = Project(
             name: "TheScoreTests",
             buildAction: .buildAction(targets: [
                 .target("TheScoreTests"),
+                .target("ButtonHeistTestSupport"),
                 .target("ThePlans"),
                 .target("TheScore"),
             ]),
@@ -261,6 +278,7 @@ let project = Project(
             name: "ButtonHeistTests",
             buildAction: .buildAction(targets: [
                 .target("ButtonHeistTests"),
+                .target("ButtonHeistTestSupport"),
                 .target("ButtonHeist"),
                 .target("ThePlans"),
                 .target("TheScore"),

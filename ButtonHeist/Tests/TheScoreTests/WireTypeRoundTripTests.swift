@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 import AccessibilitySnapshotModel
@@ -1031,7 +1032,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - PropertyChange / ElementUpdate
 
     func testPropertyChangeRoundTrip() throws {
-        let change = PropertyChange(property: .value, oldValue: .text("OK"), newValue: .text("Cancel"))
+        let change = PropertyChange.value(old: "OK", new: "Cancel")
         let data = try encoder.encode(change)
         let decoded = try decoder.decode(PropertyChange.self, from: data)
         XCTAssertEqual(decoded, change)
@@ -1077,8 +1078,8 @@ final class WireTypeRoundTripTests: XCTestCase {
             before: before,
             after: after,
             changes: [
-                PropertyChange(property: .value, oldValue: .text("A"), newValue: .text("B")),
-                PropertyChange(property: .value, oldValue: nil, newValue: .text("active")),
+                .value(old: "A", new: "B"),
+                .value(old: nil, new: "active"),
             ]
         )
         let data = try encoder.encode(update)

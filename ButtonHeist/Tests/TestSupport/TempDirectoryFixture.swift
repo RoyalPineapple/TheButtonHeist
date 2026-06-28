@@ -2,7 +2,7 @@ import Foundation
 
 /// Runs `body` with a per-test scratch directory under `rootDirectory`.
 @discardableResult
-func withTemporaryDirectory<Result>(
+public func withTemporaryDirectory<Result>(
     prefix: String,
     rootDirectory: URL = FileManager.default.temporaryDirectory,
     _ body: (URL) throws -> Result

@@ -11,7 +11,7 @@ extension TheBrains {
         index: Int,
         path: String,
         start: CFAbsoluteTime,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope? = nil
     ) async -> HeistExecutionStepResult {
@@ -38,7 +38,7 @@ extension TheBrains {
         index _: Int,
         path: String,
         start: CFAbsoluteTime,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope? = nil
     ) async -> HeistExecutionStepResult {
@@ -168,7 +168,7 @@ extension TheBrains {
         receipt: HeistWaitReceipt,
         path: String,
         start: CFAbsoluteTime,
-        runtime: any HeistExecutionRuntime,
+        runtime: HeistExecutionRuntime,
         environment: HeistExecutionEnvironment,
         scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
