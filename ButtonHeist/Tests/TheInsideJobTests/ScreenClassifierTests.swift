@@ -235,9 +235,8 @@ final class ScreenClassifierTests: XCTestCase {
                 )
             }),
             hierarchy: hierarchy,
-            containerNames: [:],
-            heistIdByElement: Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, element in
-                (element, HeistId(rawValue: "element_\(index)"))
+            heistIdsByPath: Dictionary(uniqueKeysWithValues: hierarchy.pathIndexedElements.enumerated().map { index, item in
+                (item.path, HeistId(rawValue: "element_\(index)"))
             }),
             firstResponderHeistId: nil,
         )

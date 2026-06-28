@@ -48,8 +48,6 @@ struct Screen: Equatable {
     ) {
         let liveCapture = LiveCapture(
             hierarchy: hierarchy,
-            containerNames: [:],
-            heistIdByElement: [:],
             elementRefs: elementRefs,
             containerRefsByPath: [:],
             containerContentFramesByPath: [:],
@@ -70,9 +68,7 @@ struct Screen: Equatable {
     init(
         elements: [HeistId: ScreenElement],
         hierarchy: [AccessibilityHierarchy],
-        containerNames: [AccessibilityContainer: ContainerName],
         containerNamesByPath: [TreePath: ContainerName] = [:],
-        heistIdByElement: [AccessibilityElement: HeistId],
         heistIdsByPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef] = [:],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
@@ -83,9 +79,7 @@ struct Screen: Equatable {
     ) {
         let liveCapture = LiveCapture(
             hierarchy: hierarchy,
-            containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
-            heistIdByElement: heistIdByElement,
             heistIdsByPath: heistIdsByPath,
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,

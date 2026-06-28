@@ -570,10 +570,9 @@ final class ScreenTests: XCTestCase {
                 .element(scrolledAway, traversalIndex: 0),
                 .element(visible, traversalIndex: 1)
             ],
-            containerNames: [:],
-            heistIdByElement: [
-                scrolledAway: "button_scrolled_away",
-                visible: "button_visible"
+            heistIdsByPath: [
+                TreePath([0]): "button_scrolled_away",
+                TreePath([1]): "button_visible"
             ],
             firstResponderHeistId: nil,
         )

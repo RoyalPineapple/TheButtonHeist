@@ -18,25 +18,17 @@ import AccessibilitySnapshotParser
 /// It carries weak UIKit refs, live geometry, and per-path lookups but is
 /// **never** unioned across exploration pages and must never be treated as
 /// stable identity. See `docs/ARCHITECTURE.md#state-has-one-owner`.
-    struct LiveCapture: Equatable {
-        let snapshot: Snapshot
-        let dispatchReferences: DispatchReferences
-        private let elementIndex: LiveElementIndex
+struct LiveCapture: Equatable {
+    let snapshot: Snapshot
+    let dispatchReferences: DispatchReferences
+    private let elementIndex: LiveElementIndex
 
     var hierarchy: [AccessibilityHierarchy] {
         snapshot.hierarchy
     }
 
-    var containerNames: [AccessibilityContainer: ContainerName] {
-        snapshot.containerNames
-    }
-
     var containerNamesByPath: [TreePath: ContainerName] {
         snapshot.containerNamesByPath
-    }
-
-    var heistIdByElement: [AccessibilityElement: HeistId] {
-        snapshot.heistIdByElement
     }
 
     var heistIdsByPath: [TreePath: HeistId] {
@@ -69,9 +61,7 @@ import AccessibilitySnapshotParser
 
     init(
         hierarchy: [AccessibilityHierarchy],
-        containerNames: [AccessibilityContainer: ContainerName],
         containerNamesByPath: [TreePath: ContainerName] = [:],
-        heistIdByElement: [AccessibilityElement: HeistId],
         heistIdsByPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
@@ -82,9 +72,7 @@ import AccessibilitySnapshotParser
     ) {
         let snapshot = Snapshot(
             hierarchy: hierarchy,
-            containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
-            heistIdByElement: heistIdByElement,
             heistIdsByPath: heistIdsByPath,
             containerContentFramesByPath: containerContentFramesByPath,
             containerScrollContentLocationsByPath: containerScrollContentLocationsByPath
@@ -195,39 +183,27 @@ import AccessibilitySnapshotParser
     /// lookup tables.
     struct Snapshot: Sendable, Equatable {
         let hierarchy: [AccessibilityHierarchy]
-        let containerNames: [AccessibilityContainer: ContainerName]
         let containerNamesByPath: [TreePath: ContainerName]
-        let heistIdByElement: [AccessibilityElement: HeistId]
         let heistIdsByPath: [TreePath: HeistId]
         let containerContentFramesByPath: [TreePath: CGRect]
         let containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation]
 
         init(
             hierarchy: [AccessibilityHierarchy],
-            containerNames: [AccessibilityContainer: ContainerName],
             containerNamesByPath: [TreePath: ContainerName] = [:],
-            heistIdByElement: [AccessibilityElement: HeistId],
             heistIdsByPath: [TreePath: HeistId] = [:],
             containerContentFramesByPath: [TreePath: CGRect] = [:],
             containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] = [:]
         ) {
             self.hierarchy = hierarchy
-            self.containerNames = containerNames
-            self.containerNamesByPath = containerNamesByPath.isEmpty
-                ? Self.deriveContainerNamesByPath(hierarchy: hierarchy, containerNames: containerNames)
-                : containerNamesByPath
-            self.heistIdByElement = heistIdByElement
-            self.heistIdsByPath = heistIdsByPath.isEmpty
-                ? Self.deriveHeistIdsByPath(hierarchy: hierarchy, heistIdByElement: heistIdByElement)
-                : heistIdsByPath
+            self.containerNamesByPath = containerNamesByPath
+            self.heistIdsByPath = heistIdsByPath
             self.containerContentFramesByPath = containerContentFramesByPath
             self.containerScrollContentLocationsByPath = containerScrollContentLocationsByPath
         }
 
         static let empty = Snapshot(
-            hierarchy: [],
-            containerNames: [:],
-            heistIdByElement: [:]
+            hierarchy: []
         )
 
         var heistIds: Set<HeistId> {
@@ -236,10 +212,6 @@ import AccessibilitySnapshotParser
 
         func contains(heistId: HeistId) -> Bool {
             heistIds.contains(heistId)
-        }
-
-        func heistId(for element: AccessibilityElement) -> HeistId? {
-            heistIdByElement[element]
         }
 
         func element(for heistId: HeistId) -> AccessibilityElement? {
@@ -255,28 +227,6 @@ import AccessibilitySnapshotParser
 
         func containerScrollContentLocation(forPath path: TreePath) -> SemanticScreen.ScrollContentLocation? {
             containerScrollContentLocationsByPath[path]
-        }
-
-        private static func deriveHeistIdsByPath(
-            hierarchy: [AccessibilityHierarchy],
-            heistIdByElement: [AccessibilityElement: HeistId]
-        ) -> [TreePath: HeistId] {
-            Dictionary(
-                uniqueKeysWithValues: hierarchy.pathIndexedElements.compactMap { item in
-                    heistIdByElement[item.element].map { (item.path, $0) }
-                }
-            )
-        }
-
-        private static func deriveContainerNamesByPath(
-            hierarchy: [AccessibilityHierarchy],
-            containerNames: [AccessibilityContainer: ContainerName]
-        ) -> [TreePath: ContainerName] {
-            Dictionary(
-                uniqueKeysWithValues: hierarchy.containerPaths.compactMap { item in
-                    containerNames[item.container].map { (item.path, $0) }
-                }
-            )
         }
     }
 

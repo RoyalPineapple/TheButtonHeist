@@ -100,7 +100,7 @@ extension Screen {
     ) -> Screen {
         var screenElements: [HeistId: ScreenElement] = [:]
         var hierarchy: [AccessibilityHierarchy] = []
-        var heistIdByElement: [AccessibilityElement: HeistId] = [:]
+        var heistIdsByPath: [TreePath: HeistId] = [:]
         var elementRefs: [HeistId: ElementRef] = [:]
         for (index, pair) in liveElements.enumerated() {
             screenElements[pair.heistId] = ScreenElement(
@@ -113,7 +113,7 @@ extension Screen {
                 scrollView: nil
             )
             hierarchy.append(.element(pair.element, traversalIndex: index))
-            heistIdByElement[pair.element] = pair.heistId
+            heistIdsByPath[TreePath([index])] = pair.heistId
         }
         for entry in offViewport {
             screenElements[entry.heistId] = ScreenElement(
@@ -125,8 +125,7 @@ extension Screen {
         return Screen(
             elements: screenElements,
             hierarchy: hierarchy,
-            containerNames: [:],
-            heistIdByElement: heistIdByElement,
+            heistIdsByPath: heistIdsByPath,
             elementRefs: elementRefs,
             firstResponderHeistId: firstResponderHeistId,
         )

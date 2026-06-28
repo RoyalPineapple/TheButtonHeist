@@ -238,9 +238,9 @@ extension TheStash {
 
     /// Looks up the screen entry for a live accessibility element.
     ///
-    /// Because the input is a live element, this first resolves through
-    /// `heistIdByElement`. Off-screen known elements cannot be found with this
-    /// overload.
+    /// Because the input is a live element, this first resolves through the
+    /// latest path-keyed live index. Off-screen known elements cannot be found
+    /// with this overload.
     func screenElement(for element: AccessibilityElement, in scope: InterfaceElementScope) -> ScreenElement? {
         guard let heistId = liveHeistId(for: element) else { return nil }
         return screenElement(heistId: heistId, in: scope)

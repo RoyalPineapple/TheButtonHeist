@@ -51,7 +51,7 @@ final class TheStashResolutionTests: XCTestCase {
 
     /// Register an element into the current Screen. Rebuilds the screen value
     /// on every call so individual tests don't have to think about the
-    /// memberwise init. `Screen.heistIdByElement` is the matcher path lookup.
+    /// memberwise init. `Screen.heistIdsByPath` is the live matcher lookup.
     private func register(_ element: AccessibilityElement, heistId: HeistId, index: Int) {
         hierarchyNodes.append(.element(element, traversalIndex: index))
         registeredEntries.append((element, heistId, true))
@@ -69,7 +69,12 @@ final class TheStashResolutionTests: XCTestCase {
 
     private func rebuildScreen() {
         var elements: [HeistId: Screen.ScreenElement] = [:]
-        var heistIdByElement: [AccessibilityElement: HeistId] = [:]
+        var heistIdsByPath: [TreePath: HeistId] = [:]
+        var liveIndex = 0
+        for entry in registeredEntries where entry.isLive {
+            heistIdsByPath[TreePath([liveIndex])] = entry.heistId
+            liveIndex += 1
+        }
         for entry in registeredEntries {
             let screenElement = Screen.ScreenElement(
                 heistId: entry.heistId,
@@ -77,15 +82,11 @@ final class TheStashResolutionTests: XCTestCase {
                 element: entry.element
             )
             elements[entry.heistId] = screenElement
-            if entry.isLive {
-                heistIdByElement[entry.element] = entry.heistId
-            }
         }
         bagman.installScreenForTesting(Screen(
             elements: elements,
             hierarchy: hierarchyNodes,
-            containerNames: [:],
-            heistIdByElement: heistIdByElement,
+            heistIdsByPath: heistIdsByPath,
             firstResponderHeistId: nil,
         ))
     }
@@ -215,9 +216,8 @@ final class TheStashResolutionTests: XCTestCase {
                     .element(visibleWord, traversalIndex: 0),
                 ]),
             ],
-            containerNames: [container: "scrollable_0_0_50_109"],
             containerNamesByPath: [TreePath([0]): "scrollable_0_0_50_109"],
-            heistIdByElement: [visibleWord: "words_header"],
+            heistIdsByPath: [TreePath([0, 0]): "words_header"],
             firstResponderHeistId: nil,
         )
         var elements = currentVisible.semantic.elements
@@ -413,8 +413,6 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(Screen(
             elements: ["row": staleEntry],
             hierarchy: [],
-            containerNames: [:],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
         ))
 
@@ -427,8 +425,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.recordParsedObservedEvidence(Screen(
             elements: ["row": freshEntry],
             hierarchy: [.element(row, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [row: "row"],
+            heistIdsByPath: [TreePath([0]): "row"],
             firstResponderHeistId: nil,
         ))
 
@@ -453,8 +450,6 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(Screen(
             elements: ["row": staleEntry],
             hierarchy: [],
-            containerNames: [:],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
         ))
 
@@ -466,8 +461,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.recordParsedObservedEvidence(Screen(
             elements: ["row": freshEntry],
             hierarchy: [.element(row, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [row: "row"],
+            heistIdsByPath: [TreePath([0]): "row"],
             firstResponderHeistId: nil,
         ))
 
@@ -671,8 +665,8 @@ final class TheStashResolutionTests: XCTestCase {
                 "known": Screen.ScreenElement(heistId: "known", contentSpaceOrigin: nil, element: known),
             ],
             hierarchy: [.container(container, children: [.element(visible, traversalIndex: 0)])],
-            containerNames: [container: "main_scroll"],
-            heistIdByElement: [visible: "visible"],
+            containerNamesByPath: [TreePath([0]): "main_scroll"],
+            heistIdsByPath: [TreePath([0, 0]): "visible"],
             firstResponderHeistId: nil,
         )
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(screen)
@@ -1112,9 +1106,7 @@ final class TheStashResolutionTests: XCTestCase {
             ),
             liveCapture: LiveCapture(
                 hierarchy: [.container(staleContainer, children: [])],
-                containerNames: [staleContainer: "actions"],
                 containerNamesByPath: [path: "actions"],
-                heistIdByElement: [:],
                 elementRefs: [:],
                 containerRefsByPath: [:],
                 firstResponderHeistId: nil,
@@ -1135,9 +1127,7 @@ final class TheStashResolutionTests: XCTestCase {
             ),
             liveCapture: LiveCapture(
                 hierarchy: [.container(freshContainer, children: [])],
-                containerNames: [freshContainer: "actions"],
                 containerNamesByPath: [path: "actions"],
-                heistIdByElement: [:],
                 elementRefs: [:],
                 containerRefsByPath: [path: .init(object: liveObject)],
                 firstResponderHeistId: nil,
@@ -1697,8 +1687,6 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [],
-            containerNames: [:],
-            heistIdByElement: [:],
             firstResponderHeistId: nil,
         ))
 
@@ -1716,8 +1704,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(offScreen, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [offScreen: entry.heistId],
+            heistIdsByPath: [TreePath([0]): entry.heistId],
             elementRefs: [
                 entry.heistId: .init(object: object, scrollView: scrollView)
             ],
@@ -1753,8 +1740,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(visible, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [visible: entry.heistId],
+            heistIdsByPath: [TreePath([0]): entry.heistId],
             elementRefs: [
                 entry.heistId: .init(object: object, scrollView: scrollView)
             ],

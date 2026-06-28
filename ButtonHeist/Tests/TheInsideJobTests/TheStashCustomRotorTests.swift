@@ -323,8 +323,7 @@ final class TheStashRotorTests: XCTestCase {
         stash.installScreenForTesting(Screen(
             elements: [screenElement.heistId: screenElement],
             hierarchy: [.element(element, traversalIndex: 0)],
-            containerNames: [:],
-            heistIdByElement: [element: screenElement.heistId],
+            heistIdsByPath: [TreePath([0]): screenElement.heistId],
             elementRefs: [
                 screenElement.heistId: .init(object: host, scrollView: nil)
             ],
