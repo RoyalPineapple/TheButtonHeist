@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 import ThePlans
 @testable import ButtonHeist
@@ -623,7 +624,269 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertNil(skipped.reportExpectation)
     }
 
+    func testPublicHeistEvidenceProjectionEncodesExactlyOneVariantPerEvidenceCase() throws {
+        let plan = try evidenceProjectionPlan()
+        for testCase in evidenceProjectionCases() {
+            let projection = HeistReportNodeProjection(step: testCase.step, profile: .mcp)
+            XCTAssertEqual(projectedEvidenceKey(projection.evidence), testCase.expectedKey, testCase.name)
+
+            let response = FenceResponse.heistExecution(
+                plan: plan,
+                result: HeistExecutionResult(steps: [testCase.step], durationMs: testCase.step.durationMs)
+            )
+            let json = publicJSONObject(response)
+            let report = try XCTUnwrap(json["report"] as? [String: Any], testCase.name)
+            let nodes = try XCTUnwrap(report["nodes"] as? [[String: Any]], testCase.name)
+            let node = try XCTUnwrap(nodes.first, testCase.name)
+            let evidence = try XCTUnwrap(node["evidence"] as? [String: Any], testCase.name)
+
+            XCTAssertEqual(Set(evidence.keys), Set([testCase.expectedKey]), testCase.name)
+            let payload = try XCTUnwrap(evidence[testCase.expectedKey] as? [String: Any], testCase.name)
+            try testCase.assertPayload(payload)
+        }
+    }
+
     // MARK: - Fixtures
+
+    private typealias EvidenceProjectionCase = (
+        name: String,
+        step: HeistExecutionStepResult,
+        expectedKey: String,
+        assertPayload: ([String: Any]) throws -> Void
+    )
+
+    private func evidenceProjectionCases() -> [EvidenceProjectionCase] {
+        [
+            actionEvidenceProjectionCase(),
+            waitEvidenceProjectionCase(),
+            caseSelectionEvidenceProjectionCase(),
+            forEachStringEvidenceProjectionCase(),
+            forEachElementEvidenceProjectionCase(),
+            repeatUntilEvidenceProjectionCase(),
+            heistInvocationEvidenceProjectionCase(),
+            invokeInvocationEvidenceProjectionCase(),
+            warningEvidenceProjectionCase(),
+        ]
+    }
+
+    private func evidenceProjectionPlan() throws -> HeistPlan {
+        try HeistPlan(body: [
+            try HeistStep.action(ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Button")))))),
+        ])
+    }
+
+    private func evidenceProjectionPredicate() -> AccessibilityPredicate {
+        .state(.exists(ElementPredicate(label: "Ready")))
+    }
+
+    private func actionEvidenceProjectionCase() -> EvidenceProjectionCase {
+        (
+            name: "action",
+            step: actionStep(
+                command: .activate(.target(.predicate(ElementPredicate(label: "Button")))),
+                actionResult: ActionResult(success: true, method: .activate)
+            ),
+            expectedKey: "action",
+            assertPayload: { payload in
+                XCTAssertEqual(payload["commandName"] as? String, "activate")
+                _ = try XCTUnwrap(payload["result"] as? [String: Any])
+            }
+        )
+    }
+
+    private func waitEvidenceProjectionCase() -> EvidenceProjectionCase {
+        (
+            name: "wait",
+            step: waitStep(
+                actionResult: ActionResult(success: true, method: .wait),
+                expectation: ExpectationResult(met: true, predicate: evidenceProjectionPredicate())
+            ),
+            expectedKey: "wait",
+            assertPayload: { payload in
+                _ = try XCTUnwrap(payload["result"] as? [String: Any])
+                _ = try XCTUnwrap(payload["expectation"] as? [String: Any])
+            }
+        )
+    }
+
+    private func caseSelectionEvidenceProjectionCase() -> EvidenceProjectionCase {
+        let predicate = evidenceProjectionPredicate()
+        return (
+            name: "caseSelection",
+            step: caseStep(
+                kind: .conditional,
+                selection: HeistCaseSelectionResult(
+                    cases: [caseMatch(predicate, met: true)],
+                    outcome: .matchedCase(index: 0),
+                    elapsedMs: 3
+                )
+            ),
+            expectedKey: "caseSelection",
+            assertPayload: { payload in
+                XCTAssertEqual(payload["caseCount"] as? Int, 1)
+                _ = try XCTUnwrap(payload["cases"] as? [[String: Any]])
+            }
+        )
+    }
+
+    private func forEachStringEvidenceProjectionCase() -> EvidenceProjectionCase {
+        (
+            name: "forEachString",
+            step: HeistExecutionStepResult(
+                path: "$.body[0]",
+                kind: .forEachString,
+                status: .passed,
+                durationMs: 4,
+                intent: .forEachString(parameter: "item", count: 2),
+                evidence: .forEachString(HeistForEachStringEvidence(
+                    parameter: "item",
+                    count: 2,
+                    iterationCount: 1,
+                    value: "Milk"
+                ))
+            ),
+            expectedKey: "forEachString",
+            assertPayload: { payload in
+                XCTAssertEqual(payload["parameter"] as? String, "item")
+                XCTAssertEqual(payload["value"] as? String, "Milk")
+            }
+        )
+    }
+
+    private func forEachElementEvidenceProjectionCase() -> EvidenceProjectionCase {
+        (
+            name: "forEachElement",
+            step: HeistExecutionStepResult(
+                path: "$.body[0]",
+                kind: .forEachElement,
+                status: .passed,
+                durationMs: 5,
+                intent: .forEachElement(parameter: "row", matching: "label=Row", limit: 3),
+                evidence: .forEachElement(HeistForEachElementEvidence(
+                    parameter: "row",
+                    matching: ElementPredicate(label: "Row"),
+                    limit: 3,
+                    matchedCount: 2,
+                    iterationCount: 2,
+                    targetOrdinal: 1,
+                    targetSummary: "\"Row\" staticText"
+                ))
+            ),
+            expectedKey: "forEachElement",
+            assertPayload: { payload in
+                XCTAssertEqual(payload["parameter"] as? String, "row")
+                XCTAssertEqual(payload["matchedCount"] as? Int, 2)
+                XCTAssertEqual(payload["targetSummary"] as? String, "\"Row\" staticText")
+            }
+        )
+    }
+
+    private func repeatUntilEvidenceProjectionCase() -> EvidenceProjectionCase {
+        let predicate = evidenceProjectionPredicate()
+        return (
+            name: "repeatUntil",
+            step: HeistExecutionStepResult(
+                path: "$.body[0]",
+                kind: .repeatUntil,
+                status: .passed,
+                durationMs: 6,
+                intent: .repeatUntil(predicate: predicate.description, timeout: 2),
+                evidence: .repeatUntil(HeistRepeatUntilEvidence(
+                    predicate: predicate,
+                    timeout: 2,
+                    iterationCount: 1,
+                    expectation: ExpectationResult(met: true, predicate: predicate),
+                    actionResult: ActionResult(success: true, method: .wait),
+                    lastObservedSummary: "Ready"
+                ))
+            ),
+            expectedKey: "repeatUntil",
+            assertPayload: { payload in
+                XCTAssertEqual((payload["timeout"] as? NSNumber)?.doubleValue, 2.0)
+                XCTAssertEqual(payload["iterationCount"] as? Int, 1)
+                XCTAssertEqual(payload["lastObservedSummary"] as? String, "Ready")
+            }
+        )
+    }
+
+    private func heistInvocationEvidenceProjectionCase() -> EvidenceProjectionCase {
+        (
+            name: "heistInvocation",
+            step: HeistExecutionStepResult(
+                path: "$.body[0]",
+                kind: .heist,
+                status: .passed,
+                durationMs: 7,
+                intent: .heist(name: "Nested"),
+                evidence: .invocation(HeistInvocationEvidence(name: "Nested"))
+            ),
+            expectedKey: "invocation",
+            assertPayload: { payload in
+                XCTAssertEqual(payload["name"] as? String, "Nested")
+            }
+        )
+    }
+
+    private func invokeInvocationEvidenceProjectionCase() -> EvidenceProjectionCase {
+        let invocation = HeistInvocationStep(
+            path: ["LibraryScreen", "addToCart"],
+            argument: .string(.literal("Milk"))
+        )
+        return (
+            name: "invokeInvocation",
+            step: HeistExecutionStepResult(
+                path: "$.body[0]",
+                kind: .invoke,
+                status: .passed,
+                durationMs: 8,
+                intent: .invoke(path: "LibraryScreen.addToCart", argument: "Milk"),
+                evidence: .invocation(HeistInvocationEvidence(
+                    invocation: invocation,
+                    name: "LibraryScreen.addToCart",
+                    argument: "Milk"
+                ))
+            ),
+            expectedKey: "invocation",
+            assertPayload: { payload in
+                XCTAssertEqual(payload["capability"] as? String, "LibraryScreen.addToCart")
+                XCTAssertEqual(payload["argument"] as? String, "Milk")
+            }
+        )
+    }
+
+    private func warningEvidenceProjectionCase() -> EvidenceProjectionCase {
+        (
+            name: "warning",
+            step: warnStep(message: "Heads up"),
+            expectedKey: "warning",
+            assertPayload: { payload in
+                XCTAssertEqual(payload["path"] as? String, "$.body[0]")
+                XCTAssertEqual(payload["message"] as? String, "Heads up")
+            }
+        )
+    }
+
+    private func projectedEvidenceKey(_ evidence: HeistReportEvidenceProjection?) -> String? {
+        guard let evidence else { return nil }
+        switch evidence {
+        case .action:
+            return "action"
+        case .wait:
+            return "wait"
+        case .caseSelection:
+            return "caseSelection"
+        case .forEachString:
+            return "forEachString"
+        case .forEachElement:
+            return "forEachElement"
+        case .repeatUntil:
+            return "repeatUntil"
+        case .invocation:
+            return "invocation"
+        case .warning:
+            return "warning"
+        }
+    }
 
     private func actionStep(
         path: String = "$.body[0]",

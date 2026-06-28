@@ -821,56 +821,41 @@ struct HeistReportNodeProjection: Sendable {
     }
 }
 
-struct HeistReportEvidenceProjection: Sendable {
-    let action: HeistActionEvidenceProjection?
-    let wait: HeistWaitEvidenceProjection?
-    let caseSelection: HeistCaseSelectionEvidenceProjection?
-    let forEachString: HeistForEachStringEvidenceProjection?
-    let forEachElement: HeistForEachElementEvidenceProjection?
-    let repeatUntil: HeistRepeatUntilEvidenceProjection?
-    let invocation: HeistInvocationEvidenceProjection?
-    let warning: HeistWarningEvidenceProjection?
+enum HeistReportEvidenceProjection: Sendable {
+    case action(HeistActionEvidenceProjection)
+    case wait(HeistWaitEvidenceProjection)
+    case caseSelection(HeistCaseSelectionEvidenceProjection)
+    case forEachString(HeistForEachStringEvidenceProjection)
+    case forEachElement(HeistForEachElementEvidenceProjection)
+    case repeatUntil(HeistRepeatUntilEvidenceProjection)
+    case invocation(HeistInvocationEvidenceProjection)
+    case warning(HeistWarningEvidenceProjection)
 
     init?(step: HeistExecutionStepResult, profile: ProjectionProfile) {
         guard let evidence = step.evidence else { return nil }
         switch evidence {
         case .action(let evidence):
-            self.init(action: HeistActionEvidenceProjection(evidence: evidence, profile: profile))
+            self = .action(HeistActionEvidenceProjection(evidence: evidence, profile: profile))
         case .wait(let evidence):
-            self.init(wait: HeistWaitEvidenceProjection(evidence: evidence, profile: profile))
+            self = .wait(HeistWaitEvidenceProjection(evidence: evidence, profile: profile))
         case .caseSelection(let evidence):
-            self.init(caseSelection: HeistCaseSelectionEvidenceProjection(evidence: evidence, profile: profile))
+            self = .caseSelection(HeistCaseSelectionEvidenceProjection(evidence: evidence, profile: profile))
         case .forEachString(let evidence):
-            self.init(forEachString: HeistForEachStringEvidenceProjection(evidence: evidence))
+            self = .forEachString(HeistForEachStringEvidenceProjection(evidence: evidence))
         case .forEachElement(let evidence):
-            self.init(forEachElement: HeistForEachElementEvidenceProjection(evidence: evidence))
+            self = .forEachElement(HeistForEachElementEvidenceProjection(evidence: evidence))
         case .repeatUntil(let evidence):
-            self.init(repeatUntil: HeistRepeatUntilEvidenceProjection(evidence: evidence, profile: profile))
+            self = .repeatUntil(HeistRepeatUntilEvidenceProjection(evidence: evidence, profile: profile))
         case .invocation(let evidence):
-            self.init(invocation: HeistInvocationEvidenceProjection(evidence: evidence, profile: profile))
+            self = .invocation(HeistInvocationEvidenceProjection(evidence: evidence, profile: profile))
         case .warning(let warning):
-            self.init(warning: HeistWarningEvidenceProjection(warning: warning))
+            self = .warning(HeistWarningEvidenceProjection(warning: warning))
         }
     }
 
-    private init(
-        action: HeistActionEvidenceProjection? = nil,
-        wait: HeistWaitEvidenceProjection? = nil,
-        caseSelection: HeistCaseSelectionEvidenceProjection? = nil,
-        forEachString: HeistForEachStringEvidenceProjection? = nil,
-        forEachElement: HeistForEachElementEvidenceProjection? = nil,
-        repeatUntil: HeistRepeatUntilEvidenceProjection? = nil,
-        invocation: HeistInvocationEvidenceProjection? = nil,
-        warning: HeistWarningEvidenceProjection? = nil
-    ) {
-        self.action = action
-        self.wait = wait
-        self.caseSelection = caseSelection
-        self.forEachString = forEachString
-        self.forEachElement = forEachElement
-        self.repeatUntil = repeatUntil
-        self.invocation = invocation
-        self.warning = warning
+    var warning: HeistWarningEvidenceProjection? {
+        guard case .warning(let warning) = self else { return nil }
+        return warning
     }
 }
 

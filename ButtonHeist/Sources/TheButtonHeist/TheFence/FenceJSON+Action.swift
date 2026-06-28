@@ -336,7 +336,7 @@ struct PublicHeistReportNode: Encodable {
         self.message = projection.message
         self.durationMs = projection.durationMs
         self.intent = projection.intent
-        self.evidence = projection.evidence.flatMap { PublicHeistReportEvidence(projection: $0) }
+        self.evidence = projection.evidence.map { PublicHeistReportEvidence(projection: $0) }
         self.failure = projection.failure
         self.abortedAtChildPath = projection.abortedAtChildPath
         self.expectation = projection.expectation.map { PublicExpectationResult(projection: $0) }
@@ -345,47 +345,43 @@ struct PublicHeistReportNode: Encodable {
 }
 
 struct PublicHeistReportEvidence: Encodable {
-    let action: PublicHeistActionEvidence?
-    let wait: PublicHeistWaitEvidence?
-    let caseSelection: PublicHeistCaseSelectionEvidence?
-    let forEachString: PublicHeistForEachStringEvidence?
-    let forEachElement: PublicHeistForEachElementEvidence?
-    let repeatUntil: PublicHeistRepeatUntilEvidence?
-    let invocation: PublicHeistInvocationEvidence?
-    let warning: PublicHeistWarningEvidence?
+    private let projection: HeistReportEvidenceProjection
 
-    init?(projection: HeistReportEvidenceProjection?) {
-        guard let projection else { return nil }
-        self.init(
-            action: projection.action.map { PublicHeistActionEvidence(projection: $0) },
-            wait: projection.wait.map { PublicHeistWaitEvidence(projection: $0) },
-            caseSelection: projection.caseSelection.map { PublicHeistCaseSelectionEvidence(projection: $0) },
-            forEachString: projection.forEachString.map { PublicHeistForEachStringEvidence(projection: $0) },
-            forEachElement: projection.forEachElement.map { PublicHeistForEachElementEvidence(projection: $0) },
-            repeatUntil: projection.repeatUntil.map { PublicHeistRepeatUntilEvidence(projection: $0) },
-            invocation: projection.invocation.map { PublicHeistInvocationEvidence(projection: $0) },
-            warning: projection.warning.map { PublicHeistWarningEvidence(projection: $0) }
-        )
+    init(projection: HeistReportEvidenceProjection) {
+        self.projection = projection
     }
 
-    private init(
-        action: PublicHeistActionEvidence? = nil,
-        wait: PublicHeistWaitEvidence? = nil,
-        caseSelection: PublicHeistCaseSelectionEvidence? = nil,
-        forEachString: PublicHeistForEachStringEvidence? = nil,
-        forEachElement: PublicHeistForEachElementEvidence? = nil,
-        repeatUntil: PublicHeistRepeatUntilEvidence? = nil,
-        invocation: PublicHeistInvocationEvidence? = nil,
-        warning: PublicHeistWarningEvidence? = nil
-    ) {
-        self.action = action
-        self.wait = wait
-        self.caseSelection = caseSelection
-        self.forEachString = forEachString
-        self.forEachElement = forEachElement
-        self.repeatUntil = repeatUntil
-        self.invocation = invocation
-        self.warning = warning
+    private enum CodingKeys: String, CodingKey {
+        case action
+        case wait
+        case caseSelection
+        case forEachString
+        case forEachElement
+        case repeatUntil
+        case invocation
+        case warning
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch projection {
+        case .action(let projection):
+            try container.encode(PublicHeistActionEvidence(projection: projection), forKey: .action)
+        case .wait(let projection):
+            try container.encode(PublicHeistWaitEvidence(projection: projection), forKey: .wait)
+        case .caseSelection(let projection):
+            try container.encode(PublicHeistCaseSelectionEvidence(projection: projection), forKey: .caseSelection)
+        case .forEachString(let projection):
+            try container.encode(PublicHeistForEachStringEvidence(projection: projection), forKey: .forEachString)
+        case .forEachElement(let projection):
+            try container.encode(PublicHeistForEachElementEvidence(projection: projection), forKey: .forEachElement)
+        case .repeatUntil(let projection):
+            try container.encode(PublicHeistRepeatUntilEvidence(projection: projection), forKey: .repeatUntil)
+        case .invocation(let projection):
+            try container.encode(PublicHeistInvocationEvidence(projection: projection), forKey: .invocation)
+        case .warning(let projection):
+            try container.encode(PublicHeistWarningEvidence(projection: projection), forKey: .warning)
+        }
     }
 }
 
