@@ -72,6 +72,49 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(configuration, expected)
     }
 
+    func testInfoPlistBoundaryParsesTypedShapes() {
+        let configuration = StartupConfiguration.resolve(
+            env: [:],
+            infoDictionary: [
+                "InsideJobDisableAutoStart": "yes",
+                "InsideJobPort": 5151.0,
+                "InsideJobScope": "simulator,network",
+                "InsideJobSessionTimeout": " 120.5 "
+            ]
+        )
+
+        XCTAssertEqual(configuration.disableAutoStart, ResolvedStartupValue(value: true, source: .infoPlist))
+        XCTAssertEqual(configuration.preferredPort, ResolvedStartupValue(value: 5151, source: .infoPlist))
+        XCTAssertEqual(configuration.allowedScopes, ResolvedStartupValue(value: [.simulator, .network], source: .infoPlist))
+        XCTAssertEqual(configuration.sessionTimeout, ResolvedStartupValue(value: 120.5, source: .infoPlist))
+        XCTAssertEqual(configuration.warnings, [])
+    }
+
+    func testMalformedInfoPlistValuesFallBackWithWarnings() {
+        let configuration = StartupConfiguration.resolve(
+            env: [:],
+            infoDictionary: [
+                "InsideJobDisableAutoStart": ["true"],
+                "InsideJobToken": 42,
+                "InsideJobPort": 12.5,
+                "InsideJobScope": ["simulator", "bogus"],
+                "InsideJobSessionTimeout": "soon"
+            ]
+        )
+
+        XCTAssertEqual(configuration.disableAutoStart, ResolvedStartupValue(value: false, source: .defaultValue))
+        XCTAssertEqual(configuration.token, ResolvedStartupValue(value: nil, source: .generated))
+        XCTAssertEqual(configuration.preferredPort, ResolvedStartupValue(value: 0, source: .defaultValue))
+        XCTAssertEqual(configuration.allowedScopes, ResolvedStartupValue(value: ConnectionScope.default, source: .defaultValue))
+        XCTAssertEqual(configuration.sessionTimeout, ResolvedStartupValue(value: 30.0, source: .defaultValue))
+        XCTAssertEqual(configuration.warnings, [
+            .invalidValueIgnored(key: "InsideJobDisableAutoStart", source: .infoPlist, value: "[\"true\"]"),
+            .invalidValueIgnored(key: "InsideJobPort", source: .infoPlist, value: "12.5"),
+            .invalidValueIgnored(key: "InsideJobScope", source: .infoPlist, value: "[\"simulator\", \"bogus\"]"),
+            .invalidValueIgnored(key: "InsideJobSessionTimeout", source: .infoPlist, value: "soon")
+        ])
+    }
+
     func testEmptyTokenAndInstanceIdAreIgnoredWithWarnings() {
         let configuration = StartupConfiguration.resolve(
             env: [
