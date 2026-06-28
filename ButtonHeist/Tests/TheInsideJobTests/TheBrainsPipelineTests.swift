@@ -905,10 +905,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
         guard let container = brains.stash.latestObservedLiveHierarchy.containerPaths.first(where: {
             guard $0.container.isScrollable else { return false }
-            guard let view = brains.stash.liveScrollableContainerView(forPath: $0.path) else { return true }
-            return !(view is UIScrollView)
+            return brains.stash.liveScrollableContainerView(forPath: $0.path) == nil
         }) else {
-            throw XCTSkip("No non-UIScrollView scrollable container in host UI")
+            throw XCTSkip("No semantic-only scrollable container in host UI")
         }
 
         let exploration = await brains.navigation.exploreScreen()

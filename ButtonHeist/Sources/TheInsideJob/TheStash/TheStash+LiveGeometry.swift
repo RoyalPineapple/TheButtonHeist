@@ -96,7 +96,7 @@ extension TheStash {
             ancestorIndices.removeLast()
             guard !ancestorIndices.isEmpty else { break }
             let ancestorPath = TreePath(ancestorIndices)
-            let scrollView = liveScrollableContainerView(forPath: ancestorPath) as? UIScrollView
+            let scrollView = liveScrollableContainerView(forPath: ancestorPath)
             if let scrollView {
                 return scrollView
             }

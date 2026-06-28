@@ -134,7 +134,7 @@ extension Navigation {
     ) -> ScrollableTarget? {
         let cgContentSize = contentSize.cgSize
         if let path,
-           let scrollView = stash.liveScrollableContainerView(forPath: path) as? UIScrollView {
+           let scrollView = stash.liveScrollableContainerView(forPath: path) {
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return .uiScrollView(scrollView)
         }

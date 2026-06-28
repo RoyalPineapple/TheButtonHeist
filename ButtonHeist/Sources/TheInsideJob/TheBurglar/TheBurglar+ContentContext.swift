@@ -31,7 +31,7 @@ extension TheBurglar {
 
     static func buildContainerIdentityContext(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViewsByPath: [TreePath: UIView] = [:]
+        scrollableContainerViewsByPath: [TreePath: UIScrollView] = [:]
     ) -> ContainerIdentityContext {
         var accumulator = ContainerIdentityAccumulator()
         for (index, node) in hierarchy.enumerated() {
@@ -55,7 +55,7 @@ extension TheBurglar {
         node: AccessibilityHierarchy,
         path: TreePath,
         parentScrollContext: ScrollContext?,
-        scrollableContainerViewsByPath: [TreePath: UIView],
+        scrollableContainerViewsByPath: [TreePath: UIScrollView],
         accumulator: inout ContainerIdentityAccumulator
     ) {
         guard case .container(let container, let children) = node else { return }
@@ -74,7 +74,7 @@ extension TheBurglar {
         }
         accumulator.contentFramesByPath[path] = contentFrame
 
-        if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView,
+        if let scrollView = scrollableContainerViewsByPath[path],
            !scrollView.bhIsUnsafeForProgrammaticScrolling {
             let childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             for (index, child) in children.enumerated() {
@@ -114,7 +114,7 @@ extension TheBurglar {
 
     static func buildElementContextsByPath(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViewsByPath: [TreePath: UIView] = [:]
+        scrollableContainerViewsByPath: [TreePath: UIScrollView] = [:]
     ) -> [TreePath: ElementContext] {
         var contextsByPath: [TreePath: ElementContext] = [:]
         for (index, node) in hierarchy.enumerated() {
@@ -133,7 +133,7 @@ extension TheBurglar {
         node: AccessibilityHierarchy,
         path: TreePath,
         parentScrollContext: ScrollContext?,
-        scrollableContainerViewsByPath: [TreePath: UIView],
+        scrollableContainerViewsByPath: [TreePath: UIScrollView],
         byPath contextsByPath: inout [TreePath: ElementContext]
     ) {
         switch node {
@@ -152,7 +152,7 @@ extension TheBurglar {
             contextsByPath[path] = context
         case .container(_, let children):
             let childScrollContext: ScrollContext?
-            if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView,
+            if let scrollView = scrollableContainerViewsByPath[path],
                !scrollView.bhIsUnsafeForProgrammaticScrolling {
                 childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             } else {

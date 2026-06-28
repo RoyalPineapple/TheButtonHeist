@@ -35,14 +35,14 @@ final class TheBurglar {
         let hierarchy: [AccessibilityHierarchy]
         let objectsByPath: [TreePath: NSObject]
         let containerObjectsByPath: [TreePath: NSObject]
-        let scrollViewsByPath: [TreePath: UIView]
+        let scrollViewsByPath: [TreePath: UIScrollView]
         let screenCoordinateOffsetsByPath: [TreePath: CGPoint]
 
         init(
             hierarchy: [AccessibilityHierarchy],
             objectsByPath: [TreePath: NSObject] = [:],
             containerObjectsByPath: [TreePath: NSObject] = [:],
-            scrollViewsByPath: [TreePath: UIView] = [:],
+            scrollViewsByPath: [TreePath: UIScrollView] = [:],
             screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:]
         ) {
             self.hierarchy = hierarchy
@@ -81,7 +81,7 @@ final class TheBurglar {
         var allHierarchy: [AccessibilityHierarchy] = []
         var objectsByPath: [TreePath: NSObject] = [:]
         var containerObjectsByPath: [TreePath: NSObject] = [:]
-        var scrollViewsByPath: [TreePath: UIView] = [:]
+        var scrollViewsByPath: [TreePath: UIScrollView] = [:]
         var screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:]
 
         let isMultiWindow = windows.count > 1
@@ -185,7 +185,7 @@ final class TheBurglar {
         at path: TreePath,
         objectsByPath: inout [TreePath: NSObject],
         containerObjectsByPath: inout [TreePath: NSObject],
-        scrollViewsByPath: inout [TreePath: UIView]
+        scrollViewsByPath: inout [TreePath: UIScrollView]
     ) {
         switch node {
         case let .element(_, _, source):

@@ -49,7 +49,7 @@ extension TheStash {
         liveLookup.containerName(forPath: path)
     }
 
-    func liveScrollableContainerView(forPath path: TreePath) -> UIView? {
+    func liveScrollableContainerView(forPath path: TreePath) -> UIScrollView? {
         liveLookup.scrollableContainerView(forPath: path)
     }
 

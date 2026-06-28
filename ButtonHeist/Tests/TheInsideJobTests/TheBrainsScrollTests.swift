@@ -71,11 +71,9 @@ final class TheBrainsScrollTests: XCTestCase {
             throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
         }
 
-        let unsafeTargets = brains.stash.scrollableContainerViewsByPath.values.compactMap { view -> UIScrollView? in
-            guard let scrollView = view as? UIScrollView,
-                  scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
-            return scrollView
-        }
+        let unsafeTargets = brains.stash.scrollableContainerViewsByPath.values.filter(
+            \.bhIsUnsafeForProgrammaticScrolling
+        )
         let unsafeOffsets = Dictionary(
             uniqueKeysWithValues: unsafeTargets.map { (ObjectIdentifier($0), $0.contentOffset) }
         )
@@ -1673,39 +1671,32 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - safeSwipeFrame
 
-    func testScrollableTargetUsesAccessibilityContainerFrameWhenBackingViewFrameDiffers() throws {
-        let windowScene = try requireForegroundWindowScene()
+    func testScrollableTargetUsesAccessibilityContainerFrameForSemanticOnlySwipeFallback() throws {
         let captureFrame = CGRect(x: 40, y: 120, width: 240, height: 360)
-        let backingViewFrame = CGRect(x: 12, y: 520, width: 80, height: 90)
         let contentSize = AccessibilitySize(width: 320, height: 2000)
         let container = AccessibilityContainer(
             type: .scrollable(contentSize: contentSize),
             frame: AccessibilityRect(captureFrame)
         )
-        let backingView = UIView(frame: backingViewFrame)
-        let window = UIWindow(windowScene: windowScene)
-        window.frame = UIScreen.main.bounds
-        window.addSubview(backingView)
-        window.isHidden = false
-        defer {
-            window.isHidden = true
-        }
+        let path = TreePath([0])
         brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
-            firstResponderHeistId: nil,
-            scrollableContainerViewsByPath: [TreePath([0]): .init(view: backingView)]
+            firstResponderHeistId: nil
         ))
 
-        let target = try XCTUnwrap(brains.navigation.scrollableTarget(for: container, contentSize: contentSize))
+        let target = try XCTUnwrap(brains.navigation.scrollableTarget(
+            for: container,
+            path: path,
+            contentSize: contentSize
+        ))
 
         guard case .swipeable(let frame, let resolvedContentSize) = target else {
-            XCTFail("Expected non-UIScrollView container to use swipeable accessibility geometry")
+            XCTFail("Expected semantic-only scroll container to use swipeable accessibility geometry")
             return
         }
         XCTAssertEqual(frame, captureFrame)
         XCTAssertEqual(resolvedContentSize, contentSize.cgSize)
-        XCTAssertNotEqual(frame, backingViewFrame)
     }
 
     func testScrollableTargetUsesPathKeyedLiveScrollView() throws {

@@ -127,10 +127,10 @@ final class TheStash {
         liveLookup.hierarchy
     }
 
-    /// Scrollable container paths paired with their backing UIView from the
+    /// Scrollable container paths paired with their backing UIScrollView from the
     /// visible live view. Unwraps the weak ref wrapper for call sites that need
-    /// a live UIView.
-    var scrollableContainerViewsByPath: [TreePath: UIView] {
+    /// a live scroll view.
+    var scrollableContainerViewsByPath: [TreePath: UIScrollView] {
         liveLookup.scrollableContainerViewsByPath
     }
 

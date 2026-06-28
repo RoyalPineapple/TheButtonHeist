@@ -50,19 +50,19 @@ extension ServerMessage {
     /// type tag and (optional) payload value. Used by both encode sites in
     /// this file. Adding a new case requires extending this switch — Swift's
     /// exhaustivity check is the drift detector.
-    fileprivate var wireRepresentation: (type: ServerWireMessageType, payload: (any Encodable)?) {
+    fileprivate var wireRepresentation: (type: ServerWireMessageType, payload: ServerMessageWirePayload?) {
         switch self {
         case .serverHello: return (.serverHello, nil)
         case .authRequired: return (.authRequired, nil)
-        case .pong(let payload): return (.pong, payload)
-        case .protocolMismatch(let payload): return (.protocolMismatch, payload)
-        case .error(let payload): return (.error, payload)
-        case .sessionLocked(let payload): return (.sessionLocked, payload)
-        case .info(let payload): return (.info, payload)
-        case .interface(let payload): return (.interface, payload)
-        case .actionResult(let payload): return (.actionResult, payload)
-        case .screen(let payload): return (.screen, payload)
-        case .status(let payload): return (.status, payload)
+        case .pong(let payload): return (.pong, .pong(payload))
+        case .protocolMismatch(let payload): return (.protocolMismatch, .protocolMismatch(payload))
+        case .error(let payload): return (.error, .error(payload))
+        case .sessionLocked(let payload): return (.sessionLocked, .sessionLocked(payload))
+        case .info(let payload): return (.info, .info(payload))
+        case .interface(let payload): return (.interface, .interface(payload))
+        case .actionResult(let payload): return (.actionResult, .actionResult(payload))
+        case .screen(let payload): return (.screen, .screen(payload))
+        case .status(let payload): return (.status, .status(payload))
         }
     }
 
@@ -121,6 +121,41 @@ extension ServerMessage {
 }
 
 // MARK: - Helpers
+
+private enum ServerMessageWirePayload {
+    case pong(PongPayload)
+    case protocolMismatch(ProtocolMismatchPayload)
+    case error(ServerError)
+    case sessionLocked(SessionLockedPayload)
+    case info(ServerInfo)
+    case interface(Interface)
+    case actionResult(ActionResult)
+    case screen(ScreenPayload)
+    case status(StatusPayload)
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .pong(let payload):
+            try payload.encode(to: encoder)
+        case .protocolMismatch(let payload):
+            try payload.encode(to: encoder)
+        case .error(let payload):
+            try payload.encode(to: encoder)
+        case .sessionLocked(let payload):
+            try payload.encode(to: encoder)
+        case .info(let payload):
+            try payload.encode(to: encoder)
+        case .interface(let payload):
+            try payload.encode(to: encoder)
+        case .actionResult(let payload):
+            try payload.encode(to: encoder)
+        case .screen(let payload):
+            try payload.encode(to: encoder)
+        case .status(let payload):
+            try payload.encode(to: encoder)
+        }
+    }
+}
 
 private func missingServerPayload(_ type: ServerWireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
     .missingPayload(key: ServerMessageCodingKeys.payload, type: type, codingPath: codingPath)
