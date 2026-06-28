@@ -10,6 +10,30 @@ enum TestInterfaceNode {
     case element(AccessibilityElement, actions: [ElementAction] = [])
     case container(AccessibilityContainer, containerName: ContainerName? = nil, children: [TestInterfaceNode])
 
+    static func heistElement(
+        label: String? = "Element",
+        value: String? = nil,
+        identifier: String? = nil,
+        traits: [HeistTrait] = [.staticText],
+        frameX: Double = 0,
+        frameY: Double = 0,
+        frameWidth: Double = 100,
+        frameHeight: Double = 44,
+        actions: [ElementAction]? = nil
+    ) -> TestInterfaceNode {
+        .heistElement(makeTestHeistElement(
+            label: label,
+            value: value,
+            identifier: identifier,
+            traits: traits,
+            frameX: frameX,
+            frameY: frameY,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight,
+            actions: actions
+        ))
+    }
+
     static func heistElement(_ element: HeistElement) -> TestInterfaceNode {
         .element(
             AccessibilityElement(
@@ -107,6 +131,30 @@ func testElement(_ element: HeistElement) -> TestInterfaceNode {
     .heistElement(element)
 }
 
+func testElement(
+    label: String? = "Element",
+    value: String? = nil,
+    identifier: String? = nil,
+    traits: [HeistTrait] = [.staticText],
+    frameX: Double = 0,
+    frameY: Double = 0,
+    frameWidth: Double = 100,
+    frameHeight: Double = 44,
+    actions: [ElementAction]? = nil
+) -> TestInterfaceNode {
+    .heistElement(
+        label: label,
+        value: value,
+        identifier: identifier,
+        traits: traits,
+        frameX: frameX,
+        frameY: frameY,
+        frameWidth: frameWidth,
+        frameHeight: frameHeight,
+        actions: actions
+    )
+}
+
 func testContainer(
     _ container: AccessibilityContainer,
     containerName: ContainerName? = nil,
@@ -127,6 +175,39 @@ func makeTestInterface(
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Interface {
     TestInterfaceFixture(nodes: nodes, timestamp: timestamp).interface
+}
+
+func makeTestHeistElement(
+    label: String? = "Element",
+    value: String? = nil,
+    identifier: String? = nil,
+    hint: String? = nil,
+    traits: [HeistTrait] = [.staticText],
+    frameX: Double = 0,
+    frameY: Double = 0,
+    frameWidth: Double = 100,
+    frameHeight: Double = 44,
+    activationPointX: Double? = nil,
+    activationPointY: Double? = nil,
+    respondsToUserInteraction: Bool = true,
+    actions: [ElementAction]? = nil
+) -> HeistElement {
+    HeistElement(
+        description: label ?? identifier ?? "Element",
+        label: label,
+        value: value,
+        identifier: identifier,
+        hint: hint,
+        traits: traits,
+        frameX: frameX,
+        frameY: frameY,
+        frameWidth: frameWidth,
+        frameHeight: frameHeight,
+        activationPointX: activationPointX,
+        activationPointY: activationPointY,
+        respondsToUserInteraction: respondsToUserInteraction,
+        actions: actions ?? (traits.contains(.button) ? [.activate] : [])
+    )
 }
 
 func makeTestAccessibilityContainer(

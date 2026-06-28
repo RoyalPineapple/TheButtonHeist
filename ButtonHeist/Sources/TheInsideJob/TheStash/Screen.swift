@@ -75,6 +75,7 @@ struct Screen: Equatable {
         containerNames: [AccessibilityContainer: ContainerName],
         containerNamesByPath: [TreePath: ContainerName] = [:],
         heistIdByElement: [AccessibilityElement: HeistId],
+        heistIdsByPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef] = [:],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
         containerContentFramesByPath: [TreePath: CGRect] = [:],
@@ -88,6 +89,7 @@ struct Screen: Equatable {
             containerNames: containerNames,
             containerNamesByPath: containerNamesByPath,
             heistIdByElement: heistIdByElement,
+            heistIdsByPath: heistIdsByPath,
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: containerContentFramesByPath,
@@ -187,7 +189,7 @@ struct Screen: Equatable {
 
     /// Live parse id lookup for a parsed accessibility element.
     func findLiveHeistId(for element: AccessibilityElement) -> HeistId? {
-        liveCapture.heistIdByElement[element]
+        liveCapture.heistId(for: element)
     }
 
     /// Semantic containers in deterministic traversal order.
@@ -217,10 +219,9 @@ struct Screen: Equatable {
         var seen = Set<HeistId>()
         var ordered: [ScreenElement] = []
         ordered.reserveCapacity(semantic.elements.count)
-        for (element, _) in liveCapture.hierarchy.elements {
-            guard let heistId = liveCapture.heistIdByElement[element],
-                  let entry = semantic.elements[heistId],
-                  seen.insert(heistId).inserted else { continue }
+        for liveEntry in liveCapture.orderedElementEntries() {
+            guard let entry = semantic.elements[liveEntry.heistId],
+                  seen.insert(liveEntry.heistId).inserted else { continue }
             ordered.append(entry)
         }
         let remaining = semantic.elements
@@ -266,8 +267,7 @@ struct Screen: Equatable {
                     SemanticScreen.Container(
                         container: item.container,
                         path: item.path,
-                        containerName: liveCapture.containerNamesByPath[item.path]
-                            ?? liveCapture.containerNames[item.container],
+                        containerName: liveCapture.containerNamesByPath[item.path],
                         contentFrame: liveCapture.containerContentFrame(forPath: item.path),
                         scrollContentLocation: liveCapture.containerScrollContentLocation(forPath: item.path)
                     )

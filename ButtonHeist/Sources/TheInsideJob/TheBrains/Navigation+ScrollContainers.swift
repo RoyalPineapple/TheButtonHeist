@@ -66,7 +66,7 @@ extension Navigation {
             return .resolved(.uiScrollView(scrollView))
         case .container(let containerName):
             let candidates = scrollCandidates(requiredAxis: axis).filter {
-                (stash.liveContainerName(forPath: $0.path) ?? stash.liveContainerName(for: $0.container)) == containerName
+                stash.liveContainerName(forPath: $0.path) == containerName
             }
             guard !candidates.isEmpty else {
                 return .failed(
@@ -108,9 +108,7 @@ extension Navigation {
                 return nil
             }
 
-            let liveView = self.stash.liveScrollableContainerView(forPath: path)
-                ?? self.stash.scrollableContainerViews[container]
-            if let view = liveView,
+            if let view = self.stash.liveScrollableContainerView(forPath: path),
                view.window != nil,
                Self.isObscuredByPresentation(view: view) {
                 return nil
@@ -137,10 +135,6 @@ extension Navigation {
         let cgContentSize = contentSize.cgSize
         if let path,
            let scrollView = stash.liveScrollableContainerView(forPath: path) as? UIScrollView {
-            guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
-            return .uiScrollView(scrollView)
-        }
-        if let scrollView = stash.scrollableContainerViews[container] as? UIScrollView {
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return .uiScrollView(scrollView)
         }

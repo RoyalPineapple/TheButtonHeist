@@ -224,7 +224,7 @@ extension TheStash {
     private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
         screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .element(let element, _) = node else { return nil }
-            let contentSpaceOrigin = screen.liveCapture.heistId(for: element)
+            let contentSpaceOrigin = screen.liveCapture.heistId(forPath: path)
                 .flatMap { screen.semantic.elements[$0]?.contentSpaceOrigin }
             return InterfaceElementAnnotation(
                 path: path,
@@ -236,11 +236,10 @@ extension TheStash {
 
     private static func containerAnnotations(from screen: Screen) -> [InterfaceContainerAnnotation] {
         screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
-            guard case .container(let container, _) = node else { return nil }
+            guard case .container = node else { return nil }
             return InterfaceContainerAnnotation(
                 path: path,
                 containerName: screen.liveCapture.containerNamesByPath[path]
-                    ?? screen.liveCapture.containerNames[container]
             )
         }
     }

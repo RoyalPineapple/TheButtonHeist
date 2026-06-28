@@ -61,10 +61,6 @@ extension TheStash {
         liveLookup.container(forPath: path)
     }
 
-    func liveScrollContainer(matching scrollView: UIScrollView) -> AccessibilityContainer? {
-        liveLookup.scrollContainer(matching: scrollView)
-    }
-
     func liveContainerName(for container: AccessibilityContainer) -> ContainerName? {
         liveLookup.containerName(for: container)
     }

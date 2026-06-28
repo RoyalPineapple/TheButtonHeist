@@ -48,14 +48,14 @@ struct LiveLookup {
 
     func visibleScreen(observedSemanticWorld: SemanticScreen) -> Screen {
         let visibleElements = Dictionary(
-            uniqueKeysWithValues: capture.heistIdByElement.map { element, heistId in
-                let observedEntry = observedSemanticWorld.elements[heistId]
+            uniqueKeysWithValues: capture.orderedElementEntries().map { entry in
+                let observedEntry = observedSemanticWorld.elements[entry.heistId]
                 return (
-                    heistId,
+                    entry.heistId,
                     Screen.ScreenElement(
-                        heistId: heistId,
+                        heistId: entry.heistId,
                         scrollContentLocation: observedEntry?.scrollContentLocation,
-                        element: element
+                        element: entry.element
                     )
                 )
             }
@@ -95,6 +95,10 @@ struct LiveLookup {
         capture.object(for: heistId)
     }
 
+    func elementHeistId(matching object: NSObject) -> HeistId? {
+        capture.heistId(matching: object)
+    }
+
     func scrollView(for screenElement: SemanticScreen.Element) -> UIScrollView? {
         capture.scrollView(for: screenElement)
     }
@@ -107,27 +111,15 @@ struct LiveLookup {
     func scrollView(
         for containerName: ContainerName,
         semanticContainer: @autoclosure () -> SemanticScreen.Container?,
-        tripwire: TheTripwire
+        tripwire _: TheTripwire
     ) -> UIScrollView? {
-        if let scrollView = capture.scrollView(forContainer: containerName) {
-            return scrollView
-        }
-        guard let container = semanticContainer() else {
-            return nil
-        }
-        return resolveLiveScrollViewFromWindowHierarchy(for: container, tripwire: tripwire)
+        capture.scrollView(forContainer: containerName)
+            ?? semanticContainer().flatMap { capture.scrollView(for: $0) }
     }
 
     @MainActor
-    func scrollView(for container: SemanticScreen.Container, tripwire: TheTripwire) -> UIScrollView? {
+    func scrollView(for container: SemanticScreen.Container, tripwire _: TheTripwire) -> UIScrollView? {
         capture.scrollView(for: container)
-            ?? resolveLiveScrollViewFromWindowHierarchy(for: container, tripwire: tripwire)
-    }
-
-    func elementHeistId(matching object: NSObject) -> HeistId? {
-        capture.elementRefs.first { _, ref in
-            ref.object === object
-        }?.key
     }
 
     func containerObject(forPath path: TreePath) -> NSObject? {
@@ -136,12 +128,6 @@ struct LiveLookup {
 
     func container(forPath path: TreePath) -> AccessibilityContainer? {
         capture.hierarchy.containerPaths.first { $0.path == path }?.container
-    }
-
-    func scrollContainer(matching scrollView: UIScrollView) -> AccessibilityContainer? {
-        capture.scrollableContainerViews.first { _, ref in
-            ref.view === scrollView
-        }?.key
     }
 
     func containerName(for container: AccessibilityContainer) -> ContainerName? {
@@ -153,7 +139,11 @@ struct LiveLookup {
     }
 
     func scrollableContainerView(forPath path: TreePath) -> UIView? {
-        capture.scrollableContainerViewsByPath[path]?.view
+        if let view = capture.scrollableContainerViewsByPath[path]?.view {
+            return view
+        }
+        guard let container = container(forPath: path) else { return nil }
+        return capture.scrollableContainerViews[container]?.view
     }
 
     func scrollContainerDiagnostics() -> String {
@@ -174,85 +164,6 @@ struct LiveLookup {
         return summaries.isEmpty
             ? "available live scroll containers: none"
             : "available live scroll containers: \(summaries.joined(separator: "; "))"
-    }
-
-    @MainActor
-    private func resolveLiveScrollViewFromWindowHierarchy(
-        for container: SemanticScreen.Container,
-        tripwire: TheTripwire
-    ) -> UIScrollView? {
-        guard case .scrollable(let contentSize) = container.container.type else {
-            return nil
-        }
-        let expectedContentSize = contentSize.cgSize
-        if let nestedScrollView = resolveNestedLiveScrollView(
-            for: container,
-            expectedContentSize: expectedContentSize
-        ) {
-            return nestedScrollView
-        }
-
-        let expectedFrame = container.container.frame.cgRect
-        let candidates = tripwire.getAccessibleWindows()
-            .flatMap { ScrollViewHierarchySearch.descendantScrollViews(in: $0.rootView) }
-            .filter(\.isScrollEnabled)
-        let contentMatches = candidates.filter {
-            ScrollViewHierarchySearch.contentSize($0.contentSize, matches: expectedContentSize)
-        }
-        let frameAndContentMatches = contentMatches.filter {
-            Self.screenFrame(of: $0).approximatelyEquals(expectedFrame)
-        }
-        if frameAndContentMatches.count == 1 {
-            return frameAndContentMatches[0]
-        }
-        return contentMatches.count == 1 ? contentMatches[0] : nil
-    }
-
-    @MainActor
-    private func resolveNestedLiveScrollView(
-        for container: SemanticScreen.Container,
-        expectedContentSize: CGSize
-    ) -> UIScrollView? {
-        guard let location = container.scrollContentLocation,
-              let ancestorScrollView = capture.scrollView(forContainer: location.scrollContainer)
-        else { return nil }
-
-        let candidates = ScrollViewHierarchySearch.descendantScrollViews(in: ancestorScrollView)
-            .filter(\.isScrollEnabled)
-            .filter {
-                ScrollViewHierarchySearch.contentSize($0.contentSize, matches: expectedContentSize)
-            }
-        guard !candidates.isEmpty else { return nil }
-
-        let originMatches = candidates.filter {
-            ancestorScrollView.convert(Self.screenFrame(of: $0).origin, from: nil)
-                .approximatelyEquals(location.origin)
-        }
-        if originMatches.count == 1 {
-            return originMatches[0]
-        }
-        return candidates.count == 1 ? candidates[0] : nil
-    }
-
-    @MainActor
-    private static func screenFrame(of view: UIView) -> CGRect {
-        view.convert(view.bounds, to: nil)
-    }
-}
-
-private extension CGRect {
-    func approximatelyEquals(_ other: CGRect, tolerance: CGFloat = 1) -> Bool {
-        abs(origin.x - other.origin.x) <= tolerance
-            && abs(origin.y - other.origin.y) <= tolerance
-            && abs(size.width - other.size.width) <= tolerance
-            && abs(size.height - other.size.height) <= tolerance
-    }
-}
-
-private extension CGPoint {
-    func approximatelyEquals(_ other: CGPoint, tolerance: CGFloat = 1) -> Bool {
-        abs(x - other.x) <= tolerance
-            && abs(y - other.y) <= tolerance
     }
 }
 

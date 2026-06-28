@@ -361,14 +361,13 @@ final class TargetConfigTests: XCTestCase {
             ],
             defaultTarget: "sim1"
         )
-        let json = publicJSONObject(response)
-        XCTAssertEqual(json["status"] as? String, "ok")
-        XCTAssertEqual(json["default"] as? String, "sim1")
-        let targets = json["targets"] as? [String: [String: Any]]
-        XCTAssertNotNil(targets)
-        XCTAssertEqual(targets?["sim1"]?["device"] as? String, "127.0.0.1:1455")
-        XCTAssertEqual(targets?["sim1"]?["hasToken"] as? Bool, true)
-        XCTAssertNil(targets?["sim2"]?["hasToken"])
+        let json = publicJSONProbe(response)
+        XCTAssertEqual(json.string("status"), "ok")
+        XCTAssertEqual(json.string("default"), "sim1")
+        let targets = json.object("targets")
+        XCTAssertEqual(targets.object("sim1").string("device"), "127.0.0.1:1455")
+        XCTAssertEqual(targets.object("sim1").bool("hasToken"), true)
+        targets.object("sim2").assertMissing("hasToken")
     }
 
     func testTargetsResponseCompactFormatting() {

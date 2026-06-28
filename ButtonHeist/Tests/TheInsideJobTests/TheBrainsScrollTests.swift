@@ -273,6 +273,80 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.container), [verticalOne, verticalTwo])
     }
 
+    func testLiveVisibleScreenPreservesDuplicateEqualElementsByPath() {
+        let duplicate = makeElement(label: "Duplicate", traits: .button)
+        let firstPath = TreePath([0])
+        let secondPath = TreePath([1])
+        let firstEntry = Screen.ScreenElement(
+            heistId: "duplicate_button_1",
+            contentSpaceOrigin: nil,
+            element: duplicate
+        )
+        let secondEntry = Screen.ScreenElement(
+            heistId: "duplicate_button_2",
+            contentSpaceOrigin: nil,
+            element: duplicate
+        )
+
+        brains.stash.installScreenForTesting(Screen(
+            elements: [
+                firstEntry.heistId: firstEntry,
+                secondEntry.heistId: secondEntry,
+            ],
+            hierarchy: [
+                .element(duplicate, traversalIndex: 0),
+                .element(duplicate, traversalIndex: 1),
+            ],
+            containerNames: [:],
+            heistIdByElement: [duplicate: secondEntry.heistId],
+            heistIdsByPath: [
+                firstPath: firstEntry.heistId,
+                secondPath: secondEntry.heistId,
+            ],
+            elementRefs: [
+                firstEntry.heistId: .init(object: NSObject(), scrollView: nil),
+                secondEntry.heistId: .init(object: NSObject(), scrollView: nil),
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        ))
+
+        XCTAssertEqual(
+            brains.stash.liveVisibleScreen.orderedElements.map(\.heistId),
+            [firstEntry.heistId, secondEntry.heistId]
+        )
+    }
+
+    func testResolveLiveActionTargetFailsClosedWhenWeakObjectIsStale() async {
+        let element = makeElement(label: "Detached", traits: .button)
+        let entry = Screen.ScreenElement(
+            heistId: "detached_button",
+            contentSpaceOrigin: nil,
+            element: element
+        )
+        var object: NSObject? = NSObject()
+        brains.stash.installScreenForTesting(Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [.element(element, traversalIndex: 0)],
+            containerNames: [:],
+            heistIdByElement: [element: entry.heistId],
+            heistIdsByPath: [TreePath([0]): entry.heistId],
+            elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        ))
+        object = nil
+
+        switch brains.stash.resolveLiveActionTarget(for: entry) {
+        case .objectUnavailable:
+            break
+        case .resolved(let target):
+            XCTFail("Expected stale weak object to fail closed, got \(target)")
+        case .geometryUnavailable:
+            XCTFail("Expected stale weak object failure before geometry lookup")
+        }
+    }
+
     // MARK: - Known Offscreen Entry
 
     /// Install a Screen whose `elements` includes an entry that's not in the
@@ -1059,6 +1133,25 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
     }
 
+    func testScrollToEdgeAlreadyAtRequestedEdgeSucceeds() async {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
+        brains.stash.installScreenForTesting(Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerNames: [container: "main_scroll"],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [container: .init(view: scrollView)]
+        ))
+
+        let result = await brains.navigation.executeScrollToEdge(ScrollToEdgeTarget(edge: .top))
+
+        XCTAssertTrue(result.success, "Expected already-at-edge scroll to be idempotent: \(String(describing: result.message))")
+        XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
+    }
+
     func testScrollUsesNamedContainer() async {
         let firstScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -1127,6 +1220,49 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.success, "Expected named container edge scroll to succeed: \(String(describing: result.message))")
         XCTAssertEqual(firstScrollView.contentOffset.y, 500, accuracy: 0.01)
         XCTAssertEqual(secondScrollView.contentOffset.y, 0, accuracy: 0.01)
+    }
+
+    func testScrollUsesPathKeyedContainerWhenRepeatedSameSizedScrollViews() async {
+        let firstScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let secondScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        secondScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let repeatedContainer = makeScrollableContainer(
+            contentSize: firstScrollView.contentSize,
+            frame: firstScrollView.frame
+        )
+        let firstPath = TreePath([0])
+        let secondPath = TreePath([1])
+
+        brains.stash.installScreenForTesting(Screen(
+            elements: [:],
+            hierarchy: [
+                .container(repeatedContainer, children: []),
+                .container(repeatedContainer, children: []),
+            ],
+            containerNames: [repeatedContainer: "collapsed_value_name"],
+            containerNamesByPath: [
+                firstPath: "first_repeated_scroll",
+                secondPath: "second_repeated_scroll",
+            ],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [
+                repeatedContainer: .init(view: firstScrollView),
+            ],
+            scrollableContainerViewsByPath: [
+                firstPath: .init(view: firstScrollView),
+                secondPath: .init(view: secondScrollView),
+            ]
+        ))
+
+        let result = await brains.navigation.executeScroll(
+            ScrollTarget(selection: .container("second_repeated_scroll"), direction: .down)
+        )
+
+        XCTAssertTrue(result.success, "Expected path-keyed named container scroll to succeed: \(String(describing: result.message))")
+        XCTAssertEqual(firstScrollView.contentOffset.y, 0, accuracy: 0.01)
+        XCTAssertGreaterThan(secondScrollView.contentOffset.y, 0)
     }
 
     func testScrollWithoutElementReportsAmbiguousContainers() async {
