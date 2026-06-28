@@ -114,8 +114,8 @@ private enum TextInputScreen {
     }
 
     static let pasteName = HeistDef<Void>("TextInputScreen.pasteName") {
-        Activate(nameField)
-            .withoutExpectation("Focuses the name field for the edit action")
+        ClearText(nameField)
+            .withoutExpectation("Focuses the name field through the text input pipeline before paste")
 
         SetPasteboard("Dogfood clipboard name")
             .withoutExpectation("Seeds pasteboard for the public Edit(.paste) action")
