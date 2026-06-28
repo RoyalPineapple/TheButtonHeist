@@ -127,37 +127,38 @@ extension HeistPlanRuntimeSafetyError {
 }
 
 public extension HeistPlanning {
+    static func admitPlanSourceResult(
+        from request: HeistPlanSourceAdmissionRequest
+    ) -> ValidationResult<HeistPlanLoadRequest, HeistBuildDiagnostic> {
+        do {
+            return .success(try admitPlanSource(from: request), diagnostics: [])
+        } catch let error as HeistPlanningError {
+            return .failure(error.diagnostics)
+        } catch {
+            return .failure([HeistPlanningError.invalidPlanSource(String(describing: error)).diagnostic])
+        }
+    }
+
     static func loadValidatedPlanResult(
-        from request: HeistPlanSourceRequest
+        from request: HeistPlanSourceAdmissionRequest
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
-        guard request.rawStructuredJSONIRFields.isEmpty else {
-            return .failure([HeistPlanningError.rawStructuredJSONIRFields(
-                commandName: request.commandName,
-                fields: request.rawStructuredJSONIRFields.sorted()
-            ).diagnostic])
+        switch admitPlanSourceResult(from: request) {
+        case .success(let loadRequest, _):
+            return loadValidatedPlanResult(from: loadRequest)
+        case .failure(let diagnostics):
+            return .failure(diagnostics)
         }
+    }
 
-        let hasPath = request.path != nil
-        let hasInlineSource = request.inlineButtonHeistSource != nil
-        let sourceCount = [hasPath, hasInlineSource].filter { $0 }.count
-        guard sourceCount == 1 else {
-            if sourceCount == 0 {
-                return .failure([HeistPlanningError.missingPlanSource(commandName: request.commandName).diagnostic])
-            }
-            return .failure([HeistPlanningError.multiplePlanSources(commandName: request.commandName).diagnostic])
-        }
-
-        if let path = request.path {
+    static func loadValidatedPlanResult(
+        from request: HeistPlanLoadRequest
+    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
+        switch request.source {
+        case .artifactPath(let path):
             return loadValidatedArtifactPlanResult(path: path, commandName: request.commandName)
+        case .inlineDSL(let source):
+            return compileInlineButtonHeistSourceResult(source, commandName: request.commandName)
         }
-
-        guard request.acceptsInlineButtonHeistSource else {
-            return .failure([HeistPlanningError.inlineSourceNotAccepted(commandName: request.commandName).diagnostic])
-        }
-        guard let source = request.inlineButtonHeistSource else {
-            return .failure([HeistPlanningError.missingPlanSource(commandName: request.commandName).diagnostic])
-        }
-        return compileInlineButtonHeistSourceResult(source, commandName: request.commandName)
     }
 
     static func decodeArgumentJSONResult(

@@ -817,7 +817,7 @@ import ThePlans
 }
 
 @Test func `planning admission exposes typed diagnostics before rendering`() {
-    let result = HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceRequest(
+    let result = HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceAdmissionRequest(
         commandName: "run_heist",
         rawStructuredJSONIRFields: ["body", "version"]
     ))
