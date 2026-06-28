@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 import ThePlans
-@testable import ButtonHeist
+@_spi(ButtonHeistInternals) @testable import ButtonHeist
 import TheScore
 
 /// The heist execution tree is the report structure. These tests lock the

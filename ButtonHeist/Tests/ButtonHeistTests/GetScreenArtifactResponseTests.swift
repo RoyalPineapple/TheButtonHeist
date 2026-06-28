@@ -30,13 +30,13 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertTrue(options.includeInterface)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), pngBytes)
 
-        let json = publicJSONObject(response)
-        XCTAssertEqual(json["status"] as? String, "ok")
-        XCTAssertEqual(json["path"] as? String, path)
-        XCTAssertEqual(json["width"] as? Double, 393)
-        XCTAssertEqual(json["height"] as? Double, 852)
-        XCTAssertNil(json["pngData"])
-        XCTAssertNotNil(json["interface"])
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("status"), "ok")
+        XCTAssertEqual(try json.string("path"), path)
+        XCTAssertEqual(try json.double("width"), 393)
+        XCTAssertEqual(try json.double("height"), 852)
+        try json.assertMissing("pngData")
+        try json.assertPresent("interface")
     }
 
     @ButtonHeistActor
@@ -61,10 +61,10 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertEqual(inlinePayload.interface?.projectedElements.count, 1)
         XCTAssertTrue(inlineOptions.includeInterface)
 
-        let inlineJson = publicJSONObject(inlineResponse)
-        XCTAssertEqual(inlineJson["pngData"] as? String, pngData)
-        XCTAssertNil(inlineJson["path"])
-        XCTAssertNotNil(inlineJson["interface"])
+        let inlineJson = try publicJSONProbe(inlineResponse).object()
+        XCTAssertEqual(try inlineJson.string("pngData"), pngData)
+        try inlineJson.assertMissing("path")
+        try inlineJson.assertPresent("interface")
     }
 
     @ButtonHeistActor
@@ -114,11 +114,11 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertEqual(details?.phase, .client)
         XCTAssertEqual(details?.retryable, false)
 
-        let json = publicJSONObject(response)
-        XCTAssertEqual(json["status"] as? String, "error")
-        XCTAssertEqual(json["errorCode"] as? String, "screen.inline_payload_too_large")
-        XCTAssertNil(json["pngData"])
-        XCTAssertNil(json["path"])
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("errorCode"), "screen.inline_payload_too_large")
+        try json.assertMissing("pngData")
+        try json.assertMissing("path")
     }
 
     @ButtonHeistActor

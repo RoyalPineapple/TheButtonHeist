@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import AccessibilitySnapshotModel
 import ThePlans
 @testable import TheScore
 
@@ -135,15 +136,15 @@ private enum TestActionResultTrace {
     static func projecting(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace {
         switch delta {
         case .noChange(let payload):
-            let interface = makeTestInterface(elements: placeholders(count: payload.elementCount))
+            let interface = interface(elements: placeholders(count: payload.elementCount))
             return AccessibilityTrace(captures: [
                 capture(sequence: 1, interface: interface),
                 capture(sequence: 2, interface: interface),
             ])
 
         case .elementsChanged(let payload):
-            let before = makeTestInterface(elements: beforeElements(for: payload.edits, elementCount: payload.elementCount))
-            let after = makeTestInterface(elements: afterElements(for: payload.edits, elementCount: payload.elementCount))
+            let before = interface(elements: beforeElements(for: payload.edits, elementCount: payload.elementCount))
+            let after = interface(elements: afterElements(for: payload.edits, elementCount: payload.elementCount))
             if payload.edits.isEmpty {
                 return AccessibilityTrace(captures: [
                     capture(sequence: 1, interface: before, context: .empty),
@@ -156,7 +157,7 @@ private enum TestActionResultTrace {
             ])
 
         case .screenChanged(let payload):
-            let before = makeTestInterface(elements: placeholders(count: max(payload.elementCount, 1)))
+            let before = interface(elements: placeholders(count: max(payload.elementCount, 1)))
             return AccessibilityTrace(captures: [
                 capture(sequence: 1, interface: before, context: AccessibilityTrace.Context(screenId: "before")),
                 capture(sequence: 2, interface: payload.newInterface, context: AccessibilityTrace.Context(screenId: "after")),
@@ -170,6 +171,45 @@ private enum TestActionResultTrace {
         context: AccessibilityTrace.Context = .empty
     ) -> AccessibilityTrace.Capture {
         AccessibilityTrace.Capture(sequence: sequence, interface: interface, context: context)
+    }
+
+    private static func interface(elements: [HeistElement]) -> Interface {
+        let annotations = elements.enumerated().map { index, element in
+            InterfaceElementAnnotation(path: TreePath([index]), actions: element.actions)
+        }
+        let tree = elements.enumerated().map { index, element in
+            AccessibilityHierarchy.element(accessibilityElement(element), traversalIndex: index)
+        }
+        return Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: tree,
+            annotations: InterfaceAnnotations(elements: annotations)
+        )
+    }
+
+    private static func accessibilityElement(_ element: HeistElement) -> AccessibilityElement {
+        AccessibilityElement(
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
+            identifier: element.identifier,
+            hint: element.hint,
+            userInputLabels: nil,
+            shape: .frame(AccessibilityRect(
+                x: element.frameX,
+                y: element.frameY,
+                width: element.frameWidth,
+                height: element.frameHeight
+            )),
+            activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: element.respondsToUserInteraction
+        )
     }
 
     private static func beforeElements(for edits: ElementEdits, elementCount: Int) -> [HeistElement] {
