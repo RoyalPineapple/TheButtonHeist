@@ -79,9 +79,9 @@ jobs:
         timeout-minutes: 5
         run: scripts/check-package-manifest-drift.sh
 
-      - name: Verify Swift invariant smell guard
+      - name: Reject invalid Swift pipeline shapes
         timeout-minutes: 5
-        run: scripts/check-swift-invariant-smells.sh
+        run: scripts/reject-invalid-swift-shapes.sh
 
       - name: Build TheScore
         timeout-minutes: 5

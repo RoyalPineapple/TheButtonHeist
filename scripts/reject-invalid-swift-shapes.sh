@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fail fast when retired dynamic/compatibility shapes re-enter Swift code.
+# Reject retired dynamic/compatibility shapes in Swift code.
 
 set -euo pipefail
 
@@ -38,7 +38,7 @@ for check in "${CHECKS[@]}"; do
   pattern="${check#*::}"
   matches="$(git grep -n -E "$pattern" -- "${EXISTING_PATHS[@]}" || true)"
   if [[ -n "$matches" ]]; then
-    echo "::error::Swift invariant smell detected: $label"
+    echo "::error::Invalid Swift pipeline shape rejected: $label"
     printf '%s\n' "$matches"
     status=1
   fi
@@ -47,8 +47,8 @@ done
 if [[ "$status" -ne 0 ]]; then
   cat <<'EOF'
 
-Retired pipeline shapes should be replaced with typed Swift models, typed
-Codable fixtures, concrete enums/structs, or narrow typed bridge helpers.
+Only typed Swift models, typed Codable fixtures, concrete enums/structs, and
+narrow typed bridge helpers are accepted here.
 EOF
 fi
 
