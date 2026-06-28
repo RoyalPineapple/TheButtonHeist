@@ -1490,11 +1490,11 @@ final class TheBrainsScrollTests: XCTestCase {
         var state = Navigation.SettleSwipeLoopState(
             profile: .sameDirection,
             previousVisibleIds: ["a"],
-            previousAnchor: 100
+            previousAnchor: visibleAnchorSignature(y: 100)
         )
         let step1 = state.advance(
             visibleIds: ["b"],
-            anchorSignature: 200,
+            anchorSignature: visibleAnchorSignature(y: 200),
             newHeistIds: []
         )
         XCTAssertEqual(step1, .continue, "Viewport change resets stable counter")
@@ -1502,7 +1502,7 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let step2 = state.advance(
             visibleIds: ["b"],
-            anchorSignature: 200,
+            anchorSignature: visibleAnchorSignature(y: 200),
             newHeistIds: []
         )
         XCTAssertEqual(step2, .done, "Same-direction profile exits once stable visible count hits 1")
@@ -1513,19 +1513,19 @@ final class TheBrainsScrollTests: XCTestCase {
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousVisibleIds: ["a"],
-            previousAnchor: 100
+            previousAnchor: visibleAnchorSignature(y: 100)
         )
         for frameIndex in 0..<5 {
             let step = state.advance(
                 visibleIds: ["a"],
-                anchorSignature: 100,
+                anchorSignature: visibleAnchorSignature(y: 100),
                 newHeistIds: []
             )
             XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) must not exit before minFrames=6")
         }
         let finalStep = state.advance(
             visibleIds: ["a"],
-            anchorSignature: 100,
+            anchorSignature: visibleAnchorSignature(y: 100),
             newHeistIds: []
         )
         XCTAssertEqual(finalStep, .done, "Direction-change profile exits at frame 6")
@@ -1536,20 +1536,20 @@ final class TheBrainsScrollTests: XCTestCase {
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousVisibleIds: ["a"],
-            previousAnchor: 100
+            previousAnchor: visibleAnchorSignature(y: 100)
         )
         for frameIndex in 0..<23 {
             let heistId = HeistId(rawValue: "id-\(frameIndex)")
             let step = state.advance(
                 visibleIds: [heistId],
-                anchorSignature: 200 + frameIndex,
+                anchorSignature: visibleAnchorSignature(heistId: heistId, y: CGFloat(200 + frameIndex)),
                 newHeistIds: [heistId]
             )
             XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) churns, should continue")
         }
         let finalStep = state.advance(
             visibleIds: [HeistId(rawValue: "id-final")],
-            anchorSignature: 999,
+            anchorSignature: visibleAnchorSignature(heistId: "id-final", y: 999),
             newHeistIds: [HeistId(rawValue: "id-final")]
         )
         XCTAssertEqual(finalStep, .done, "Must exit at maxFrames=24 even if never settles")
@@ -1560,20 +1560,20 @@ final class TheBrainsScrollTests: XCTestCase {
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousVisibleIds: ["a"],
-            previousAnchor: 100
+            previousAnchor: visibleAnchorSignature(y: 100)
         )
         XCTAssertFalse(state.moved)
 
         _ = state.advance(
             visibleIds: ["a"],
-            anchorSignature: 200,
+            anchorSignature: visibleAnchorSignature(y: 200),
             newHeistIds: []
         )
         XCTAssertTrue(state.moved, "Differing anchor flags motion")
 
         _ = state.advance(
             visibleIds: ["a"],
-            anchorSignature: 100,
+            anchorSignature: visibleAnchorSignature(y: 100),
             newHeistIds: []
         )
         XCTAssertTrue(state.moved, "moved only latches true, never clears back to false")
@@ -1601,17 +1601,74 @@ final class TheBrainsScrollTests: XCTestCase {
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousVisibleIds: ["a", "b"],
-            previousAnchor: 500
+            previousAnchor: visibleAnchorSignature(y: 500)
         )
         _ = state.advance(
             visibleIds: ["a", "c"],
-            anchorSignature: 500,
+            anchorSignature: visibleAnchorSignature(y: 500),
             newHeistIds: ["c"]
         )
         XCTAssertFalse(
             state.moved,
             "Matching anchor must suppress viewport-set differences as motion signal"
         )
+    }
+
+    func testVisibleAnchorSignatureEquatesSameCoarseGeometry() {
+        let lhs = visibleAnchorSignature([
+            (heistId: "b", origin: CGPoint(x: 20, y: 200)),
+            (heistId: "a", origin: CGPoint(x: 10, y: 100)),
+        ])
+        let rhs = visibleAnchorSignature([
+            (heistId: "a", origin: CGPoint(x: 10, y: 100)),
+            (heistId: "b", origin: CGPoint(x: 20, y: 200)),
+        ])
+
+        XCTAssertEqual(lhs, rhs)
+    }
+
+    func testVisibleAnchorSignatureDistinguishesDifferentCoarseGeometry() {
+        let lhs = visibleAnchorSignature(y: 100)
+        let rhs = visibleAnchorSignature(y: 101)
+
+        XCTAssertNotEqual(lhs, rhs)
+    }
+
+    func testSwipeTargetKeyEquatesSameCoarseGeometry() {
+        let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
+        let contentSize = CGSize(width: 300, height: 1_200)
+
+        let lhs = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
+        let rhs = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
+
+        XCTAssertEqual(lhs, rhs)
+    }
+
+    func testSwipeTargetKeyDistinguishesDifferentCoarseGeometry() {
+        let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
+        let contentSize = CGSize(width: 300, height: 1_200)
+
+        let lhs = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
+        let rhs = brains.navigation.swipeTargetKey(
+            frame: frame.offsetBy(dx: 0, dy: 1),
+            contentSize: contentSize
+        )
+
+        XCTAssertNotEqual(lhs, rhs)
+    }
+
+    func testSwipeDirectionCacheUsesEquivalentTypedKeyForDirectionChangeLookup() {
+        let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
+        let contentSize = CGSize(width: 300, height: 1_200)
+        let originalKey = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
+        let lookupKey = brains.navigation.swipeTargetKey(frame: frame, contentSize: contentSize)
+
+        brains.navigation.lastSwipeDirectionByTarget[originalKey] = .down
+
+        let changesToUp = brains.navigation.lastSwipeDirectionByTarget[lookupKey].map { $0 != .up } ?? false
+        let changesToDown = brains.navigation.lastSwipeDirectionByTarget[lookupKey].map { $0 != .down } ?? false
+        XCTAssertTrue(changesToUp)
+        XCTAssertFalse(changesToDown)
     }
 
     // MARK: - safeSwipeFrame
@@ -1734,7 +1791,11 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - Clear Cache
 
     func testClearCacheClearsLastSwipeDirectionCache() {
-        brains.navigation.lastSwipeDirectionByTarget["key"] = .down
+        let key = brains.navigation.swipeTargetKey(
+            frame: CGRect(x: 10, y: 20, width: 300, height: 400),
+            contentSize: CGSize(width: 300, height: 1_200)
+        )
+        brains.navigation.lastSwipeDirectionByTarget[key] = .down
         XCTAssertFalse(brains.navigation.lastSwipeDirectionByTarget.isEmpty)
         brains.clearCache()
         XCTAssertTrue(
@@ -1744,6 +1805,20 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    private func visibleAnchorSignature(
+        _ anchors: [(heistId: HeistId, origin: CGPoint)]
+    ) -> Navigation.VisibleAnchorSignature {
+        Navigation.VisibleAnchorSignature(anchors: anchors)
+    }
+
+    private func visibleAnchorSignature(
+        heistId: HeistId = "a",
+        x: CGFloat = 0,
+        y: CGFloat
+    ) -> Navigation.VisibleAnchorSignature {
+        visibleAnchorSignature([(heistId: heistId, origin: CGPoint(x: x, y: y))])
+    }
 
     private func makeElement(
         label: String? = nil,
