@@ -158,12 +158,16 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         // heistId is excluded from the wire — the delta is self-describing by label.
         let editsJSON = try JSONProbe(data: data).object("edits")
         let removedJSON = try editsJSON.array("removed")
-        XCTAssertEqual(try removedJSON.first?.string("label"), "Old")
-        try removedJSON.first?.assertMissing("heistId")
+        XCTAssertEqual(removedJSON.count, 1)
+        let removedElementJSON = try XCTUnwrap(removedJSON.first)
+        XCTAssertEqual(try removedElementJSON.string("label"), "Old")
+        try removedElementJSON.assertMissing("heistId")
         let updatedJSON = try editsJSON.array("updated")
-        try updatedJSON.first?.assertMissing("element")
-        XCTAssertEqual(try updatedJSON.first?.object("before").string("value"), "1")
-        XCTAssertEqual(try updatedJSON.first?.object("after").string("value"), "2")
+        XCTAssertEqual(updatedJSON.count, 1)
+        let updatedElementJSON = try XCTUnwrap(updatedJSON.first)
+        try updatedElementJSON.assertMissing("element")
+        XCTAssertEqual(try updatedElementJSON.object("before").string("value"), "1")
+        XCTAssertEqual(try updatedElementJSON.object("after").string("value"), "2")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -172,7 +176,9 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.elementCount, 14)
         XCTAssertEqual(payload.edits.added.map(\.label), ["New"])
         XCTAssertEqual(payload.edits.removed.map(\.label), ["Old"])
-        XCTAssertEqual(payload.edits.updated.first?.after.label, "Counter")
+        XCTAssertEqual(payload.edits.updated.count, 1)
+        let updatedEdit = try XCTUnwrap(payload.edits.updated.first)
+        XCTAssertEqual(updatedEdit.after.label, "Counter")
         XCTAssertEqual(payload.transient.map(\.label), ["Loading"])
     }
 
