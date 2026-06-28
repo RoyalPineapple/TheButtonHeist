@@ -444,5 +444,11 @@ private extension TreePath {
     }
 }
 
+private extension TreePath {
+    var liveCaptureDiagnosticDescription: String {
+        "[\(indices.map(String.init).joined(separator: ", "))]"
+    }
+}
+
 #endif // DEBUG
 #endif // canImport(UIKit)
