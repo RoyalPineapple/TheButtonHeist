@@ -720,7 +720,7 @@ final class TheBrainsActionTests: XCTestCase {
                 return ActionResult(
                     success: true,
                     method: .wait,
-                    accessibilityTrace: observedReady.accessibilityTrace
+                    accessibilityTrace: AccessibilityTrace(capture: observedReady.capture)
                 )
             }
         )
@@ -733,14 +733,14 @@ final class TheBrainsActionTests: XCTestCase {
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
-        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let heist: HeistExecutionResult = try XCTUnwrap(result.heistExecutionPayload)
         let actionStep = try XCTUnwrap(heist.steps.first)
         let waitStep = try XCTUnwrap(heist.steps.dropFirst().first)
 
         XCTAssertTrue(result.success, result.message ?? "heist failed")
         XCTAssertEqual(dispatchedTypes, [.activate])
         XCTAssertEqual(waitedPredicates.count, 1)
-        XCTAssertEqual(heist.steps.map(\.kind), [.action, .wait])
+        XCTAssertEqual(heist.steps.map(\.kind), [HeistExecutionStepKind.action, .wait])
         XCTAssertNotNil(actionStep.actionEvidence)
         XCTAssertNil(actionStep.waitEvidence)
         XCTAssertNil(waitStep.actionEvidence)
