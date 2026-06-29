@@ -72,6 +72,17 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         XCTAssertEqual(wait.timeout, 2)
     }
 
+    func testRuntimeActionCarriesTransientViewportCommand() throws {
+        let message = ClientMessage.runtimeAction(.viewportScroll(ScrollTarget(direction: .down)))
+        let data = try JSONEncoder().encode(message)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+
+        XCTAssertTrue(json.contains(#""type":"runtimeAction""#), json)
+
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        XCTAssertEqual(decoded, message)
+    }
+
     func testPrimitiveActionClientMessageJSONIsRejected() throws {
         let primitiveMessages = [
             #"{"type":"activate","payload":{"identifier":"btn"}}"#,

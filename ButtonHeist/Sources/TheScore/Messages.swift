@@ -63,6 +63,7 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
     case clientHello, authenticate, requestInterface, ping, status
     case getPasteboard
     case requestScreen
+    case runtimeAction
     case heistPlan
 }
 

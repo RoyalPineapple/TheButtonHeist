@@ -20,13 +20,11 @@ extension TheFence {
 
     /// Execute one user intent.
     ///
-    /// Every executable UI action and the `wait` command run as a one-step
+    /// Durable executable UI actions and the `wait` command run as a one-step
     /// `HeistPlan` on the device — the same engine that runs a composed heist.
-    /// There is no client-side action dispatch or expectation evaluation: a
-    /// single command is a one-step heist, and its expectation is the action
-    /// step's expectation, evaluated server-side against the action's own
-    /// pre-action baseline. Non-action commands (interface, screen, session,
-    /// the `get_pasteboard` read) keep their dedicated handler.
+    /// Transient runtime actions that are not durable heist primitives fall
+    /// through to direct client dispatch. Non-action commands (interface,
+    /// screen, session, the `get_pasteboard` read) keep their dedicated handler.
     func execute(parsed: ParsedRequest) async throws -> FenceResponse {
         try await ensureConnectedIfNeeded(for: parsed.command)
 

@@ -1,11 +1,13 @@
 import Foundation
 import ThePlans
 
-/// Resolved, internal action dispatch used by the heist runtime.
+/// Resolved, internal action dispatch used by the heist runtime and by direct
+/// transient client commands.
 ///
-/// This type is intentionally not `Codable`: public mutation crosses the
-/// client/server boundary only as `ClientMessage.heistPlan`, then action steps
-/// lower to this type inside the app runtime.
+/// This type is intentionally not `Codable`: durable mutation crosses the
+/// client/server boundary as `ClientMessage.heistPlan`, while transient direct
+/// commands cross as `HeistActionCommand` and lower to this type inside the app
+/// runtime.
 package enum RuntimeActionMessage: Sendable, Equatable {
     /// Activate an element.
     case activate(ElementTarget)

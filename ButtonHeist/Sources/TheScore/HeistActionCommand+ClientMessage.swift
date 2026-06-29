@@ -3,9 +3,10 @@ import ThePlans
 /// Internal lowering between ThePlans action commands and TheInsideJob's
 /// dispatch implementation.
 ///
-/// Public mutation requests cross the device wire as `ClientMessage.heistPlan`.
-/// Once a plan is inside the runtime, action steps resolve to
-/// `RuntimeActionMessage` for primitive dispatch.
+/// Durable public mutation requests cross the device wire as
+/// `ClientMessage.heistPlan`; transient direct actions cross as
+/// `ClientMessage.runtimeAction`. Both lower to `RuntimeActionMessage` for
+/// primitive dispatch inside the app runtime.
 package extension HeistActionCommand {
     init(runtimeActionMessage: RuntimeActionMessage) throws {
         switch runtimeActionMessage {
