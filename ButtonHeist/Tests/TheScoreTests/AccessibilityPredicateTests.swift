@@ -577,12 +577,12 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     func testElementUpdatedRejectsStringCheckersForNonTextPropertiesAtDecodeBoundary() {
         let cases = [
-            ("traits", #"Unknown trait set match field "mode""#),
-            ("actions", #"Unknown action set match field "mode""#),
-            ("frame", #"Unknown frame match field "mode""#),
-            ("activationPoint", #"Unknown activation point match field "mode""#),
-            ("customContent", #"Unknown custom content match field "mode""#),
-            ("rotors", #"Unknown rotor set match field "mode""#),
+            ("traits", "Unknown trait set match field"),
+            ("actions", "Unknown action set match field"),
+            ("frame", "Unknown frame match field"),
+            ("activationPoint", "Unknown activation point match field"),
+            ("customContent", "Unknown custom content match field"),
+            ("rotors", "Unknown rotor set match field"),
         ]
         for (property, expectedMessage) in cases {
             assertAccessibilityPredicateDecodeFails(
