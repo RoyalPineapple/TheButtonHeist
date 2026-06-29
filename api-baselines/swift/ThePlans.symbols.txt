@@ -345,6 +345,10 @@ symbol	ThePlans.symbols.json	s:8ThePlans13HeistPlanningO24decodeArgumentJSONResu
 symbol	ThePlans.symbols.json	s:8ThePlans13HeistPlanningO26validateRootArgumentResult_3forAA010ValidationH0OyytAA0C15BuildDiagnosticVGAA0cG0O_AA0C4PlanVtFZ	swift.type.method	public	validateRootArgumentResult(_:for:)	HeistPlanning.validateRootArgumentResult(_:for:)	static func validateRootArgumentResult(_ argument: HeistArgument, for plan: HeistPlan) -> ValidationResult<Void, HeistBuildDiagnostic>
 symbol	ThePlans.symbols.json	s:8ThePlans13HeistPlanningO29rawStructuredJSONIRFieldNamesShySSGvpZ	swift.type.property	public	rawStructuredJSONIRFieldNames	HeistPlanning.rawStructuredJSONIRFieldNames	static let rawStructuredJSONIRFieldNames: Set<String>
 symbol	ThePlans.symbols.json	s:8ThePlans13HeistPlanningO8readPlan4fromAA0cF0V10Foundation3URLV_tKFZ	swift.type.method	public	readPlan(from:)	HeistPlanning.readPlan(from:)	static func readPlan(from url: URL) throws -> HeistPlan
+symbol	ThePlans.symbols.json	s:8ThePlans13LabelPropertyO	swift.enum	public	LabelProperty	LabelProperty	enum LabelProperty
+symbol	ThePlans.symbols.json	s:8ThePlans13LabelPropertyO11ExprCheckera	swift.typealias	public	LabelProperty.ExprChecker	LabelProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ThePlans.symbols.json	s:8ThePlans13LabelPropertyO7Checkera	swift.typealias	public	LabelProperty.Checker	LabelProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ThePlans.symbols.json	s:8ThePlans13LabelPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	LabelProperty.property	static let property: ElementProperty
 symbol	ThePlans.symbols.json	s:8ThePlans13PredicateCaseV	swift.struct	public	PredicateCase	PredicateCase	struct PredicateCase
 symbol	ThePlans.symbols.json	s:8ThePlans13PredicateCaseV11descriptionSSvp	swift.property	public	description	PredicateCase.description	var description: String { get }
 symbol	ThePlans.symbols.json	s:8ThePlans13PredicateCaseV4bodySayAA9HeistStepOGvp	swift.property	public	body	PredicateCase.body	let body: [HeistStep]
@@ -412,9 +416,9 @@ symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV	swift.struct	pu
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV11displayPathSSvp	swift.property	public	displayPath	HeistCallGraph.Cycle.displayPath	var displayPath: String { get }
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV4pathAESaySSG_tcfc	swift.init	public	init(path:)	HeistCallGraph.Cycle.init(path:)	init(path: [String])
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV4pathSaySSGvp	swift.property	public	path	HeistCallGraph.Cycle.path	let path: [String]
-symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5edgesShyAC4EdgeVGvp	swift.property	public	edges	HeistCallGraph.edges	let edges: Set<HeistCallGraph.Edge>
+symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5edgesShyAC4EdgeVGvp	swift.property	public	edges	HeistCallGraph.edges	var edges: Set<HeistCallGraph.Edge> { get }
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5nodes5edgesACShySSG_ShyAC4EdgeVGtcfc	swift.init	public	init(nodes:edges:)	HeistCallGraph.init(nodes:edges:)	init(nodes: Set<String>, edges: Set<HeistCallGraph.Edge>)
-symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5nodesShySSGvp	swift.property	public	nodes	HeistCallGraph.nodes	let nodes: Set<String>
+symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5nodesShySSGvp	swift.property	public	nodes	HeistCallGraph.nodes	var nodes: Set<String> { get }
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV9isAcyclicSbvp	swift.property	public	isAcyclic	HeistCallGraph.isAcyclic	var isAcyclic: Bool { get }
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistParameterO	swift.enum	public	HeistParameter	HeistParameter	enum HeistParameter
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistParameterO13elementTargetyAcA0C13ReferenceNameV_tcACmF	swift.enum.case	public	HeistParameter.elementTarget(name:)	HeistParameter.elementTarget(name:)	case elementTarget(name: HeistReferenceName)
@@ -500,11 +504,13 @@ symbol	ThePlans.symbols.json	s:8ThePlans15DismissKeyboardV17expectationWaiverSSS
 symbol	ThePlans.symbols.json	s:8ThePlans15DismissKeyboardV7commandAA18HeistActionCommandOvp	swift.property	public	command	DismissKeyboard.command	let command: HeistActionCommand
 symbol	ThePlans.symbols.json	s:8ThePlans15DismissKeyboardVACycfc	swift.init	public	init()	DismissKeyboard.init()	init()
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO	swift.enum	public	ElementProperty	ElementProperty	enum ElementProperty
+symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO10identifieryA2CmF	swift.enum.case	public	ElementProperty.identifier	ElementProperty.identifier	case identifier
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO10isGeometrySbvp	swift.property	public	isGeometry	ElementProperty.isGeometry	var isGeometry: Bool { get }
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO13customContentyA2CmF	swift.enum.case	public	ElementProperty.customContent	ElementProperty.customContent	case customContent
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO15activationPointyA2CmF	swift.enum.case	public	ElementProperty.activationPoint	ElementProperty.activationPoint	case activationPoint
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO4hintyA2CmF	swift.enum.case	public	ElementProperty.hint	ElementProperty.hint	case hint
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO5frameyA2CmF	swift.enum.case	public	ElementProperty.frame	ElementProperty.frame	case frame
+symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO5labelyA2CmF	swift.enum.case	public	ElementProperty.label	ElementProperty.label	case label
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO5valueyA2CmF	swift.enum.case	public	ElementProperty.value	ElementProperty.value	case value
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO6rotorsyA2CmF	swift.enum.case	public	ElementProperty.rotors	ElementProperty.rotors	case rotors
 symbol	ThePlans.symbols.json	s:8ThePlans15ElementPropertyO6traitsyA2CmF	swift.enum.case	public	ElementProperty.traits	ElementProperty.traits	case traits
@@ -621,6 +627,9 @@ symbol	ThePlans.symbols.json	s:8ThePlans16ValidationResultO7flatMapyACyqd__q_GAE
 symbol	ThePlans.symbols.json	s:8ThePlans16ValidationResultO7successyACyxq_Gx_Sayq_GtcAEms8SendableRzsAGR_r0_lF	swift.enum.case	public	ValidationResult.success(_:diagnostics:)	ValidationResult.success(_:diagnostics:)	case success(Value, diagnostics: [Diagnostic])
 symbol	ThePlans.symbols.json	s:8ThePlans16immediateTimeoutSdvp	swift.var	public	immediateTimeout	immediateTimeout	let immediateTimeout: Double
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO	swift.enum	public	AnyPropertyChange	AnyPropertyChange	enum AnyPropertyChange
+symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO10identifier6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	identifier(before:after:)	AnyPropertyChange.identifier(before:after:)	static func identifier(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO10identifieryACSSFZ	swift.type.method	public	identifier(_:)	AnyPropertyChange.identifier(_:)	static func identifier(_ after: String) -> AnyPropertyChange
+symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO10identifieryAcA07ElementdE0VyAA010IdentifierD0OGcACmF	swift.enum.case	public	AnyPropertyChange.identifier(_:)	AnyPropertyChange.identifier(_:)	case identifier(ElementPropertyChange<IdentifierProperty>)
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO11descriptionSSvp	swift.property	public	description	AnyPropertyChange.description	var description: String { get }
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO13customContent6before5afterAcA06CustomG5MatchVySSGSg_AJtFZ	swift.type.method	public	customContent(before:after:)	AnyPropertyChange.customContent(before:after:)	static func customContent(before: CustomContentMatch<String>? = nil, after: CustomContentMatch<String>? = nil) -> AnyPropertyChange
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO13customContentyAcA07ElementdE0VyAA06CustomgD0OGcACmF	swift.enum.case	public	AnyPropertyChange.customContent(_:)	AnyPropertyChange.customContent(_:)	case customContent(ElementPropertyChange<CustomContentProperty>)
@@ -631,6 +640,9 @@ symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO4hint6before5afterAc
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO4hintyAcA07ElementdE0VyAA04HintD0OGcACmF	swift.enum.case	public	AnyPropertyChange.hint(_:)	AnyPropertyChange.hint(_:)	case hint(ElementPropertyChange<HintProperty>)
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO5frame6before5afterAcA17ElementFrameMatchVSg_AItFZ	swift.type.method	public	frame(before:after:)	AnyPropertyChange.frame(before:after:)	static func frame(before: ElementFrameMatch? = nil, after: ElementFrameMatch? = nil) -> AnyPropertyChange
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO5frameyAcA07ElementdE0VyAA05FrameD0OGcACmF	swift.enum.case	public	AnyPropertyChange.frame(_:)	AnyPropertyChange.frame(_:)	case frame(ElementPropertyChange<FrameProperty>)
+symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO5label6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	label(before:after:)	AnyPropertyChange.label(before:after:)	static func label(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
+symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO5labelyACSSFZ	swift.type.method	public	label(_:)	AnyPropertyChange.label(_:)	static func label(_ after: String) -> AnyPropertyChange
+symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO5labelyAcA07ElementdE0VyAA05LabelD0OGcACmF	swift.enum.case	public	AnyPropertyChange.label(_:)	AnyPropertyChange.label(_:)	case label(ElementPropertyChange<LabelProperty>)
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO5value6before5afterAcA11StringMatchOySSGSg_AJtFZ	swift.type.method	public	value(before:after:)	AnyPropertyChange.value(before:after:)	static func value(before: StringMatch<String>? = nil, after: StringMatch<String>? = nil) -> AnyPropertyChange
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO5valueyACSSFZ	swift.type.method	public	value(_:)	AnyPropertyChange.value(_:)	static func value(_ after: String) -> AnyPropertyChange
 symbol	ThePlans.symbols.json	s:8ThePlans17AnyPropertyChangeO5valueyAcA07ElementdE0VyAA05ValueD0OGcACmF	swift.enum.case	public	AnyPropertyChange.value(_:)	AnyPropertyChange.value(_:)	case value(ElementPropertyChange<ValueProperty>)
@@ -838,6 +850,10 @@ symbol	ThePlans.symbols.json	s:8ThePlans18HeistReferenceNameV6encode2toys7Encode
 symbol	ThePlans.symbols.json	s:8ThePlans18HeistReferenceNameV8rawValueACSS_tcfc	swift.init	public	init(rawValue:)	HeistReferenceName.init(rawValue:)	init(rawValue: String)
 symbol	ThePlans.symbols.json	s:8ThePlans18HeistReferenceNameV8rawValueSSvp	swift.property	public	rawValue	HeistReferenceName.rawValue	let rawValue: String
 symbol	ThePlans.symbols.json	s:8ThePlans18HeistReferenceNameV9validated4typeACSS_tKF	swift.method	public	validated(type:)	HeistReferenceName.validated(type:)	func validated(type: String = "heist") throws -> HeistReferenceName
+symbol	ThePlans.symbols.json	s:8ThePlans18IdentifierPropertyO	swift.enum	public	IdentifierProperty	IdentifierProperty	enum IdentifierProperty
+symbol	ThePlans.symbols.json	s:8ThePlans18IdentifierPropertyO11ExprCheckera	swift.typealias	public	IdentifierProperty.ExprChecker	IdentifierProperty.ExprChecker	typealias ExprChecker = StringMatch<StringExpr>
+symbol	ThePlans.symbols.json	s:8ThePlans18IdentifierPropertyO7Checkera	swift.typealias	public	IdentifierProperty.Checker	IdentifierProperty.Checker	typealias Checker = StringMatch<String>
+symbol	ThePlans.symbols.json	s:8ThePlans18IdentifierPropertyO8propertyAA07ElementD0OvpZ	swift.type.property	public	property	IdentifierProperty.property	static let property: ElementProperty
 symbol	ThePlans.symbols.json	s:8ThePlans18ScrollToEdgeTargetV	swift.struct	public	ScrollToEdgeTarget	ScrollToEdgeTarget	struct ScrollToEdgeTarget
 symbol	ThePlans.symbols.json	s:8ThePlans18ScrollToEdgeTargetV07elementF04edgeAcA07ElementF0O_AA0cE0Otcfc	swift.init	public	init(elementTarget:edge:)	ScrollToEdgeTarget.init(elementTarget:edge:)	init(elementTarget: ElementTarget, edge: ScrollEdge = .top)
 symbol	ThePlans.symbols.json	s:8ThePlans18ScrollToEdgeTargetV11descriptionSSvp	swift.property	public	description	ScrollToEdgeTarget.description	var description: String { get }
@@ -992,6 +1008,10 @@ symbol	ThePlans.symbols.json	s:8ThePlans20HeistSemanticSurfaceV16targetPredicate
 symbol	ThePlans.symbols.json	s:8ThePlans20HeistSemanticSurfaceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistSemanticSurface.init(from:)	init(from decoder: any Decoder) throws
 symbol	ThePlans.symbols.json	s:8ThePlans20HeistSemanticSurfaceV5waitsSaySSGvp	swift.property	public	waits	HeistSemanticSurface.waits	let waits: [String]
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO	swift.enum	public	AnyPropertyChangeExpr	AnyPropertyChangeExpr	enum AnyPropertyChangeExpr
+symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO10identifier6before5afterAcA11StringMatchOyAA0jF0OGSg_ALtFZ	swift.type.method	public	identifier(before:after:)	AnyPropertyChangeExpr.identifier(before:after:)	static func identifier(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO10identifieryACSSFZ	swift.type.method	public	identifier(_:)	AnyPropertyChangeExpr.identifier(_:)	static func identifier(_ after: String) -> AnyPropertyChangeExpr
+symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO10identifieryAcA06StringF0OFZ	swift.type.method	public	identifier(_:)	AnyPropertyChangeExpr.identifier(_:)	static func identifier(_ after: StringExpr) -> AnyPropertyChangeExpr
+symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO10identifieryAcA07ElementdeF0VyAA010IdentifierD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.identifier(_:)	AnyPropertyChangeExpr.identifier(_:)	case identifier(ElementPropertyChangeExpr<IdentifierProperty>)
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO11descriptionSSvp	swift.property	public	description	AnyPropertyChangeExpr.description	var description: String { get }
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO13customContent6before5afterAcA06CustomH5MatchVyAA06StringF0OGSg_ALtFZ	swift.type.method	public	customContent(before:after:)	AnyPropertyChangeExpr.customContent(before:after:)	static func customContent(before: CustomContentMatch<StringExpr>? = nil, after: CustomContentMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO13customContentyAcA07ElementdeF0VyAA06CustomhD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.customContent(_:)	AnyPropertyChangeExpr.customContent(_:)	case customContent(ElementPropertyChangeExpr<CustomContentProperty>)
@@ -1002,6 +1022,10 @@ symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO4hint6before5aft
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO4hintyAcA07ElementdeF0VyAA04HintD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.hint(_:)	AnyPropertyChangeExpr.hint(_:)	case hint(ElementPropertyChangeExpr<HintProperty>)
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5frame6before5afterAcA17ElementFrameMatchVSg_AItFZ	swift.type.method	public	frame(before:after:)	AnyPropertyChangeExpr.frame(before:after:)	static func frame(before: ElementFrameMatch? = nil, after: ElementFrameMatch? = nil) -> AnyPropertyChangeExpr
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5frameyAcA07ElementdeF0VyAA05FrameD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.frame(_:)	AnyPropertyChangeExpr.frame(_:)	case frame(ElementPropertyChangeExpr<FrameProperty>)
+symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5label6before5afterAcA11StringMatchOyAA0jF0OGSg_ALtFZ	swift.type.method	public	label(before:after:)	AnyPropertyChangeExpr.label(before:after:)	static func label(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
+symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5labelyACSSFZ	swift.type.method	public	label(_:)	AnyPropertyChangeExpr.label(_:)	static func label(_ after: String) -> AnyPropertyChangeExpr
+symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5labelyAcA06StringF0OFZ	swift.type.method	public	label(_:)	AnyPropertyChangeExpr.label(_:)	static func label(_ after: StringExpr) -> AnyPropertyChangeExpr
+symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5labelyAcA07ElementdeF0VyAA05LabelD0OGcACmF	swift.enum.case	public	AnyPropertyChangeExpr.label(_:)	AnyPropertyChangeExpr.label(_:)	case label(ElementPropertyChangeExpr<LabelProperty>)
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5value6before5afterAcA11StringMatchOyAA0jF0OGSg_ALtFZ	swift.type.method	public	value(before:after:)	AnyPropertyChangeExpr.value(before:after:)	static func value(before: StringMatch<StringExpr>? = nil, after: StringMatch<StringExpr>? = nil) -> AnyPropertyChangeExpr
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5valueyACSSFZ	swift.type.method	public	value(_:)	AnyPropertyChangeExpr.value(_:)	static func value(_ after: String) -> AnyPropertyChangeExpr
 symbol	ThePlans.symbols.json	s:8ThePlans21AnyPropertyChangeExprO5valueyAcA06StringF0OFZ	swift.type.method	public	value(_:)	AnyPropertyChangeExpr.value(_:)	static func value(_ after: StringExpr) -> AnyPropertyChangeExpr
@@ -1807,6 +1831,8 @@ relationship	conformsTo	s:8ThePlans13HeistCompilerC	s:ScA	HeistCompiler	_Concurr
 relationship	conformsTo	s:8ThePlans13HeistCompilerC	s:s8SendableP	HeistCompiler	Swift.Sendable
 relationship	conformsTo	s:8ThePlans13HeistCompilerC13ConfigurationV	s:SQ	HeistCompiler.Configuration	Swift.Equatable
 relationship	conformsTo	s:8ThePlans13HeistCompilerC13ConfigurationV	s:s8SendableP	HeistCompiler.Configuration	Swift.Sendable
+relationship	conformsTo	s:8ThePlans13LabelPropertyO	s:8ThePlans19ElementPropertyKindP	LabelProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans13LabelPropertyO	s:s8SendableP	LabelProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans13PredicateCaseV	s:SE	PredicateCase	Swift.Encodable
 relationship	conformsTo	s:8ThePlans13PredicateCaseV	s:SQ	PredicateCase	Swift.Equatable
 relationship	conformsTo	s:8ThePlans13PredicateCaseV	s:Se	PredicateCase	Swift.Decodable
@@ -2034,6 +2060,8 @@ relationship	conformsTo	s:8ThePlans18HeistReferenceNameV	s:s26ExpressibleByStrin
 relationship	conformsTo	s:8ThePlans18HeistReferenceNameV	s:s33ExpressibleByUnicodeScalarLiteralP	HeistReferenceName	Swift.ExpressibleByUnicodeScalarLiteral
 relationship	conformsTo	s:8ThePlans18HeistReferenceNameV	s:s43ExpressibleByExtendedGraphemeClusterLiteralP	HeistReferenceName	Swift.ExpressibleByExtendedGraphemeClusterLiteral
 relationship	conformsTo	s:8ThePlans18HeistReferenceNameV	s:s8SendableP	HeistReferenceName	Swift.Sendable
+relationship	conformsTo	s:8ThePlans18IdentifierPropertyO	s:8ThePlans19ElementPropertyKindP	IdentifierProperty	ElementPropertyKind
+relationship	conformsTo	s:8ThePlans18IdentifierPropertyO	s:s8SendableP	IdentifierProperty	Swift.Sendable
 relationship	conformsTo	s:8ThePlans18ScrollToEdgeTargetV	s:SE	ScrollToEdgeTarget	Swift.Encodable
 relationship	conformsTo	s:8ThePlans18ScrollToEdgeTargetV	s:SQ	ScrollToEdgeTarget	Swift.Equatable
 relationship	conformsTo	s:8ThePlans18ScrollToEdgeTargetV	s:Se	ScrollToEdgeTarget	Swift.Decodable

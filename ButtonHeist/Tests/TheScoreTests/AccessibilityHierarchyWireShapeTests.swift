@@ -172,7 +172,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
             omittedContainers: [
                 InterfaceDiscoveryOmittedContainer(
                     containerName: "main_scroll",
-                    type: "scrollable",
+                    type: .scrollable,
                     reasonCodes: [.discoveryScrollLimit],
                     scrollAxis: .vertical,
                     viewportWidth: 320,
@@ -198,35 +198,35 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
     func testOmittedContainerDiagnosticsUseCanonicalSortOrder() {
         let unnamed = InterfaceDiscoveryOmittedContainer(
-            type: "scrollable",
+            type: .scrollable,
             reasonCodes: [],
             viewportWidth: 320,
             viewportHeight: 400
         )
         let namedList = InterfaceDiscoveryOmittedContainer(
             containerName: "main",
-            type: "list",
+            type: .list,
             reasonCodes: [],
             viewportWidth: 500,
             viewportHeight: 400
         )
         let namedScrollableNarrow = InterfaceDiscoveryOmittedContainer(
             containerName: "main",
-            type: "scrollable",
+            type: .scrollable,
             reasonCodes: [],
             viewportWidth: 320,
             viewportHeight: 400
         )
         let namedScrollableWide = InterfaceDiscoveryOmittedContainer(
             containerName: "main",
-            type: "scrollable",
+            type: .scrollable,
             reasonCodes: [],
             viewportWidth: 500,
             viewportHeight: 400
         )
         let laterName = InterfaceDiscoveryOmittedContainer(
             containerName: "secondary",
-            type: "scrollable",
+            type: .scrollable,
             reasonCodes: [],
             viewportWidth: 100,
             viewportHeight: 100

@@ -437,7 +437,7 @@ final class Navigation {
             guard case .scrollable(let contentSize) = container.type else {
                 return InterfaceDiscoveryOmittedContainer(
                     containerName: containerName,
-                    type: container.typeName.rawValue,
+                    type: container.typeName,
                     reasonCodes: reasons.interfaceDiscoveryReasonCodes,
                     viewportWidth: Double(frame.size.width),
                     viewportHeight: Double(frame.size.height)
@@ -452,7 +452,7 @@ final class Navigation {
             )
             return InterfaceDiscoveryOmittedContainer(
                 containerName: containerName,
-                type: container.typeName.rawValue,
+                type: container.typeName,
                 reasonCodes: reasons.interfaceDiscoveryReasonCodes,
                 scrollAxis: scrollAxis,
                 viewportWidth: Double(frame.size.width),

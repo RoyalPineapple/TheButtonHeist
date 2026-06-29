@@ -3,15 +3,113 @@ import Network
 
 import TheScore
 
+struct DiscoveryDeviceID: Hashable, Sendable, Codable, CustomStringConvertible, CustomDebugStringConvertible {
+    let rawValue: String
+
+    init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    var description: String { rawValue }
+    var debugDescription: String { rawValue }
+
+    static func hostPort(host: String, port: UInt16) -> DiscoveryDeviceID {
+        DiscoveryDeviceID("\(host):\(port)")
+    }
+
+    static func serviceName(_ serviceName: DiscoveryServiceName) -> DiscoveryDeviceID {
+        DiscoveryDeviceID(serviceName.rawValue)
+    }
+
+    static func usbIdentifier(_ identifier: String) -> DiscoveryDeviceID {
+        DiscoveryDeviceID("usb-\(identifier)")
+    }
+}
+
+struct DiscoveryServiceName: Hashable, Sendable, Codable, CustomStringConvertible, CustomDebugStringConvertible {
+    let rawValue: String
+
+    init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    var description: String { rawValue }
+    var debugDescription: String { rawValue }
+}
+
+struct DiscoveryIdentity: Hashable, Sendable, Codable, CustomStringConvertible, CustomDebugStringConvertible {
+    let rawValue: String
+
+    init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    var description: String { rawValue }
+    var debugDescription: String { rawValue }
+
+    static func installation(appName: String, installationId: String) -> DiscoveryIdentity {
+        let normalizedAppName = appName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return DiscoveryIdentity("install|\(normalizedAppName)|\(installationId)")
+    }
+
+    static func serviceName(_ serviceName: DiscoveryServiceName) -> DiscoveryIdentity {
+        DiscoveryIdentity("service|\(serviceName.rawValue)")
+    }
+}
+
+struct DiscoveryResolutionQuery: Equatable, Sendable, CustomStringConvertible {
+    let rawValue: String
+    let normalizedValue: String
+
+    init?(_ value: String?) {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        rawValue = trimmed
+        normalizedValue = trimmed.lowercased()
+    }
+
+    var description: String { rawValue }
+}
+
 /// A discovered iOS device running TheInsideJob.
 ///
-/// `id` is the discovery identity used to dedupe and resolve a concrete endpoint:
-/// Bonjour service name, USB device identifier, or direct `host:port`. `name` is
+/// `id` is the public endpoint identifier: Bonjour service name, USB device
+/// identifier, or direct `host:port`. Internal discovery code wraps that string
+/// before using it as a device id, service name, or semantic identity. `name` is
 /// the advertised service label. Human-facing display text is derived separately
 /// by `displayName(among:)` so target resolution does not depend on formatting.
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     /// Stable discovery key for this advertised endpoint.
-    public let id: String
+    private let deviceID: DiscoveryDeviceID
+    public var id: String { deviceID.rawValue }
     /// Advertised service label, usually `AppName#instanceId`.
     let name: String
     let endpoint: NWEndpoint
@@ -32,7 +130,25 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
                 displayDeviceName: String? = nil,
                 instanceId: String? = nil,
                 connectionType: ConnectionScope? = nil) {
-        self.id = id
+        self.init(
+            deviceID: DiscoveryDeviceID(id),
+            name: name,
+            endpoint: endpoint,
+            simulatorUDID: simulatorUDID,
+            installationId: installationId,
+            displayDeviceName: displayDeviceName,
+            instanceId: instanceId,
+            connectionType: connectionType
+        )
+    }
+
+    init(deviceID: DiscoveryDeviceID, name: String, endpoint: NWEndpoint,
+         simulatorUDID: String? = nil,
+         installationId: String? = nil,
+         displayDeviceName: String? = nil,
+         instanceId: String? = nil,
+         connectionType: ConnectionScope? = nil) {
+        self.deviceID = deviceID
         self.name = name
         self.endpoint = endpoint
         self.simulatorUDID = simulatorUDID
@@ -40,7 +156,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.advertisedDeviceName = displayDeviceName
         self.instanceId = instanceId
         self.connectionType = connectionType ?? Self.inferConnectionType(
-            id: id,
+            id: deviceID,
             simulatorUDID: simulatorUDID
         )
     }
@@ -52,10 +168,10 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         name: String? = nil
     ) -> DiscoveredDevice? {
         guard let (host, port) = parseHostPort(from: value) else { return nil }
-        let resolvedId = id ?? "\(host):\(port)"
+        let resolvedId = DiscoveryDeviceID(id ?? "\(host):\(port)")
         let resolvedName = name ?? "\(host):\(port)"
         return DiscoveredDevice(
-            id: resolvedId,
+            deviceID: resolvedId,
             name: resolvedName,
             endpoint: .hostPort(host: .init(host), port: .init(integerLiteral: port))
         )
@@ -67,7 +183,8 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
             host: NWEndpoint.Host(host),
             port: NWEndpoint.Port(integerLiteral: port)
         )
-        self.init(id: "\(host):\(port)", name: "\(host):\(port)", endpoint: endpoint)
+        let deviceID = DiscoveryDeviceID.hostPort(host: host, port: port)
+        self.init(deviceID: deviceID, name: deviceID.rawValue, endpoint: endpoint)
     }
 
     /// Parse a direct loopback connection target from a filter string.
@@ -82,11 +199,11 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
+        hasher.combine(deviceID)
     }
 
     public static func == (lhs: DiscoveredDevice, rhs: DiscoveredDevice) -> Bool {
-        lhs.id == rhs.id
+        lhs.deviceID == rhs.deviceID
     }
 
     private static func parseHostPort(from value: String) -> (String, UInt16)? {
@@ -127,10 +244,18 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return trimmed.isEmpty ? nil : trimmed.lowercased()
     }
 
-    private static func inferConnectionType(id: String, simulatorUDID: String?) -> ConnectionScope {
+    private static func inferConnectionType(id: DiscoveryDeviceID, simulatorUDID: String?) -> ConnectionScope {
         if simulatorUDID != nil { return .simulator }
-        if id.hasPrefix("usb-") { return .usb }
+        if id.rawValue.hasPrefix("usb-") { return .usb }
         return .network
+    }
+
+    var discoveryDeviceID: DiscoveryDeviceID {
+        deviceID
+    }
+
+    var discoveryServiceName: DiscoveryServiceName {
+        DiscoveryServiceName(id)
     }
 
     /// Instance ID parsed from service name suffix (e.g., "a1b2c3d4").
@@ -159,14 +284,12 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         advertisedDeviceName ?? ""
     }
 
-    var discoveryIdentity: String {
-        let normalizedAppName = appName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
+    var discoveryIdentity: DiscoveryIdentity {
         if let installationId = Self.normalizedIdentifier(installationId) {
-            return "install|\(normalizedAppName)|\(installationId)"
+            return .installation(appName: appName, installationId: installationId)
         }
 
-        return "service|\(id)"
+        return .serviceName(discoveryServiceName)
     }
 
     var resolutionDiagnosticLabel: String {
@@ -174,22 +297,24 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return "\(name) (\(deviceName))"
     }
 
-    /// Check if this device matches a requested target query.
-    /// Matches case-insensitively: contains on service/app/device names, exact
-    /// or prefix on identifiers.
-    func matches(resolutionQuery query: String) -> Bool {
-        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalizedQuery.isEmpty else { return false }
-
+    func matches(resolutionQuery query: DiscoveryResolutionQuery) -> Bool {
         let nameMatches = [name, appName, deviceName]
-            .map { $0.lowercased() }
-            .contains { $0.contains(normalizedQuery) }
+            .contains { Self.label($0, matches: query) }
 
         let identifierMatches = [shortId, installationId, instanceId, simulatorUDID, id]
-            .compactMap { $0?.lowercased() }
-            .contains { $0 == normalizedQuery || $0.hasPrefix(normalizedQuery) }
+            .contains { Self.identifier($0, matches: query) }
 
         return nameMatches || identifierMatches
+    }
+
+    private static func label(_ value: String, matches query: DiscoveryResolutionQuery) -> Bool {
+        value.lowercased().contains(query.normalizedValue)
+    }
+
+    private static func identifier(_ value: String?, matches query: DiscoveryResolutionQuery) -> Bool {
+        guard let value else { return false }
+        let normalizedValue = value.lowercased()
+        return normalizedValue == query.normalizedValue || normalizedValue.hasPrefix(query.normalizedValue)
     }
 
     /// Compute display text with disambiguation when multiple discovered
@@ -207,13 +332,4 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         }
         return "\(app)\(deviceSuffix)"
     }
-}
-
-extension Array where Element == DiscoveredDevice {
-    /// Return the first device matching the filter, or the first device if filter is nil.
-    func first(matching filter: String?) -> DiscoveredDevice? {
-        guard let filter else { return first }
-        return first { $0.matches(resolutionQuery: filter) }
-    }
-
 }

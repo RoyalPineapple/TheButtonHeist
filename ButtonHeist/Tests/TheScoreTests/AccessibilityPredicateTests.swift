@@ -548,9 +548,102 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertFalse(mismatch.validate(against: action).met)
     }
 
+    func testElementUpdatedRejectsBeforeAfterWithoutPropertyAtDecodeBoundary() {
+        let json = Data("""
+        {
+          "type": "change",
+          "scopes": [
+            {
+              "type": "elements",
+              "assertions": [
+                {
+                  "type": "updated",
+                  "after": { "x": 1 }
+                }
+              ]
+            }
+          ]
+        }
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityPredicate.self, from: json)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertEqual(context.codingPath.last?.stringValue, "property")
+            XCTAssertEqual(context.debugDescription, "updated predicate before/after require property")
+        }
+    }
+
     func testElementUpdatedRejectsStringCheckersForNonTextPropertiesAtDecodeBoundary() {
-        for property in ["traits", "actions", "frame", "activationPoint", "customContent", "rotors"] {
-            let json = Data("""
+        let cases = [
+            ("traits", "Unknown trait set match field"),
+            ("actions", "Unknown action set match field"),
+            ("frame", "Unknown frame match field"),
+            ("activationPoint", "Unknown activation point match field"),
+            ("customContent", "Unknown custom content match field"),
+            ("rotors", "Unknown rotor set match field"),
+        ]
+        for (property, expectedMessage) in cases {
+            assertAccessibilityPredicateDecodeFails(
+                """
+                {
+                  "type": "change",
+                  "scopes": [
+                    {
+                      "type": "elements",
+                      "assertions": [
+                        {
+                          "type": "updated",
+                          "property": "\(property)",
+                          "after": { "mode": "exact", "value": "activate" }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """,
+                contains: expectedMessage,
+                "\(property) accepted a string-match-shaped update checker"
+            )
+        }
+    }
+
+    func testElementUpdatedRejectsElementMatcherFieldsInsideTypedCheckerObjects() {
+        let cases = [
+            ("traits", #"Unknown trait set match field "label""#),
+            ("frame", #"Unknown frame match field "label""#),
+        ]
+        for (property, expectedMessage) in cases {
+            assertAccessibilityPredicateDecodeFails(
+                """
+                {
+                  "type": "change",
+                  "scopes": [
+                    {
+                      "type": "elements",
+                      "assertions": [
+                        {
+                          "type": "updated",
+                          "property": "\(property)",
+                          "after": {
+                            "label": { "mode": "exact", "value": "Save" }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """,
+                contains: expectedMessage,
+                "\(property) accepted an element-matcher field inside its checker object"
+            )
+        }
+    }
+
+    func testElementUpdatedRejectsUnknownNestedCheckerKeysAtDecodeBoundary() {
+        assertAccessibilityPredicateDecodeFails(
+            """
             {
               "type": "change",
               "scopes": [
@@ -559,20 +652,16 @@ final class AccessibilityPredicateTests: XCTestCase {
                   "assertions": [
                     {
                       "type": "updated",
-                      "property": "\(property)",
-                      "after": "activate"
+                      "property": "frame",
+                      "after": { "x": 1, "unexpected": true }
                     }
                   ]
                 }
               ]
             }
-            """.utf8)
-
-            XCTAssertThrowsError(
-                try JSONDecoder().decode(AccessibilityPredicate.self, from: json),
-                "\(property) accepted a string-shaped update checker"
-            )
-        }
+            """,
+            contains: #"Unknown frame match field "unexpected""#
+        )
     }
 
     func testElementUpdatedNoFiltersMetWhenAnyUpdatesExist() {
@@ -864,6 +953,41 @@ final class AccessibilityPredicateTests: XCTestCase {
 
     // MARK: - Helpers
 
+    private func assertAccessibilityPredicateDecodeFails(
+        _ json: String,
+        contains expectedMessage: String,
+        _ failureMessage: String = "Expected decode to fail",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(AccessibilityPredicate.self, from: Data(json.utf8)),
+            failureMessage,
+            file: file,
+            line: line
+        ) { error in
+            let message = decodingFailureMessage(error)
+            XCTAssertTrue(
+                message.contains(expectedMessage),
+                "Expected error containing \(expectedMessage), got \(message)",
+                file: file,
+                line: line
+            )
+        }
+    }
+
+    private func decodingFailureMessage(_ error: Error) -> String {
+        switch error {
+        case DecodingError.dataCorrupted(let context),
+             DecodingError.keyNotFound(_, let context),
+             DecodingError.typeMismatch(_, let context),
+             DecodingError.valueNotFound(_, let context):
+            return context.debugDescription
+        default:
+            return String(describing: error)
+        }
+    }
+
     private func makeElement(
         label: String? = nil,
         value: String? = nil,
@@ -957,6 +1081,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         afterTraits: [HeistTrait]
     ) -> PropertyChange {
         switch property {
+        case .label:
+            return .label(old: old, new: new)
+        case .identifier:
+            return .identifier(old: old, new: new)
         case .value:
             return .value(old: old, new: new)
         case .hint:
@@ -975,6 +1103,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         traits: [HeistTrait]
     ) -> HeistElement {
         switch property {
+        case .label:
+            return makeElement(label: value ?? label, traits: traits)
+        case .identifier:
+            return makeElement(label: label, identifier: value, traits: traits)
         case .value:
             return makeElement(label: label, value: value, traits: traits)
         case .traits:

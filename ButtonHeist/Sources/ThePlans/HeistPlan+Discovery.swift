@@ -247,11 +247,11 @@ private extension HeistPlan {
         for definition in definitions {
             guard let localName = definition.name, !localName.isEmpty else { continue }
             let namePath = pathPrefix + [localName]
-            let qualifiedName = HeistInvocationPath.render(namePath)
+            let definitionNode = HeistCallGraph.Node(namePath: namePath)
             let environment = Self.discoveryEnvironment(for: definition.parameter)
             heists.append(ResolvedCatalogHeist(
                 entry: catalogEntry(
-                    name: qualifiedName,
+                    name: definitionNode.name,
                     role: .capability,
                     parameter: definition.parameter
                 ),
@@ -259,7 +259,7 @@ private extension HeistPlan {
                 definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: namePath),
                 rootDefinitionScope: rootDefinitionScope,
                 environment: environment,
-                invocationStack: [qualifiedName]
+                invocationStack: [definitionNode]
             ))
             collectCatalogDefinitions(
                 definition.definitions,
@@ -399,7 +399,7 @@ struct ResolvedCatalogHeist {
     let definitionScope: HeistDefinitionScope
     let rootDefinitionScope: HeistDefinitionScope
     let environment: HeistExecutionEnvironment
-    let invocationStack: [String]
+    let invocationStack: [HeistCallGraph.Node]
 }
 
 private struct HeistSemanticSurfaceBuilder {
@@ -436,7 +436,7 @@ private struct HeistSemanticSurfaceBuilder {
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
         environment: HeistExecutionEnvironment,
-        invocationStack: [String]
+        invocationStack: [HeistCallGraph.Node]
     ) {
         for step in steps {
             collect(
@@ -454,7 +454,7 @@ private struct HeistSemanticSurfaceBuilder {
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
         environment: HeistExecutionEnvironment,
-        invocationStack: [String]
+        invocationStack: [HeistCallGraph.Node]
     ) {
         switch step {
         case .action(let action):
@@ -565,14 +565,15 @@ private struct HeistSemanticSurfaceBuilder {
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
         environment: HeistExecutionEnvironment,
-        invocationStack: [String]
+        invocationStack: [HeistCallGraph.Node]
     ) {
         guard let resolved = definitionScope.resolveInvocation(
             path: invocation.invocationPath,
             rootScope: rootDefinitionScope
         ) else { return }
-        appendUnique(resolved.qualifiedName, to: &nestedRunHeists)
-        guard HeistCallGraph.cycle(closing: resolved.qualifiedName, in: invocationStack) == nil,
+        let resolvedNode = resolved.callGraphNode
+        appendUnique(resolvedNode.name, to: &nestedRunHeists)
+        guard HeistCallGraph.nodeCycle(closing: resolvedNode, in: invocationStack) == nil,
               let nestedEnvironment = try? environment.binding(
                 argument: invocation.argument,
                 to: resolved.definition.parameter
@@ -586,7 +587,7 @@ private struct HeistSemanticSurfaceBuilder {
             ),
             rootDefinitionScope: rootDefinitionScope,
             environment: nestedEnvironment,
-            invocationStack: invocationStack + [resolved.qualifiedName]
+            invocationStack: invocationStack + [resolvedNode]
         )
     }
 

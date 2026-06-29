@@ -5,7 +5,7 @@ import TheScore
 extension TheSafecracker {
 
     /// Outcome of a high-level interaction (action, gesture, text entry).
-    /// TheInsideJob wraps this with AccessibilityTrace.Delta to produce the wire ActionResult.
+    /// TheInsideJob wraps this with post-action observations to produce the wire ActionResult.
     struct InteractionResult {
         let success: Bool
         let method: ActionMethod
@@ -84,45 +84,33 @@ extension TheSafecracker {
 
         func withSubjectEvidence(_ evidence: ActionSubjectEvidence?) -> InteractionResult {
             guard success, let evidence else { return self }
-            return InteractionResult(
-                success: success,
-                method: method,
-                message: message,
-                payload: payload,
-                subjectEvidence: evidence,
-                resolvedElementId: resolvedElementId,
-                activationTrace: activationTrace,
-                timing: timing,
-                failureKind: failureKind
-            )
+            return copying(subjectEvidence: evidence)
         }
 
         func withActivationTrace(_ trace: ActivationTrace?) -> InteractionResult {
             guard let trace else { return self }
-            return InteractionResult(
-                success: success,
-                method: method,
-                message: message,
-                payload: payload,
-                subjectEvidence: subjectEvidence,
-                resolvedElementId: resolvedElementId,
-                activationTrace: trace,
-                timing: timing,
-                failureKind: failureKind
-            )
+            return copying(activationTrace: trace)
         }
 
         func withTiming(_ timing: ActionPerformanceTiming?) -> InteractionResult {
             guard let timing else { return self }
+            return copying(timing: self.timing?.merging(timing) ?? timing)
+        }
+
+        private func copying(
+            subjectEvidence: ActionSubjectEvidence? = nil,
+            activationTrace: ActivationTrace? = nil,
+            timing: ActionPerformanceTiming? = nil
+        ) -> InteractionResult {
             return InteractionResult(
                 success: success,
                 method: method,
                 message: message,
                 payload: payload,
-                subjectEvidence: subjectEvidence,
+                subjectEvidence: subjectEvidence ?? self.subjectEvidence,
                 resolvedElementId: resolvedElementId,
-                activationTrace: activationTrace,
-                timing: self.timing?.merging(timing) ?? timing,
+                activationTrace: activationTrace ?? self.activationTrace,
+                timing: timing ?? self.timing,
                 failureKind: failureKind
             )
         }

@@ -113,7 +113,7 @@ final class DeviceDiscovery: DeviceDiscovering {
             case .removed(let result):
                 logger.info("Service removed: \(String(describing: result.endpoint))")
                 if case let .service(name, _, _, _) = result.endpoint {
-                    let mutations = registry.recordLost(serviceName: name)
+                    let mutations = registry.recordLost(DiscoveryServiceName(name))
                     discoveryPhase = .active(
                         id: sessionID,
                         browser: browser,
@@ -127,7 +127,7 @@ final class DeviceDiscovery: DeviceDiscovering {
                 if case let .service(oldName, _, _, _) = old.endpoint,
                    case let .service(newName, _, _, _) = new.endpoint,
                    oldName != newName {
-                    let mutations = registry.recordLost(serviceName: oldName)
+                    let mutations = registry.recordLost(DiscoveryServiceName(oldName))
                     discoveryPhase = .active(
                         id: sessionID,
                         browser: browser,
@@ -209,7 +209,7 @@ final class DeviceDiscovery: DeviceDiscovering {
         }
         for serviceName in unreachableServiceNames {
             logger.info("Evicting unreachable device advertisement: \(serviceName)")
-            let mutations = currentRegistry.recordLost(serviceName: serviceName)
+            let mutations = currentRegistry.recordLost(DiscoveryServiceName(serviceName))
             discoveryPhase = .active(
                 id: sessionID,
                 browser: currentBrowser,

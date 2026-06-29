@@ -153,6 +153,10 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func render(propertyChange change: AnyPropertyChange) -> String {
         switch change {
+        case .label(let change):
+            return renderStringPropertyChange("label", before: change.before, after: change.after)
+        case .identifier(let change):
+            return renderStringPropertyChange("identifier", before: change.before, after: change.after)
         case .value(let change):
             return renderStringPropertyChange("value", before: change.before, after: change.after)
         case .traits(let change):
@@ -174,6 +178,10 @@ extension HeistCanonicalSwiftDSLRenderer {
 
     func render(propertyChange change: AnyPropertyChangeExpr, environment: RenderEnvironment) throws -> String {
         switch change {
+        case .label(let change):
+            return try renderStringPropertyChange("label", before: change.before, after: change.after, environment: environment)
+        case .identifier(let change):
+            return try renderStringPropertyChange("identifier", before: change.before, after: change.after, environment: environment)
         case .value(let change):
             return try renderStringPropertyChange("value", before: change.before, after: change.after, environment: environment)
         case .traits(let change):

@@ -138,6 +138,44 @@ public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable
     }
 }
 
+/// Opaque element identity used only by trace-backed diffing.
+///
+/// Public element projections stay content-shaped. When a capture has stronger
+/// semantic identity metadata, diffing can pair by this value and keep
+/// label/identifier churn from masquerading as remove/add churn.
+package struct TraceElementIdentity: Codable, Equatable, Hashable, Sendable, Comparable, CustomStringConvertible {
+    package let rawValue: String
+
+    package init(_ rawValue: String) {
+        precondition(!rawValue.isEmpty, "TraceElementIdentity cannot be empty")
+        self.rawValue = rawValue
+    }
+
+    package init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        guard !rawValue.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "TraceElementIdentity cannot be empty"
+            ))
+        }
+        self.rawValue = rawValue
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    package var description: String {
+        rawValue
+    }
+
+    package static func < (lhs: TraceElementIdentity, rhs: TraceElementIdentity) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
 /// Button Heist metadata attached to one parser container.
 ///
 /// Container type, modal state, and geometry live on `AccessibilityContainer`.
@@ -180,6 +218,36 @@ public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable {
 
     public var containerByPath: [TreePath: InterfaceContainerAnnotation] {
         Dictionary(containers.map { ($0.path, $0) }, uniquingKeysWith: { _, latest in latest })
+    }
+}
+
+package struct InterfaceTraceIdentities: Equatable, Sendable {
+    package static let empty = InterfaceTraceIdentities()
+
+    package let byPath: [TreePath: TraceElementIdentity]
+
+    package init(_ byPath: [TreePath: TraceElementIdentity] = [:]) {
+        self.byPath = byPath
+    }
+
+    package subscript(path: TreePath) -> TraceElementIdentity? {
+        byPath[path]
+    }
+}
+
+package struct InterfaceElementRecord: Equatable, Sendable {
+    package let path: TreePath
+    package let element: HeistElement
+    package let traceIdentity: TraceElementIdentity?
+
+    package init(
+        path: TreePath,
+        element: HeistElement,
+        traceIdentity: TraceElementIdentity? = nil
+    ) {
+        self.path = path
+        self.element = element
+        self.traceIdentity = traceIdentity
     }
 }
 
@@ -249,7 +317,7 @@ public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
 
 public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, Sendable {
     public let containerName: ContainerName?
-    public let type: String
+    public let type: ContainerTypeName
     public let reasonCodes: [InterfaceDiscoveryReasonCode]
     public let scrollAxis: ScrollContainerAxis?
     public let viewportWidth: Double?
@@ -259,7 +327,7 @@ public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, 
 
     public init(
         containerName: ContainerName? = nil,
-        type: String,
+        type: ContainerTypeName,
         reasonCodes: [InterfaceDiscoveryReasonCode],
         scrollAxis: ScrollContainerAxis? = nil,
         viewportWidth: Double? = nil,
@@ -287,7 +355,7 @@ extension InterfaceDiscoveryOmittedContainer: Comparable {
         let leftName = left.containerName?.rawValue ?? ""
         let rightName = right.containerName?.rawValue ?? ""
         if leftName != rightName { return leftName < rightName }
-        if left.type != right.type { return left.type < right.type }
+        if left.type != right.type { return left.type.rawValue < right.type.rawValue }
 
         let leftViewportWidth = left.viewportWidth ?? 0
         let rightViewportWidth = right.viewportWidth ?? 0
@@ -309,14 +377,29 @@ public struct Interface: Codable, Equatable, Sendable {
     public let tree: [AccessibilityHierarchy]
     public let annotations: InterfaceAnnotations
     public let diagnostics: InterfaceDiagnostics?
+    package let traceIdentities: InterfaceTraceIdentities
 
     /// Button Heist element projection in VoiceOver traversal order.
     public var projectedElements: [HeistElement] {
+        projectedElementRecords.map(\.element)
+    }
+
+    /// Trace-aware element projection in VoiceOver traversal order.
+    ///
+    /// `projectedElements` intentionally stays a public, content-only view.
+    /// Diffing uses records so optional trace identity can participate in
+    /// pairing without leaking into `HeistElement`.
+    package var projectedElementRecords: [InterfaceElementRecord] {
         let annotationsByPath = annotations.elementByPath
         return tree.pathIndexedElements.map { item in
-            HeistElement(
-                accessibilityElement: item.element,
-                annotation: annotationsByPath[item.path]
+            let annotation = annotationsByPath[item.path]
+            return InterfaceElementRecord(
+                path: item.path,
+                element: HeistElement(
+                    accessibilityElement: item.element,
+                    annotation: annotation
+                ),
+                traceIdentity: traceIdentities[item.path]
             )
         }
     }
@@ -331,6 +414,28 @@ public struct Interface: Codable, Equatable, Sendable {
         self.tree = tree
         self.annotations = annotations
         self.diagnostics = diagnostics
+        self.traceIdentities = .empty
+    }
+
+    package init(
+        timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations = .empty,
+        diagnostics: InterfaceDiagnostics? = nil,
+        traceIdentities: InterfaceTraceIdentities
+    ) {
+        self.timestamp = timestamp
+        self.tree = tree
+        self.annotations = annotations
+        self.diagnostics = diagnostics
+        self.traceIdentities = traceIdentities
+    }
+
+    public static func == (lhs: Interface, rhs: Interface) -> Bool {
+        lhs.timestamp == rhs.timestamp &&
+            lhs.tree == rhs.tree &&
+            lhs.annotations == rhs.annotations &&
+            lhs.diagnostics == rhs.diagnostics
     }
 
     public func withDiagnostics(_ diagnostics: InterfaceDiagnostics?) -> Interface {
@@ -338,7 +443,8 @@ public struct Interface: Codable, Equatable, Sendable {
             timestamp: timestamp,
             tree: tree,
             annotations: annotations,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            traceIdentities: traceIdentities
         )
     }
 
@@ -371,6 +477,21 @@ public struct Interface: Codable, Equatable, Sendable {
             )
         }
         return InterfaceAnnotations(elements: elements, containers: containers)
+    }
+
+    package func traceIdentities(
+        forSubtree node: AccessibilityHierarchy,
+        originalPath: TreePath,
+        rootPath: TreePath
+    ) -> InterfaceTraceIdentities {
+        let identities = node.compactMapSubtrees(path: rootPath) { node, newPath -> (TreePath, TraceElementIdentity)? in
+            guard case .element = node else { return nil }
+            let relativePath = Array(newPath.indices.dropFirst(rootPath.indices.count))
+            let oldPath = TreePath(originalPath.indices + relativePath)
+            guard let identity = traceIdentities[oldPath] else { return nil }
+            return (newPath, identity)
+        }
+        return InterfaceTraceIdentities(Dictionary(uniqueKeysWithValues: identities))
     }
 
 }

@@ -67,7 +67,8 @@ extension FenceResponse {
         command: TheFence.Command? = nil,
         result: ActionResult? = nil
     ) -> String? {
-        if expectation.predicate == .change(.screen()), expectation.actual == "elementsChanged" {
+        if expectation.predicate == .change(.screen()),
+           expectation.actual == AccessibilityTrace.DeltaKind.elementsChanged.rawValue {
             return ".change(.screen()) requires a screen-level transition; " +
                 "use .change(.elements()) for same-screen element updates " +
                 "or wait when the UI may settle asynchronously"

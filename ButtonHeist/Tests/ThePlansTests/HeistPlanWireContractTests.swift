@@ -86,6 +86,31 @@ func `model Codable boundaries reject unknown fields`() {
     }
 }
 
+@Test
+func `element update property checkers reject unknown fields`() {
+    expectUnknownField("frame match", contains: #"Unknown frame match field "unexpected""#) {
+        _ = try JSONDecoder().decode(ElementFrameMatch.self, from: Data("""
+        { "width": 1, "unexpected": true }
+        """.utf8))
+    }
+
+    expectUnknownField("activation point match", contains: #"Unknown activation point match field "unexpected""#) {
+        _ = try JSONDecoder().decode(ElementPointMatch.self, from: Data("""
+        { "x": 1, "unexpected": true }
+        """.utf8))
+    }
+
+    expectUnknownField("nested frame update", contains: #"Unknown frame match field "unexpected""#) {
+        _ = try JSONDecoder().decode(ElementDeltaPredicate.self, from: Data("""
+        {
+          "type": "updated",
+          "property": "frame",
+          "after": { "x": 1, "unexpected": true }
+        }
+        """.utf8))
+    }
+}
+
 private func unknownStepPayloadCases() -> [(String, String, () throws -> Void)] {
     [
         ("step wrapper", #"Unknown warn heist step field "unexpected""#, {

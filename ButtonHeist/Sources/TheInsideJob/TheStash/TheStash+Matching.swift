@@ -1,46 +1,9 @@
 #if canImport(UIKit)
 #if DEBUG
-import UIKit
-
 import ThePlans
 import TheScore
 
 import AccessibilitySnapshotParser
-
-// MARK: - Stable Identity
-
-extension AccessibilityElement {
-
-    /// Key for tracking unique elements across scroll positions.
-    /// Prefers semantic properties (label, identifier, value) which are stable
-    /// across scroll offsets. When all semantic properties are empty, falls back
-    /// to frame geometry so identical unlabeled elements at different positions
-    /// still hash as distinct.
-    struct StableKey: Hashable {
-        let label: String?
-        let identifier: String?
-        let value: String?
-        let traits: AccessibilityTraits
-        let geometryDisambiguationFrame: CGRect?
-    }
-
-    private var hasSemanticIdentity: Bool {
-        label?.isEmpty == false
-            || identifier?.isEmpty == false
-            || value?.isEmpty == false
-    }
-
-    var stableKey: StableKey {
-        let frame: CGRect? = hasSemanticIdentity ? nil : shape.frame
-        return StableKey(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits,
-            geometryDisambiguationFrame: frame
-        )
-    }
-}
 
 // MARK: - Hierarchy-Level Element Matching
 

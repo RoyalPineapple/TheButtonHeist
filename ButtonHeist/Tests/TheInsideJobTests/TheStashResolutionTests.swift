@@ -91,6 +91,56 @@ final class TheStashResolutionTests: XCTestCase {
         ))
     }
 
+    private func installMatcherParityScreen() -> Screen {
+        nextElementYOffset = 0
+        let screen = Screen.makeForTests(elements: [
+            (
+                element(label: "Save", value: "Draft", identifier: "save_button", traits: .button),
+                HeistId(rawValue: "save_button")
+            ),
+            (
+                element(label: "Save Draft", value: "Draft", identifier: "save_draft_button", traits: .button),
+                HeistId(rawValue: "save_draft_button")
+            ),
+            (
+                element(label: "Search Items", value: "milk", identifier: "search_field", traits: .searchField),
+                HeistId(rawValue: "search_field")
+            ),
+            (
+                element(label: "Settings", identifier: "settings_header", traits: .header),
+                HeistId(rawValue: "settings_header")
+            ),
+            (
+                element(label: "Delete", value: "First", identifier: "delete_first", traits: .button),
+                HeistId(rawValue: "delete_first")
+            ),
+            (
+                element(label: "Delete", value: "Second", identifier: "delete_second", traits: [.button, .notEnabled]),
+                HeistId(rawValue: "delete_second")
+            ),
+            (
+                element(label: "Done", value: "Complete", identifier: "done_button", traits: [.button, .selected]),
+                HeistId(rawValue: "done_button")
+            ),
+        ])
+        bagman.installScreenForTesting(screen)
+        return screen
+    }
+
+    private func matchSignature(_ element: AccessibilityElement) -> String {
+        matchSignature(TheStash.WireConversion.convert(element))
+    }
+
+    private func matchSignature(_ element: HeistElement) -> String {
+        let traits = element.traits.map(\.rawValue).sorted().joined(separator: ",")
+        return [
+            element.label ?? "",
+            element.identifier ?? "",
+            element.value ?? "",
+            traits,
+        ].joined(separator: "|")
+    }
+
     // MARK: - Settled Semantic Observation
 
     func testSemanticObservationSubscriptionsCoalesceToWidestScope() {
@@ -1941,6 +1991,180 @@ final class TheStashResolutionTests: XCTestCase {
         // Element resolves immediately — no markPresented gate
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Combobox")))
         XCTAssertNotNil(result.resolved)
+    }
+
+    // MARK: - ElementMatchSet Parity
+
+    func testElementMatchSetMatchesStashCountAndOrder() {
+        let screen = installMatcherParityScreen()
+        let projectedElements = screen.orderedElements.map { TheStash.WireConversion.convert($0.element) }
+        let matchSet = ElementMatchSet(elements: projectedElements)
+
+        struct MatchCase {
+            let name: String
+            let predicate: ElementPredicate
+            let expectedIds: [HeistId]
+        }
+
+        let cases = [
+            MatchCase(
+                name: "exact substring miss",
+                predicate: ElementPredicate(label: "Draft"),
+                expectedIds: []
+            ),
+            MatchCase(
+                name: "exact excludes partial sibling",
+                predicate: ElementPredicate(label: "Save"),
+                expectedIds: ["save_button"]
+            ),
+            MatchCase(
+                name: "contains",
+                predicate: ElementPredicate(label: .contains("Save")),
+                expectedIds: ["save_button", "save_draft_button"]
+            ),
+            MatchCase(
+                name: "prefix",
+                predicate: ElementPredicate(label: .prefix("Save")),
+                expectedIds: ["save_button", "save_draft_button"]
+            ),
+            MatchCase(
+                name: "suffix",
+                predicate: ElementPredicate(label: .suffix("Draft")),
+                expectedIds: ["save_draft_button"]
+            ),
+            MatchCase(
+                name: "identifier",
+                predicate: ElementPredicate(identifier: "search_field"),
+                expectedIds: ["search_field"]
+            ),
+            MatchCase(
+                name: "value",
+                predicate: ElementPredicate(value: "Complete"),
+                expectedIds: ["done_button"]
+            ),
+            MatchCase(
+                name: "traits",
+                predicate: ElementPredicate(traits: [.selected]),
+                expectedIds: ["done_button"]
+            ),
+            MatchCase(
+                name: "excludeTraits",
+                predicate: ElementPredicate(label: "Delete", excludeTraits: [.notEnabled]),
+                expectedIds: ["delete_first"]
+            ),
+            MatchCase(
+                name: "compound checks",
+                predicate: ElementPredicate.element(
+                    .label(.exact("Done")),
+                    .identifier(.exact("done_button")),
+                    .value(.exact("Complete")),
+                    traits: [.button, .selected],
+                    excludeTraits: [.notEnabled]
+                ),
+                expectedIds: ["done_button"]
+            ),
+            MatchCase(
+                name: "empty predicate",
+                predicate: ElementPredicate(),
+                expectedIds: []
+            ),
+            MatchCase(
+                name: "duplicate labels",
+                predicate: ElementPredicate(label: "Delete"),
+                expectedIds: ["delete_first", "delete_second"]
+            ),
+        ]
+
+        for testCase in cases {
+            let stashMatches = bagman.matchScreenElements(testCase.predicate, limit: 100)
+            let setMatches = matchSet.matching(testCase.predicate).elements
+
+            XCTAssertEqual(stashMatches.map(\.heistId), testCase.expectedIds, testCase.name)
+            XCTAssertEqual(
+                setMatches.map(matchSignature),
+                stashMatches.map { matchSignature($0.element) },
+                testCase.name
+            )
+        }
+    }
+
+    func testElementMatchSetMatchesResolveTargetBehavior() throws {
+        let screen = installMatcherParityScreen()
+        let projectedElements = screen.orderedElements.map { TheStash.WireConversion.convert($0.element) }
+        let matchSet = ElementMatchSet(elements: projectedElements)
+
+        enum ExpectedResolution {
+            case resolved(HeistId)
+            case ambiguous(Int)
+            case notFound
+            case ordinalOutOfRange(requested: Int, matchCount: Int)
+        }
+
+        struct ResolutionCase {
+            let name: String
+            let target: ElementTarget
+            let expected: ExpectedResolution
+        }
+
+        let cases = [
+            ResolutionCase(
+                name: "unique",
+                target: .predicate(ElementPredicate(label: "Done")),
+                expected: .resolved("done_button")
+            ),
+            ResolutionCase(
+                name: "ambiguous",
+                target: .predicate(ElementPredicate(label: "Delete")),
+                expected: .ambiguous(2)
+            ),
+            ResolutionCase(
+                name: "not found",
+                target: .predicate(ElementPredicate(label: "Missing")),
+                expected: .notFound
+            ),
+            ResolutionCase(
+                name: "ordinal select",
+                target: .predicate(ElementPredicate(label: "Delete"), ordinal: 1),
+                expected: .resolved("delete_second")
+            ),
+            ResolutionCase(
+                name: "ordinal out of range",
+                target: .predicate(ElementPredicate(label: "Delete"), ordinal: 2),
+                expected: .ordinalOutOfRange(requested: 2, matchCount: 2)
+            ),
+        ]
+
+        for testCase in cases {
+            let setMatches = matchSet.matching(testCase.target)
+            let resolution = bagman.resolveTarget(testCase.target)
+
+            switch testCase.expected {
+            case .resolved(let expectedId):
+                let expectedElement = try XCTUnwrap(screen.findElement(heistId: expectedId)?.element, testCase.name)
+                let resolved = try XCTUnwrap(resolution.resolved, testCase.name)
+                XCTAssertEqual(resolved.heistId, expectedId, testCase.name)
+                XCTAssertEqual(setMatches.count, 1, testCase.name)
+                XCTAssertEqual(setMatches.elements.map(matchSignature), [matchSignature(expectedElement)], testCase.name)
+            case .ambiguous(let expectedCount):
+                guard case .ambiguous(let facts) = resolution else {
+                    return XCTFail("Expected ambiguous for \(testCase.name), got \(resolution)")
+                }
+                XCTAssertEqual(facts.matchedCount, expectedCount, testCase.name)
+                XCTAssertEqual(setMatches.count, expectedCount, testCase.name)
+            case .notFound:
+                guard case .notFound(let facts) = resolution else {
+                    return XCTFail("Expected notFound for \(testCase.name), got \(resolution)")
+                }
+                XCTAssertEqual(facts.reason, .noMatches, testCase.name)
+                XCTAssertTrue(setMatches.isEmpty, testCase.name)
+            case .ordinalOutOfRange(let requested, let matchCount):
+                guard case .notFound(let facts) = resolution else {
+                    return XCTFail("Expected notFound for \(testCase.name), got \(resolution)")
+                }
+                XCTAssertEqual(facts.reason, .ordinalOutOfRange(requested: requested, matchCount: matchCount), testCase.name)
+                XCTAssertTrue(setMatches.isEmpty, testCase.name)
+            }
+        }
     }
 
     // MARK: - Exact Default and Explicit Broad Matches

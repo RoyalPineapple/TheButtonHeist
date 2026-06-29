@@ -1364,7 +1364,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             omittedContainers: [
                 InterfaceDiscoveryOmittedContainer(
                     containerName: "main_scroll",
-                    type: "scrollable",
+                    type: .scrollable,
                     reasonCodes: [.discoveryScrollLimit],
                     scrollAxis: .vertical,
                     viewportWidth: 390,

@@ -1343,7 +1343,8 @@ import Testing
         ),
         (
             root(#"WaitFor(.change(.updated(.title())))"#),
-            "unsupported element update property '.title'. Valid: value, traits, hint, actions, frame, activationPoint, customContent, rotors"
+            "unsupported element update property '.title'. Valid: label, identifier, value, traits, hint, " +
+                "actions, frame, activationPoint, customContent, rotors"
         ),
     ]
 

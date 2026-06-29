@@ -17,6 +17,18 @@ public enum ValueProperty: ElementPropertyKind {
     public static let property = ElementProperty.value
 }
 
+public enum LabelProperty: ElementPropertyKind {
+    public typealias Checker = StringMatch<String>
+    public typealias ExprChecker = StringMatch<StringExpr>
+    public static let property = ElementProperty.label
+}
+
+public enum IdentifierProperty: ElementPropertyKind {
+    public typealias Checker = StringMatch<String>
+    public typealias ExprChecker = StringMatch<StringExpr>
+    public static let property = ElementProperty.identifier
+}
+
 public enum TraitsProperty: ElementPropertyKind {
     public typealias Checker = TraitSetMatch
     public typealias ExprChecker = TraitSetMatch
@@ -184,6 +196,22 @@ public struct ElementFrameMatch: Codable, Sendable, Equatable {
     public static func match(x: Int? = nil, y: Int? = nil, width: Int? = nil, height: Int? = nil) -> Self {
         Self(x: x, y: y, width: width, height: height)
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x, y, width, height
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "frame match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decodeIfPresent(Int.self, forKey: .x),
+            y: try container.decodeIfPresent(Int.self, forKey: .y),
+            width: try container.decodeIfPresent(Int.self, forKey: .width),
+            height: try container.decodeIfPresent(Int.self, forKey: .height)
+        )
+    }
+
 }
 
 extension ElementFrameMatch: CustomStringConvertible {
@@ -214,6 +242,20 @@ public struct ElementPointMatch: Codable, Sendable, Equatable {
     public static func match(x: Int? = nil, y: Int? = nil) -> Self {
         Self(x: x, y: y)
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x, y
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "activation point match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decodeIfPresent(Int.self, forKey: .x),
+            y: try container.decodeIfPresent(Int.self, forKey: .y)
+        )
+    }
+
 }
 
 extension ElementPointMatch: CustomStringConvertible {
@@ -414,6 +456,8 @@ public struct ElementPropertyChangeExpr<P: ElementPropertyKind>: Codable, Sendab
 }
 
 public enum AnyPropertyChange: Codable, Sendable, Equatable {
+    case label(ElementPropertyChange<LabelProperty>)
+    case identifier(ElementPropertyChange<IdentifierProperty>)
     case value(ElementPropertyChange<ValueProperty>)
     case traits(ElementPropertyChange<TraitsProperty>)
     case hint(ElementPropertyChange<HintProperty>)
@@ -425,6 +469,8 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
 
     public var property: ElementProperty {
         switch self {
+        case .label: return LabelProperty.property
+        case .identifier: return IdentifierProperty.property
         case .value: return ValueProperty.property
         case .traits: return TraitsProperty.property
         case .hint: return HintProperty.property
@@ -434,6 +480,28 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
         case .customContent: return CustomContentProperty.property
         case .rotors: return RotorsProperty.property
         }
+    }
+
+    public static func label(
+        before: StringMatch<String>? = nil,
+        after: StringMatch<String>? = nil
+    ) -> Self {
+        .label(ElementPropertyChange(before: before, after: after))
+    }
+
+    public static func label(_ after: String) -> Self {
+        .label(after: .exact(after))
+    }
+
+    public static func identifier(
+        before: StringMatch<String>? = nil,
+        after: StringMatch<String>? = nil
+    ) -> Self {
+        .identifier(ElementPropertyChange(before: before, after: after))
+    }
+
+    public static func identifier(_ after: String) -> Self {
+        .identifier(after: .exact(after))
     }
 
     public static func value(
@@ -503,6 +571,8 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
 }
 
 public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
+    case label(ElementPropertyChangeExpr<LabelProperty>)
+    case identifier(ElementPropertyChangeExpr<IdentifierProperty>)
     case value(ElementPropertyChangeExpr<ValueProperty>)
     case traits(ElementPropertyChangeExpr<TraitsProperty>)
     case hint(ElementPropertyChangeExpr<HintProperty>)
@@ -514,6 +584,8 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
 
     public var property: ElementProperty {
         switch self {
+        case .label: return LabelProperty.property
+        case .identifier: return IdentifierProperty.property
         case .value: return ValueProperty.property
         case .traits: return TraitsProperty.property
         case .hint: return HintProperty.property
@@ -527,6 +599,16 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
 
     public init(_ change: AnyPropertyChange) {
         switch change {
+        case .label(let change):
+            self = .label(ElementPropertyChangeExpr(
+                before: change.before?.map(StringExpr.literal),
+                after: change.after?.map(StringExpr.literal)
+            ))
+        case .identifier(let change):
+            self = .identifier(ElementPropertyChangeExpr(
+                before: change.before?.map(StringExpr.literal),
+                after: change.after?.map(StringExpr.literal)
+            ))
         case .value(let change):
             self = .value(ElementPropertyChangeExpr(
                 before: change.before?.map(StringExpr.literal),
@@ -560,6 +642,16 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
 
     public func resolve(in environment: HeistExecutionEnvironment) throws -> AnyPropertyChange {
         switch self {
+        case .label(let change):
+            return .label(ElementPropertyChange(
+                before: try change.before?.resolve(in: environment),
+                after: try change.after?.resolve(in: environment)
+            ))
+        case .identifier(let change):
+            return .identifier(ElementPropertyChange(
+                before: try change.before?.resolve(in: environment),
+                after: try change.after?.resolve(in: environment)
+            ))
         case .value(let change):
             return .value(ElementPropertyChange(
                 before: try change.before?.resolve(in: environment),
@@ -589,6 +681,36 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
                 after: try change.after?.resolve(in: environment)
             ))
         }
+    }
+
+    public static func label(
+        before: StringMatch<StringExpr>? = nil,
+        after: StringMatch<StringExpr>? = nil
+    ) -> Self {
+        .label(ElementPropertyChangeExpr(before: before, after: after))
+    }
+
+    public static func label(_ after: StringExpr) -> Self {
+        .label(after: .exact(after))
+    }
+
+    public static func label(_ after: String) -> Self {
+        .label(.literal(after))
+    }
+
+    public static func identifier(
+        before: StringMatch<StringExpr>? = nil,
+        after: StringMatch<StringExpr>? = nil
+    ) -> Self {
+        .identifier(ElementPropertyChangeExpr(before: before, after: after))
+    }
+
+    public static func identifier(_ after: StringExpr) -> Self {
+        .identifier(after: .exact(after))
+    }
+
+    public static func identifier(_ after: String) -> Self {
+        .identifier(.literal(after))
     }
 
     public static func value(
@@ -842,6 +964,10 @@ private extension AnyPropertyChange {
         from container: KeyedDecodingContainer<ElementUpdateCodingKeys>
     ) throws -> AnyPropertyChange {
         switch property {
+        case .label:
+            return .label(try ElementPropertyChange<LabelProperty>(from: container))
+        case .identifier:
+            return .identifier(try ElementPropertyChange<IdentifierProperty>(from: container))
         case .value:
             return .value(try ElementPropertyChange<ValueProperty>(from: container))
         case .traits:
@@ -864,6 +990,10 @@ private extension AnyPropertyChange {
     func encodeFields(to container: inout KeyedEncodingContainer<ElementUpdateCodingKeys>) throws {
         try container.encode(property, forKey: .property)
         switch self {
+        case .label(let change):
+            try change.encodeFields(to: &container)
+        case .identifier(let change):
+            try change.encodeFields(to: &container)
         case .value(let change):
             try change.encodeFields(to: &container)
         case .traits(let change):
@@ -908,6 +1038,10 @@ private extension AnyPropertyChangeExpr {
         from container: KeyedDecodingContainer<ElementUpdateCodingKeys>
     ) throws -> AnyPropertyChangeExpr {
         switch property {
+        case .label:
+            return .label(try ElementPropertyChangeExpr<LabelProperty>(from: container))
+        case .identifier:
+            return .identifier(try ElementPropertyChangeExpr<IdentifierProperty>(from: container))
         case .value:
             return .value(try ElementPropertyChangeExpr<ValueProperty>(from: container))
         case .traits:
@@ -930,6 +1064,10 @@ private extension AnyPropertyChangeExpr {
     func encodeFields(to container: inout KeyedEncodingContainer<ElementUpdateCodingKeys>) throws {
         try container.encode(property, forKey: .property)
         switch self {
+        case .label(let change):
+            try change.encodeFields(to: &container)
+        case .identifier(let change):
+            try change.encodeFields(to: &container)
         case .value(let change):
             try change.encodeFields(to: &container)
         case .traits(let change):
@@ -1001,6 +1139,8 @@ extension ElementUpdatePredicateExpr: CustomStringConvertible {
 extension AnyPropertyChange: CustomStringConvertible {
     public var description: String {
         switch self {
+        case .label(let change): return change.description(name: "label")
+        case .identifier(let change): return change.description(name: "identifier")
         case .value(let change): return change.description(name: "value")
         case .traits(let change): return change.description(name: "traits")
         case .hint(let change): return change.description(name: "hint")
@@ -1016,6 +1156,8 @@ extension AnyPropertyChange: CustomStringConvertible {
 extension AnyPropertyChangeExpr: CustomStringConvertible {
     public var description: String {
         switch self {
+        case .label(let change): return change.description(name: "label")
+        case .identifier(let change): return change.description(name: "identifier")
         case .value(let change): return change.description(name: "value")
         case .traits(let change): return change.description(name: "traits")
         case .hint(let change): return change.description(name: "hint")

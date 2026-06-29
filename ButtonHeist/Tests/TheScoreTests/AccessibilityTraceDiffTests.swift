@@ -148,6 +148,112 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(payload.edits.added.map(\.label), ["Review sale 1 item"])
     }
 
+    func testTraceIdentityPairsElementAcrossLabelAndIdentifierChanges() throws {
+        let beforeElement = makeElement(
+            label: "Charge $0.00",
+            value: "ready",
+            identifier: "FooterButton.Charge",
+            traits: [.button]
+        )
+        let afterElement = makeElement(
+            label: "Review sale 1 item",
+            value: "done",
+            identifier: "FooterButton.ReviewSale",
+            traits: [.button]
+        )
+        let before = makeTraceIdentityInterface([
+            (element: makeElement(label: "Bagel", traits: [.button]), identity: "bagel"),
+            (element: beforeElement, identity: "footer-action"),
+        ])
+        let after = makeTraceIdentityInterface([
+            (element: makeElement(label: "Bagel", traits: [.button]), identity: "bagel"),
+            (element: afterElement, identity: "footer-action"),
+        ])
+
+        let edits = ElementEdits.between(before, after)
+        let delta = captureDelta(before: before, after: after)
+
+        XCTAssertTrue(edits.added.isEmpty)
+        XCTAssertTrue(edits.removed.isEmpty)
+        let update = try XCTUnwrap(edits.updated.single)
+        XCTAssertEqual(update.before.label, "Charge $0.00")
+        XCTAssertEqual(update.after.label, "Review sale 1 item")
+        XCTAssertEqual(update.changes.map(\.property), [.label, .identifier, .value])
+        XCTAssertEqual(delta.testElementEdits, edits)
+        XCTAssertFalse(try XCTUnwrap(delta.testInteractionDigest).elementSetChanged)
+    }
+
+    func testTraceIdentityReportsLabelOnlyChangeAsElementUpdate() throws {
+        let beforeElement = makeElement(label: "Total", traits: [.staticText])
+        let afterElement = makeElement(label: "Total $12.00", traits: [.staticText])
+        let before = makeTraceIdentityInterface([
+            (element: beforeElement, identity: "total-label"),
+        ])
+        let after = makeTraceIdentityInterface([
+            (element: afterElement, identity: "total-label"),
+        ])
+
+        let edits = ElementEdits.between(before, after)
+        let delta = captureDelta(before: before, after: after)
+
+        XCTAssertTrue(edits.added.isEmpty)
+        XCTAssertTrue(edits.removed.isEmpty)
+        let update = try XCTUnwrap(edits.updated.single)
+        XCTAssertEqual(update.changes.map(\.property), [.label])
+        XCTAssertEqual(update.changes.first?.oldValue, .text("Total"))
+        XCTAssertEqual(update.changes.first?.newValue, .text("Total $12.00"))
+        guard case .elementsChanged = delta else {
+            return XCTFail("Expected elementsChanged for trace-identity label update, got \(delta)")
+        }
+    }
+
+    func testDifferentTraceIdentitiesDoNotFallBackToContentPairing() {
+        let beforeElement = makeElement(label: "Continue", value: "ready", traits: [.button])
+        let afterElement = makeElement(label: "Continue", value: "done", traits: [.button])
+        let before = makeTraceIdentityInterface([
+            (element: beforeElement, identity: "before-action"),
+        ])
+        let after = makeTraceIdentityInterface([
+            (element: afterElement, identity: "after-action"),
+        ])
+
+        let edits = ElementEdits.between(before, after)
+
+        XCTAssertTrue(edits.updated.isEmpty)
+        XCTAssertEqual(edits.removed, [beforeElement])
+        XCTAssertEqual(edits.added, [afterElement])
+    }
+
+    func testTraceIdentityPresenceMismatchDoesNotPair() {
+        let beforeElement = makeElement(label: "Continue", value: "ready", traits: [.button])
+        let afterElement = makeElement(label: "Continue", value: "done", traits: [.button])
+        let before = makeTraceIdentityInterface([
+            (element: beforeElement, identity: "action"),
+        ])
+        let after = makeTestInterface(elements: [afterElement])
+
+        let edits = ElementEdits.between(before, after)
+
+        XCTAssertTrue(edits.updated.isEmpty)
+        XCTAssertEqual(edits.removed, [beforeElement])
+        XCTAssertEqual(edits.added, [afterElement])
+    }
+
+    func testTraceIdentityDoesNotEncodeInPublicInterfaceJSON() throws {
+        let interface = makeTraceIdentityInterface([
+            (element: makeElement(label: "Continue", traits: [.button]), identity: "private-action-id"),
+        ])
+
+        let data = try JSONEncoder().encode(interface)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        let decoded = try JSONDecoder().decode(Interface.self, from: data)
+
+        XCTAssertFalse(json.contains("traceIdentity"))
+        XCTAssertFalse(json.contains("private-action-id"))
+        XCTAssertEqual(decoded, interface)
+        XCTAssertNil(decoded.projectedElementRecords.single?.traceIdentity)
+    }
+
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
         let beforeInterface = makeTestInterface(
             nodes: [
@@ -469,6 +575,30 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ])
     }
 
+    private func makeTraceIdentityInterface(
+        _ elements: [(element: HeistElement, identity: String)],
+        timestamp: Date = Date(timeIntervalSince1970: 0)
+    ) -> Interface {
+        let tree = elements.enumerated().map { index, entry in
+            AccessibilityHierarchy.element(makeTestAccessibilityElement(entry.element), traversalIndex: index)
+        }
+        let annotations = elements.enumerated().map { index, entry in
+            InterfaceElementAnnotation(
+                path: TreePath([index]),
+                actions: entry.element.actions
+            )
+        }
+        let traceIdentities = Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, entry in
+            (TreePath([index]), TraceElementIdentity(entry.identity))
+        })
+        return Interface(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: InterfaceAnnotations(elements: annotations),
+            traceIdentities: InterfaceTraceIdentities(traceIdentities)
+        )
+    }
+
     private func makeContainer() -> AccessibilityContainer {
         makeTestAccessibilityContainer()
     }
@@ -553,4 +683,10 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         return delta
     }
 
+}
+
+private extension Array {
+    var single: Element? {
+        count == 1 ? self[0] : nil
+    }
 }

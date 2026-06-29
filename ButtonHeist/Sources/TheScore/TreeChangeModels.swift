@@ -233,6 +233,8 @@ extension ElementPropertyValueChange {
 /// A single typed property change. Each case pins the property to the only
 /// value type it can carry.
 public enum PropertyChange: Sendable, Equatable {
+    case label(ElementPropertyValueChange<LabelProperty>)
+    case identifier(ElementPropertyValueChange<IdentifierProperty>)
     case value(ElementPropertyValueChange<ValueProperty>)
     case traits(ElementPropertyValueChange<TraitsProperty>)
     case hint(ElementPropertyValueChange<HintProperty>)
@@ -241,6 +243,14 @@ public enum PropertyChange: Sendable, Equatable {
     case activationPoint(ElementPropertyValueChange<ActivationPointProperty>)
     case customContent(ElementPropertyValueChange<CustomContentProperty>)
     case rotors(ElementPropertyValueChange<RotorsProperty>)
+
+    public static func label(old: String?, new: String?) -> Self {
+        .label(ElementPropertyValueChange(old: old, new: new))
+    }
+
+    public static func identifier(old: String?, new: String?) -> Self {
+        .identifier(ElementPropertyValueChange(old: old, new: new))
+    }
 
     public static func value(old: String?, new: String?) -> Self {
         .value(ElementPropertyValueChange(old: old, new: new))
@@ -276,6 +286,10 @@ public enum PropertyChange: Sendable, Equatable {
 
     public var property: ElementProperty {
         switch self {
+        case .label:
+            return LabelProperty.property
+        case .identifier:
+            return IdentifierProperty.property
         case .value:
             return ValueProperty.property
         case .traits:
@@ -297,6 +311,10 @@ public enum PropertyChange: Sendable, Equatable {
 
     public var oldValue: ElementPropertyValue? {
         switch self {
+        case .label(let change):
+            return change.oldValue
+        case .identifier(let change):
+            return change.oldValue
         case .value(let change):
             return change.oldValue
         case .traits(let change):
@@ -318,6 +336,10 @@ public enum PropertyChange: Sendable, Equatable {
 
     public var newValue: ElementPropertyValue? {
         switch self {
+        case .label(let change):
+            return change.newValue
+        case .identifier(let change):
+            return change.newValue
         case .value(let change):
             return change.newValue
         case .traits(let change):
@@ -339,6 +361,10 @@ public enum PropertyChange: Sendable, Equatable {
 
     public var oldDisplayText: String? {
         switch self {
+        case .label(let change):
+            return change.oldDisplayText
+        case .identifier(let change):
+            return change.oldDisplayText
         case .value(let change):
             return change.oldDisplayText
         case .traits(let change):
@@ -360,6 +386,10 @@ public enum PropertyChange: Sendable, Equatable {
 
     public var newDisplayText: String? {
         switch self {
+        case .label(let change):
+            return change.newDisplayText
+        case .identifier(let change):
+            return change.newDisplayText
         case .value(let change):
             return change.newDisplayText
         case .traits(let change):
@@ -395,6 +425,10 @@ extension PropertyChange: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let property = try container.decode(ElementProperty.self, forKey: .property)
         switch property {
+        case .label:
+            self = .label(try Self.decodeChange(LabelProperty.self, from: container))
+        case .identifier:
+            self = .identifier(try Self.decodeChange(IdentifierProperty.self, from: container))
         case .value:
             self = .value(try Self.decodeChange(ValueProperty.self, from: container))
         case .traits:
@@ -418,6 +452,10 @@ extension PropertyChange: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(property, forKey: .property)
         switch self {
+        case .label(let change):
+            try Self.encodeChange(change, to: &container)
+        case .identifier(let change):
+            try Self.encodeChange(change, to: &container)
         case .value(let change):
             try Self.encodeChange(change, to: &container)
         case .traits(let change):
@@ -468,6 +506,10 @@ extension PropertyChange: Codable {
 extension PropertyChange {
     func satisfies(_ expected: AnyPropertyChange) -> Bool {
         switch expected {
+        case .label(let expected):
+            return satisfies(expected)
+        case .identifier(let expected):
+            return satisfies(expected)
         case .value(let expected):
             return satisfies(expected)
         case .traits(let expected):
@@ -485,6 +527,16 @@ extension PropertyChange {
         case .rotors(let expected):
             return satisfies(expected)
         }
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<LabelProperty>) -> Bool {
+        guard case .label(let observed) = self else { return false }
+        return observed.satisfies(expected)
+    }
+
+    private func satisfies(_ expected: ElementPropertyChange<IdentifierProperty>) -> Bool {
+        guard case .identifier(let observed) = self else { return false }
+        return observed.satisfies(expected)
     }
 
     private func satisfies(_ expected: ElementPropertyChange<ValueProperty>) -> Bool {
@@ -550,6 +602,56 @@ extension ValueProperty: ElementPropertyValueKind {
 
     public static func change(old: String?, new: String?) -> PropertyChange {
         .value(old: old, new: new)
+    }
+}
+
+extension LabelProperty: ElementPropertyValueKind {
+    public typealias Value = String
+
+    public static func value(in element: HeistElement) -> String? {
+        element.label
+    }
+
+    public static func displayText(for value: String) -> String {
+        value
+    }
+
+    public static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
+        guard let value else { return false }
+        return checker.matches(value)
+    }
+
+    public static func erasedValue(_ value: String) -> ElementPropertyValue {
+        .text(value)
+    }
+
+    public static func change(old: String?, new: String?) -> PropertyChange {
+        .label(old: old, new: new)
+    }
+}
+
+extension IdentifierProperty: ElementPropertyValueKind {
+    public typealias Value = String
+
+    public static func value(in element: HeistElement) -> String? {
+        element.identifier
+    }
+
+    public static func displayText(for value: String) -> String {
+        value
+    }
+
+    public static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
+        guard let value else { return false }
+        return checker.matches(value)
+    }
+
+    public static func erasedValue(_ value: String) -> ElementPropertyValue {
+        .text(value)
+    }
+
+    public static func change(old: String?, new: String?) -> PropertyChange {
+        .identifier(old: old, new: new)
     }
 }
 

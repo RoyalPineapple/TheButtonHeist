@@ -239,8 +239,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             )
             return
         }
-        let resolvedName = resolved.qualifiedName
-        if let cycle = context.callGraphCycle(closing: resolvedName) {
+        if let cycle = context.callGraphCycle(closing: resolved.callGraphNode) {
             fail(
                 path: context.path.child(.path).description,
                 contract: "heist runs must not be recursive",

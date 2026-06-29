@@ -18,6 +18,7 @@ extension Interface {
             .map { $0.hierarchy }
         annotations = try container.decode(InterfaceAnnotations.self, forKey: .annotations)
         diagnostics = try container.decodeIfPresent(InterfaceDiagnostics.self, forKey: .diagnostics)
+        traceIdentities = .empty
     }
 
     public func encode(to encoder: Encoder) throws {

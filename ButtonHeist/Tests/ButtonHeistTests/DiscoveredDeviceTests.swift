@@ -5,6 +5,44 @@ import TheScore
 
 final class DiscoveredDeviceTests: XCTestCase {
 
+    private func makeResolutionQuery(
+        _ value: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> DiscoveryResolutionQuery {
+        guard let query = DiscoveryResolutionQuery(value) else {
+            XCTFail("Expected valid discovery resolution query for \(value)", file: file, line: line)
+            return DiscoveryResolutionQuery("fallback")!
+        }
+        return query
+    }
+
+    private func XCTAssertMatches(
+        _ device: DiscoveredDevice,
+        _ value: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertTrue(
+            device.matches(resolutionQuery: makeResolutionQuery(value, file: file, line: line)),
+            file: file,
+            line: line
+        )
+    }
+
+    private func XCTAssertDoesNotMatch(
+        _ device: DiscoveredDevice,
+        _ value: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertFalse(
+            device.matches(resolutionQuery: makeResolutionQuery(value, file: file, line: line)),
+            file: file,
+            line: line
+        )
+    }
+
     func testEquality() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device1 = DiscoveredDevice(id: "test-1", name: "Device 1", endpoint: endpoint)
@@ -49,6 +87,66 @@ final class DiscoveredDeviceTests: XCTestCase {
 
         XCTAssertEqual(device.id, "device-123")
         XCTAssertEqual(device.name, "TestApp")
+    }
+
+    // MARK: - Typed Discovery Identifiers
+
+    func testDiscoveryServiceNameIsHashableByRawValue() {
+        let serviceName = DiscoveryServiceName("DemoApp#abc123")
+        let sameServiceName = DiscoveryServiceName("DemoApp#abc123")
+        let otherServiceName = DiscoveryServiceName("DemoApp#def456")
+
+        XCTAssertEqual(serviceName, sameServiceName)
+        XCTAssertNotEqual(serviceName, otherServiceName)
+        XCTAssertEqual(Set([serviceName, sameServiceName, otherServiceName]).count, 2)
+        XCTAssertEqual(serviceName.rawValue, "DemoApp#abc123")
+    }
+
+    func testDiscoveryIdentityPreservesRawAndPrintedValue() {
+        let serviceName = DiscoveryServiceName("DemoApp#abc123")
+        let serviceIdentity = DiscoveryIdentity.serviceName(serviceName)
+        let installIdentity = DiscoveryIdentity.installation(
+            appName: " DemoApp ",
+            installationId: "install-1"
+        )
+
+        XCTAssertEqual(serviceIdentity.rawValue, "service|DemoApp#abc123")
+        XCTAssertEqual(String(describing: serviceIdentity), "service|DemoApp#abc123")
+        XCTAssertEqual(installIdentity.rawValue, "install|demoapp|install-1")
+        XCTAssertEqual(String(describing: installIdentity), "install|demoapp|install-1")
+    }
+
+    func testDiscoveryWrappersEncodeAsSingleJSONStringValues() throws {
+        let encoder = JSONEncoder()
+        let serviceName = DiscoveryServiceName("DemoApp#abc123")
+        let identity = DiscoveryIdentity.serviceName(serviceName)
+
+        XCTAssertEqual(String(data: try encoder.encode(serviceName), encoding: .utf8), #""DemoApp#abc123""#)
+        XCTAssertEqual(String(data: try encoder.encode(identity), encoding: .utf8), #""service|DemoApp#abc123""#)
+    }
+
+    func testDiscoveryDeviceIDFactoriesPreserveRawValues() throws {
+        let serviceName = DiscoveryServiceName("DemoApp#abc123")
+        let hostPort = DiscoveryDeviceID.hostPort(host: "127.0.0.1", port: 5555)
+        let service = DiscoveryDeviceID.serviceName(serviceName)
+        let usb = DiscoveryDeviceID.usbIdentifier("00008120")
+
+        XCTAssertEqual(hostPort.rawValue, "127.0.0.1:5555")
+        XCTAssertEqual(service.rawValue, "DemoApp#abc123")
+        XCTAssertEqual(usb.rawValue, "usb-00008120")
+        XCTAssertEqual(String(data: try JSONEncoder().encode(usb), encoding: .utf8), #""usb-00008120""#)
+    }
+
+    func testDeviceResolutionTargetTrimsQueryAndTreatsBlankAsAutomatic() {
+        let queryTarget = DeviceResolutionTarget(filter: " DemoApp ")
+        guard case .query(let query) = queryTarget.kind else {
+            return XCTFail("Expected query target, got \(queryTarget)")
+        }
+        XCTAssertEqual(query.rawValue, "DemoApp")
+        XCTAssertEqual(query.normalizedValue, "demoapp")
+
+        XCTAssertEqual(DeviceResolutionTarget(filter: nil).kind, .automatic)
+        XCTAssertEqual(DeviceResolutionTarget(filter: "   ").kind, .automatic)
     }
 
     // MARK: - Short ID Parsing
@@ -194,9 +292,9 @@ final class DiscoveredDeviceTests: XCTestCase {
         )
 
         XCTAssertEqual(first.displayName(among: [first, second]), "DemoApp (Office iPhone) [abc123]")
-        XCTAssertTrue(first.matches(resolutionQuery: "DemoApp"))
-        XCTAssertTrue(first.matches(resolutionQuery: "Office iPhone"))
-        XCTAssertTrue(first.matches(resolutionQuery: "abc"))
+        XCTAssertMatches(first, "DemoApp")
+        XCTAssertMatches(first, "Office iPhone")
+        XCTAssertMatches(first, "abc")
     }
 
     // MARK: - Filter Matching
@@ -205,17 +303,19 @@ final class DiscoveredDeviceTests: XCTestCase {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc123", endpoint: endpoint)
 
-        XCTAssertTrue(device.matches(resolutionQuery: "TestApp"))
-        XCTAssertTrue(device.matches(resolutionQuery: "testapp")) // case-insensitive
+        XCTAssertMatches(device, "TestApp")
+        XCTAssertMatches(device, "testapp") // case-insensitive
+        XCTAssertMatches(device, " TestApp ")
+        XCTAssertNil(DiscoveryResolutionQuery("   "))
     }
 
     func testMatchesByAppName() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "MyApp#abc", endpoint: endpoint)
 
-        XCTAssertTrue(device.matches(resolutionQuery: "MyApp"))
-        XCTAssertTrue(device.matches(resolutionQuery: "myapp"))
-        XCTAssertFalse(device.matches(resolutionQuery: "OtherApp"))
+        XCTAssertMatches(device, "MyApp")
+        XCTAssertMatches(device, "myapp")
+        XCTAssertDoesNotMatch(device, "OtherApp")
     }
 
     func testMatchesByDeviceName() {
@@ -227,18 +327,18 @@ final class DiscoveredDeviceTests: XCTestCase {
             displayDeviceName: "iPhone 16 Pro"
         )
 
-        XCTAssertTrue(device.matches(resolutionQuery: "iPhone 16"))
-        XCTAssertTrue(device.matches(resolutionQuery: "iphone 16 pro"))
+        XCTAssertMatches(device, "iPhone 16")
+        XCTAssertMatches(device, "iphone 16 pro")
     }
 
     func testMatchesByShortIdPrefix() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc123", endpoint: endpoint)
 
-        XCTAssertTrue(device.matches(resolutionQuery: "abc"))
-        XCTAssertTrue(device.matches(resolutionQuery: "abc123"))
+        XCTAssertMatches(device, "abc")
+        XCTAssertMatches(device, "abc123")
         // "123" still matches via name.contains (full name includes "abc123")
-        XCTAssertTrue(device.matches(resolutionQuery: "123"))
+        XCTAssertMatches(device, "123")
     }
 
     func testMatchesByInstanceIdPrefix() {
@@ -249,8 +349,8 @@ final class DiscoveredDeviceTests: XCTestCase {
             instanceId: "my-instance-42"
         )
 
-        XCTAssertTrue(device.matches(resolutionQuery: "my-instance"))
-        XCTAssertFalse(device.matches(resolutionQuery: "instance-42"))
+        XCTAssertMatches(device, "my-instance")
+        XCTAssertDoesNotMatch(device, "instance-42")
     }
 
     func testMatchesBySimulatorUDIDPrefix() {
@@ -261,17 +361,30 @@ final class DiscoveredDeviceTests: XCTestCase {
             simulatorUDID: "DEADBEEF-1234-5678-9ABC-DEF012345678"
         )
 
-        XCTAssertTrue(device.matches(resolutionQuery: "DEADBEEF"))
-        XCTAssertTrue(device.matches(resolutionQuery: "deadbeef"))
-        XCTAssertFalse(device.matches(resolutionQuery: "1234-5678"))
+        XCTAssertMatches(device, "DEADBEEF")
+        XCTAssertMatches(device, "deadbeef")
+        XCTAssertDoesNotMatch(device, "1234-5678")
+    }
+
+    func testMatchesByDiscoveryDeviceIDPrefix() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "network-device-42",
+            name: "TestApp",
+            endpoint: endpoint
+        )
+
+        XCTAssertMatches(device, "network-device")
+        XCTAssertMatches(device, "network-device-42")
+        XCTAssertDoesNotMatch(device, "device-42")
     }
 
     func testNoMatch() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "TestApp#abc", endpoint: endpoint)
 
-        XCTAssertFalse(device.matches(resolutionQuery: "Android"))
-        XCTAssertFalse(device.matches(resolutionQuery: "zzzzz"))
+        XCTAssertDoesNotMatch(device, "Android")
+        XCTAssertDoesNotMatch(device, "zzzzz")
     }
 
     func testDiscoveryIdentityPrefersInstallationId() {
@@ -294,6 +407,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         )
 
         XCTAssertEqual(oldDevice.discoveryIdentity, newDevice.discoveryIdentity)
+        XCTAssertEqual(oldDevice.discoveryIdentity.rawValue, "install|accessibilitytestapp|install-1")
     }
 
     func testDiscoveryIdentityFallsBackToServiceIdWithoutInstallationId() {
@@ -313,6 +427,44 @@ final class DiscoveredDeviceTests: XCTestCase {
 
         // Without installationId, each device gets a unique service-based identity
         XCTAssertNotEqual(firstDevice.discoveryIdentity, secondDevice.discoveryIdentity)
+        XCTAssertEqual(firstDevice.discoveryIdentity.rawValue, "service|first")
+    }
+
+    func testDiscoveryRegistryUpdatesSameServiceWithoutMutation() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let firstDevice = DiscoveredDevice(
+            id: "AccessibilityTestApp#a18032ae",
+            name: "AccessibilityTestApp#a18032ae",
+            endpoint: endpoint,
+            displayDeviceName: "Before"
+        )
+        let updatedDevice = DiscoveredDevice(
+            id: "AccessibilityTestApp#a18032ae",
+            name: "AccessibilityTestApp#a18032ae",
+            endpoint: endpoint,
+            displayDeviceName: "After"
+        )
+
+        var registry = DiscoveryRegistry()
+
+        XCTAssertEqual(registry.recordFound(firstDevice), [.found(firstDevice)])
+        XCTAssertTrue(registry.recordFound(updatedDevice).isEmpty)
+        XCTAssertEqual(registry.devices.first?.deviceName, "After")
+    }
+
+    func testDiscoveryRegistryIgnoresUnknownServiceLoss() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "AccessibilityTestApp#a18032ae",
+            name: "AccessibilityTestApp#a18032ae",
+            endpoint: endpoint
+        )
+
+        var registry = DiscoveryRegistry()
+
+        XCTAssertEqual(registry.recordFound(device), [.found(device)])
+        XCTAssertTrue(registry.recordLost(DiscoveryServiceName("missing-service")).isEmpty)
+        XCTAssertEqual(registry.devices, [device])
     }
 
     func testDiscoveryRegistryDedupesSimulatorRelaunches() {
@@ -369,7 +521,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         _ = registry.recordFound(newDevice)
 
         XCTAssertEqual(
-            registry.recordLost(serviceName: newDevice.id),
+            registry.recordLost(newDevice.discoveryServiceName),
             [.lost(newDevice), .found(oldDevice)]
         )
         XCTAssertEqual(registry.devices, [oldDevice])
@@ -398,38 +550,8 @@ final class DiscoveredDeviceTests: XCTestCase {
         _ = registry.recordFound(oldDevice)
         _ = registry.recordFound(newDevice)
 
-        XCTAssertTrue(registry.recordLost(serviceName: oldDevice.id).isEmpty)
+        XCTAssertTrue(registry.recordLost(oldDevice.discoveryServiceName).isEmpty)
         XCTAssertEqual(registry.devices, [newDevice])
-    }
-
-    // MARK: - Array first(matching:)
-
-    func testArrayFirstMatchingNilFilter() {
-        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let devices = [
-            DiscoveredDevice(id: "a", name: "First-iPhone", endpoint: endpoint),
-            DiscoveredDevice(id: "b", name: "Second-iPad", endpoint: endpoint),
-        ]
-
-        XCTAssertEqual(devices.first(matching: nil)?.id, "a")
-    }
-
-    func testArrayFirstMatchingWithFilter() {
-        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let devices = [
-            DiscoveredDevice(id: "a", name: "First-iPhone", endpoint: endpoint),
-            DiscoveredDevice(id: "b", name: "Second-iPad", endpoint: endpoint),
-        ]
-
-        XCTAssertEqual(devices.first(matching: "iPad")?.id, "b")
-        XCTAssertNil(devices.first(matching: "Mac"))
-    }
-
-    func testArrayFirstMatchingEmpty() {
-        let devices: [DiscoveredDevice] = []
-
-        XCTAssertNil(devices.first(matching: nil))
-        XCTAssertNil(devices.first(matching: "anything"))
     }
 
     // MARK: - Host:Port Init

@@ -87,7 +87,7 @@ extension FenceResponse {
     private static func compactDiscoveryOmittedContainer(
         _ container: InterfaceDiscoveryOmittedContainer
     ) -> String {
-        var parts = [container.type]
+        var parts = [container.type.rawValue]
         if let containerName = nonEmpty(container.containerName?.rawValue) {
             parts.append("containerName=\(quotedString(containerName))")
         }

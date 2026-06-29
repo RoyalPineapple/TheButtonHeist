@@ -96,7 +96,8 @@ extension TheStash {
             annotations: InterfaceAnnotations(
                 elements: elementAnnotations(from: screen),
                 containers: containerAnnotations(from: screen)
-            )
+            ),
+            traceIdentities: traceIdentities(from: screen)
         )
     }
 
@@ -109,6 +110,7 @@ extension TheStash {
     static func toDiscoveryInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
         var elementAnnotations = elementAnnotations(from: screen)
         var containerAnnotations = containerAnnotations(from: screen)
+        var traceIdentitiesByPath = traceIdentities(from: screen).byPath
         let containerAnnotationsByPath = Dictionary(
             containerAnnotations.map { ($0.path, $0) },
             uniquingKeysWith: { _, latest in latest }
@@ -137,6 +139,7 @@ extension TheStash {
                     let childPath = path.appending(children.count)
                     children.append(.element(entry.element, traversalIndex: nextTraversalIndex))
                     nextTraversalIndex += 1
+                    traceIdentitiesByPath[childPath] = entry.heistId.traceElementIdentity
                     elementAnnotations.append(InterfaceElementAnnotation(
                         path: childPath,
                         actions: buildActions(for: entry.element)
@@ -186,7 +189,8 @@ extension TheStash {
             annotations: InterfaceAnnotations(
                 elements: elementAnnotations,
                 containers: containerAnnotations
-            )
+            ),
+            traceIdentities: InterfaceTraceIdentities(traceIdentitiesByPath)
         )
     }
 
@@ -211,10 +215,14 @@ extension TheStash {
                 actions: buildActions(for: entry.element)
             )
         }
+        let traceIdentities = Dictionary(uniqueKeysWithValues: entries.enumerated().map { index, entry in
+            (TreePath([index]), entry.heistId.traceElementIdentity)
+        })
         return Interface(
             timestamp: timestamp,
             tree: tree,
-            annotations: InterfaceAnnotations(elements: annotations)
+            annotations: InterfaceAnnotations(elements: annotations),
+            traceIdentities: InterfaceTraceIdentities(traceIdentities)
         )
     }
 
@@ -228,6 +236,12 @@ extension TheStash {
                 actions: buildActions(for: element)
             )
         }
+    }
+
+    private static func traceIdentities(from screen: Screen) -> InterfaceTraceIdentities {
+        InterfaceTraceIdentities(Dictionary(uniqueKeysWithValues: screen.liveCapture.heistIdsByPath.map { path, heistId in
+            (path, heistId.traceElementIdentity)
+        }))
     }
 
     private static func containerAnnotations(from screen: Screen) -> [InterfaceContainerAnnotation] {
