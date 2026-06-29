@@ -484,6 +484,131 @@ func runtimeSafetyEnforcesBounds() throws {
 }
 
 @Test
+func runtimeSafetyRequiresForEachElementPositiveLimitUnderConfiguredMax() throws {
+    #expect(throws: HeistPlanError.self) {
+        _ = try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 0,
+            parameter: "target",
+            body: [.warn(WarnStep(message: "body"))]
+        )
+    }
+
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 2,
+            parameter: "target",
+            body: [.warn(WarnStep(message: "body"))]
+        )),
+    ])
+
+    let failures = runtimeSafetyFailures(
+        for: raw,
+        limits: HeistPlanRuntimeSafetyLimits(maxForEachElementLimit: 1)
+    )
+
+    #expect(failures.contains {
+        $0.path == "$.body[0].for_each_element.limit"
+            && $0.contract == "max for_each_element limit"
+            && $0.observed == "2"
+    }, "\(failures)")
+}
+
+@Test
+func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws {
+    #expect(throws: HeistPlanError.self) {
+        _ = try ForEachStringStep(
+            values: [],
+            parameter: "item",
+            body: [.warn(WarnStep(message: "body"))]
+        )
+    }
+
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            body: [.warn(WarnStep(message: "body"))]
+        )),
+    ])
+
+    let failures = runtimeSafetyFailures(
+        for: raw,
+        limits: HeistPlanRuntimeSafetyLimits(maxForEachStringValues: 1)
+    )
+
+    #expect(failures.contains {
+        $0.path == "$.body[0].for_each_string.values"
+            && $0.contract == "max for_each_string values"
+            && $0.observed == "2 values"
+    }, "\(failures)")
+}
+
+@Test
+func runtimeSafetyRequiresRepeatUntilFiniteTimeoutUnderConfiguredMax() throws {
+    let validTimeouts = [0.0, 1.0]
+    for timeout in validTimeouts {
+        let raw = HeistPlanAdmissionCandidate(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .state(.exists(.label("Done"))),
+                timeout: timeout,
+                body: [.warn(WarnStep(message: "retry"))]
+            )),
+        ])
+
+        let failures = runtimeSafetyFailures(
+            for: raw,
+            limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
+        )
+
+        #expect(failures.isEmpty, "\(timeout): \(failures)")
+    }
+
+    let infinite = HeistPlanAdmissionCandidate(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .state(.exists(.label("Done"))),
+            timeout: .infinity,
+            body: [.warn(WarnStep(message: "retry"))]
+        )),
+    ])
+    let excessive = HeistPlanAdmissionCandidate(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .state(.exists(.label("Done"))),
+            timeout: 2,
+            body: [.warn(WarnStep(message: "retry"))]
+        )),
+    ])
+
+    #expect(throws: HeistPlanError.self) {
+        _ = try RepeatUntilStep(
+            predicate: .state(.exists(.label("Done"))),
+            timeout: -1,
+            body: [.warn(WarnStep(message: "retry"))]
+        )
+    }
+
+    let infiniteFailures = runtimeSafetyFailures(
+        for: infinite,
+        limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
+    )
+    let excessiveFailures = runtimeSafetyFailures(
+        for: excessive,
+        limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
+    )
+
+    #expect(infiniteFailures.contains {
+        $0.path == "$.body[0].repeat_until.timeout"
+            && $0.contract == "repeat_until timeout must be finite"
+    }, "\(infiniteFailures)")
+    #expect(excessiveFailures.contains {
+        $0.path == "$.body[0].repeat_until.timeout"
+            && $0.contract == "max repeat_until timeout"
+            && $0.observed == "2 seconds"
+    }, "\(excessiveFailures)")
+}
+
+@Test
 func runtimeSafetyRejectsPredicateContractsThatDecodingRejects() throws {
     let cases: [(String, HeistPlanAdmissionCandidate, AccessibilityPredicateContract.Violation)] = [
         (

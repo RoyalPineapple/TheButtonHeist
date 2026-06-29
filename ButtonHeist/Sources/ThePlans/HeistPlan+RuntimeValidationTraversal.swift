@@ -431,6 +431,15 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func validateRepeatUntil(_ step: RepeatUntilStep, path: HeistTraversalPath) {
+        guard step.timeout.isFinite else {
+            fail(
+                path: path.child(.timeout).description,
+                contract: "repeat_until timeout must be finite",
+                observed: ScoreDescription.decimal(step.timeout),
+                correction: "Use a finite timeout from 0 through \(ScoreDescription.decimal(limits.maxRepeatUntilTimeout)) seconds."
+            )
+            return
+        }
         guard step.timeout >= 0 else {
             fail(
                 path: path.child(.timeout).description,
@@ -439,6 +448,14 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
                 correction: "Use a timeout of 0 or more seconds."
             )
             return
+        }
+        if step.timeout > limits.maxRepeatUntilTimeout {
+            fail(
+                path: path.child(.timeout).description,
+                contract: "max repeat_until timeout",
+                observed: "\(ScoreDescription.decimal(step.timeout)) seconds",
+                correction: "Use a timeout of \(ScoreDescription.decimal(limits.maxRepeatUntilTimeout)) seconds or less."
+            )
         }
         guard !step.body.isEmpty else {
             fail(
