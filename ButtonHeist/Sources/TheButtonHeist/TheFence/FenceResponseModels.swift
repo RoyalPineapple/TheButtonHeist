@@ -213,7 +213,7 @@ public enum FenceResponse {
     case heistCatalog(HeistDiscoveryCatalog)
     case heistDescription(HeistDescription)
     case sessionState(payload: SessionStatePayload)
-    case targets([String: TargetConfig], defaultTarget: String?)
+    case targets([TargetName: TargetConfig], defaultTarget: TargetName?)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     var actionResult: ActionResult? {

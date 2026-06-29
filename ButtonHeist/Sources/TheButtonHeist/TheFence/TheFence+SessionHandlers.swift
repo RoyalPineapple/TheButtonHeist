@@ -40,17 +40,17 @@ extension TheFence {
                 )
             }
             guard let target = fileConfig.targets[targetName] else {
-                let available = fileConfig.targets.keys.sorted()
+                let available = fileConfig.targets.keys.map(\.rawValue).sorted()
                 throw FenceError.invalidRequest(
-                    "Unknown target '\(targetName)'. Available: \(available.joined(separator: ", "))"
+                    "Unknown target '\(targetName.rawValue)'. Available: \(available.joined(separator: ", "))"
                 )
             }
             resolvedDevice = target.device
             resolvedToken = request.token ?? target.token
             resolvedDirectDevice = DiscoveredDevice.fromHostPort(
                 target.device,
-                id: "config-\(targetName)",
-                name: targetName
+                id: "config-\(targetName.rawValue)",
+                name: targetName.rawValue
             )
         } else if handoff.isConnected || config.deviceFilter != nil || config.directDevice != nil {
             return try await establishSessionOnly()

@@ -186,8 +186,8 @@ public struct EnvironmentConfig: Sendable {
             resolvedToken = token ?? configTarget.token
             directDevice = DiscoveredDevice.fromHostPort(
                 configTarget.device,
-                id: "config-\(fileConfig?.defaultTarget ?? configTarget.device)",
-                name: fileConfig?.defaultTarget
+                id: "config-\(fileConfig?.defaultTarget?.rawValue ?? configTarget.device)",
+                name: fileConfig?.defaultTarget?.rawValue
             )
         } else {
             resolvedDevice = nil

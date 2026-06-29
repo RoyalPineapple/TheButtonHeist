@@ -9,6 +9,77 @@ import Testing
     #expect(coveredTypes == allTypes)
 }
 
+@Test func `action command target traversal reports roles paths and report targets`() throws {
+    let commandPath = "$.body[0].action.command"
+    let cases: [(String, HeistActionCommand, [TargetOccurrenceExpectation])] = [
+        (
+            "semantic expression target",
+            .activate(.label("Pay")),
+            [
+                TargetOccurrenceExpectation(
+                    role: .semantic,
+                    path: .payloadTarget,
+                    renderedPath: "\(commandPath).payload.target",
+                    reportTarget: .label("Pay")
+                ),
+            ]
+        ),
+        (
+            "scroll expression target",
+            .viewportScrollToVisible(.label("Checkout")),
+            [
+                TargetOccurrenceExpectation(
+                    role: .scroll,
+                    path: .payloadTarget,
+                    renderedPath: "\(commandPath).payload.target",
+                    reportTarget: .label("Checkout")
+                ),
+            ]
+        ),
+        (
+            "gesture start element target",
+            .mechanicalSwipe(SwipeTarget(
+                selection: .point(
+                    start: .elementUnitPoint(.label("Row"), UnitPoint(x: 0.5, y: 0.5)),
+                    destination: .direction(.up)
+                )
+            )),
+            [
+                TargetOccurrenceExpectation(
+                    role: .gesture,
+                    path: .payloadStartElement,
+                    renderedPath: "\(commandPath).payload.start.element",
+                    reportTarget: .label("Row")
+                ),
+            ]
+        ),
+        (
+            "scroll container element target",
+            .viewportScroll(ScrollTarget(selection: .element(.label("List")), direction: .down)),
+            [
+                TargetOccurrenceExpectation(
+                    role: .scroll,
+                    path: .payloadTarget,
+                    renderedPath: "\(commandPath).payload.target",
+                    reportTarget: .label("List")
+                ),
+            ]
+        ),
+    ]
+
+    for (name, command, expected) in cases {
+        let actual = command.targetOccurrences.map {
+            TargetOccurrenceExpectation(
+                role: $0.role,
+                path: $0.path,
+                renderedPath: $0.path.render(commandPath: commandPath),
+                reportTarget: $0.reportTarget
+            )
+        }
+        #expect(actual == expected, "\(name)")
+    }
+}
+
 @Test func `action command wire durability report target and canonical source contracts stay aligned`() throws {
     for testCase in actionCommandContractCases {
         let data = try JSONEncoder().encode(testCase.command)
@@ -170,6 +241,13 @@ import Testing
 
 private struct EncodedCommandType: Decodable {
     let type: String
+}
+
+private struct TargetOccurrenceExpectation: Equatable {
+    let role: HeistActionCommandTargetOccurrence.Role
+    let path: HeistActionCommandTargetOccurrence.Path
+    let renderedPath: String
+    let reportTarget: ElementTarget?
 }
 
 private struct ActionCommandContractCase {

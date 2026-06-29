@@ -7,9 +7,9 @@ extension HeistPlanRuntimeSafetyValidator {
         scope: HeistReferenceScope
     ) {
         switch command {
-        case .activate(let target), .increment(let target), .decrement(let target), .viewportScrollToVisible(let target):
-            validateTarget(target, path: "\(path).payload.target", scope: scope)
-        case .customAction(let name, let target):
+        case .activate, .increment, .decrement, .viewportScrollToVisible:
+            validateActionTargets(in: command, path: path, scope: scope)
+        case .customAction(let name, _):
             addString(name, path: "\(path).payload.actionName", role: "custom action name")
             if name.isEmpty {
                 fail(
@@ -19,13 +19,13 @@ extension HeistPlanRuntimeSafetyValidator {
                     correction: "Use the non-empty custom action name exposed by the target element."
                 )
             }
-            validateTarget(target, path: "\(path).payload.target", scope: scope)
-        case .rotor(let selection, let target, _):
+            validateActionTargets(in: command, path: path, scope: scope)
+        case .rotor(let selection, _, _):
             if case .named(let name) = selection {
                 addString(name, path: "\(path).payload.rotor", role: "rotor name")
             }
-            validateTarget(target, path: "\(path).payload.target", scope: scope)
-        case .typeText(let text, let target, let replacingExisting):
+            validateActionTargets(in: command, path: path, scope: scope)
+        case .typeText(let text, _, let replacingExisting):
             validateString(text, path: "\(path).payload.text", scope: scope)
             if case .literal("") = text, !replacingExisting {
                 fail(
@@ -35,28 +35,24 @@ extension HeistPlanRuntimeSafetyValidator {
                     correction: "Use TypeText with non-empty text, or pass replacingExisting: true to clear the field."
                 )
             }
-            if let target {
-                validateTarget(target, path: "\(path).payload.target", scope: scope)
-            }
-        case .mechanicalTap(let target):
-            validateGesturePointSelection(target.selection, path: "\(path).payload", scope: scope)
+            validateActionTargets(in: command, path: path, scope: scope)
+        case .mechanicalTap:
+            validateActionTargets(in: command, path: path, scope: scope)
         case .mechanicalLongPress(let target):
-            validateGesturePointSelection(target.selection, path: "\(path).payload", scope: scope)
+            validateActionTargets(in: command, path: path, scope: scope)
             validateGestureDuration(target.duration, path: "\(path).payload.duration")
         case .mechanicalSwipe(let target):
-            validateSwipe(target, path: "\(path).payload", scope: scope)
+            validateActionTargets(in: command, path: path, scope: scope)
             if let duration = target.duration {
                 validateGestureDuration(duration, path: "\(path).payload.duration")
             }
         case .mechanicalDrag(let target):
-            validateDrag(target, path: "\(path).payload", scope: scope)
+            validateActionTargets(in: command, path: path, scope: scope)
             if let duration = target.duration {
                 validateGestureDuration(duration, path: "\(path).payload.duration")
             }
-        case .viewportScroll(let target):
-            validateScroll(target.selection, path: "\(path).payload", scope: scope)
-        case .viewportScrollToEdge(let target):
-            validateScroll(target.selection, path: "\(path).payload", scope: scope)
+        case .viewportScroll, .viewportScrollToEdge:
+            validateActionTargets(in: command, path: path, scope: scope)
         case .setPasteboard(let target):
             addString(target.text, path: "\(path).payload.text", role: "pasteboard text")
             if target.text.isEmpty {
@@ -72,16 +68,19 @@ extension HeistPlanRuntimeSafetyValidator {
         }
     }
 
-    mutating func validateGesturePointSelection(
-        _ selection: GesturePointSelection,
+    mutating func validateActionTargets(
+        in command: HeistActionCommand,
         path: String,
         scope: HeistReferenceScope
     ) {
-        switch selection {
-        case .element(let target), .elementUnitPoint(let target, _):
-            validateElementTarget(target, path: "\(path).element")
-        case .coordinate:
-            break
+        for occurrence in command.targetOccurrences {
+            let targetPath = occurrence.path.render(commandPath: path)
+            switch occurrence.target {
+            case .expression(let target):
+                validateTarget(target, path: targetPath, scope: scope)
+            case .element(let target):
+                validateElementTarget(target, path: targetPath)
+            }
         }
     }
 
@@ -98,41 +97,5 @@ extension HeistPlanRuntimeSafetyValidator {
             observed: "\(duration.seconds)",
             correction: "Use a finite duration greater than 0 and no more than \(GestureDuration.maximumSeconds) seconds."
         )
-    }
-
-    mutating func validateSwipe(
-        _ target: SwipeTarget,
-        path: String,
-        scope: HeistReferenceScope
-    ) {
-        switch target.selection {
-        case .unitElement(let target, _, _), .elementDirection(let target, _):
-            validateElementTarget(target, path: "\(path).element")
-        case .point(let start, _):
-            validateGesturePointSelection(start, path: "\(path).start", scope: scope)
-        }
-    }
-
-    mutating func validateDrag(
-        _ target: DragTarget,
-        path: String,
-        scope: HeistReferenceScope
-    ) {
-        switch target.selection {
-        case .elementToPoint(let target, _, _):
-            validateElementTarget(target, path: "\(path).element")
-        case .pointToPoint:
-            break
-        }
-    }
-
-    mutating func validateScroll(
-        _ selection: ScrollContainerSelection,
-        path: String,
-        scope: HeistReferenceScope
-    ) {
-        if case .element(let target) = selection {
-            validateElementTarget(target, path: "\(path).target")
-        }
     }
 }

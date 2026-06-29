@@ -184,8 +184,8 @@ public final class TheFence {
         config.targets.compactMap { name, target in
             guard let device = DiscoveredDevice.fromHostPort(
                 target.device,
-                id: "config-\(name)",
-                name: name
+                id: "config-\(name.rawValue)",
+                name: name.rawValue
             ) else { return nil }
             return device
         }

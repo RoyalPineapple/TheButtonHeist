@@ -19,11 +19,11 @@ final class TargetConfigTests: XCTestCase {
         """
         let config = try JSONDecoder().decode(ButtonHeistFileConfig.self, from: Data(json.utf8))
         XCTAssertEqual(config.targets.count, 2)
-        XCTAssertEqual(config.targets["sim1"]?.device, "127.0.0.1:1455")
-        XCTAssertEqual(config.targets["sim1"]?.token, "abc123")
-        XCTAssertEqual(config.targets["sim2"]?.device, "127.0.0.1:1456")
-        XCTAssertNil(config.targets["sim2"]?.token)
-        XCTAssertEqual(config.defaultTarget, "sim1")
+        XCTAssertEqual(config.targets[targetName("sim1")]?.device, "127.0.0.1:1455")
+        XCTAssertEqual(config.targets[targetName("sim1")]?.token, "abc123")
+        XCTAssertEqual(config.targets[targetName("sim2")]?.device, "127.0.0.1:1456")
+        XCTAssertNil(config.targets[targetName("sim2")]?.token)
+        XCTAssertEqual(config.defaultTarget, targetName("sim1"))
     }
 
     func testParseConfigWithoutDefault() throws {
@@ -107,15 +107,15 @@ final class TargetConfigTests: XCTestCase {
 
     func testEnvVarsOverrideEverything() {
         let config = ButtonHeistFileConfig(
-            targets: ["sim1": TargetConfig(device: "127.0.0.1:1455", token: "config-token")],
-            defaultTarget: "sim1"
+            targets: targetConfigs(["sim1": TargetConfig(device: "127.0.0.1:1455", token: "config-token")]),
+            defaultTarget: targetName("sim1")
         )
         let env = environment([
             .buttonheistDevice: "127.0.0.1:9999",
             .buttonheistToken: "env-token",
         ])
 
-        let resolved = TargetConfigResolver.resolveEffective(targetName: "sim1", config: config, environment: env)
+        let resolved = TargetConfigResolver.resolveEffective(targetName: targetName("sim1"), config: config, environment: env)
         XCTAssertEqual(resolved?.device, "127.0.0.1:9999")
         XCTAssertEqual(resolved?.token, "env-token")
     }
@@ -129,21 +129,21 @@ final class TargetConfigTests: XCTestCase {
 
     func testNamedTargetFromConfig() {
         let config = ButtonHeistFileConfig(
-            targets: ["sim1": TargetConfig(device: "127.0.0.1:1455", token: "t1")],
+            targets: targetConfigs(["sim1": TargetConfig(device: "127.0.0.1:1455", token: "t1")]),
             defaultTarget: nil
         )
-        let resolved = TargetConfigResolver.resolveEffective(targetName: "sim1", config: config, environment: .empty)
+        let resolved = TargetConfigResolver.resolveEffective(targetName: targetName("sim1"), config: config, environment: .empty)
         XCTAssertEqual(resolved?.device, "127.0.0.1:1455")
         XCTAssertEqual(resolved?.token, "t1")
     }
 
     func testDefaultTargetFromConfig() {
         let config = ButtonHeistFileConfig(
-            targets: [
+            targets: targetConfigs([
                 "sim1": TargetConfig(device: "127.0.0.1:1455"),
                 "sim2": TargetConfig(device: "127.0.0.1:1456"),
-            ],
-            defaultTarget: "sim2"
+            ]),
+            defaultTarget: targetName("sim2")
         )
         let resolved = TargetConfigResolver.resolveEffective(config: config, environment: .empty)
         XCTAssertEqual(resolved?.device, "127.0.0.1:1456")
@@ -156,17 +156,17 @@ final class TargetConfigTests: XCTestCase {
 
     func testUnknownTargetNameReturnsNil() {
         let config = ButtonHeistFileConfig(
-            targets: ["sim1": TargetConfig(device: "127.0.0.1:1455")],
+            targets: targetConfigs(["sim1": TargetConfig(device: "127.0.0.1:1455")]),
             defaultTarget: nil
         )
-        let resolved = TargetConfigResolver.resolveEffective(targetName: "unknown", config: config, environment: .empty)
+        let resolved = TargetConfigResolver.resolveEffective(targetName: targetName("unknown"), config: config, environment: .empty)
         XCTAssertNil(resolved)
     }
 
     func testEnvTokenOverridesConfigToken() {
         let config = ButtonHeistFileConfig(
-            targets: ["sim1": TargetConfig(device: "127.0.0.1:1455", token: "config-token")],
-            defaultTarget: "sim1"
+            targets: targetConfigs(["sim1": TargetConfig(device: "127.0.0.1:1455", token: "config-token")]),
+            defaultTarget: targetName("sim1")
         )
         let env = environment([.buttonheistToken: "env-token"])
         let resolved = TargetConfigResolver.resolveEffective(config: config, environment: env)
@@ -194,9 +194,9 @@ final class TargetConfigTests: XCTestCase {
         try json.write(to: configFile, atomically: true, encoding: .utf8)
 
         let config = try TargetConfigResolver.loadConfig(from: configFile.path)
-        XCTAssertEqual(config.targets["test"]?.device, "127.0.0.1:1455")
-        XCTAssertEqual(config.targets["test"]?.token, "test-token")
-        XCTAssertEqual(config.defaultTarget, "test")
+        XCTAssertEqual(config.targets[targetName("test")]?.device, "127.0.0.1:1455")
+        XCTAssertEqual(config.targets[targetName("test")]?.token, "test-token")
+        XCTAssertEqual(config.defaultTarget, targetName("test"))
     }
 
     func testExplicitMissingConfigPathThrowsDiagnosticError() {
@@ -305,10 +305,10 @@ final class TargetConfigTests: XCTestCase {
     @ButtonHeistActor
     func testConfigTargetsAsDevices() async {
         let config = ButtonHeistFileConfig(
-            targets: [
+            targets: targetConfigs([
                 "sim1": TargetConfig(device: "127.0.0.1:1455"),
                 "sim2": TargetConfig(device: "127.0.0.1:1456", token: "tok"),
-            ]
+            ])
         )
         let devices = TheFence.configTargetsAsDevices(config)
         XCTAssertEqual(devices.count, 2)
@@ -325,10 +325,10 @@ final class TargetConfigTests: XCTestCase {
     @ButtonHeistActor
     func testConfigTargetsWithInvalidDeviceSkipped() async {
         let config = ButtonHeistFileConfig(
-            targets: [
+            targets: targetConfigs([
                 "good": TargetConfig(device: "127.0.0.1:1455"),
                 "bad": TargetConfig(device: "no-port-here"),
-            ]
+            ])
         )
         let devices = TheFence.configTargetsAsDevices(config)
         XCTAssertEqual(devices.count, 1)
@@ -339,8 +339,8 @@ final class TargetConfigTests: XCTestCase {
 
     func testTargetsResponseHumanFormatting() {
         let response = FenceResponse.targets(
-            ["sim1": TargetConfig(device: "127.0.0.1:1455")],
-            defaultTarget: "sim1"
+            targetConfigs(["sim1": TargetConfig(device: "127.0.0.1:1455")]),
+            defaultTarget: targetName("sim1")
         )
         let text = response.humanFormatted()
         XCTAssertTrue(text.contains("sim1"))
@@ -355,11 +355,11 @@ final class TargetConfigTests: XCTestCase {
 
     func testTargetsResponseJSON() throws {
         let response = FenceResponse.targets(
-            [
+            targetConfigs([
                 "sim1": TargetConfig(device: "127.0.0.1:1455", token: "tok"),
                 "sim2": TargetConfig(device: "127.0.0.1:1456"),
-            ],
-            defaultTarget: "sim1"
+            ]),
+            defaultTarget: targetName("sim1")
         )
         let json = try publicJSONProbe(response)
         XCTAssertEqual(try json.string("status"), "ok")
@@ -372,8 +372,8 @@ final class TargetConfigTests: XCTestCase {
 
     func testTargetsResponseCompactFormatting() {
         let response = FenceResponse.targets(
-            ["sim1": TargetConfig(device: "127.0.0.1:1455")],
-            defaultTarget: "sim1"
+            targetConfigs(["sim1": TargetConfig(device: "127.0.0.1:1455")]),
+            defaultTarget: targetName("sim1")
         )
         let text = response.compactFormatted()
         XCTAssertTrue(text.contains("sim1"))
@@ -446,11 +446,11 @@ final class TargetConfigTests: XCTestCase {
     @ButtonHeistActor
     func testConnectWithNamedTargetSwitchesConnection() async throws {
         let config = ButtonHeistFileConfig(
-            targets: [
+            targets: targetConfigs([
                 "sim1": TargetConfig(device: "127.0.0.1:1455", token: "tok1"),
                 "sim2": TargetConfig(device: "127.0.0.1:1456", token: "tok2"),
-            ],
-            defaultTarget: "sim1"
+            ]),
+            defaultTarget: targetName("sim1")
         )
         let fence = makeMockFence(fileConfig: config)
 
@@ -485,10 +485,10 @@ final class TargetConfigTests: XCTestCase {
     @ButtonHeistActor
     func testConnectFailureLeavesDisconnectedOnRequestedTarget() async throws {
         let config = ButtonHeistFileConfig(
-            targets: [
+            targets: targetConfigs([
                 "sim1": TargetConfig(device: "127.0.0.1:1455", token: "tok1"),
-            ],
-            defaultTarget: "sim1"
+            ]),
+            defaultTarget: targetName("sim1")
         )
         let fence = TheFence(configuration: .init(
             deviceFilter: "127.0.0.1:1455",
@@ -562,8 +562,8 @@ final class TargetConfigTests: XCTestCase {
     @ButtonHeistActor
     func testConnectWithUnknownTargetReturnsError() async throws {
         let config = ButtonHeistFileConfig(
-            targets: ["sim1": TargetConfig(device: "127.0.0.1:1455")],
-            defaultTarget: "sim1"
+            targets: targetConfigs(["sim1": TargetConfig(device: "127.0.0.1:1455")]),
+            defaultTarget: targetName("sim1")
         )
         let fence = TheFence(configuration: .init(fileConfig: config))
         do {
@@ -606,17 +606,17 @@ final class TargetConfigTests: XCTestCase {
     @ButtonHeistActor
     func testListTargetsWithConfig() async throws {
         let config = ButtonHeistFileConfig(
-            targets: [
+            targets: targetConfigs([
                 "sim1": TargetConfig(device: "127.0.0.1:1455"),
                 "sim2": TargetConfig(device: "127.0.0.1:1456"),
-            ],
-            defaultTarget: "sim1"
+            ]),
+            defaultTarget: targetName("sim1")
         )
         let fence = TheFence(configuration: .init(fileConfig: config))
         let response = try await fence.execute(command: .listTargets)
         if case .targets(let targets, let defaultTarget) = response {
             XCTAssertEqual(targets.count, 2)
-            XCTAssertEqual(defaultTarget, "sim1")
+            XCTAssertEqual(defaultTarget, targetName("sim1"))
         } else {
             XCTFail("Expected targets response, got \(response)")
         }
@@ -633,15 +633,25 @@ final class TargetConfigTests: XCTestCase {
 
     func testButtonHeistFileConfigRoundTrip() throws {
         let original = ButtonHeistFileConfig(
-            targets: [
+            targets: targetConfigs([
                 "sim1": TargetConfig(device: "127.0.0.1:1455", token: "tok"),
                 "sim2": TargetConfig(device: "127.0.0.1:1456"),
-            ],
-            defaultTarget: "sim1"
+            ]),
+            defaultTarget: targetName("sim1")
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)
         XCTAssertEqual(original, decoded)
+    }
+
+    private func targetName(_ value: String) -> TargetName {
+        TargetName(rawValue: value)
+    }
+
+    private func targetConfigs(_ values: [String: TargetConfig]) -> [TargetName: TargetConfig] {
+        Dictionary(uniqueKeysWithValues: values.map { key, value in
+            (targetName(key), value)
+        })
     }
 
     private func environment(_ values: [EnvironmentKey: String]) -> ButtonHeistEnvironment {

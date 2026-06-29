@@ -25,6 +25,10 @@ TOOL_SOURCE_PATHS=(
   ButtonHeist/Sources/HeistPlanTool
 )
 
+FENCE_SOURCE_PATHS=(
+  ButtonHeist/Sources/TheButtonHeist/TheFence
+)
+
 EXISTING_PATHS=()
 for path in "${CODE_PATHS[@]}"; do
   if [[ -e "$path" ]]; then
@@ -43,6 +47,13 @@ EXISTING_TOOL_SOURCE_PATHS=()
 for path in "${TOOL_SOURCE_PATHS[@]}"; do
   if [[ -e "$path" ]]; then
     EXISTING_TOOL_SOURCE_PATHS+=("$path")
+  fi
+done
+
+EXISTING_FENCE_SOURCE_PATHS=()
+for path in "${FENCE_SOURCE_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_FENCE_SOURCE_PATHS+=("$path")
   fi
 done
 
@@ -166,6 +177,43 @@ tooling_plain_public_extension_matches="$(
 )"
 report_matches "tooling-only catalog/schema/reference extension in normal public API" "$tooling_plain_public_extension_matches"
 
+SPI_PUBLIC_ALLOWED_LINES=(
+  'ButtonHeist/Sources/TheButtonHeist/Support/IdleMonitor.swift:LINE:@_spi(ButtonHeistTooling) public final class IdleMonitor {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/FenceCommandReference.swift:LINE:@_spi(ButtonHeistTooling) public enum FenceCommandReference {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift:LINE:@_spi(ButtonHeistInternals) public struct FenceResponsePresenter: Sendable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift:LINE:@_spi(ButtonHeistInternals) public struct ProjectionLimits: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift:LINE:@_spi(ButtonHeistInternals) public struct ProjectionProfile: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift:LINE:    @_spi(ButtonHeistTooling) public struct CommandArgumentEnvelope: Sendable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift:LINE:        @_spi(ButtonHeistTooling) public let argumentValues: [String: HeistValue]'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift:LINE:        @_spi(ButtonHeistTooling) public init('
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift:LINE:@_spi(ButtonHeistTooling) public enum FenceCommandFamily: String, Sendable, CaseIterable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceCommandDescriptor: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceCommandProjection: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift:LINE:@_spi(ButtonHeistTooling) public extension TheFence.Command {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:    @_spi(ButtonHeistTooling) public let message: String'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:    @_spi(ButtonHeistTooling) public let details: FailureDetails'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:    @_spi(ButtonHeistTooling) public init(message: String, details: FailureDetails = FailureDetails(code: .requestInvalid)) {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceOperationRequest: Sendable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:    @_spi(ButtonHeistTooling) public let command: TheFence.Command'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:    @_spi(ButtonHeistTooling) public let arguments: TheFence.CommandArgumentEnvelope'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:    @_spi(ButtonHeistTooling) public init(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope) {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift:LINE:@_spi(ButtonHeistTooling) public extension TheFence.Command {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceParameterSpec: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public extension FenceParameterKey {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public enum MCPExposure: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public struct MCPToolAnnotationSpec: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public extension FenceParameterSpec.ParamType {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public extension FenceCommandDescriptor {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public extension FenceParameterSpec {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift:LINE:@_spi(ButtonHeistTooling) public enum CLIExposure: Sendable, Equatable {'
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence.swift:LINE:    @_spi(ButtonHeistTooling) public func execute(_ request: FenceOperationRequest) async throws -> FenceResponse {'
+)
+spi_public_matches="$(git_grep '@_spi\([^)]*\)[[:space:]]+public[[:space:]]+' "${EXISTING_SOURCE_PATHS[@]}")"
+spi_public_matches="$(filter_allowed_normalized_lines "$spi_public_matches" "${SPI_PUBLIC_ALLOWED_LINES[@]}")"
+report_matches "new SPI-public declaration outside explicit allowlist" "$spi_public_matches"
+
 RAW_LOGGER_ALLOWED_LINES=(
   'ButtonHeist/Sources/TheScore/ButtonHeistLog.swift:LINE:        Logger(subsystem: channel.subsystem.rawValue, category: channel.category)'
 )
@@ -180,12 +228,21 @@ TUPLE_RETURN_GUARD_PATHS=(
   ':(glob)ButtonHeist/Sources/ThePlans/HeistPlanSource*Parser.swift'
   ':(glob)ButtonHeist/Sources/TheButtonHeist/TheFence/*.swift'
 )
-TUPLE_RETURN_ALLOWED_LINES=(
-  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+SwipeDragGestures.swift:LINE:    ) throws -> (key: Intent, payload: TheFence.CommandArgumentEnvelope)'
-)
 tuple_return_matches="$(git_grep '[[:space:]]*->[[:space:]]*\([^)]*,[^)]*\)[?]?' "${TUPLE_RETURN_GUARD_PATHS[@]}")"
-tuple_return_matches="$(filter_allowed_normalized_lines "$tuple_return_matches" "${TUPLE_RETURN_ALLOWED_LINES[@]}")"
 report_matches "tuple return APIs in parser/compiler/fence surfaces" "$tuple_return_matches"
+
+GESTURE_PAYLOAD_GUARD_PATHS=(
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+GestureTargets.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+SwipeDragGestures.swift
+)
+EXISTING_GESTURE_PAYLOAD_GUARD_PATHS=()
+for path in "${GESTURE_PAYLOAD_GUARD_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_GESTURE_PAYLOAD_GUARD_PATHS+=("$path")
+  fi
+done
+gesture_payload_helper_matches="$(git_grep '\b(SwipeInput|DragInput|BoundedUnitPoint|singleObjectPayloadIntent)\b' "${EXISTING_GESTURE_PAYLOAD_GUARD_PATHS[@]}")"
+report_matches "retired gesture-local payload decoder/helper" "$gesture_payload_helper_matches"
 
 compiler_diagnostic_collapse_matches="$(git_grep 'diagnostics\[[0-9]+\]' ButtonHeist/Sources/ThePlans)"
 report_matches "compiler diagnostic set collapsed by index" "$compiler_diagnostic_collapse_matches"
@@ -211,6 +268,36 @@ report_matches "public command-plus-arguments execution surface" "$public_comman
 
 direct_command_execute_matches="$(git_grep '\.execute[[:space:]]*\([[:space:]]*command:[^)]*arguments:' "${EXISTING_SOURCE_PATHS[@]}")"
 report_matches "direct fence command-plus-arguments call site" "$direct_command_execute_matches"
+
+command_boundary_raw_matcher_matches="$(
+  git_grep \
+    'argumentValues\[[^]]*"(checks|label|identifier|value|traits|excludeTraits)"|schemaStringMatches[[:space:]]*\([[:space:]]*("label"|"identifier"|"value"|[.]label|[.]identifier|[.]value)[[:space:]]*\)|schemaStringArray[[:space:]]*\([[:space:]]*("traits"|"excludeTraits"|[.]traits|[.]excludeTraits)[[:space:]]*\)' \
+    "${EXISTING_FENCE_SOURCE_PATHS[@]}"
+)"
+report_matches "raw command-boundary matcher shortcut outside typed matcher-field boundary" "$command_boundary_raw_matcher_matches"
+
+PUBLIC_RESPONSE_SERIALIZATION_CALL_SITE_PATHS=(
+  ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+JSON.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Response.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponseModels.swift
+)
+EXISTING_PUBLIC_RESPONSE_SERIALIZATION_CALL_SITE_PATHS=()
+for path in "${PUBLIC_RESPONSE_SERIALIZATION_CALL_SITE_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_PUBLIC_RESPONSE_SERIALIZATION_CALL_SITE_PATHS+=("$path")
+  fi
+done
+public_response_direct_encoder_matches="$(git_grep '\bJSONEncoder[[:space:]]*\(' "${EXISTING_PUBLIC_RESPONSE_SERIALIZATION_CALL_SITE_PATHS[@]}")"
+report_matches "public response JSONEncoder bypass outside PublicJSONSerializer" "$public_response_direct_encoder_matches"
+
+PUBLIC_RESPONSE_ENVELOPE_ALLOWED_PATHS=(
+  '^ButtonHeist/Sources/TheButtonHeist/TheFence/PublicJSONSerializer\.swift$'
+)
+public_response_envelope_matches="$(git_grep '\bPublicResponseEnvelope\b' "${EXISTING_FENCE_SOURCE_PATHS[@]}")"
+public_response_envelope_matches="$(filter_allowed_paths "$public_response_envelope_matches" "${PUBLIC_RESPONSE_ENVELOPE_ALLOWED_PATHS[@]}")"
+report_matches "public response envelope bypass outside PublicJSONSerializer" "$public_response_envelope_matches"
 
 TOOL_STDOUT_ALLOWED_LINES=(
   'ButtonHeist/Sources/HeistDoctorTool/main.swift:LINE:        FileHandle.standardOutput.write(Data((line + "\n").utf8))'

@@ -28,18 +28,24 @@ public struct TargetConfig: Codable, Sendable, Equatable {
 }
 
 /// Typed selector for a named target in `.buttonheist.json`.
-struct TargetName: RawRepresentable, Hashable, Sendable, Equatable, ExpressibleByStringLiteral, CustomStringConvertible {
-    let rawValue: String
+public struct TargetName: RawRepresentable, Hashable, Sendable, Equatable, Codable, CustomStringConvertible {
+    public let rawValue: String
 
-    init(rawValue: String) {
+    public init(rawValue: String) {
         self.rawValue = rawValue
     }
 
-    init(stringLiteral value: String) {
-        self.init(rawValue: value)
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
     }
 
-    var description: String {
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    public var description: String {
         rawValue
     }
 }
@@ -47,15 +53,15 @@ struct TargetName: RawRepresentable, Hashable, Sendable, Equatable, ExpressibleB
 /// Config file schema for `.buttonheist.json` or `~/.config/buttonheist/config.json`.
 /// Contains named targets and an optional default.
 struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
-    let targets: [String: TargetConfig]
-    let defaultTarget: String?
+    let targets: [TargetName: TargetConfig]
+    let defaultTarget: TargetName?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case targets
         case defaultTarget = "default"
     }
 
-    init(targets: [String: TargetConfig], defaultTarget: String? = nil) {
+    init(targets: [TargetName: TargetConfig], defaultTarget: TargetName? = nil) {
         self.targets = targets
         self.defaultTarget = defaultTarget
     }
@@ -63,8 +69,39 @@ struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownFields(allowed: CodingKeys.self)
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        targets = try container.decode([String: TargetConfig].self, forKey: .targets)
+        let targetContainer = try container.nestedContainer(keyedBy: TargetNameCodingKey.self, forKey: .targets)
+        targets = try Dictionary(uniqueKeysWithValues: targetContainer.allKeys.map { key in
+            (
+                TargetName(rawValue: key.stringValue),
+                try targetContainer.decode(TargetConfig.self, forKey: key)
+            )
+        })
         defaultTarget = try container.decodeIfPresent(String.self, forKey: .defaultTarget)
+            .map(TargetName.init(rawValue:))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        var targetContainer = container.nestedContainer(keyedBy: TargetNameCodingKey.self, forKey: .targets)
+        for (name, target) in targets.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            try targetContainer.encode(target, forKey: TargetNameCodingKey(stringValue: name.rawValue))
+        }
+        try container.encodeIfPresent(defaultTarget, forKey: .defaultTarget)
+    }
+}
+
+private struct TargetNameCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init(stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(intValue: Int) {
+        stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }
 
@@ -130,28 +167,7 @@ enum TargetConfigResolver {
             guard FileManager.default.fileExists(atPath: url.path) else {
                 continue
             }
-            let data: Data
-            do {
-                data = try Data(contentsOf: url)
-            } catch {
-                throw TargetConfigLoadError(
-                    path: url.path,
-                    kind: .readFailed,
-                    underlyingDescription: error.localizedDescription
-                )
-            }
-            let config: ButtonHeistFileConfig
-            do {
-                config = try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)
-            } catch {
-                logger.error("Failed to decode config \(url.path): \(error)")
-                throw TargetConfigLoadError(
-                    path: url.path,
-                    kind: .decodeFailed,
-                    underlyingDescription: error.localizedDescription
-                )
-            }
-            return config
+            return try readConfig(at: url)
         }
         return nil
     }
@@ -159,6 +175,10 @@ enum TargetConfigResolver {
     /// Load and parse a user-provided config path.
     static func loadConfig(from explicitPath: String) throws -> ButtonHeistFileConfig {
         let url = configURL(for: explicitPath)
+        return try readConfig(at: url)
+    }
+
+    private static func readConfig(at url: URL) throws -> ButtonHeistFileConfig {
         let data: Data
         do {
             data = try Data(contentsOf: url)
@@ -173,6 +193,7 @@ enum TargetConfigResolver {
         do {
             return try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)
         } catch {
+            logger.error("Failed to decode config \(url.path): \(error)")
             throw TargetConfigLoadError(
                 path: url.path,
                 kind: .decodeFailed,
@@ -199,7 +220,7 @@ enum TargetConfigResolver {
 
         guard let config else { return nil }
 
-        let name = targetName?.rawValue ?? config.defaultTarget
+        let name = targetName ?? config.defaultTarget
         guard let name else { return nil }
 
         guard var target = config.targets[name] else { return nil }

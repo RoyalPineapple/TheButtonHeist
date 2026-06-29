@@ -1913,59 +1913,6 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
-    func testCommandArgumentEnvelopeReadsUnitPoint() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "start": .object(["x": .double(0.25), "y": .double(0.75)]),
-        ])
-
-        XCTAssertEqual(try envelope.schemaUnitPoint("start"), UnitPoint(x: 0.25, y: 0.75))
-    }
-
-    func testCommandArgumentEnvelopeUnitPointErrorsUseQualifiedFields() throws {
-        let missingField = TheFence.CommandArgumentEnvelope(values: [
-            "start": .object(["x": .double(0.25)]),
-        ])
-        XCTAssertThrowsError(try missingField.schemaUnitPoint("start")) { error in
-            XCTAssertEqual(
-                (error as? SchemaValidationError)?.message,
-                "schema validation failed for start.y: observed missing; expected number"
-            )
-        }
-
-        let outOfRange = TheFence.CommandArgumentEnvelope(values: [
-            "start": .object(["x": .double(1.2), "y": .double(0.5)]),
-        ])
-        XCTAssertThrowsError(try outOfRange.schemaUnitPoint("start")) { error in
-            XCTAssertEqual(
-                (error as? SchemaValidationError)?.message,
-                "schema validation failed for start.x: observed number 1.2; expected number in 0...1"
-            )
-        }
-
-        let extraField = TheFence.CommandArgumentEnvelope(values: [
-            "start": .object(["x": .double(0.25), "y": .double(0.75), "z": .double(0.5)]),
-        ])
-        XCTAssertThrowsError(try extraField.schemaUnitPoint("start")) { error in
-            XCTAssertEqual(
-                (error as? SchemaValidationError)?.message,
-                "schema validation failed for start.z: observed number 0.5; expected valid unit point field"
-            )
-        }
-    }
-
-    func testCommandArgumentEnvelopeUnitPointRejectsNonObjectWithSpecificExpectedShape() throws {
-        let envelope = TheFence.CommandArgumentEnvelope(values: [
-            "start": .string("left"),
-        ])
-
-        XCTAssertThrowsError(try envelope.schemaUnitPoint("start")) { error in
-            XCTAssertEqual(
-                (error as? SchemaValidationError)?.message,
-                "schema validation failed for start: observed string \"left\"; expected object with numeric x and y"
-            )
-        }
-    }
-
     func testCommandArgumentEnvelopeReadsRequiredEnum() throws {
         let envelope = TheFence.CommandArgumentEnvelope(values: [
             "direction": .string("up"),
@@ -2134,7 +2081,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapMissingTarget() async {
         await assertOperationValidationError(
             command: .oneFingerTap,
-            contains: "Must specify element or point"
+            contains: "point requires element, element with unitPoint, or ScreenPoint"
         )
     }
 
@@ -2152,6 +2099,18 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .oneFingerTap,
             arguments: ["point": .object(["x": .double(100.0)])],
             equals: "schema validation failed for point.y: observed missing; expected number"
+        )
+    }
+
+    @ButtonHeistActor
+    func testOneFingerTapRejectsOutOfRangeUnitPoint() async {
+        await assertOperationValidationError(
+            command: .oneFingerTap,
+            arguments: [
+                "element": targetValue(identifier: "myButton"),
+                "unitPoint": .object(["x": .double(1.2), "y": .double(0.5)]),
+            ],
+            equals: "schema validation failed for unitPoint.x: observed number 1.2; expected number in 0...1"
         )
     }
 
@@ -2216,7 +2175,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testLongPressMissingTarget() async {
         await assertOperationValidationError(
             command: .longPress,
-            contains: "Must specify element or point"
+            contains: "point requires element, element with unitPoint, or ScreenPoint"
         )
     }
 
@@ -2367,7 +2326,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     "end": .object(["x": .double(30.0), "y": .double(40.0)]),
                 ]),
             ],
-            equals: "schema validation failed for swipe: observed mixed or missing gesture intent; expected exactly one swipe intent"
+            equals: "swipe accepts exactly one gesture intent"
         )
     }
 
@@ -2442,7 +2401,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     "end": .object(["x": .double(100.0), "y": .double(200.0)]),
                 ]),
             ],
-            equals: "schema validation failed for drag: observed mixed or missing gesture intent; expected exactly one drag intent"
+            equals: "drag accepts exactly one gesture intent"
         )
     }
 

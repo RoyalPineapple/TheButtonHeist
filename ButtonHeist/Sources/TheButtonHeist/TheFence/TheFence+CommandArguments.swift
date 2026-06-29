@@ -311,7 +311,7 @@ struct HeistValuePayloadExpectation: Sendable, Equatable {
         ])
     }
 
-    private static func prefixed(
+    static func prefixed(
         _ prefix: String,
         _ expectations: [String: HeistValueExpectedType]
     ) -> [String: HeistValueExpectedType] {
@@ -320,7 +320,7 @@ struct HeistValuePayloadExpectation: Sendable, Equatable {
         }
     }
 
-    private static func merged(
+    static func merged(
         _ expectations: [[String: HeistValueExpectedType]]
     ) -> [String: HeistValueExpectedType] {
         expectations.reduce(into: [:]) { result, expectation in

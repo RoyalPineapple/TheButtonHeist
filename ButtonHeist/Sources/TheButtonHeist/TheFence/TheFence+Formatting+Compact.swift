@@ -70,9 +70,9 @@ extension FenceResponse {
             return Self.compactSessionState(payload)
         case .targets(let targets, let defaultTarget):
             if targets.isEmpty { return "no targets configured" }
-            return targets.sorted(by: { $0.key < $1.key }).map { name, target in
+            return targets.sorted(by: { $0.key.rawValue < $1.key.rawValue }).map { name, target in
                 let isDefault = name == defaultTarget ? " *" : ""
-                return "\(name): \(target.device)\(isDefault)"
+                return "\(name.rawValue): \(target.device)\(isDefault)"
             }.joined(separator: "\n")
         }
     }

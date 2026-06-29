@@ -100,33 +100,29 @@ public actor HeistCompiler {
                 ])
             }
 
-            var plans: [HeistPlan] = []
-            var diagnostics: [HeistBuildDiagnostic] = []
+            var compileResults: [ValidationResult<HeistPlan, HeistBuildDiagnostic>] = []
             for source in sources {
                 try Task.checkCancellation()
-                switch await compileFile(source, entry: configuration.directoryEntry) {
-                case .success(let plan, let compileDiagnostics):
-                    plans.append(plan)
-                    diagnostics.append(contentsOf: compileDiagnostics)
-                case .failure(let compileDiagnostics):
-                    diagnostics.append(contentsOf: compileDiagnostics)
+                compileResults.append(await compileFile(source, entry: configuration.directoryEntry))
+            }
+
+            let compiledPlans = compileResults.collectValidationResults()
+            let compileDiagnostics = compiledPlans.diagnostics
+            guard compileDiagnostics.allSatisfy({ $0.severity != .error }) else {
+                return .failure(compileDiagnostics)
+            }
+            return compiledPlans.flatMap { plans in
+                let catalogDiagnostics = Self.catalogDiagnostics(for: plans, sources: sources)
+                guard catalogDiagnostics.allSatisfy({ $0.severity != .error }) else {
+                    return .failure(catalogDiagnostics)
                 }
-            }
 
-            guard diagnostics.allSatisfy({ $0.severity != .error }) else {
-                return .failure(diagnostics)
+                let catalog = HeistCatalog(
+                    source: HeistCatalogSource(url: directory),
+                    capabilities: plans
+                )
+                return .success(catalog, diagnostics: catalogDiagnostics)
             }
-            let catalogDiagnostics = Self.catalogDiagnostics(for: plans, sources: sources)
-            diagnostics.append(contentsOf: catalogDiagnostics)
-            guard diagnostics.allSatisfy({ $0.severity != .error }) else {
-                return .failure(diagnostics)
-            }
-
-            let catalog = HeistCatalog(
-                source: HeistCatalogSource(url: directory),
-                capabilities: plans
-            )
-            return .success(catalog, diagnostics: diagnostics)
         } catch is CancellationError {
             return .failure([Self.diagnostic(
                 code: "heist.directory.cancelled",

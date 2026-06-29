@@ -39,23 +39,30 @@ extension TheFence {
                 throw SchemaValidationError(
                     field: "\(field)[\(index)].kind",
                     observed: "missing",
-                    expected: SchemaValidationError.expectedEnumValues(elementPredicateCheckKinds)
+                    expected: SchemaValidationError.expectedEnum(ElementPredicateCheck<String>.Kind.self)
                 )
             }
             guard case .string(let kindName) = kind else {
                 throw SchemaValidationError(
                     field: "\(field)[\(index)].kind",
                     observed: kind.schemaObservedDescription,
-                    expected: SchemaValidationError.expectedEnumValues(elementPredicateCheckKinds)
+                    expected: SchemaValidationError.expectedEnum(ElementPredicateCheck<String>.Kind.self)
                 )
             }
-            switch kindName {
-            case "label", "identifier", "value":
+            guard let checkKind = ElementPredicateCheck<String>.Kind(rawValue: kindName) else {
+                throw SchemaValidationError(
+                    field: "\(field)[\(index)].kind",
+                    observed: "string \"\(kindName)\"",
+                    expected: SchemaValidationError.expectedEnum(ElementPredicateCheck<String>.Kind.self)
+                )
+            }
+            switch checkKind {
+            case .label, .identifier, .value:
                 try rejectFieldIfPresent(
                     "values",
                     in: object,
                     field: "\(field)[\(index)].values",
-                    expected: "not present for \(kindName) checks"
+                    expected: "not present for \(checkKind.rawValue) checks"
                 )
                 guard let match = object["match"] else {
                     throw SchemaValidationError(
@@ -71,29 +78,19 @@ extension TheFence {
                         expected: "StringMatch object with mode and value"
                     )
                 }
-            case "traits", "excludeTraits":
+            case .traits, .excludeTraits:
                 try rejectFieldIfPresent(
                     "match",
                     in: object,
                     field: "\(field)[\(index)].match",
-                    expected: "not present for \(kindName) checks"
+                    expected: "not present for \(checkKind.rawValue) checks"
                 )
                 try validateTraitNamesValue(
                     object["values"],
                     field: "\(field)[\(index)].values"
                 )
-            default:
-                throw SchemaValidationError(
-                    field: "\(field)[\(index)].kind",
-                    observed: "string \"\(kindName)\"",
-                    expected: SchemaValidationError.expectedEnumValues(elementPredicateCheckKinds)
-                )
             }
         }
-    }
-
-    private nonisolated static var elementPredicateCheckKinds: [String] {
-        ["label", "identifier", "value", "traits", "excludeTraits"]
     }
 
     private nonisolated static func rejectFieldIfPresent(

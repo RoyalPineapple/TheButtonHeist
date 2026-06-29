@@ -727,11 +727,7 @@ struct HeistCompilerTests {
     @Test
     func `parser compiler and fence surfaces avoid new tuple return APIs`() throws {
         let root = try repositoryRoot()
-        let allowedTupleReturns: Set<String> = [
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+SwipeDragGestures.swift:"
-                + "func singleObjectPayloadIntent<Intent>( _: Intent.Type, field: String, expected: String ) "
-                + "throws -> (key: Intent, payload: TheFence.CommandArgumentEnvelope)",
-        ]
+        let allowedTupleReturns: Set<String> = []
         let tupleReturnPattern = #"\b(?:@\w+(?:\([^)]*\))?\s+"#
             + #"|(?:public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated)\s+)*"#
             + #"func\s+\w+[^{=]*?->\s*\([^)]*,[^)]*\)\??"#
@@ -746,6 +742,40 @@ struct HeistCompilerTests {
         #expect(
             unexpected.isEmpty,
             "Unexpected tuple return APIs in parser/compiler/fence surfaces:\n\(unexpected.sorted().joined(separator: "\n"))"
+        )
+    }
+
+    @Test
+    func `public response serialization stays behind PublicJSONSerializer`() throws {
+        let root = try repositoryRoot()
+        let responseCallSitePaths = [
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+JSON.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Response.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponseModels.swift",
+        ]
+        let responseCallSiteFiles = responseCallSitePaths.map { root.appendingPathComponent($0) }
+
+        let directEncoders = try sourceMatches(
+            in: responseCallSiteFiles,
+            root: root,
+            pattern: #"\bJSONEncoder\s*\("#
+        )
+        #expect(
+            directEncoders.isEmpty,
+            "Unexpected public response JSONEncoder bypasses:\n\(directEncoders.sorted().joined(separator: "\n"))"
+        )
+
+        let publicResponseEnvelopeUse = try sourceMatchFiles(
+            in: try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence", isDirectory: true)),
+            root: root,
+            pattern: #"\bPublicResponseEnvelope\b"#
+        )
+        .filter { $0 != "ButtonHeist/Sources/TheButtonHeist/TheFence/PublicJSONSerializer.swift" }
+        #expect(
+            publicResponseEnvelopeUse.isEmpty,
+            "Unexpected public response envelope bypasses:\n\(publicResponseEnvelopeUse.sorted().joined(separator: "\n"))"
         )
     }
 
@@ -1033,23 +1063,19 @@ struct HeistCompilerTests {
 private func requireSuccess<Value>(
     _ result: ValidationResult<Value, HeistBuildDiagnostic>
 ) async throws -> (Value, [HeistBuildDiagnostic]) {
-    switch result {
-    case .success(let value, let diagnostics):
-        return (value, diagnostics)
-    case .failure(let diagnostics):
-        throw CompilerTestFailure(diagnostics.map(\.description).joined(separator: "\n"))
-    }
+    let value = try result.get(orThrow: {
+        CompilerTestFailure($0.map(\.description).joined(separator: "\n"))
+    })
+    return (value, result.diagnostics)
 }
 
 private func requireFailure<Value>(
     _ result: ValidationResult<Value, HeistBuildDiagnostic>
 ) async throws -> [HeistBuildDiagnostic] {
-    switch result {
-    case .success:
+    guard let diagnostics = result.failureDiagnostics else {
         throw CompilerTestFailure("Expected compilation to fail")
-    case .failure(let diagnostics):
-        return diagnostics
     }
+    return diagnostics
 }
 
 private final class CompilerTemporaryDirectory {
