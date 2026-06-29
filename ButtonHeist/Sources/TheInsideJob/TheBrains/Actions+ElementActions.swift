@@ -113,7 +113,8 @@ extension Actions {
                         return .failure(failure.interactionResult(commandMethod: .activate))
                     }
                 },
-                activationPointDispatch: safecracker.tap
+                activationPointDispatch: safecracker.tap,
+                showFingerprint: safecracker.showFingerprint
             ).apply(to: context.liveTarget)
         }
     }

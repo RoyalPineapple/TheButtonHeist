@@ -106,6 +106,7 @@ INSIDEJOB_TOKEN=my-secret-token
 INSIDEJOB_ID=my-instance
 INSIDEJOB_SESSION_TIMEOUT=30
 INSIDEJOB_SCOPE=simulator,usb
+INSIDEJOB_FINGERPRINTS=true
 ```
 
 ```xml
@@ -120,10 +121,14 @@ INSIDEJOB_SCOPE=simulator,usb
     <string>simulator</string>
     <string>usb</string>
 </array>
+<key>InsideJobFingerprintsEnabled</key>
+<true/>
 ```
 
 Default scope is `simulator,usb`. WiFi/LAN exposure is opt-in with
 `network`; only that mode requires Bonjour Info.plist entries.
+Fingerprints are enabled by default and can also be disabled from code with
+`TheInsideJob.configure(fingerprintsEnabled: false)`.
 
 ### Lifecycle
 

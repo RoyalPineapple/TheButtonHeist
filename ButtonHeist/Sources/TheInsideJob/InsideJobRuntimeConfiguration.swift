@@ -13,6 +13,8 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     let allowedScopes: Set<ConnectionScope>
     let allowedScopesSource: StartupConfigurationSource
     let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
+    let fingerprintsEnabled: Bool
+    let fingerprintsEnabledSource: StartupConfigurationSource
     let sessionIdentity: InsideJobSessionIdentity
 
     static func resolve(
@@ -20,7 +22,8 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         token: String?,
         instanceId: String?,
         allowedScopes: Set<ConnectionScope>?,
-        port: UInt16
+        port: UInt16,
+        fingerprintsEnabled: Bool? = nil
     ) -> InsideJobRuntimeConfiguration {
         let resolvedToken = resolvedRuntimeToken(
             explicitToken: token,
@@ -35,7 +38,9 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             preferredPortSource: port == 0 ? .defaultValue : .api,
             allowedScopes: allowedScopes ?? startupConfiguration.allowedScopes.value,
             allowedScopesSource: allowedScopes == nil ? startupConfiguration.allowedScopes.source : .api,
-            sessionReleaseTimeout: startupConfiguration.sessionTimeout
+            sessionReleaseTimeout: startupConfiguration.sessionTimeout,
+            fingerprintsEnabled: fingerprintsEnabled ?? startupConfiguration.fingerprintsEnabled.value,
+            fingerprintsEnabledSource: fingerprintsEnabled == nil ? startupConfiguration.fingerprintsEnabled.source : .api
         )
     }
 
@@ -53,7 +58,9 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             preferredPortSource: startupConfiguration.preferredPort.source,
             allowedScopes: startupConfiguration.allowedScopes.value,
             allowedScopesSource: startupConfiguration.allowedScopes.source,
-            sessionReleaseTimeout: startupConfiguration.sessionTimeout
+            sessionReleaseTimeout: startupConfiguration.sessionTimeout,
+            fingerprintsEnabled: startupConfiguration.fingerprintsEnabled.value,
+            fingerprintsEnabledSource: startupConfiguration.fingerprintsEnabled.source
         )
     }
 
@@ -87,6 +94,8 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         allowedScopes: Set<ConnectionScope>,
         allowedScopesSource: StartupConfigurationSource,
         sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>,
+        fingerprintsEnabled: Bool = true,
+        fingerprintsEnabledSource: StartupConfigurationSource = .defaultValue,
         sessionIdentity: InsideJobSessionIdentity? = nil
     ) {
         self.token = token
@@ -97,6 +106,8 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         self.allowedScopes = allowedScopes
         self.allowedScopesSource = allowedScopesSource
         self.sessionReleaseTimeout = sessionReleaseTimeout
+        self.fingerprintsEnabled = fingerprintsEnabled
+        self.fingerprintsEnabledSource = fingerprintsEnabledSource
         self.sessionIdentity = sessionIdentity ?? InsideJobSessionIdentity.make(instanceId: instanceId)
     }
 }

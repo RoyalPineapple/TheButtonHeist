@@ -201,7 +201,7 @@ Boring in the useful way: receipts say what ran, what changed, and where the mac
 Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC
 `+load`; no app setup code is required. Release builds do not start the server.
 
-By default the server accepts simulator loopback and USB-scoped connections. It does not publish Bonjour on the LAN unless you opt into network scope with `INSIDEJOB_SCOPE=simulator,usb,network` or `InsideJobScope`.
+By default the server accepts simulator loopback and USB-scoped connections. It does not publish Bonjour on the LAN unless you opt into network scope with `INSIDEJOB_SCOPE=simulator,usb,network` or `InsideJobScope`. Interaction fingerprints are enabled by default; disable them with `INSIDEJOB_FINGERPRINTS=false`, `InsideJobFingerprintsEnabled`, or `TheInsideJob.configure(fingerprintsEnabled: false)`.
 
 If you enable network scope, add the Bonjour permissions:
 

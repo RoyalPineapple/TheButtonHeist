@@ -48,7 +48,8 @@ public final class TheInsideJob {
         token: String? = nil,
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
-        port: UInt16 = 0
+        port: UInt16 = 0,
+        fingerprintsEnabled: Bool? = nil
     ) {
         switch sharedState {
         case .pending:
@@ -59,7 +60,8 @@ public final class TheInsideJob {
                     token: token,
                     instanceId: instanceId,
                     allowedScopes: allowedScopes,
-                    port: port
+                    port: port,
+                    fingerprintsEnabled: fingerprintsEnabled
                 )
             )
             sharedState = .pending(args)
@@ -121,13 +123,15 @@ public final class TheInsideJob {
         token: String? = nil,
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
-        port: UInt16 = 0
+        port: UInt16 = 0,
+        fingerprintsEnabled: Bool? = nil
     ) {
         self.init(
             token: token,
             instanceId: instanceId,
             allowedScopes: allowedScopes,
             port: port,
+            fingerprintsEnabled: fingerprintsEnabled,
             transportFactory: { ServerTransport(token: $0, allowedScopes: $1) }
         )
     }
@@ -137,6 +141,7 @@ public final class TheInsideJob {
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0,
+        fingerprintsEnabled: Bool? = nil,
         transportFactory: @escaping @MainActor (String, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
@@ -147,7 +152,8 @@ public final class TheInsideJob {
                 token: token,
                 instanceId: instanceId,
                 allowedScopes: allowedScopes,
-                port: port
+                port: port,
+                fingerprintsEnabled: fingerprintsEnabled
             ),
             transportFactory: transportFactory
         )
@@ -171,7 +177,10 @@ public final class TheInsideJob {
             explicitToken: runtimeConfiguration.token,
             sessionReleaseTimeout: runtimeConfiguration.sessionReleaseTimeout.value
         )
-        self.brains = TheBrains(tripwire: self.tripwire)
+        self.brains = TheBrains(
+            tripwire: self.tripwire,
+            fingerprintsEnabled: runtimeConfiguration.fingerprintsEnabled
+        )
         self.getaway = TheGetaway(
             muscle: self.muscle,
             brains: self.brains,

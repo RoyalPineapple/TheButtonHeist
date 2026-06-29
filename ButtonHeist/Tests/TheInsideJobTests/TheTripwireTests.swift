@@ -109,6 +109,46 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertEqual(scan.windowCount, windows.count)
     }
 
+    func testFingerprintWindowIsExcludedFromTraversalByDefault() {
+        let fingerprintWindow = makeWindow(level: .statusBar + 100, type: TheFingerprints.FingerprintWindow.self)
+        fingerprintWindow.isHidden = false
+        defer { fingerprintWindow.isHidden = true }
+
+        XCTAssertFalse(TheTripwire.orderedVisibleWindows().contains(fingerprintWindow))
+        XCTAssertFalse(tripwire.getTraversableWindows().contains { $0.window === fingerprintWindow })
+        XCTAssertTrue(TheTripwire.orderedVisibleWindows(includeFingerprints: true).contains(fingerprintWindow))
+    }
+
+    func testFingerprintsTrackOneIndicatorPerActivePoint() {
+        let fingerprints = TheFingerprints(isEnabled: true)
+
+        fingerprints.beginTracking(at: [
+            CGPoint(x: 20, y: 40),
+            CGPoint(x: 80, y: 120),
+        ])
+        XCTAssertEqual(fingerprints.activeFingerprintCenters, [
+            CGPoint(x: 20, y: 40),
+            CGPoint(x: 80, y: 120),
+        ])
+
+        fingerprints.updateTracking(to: [
+            CGPoint(x: 25, y: 45),
+            CGPoint(x: 85, y: 125),
+            CGPoint(x: 145, y: 185),
+        ])
+        XCTAssertEqual(fingerprints.activeFingerprintCenters, [
+            CGPoint(x: 25, y: 45),
+            CGPoint(x: 85, y: 125),
+            CGPoint(x: 145, y: 185),
+        ])
+
+        fingerprints.updateTracking(to: [CGPoint(x: 40, y: 60)])
+        XCTAssertEqual(fingerprints.activeFingerprintCenters, [CGPoint(x: 40, y: 60)])
+
+        fingerprints.endTracking()
+        XCTAssertTrue(fingerprints.activeFingerprintCenters.isEmpty)
+    }
+
     func testScanLayersDetectsPendingLayout() {
         let windows = tripwire.getTraversableWindows()
         guard let window = windows.first?.window else {

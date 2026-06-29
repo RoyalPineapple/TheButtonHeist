@@ -56,6 +56,7 @@
 		12CB0797ED4EF44DD20E97F6 /* AccessibilityTraceCaptures.swift in Sources */ = {isa = PBXBuildFile; fileRef = B04B13599EA3DEFD58B9874C /* AccessibilityTraceCaptures.swift */; };
 		13344C2041F70A5C737C6D5F /* Navigation+Explore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0416F886B1256AC38EC0F682 /* Navigation+Explore.swift */; };
 		1366F734AD26E926EDBF786A /* ClientSessionPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85CAF3FDE818AAC58F840AEE /* ClientSessionPayloads.swift */; };
+		14FD6C0CDE2EE60E1805F245 /* TheFingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12CAE8F1C0CE5FAD5BB0B5A /* TheFingerprints.swift */; };
 		14FD7551AA0DB05B3797CB68 /* AccessibilitySnapshotModel.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A1174FF61F852D42C77E18C /* AccessibilitySnapshotModel.framework */; };
 		1515553E1E30191FC8047F11 /* TheFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B92FA5985EAF1A5C7360207 /* TheFence.swift */; };
 		15ACCDAABA1FB72018B87121 /* TheBurglar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B68F25EE20E871B3447D1A /* TheBurglar.swift */; };
@@ -1361,6 +1362,7 @@
 		CF2F586190CE1CB11AC6617B /* TheSafecracker+TapDiagnostic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TapDiagnostic.swift"; sourceTree = "<group>"; };
 		D0BAD5A4EB504A85EF99890C /* TheInsideJob-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJob-Info.plist"; sourceTree = "<group>"; };
 		D0E65AC490BC5A169DC71987 /* TheFence+RequestPayload+AccessibilityActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+AccessibilityActions.swift"; sourceTree = "<group>"; };
+		D12CAE8F1C0CE5FAD5BB0B5A /* TheFingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFingerprints.swift; sourceTree = "<group>"; };
 		D224918A5B322499545A93F8 /* AccessibilityTrace+Diff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityTrace+Diff.swift"; sourceTree = "<group>"; };
 		D355B25F35519BEF35AD6E72 /* HandoffConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffConnectionState.swift; sourceTree = "<group>"; };
 		D3634255747D1400EBC0ED4D /* ClientAuthenticationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientAuthenticationState.swift; sourceTree = "<group>"; };
@@ -2180,6 +2182,7 @@
 				437E5023B69211C5AB0F7113 /* SafecrackerKeyboardInput.swift */,
 				53C7C35A8CF056BEF5EA665B /* SafecrackerTouchInjection.swift */,
 				505ED717985FBDFE68196CEB /* SyntheticTouch.swift */,
+				D12CAE8F1C0CE5FAD5BB0B5A /* TheFingerprints.swift */,
 				1308BFFECC16AF7E933839EB /* TheSafecracker.swift */,
 				391B03A01333352D477FAAD8 /* TheSafecracker+InteractionResult.swift */,
 				321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */,
@@ -3133,6 +3136,7 @@
 				ED18E524A5274F08CB8CA30E /* SafecrackerKeyboardInput.swift in Sources */,
 				0A78939368888C4481CFFEAB /* SafecrackerTouchInjection.swift in Sources */,
 				23383C5DDB478FF24AC6A933 /* SyntheticTouch.swift in Sources */,
+				14FD6C0CDE2EE60E1805F245 /* TheFingerprints.swift in Sources */,
 				45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */,
 				5FDB784EAAE6919F10C03929 /* TheSafecracker+InteractionResult.swift in Sources */,
 				5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */,

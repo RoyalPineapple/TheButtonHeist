@@ -47,10 +47,10 @@ final class TheBrains {
         }
     }
 
-    init(tripwire: TheTripwire) {
+    init(tripwire: TheTripwire, fingerprintsEnabled: Bool = true) {
         self.tripwire = tripwire
         let stash = TheStash(tripwire: tripwire)
-        let safecracker = TheSafecracker()
+        let safecracker = TheSafecracker(fingerprintsEnabled: fingerprintsEnabled)
         self.stash = stash
         self.safecracker = safecracker
         let navigation = Navigation(

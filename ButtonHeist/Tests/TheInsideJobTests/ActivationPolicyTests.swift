@@ -34,6 +34,7 @@ final class ActivationPolicyTests: XCTestCase {
         let refreshedTarget = makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
         var events: [String] = []
         var dispatchedPoints: [CGPoint] = []
+        var fingerprintPoints: [CGPoint] = []
 
         let result = await makePolicy(
             accessibilityActivate: { target in
@@ -47,6 +48,9 @@ final class ActivationPolicyTests: XCTestCase {
             activationPointDispatch: { point in
                 dispatchedPoints.append(point)
                 return true
+            },
+            showFingerprint: { point in
+                fingerprintPoints.append(point)
             }
         ).apply(to: initialTarget)
 
@@ -54,6 +58,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(events, ["refresh", "activate:refreshed"])
         XCTAssertTrue(dispatchedPoints.isEmpty)
+        XCTAssertEqual(fingerprintPoints, [CGPoint(x: 30, y: 40)])
         XCTAssertEqual(result.activationTrace, ActivationTrace(
             axActivateReturned: true,
             tapActivationDispatched: false
@@ -176,12 +181,14 @@ final class ActivationPolicyTests: XCTestCase {
     private func makePolicy(
         accessibilityActivate: @escaping @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
-        activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool
+        activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool,
+        showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in }
     ) -> ActivationPolicy {
         ActivationPolicy(
             accessibilityActivate: accessibilityActivate,
             refreshAndResolve: refreshAndResolve,
-            activationPointDispatch: activationPointDispatch
+            activationPointDispatch: activationPointDispatch,
+            showFingerprint: showFingerprint
         )
     }
 
