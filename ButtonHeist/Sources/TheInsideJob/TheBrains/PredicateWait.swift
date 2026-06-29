@@ -214,6 +214,7 @@ enum PredicateObservationDiagnostics {
                 changeBaselineSequence: nil,
                 requiresChangeBaseline: step.predicate.requiresChangeBaseline,
                 pollWhenTimeoutZero: false,
+                discoveryBootstrap: .afterInitialDiscoveryAttempt,
                 evaluate: { observation, _ in
                     let baselineSeed: PredicateObservationBaselineSeed =
                         step.predicate.requiresChangeBaseline && stream.changeBaseline == nil
@@ -1177,7 +1178,7 @@ enum PredicatePollingCadence {
 
 enum PredicateDiscoveryBootstrap {
     case ifNoObservation
-    case afterVisibleSeed
+    case afterInitialDiscoveryAttempt
 
     func needsInitialProbe(
         initialObservedSequence: SettledObservationSequence?
@@ -1185,8 +1186,8 @@ enum PredicateDiscoveryBootstrap {
         switch self {
         case .ifNoObservation:
             return initialObservedSequence == nil
-        case .afterVisibleSeed:
-            return true
+        case .afterInitialDiscoveryAttempt:
+            return false
         }
     }
 }

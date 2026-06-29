@@ -712,7 +712,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             after: 1,
             requiresChangeBaseline: false,
             initialVisibleFingerprint: .known("previous-visible-fingerprint"),
-            discoveryBootstrap: .afterVisibleSeed,
+            discoveryBootstrap: .afterInitialDiscoveryAttempt,
             evaluate: { observation, _ in
                 PredicateEvaluation.evaluate(predicate, in: observation)
             },
@@ -723,7 +723,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.visible])
     }
 
-    func testPredicatePollingEngineProbesDiscoveryImmediatelyAfterVisibleSeedMiss() async {
+    func testPredicatePollingEngineDefersDiscoveryAfterInitialDiscoveryAttempt() async {
         let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
         var observedScopes: [SemanticObservationScope] = []
         var observedTimeouts: [Double?] = []
@@ -746,15 +746,15 @@ final class TheBrainsPipelineTests: XCTestCase {
             after: 1,
             requiresChangeBaseline: false,
             initialVisibleFingerprint: .known("visible-seed"),
-            discoveryBootstrap: .afterVisibleSeed,
+            discoveryBootstrap: .afterInitialDiscoveryAttempt,
             evaluate: { observation, _ in
                 PredicateEvaluation.evaluate(predicate, in: observation)
             },
             isMatched: \.met
         )
 
-        XCTAssertFalse(result.lastEvaluation?.met ?? true)
-        XCTAssertEqual(Array(observedScopes.prefix(2)), [.visible, .discovery])
+        XCTAssertNil(result.lastEvaluation)
+        XCTAssertFalse(observedScopes.contains(.discovery))
         XCTAssertEqual(observedTimeouts.first.flatMap { $0 }, 0)
     }
 
