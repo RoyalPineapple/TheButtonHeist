@@ -354,10 +354,12 @@ public struct HeistDef<Input>: Sendable {
 }
 
 public struct HeistInvocationContent: HeistContent {
-    private static let invalidInvocationPlaceholder = HeistInvocationStep(
-        invocationPath: try! HeistInvocationPath(components: ["invalid"]),
-        argument: .none
-    )
+    private static let invalidInvocationPlaceholder: HeistInvocationStep = {
+        guard let path = try? HeistInvocationPath(components: ["invalid"]) else {
+            preconditionFailure("known-valid placeholder invocation path failed validation")
+        }
+        return HeistInvocationStep(invocationPath: path, argument: .none)
+    }()
 
     fileprivate let invocationStep: HeistInvocationStep?
     public var invocation: HeistInvocationStep {
