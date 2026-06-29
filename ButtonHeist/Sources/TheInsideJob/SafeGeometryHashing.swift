@@ -91,30 +91,21 @@ extension UIBezierPath {
 // MARK: - Content Fingerprint
 
 extension AccessibilityElement {
-    /// Identity hash based on content only: no traversal index, no window-space
-    /// frame when stable content-space geometry is available.
-    ///
-    /// - Parameter contentSpaceOrigin: Position in a scroll view's content
-    ///   coordinate space. When nil, the window-space frame origin is used.
-    func fingerprint(contentSpaceOrigin: CGPoint?) -> Int {
+    /// Identity hash based on content only: no traversal index.
+    func fingerprint() -> Int {
         var hasher = Hasher()
         hasher.combine(label)
         hasher.combine(identifier)
         hasher.combine(value)
         hasher.combine(traits)
-        if let origin = contentSpaceOrigin {
-            hasher.combine(safeInt(origin.x))
-            hasher.combine(safeInt(origin.y))
-        } else {
-            switch shape {
-            case let .frame(rect):
-                hasher.combine(safeInt(rect.origin.x))
-                hasher.combine(safeInt(rect.origin.y))
-            case let .path(path):
-                let bounds = safePathBounds(path)
-                hasher.combine(safeInt(bounds.origin.x))
-                hasher.combine(safeInt(bounds.origin.y))
-            }
+        switch shape {
+        case let .frame(rect):
+            hasher.combine(safeInt(rect.origin.x))
+            hasher.combine(safeInt(rect.origin.y))
+        case let .path(path):
+            let bounds = safePathBounds(path)
+            hasher.combine(safeInt(bounds.origin.x))
+            hasher.combine(safeInt(bounds.origin.y))
         }
         switch shape {
         case let .frame(rect):
@@ -130,7 +121,7 @@ extension AccessibilityElement {
 
     /// Convenience fingerprint using window-space geometry.
     var contentFingerprint: Int {
-        fingerprint(contentSpaceOrigin: nil)
+        fingerprint()
     }
 }
 
@@ -158,12 +149,9 @@ extension AccessibilityHierarchy {
 }
 
 func contentFingerprints(
-    for elements: [AccessibilityElement],
-    origins: [CGPoint?]
+    for elements: [AccessibilityElement]
 ) -> [Int] {
-    zip(elements, origins).map { element, origin in
-        element.fingerprint(contentSpaceOrigin: origin)
-    }
+    elements.map { $0.fingerprint() }
 }
 
 private func safePathBounds(_ pathElements: [AccessibilityPathElement]) -> CGRect {

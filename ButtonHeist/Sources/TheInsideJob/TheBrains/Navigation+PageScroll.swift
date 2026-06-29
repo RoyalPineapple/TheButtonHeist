@@ -91,7 +91,6 @@ extension Navigation {
         commitViewportMoves: Bool = true
     ) async -> ScrollSettleProof {
         let before = stash.visibleIds
-        let beforeAnchor = visibleAnchorSignature()
 
         switch target {
         case .uiScrollView(let sv):
@@ -119,7 +118,6 @@ extension Navigation {
             }
             let result = await settleSwipeMotion(
                 previousVisibleIds: before,
-                previousAnchor: beforeAnchor,
                 requireDirectionChangeSettle: isDirectionChange,
                 commitViewportMoves: commitViewportMoves
             )

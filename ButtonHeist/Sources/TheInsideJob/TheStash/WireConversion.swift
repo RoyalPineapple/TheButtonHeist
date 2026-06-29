@@ -139,8 +139,7 @@ extension TheStash {
                     nextTraversalIndex += 1
                     elementAnnotations.append(InterfaceElementAnnotation(
                         path: childPath,
-                        actions: buildActions(for: entry.element),
-                        contentSpaceOrigin: entry.contentSpaceOrigin.map(AccessibilityPoint.init)
+                        actions: buildActions(for: entry.element)
                     ))
                 case .container(let entry):
                     guard emittedContainerPaths.insert(entry.path).inserted else {
@@ -156,7 +155,8 @@ extension TheStash {
                     children.append(.container(entry.container, children: nestedChildren))
                     containerAnnotations.append(InterfaceContainerAnnotation(
                         path: childPath,
-                        containerName: entry.containerName
+                        containerName: entry.containerName,
+                        scrollInventory: entry.scrollInventory
                     ))
                 }
             }
@@ -200,13 +200,15 @@ extension TheStash {
     static func toSemanticInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
         let entries = screen.orderedElements
         let tree = entries.enumerated().map { index, entry in
-            AccessibilityHierarchy.element(entry.element, traversalIndex: index)
+            AccessibilityHierarchy.element(
+                entry.element,
+                traversalIndex: index
+            )
         }
         let annotations = entries.enumerated().map { index, entry in
             InterfaceElementAnnotation(
                 path: TreePath([index]),
-                actions: buildActions(for: entry.element),
-                contentSpaceOrigin: entry.contentSpaceOrigin.map(AccessibilityPoint.init)
+                actions: buildActions(for: entry.element)
             )
         }
         return Interface(
@@ -221,12 +223,9 @@ extension TheStash {
     private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
         screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .element(let element, _) = node else { return nil }
-            let contentSpaceOrigin = screen.liveCapture.heistId(forPath: path)
-                .flatMap { screen.semantic.elements[$0]?.contentSpaceOrigin }
             return InterfaceElementAnnotation(
                 path: path,
-                actions: buildActions(for: element),
-                contentSpaceOrigin: contentSpaceOrigin.map(AccessibilityPoint.init)
+                actions: buildActions(for: element)
             )
         }
     }
@@ -236,7 +235,8 @@ extension TheStash {
             guard case .container = node else { return nil }
             return InterfaceContainerAnnotation(
                 path: path,
-                containerName: screen.liveCapture.containerNamesByPath[path]
+                containerName: screen.liveCapture.containerNamesByPath[path],
+                scrollInventory: screen.liveCapture.scrollInventory(forPath: path)
             )
         }
     }
@@ -255,13 +255,20 @@ private struct DiscoveryChildren {
     }
 
     struct SortKey: Comparable {
-        let y: CGFloat
-        let x: CGFloat
+        let index: Int?
         let stableName: String
 
         static func < (lhs: SortKey, rhs: SortKey) -> Bool {
-            if lhs.y != rhs.y { return lhs.y < rhs.y }
-            if lhs.x != rhs.x { return lhs.x < rhs.x }
+            switch (lhs.index, rhs.index) {
+            case let (left?, right?) where left != right:
+                return left < right
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            default:
+                break
+            }
             return lhs.stableName < rhs.stableName
         }
     }
@@ -276,12 +283,11 @@ private struct DiscoveryChildren {
         var childrenByParent: [TreePath: [Child]] = [:]
         for entry in screen.semantic.elements.values {
             guard !liveIds.contains(entry.heistId),
-                  let location = entry.scrollContentLocation
+                  let membership = entry.scrollMembership
             else { continue }
-            childrenByParent[location.scrollContainerPath, default: []].append(Child(
+            childrenByParent[membership.containerPath, default: []].append(Child(
                 sortKey: SortKey(
-                    y: location.origin.y,
-                    x: location.origin.x,
+                    index: membership.index,
                     stableName: entry.heistId.rawValue
                 ),
                 kind: .element(entry)
@@ -289,13 +295,12 @@ private struct DiscoveryChildren {
         }
         for entry in screen.semantic.containers.values {
             guard !liveContainerPaths.contains(entry.path),
-                  let location = entry.scrollContentLocation
+                  let membership = entry.scrollMembership
             else { continue }
             let stableName = entry.containerName?.rawValue ?? entry.path.indices.map(String.init).joined(separator: ".")
-            childrenByParent[location.scrollContainerPath, default: []].append(Child(
+            childrenByParent[membership.containerPath, default: []].append(Child(
                 sortKey: SortKey(
-                    y: location.origin.y,
-                    x: location.origin.x,
+                    index: membership.index,
                     stableName: stableName
                 ),
                 kind: .container(entry)

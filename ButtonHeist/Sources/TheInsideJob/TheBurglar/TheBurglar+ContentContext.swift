@@ -17,15 +17,13 @@ extension TheBurglar {
     /// evidence and must not feed generated container names or interface hashes.
     struct ContainerIdentityContext {
         let contentFramesByPath: [TreePath: CGRect]
-        let scrollContentOriginsByPath: [TreePath: CGPoint]
-        let scrollContainerPathsByPath: [TreePath: TreePath]
+        let scrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership]
         let nestedInScrollViewPaths: Set<TreePath>
     }
 
     private struct ContainerIdentityAccumulator {
         var contentFramesByPath: [TreePath: CGRect] = [:]
-        var scrollContentOriginsByPath: [TreePath: CGPoint] = [:]
-        var scrollContainerPathsByPath: [TreePath: TreePath] = [:]
+        var scrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership] = [:]
         var nestedInScrollViewPaths = Set<TreePath>()
     }
 
@@ -45,8 +43,7 @@ extension TheBurglar {
         }
         return ContainerIdentityContext(
             contentFramesByPath: accumulator.contentFramesByPath,
-            scrollContentOriginsByPath: accumulator.scrollContentOriginsByPath,
-            scrollContainerPathsByPath: accumulator.scrollContainerPathsByPath,
+            scrollMembershipsByPath: accumulator.scrollMembershipsByPath,
             nestedInScrollViewPaths: accumulator.nestedInScrollViewPaths
         )
     }
@@ -64,10 +61,10 @@ extension TheBurglar {
         let contentFrame: CGRect
         if let parentScrollContext {
             contentFrame = CGRect(origin: .zero, size: frame.size)
-            if !frame.isNull, !frame.isEmpty {
-                accumulator.scrollContentOriginsByPath[path] = parentScrollContext.view.convert(frame.origin, from: nil)
-                accumulator.scrollContainerPathsByPath[path] = parentScrollContext.containerPath
-            }
+            accumulator.scrollMembershipsByPath[path] = SemanticScreen.ScrollMembership(
+                containerPath: parentScrollContext.containerPath,
+                index: nil
+            )
             accumulator.nestedInScrollViewPaths.insert(path)
         } else {
             contentFrame = frame
@@ -102,8 +99,7 @@ extension TheBurglar {
     // MARK: - Element Context Building
 
     struct ElementContext {
-        let contentSpaceOrigin: CGPoint?
-        let scrollContainerPath: TreePath?
+        let scrollMembership: SemanticScreen.ScrollMembership?
         weak var scrollView: UIScrollView?
     }
 
@@ -112,8 +108,8 @@ extension TheBurglar {
         let containerPath: TreePath
     }
 
-    /// Walk the hierarchy tree to gather per-element context: content-space origins,
-    /// and scroll view refs. Live element objects are read directly from the
+    /// Walk the hierarchy tree to gather per-element scroll membership and scroll
+    /// view refs. Live element objects are read directly from the
     /// parser result while building the current live capture.
     static func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
@@ -161,15 +157,10 @@ extension TheBurglar {
     ) {
         switch node {
         case .element(let element, _):
-            let origin: CGPoint? = parentScrollContext.flatMap { context in
-                let frame = element.shape.frame
-                return (!frame.isNull && !frame.isEmpty)
-                    ? context.view.convert(frame.origin, from: nil)
-                    : nil
-            }
             let context = ElementContext(
-                contentSpaceOrigin: origin,
-                scrollContainerPath: parentScrollContext?.containerPath,
+                scrollMembership: parentScrollContext.map {
+                    SemanticScreen.ScrollMembership(containerPath: $0.containerPath, index: nil)
+                },
                 scrollView: parentScrollContext?.view
             )
             contexts[element] = context

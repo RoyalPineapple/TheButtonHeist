@@ -22,29 +22,17 @@ struct PageReconciliation: Equatable {
 /// Reconcile a visible page into accumulated semantic memory.
 ///
 /// Visible pages are physical evidence; known state is semantic memory. This
-/// helper is the page-level bridge: content identity finds overlap, and
-/// content-space geometry orders the merged memory when available.
-///
-/// When content-space origins are complete, geometry orders the union. Otherwise,
-/// overlap anchors the page in semantic memory and page evidence wins inside the
-/// visible overlap. See `reconcileByContentOrigin` and `reconcileByOverlap` for
-/// those two merge strategies.
+/// helper is the page-level bridge: content identity finds overlap, and page
+/// evidence wins inside the visible overlap.
 ///
 /// - Parameters:
 ///   - accumulated: Elements seen so far from previous pages.
-///   - accumulatedOrigins: Content-space origin for each accumulated element.
-///     Pass nil entries for elements not inside a scroll view.
 ///   - page: Elements from the current viewport.
-///   - pageOrigins: Content-space origin for each page element.
-///     Pass nil entries for elements not inside a scroll view.
 ///
 /// When no overlap is found, the page is appended as entirely new content.
 func reconcilePage(
     accumulated: [AccessibilityElement],
-    accumulatedOrigins: [CGPoint?],
-    page: [AccessibilityElement],
-    pageOrigins: [CGPoint?],
-    orderingAxis: ContentOrderingAxis? = nil
+    page: [AccessibilityElement]
 ) -> PageReconciliation {
     guard !page.isEmpty else {
         return PageReconciliation(
@@ -64,25 +52,12 @@ func reconcilePage(
         )
     }
 
-    let accumulatedFingerprints = contentFingerprints(for: accumulated, origins: accumulatedOrigins)
-    let pageFingerprints = contentFingerprints(for: page, origins: pageOrigins)
+    let accumulatedFingerprints = contentFingerprints(for: accumulated)
+    let pageFingerprints = contentFingerprints(for: page)
     let overlap = findOverlap(
         accumulated: accumulatedFingerprints,
         page: pageFingerprints
     )
-
-    if let ordered = reconcileByContentOrigin(
-        accumulated: accumulated,
-        accumulatedOrigins: accumulatedOrigins,
-        accumulatedFingerprints: accumulatedFingerprints,
-        page: page,
-        pageOrigins: pageOrigins,
-        pageFingerprints: pageFingerprints,
-        overlap: overlap,
-        orderingAxis: orderingAxis
-    ) {
-        return ordered
-    }
 
     return reconcileByOverlap(accumulated: accumulated, page: page, overlap: overlap)
 }
@@ -120,16 +95,4 @@ private func reconcileByOverlap(
     )
 }
 
-/// Convenience overload using window-space frames (for non-scrollable contexts or tests).
-func reconcilePage(
-    accumulated: [AccessibilityElement],
-    page: [AccessibilityElement]
-) -> PageReconciliation {
-    reconcilePage(
-        accumulated: accumulated,
-        accumulatedOrigins: accumulated.map { _ in nil },
-        page: page,
-        pageOrigins: page.map { _ in nil }
-    )
-}
 #endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

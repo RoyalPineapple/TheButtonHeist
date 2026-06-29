@@ -1616,7 +1616,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(waitRequests.count, 1)
-        if case .actionEndpoint(let request, trace: nil)? = waitRequests.first {
+        if case .actionEndpoint(let request, observationScope: .visible, trace: nil)? = waitRequests.first {
             XCTAssertEqual(request, try expectation.resolve(in: .empty))
         } else {
             XCTFail("Expected action endpoint wait request")
@@ -1624,6 +1624,34 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.actionEvidence?.expectationActionResult?.method, .wait)
         XCTAssertEqual(step.reportExpectation?.met, false)
         XCTAssertEqual(step.reportExpectation?.actual, "no observed accessibility trace")
+    }
+
+    func testViewportActionExpectationSettlesWithDiscoveryScope() async throws {
+        let observedReady = observedState(labels: ["Long List"])
+        var observedScopes: [SemanticObservationScope] = []
+        let runtime = heistRuntime(
+            observations: [observedReady],
+            execute: { _ in
+                ActionResult(success: true, method: .scrollToEdge)
+            },
+            observedScopes: { scope in
+                observedScopes.append(scope)
+            }
+        )
+        let plan = try HeistPlan(body: [
+            .action(try ActionStep(
+                command: .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
+                expectation: WaitStep(
+                    predicate: .exists(ElementPredicate(label: "Long List")),
+                    timeout: 0.01
+                )
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(result.success, result.message ?? "heist failed")
+        XCTAssertEqual(observedScopes, [.discovery])
     }
 
     func testHeistRuntimeSafetyRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
@@ -2984,7 +3012,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "element inflation failed [noRevealPath]",
             "known target \"Below Fold\"",
-            "no content-space position",
+            "no scroll membership",
         ])
     }
 
@@ -3234,12 +3262,12 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [
                 hostHeistId: Screen.ScreenElement(
                     heistId: hostHeistId,
-                    contentSpaceOrigin: nil,
+                    scrollMembership: nil,
                     element: hostElement
                 ),
                 resultHeistId: Screen.ScreenElement(
                     heistId: resultHeistId,
-                    contentSpaceOrigin: nil,
+                    scrollMembership: nil,
                     element: resultElement
                 ),
             ],
@@ -3671,7 +3699,7 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 if waitStep.timeout == 0,
                    afterSequence == nil,
-                   let observation = observationSource.immediate(scope: waitStep.predicate.observationScope) {
+                   let observation = observationSource.immediate(scope: request.observationScope) {
                     let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: observation)
                     let result = ActionResult(
                         success: expectation.met,
@@ -3688,7 +3716,7 @@ final class TheBrainsActionTests: XCTestCase {
                     )
                 }
                 guard let observation = observationSource.next(
-                    scope: waitStep.predicate.observationScope,
+                    scope: request.observationScope,
                     timeout: waitStep.timeout
                 ) else {
                     let expectation = ExpectationResult(

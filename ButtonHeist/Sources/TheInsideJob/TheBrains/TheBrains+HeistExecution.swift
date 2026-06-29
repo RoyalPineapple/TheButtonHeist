@@ -28,7 +28,11 @@ extension TheBrains {
 
     enum HeistRuntimeWaitRequest: Equatable, Sendable {
         case standalone(ResolvedWaitStep)
-        case actionEndpoint(ResolvedWaitStep, trace: AccessibilityTrace?)
+        case actionEndpoint(
+            ResolvedWaitStep,
+            observationScope: SemanticObservationScope,
+            trace: AccessibilityTrace?
+        )
         case immediate(ResolvedWaitStep)
         case afterObservation(
             ResolvedWaitStep,
@@ -40,11 +44,23 @@ extension TheBrains {
         var step: ResolvedWaitStep {
             switch self {
             case .standalone(let step),
-                 .actionEndpoint(let step, _),
+                 .actionEndpoint(let step, _, _),
                  .immediate(let step),
                  .afterObservation(let step, _, _),
                  .baselineTraceOnly(let step, _):
                 return step
+            }
+        }
+
+        var observationScope: SemanticObservationScope {
+            switch self {
+            case .standalone(let step),
+                 .immediate(let step),
+                 .afterObservation(let step, _, _),
+                 .baselineTraceOnly(let step, _):
+                return step.predicate.observationScope
+            case .actionEndpoint(_, let observationScope, _):
+                return observationScope
             }
         }
 
@@ -53,7 +69,7 @@ extension TheBrains {
             case .standalone,
                  .immediate:
                 return nil
-            case .actionEndpoint(_, let trace),
+            case .actionEndpoint(_, _, let trace),
                  .afterObservation(_, let trace, _),
                  .baselineTraceOnly(_, let trace):
                 return trace
@@ -89,7 +105,8 @@ extension TheBrains {
                     await brains.interactionObservation.waitForPredicate(
                         request.step,
                         initialTrace: request.initialTrace,
-                        after: request.afterSequence
+                        after: request.afterSequence,
+                        observationScope: request.observationScope
                     )
                 },
                 selectPredicateCase: { cases, timeout in

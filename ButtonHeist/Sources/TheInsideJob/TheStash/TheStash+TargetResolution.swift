@@ -38,7 +38,7 @@ extension TheStash {
             identifier = element.identifier
             value = element.value
             isVisible = visibleHeistIds.contains(screenElement.heistId)
-            isReachable = screenElement.contentSpaceOrigin != nil
+            isReachable = screenElement.scrollMembership != nil
         }
     }
 

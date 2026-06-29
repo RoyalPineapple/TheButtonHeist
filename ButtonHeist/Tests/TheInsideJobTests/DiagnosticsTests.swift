@@ -53,7 +53,7 @@ final class DiagnosticsTests: XCTestCase {
         let element = makeElement(label: "Hello")
         let screenElement = TheStash.ScreenElement(
             heistId: "hello",
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: element
         )
 

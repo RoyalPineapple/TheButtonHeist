@@ -123,7 +123,7 @@ final class WireConverterTests: XCTestCase {
     ) -> Screen.ScreenElement {
         Screen.ScreenElement(
             heistId: heistId,
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: makeElement(
                 label: label, value: value, identifier: identifier, hint: hint,
                 traits: traits, frameX: frameX, frameY: frameY,
@@ -366,14 +366,12 @@ final class WireConverterTests: XCTestCase {
             elements: [
                 "aardvark_staticText": Screen.ScreenElement(
                     heistId: "aardvark_staticText",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 0),
-                    scrollContainerPath: TreePath([0]),
+                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: 0),
                     element: visible
                 ),
                 "zymurgy_staticText": Screen.ScreenElement(
                     heistId: "zymurgy_staticText",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 1_600),
-                    scrollContainerPath: TreePath([0]),
+                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: 1),
                     element: offViewport
                 ),
             ],
@@ -398,24 +396,12 @@ final class WireConverterTests: XCTestCase {
 
         let projected = interface.projectedElements
         XCTAssertEqual(projected.compactMap(\.label), ["aardvark", "zymurgy"])
-        let visibleProjection = try XCTUnwrap(projected.first { $0.label == "aardvark" })
-        let offViewportProjection = try XCTUnwrap(projected.first { $0.label == "zymurgy" })
-        XCTAssertEqual(visibleProjection.frameY, 0)
-        XCTAssertEqual(visibleProjection.activationPointY, 22)
-        XCTAssertEqual(offViewportProjection.frameY, 1_600)
-        XCTAssertEqual(offViewportProjection.activationPointY, 1_622)
-        XCTAssertNotEqual(
-            visibleProjection.frameY,
-            offViewportProjection.frameY,
-            "A scroll-discovered element must not inherit the viewport row occupied by an earlier element"
-        )
 
         let selectedInterface = try InterfaceSelector(interface: interface).select(InterfaceQuery(
             matcher: ElementPredicate(label: "zymurgy")
         ))
         let selectedProjection = try XCTUnwrap(selectedInterface.projectedElements.first)
-        XCTAssertEqual(selectedProjection.frameY, 1_600)
-        XCTAssertEqual(selectedProjection.activationPointY, 1_622)
+        XCTAssertEqual(selectedProjection.label, "zymurgy")
     }
 
     func testDiscoveryInterfaceGraftsKnownNestedScrollContainers() throws {
@@ -440,20 +426,14 @@ final class WireConverterTests: XCTestCase {
             path: TreePath([0, 0]),
             containerName: "inner_words",
             contentFrame: nil,
-            scrollContentLocation: SemanticScreen.ScrollContentLocation(
-                origin: CGPoint(x: 20, y: 700),
-                scrollContainerPath: TreePath([0])
-            )
+            scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0)
         )
         let screen = Screen(
             semantic: SemanticScreen(
                 elements: [
                     "interstitial_staticText": SemanticScreen.Element(
                         heistId: "interstitial_staticText",
-                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
-                            origin: CGPoint(x: 0, y: 300),
-                            scrollContainerPath: TreePath([0, 0])
-                        ),
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0, 0]), index: 0),
                         element: nestedWord
                     ),
                 ],
@@ -493,18 +473,12 @@ final class WireConverterTests: XCTestCase {
                 elements: [
                     "recycled_cell": SemanticScreen.Element(
                         heistId: "recycled_cell",
-                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
-                            origin: CGPoint(x: 0, y: 724),
-                            scrollContainerPath: TreePath([0])
-                        ),
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0),
                         element: recycledCell
                     ),
                     "stale_recycled_cell_path": SemanticScreen.Element(
                         heistId: "recycled_cell",
-                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
-                            origin: CGPoint(x: 0, y: 724),
-                            scrollContainerPath: TreePath([0])
-                        ),
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0),
                         element: recycledCell
                     ),
                 ],
@@ -562,18 +536,12 @@ final class WireConverterTests: XCTestCase {
                 elements: [
                     "repeat_button": SemanticScreen.Element(
                         heistId: "repeat_button",
-                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
-                            origin: CGPoint(x: 0, y: 724),
-                            scrollContainerPath: TreePath([0])
-                        ),
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0),
                         element: firstCell
                     ),
                     "repeat_button_1": SemanticScreen.Element(
                         heistId: "repeat_button_1",
-                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
-                            origin: CGPoint(x: 0, y: 788),
-                            scrollContainerPath: TreePath([0])
-                        ),
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 1),
                         element: secondCell
                     ),
                 ],
@@ -629,20 +597,14 @@ final class WireConverterTests: XCTestCase {
                         path: TreePath([0, 0]),
                         containerName: "saved_carts_group",
                         contentFrame: nil,
-                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
-                            origin: CGPoint(x: 0, y: 640),
-                            scrollContainerPath: TreePath([0])
-                        )
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 0)
                     ),
                     TreePath([0, 1]): SemanticScreen.Container(
                         container: recycledContainer,
                         path: TreePath([0, 1]),
                         containerName: "saved_carts_group",
                         contentFrame: nil,
-                        scrollContentLocation: SemanticScreen.ScrollContentLocation(
-                            origin: CGPoint(x: 0, y: 640),
-                            scrollContainerPath: TreePath([0])
-                        )
+                        scrollMembership: SemanticScreen.ScrollMembership(containerPath: TreePath([0]), index: 1)
                     ),
                 ]
             ),

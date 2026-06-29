@@ -252,6 +252,14 @@ private enum TouchCanvasScreen {
 private enum LongListScreen {
     static let exerciseViewportRuntimeCommands = HeistDef<Void>("LongList.exerciseViewportRuntimeCommands") {
         try rawAction(
+            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .top)),
+            expectation: WaitStep(
+                predicate: .exists(.label("Widget 0, Hardware")),
+                timeout: .seconds(8)
+            )
+        )
+
+        try rawAction(
             .viewportScroll(ScrollTarget(direction: .down)),
             waiver: "Explicit viewport scroll is the runtime feature under test"
         )

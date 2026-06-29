@@ -26,7 +26,6 @@ extension Navigation {
     /// when no new elements are discovered for a short consecutive frame window.
     func settleSwipeMotion(
         previousVisibleIds: Set<HeistId>,
-        previousAnchor: VisibleAnchorSignature?,
         requireDirectionChangeSettle: Bool,
         commitViewportMoves: Bool = true
     ) async -> ScrollSettleResult {
@@ -35,8 +34,7 @@ extension Navigation {
             : .sameDirection
         var state = SettleSwipeLoopState(
             profile: profile,
-            previousVisibleIds: previousVisibleIds,
-            previousAnchor: previousAnchor
+            previousVisibleIds: previousVisibleIds
         )
         var seenVisibleIds = stash.visibleIds
 
@@ -48,21 +46,12 @@ extension Navigation {
 
             let step = state.advance(
                 visibleIds: currentVisibleIds,
-                anchorSignature: visibleAnchorSignature(),
                 newHeistIds: newHeistIds
             )
             if case .done = step { break }
             await tripwire.yieldFrames(1)
         }
         return state.moved ? .moved : .unchanged
-    }
-
-    /// Stable signature for the viewport based on content-space origins.
-    /// Avoids treating edge bounces/re-parses as true movement.
-    func visibleAnchorSignature() -> VisibleAnchorSignature? {
-        let anchors = stash.visibleContentOriginAnchors()
-        guard !anchors.isEmpty else { return nil }
-        return VisibleAnchorSignature(anchors: anchors)
     }
 
     func swipeTargetKey(frame: CGRect, contentSize: CGSize) -> SwipeTargetKey {

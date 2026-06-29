@@ -21,7 +21,8 @@ struct Screen: Equatable {
     let semantic: SemanticScreen
     let liveCapture: LiveCapture
 
-    typealias ScrollContentLocation = SemanticScreen.ScrollContentLocation
+    typealias ScrollMembership = SemanticScreen.ScrollMembership
+    typealias ObservedScrollContentActivationPoint = SemanticScreen.ObservedScrollContentActivationPoint
     typealias ScreenElement = SemanticScreen.Element
     typealias KnownInterface = SemanticScreen
     typealias ScrollableViewRef = LiveCapture.ScrollableViewRef
@@ -49,11 +50,13 @@ struct Screen: Equatable {
         let liveCapture = LiveCapture(
             hierarchy: hierarchy,
             elementRefs: elementRefs,
-            containerRefsByPath: [:],
-            containerContentFramesByPath: [:],
-            containerScrollContentLocationsByPath: [:],
-            firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+        containerRefsByPath: [:],
+        containerContentFramesByPath: [:],
+        containerScrollMembershipsByPath: [:],
+        containerObservedScrollContentActivationPointsByPath: [:],
+        scrollInventoriesByPath: [:],
+        firstResponderHeistId: firstResponderHeistId,
+        scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
         self.init(
             semantic: SemanticScreen(
@@ -73,7 +76,9 @@ struct Screen: Equatable {
         elementRefs: [HeistId: ElementRef] = [:],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
         containerContentFramesByPath: [TreePath: CGRect] = [:],
-        containerScrollContentLocationsByPath: [TreePath: ScrollContentLocation] = [:],
+        containerScrollMembershipsByPath: [TreePath: ScrollMembership] = [:],
+        containerObservedScrollContentActivationPointsByPath: [TreePath: ObservedScrollContentActivationPoint] = [:],
+        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
@@ -84,7 +89,9 @@ struct Screen: Equatable {
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
             containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath,
+            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
+            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
+            scrollInventoriesByPath: scrollInventoriesByPath,
             firstResponderHeistId: firstResponderHeistId,
             scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
@@ -224,8 +231,7 @@ struct Screen: Equatable {
     ///
     /// Conflict rule: **last read always wins.** When the same heistId appears
     /// in both `self` and `other`, the entire `ScreenElement` from `other`
-    /// replaces the one from `self` — no field-level merging, no special case
-    /// to preserve a previously-recorded `contentSpaceOrigin`. The most recent
+    /// replaces the one from `self` — no field-level merging. The most recent
     /// observation is the source of truth.
     ///
     /// `liveCapture` takes `other`'s. It is the latest visible live view, not a
@@ -254,7 +260,11 @@ struct Screen: Equatable {
                         path: item.path,
                         containerName: liveCapture.containerNamesByPath[item.path],
                         contentFrame: liveCapture.containerContentFrame(forPath: item.path),
-                        scrollContentLocation: liveCapture.containerScrollContentLocation(forPath: item.path)
+                        scrollMembership: liveCapture.containerScrollMembership(forPath: item.path),
+                        observedScrollContentActivationPoint: liveCapture.containerObservedScrollContentActivationPoint(
+                            forPath: item.path
+                        ),
+                        scrollInventory: liveCapture.scrollInventory(forPath: item.path)
                     )
                 )
             }

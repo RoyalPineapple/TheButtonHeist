@@ -30,13 +30,15 @@ enum PredicateObservationDiagnostics {
     func wait(
         for step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil
+        after sequence: SettledObservationSequence? = nil,
+        observationScope: SemanticObservationScope? = nil
     ) async -> HeistWaitReceipt {
         do {
             return await wait(
                 for: try step.resolve(in: .empty),
                 initialTrace: initialTrace,
-                after: sequence
+                after: sequence,
+                observationScope: observationScope
             )
         } catch {
             let predicate = Self.unresolvedWaitPredicate()
@@ -60,11 +62,12 @@ enum PredicateObservationDiagnostics {
     func wait(
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil
+        after sequence: SettledObservationSequence? = nil,
+        observationScope: SemanticObservationScope? = nil
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
-        let scope = step.predicate.observationScope
+        let scope = observationScope ?? step.predicate.observationScope
 
         let initialEntry = await observeSemanticState(
             scope: scope,
@@ -76,7 +79,8 @@ enum PredicateObservationDiagnostics {
                 for: step,
                 initialTrace: initialTrace,
                 start: start,
-                shouldPoll: timeout > 0 && sequence == nil
+                shouldPoll: timeout > 0 && sequence == nil,
+                observationScope: scope
             )
         }
 
@@ -185,7 +189,8 @@ enum PredicateObservationDiagnostics {
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace?,
         start: CFAbsoluteTime,
-        shouldPoll: Bool
+        shouldPoll: Bool,
+        observationScope: SemanticObservationScope
     ) async -> HeistWaitReceipt {
         var state = WaitPredicateState(predicate: step.predicate)
         var stream = PredicateObservationStreamState()
@@ -194,7 +199,7 @@ enum PredicateObservationDiagnostics {
             let pollResult = await PredicatePollingEngine<ExpectationResult>(
                 observeSemanticState: observeSemanticState
             ).poll(
-                scope: step.predicate.observationScope,
+                scope: observationScope,
                 timeout: step.timeout,
                 start: start,
                 after: nil,

@@ -167,6 +167,32 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
     }
 
+    func testViewportPostActionCommitPreservesDiscoveryMemory() async {
+        let topScreen = makeScreen(elements: [
+            ("Widget 0, Hardware", .button, "top_row"),
+            ("Long List", .header, "long_list_header"),
+        ])
+        brains.stash.installScreenForTesting(topScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+
+        let bottomScreen = makeScreen(elements: [
+            ("Widget 90, Hardware", .button, "bottom_row"),
+            ("Long List", .header, "long_list_header"),
+        ])
+        let result = await brains.interactionObservation.finishAfterAction(
+            success: true,
+            method: .scrollToEdge,
+            before: before,
+            postActionCommitScope: .discovery,
+            settleOutcome: settledOutcome(finalScreen: bottomScreen)
+        )
+
+        let labels = Set(brains.stash.settledSemanticScreen.semantic.elements.values.compactMap(\.element.label))
+        XCTAssertTrue(result.success)
+        XCTAssertTrue(labels.contains("Widget 0, Hardware"), "Discovery commit should retain the previously observed page")
+        XCTAssertTrue(labels.contains("Widget 90, Hardware"), "Discovery commit should include the newly observed page")
+    }
+
     func testSyntheticTapNoChangeCanRemainSuccessful() async {
         let beforeScreen = makeScreen(elements: [("Map", .button, "map_button")])
         brains.stash.installScreenForTesting(beforeScreen)
@@ -372,7 +398,6 @@ final class TheBrainsPipelineTests: XCTestCase {
                 Screen.OffViewportEntry(
                     discoveredOnly,
                     heistId: HeistId(rawValue: "buttonheist_demo"),
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]

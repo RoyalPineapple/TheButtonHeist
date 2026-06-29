@@ -43,7 +43,7 @@ public enum AccessibilityPolicy {
     /// An element gaining or losing one of these between parses keeps the
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
-    /// - TheBurglar content-space disambiguation
+    /// - TheBurglar duplicate-id disambiguation
     /// - `AccessibilityTrace.Delta.between` (functional-move pairing)
     /// - `MinimumPredicateSelector` (matcher suggestion — adds state only
     ///   when semantic predicates remain ambiguous)

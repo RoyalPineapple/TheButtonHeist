@@ -152,18 +152,19 @@ extension FenceResponse {
                 projection.container,
                 containerName: projection.containerName,
                 detail: detail,
-                observedElementCount: projection.observedElementCount
+                observedElementCount: projection.observedElementCount,
+                scrollInventory: projection.scrollInventory
             )
-            var body = projection.children.flatMap {
+            var body = compactScrollMetadataLine(projection)
+            body.append(contentsOf: projection.children.flatMap {
                 indented(lines: compactTreeLines($0, detail: detail))
-            }
+            })
             if let truncation = projection.truncation {
-                body.append(
-                    "  ... subtree truncated: omitted \(truncation.omittedElementCount) observed elements " +
-                    "(visibleElementBudget=\(truncation.visibleElementBudget))"
-                )
+                body.append("  ⋮ \(truncation.omittedElementCount) more")
+            } else if let inventoryOmission = inventoryOmissionLine(projection) {
+                body.append(inventoryOmission)
             }
-            return [header] + body
+            return [header] + body + [compactContainerClosingLine(projection)]
         }
     }
 
@@ -177,73 +178,55 @@ extension FenceResponse {
         _ container: AccessibilityContainer,
         annotation: InterfaceContainerAnnotation?,
         detail: InterfaceDetail,
-        observedElementCount: Int? = nil
+        observedElementCount: Int? = nil,
+        scrollInventory: ScrollInventory? = nil
     ) -> String {
         var parts: [String]
         switch container.type {
         case .semanticGroup(let label, let value, let identifier):
             parts = ["group"]
-            if let label = nonEmpty(label) { parts.append("label=\(quotedString(label))") }
+            if let label = nonEmpty(label) { parts.append(quotedString(label)) }
             if let value = nonEmpty(value) { parts.append("value=\(quotedString(value))") }
             if let identifier = nonEmpty(identifier) { parts.append("id=\(quotedString(identifier))") }
             if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName=\(quotedString(containerName))")
+                parts.append(quotedString(containerName))
             }
         case .list:
             parts = ["list"]
             if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName=\(quotedString(containerName))")
+                parts.append(quotedString(containerName))
             }
         case .landmark:
             parts = ["landmark"]
             if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName=\(quotedString(containerName))")
+                parts.append(quotedString(containerName))
             }
         case .dataTable(let rowCount, let columnCount):
             parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
             if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName=\(quotedString(containerName))")
+                parts.append(quotedString(containerName))
             }
         case .tabBar:
             parts = ["tab_bar"]
             if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName=\(quotedString(containerName))")
+                parts.append(quotedString(containerName))
             }
-        case .scrollable(let contentSize):
-            let frame = container.frame
-            parts = ["scrollable"]
+        case .scrollable:
+            parts = ["list"]
             if let containerName = nonEmpty(annotation?.containerName?.rawValue) {
-                parts.append("containerName=\(quotedString(containerName))")
-            }
-            parts.append("viewport=\(Int(frame.size.width))x\(Int(frame.size.height))")
-            parts.append("content=\(Int(contentSize.width))x\(Int(contentSize.height))")
-            let scrollAxis = ScrollContainerMetrics.axis(
-                contentWidth: Double(contentSize.width),
-                contentHeight: Double(contentSize.height),
-                viewportWidth: Double(frame.size.width),
-                viewportHeight: Double(frame.size.height)
-            )
-            parts.append("scrollAxis=\(scrollAxis.rawValue)")
-            let horizontalPageScrolls = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
-                contentWidth: Double(contentSize.width),
-                viewportWidth: Double(frame.size.width)
-            )
-            if horizontalPageScrolls > 0 {
-                parts.append("pageScrollsX=\(horizontalPageScrolls)")
-            }
-            let verticalPageScrolls = ScrollContainerMetrics.estimatedVerticalPageScrolls(
-                contentHeight: Double(contentSize.height),
-                viewportHeight: Double(frame.size.height)
-            )
-            if verticalPageScrolls > 0 {
-                parts.append("pageScrollsY=\(verticalPageScrolls)")
+                parts.append(quotedString(containerName))
             }
             if let observedElementCount {
-                parts.append("observedElementCount=\(observedElementCount)")
+                let totalElementCount = scrollInventory?.totalElementCount
+                if let totalElementCount, totalElementCount > observedElementCount {
+                    parts.append("\(totalElementCount) elements, showing \(observedElementCount)")
+                } else {
+                    parts.append("\(totalElementCount ?? observedElementCount) elements")
+                }
             }
         }
         if container.isModalBoundary {
-            parts.append("modal=true")
+            parts.append("modal")
         }
         if detail == .full {
             let frame = container.frame
@@ -251,14 +234,15 @@ extension FenceResponse {
                 "frame=(\(Int(frame.origin.x)),\(Int(frame.origin.y)),\(Int(frame.size.width)),\(Int(frame.size.height)))"
             )
         }
-        return parts.joined(separator: " ")
+        return "── \(parts.joined(separator: " ")) ──"
     }
 
     private static func compactContainerLine(
         _ container: AccessibilityContainer,
         containerName: String?,
         detail: InterfaceDetail,
-        observedElementCount: Int? = nil
+        observedElementCount: Int? = nil,
+        scrollInventory: ScrollInventory? = nil
     ) -> String {
         compactContainerLine(
             container,
@@ -266,8 +250,69 @@ extension FenceResponse {
                 InterfaceContainerAnnotation(path: .root, containerName: ContainerName(rawValue: $0))
             },
             detail: detail,
-            observedElementCount: observedElementCount
+            observedElementCount: observedElementCount,
+            scrollInventory: scrollInventory
         )
     }
 
+    private static func compactContainerClosingLine(_ projection: InterfaceContainerProjection) -> String {
+        let name = projection.containerName
+            ?? semanticContainerLabel(projection.container)
+            ?? semanticContainerType(projection.container)
+        return "── /\(name) ──"
+    }
+
+    private static func compactScrollMetadataLine(_ projection: InterfaceContainerProjection) -> [String] {
+        guard case .scrollable(let contentSize) = projection.container.type else { return [] }
+        let frame = projection.container.frame
+        let axis = ScrollContainerMetrics.axis(
+            contentWidth: Double(contentSize.width),
+            contentHeight: Double(contentSize.height),
+            viewportWidth: Double(frame.size.width),
+            viewportHeight: Double(frame.size.height)
+        )
+        let pageScrollsX = ScrollContainerMetrics.estimatedHorizontalPageScrolls(
+            contentWidth: Double(contentSize.width),
+            viewportWidth: Double(frame.size.width)
+        )
+        let pageScrollsY = ScrollContainerMetrics.estimatedVerticalPageScrolls(
+            contentHeight: Double(contentSize.height),
+            viewportHeight: Double(frame.size.height)
+        )
+        let pages = max(1, max(pageScrollsX, pageScrollsY) + 1)
+        return [
+            "  \(Int(frame.size.width))×\(Int(frame.size.height)) view, "
+                + "\(Int(contentSize.width))×\(Int(contentSize.height)) content "
+                + "(\(pages) pages), \(axis.rawValue)",
+        ]
+    }
+
+    private static func inventoryOmissionLine(_ projection: InterfaceContainerProjection) -> String? {
+        guard let totalElementCount = projection.scrollInventory?.totalElementCount else { return nil }
+        let omitted = totalElementCount - projection.observedElementCount
+        guard omitted > 0 else { return nil }
+        return "  ⋮ \(omitted) more"
+    }
+
+    private static func semanticContainerType(_ container: AccessibilityContainer) -> String {
+        switch container.type {
+        case .semanticGroup:
+            return "group"
+        case .list, .scrollable:
+            return "list"
+        case .landmark:
+            return "landmark"
+        case .dataTable:
+            return "table"
+        case .tabBar:
+            return "tab_bar"
+        }
+    }
+
+    private static func semanticContainerLabel(_ container: AccessibilityContainer) -> String? {
+        if case .semanticGroup(let label, _, _) = container.type {
+            return nonEmpty(label)
+        }
+        return nil
+    }
 }

@@ -126,11 +126,10 @@ public extension HeistElement {
         annotation: InterfaceElementAnnotation? = nil
     ) {
         let frame = accessibilityFrame(for: element.shape)
-        let projectedFrame = contentSpaceFrame(for: frame, annotation: annotation)
         let activationPoint = accessibilityActivationPoint(
             for: element,
             sourceFrame: frame,
-            projectedFrame: projectedFrame
+            projectedFrame: frame
         )
         let validCustomContent = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
         let validRotors = element.customRotors.filter { !$0.name.isEmpty }
@@ -141,10 +140,10 @@ public extension HeistElement {
             identifier: element.identifier,
             hint: element.hint,
             traits: element.traits.heistTraits,
-            frameX: sanitizedDouble(projectedFrame.origin.x),
-            frameY: sanitizedDouble(projectedFrame.origin.y),
-            frameWidth: sanitizedDouble(projectedFrame.size.width),
-            frameHeight: sanitizedDouble(projectedFrame.size.height),
+            frameX: sanitizedDouble(frame.origin.x),
+            frameY: sanitizedDouble(frame.origin.y),
+            frameWidth: sanitizedDouble(frame.size.width),
+            frameHeight: sanitizedDouble(frame.size.height),
             activationPointX: sanitizedDouble(activationPoint.x),
             activationPointY: sanitizedDouble(activationPoint.y),
             respondsToUserInteraction: element.respondsToUserInteraction,
@@ -155,16 +154,6 @@ public extension HeistElement {
             actions: annotation?.actions ?? []
         )
     }
-}
-
-private func contentSpaceFrame(for frame: CGRect, annotation: InterfaceElementAnnotation?) -> CGRect {
-    guard let contentSpaceOrigin = annotation?.contentSpaceOrigin else { return frame }
-    return CGRect(
-        x: CGFloat(contentSpaceOrigin.x),
-        y: CGFloat(contentSpaceOrigin.y),
-        width: frame.size.width,
-        height: frame.size.height
-    )
 }
 
 private func accessibilityActivationPoint(

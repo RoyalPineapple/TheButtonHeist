@@ -2482,6 +2482,11 @@ symbol	ButtonHeist.symbols.json	s:8TheScore15RequestEnvelopeV6encode2toys7Encode
 symbol	ButtonHeist.symbols.json	s:8TheScore15RequestEnvelopeV7decoded4fromAC10Foundation4DataV_tKFZ	swift.type.method	public	decoded(from:)	RequestEnvelope.decoded(from:)	static func decoded(from data: Data) throws -> RequestEnvelope
 symbol	ButtonHeist.symbols.json	s:8TheScore15RequestEnvelopeV7messageAA13ClientMessageOvp	swift.property	public	message	RequestEnvelope.message	let message: ClientMessage
 symbol	ButtonHeist.symbols.json	s:8TheScore15RequestEnvelopeV9requestIdSSSgvp	swift.property	public	requestId	RequestEnvelope.requestId	let requestId: String?
+symbol	ButtonHeist.symbols.json	s:8TheScore15ScrollInventoryV	swift.struct	public	ScrollInventory	ScrollInventory	struct ScrollInventory
+symbol	ButtonHeist.symbols.json	s:8TheScore15ScrollInventoryV14visibleIndicesSaySiGvp	swift.property	public	visibleIndices	ScrollInventory.visibleIndices	let visibleIndices: [Int]
+symbol	ButtonHeist.symbols.json	s:8TheScore15ScrollInventoryV17totalElementCount14visibleIndicesACSiSg_SaySiGtcfc	swift.init	public	init(totalElementCount:visibleIndices:)	ScrollInventory.init(totalElementCount:visibleIndices:)	init(totalElementCount: Int?, visibleIndices: [Int])
+symbol	ButtonHeist.symbols.json	s:8TheScore15ScrollInventoryV17totalElementCountSiSgvp	swift.property	public	totalElementCount	ScrollInventory.totalElementCount	let totalElementCount: Int?
+symbol	ButtonHeist.symbols.json	s:8TheScore15ScrollInventoryV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ScrollInventory.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8TheScore15SubtreeSelectorO	swift.enum	public	SubtreeSelector	SubtreeSelector	enum SubtreeSelector
 symbol	ButtonHeist.symbols.json	s:8TheScore15SubtreeSelectorO11descriptionSSvp	swift.property	public	description	SubtreeSelector.description	var description: String { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore15SubtreeSelectorO13hasPredicatesSbvp	swift.property	public	hasPredicates	SubtreeSelector.hasPredicates	var hasPredicates: Bool { get }
@@ -3165,9 +3170,8 @@ symbol	ButtonHeist.symbols.json	s:8TheScore26HeistForEachStringEvidenceV5valueSS
 symbol	ButtonHeist.symbols.json	s:8TheScore26HeistForEachStringEvidenceV9parameter0A5Plans0C13ReferenceNameVvp	swift.property	public	parameter	HeistForEachStringEvidence.parameter	let parameter: HeistReferenceName
 symbol	ButtonHeist.symbols.json	s:8TheScore26HeistForEachStringEvidenceV9parameter5count14iterationCount0J7Ordinal5value13failureReasonAC0A5Plans0C13ReferenceNameV_S3iSgSSSgANtcfc	swift.init	public	init(parameter:count:iterationCount:iterationOrdinal:value:failureReason:)	HeistForEachStringEvidence.init(parameter:count:iterationCount:iterationOrdinal:value:failureReason:)	init(parameter: HeistReferenceName, count: Int, iterationCount: Int, iterationOrdinal: Int? = nil, value: String? = nil, failureReason: String? = nil)
 symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV	swift.struct	public	InterfaceElementAnnotation	InterfaceElementAnnotation	struct InterfaceElementAnnotation
-symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV18contentSpaceOrigin26AccessibilitySnapshotModel0I5PointVSgvp	swift.property	public	contentSpaceOrigin	InterfaceElementAnnotation.contentSpaceOrigin	let contentSpaceOrigin: AccessibilityPoint?
 symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	InterfaceElementAnnotation.init(from:)	init(from decoder: any Decoder) throws
-symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV4path7actions18contentSpaceOriginAcA8TreePathV_Say0A5Plans0D6ActionOG26AccessibilitySnapshotModel0O5PointVSgtcfc	swift.init	public	init(path:actions:contentSpaceOrigin:)	InterfaceElementAnnotation.init(path:actions:contentSpaceOrigin:)	init(path: TreePath, actions: [ElementAction], contentSpaceOrigin: AccessibilityPoint? = nil)
+symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV4path7actionsAcA8TreePathV_Say0A5Plans0D6ActionOGtcfc	swift.init	public	init(path:actions:)	InterfaceElementAnnotation.init(path:actions:)	init(path: TreePath, actions: [ElementAction])
 symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV4pathAA8TreePathVvp	swift.property	public	path	InterfaceElementAnnotation.path	let path: TreePath
 symbol	ButtonHeist.symbols.json	s:8TheScore26InterfaceElementAnnotationV7actionsSay0A5Plans0D6ActionOGvp	swift.property	public	actions	InterfaceElementAnnotation.actions	let actions: [ElementAction]
 symbol	ButtonHeist.symbols.json	s:8TheScore26SettledObservationSequenceV	swift.struct	public	SettledObservationSequence	SettledObservationSequence	struct SettledObservationSequence
@@ -3214,8 +3218,9 @@ symbol	ButtonHeist.symbols.json	s:8TheScore28HeistCaseSelectionMissReasonO8rawVa
 symbol	ButtonHeist.symbols.json	s:8TheScore28HeistCaseSelectionMissReasonO8timedOutyA2CmF	swift.enum.case	public	HeistCaseSelectionMissReason.timedOut	HeistCaseSelectionMissReason.timedOut	case timedOut
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceContainerAnnotationV	swift.struct	public	InterfaceContainerAnnotation	InterfaceContainerAnnotation	struct InterfaceContainerAnnotation
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceContainerAnnotationV13containerName0A5Plans0dG0VSgvp	swift.property	public	containerName	InterfaceContainerAnnotation.containerName	let containerName: ContainerName?
+symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceContainerAnnotationV15scrollInventoryAA06ScrollG0VSgvp	swift.property	public	scrollInventory	InterfaceContainerAnnotation.scrollInventory	let scrollInventory: ScrollInventory?
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceContainerAnnotationV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	InterfaceContainerAnnotation.init(from:)	init(from decoder: any Decoder) throws
-symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceContainerAnnotationV4path13containerNameAcA8TreePathV_0A5Plans0dH0VSgtcfc	swift.init	public	init(path:containerName:)	InterfaceContainerAnnotation.init(path:containerName:)	init(path: TreePath, containerName: ContainerName?)
+symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceContainerAnnotationV4path13containerName15scrollInventoryAcA8TreePathV_0A5Plans0dH0VSgAA06ScrollJ0VSgtcfc	swift.init	public	init(path:containerName:scrollInventory:)	InterfaceContainerAnnotation.init(path:containerName:scrollInventory:)	init(path: TreePath, containerName: ContainerName?, scrollInventory: ScrollInventory? = nil)
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceContainerAnnotationV4pathAA8TreePathVvp	swift.property	public	path	InterfaceContainerAnnotation.path	let path: TreePath
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceDiscoveryReasonCodeO	swift.enum	public	InterfaceDiscoveryReasonCode	InterfaceDiscoveryReasonCode	enum InterfaceDiscoveryReasonCode
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceDiscoveryReasonCodeO11notExploredyA2CmF	swift.enum.case	public	InterfaceDiscoveryReasonCode.notExplored	InterfaceDiscoveryReasonCode.notExplored	case notExplored
@@ -4260,6 +4265,11 @@ relationship	conformsTo	s:8TheScore15HeistStepIntentO	s:s8SendableP	HeistStepInt
 relationship	conformsTo	s:8TheScore15RequestEnvelopeV	s:SE	RequestEnvelope	Swift.Encodable
 relationship	conformsTo	s:8TheScore15RequestEnvelopeV	s:Se	RequestEnvelope	Swift.Decodable
 relationship	conformsTo	s:8TheScore15RequestEnvelopeV	s:s8SendableP	RequestEnvelope	Swift.Sendable
+relationship	conformsTo	s:8TheScore15ScrollInventoryV	s:SE	ScrollInventory	Swift.Encodable
+relationship	conformsTo	s:8TheScore15ScrollInventoryV	s:SH	ScrollInventory	Swift.Hashable
+relationship	conformsTo	s:8TheScore15ScrollInventoryV	s:SQ	ScrollInventory	Swift.Equatable
+relationship	conformsTo	s:8TheScore15ScrollInventoryV	s:Se	ScrollInventory	Swift.Decodable
+relationship	conformsTo	s:8TheScore15ScrollInventoryV	s:s8SendableP	ScrollInventory	Swift.Sendable
 relationship	conformsTo	s:8TheScore15SubtreeSelectorO	s:SE	SubtreeSelector	Swift.Encodable
 relationship	conformsTo	s:8TheScore15SubtreeSelectorO	s:SQ	SubtreeSelector	Swift.Equatable
 relationship	conformsTo	s:8TheScore15SubtreeSelectorO	s:Se	SubtreeSelector	Swift.Decodable

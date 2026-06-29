@@ -30,7 +30,8 @@ struct PublicContainer: Encodable {
         let fields = Self.fields(
             for: projection.container,
             children: children,
-            observedElementCount: projection.observedElementCount
+            observedElementCount: projection.observedElementCount,
+            scrollInventory: projection.scrollInventory
         )
         self.type = fields.type
         self.label = fields.label
@@ -68,7 +69,8 @@ struct PublicContainer: Encodable {
     private static func fields(
         for container: AccessibilityContainer,
         children: [PublicTreeNode],
-        observedElementCount: Int?
+        observedElementCount: Int?,
+        scrollInventory: ScrollInventory?
     ) -> Fields {
         switch container.type {
         case .semanticGroup(let label, let value, let identifier):
@@ -86,7 +88,8 @@ struct PublicContainer: Encodable {
                 contentSize: contentSize,
                 frame: container.frame,
                 children: children,
-                observedElementCount: observedElementCount
+                observedElementCount: observedElementCount,
+                scrollInventory: scrollInventory
             )
         }
     }
@@ -95,7 +98,8 @@ struct PublicContainer: Encodable {
         contentSize: AccessibilitySize,
         frame: AccessibilityRect,
         children: [PublicTreeNode],
-        observedElementCount: Int?
+        observedElementCount: Int?,
+        scrollInventory: ScrollInventory?
     ) -> Fields {
         let contentWidth = Self.sanitizedDouble(contentSize.width)
         let contentHeight = Self.sanitizedDouble(contentSize.height)
@@ -116,13 +120,15 @@ struct PublicContainer: Encodable {
             viewportHeight: viewportHeight
         )
         return Fields(
-            type: "scrollable",
+            type: "list",
             contentWidth: contentWidth,
             contentHeight: contentHeight,
             scrollAxis: scrollAxis.rawValue,
             pageScrollsX: horizontalPageScrolls > 0 ? horizontalPageScrolls : nil,
             pageScrollsY: verticalPageScrolls > 0 ? verticalPageScrolls : nil,
-            observedElementCount: observedElementCount ?? children.reduce(0) { $0 + $1.elementCount }
+            observedElementCount: scrollInventory?.totalElementCount
+                ?? observedElementCount
+                ?? children.reduce(0) { $0 + $1.elementCount }
         )
     }
 

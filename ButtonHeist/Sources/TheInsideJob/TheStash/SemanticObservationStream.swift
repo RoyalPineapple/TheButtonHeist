@@ -366,6 +366,7 @@ final class SemanticObservationStream {
 
     func settlePostActionObservation(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
+        commitScope: SemanticObservationScope = .visible,
         settleOutcome providedOutcome: SettleSession.Outcome? = nil
     ) async -> (settle: SettleSession.Outcome, event: SettledSemanticObservationEvent?, diagnosticScreen: Screen?) {
         guard let stash else {
@@ -405,7 +406,14 @@ final class SemanticObservationStream {
             return (outcome, nil, nil)
         }
         if outcome.outcome.didSettleCleanly {
-            return (outcome, commitSettledVisibleObservation(finalScreen), nil)
+            let event: SettledSemanticObservationEvent
+            switch commitScope {
+            case .visible:
+                event = commitSettledVisibleObservation(finalScreen)
+            case .discovery:
+                event = commitSettledDiscoveryObservation(stash.settledSemanticScreen.merging(finalScreen))
+            }
+            return (outcome, event, nil)
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)

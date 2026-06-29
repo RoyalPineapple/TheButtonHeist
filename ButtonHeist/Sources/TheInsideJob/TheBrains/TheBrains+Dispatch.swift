@@ -69,13 +69,29 @@ extension TheBrains {
                 interaction: { await self.actions.executeTypeText(target) }
             )
         case .scroll(let target):
-            return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
+            return await performInteraction(
+                method: .scroll,
+                observationScope: .discovery,
+                postActionCommitScope: .discovery
+            ) {
+                await self.navigation.executeScroll(target)
+            }
         case .scrollToVisible(let target):
-            return await performInteraction(method: .scrollToVisible, observationScope: .discovery) {
+            return await performInteraction(
+                method: .scrollToVisible,
+                observationScope: .discovery,
+                postActionCommitScope: .discovery
+            ) {
                 await self.navigation.executeScrollToVisible(target)
             }
         case .scrollToEdge(let target):
-            return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
+            return await performInteraction(
+                method: .scrollToEdge,
+                observationScope: .discovery,
+                postActionCommitScope: .discovery
+            ) {
+                await self.navigation.executeScrollToEdge(target)
+            }
         case .wait(let target):
             return await performWait(target: target)
         }
@@ -98,6 +114,7 @@ extension TheBrains {
         method: ActionMethod,
         observationScope: SemanticObservationScope = .visible,
         beforeStateScope: SemanticObservationScope = .visible,
+        postActionCommitScope: SemanticObservationScope = .visible,
         afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
@@ -128,7 +145,8 @@ extension TheBrains {
             errorKind: Self.actionErrorKind(for: result),
             subjectEvidence: result.subjectEvidence,
             activationTrace: result.activationTrace,
-            before: before
+            before: before,
+            postActionCommitScope: postActionCommitScope
         )
         return actionResult.withTiming(ActionPerformanceTiming(
             beforeObservationMs: beforeObservationMs,

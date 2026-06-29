@@ -78,7 +78,7 @@ final class TheStashResolutionTests: XCTestCase {
         for entry in registeredEntries {
             let screenElement = Screen.ScreenElement(
                 heistId: entry.heistId,
-                contentSpaceOrigin: nil,
+                scrollMembership: nil,
                 element: entry.element
             )
             elements[entry.heistId] = screenElement
@@ -178,7 +178,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     staleOffscreen,
                     heistId: "shared_row",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -206,8 +205,7 @@ final class TheStashResolutionTests: XCTestCase {
             elements: [
                 "words_header": Screen.ScreenElement(
                     heistId: "words_header",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 0),
-                    scrollContainerPath: TreePath([0]),
+                    scrollMembership: nil,
                     element: visibleWord
                 ),
             ],
@@ -223,8 +221,7 @@ final class TheStashResolutionTests: XCTestCase {
         var elements = currentVisible.semantic.elements
         elements["home_button"] = Screen.ScreenElement(
             heistId: "home_button",
-            contentSpaceOrigin: CGPoint(x: 0, y: 800),
-            scrollContainerPath: TreePath([0]),
+            scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: nil),
             element: staleHomeButton
         )
         let pollutedSettledScreen = Screen(
@@ -255,7 +252,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     staleOffscreen,
                     heistId: "stale_offscreen",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -346,7 +342,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     discovered,
                     heistId: "buttonheist_demo",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -406,8 +401,7 @@ final class TheStashResolutionTests: XCTestCase {
         let row = element(label: "Row", traits: .button)
         let staleEntry = Screen.ScreenElement(
             heistId: "row",
-            contentSpaceOrigin: CGPoint(x: 0, y: 100),
-            scrollContainerPath: TreePath([0]),
+            scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: 100),
             element: row
         )
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(Screen(
@@ -418,8 +412,7 @@ final class TheStashResolutionTests: XCTestCase {
 
         let freshEntry = Screen.ScreenElement(
             heistId: "row",
-            contentSpaceOrigin: CGPoint(x: 0, y: 500),
-            scrollContainerPath: TreePath([0]),
+            scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: 500),
             element: row
         )
         bagman.recordParsedObservedEvidence(Screen(
@@ -429,22 +422,15 @@ final class TheStashResolutionTests: XCTestCase {
             firstResponderHeistId: nil,
         ))
 
-        XCTAssertEqual(
-            bagman.liveVisibleScreen.findElement(heistId: "row")?.contentSpaceOrigin,
-            CGPoint(x: 0, y: 500)
-        )
-        XCTAssertEqual(
-            try XCTUnwrap(bagman.liveScreenElement(heistId: "row")).contentSpaceOrigin,
-            CGPoint(x: 0, y: 500)
-        )
+        XCTAssertEqual(bagman.liveVisibleScreen.findElement(heistId: "row")?.scrollMembership?.index, 500)
+        XCTAssertEqual(try XCTUnwrap(bagman.liveScreenElement(heistId: "row")).scrollMembership?.index, 500)
     }
 
     func testLiveVisibleEntriesDoNotPreserveSettledRevealMetadataWhenFreshObservationHasNone() throws {
         let row = element(label: "Row", traits: .button)
         let staleEntry = Screen.ScreenElement(
             heistId: "row",
-            contentSpaceOrigin: CGPoint(x: 0, y: 100),
-            scrollContainerPath: TreePath([0]),
+            scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: nil),
             element: row
         )
         bagman.semanticObservationStream.commitSettledDiscoveryObservation(Screen(
@@ -455,7 +441,7 @@ final class TheStashResolutionTests: XCTestCase {
 
         let freshEntry = Screen.ScreenElement(
             heistId: "row",
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: row
         )
         bagman.recordParsedObservedEvidence(Screen(
@@ -465,8 +451,8 @@ final class TheStashResolutionTests: XCTestCase {
             firstResponderHeistId: nil,
         ))
 
-        XCTAssertNil(bagman.liveVisibleScreen.findElement(heistId: "row")?.contentSpaceOrigin)
-        XCTAssertNil(try XCTUnwrap(bagman.liveScreenElement(heistId: "row")).contentSpaceOrigin)
+        XCTAssertNil(bagman.liveVisibleScreen.findElement(heistId: "row")?.scrollMembership)
+        XCTAssertNil(try XCTUnwrap(bagman.liveScreenElement(heistId: "row")).scrollMembership)
     }
 
     func testCancelledNoScreenSettleDoesNotPublishSettledTruth() async {
@@ -646,7 +632,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     knownDiscovery,
                     heistId: "known_discovery",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -682,7 +667,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     knownDiscovery,
                     heistId: "known_discovery",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -750,7 +734,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     firstKnown,
                     heistId: "first_known",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -765,7 +748,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     secondKnown,
                     heistId: "second_known",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -793,8 +775,8 @@ final class TheStashResolutionTests: XCTestCase {
         )
         let screen = Screen(
             elements: [
-                "visible": Screen.ScreenElement(heistId: "visible", contentSpaceOrigin: nil, element: visible),
-                "known": Screen.ScreenElement(heistId: "known", contentSpaceOrigin: nil, element: known),
+                "visible": Screen.ScreenElement(heistId: "visible", scrollMembership: nil, element: visible),
+                "known": Screen.ScreenElement(heistId: "known", scrollMembership: nil, element: known),
             ],
             hierarchy: [.container(container, children: [.element(visible, traversalIndex: 0)])],
             containerNamesByPath: [TreePath([0]): "main_scroll"],
@@ -816,26 +798,22 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(semanticInterface.annotations.containers, [])
     }
 
-    func testKnownContentOriginsAreKeyedByHeistIdForEqualElements() {
+    func testKnownScrollMembershipsAreKeyedByHeistIdForEqualElements() {
         let repeated = AccessibilityElement.make(
             label: "Repeat",
             traits: .button,
             frame: CGRect(x: 0, y: 0, width: 100, height: 44)
         )
-        let firstOrigin = CGPoint(x: 0, y: 100)
-        let secondOrigin = CGPoint(x: 0, y: 500)
         bagman.installScreenForTesting(Screen(
             elements: [
                 "repeat_button_1": Screen.ScreenElement(
                     heistId: "repeat_button_1",
-                    contentSpaceOrigin: firstOrigin,
-                    scrollContainerPath: TreePath([0]),
+                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: 100),
                     element: repeated
                 ),
                 "repeat_button_2": Screen.ScreenElement(
                     heistId: "repeat_button_2",
-                    contentSpaceOrigin: secondOrigin,
-                    scrollContainerPath: TreePath([0]),
+                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: 500),
                     element: repeated
                 ),
             ],
@@ -850,10 +828,14 @@ final class TheStashResolutionTests: XCTestCase {
             firstResponderHeistId: nil,
         ))
 
-        let origins = bagman.knownContentOriginsByHeistId()
-
-        XCTAssertEqual(origins["repeat_button_1"] ?? nil, firstOrigin)
-        XCTAssertEqual(origins["repeat_button_2"] ?? nil, secondOrigin)
+        XCTAssertEqual(
+            bagman.settledSemanticScreen.findElement(heistId: "repeat_button_1")?.scrollMembership?.index,
+            100
+        )
+        XCTAssertEqual(
+            bagman.settledSemanticScreen.findElement(heistId: "repeat_button_2")?.scrollMembership?.index,
+            500
+        )
     }
 
     func testTimeoutZeroTurnsObservationCycleBeforeReturningCleanLatest() async {
@@ -1330,7 +1312,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     controls,
                     heistId: "controls_demo",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 120),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -1357,7 +1338,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     staleOffscreen,
                     heistId: "shared_row",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -1387,7 +1367,6 @@ final class TheStashResolutionTests: XCTestCase {
                 Screen.OffViewportEntry(
                     staleOffscreen,
                     heistId: "stale_offscreen",
-                    contentSpaceOrigin: CGPoint(x: 20, y: 2_000),
                     scrollContainerPath: TreePath([0])
                 ),
             ]
@@ -1851,8 +1830,7 @@ final class TheStashResolutionTests: XCTestCase {
         let scrollView = UIScrollView()
         let entry = Screen.ScreenElement(
             heistId: "below_fold_button",
-            contentSpaceOrigin: CGPoint(x: 0, y: 2_000),
-            scrollContainerPath: TreePath([0]),
+            scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: nil),
             element: offScreen
         )
 
@@ -1906,7 +1884,7 @@ final class TheStashResolutionTests: XCTestCase {
         let scrollView = UIScrollView()
         let entry = Screen.ScreenElement(
             heistId: "button_visible",
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: visible
         )
         bagman.installScreenForTesting(Screen(

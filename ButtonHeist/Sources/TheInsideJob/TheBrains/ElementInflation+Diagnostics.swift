@@ -15,11 +15,11 @@ extension ElementInflation {
     ) -> String {
         let description = Navigation.ScrollTargetDescription(entry).description
         switch failure {
-        case .missingContentOrigin:
-            return "known target \(description) has no content-space position"
+        case .missingScrollMembership:
+            return "known target \(description) has no scroll membership"
         case .noLiveScrollableAncestor:
             let scrollContainer: String
-            if let path = entry.scrollContentLocation?.scrollContainerPath {
+            if let path = entry.scrollMembership?.containerPath {
                 scrollContainer = " expectedScrollContainerPath=\(path.indices)"
             } else {
                 scrollContainer = ""
@@ -27,8 +27,8 @@ extension ElementInflation {
             return "known target \(description) has no live scrollable ancestor in the current semantic graph;"
                 + scrollContainer
                 + " \(stash.liveScrollContainerDiagnostics())"
-        case .unsafeProgrammaticScroll:
-            return "known target \(description) is inside a scroll view that is unsafe for programmatic semantic reveal"
+        case .scanDidNotRevealTarget:
+            return "known target \(description) was not visible after scroll scan"
         }
     }
 

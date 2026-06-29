@@ -332,7 +332,7 @@ extension TheStash {
         }
 
         var details = ["offscreen"]
-        if candidate.contentSpaceOrigin == nil {
+        if candidate.scrollMembership == nil {
             details.append("unreachable")
         }
         return "(\(details.joined(separator: ", ")))"

@@ -14,8 +14,8 @@ import AccessibilitySnapshotParser
 ///
 /// `SemanticScreen` contains targetable accessibility identity and value-only
 /// reveal evidence. It must not hold UIKit objects, viewport geometry as live
-/// authority, activation points, or weak refs. Live action geometry is acquired
-/// from `LiveCapture` for each operation.
+/// authority, live activation points, or weak refs. Live action geometry is
+/// acquired from `LiveCapture` for each operation.
 struct SemanticScreen: Sendable, Equatable {
     let elements: [HeistId: Element]
     let containers: [TreePath: Container]
@@ -58,89 +58,91 @@ struct SemanticScreen: Sendable, Equatable {
 
     // MARK: - Element Entry
 
-    /// Content-space location derived while walking the hierarchy. This is
-    /// durable settled-world evidence: the element's content origin and the
-    /// scroll container that owns that coordinate space. It deliberately does
-    /// not carry a UIKit object, frame, or activation point.
-    struct ScrollContentLocation: Sendable, Equatable {
-        let origin: CGPoint
-        let scrollContainerPath: TreePath
+    /// Durable scroll-container membership derived while walking the hierarchy.
+    ///
+    /// This is semantic placement evidence, not live action geometry: it records
+    /// the owning scroll container and the optional accessibility container index
+    /// reported by UIKit. It deliberately cannot express an absolute scroll-content point.
+    struct ScrollMembership: Sendable, Equatable {
+        let containerPath: TreePath
+        let index: Int?
+    }
+
+    /// Scroll-content coordinate captured for an element's activation point
+    /// while that element was visible in its scroll view.
+    ///
+    /// This is reveal evidence only. It is not current screen geometry, and it
+    /// must not be projected into wire `frame` / `activationPoint` fields for
+    /// off-viewport elements.
+    struct ObservedScrollContentActivationPoint: Sendable, Equatable {
+        let point: CGPoint
+
+        init?(_ point: CGPoint) {
+            guard point.x.isFinite, point.y.isFinite else { return nil }
+            self.point = point
+        }
     }
 
     struct Element: Sendable, Equatable {
         let heistId: HeistId
-        let scrollContentLocation: ScrollContentLocation?
+        let scrollMembership: ScrollMembership?
+        let observedScrollContentActivationPoint: ObservedScrollContentActivationPoint?
         /// Parsed accessibility identity/value retained in the settled world.
         /// Do not treat its frame or activation point as live action geometry.
         let element: AccessibilityElement
 
-        var contentSpaceOrigin: CGPoint? {
-            scrollContentLocation?.origin
+        var scrollContainerPath: TreePath? {
+            scrollMembership?.containerPath
+        }
+
+        var scrollIndex: Int? {
+            scrollMembership?.index
         }
 
         init(
             heistId: HeistId,
-            scrollContentLocation: ScrollContentLocation?,
+            scrollMembership: ScrollMembership?,
+            observedScrollContentActivationPoint: ObservedScrollContentActivationPoint? = nil,
             element: AccessibilityElement
         ) {
             self.heistId = heistId
-            self.scrollContentLocation = scrollContentLocation
+            self.scrollMembership = scrollMembership
+            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
             self.element = element
-        }
-
-        init(
-            heistId: HeistId,
-            contentSpaceOrigin: CGPoint?,
-            scrollContainerPath: TreePath? = nil,
-            element: AccessibilityElement
-        ) {
-            self.heistId = heistId
-            self.scrollContentLocation = Self.scrollContentLocation(
-                origin: contentSpaceOrigin,
-                scrollContainerPath: scrollContainerPath
-            )
-            self.element = element
-        }
-
-        private static func scrollContentLocation(
-            origin: CGPoint?,
-            scrollContainerPath: TreePath?
-        ) -> ScrollContentLocation? {
-            guard let origin, let scrollContainerPath else { return nil }
-            return ScrollContentLocation(origin: origin, scrollContainerPath: scrollContainerPath)
         }
     }
 
     // MARK: - Container Entry
 
-    /// Durable settled-world container identity and content-space evidence.
+    /// Durable settled-world container identity and scroll inventory evidence.
     ///
-    /// The path and content frame are capture-local semantic evidence used to
-    /// derive a reveal plan. UIKit object refs and live activation geometry
-    /// remain in `LiveCapture` and are acquired only at dispatch time.
+    /// UIKit object refs and live activation geometry remain in `LiveCapture`
+    /// and are acquired only at dispatch time.
     struct Container: Sendable, Equatable {
         let container: AccessibilityContainer
         let path: TreePath
         let containerName: ContainerName?
         let contentFrame: CGRect?
-        let scrollContentLocation: ScrollContentLocation?
-
-        var contentSpaceOrigin: CGPoint? {
-            scrollContentLocation?.origin
-        }
+        let scrollMembership: ScrollMembership?
+        let observedScrollContentActivationPoint: ObservedScrollContentActivationPoint?
+        let scrollInventory: ScrollInventory?
 
         init(
             container: AccessibilityContainer,
             path: TreePath,
             containerName: ContainerName?,
             contentFrame: CGRect?,
-            scrollContentLocation: ScrollContentLocation? = nil
+            scrollMembership: ScrollMembership? = nil,
+            observedScrollContentActivationPoint: ObservedScrollContentActivationPoint? = nil,
+            scrollInventory: ScrollInventory? = nil
         ) {
             self.container = container
             self.path = path
             self.containerName = containerName
             self.contentFrame = contentFrame
-            self.scrollContentLocation = scrollContentLocation
+            self.scrollMembership = scrollMembership
+            self.observedScrollContentActivationPoint = observedScrollContentActivationPoint
+            self.scrollInventory = scrollInventory
         }
     }
 

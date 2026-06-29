@@ -60,18 +60,18 @@ extension Screen {
     struct OffViewportEntry {
         let element: AccessibilityElement
         let heistId: HeistId
-        let scrollContentLocation: ScrollContentLocation?
+        let scrollMembership: ScrollMembership?
 
         init(
             _ element: AccessibilityElement,
             heistId: HeistId,
-            contentSpaceOrigin: CGPoint? = nil,
-            scrollContainerPath: TreePath = TreePath([0])
+            scrollContainerPath: TreePath? = nil,
+            scrollIndex: Int? = nil
         ) {
             self.element = element
             self.heistId = heistId
-            self.scrollContentLocation = contentSpaceOrigin.map {
-                ScrollContentLocation(origin: $0, scrollContainerPath: scrollContainerPath)
+            self.scrollMembership = scrollContainerPath.map {
+                ScrollMembership(containerPath: $0, index: scrollIndex)
             }
         }
     }
@@ -105,7 +105,7 @@ extension Screen {
         for (index, pair) in liveElements.enumerated() {
             screenElements[pair.heistId] = ScreenElement(
                 heistId: pair.heistId,
-                contentSpaceOrigin: nil,
+                scrollMembership: nil,
                 element: pair.element
             )
             elementRefs[pair.heistId] = ElementRef(
@@ -118,7 +118,7 @@ extension Screen {
         for entry in offViewport {
             screenElements[entry.heistId] = ScreenElement(
                 heistId: entry.heistId,
-                scrollContentLocation: entry.scrollContentLocation,
+                scrollMembership: entry.scrollMembership,
                 element: entry.element
             )
         }

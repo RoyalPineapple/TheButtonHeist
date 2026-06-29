@@ -20,6 +20,7 @@ final class ElementInflation {
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
     var discoverTarget: (@MainActor (ElementTarget) async -> Screen?)?
+    var revealKnownTarget: (@MainActor (HeistId) async -> Screen?)?
 
     static let comfortMarginFraction: CGFloat = 1.0 / 6.0
     static var postScrollLayoutFrames: Int { Navigation.postScrollLayoutFrames }
@@ -299,7 +300,7 @@ final class ElementInflation {
         switch target {
         case .predicate(let predicate, ordinal: nil):
             let revealableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
-                .filter { $0.contentSpaceOrigin != nil && stash.liveScrollView(for: $0) != nil }
+                .filter { $0.scrollMembership != nil && stash.liveScrollView(for: $0) != nil }
             return revealableMatches.count == 1 ? revealableMatches[0] : nil
         case .predicate:
             return nil
@@ -317,7 +318,7 @@ final class ElementInflation {
         switch target {
         case .predicate(let predicate, ordinal: nil):
             let reachableMatches = stash.matchScreenElements(predicate, limit: 3, in: screen)
-                .filter { $0.scrollContentLocation != nil }
+                .filter { $0.scrollMembership != nil }
             return reachableMatches.count == 1 ? reachableMatches[0] : nil
         case .predicate:
             return nil
