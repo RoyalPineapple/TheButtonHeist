@@ -51,7 +51,9 @@ extension TheBurglar {
         heistIdsByPath.reserveCapacity(elements.count)
         var elementRefs: [HeistId: Screen.ElementRef] = [:]
         elementRefs.reserveCapacity(elements.count)
-        for ((parsedElement, path, _), heistId) in zip(indexedElements, resolvedHeistIds) {
+        for (indexedElement, heistId) in zip(indexedElements, resolvedHeistIds) {
+            let parsedElement = indexedElement.element
+            let path = indexedElement.path
             let context = contextsByPath[path]
             let scrollMembership = scrollMembership(
                 context?.scrollMembership,

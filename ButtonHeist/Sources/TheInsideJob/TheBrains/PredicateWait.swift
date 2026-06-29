@@ -782,11 +782,6 @@ private struct PredicateObservationSnapshot {
     }
 }
 
-private struct PredicateStateEvaluation {
-    let met: Bool
-    let actual: String?
-}
-
 private struct PredicateStateMatch: Hashable, Sendable {
     let path: TreePath
     let traversalOrder: Int
@@ -846,29 +841,28 @@ private struct PredicateStateMatchSet {
         _ state: AccessibilityPredicate.State,
         predicate: AccessibilityPredicate?
     ) -> ExpectationResult {
-        let outcome = evaluate(state)
-        return ExpectationResult(met: outcome.met, predicate: predicate, actual: outcome.actual)
+        evaluate(state).expectation(for: predicate)
     }
 
-    private func evaluate(_ state: AccessibilityPredicate.State) -> PredicateStateEvaluation {
+    private func evaluate(_ state: AccessibilityPredicate.State) -> PredicateEvaluationResult {
         switch state.contract {
         case .element(let requirement, let predicate):
             let isPresent = !matching(predicate).isEmpty
             let met = requirement.isMet(isPresent: isPresent)
-            return PredicateStateEvaluation(
+            return PredicateEvaluationResult(
                 met: met,
                 actual: met ? nil : requirement.failureDescription(for: predicate)
             )
         case .target(let requirement, let target):
             let isPresent = !matching(target).isEmpty
             let met = requirement.isMet(isPresent: isPresent)
-            return PredicateStateEvaluation(
+            return PredicateEvaluationResult(
                 met: met,
                 actual: met ? nil : requirement.failureDescription(for: target)
             )
         case .all(let states):
             guard !states.isEmpty else {
-                return PredicateStateEvaluation(
+                return PredicateEvaluationResult(
                     met: false,
                     actual: AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription
                 )
@@ -877,7 +871,7 @@ private struct PredicateStateMatchSet {
                 let outcome = evaluate(state)
                 return outcome.met ? nil : (outcome.actual ?? state.description)
             }
-            return PredicateStateEvaluation(
+            return PredicateEvaluationResult(
                 met: failures.isEmpty,
                 actual: failures.isEmpty ? nil : failures.joined(separator: "; ")
             )

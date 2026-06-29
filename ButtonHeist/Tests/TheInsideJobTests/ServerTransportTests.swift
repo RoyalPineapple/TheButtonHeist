@@ -41,21 +41,25 @@ final class ServerTransportTests: XCTestCase {
     }
 
     func testTransportEventStreamDropsNewestWhenBufferLimitIsReached() {
-        let (stream, continuation) = TransportEventStream.makeEventStream(
+        let eventStream = TransportEventStream.makeEventStream(
             bufferLimit: ServerTransport.eventStreamBufferLimit
         )
         defer {
-            continuation.finish()
-            withExtendedLifetime(stream) {}
+            eventStream.continuation.finish()
+            withExtendedLifetime(eventStream.events) {}
         }
 
         for index in 0..<ServerTransport.eventStreamBufferLimit {
-            guard case .enqueued = continuation.yield(.clientConnected(clientId: index, remoteAddress: nil)) else {
+            let yieldResult = eventStream.continuation.yield(.clientConnected(clientId: index, remoteAddress: nil))
+            guard case .enqueued = yieldResult else {
                 return XCTFail("Expected transport event to enqueue before the buffer limit")
             }
         }
 
-        guard case .dropped = continuation.yield(.clientDisconnected(clientId: ServerTransport.eventStreamBufferLimit)) else {
+        let overflowResult = eventStream.continuation.yield(
+            .clientDisconnected(clientId: ServerTransport.eventStreamBufferLimit)
+        )
+        guard case .dropped = overflowResult else {
             return XCTFail("Expected newest transport event to drop when the buffer limit is reached")
         }
     }

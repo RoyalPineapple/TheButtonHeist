@@ -159,9 +159,9 @@ final class PostActionObservation {
         settledObservationSequence: SettledObservationSequence?
     ) -> BeforeState {
         let snapshot = stash.selectElements(in: screen)
-        let (interface, interfaceHash) = stash.semanticInterfaceWithHash(for: screen)
+        let semanticInterface = stash.semanticInterfaceWithHash(for: screen)
         let capture = makeTraceCapture(
-            interface: interface,
+            interface: semanticInterface.interface,
             sequence: 0,
             tripwireSignal: tripwireSignal,
             screenId: screen.id
@@ -171,8 +171,8 @@ final class PostActionObservation {
             snapshot: snapshot,
             elements: snapshot.map(\.element),
             hierarchy: screen.liveCapture.hierarchy,
-            interface: interface,
-            interfaceHash: interfaceHash,
+            interface: semanticInterface.interface,
+            interfaceHash: semanticInterface.hash,
             semanticHash: screen.semantic.semanticHash,
             capture: capture,
             tripwireSignal: tripwireSignal,
@@ -620,11 +620,24 @@ private extension SemanticScreen {
     }
 }
 
+private struct LiveCaptureRemovalResult {
+    let liveCapture: LiveCapture
+    let pathMap: [TreePath: TreePath]
+}
+
+private struct AccessibilityHierarchyRemovalResult {
+    let hierarchy: [AccessibilityHierarchy]
+    let heistIdsByPath: [TreePath: HeistId]
+    let pathMap: [TreePath: TreePath]
+}
+
 private extension LiveCapture {
     func removingElementsWithPathMap(
         withIds removedIds: Set<HeistId>
-    ) -> (liveCapture: LiveCapture, pathMap: [TreePath: TreePath]) {
-        guard !removedIds.isEmpty else { return (self, [:]) }
+    ) -> LiveCaptureRemovalResult {
+        guard !removedIds.isEmpty else {
+            return LiveCaptureRemovalResult(liveCapture: self, pathMap: [:])
+        }
         let filteredLiveTree = hierarchy.removingElements(
             withIds: removedIds,
             heistIdsByPath: heistIdsByPath
@@ -648,7 +661,7 @@ private extension LiveCapture {
             firstResponderHeistId: firstResponderHeistId.flatMap { removedIds.contains($0) ? nil : $0 },
             scrollableContainerViewsByPath: Self.remap(scrollableContainerViewsByPath, using: filteredLiveTree.pathMap)
         )
-        return (liveCapture, filteredLiveTree.pathMap)
+        return LiveCaptureRemovalResult(liveCapture: liveCapture, pathMap: filteredLiveTree.pathMap)
     }
 
     private static func remap<Value>(
@@ -687,7 +700,7 @@ private extension Array where Element == AccessibilityHierarchy {
     func removingElements(
         withIds removedIds: Set<HeistId>,
         heistIdsByPath: [TreePath: HeistId]
-    ) -> (hierarchy: [AccessibilityHierarchy], heistIdsByPath: [TreePath: HeistId], pathMap: [TreePath: TreePath]) {
+    ) -> AccessibilityHierarchyRemovalResult {
         var hierarchy: [AccessibilityHierarchy] = []
         var remappedHeistIdsByPath: [TreePath: HeistId] = [:]
         var pathMap: [TreePath: TreePath] = [:]
@@ -704,7 +717,11 @@ private extension Array where Element == AccessibilityHierarchy {
             ) else { continue }
             hierarchy.append(filteredNode)
         }
-        return (hierarchy, remappedHeistIdsByPath, pathMap)
+        return AccessibilityHierarchyRemovalResult(
+            hierarchy: hierarchy,
+            heistIdsByPath: remappedHeistIdsByPath,
+            pathMap: pathMap
+        )
     }
 }
 

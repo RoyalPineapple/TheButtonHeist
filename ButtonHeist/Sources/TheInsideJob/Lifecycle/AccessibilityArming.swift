@@ -7,6 +7,16 @@ import TheScore
 
 private let accessibilityArmingLogger = ButtonHeistLog.logger(.insideJob(.accessibility))
 
+enum AccessibilityEnvironmentKey: String, Sendable {
+    case iPhoneSimulatorRoot = "IPHONE_SIMULATOR_ROOT"
+}
+
+private extension Dictionary where Key == String, Value == String {
+    subscript(_ key: AccessibilityEnvironmentKey) -> String? {
+        self[key.rawValue]
+    }
+}
+
 // MARK: - Accessibility Arming
 
 /// Arms the accessibility runtime so the live accessibility tree is populated.
@@ -37,7 +47,7 @@ func armApplicationAccessibility(environment: [String: String] = ProcessInfo.pro
 /// simulator (where system dylibs live under `IPHONE_SIMULATOR_ROOT`).
 func libAccessibilityPath(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
     let dylib = "/usr/lib/libAccessibility.dylib"
-    guard let simulatorRoot = environment["IPHONE_SIMULATOR_ROOT"] else {
+    guard let simulatorRoot = environment[.iPhoneSimulatorRoot] else {
         return dylib
     }
     return (simulatorRoot as NSString).appendingPathComponent(dylib)

@@ -601,8 +601,8 @@ private let expectedRepairJSONReportJSON = """
 
         #expect(tiedBest.count == 2)
         #expect(tiedBest.map(\.element.traversalIndex) == [1, 3])
-        #expect(tiedBest.allSatisfy { $0.reasons.contains("Label is a close semantic rename.") })
-        #expect(tiedBest.allSatisfy { $0.reasons.contains("Sibling row context is preserved.") })
+        #expect(tiedBest.allSatisfy { $0.reasons.contains(.labelSemanticRename) })
+        #expect(tiedBest.allSatisfy { $0.reasons.contains(.siblingRowContextPreserved) })
     }
 
     @Test("After diff explains value changes without requiring full after snapshot")

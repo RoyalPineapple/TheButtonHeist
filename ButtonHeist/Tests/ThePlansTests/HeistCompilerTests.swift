@@ -689,22 +689,16 @@ struct HeistCompilerTests {
         let projectionSource = try String(contentsOf: projectionFile, encoding: .utf8)
 
         #expect(projectionSource.contains("enum ActionMethodProjection"))
+        #expect(projectionSource.range(of: #"\binit\s*\(\s*method\s*:\s*String\b"#, options: .regularExpression) == nil)
         #expect(projectionSource.range(of: #"\bmethod:\s*String\b"#, options: .regularExpression) == nil)
         #expect(!projectionSource.contains("Public" + "ActionFailureProjection"))
 
         let actionProjectionCallPattern = #"ActionProjection\s*\(\s*method:"#
-        let callSitePaths = [
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Response.swift",
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift",
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/ReportProjections.swift",
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting.swift",
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Action.swift",
-        ]
-        for path in callSitePaths {
-            let source = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        for file in try productionSwiftFiles(in: root) {
+            let source = try String(contentsOf: file, encoding: .utf8)
             #expect(
                 source.range(of: actionProjectionCallPattern, options: .regularExpression) == nil,
-                "Unexpected raw ActionProjection method initializer in \(path)"
+                "Unexpected raw ActionProjection method initializer in \(repositoryRelativePath(file, root: root))"
             )
         }
 
@@ -713,6 +707,120 @@ struct HeistCompilerTests {
             encoding: .utf8
         )
         #expect(jsonSource.contains("self.method = projection.actionMethod.rawValue"))
+    }
+
+    @Test
+    func `pipeline surfaces avoid new tuple return APIs`() throws {
+        let root = try repositoryRoot()
+        let pipelineFiles = try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/TheInsideJob/TheBrains", isDirectory: true))
+            + swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/TheInsideJob/TheStash", isDirectory: true))
+            + [
+                root.appendingPathComponent("ButtonHeist/Sources/TheScore/AccessibilityPredicate+Evaluation.swift"),
+                root.appendingPathComponent("ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift"),
+            ]
+        let allowedTupleReturns: Set<String> = [
+            "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+Capture.swift:"
+                + "func captureScreen() -> (image: UIImage, bounds: CGRect)?",
+            "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+WorldState.swift:"
+                + "func semanticInterfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String)",
+            "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+WorldState.swift:"
+                + "func semanticInterfaceWithHash( for screen: Screen, timestamp: Date = Date() ) "
+                + "-> (interface: Interface, hash: String)",
+            "ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift:"
+                + "private static func matcherTraitSortKey(_ trait: HeistTrait) -> (Int, String)",
+        ]
+        let functionTupleReturnPattern = #"\b(?:@\w+(?:\([^)]*\))?\s+"#
+            + #"|(?:public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated)\s+)*"#
+            + #"func\s+\w+[^{=]*?->\s*\([^)]*,[^)]*\)\??"#
+        let functionTupleReturns = try sourceSnippets(
+            in: pipelineFiles,
+            root: root,
+            pattern: functionTupleReturnPattern
+        )
+        let closureTupleReturns = try sourceSnippets(
+            in: pipelineFiles,
+            root: root,
+            pattern: #"\b(?:typealias|let|var)\b[^\n=]*[:=][^\n]*->\s*\([^)\n]*,[^)\n]*\)\??"#
+        )
+        let unexpected = functionTupleReturns
+            .union(closureTupleReturns)
+            .subtracting(allowedTupleReturns)
+
+        #expect(
+            unexpected.isEmpty,
+            "Unexpected non-local tuple return APIs in pipeline surfaces:\n\(unexpected.sorted().joined(separator: "\n"))"
+        )
+    }
+
+    @Test
+    func `public report projections avoid raw dictionary surfaces`() throws {
+        let root = try repositoryRoot()
+        let projectionSurfacePaths = [
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Response.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Interface.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Container.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+TreeNode.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Session.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/ReportProjections.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Action.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Delta.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Heist.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Interface.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+JUnitReport.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift",
+        ]
+        let projectionSurfaceFiles = projectionSurfacePaths.map { root.appendingPathComponent($0) }
+        let rawDictionaryPatterns = [
+            #"\[String:\s*(HeistValue|Any|any\s+Encodable|Encodable|JSONValue|Value)\]"#,
+            #"Dictionary\s*<\s*String\s*,\s*(HeistValue|Any|any\s+Encodable|Encodable|JSONValue|Value)\s*>"#,
+        ]
+
+        for pattern in rawDictionaryPatterns {
+            let unexpected = try sourceMatches(in: projectionSurfaceFiles, root: root, pattern: pattern)
+            #expect(
+                unexpected.isEmpty,
+                "Unexpected raw projection dictionaries:\n\(unexpected.sorted().joined(separator: "\n"))"
+            )
+        }
+    }
+
+    @Test
+    func `legacy compatibility config spellings stay allowlisted`() throws {
+        let root = try repositoryRoot()
+        let files = try productionSwiftFiles(in: root)
+        let allowedLegacyRuntimeKnobAliases: Set<String> = [
+            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_POST_SCROLL_LAYOUT_FRAMES", "BUTTONHEIST_POST_SCROLL_LAYOUT_FRAMES"],"#,
+            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_TRIPWIRE_PULSE_HZ", "BUTTONHEIST_TRIPWIRE_PULSE_HZ"],"#,
+            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_MAX_SCROLLS_PER_CONTAINER", "BUTTONHEIST_MAX_SCROLLS_PER_CONTAINER"],"#,
+            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_MAX_SCROLLS_PER_DISCOVERY", "BUTTONHEIST_MAX_SCROLLS_PER_DISCOVERY"],"#,
+            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:"BH_SCROLL_SUBTREE_ELEMENT_BUDGET","#,
+            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:"BH_VISIBLE_ELEMENT_BUDGET","#,
+            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_TOTAL_NODE_BUDGET", "BUTTONHEIST_TOTAL_NODE_BUDGET"],"#,
+        ]
+        let legacyRuntimeKnobAliases = try sourceMatches(
+            in: files,
+            root: root,
+            pattern: #""BH_[A-Z0-9_]+""#
+        )
+        let unexpectedLegacyRuntimeKnobAliases = legacyRuntimeKnobAliases.subtracting(allowedLegacyRuntimeKnobAliases)
+        #expect(
+            unexpectedLegacyRuntimeKnobAliases.isEmpty,
+            "Unexpected legacy runtime knob aliases:\n\(unexpectedLegacyRuntimeKnobAliases.sorted().joined(separator: "\n"))"
+        )
+
+        let retiredConfigFieldMatches = try sourceMatches(
+            in: files,
+            root: root,
+            pattern: #""(certFingerprint|certificateFingerprint|tlsFingerprint|tlsCertificateFingerprint|serverFingerprint|serverCertificateFingerprint)""#
+        )
+        #expect(
+            retiredConfigFieldMatches.isEmpty,
+            "Unexpected retired config field spellings:\n\(retiredConfigFieldMatches.sorted().joined(separator: "\n"))"
+        )
     }
 
     @Test
@@ -764,7 +872,7 @@ struct HeistCompilerTests {
         let observed = try sourceMatches(
             in: productionSwiftFiles(in: root),
             root: root,
-            pattern: #"(:|->|\[[^]]*:)\s*Any\b"#
+            pattern: #"(:|->|\[[^]]*:|Dictionary\s*<[^>]+,|Array\s*<|Set\s*<|\bany\s+)\s*Any\b"#
         )
         let unexpected = observed.subtracting(allowedAnyLines)
 
@@ -985,6 +1093,24 @@ private func sourceMatchFiles(in files: [URL], root: URL, pattern: String) throw
         let lines = try sourceLines(in: file)
         if lines.contains(where: { $0.range(of: pattern, options: .regularExpression) != nil }) {
             matches.insert(repositoryRelativePath(file, root: root))
+        }
+    }
+    return matches
+}
+
+private func sourceSnippets(in files: [URL], root: URL, pattern: String) throws -> Set<String> {
+    let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
+    var matches: Set<String> = []
+    for file in files {
+        let source = try String(contentsOf: file, encoding: .utf8)
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        let relativePath = repositoryRelativePath(file, root: root)
+        for match in regex.matches(in: source, range: range) {
+            guard let sourceRange = Range(match.range, in: source) else { continue }
+            let snippet = source[sourceRange]
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            matches.insert("\(relativePath):\(snippet)")
         }
     }
     return matches

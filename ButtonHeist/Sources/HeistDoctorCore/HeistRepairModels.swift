@@ -4,23 +4,60 @@ import TheScore
 
 // MARK: - Heist Repair Evidence
 
+public struct HeistRepairCustomActionIdentity: RawRepresentable, Codable, Sendable, Equatable, Hashable {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+public struct HeistRepairRotorIdentity: RawRepresentable, Codable, Sendable, Equatable, Hashable {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
 public struct HeistRepairActionIdentity: Codable, Sendable, Equatable {
     public let commandType: HeistActionCommandType
-    public let customActionName: String?
+    public let customAction: HeistRepairCustomActionIdentity?
 
-    public init(commandType: HeistActionCommandType, customActionName: String? = nil) {
+    public init(
+        commandType: HeistActionCommandType,
+        customAction: HeistRepairCustomActionIdentity? = nil
+    ) {
         self.commandType = commandType
-        self.customActionName = customActionName
+        self.customAction = customAction
     }
 
     public init(command: HeistActionCommand) {
-        let customActionName: String?
+        let customAction: HeistRepairCustomActionIdentity?
         if case .customAction(let name, _) = command {
-            customActionName = name
+            customAction = HeistRepairCustomActionIdentity(rawValue: name)
         } else {
-            customActionName = nil
+            customAction = nil
         }
-        self.init(commandType: command.wireType, customActionName: customActionName)
+        self.init(commandType: command.wireType, customAction: customAction)
     }
 }
 
@@ -127,7 +164,7 @@ public struct ElementSummary: Codable, Sendable, Equatable {
     public let hint: String?
     public let traits: [HeistTrait]
     public let actions: [ElementAction]
-    public let rotors: [String]
+    public let rotors: [HeistRepairRotorIdentity]
     public let siblingText: [String]
     public let headerText: [String]
 
@@ -139,7 +176,7 @@ public struct ElementSummary: Codable, Sendable, Equatable {
         hint: String?,
         traits: [HeistTrait],
         actions: [ElementAction],
-        rotors: [String],
+        rotors: [HeistRepairRotorIdentity],
         siblingText: [String] = [],
         headerText: [String] = []
     ) {

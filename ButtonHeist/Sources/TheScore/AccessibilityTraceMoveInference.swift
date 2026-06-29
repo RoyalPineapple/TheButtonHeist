@@ -50,35 +50,38 @@ enum AccessibilityTraceMoveInference {
     private static func inferFunctionalHeistElementPairs(
         removedByKey: [ElementDiffPairingKey: HeistElement],
         addedByKey: [ElementDiffPairingKey: HeistElement]
-    ) -> [(removedKey: ElementDiffPairingKey, insertedKey: ElementDiffPairingKey)] {
+    ) -> [FunctionalElementPair<ElementDiffPairingKey>] {
         let removed = removedByKey.map { key, element in
-            (key, pairingSignature(for: element))
+            ElementPairingCandidate(key: key, signature: pairingSignature(for: element))
         }
         let added = addedByKey.map { key, element in
-            (key, pairingSignature(for: element))
+            ElementPairingCandidate(key: key, signature: pairingSignature(for: element))
         }
         return inferFunctionalPairs(removed: removed, added: added)
     }
 
     private static func inferFunctionalPairs<Key: Hashable>(
-        removed: [(Key, ElementPairingSignature)],
-        added: [(Key, ElementPairingSignature)]
-    ) -> [(removedKey: Key, insertedKey: Key)] {
-        let removedByIdentity = Dictionary(grouping: removed, by: { $0.1.identity })
-        let addedByIdentity = Dictionary(grouping: added, by: { $0.1.identity })
+        removed: [ElementPairingCandidate<Key>],
+        added: [ElementPairingCandidate<Key>]
+    ) -> [FunctionalElementPair<Key>] {
+        let removedByIdentity = Dictionary(grouping: removed, by: { $0.signature.identity })
+        let addedByIdentity = Dictionary(grouping: added, by: { $0.signature.identity })
         let identities = Set(removedByIdentity.keys).intersection(addedByIdentity.keys)
-        var pairs: [(removedKey: Key, insertedKey: Key)] = []
+        var pairs: [FunctionalElementPair<Key>] = []
 
         for identity in identities {
             guard let removedMatches = removedByIdentity[identity],
                   let addedMatches = addedByIdentity[identity] else { continue }
             if removedMatches.count == 1 && addedMatches.count == 1 {
-                pairs.append((removedKey: removedMatches[0].0, insertedKey: addedMatches[0].0))
+                pairs.append(FunctionalElementPair(
+                    removedKey: removedMatches[0].key,
+                    insertedKey: addedMatches[0].key
+                ))
                 continue
             }
 
-            let removedByFullSignature = Dictionary(grouping: removedMatches, by: \.1)
-            let addedByFullSignature = Dictionary(grouping: addedMatches, by: \.1)
+            let removedByFullSignature = Dictionary(grouping: removedMatches, by: \.signature)
+            let addedByFullSignature = Dictionary(grouping: addedMatches, by: \.signature)
             let matchingSignatures = Set(removedByFullSignature.keys)
                 .intersection(addedByFullSignature.keys)
             for signature in matchingSignatures {
@@ -86,14 +89,24 @@ enum AccessibilityTraceMoveInference {
                       let addedStateMatches = addedByFullSignature[signature],
                       removedStateMatches.count == 1,
                       addedStateMatches.count == 1 else { continue }
-                pairs.append((
-                    removedKey: removedStateMatches[0].0,
-                    insertedKey: addedStateMatches[0].0
+                pairs.append(FunctionalElementPair(
+                    removedKey: removedStateMatches[0].key,
+                    insertedKey: addedStateMatches[0].key
                 ))
             }
         }
         return pairs
     }
+}
+
+private struct ElementPairingCandidate<Key: Hashable> {
+    let key: Key
+    let signature: ElementPairingSignature
+}
+
+private struct FunctionalElementPair<Key: Hashable> {
+    let removedKey: Key
+    let insertedKey: Key
 }
 
 private struct ElementIdentitySignature: Hashable {

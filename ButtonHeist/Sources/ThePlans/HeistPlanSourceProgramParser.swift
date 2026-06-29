@@ -1,5 +1,15 @@
 import Foundation
 
+struct HeistDefinitionHeader {
+    let path: String
+    let parameter: HeistParameter
+}
+
+struct HeistPlanHeader {
+    let name: String?
+    let parameter: HeistParameter
+}
+
 extension HeistPlanSourceParser {
     mutating func parseRootHeistPlan() throws -> HeistPlanAdmissionCandidate {
         let name = try parseCalleeName()
@@ -96,7 +106,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseHeistDefHeader(
         parameterKind: HeistDefinitionParameterKind
-    ) throws -> (path: String, parameter: HeistParameter) {
+    ) throws -> HeistDefinitionHeader {
         try expectSymbol("(")
         let path = try parseStringLiteral()
         var parameter = HeistParameter.none
@@ -125,7 +135,7 @@ extension HeistPlanSourceParser {
         default:
             throw error(previous, "HeistDef parameter type does not match its parameter declaration")
         }
-        return (path, parameter)
+        return HeistDefinitionHeader(path: path, parameter: parameter)
     }
 
     func makeDefinition(
@@ -259,11 +269,11 @@ extension HeistPlanSourceParser {
         )
     }
 
-    mutating func parseHeistPlanHeader() throws -> (name: String?, parameter: HeistParameter) {
+    mutating func parseHeistPlanHeader() throws -> HeistPlanHeader {
         var name: String?
         var parameter = HeistParameter.none
         guard consumeSymbol("(") else {
-            return (nil, .none)
+            return HeistPlanHeader(name: nil, parameter: .none)
         }
         if currentToken.isSymbol(")") {
             throw error(currentToken, "empty HeistPlan parentheses are not canonical; use `HeistPlan { ... }`")
@@ -278,7 +288,7 @@ extension HeistPlanSourceParser {
             }
         }
         try expectSymbol(")")
-        return (name, parameter)
+        return HeistPlanHeader(name: name, parameter: parameter)
     }
 
     mutating func parseRootHeistParameter() throws -> HeistParameter {

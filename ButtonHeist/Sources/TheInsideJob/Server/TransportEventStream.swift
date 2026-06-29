@@ -15,7 +15,9 @@ final class TransportEventStream: @unchecked Sendable { // swiftlint:disable:thi
 
     init(bufferLimit: Int) {
         self.bufferLimit = bufferLimit
-        (self.events, self.continuation) = Self.makeEventStream(bufferLimit: bufferLimit)
+        let eventStream = Self.makeEventStream(bufferLimit: bufferLimit)
+        self.events = eventStream.events
+        self.continuation = eventStream.continuation
     }
 
     func makeCallbacks(
@@ -60,13 +62,16 @@ final class TransportEventStream: @unchecked Sendable { // swiftlint:disable:thi
         continuation.finish()
     }
 
-    nonisolated static func makeEventStream(bufferLimit: Int) -> (
-        AsyncStream<TransportEvent>,
-        AsyncStream<TransportEvent>.Continuation
-    ) {
-        AsyncStream<TransportEvent>.makeStream(
+    struct EventStream {
+        let events: AsyncStream<TransportEvent>
+        let continuation: AsyncStream<TransportEvent>.Continuation
+    }
+
+    nonisolated static func makeEventStream(bufferLimit: Int) -> EventStream {
+        let stream = AsyncStream<TransportEvent>.makeStream(
             bufferingPolicy: .bufferingOldest(bufferLimit)
         )
+        return EventStream(events: stream.stream, continuation: stream.continuation)
     }
 
     nonisolated static func yieldEvent(

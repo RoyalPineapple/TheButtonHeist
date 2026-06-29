@@ -190,8 +190,8 @@ public enum AccessibilityPolicy {
         synthesisPriority.firstIndex(of: trait) ?? synthesisPriority.count
     }
 
-    private static func matcherTraitSortKey(_ trait: HeistTrait) -> (Int, String) {
-        (matcherTraitPriority(trait), trait.rawValue)
+    private static func matcherTraitSortKey(_ trait: HeistTrait) -> MatcherTraitSortKey {
+        MatcherTraitSortKey(priority: matcherTraitPriority(trait), name: trait.rawValue)
     }
 
     private static func nonEmpty(_ value: String?) -> String? {
@@ -213,4 +213,16 @@ public enum AccessibilityPolicy {
     /// threshold alter screen-change semantics and should be made with a
     /// clear empirical justification.
     public static let tabSwitchPersistThreshold: Double = 0.4
+}
+
+private struct MatcherTraitSortKey: Comparable {
+    let priority: Int
+    let name: String
+
+    static func < (lhs: MatcherTraitSortKey, rhs: MatcherTraitSortKey) -> Bool {
+        if lhs.priority != rhs.priority {
+            return lhs.priority < rhs.priority
+        }
+        return lhs.name < rhs.name
+    }
 }

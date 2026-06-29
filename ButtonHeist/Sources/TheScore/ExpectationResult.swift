@@ -1,6 +1,22 @@
 import ThePlans
 import Foundation
 
+/// Predicate-local evaluation facts before they are attached to an
+/// `ExpectationResult` boundary value.
+public struct PredicateEvaluationResult: Sendable, Equatable {
+    public let met: Bool
+    public let actual: String?
+
+    public init(met: Bool, actual: String? = nil) {
+        self.met = met
+        self.actual = actual
+    }
+
+    public func expectation(for predicate: AccessibilityPredicate?) -> ExpectationResult {
+        ExpectationResult(met: met, predicate: predicate, actual: actual)
+    }
+}
+
 /// The outcome of checking an `AccessibilityPredicate` against an observed
 /// interface or transition delta.
 public struct ExpectationResult: Codable, Sendable, Equatable {
@@ -15,6 +31,10 @@ public struct ExpectationResult: Codable, Sendable, Equatable {
         self.met = met
         self.predicate = predicate
         self.actual = actual
+    }
+
+    public init(_ result: PredicateEvaluationResult, predicate: AccessibilityPredicate?) {
+        self.init(met: result.met, predicate: predicate, actual: result.actual)
     }
 }
 

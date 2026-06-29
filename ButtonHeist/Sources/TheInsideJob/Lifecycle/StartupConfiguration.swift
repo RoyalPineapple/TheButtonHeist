@@ -192,11 +192,36 @@ private extension NSNumber {
     }
 }
 
+struct StartupEnvironmentKey: RawRepresentable, Hashable, Sendable {
+    let rawValue: String
+
+    init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    private init(_ key: EnvironmentKey) {
+        self.rawValue = key.rawValue
+    }
+
+    static let disableAutoStart = StartupEnvironmentKey(.insideJobDisable)
+    static let token = StartupEnvironmentKey(.insideJobToken)
+    static let instanceId = StartupEnvironmentKey(.insideJobId)
+    static let port = StartupEnvironmentKey(.insideJobPort)
+    static let scope = StartupEnvironmentKey(.insideJobScope)
+    static let sessionTimeout = StartupEnvironmentKey(.insideJobSessionTimeout)
+    static let fingerprintsEnabled = StartupEnvironmentKey(rawValue: "INSIDEJOB_FINGERPRINTS")
+}
+
+private extension Dictionary where Key == String, Value == String {
+    subscript(_ key: StartupEnvironmentKey) -> String? {
+        self[key.rawValue]
+    }
+}
+
 struct StartupConfiguration: Equatable, Sendable {
     static let defaultSessionTimeout: TimeInterval = 30.0
     static let minimumSessionTimeout: TimeInterval = 1.0
     static let maximumSessionTimeout: TimeInterval = 3600.0
-    static let fingerprintsEnabledEnvironmentKey = "INSIDEJOB_FINGERPRINTS"
 
     let disableAutoStart: ResolvedStartupValue<Bool>
     let fingerprintsEnabled: ResolvedStartupValue<Bool>
@@ -234,7 +259,7 @@ struct StartupConfiguration: Equatable, Sendable {
         var warnings: [StartupConfigurationWarning] = []
         let plist = infoPlist
         let disableAutoStart = resolveBool(
-            envKey: EnvironmentKey.insideJobDisable.rawValue,
+            envKey: .disableAutoStart,
             plistKey: .disableAutoStart,
             defaultValue: false,
             env: env,
@@ -247,7 +272,7 @@ struct StartupConfiguration: Equatable, Sendable {
             warnings: &warnings
         )
         let token = resolveString(
-            envKey: .insideJobToken,
+            envKey: .token,
             plistKey: .token,
             env: env,
             plist: plist,
@@ -255,7 +280,7 @@ struct StartupConfiguration: Equatable, Sendable {
             warnings: &warnings
         )
         let instanceId = resolveString(
-            envKey: .insideJobId,
+            envKey: .instanceId,
             plistKey: .instanceId,
             env: env,
             plist: plist,
@@ -265,7 +290,7 @@ struct StartupConfiguration: Equatable, Sendable {
         let preferredPort = resolvePort(env: env, plist: plist, warnings: &warnings)
         let allowedScopes = resolveAllowedScopes(env: env, plist: plist, warnings: &warnings)
         let sessionTimeout = resolveTimeInterval(
-            envKey: .insideJobSessionTimeout,
+            envKey: .sessionTimeout,
             plistKey: .sessionTimeout,
             defaultValue: defaultSessionTimeout,
             clamp: { min(max(minimumSessionTimeout, $0), maximumSessionTimeout) },
@@ -287,14 +312,14 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     private static func resolveString(
-        envKey: EnvironmentKey,
+        envKey: StartupEnvironmentKey,
         plistKey: StartupInfoPlistKey,
         env: [String: String],
         plist: StartupInfoPlist,
         absentSource: StartupConfigurationSource,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<String?> {
-        if let envValue = env[envKey.rawValue] {
+        if let envValue = env[envKey] {
             if !envValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return ResolvedStartupValue(value: envValue, source: .environment)
             }
@@ -316,12 +341,12 @@ struct StartupConfiguration: Equatable, Sendable {
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<UInt16> {
-        if let envValue = env[EnvironmentKey.insideJobPort.rawValue] {
+        if let envValue = env[.port] {
             if let parsed = parsePort(envValue) {
                 return ResolvedStartupValue(value: parsed, source: .environment)
             }
             warnings.append(.invalidValueIgnored(
-                key: EnvironmentKey.insideJobPort.rawValue,
+                key: StartupEnvironmentKey.port.rawValue,
                 source: .environment,
                 value: envValue
             ))
@@ -362,7 +387,7 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     private static func resolveTimeInterval(
-        envKey: EnvironmentKey,
+        envKey: StartupEnvironmentKey,
         plistKey: StartupInfoPlistKey,
         defaultValue: TimeInterval,
         clamp: (TimeInterval) -> TimeInterval,
@@ -370,7 +395,7 @@ struct StartupConfiguration: Equatable, Sendable {
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<TimeInterval> {
-        if let envValue = env[envKey.rawValue] {
+        if let envValue = env[envKey] {
             if let parsed = parseTimeInterval(envValue) {
                 return ResolvedStartupValue(value: clamp(parsed), source: .environment)
             }
@@ -413,12 +438,12 @@ struct StartupConfiguration: Equatable, Sendable {
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<Set<ConnectionScope>> {
-        if let envValue = env[EnvironmentKey.insideJobScope.rawValue] {
+        if let envValue = env[.scope] {
             if let parsed = ConnectionScope.parse(envValue) {
                 return ResolvedStartupValue(value: parsed, source: .environment)
             }
             warnings.append(.invalidValueIgnored(
-                key: EnvironmentKey.insideJobScope.rawValue,
+                key: StartupEnvironmentKey.scope.rawValue,
                 source: .environment,
                 value: envValue
             ))
@@ -449,7 +474,7 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     private static func resolveBool(
-        envKey: String,
+        envKey: StartupEnvironmentKey,
         plistKey: StartupInfoPlistKey,
         defaultValue: Bool,
         env: [String: String],
@@ -460,7 +485,7 @@ struct StartupConfiguration: Equatable, Sendable {
             if let parsed = parseBool(envValue) {
                 return ResolvedStartupValue(value: parsed, source: .environment)
             }
-            warnings.append(.invalidValueIgnored(key: envKey, source: .environment, value: envValue))
+            warnings.append(.invalidValueIgnored(key: envKey.rawValue, source: .environment, value: envValue))
         }
 
         if let plistValue = plist[plistKey] {
@@ -503,12 +528,12 @@ struct StartupConfiguration: Equatable, Sendable {
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<Bool> {
-        if let envValue = env[fingerprintsEnabledEnvironmentKey] {
+        if let envValue = env[.fingerprintsEnabled] {
             if let parsed = parseBool(envValue) {
                 return ResolvedStartupValue(value: parsed, source: .environment)
             }
             warnings.append(.invalidValueIgnored(
-                key: fingerprintsEnabledEnvironmentKey,
+                key: StartupEnvironmentKey.fingerprintsEnabled.rawValue,
                 source: .environment,
                 value: envValue
             ))

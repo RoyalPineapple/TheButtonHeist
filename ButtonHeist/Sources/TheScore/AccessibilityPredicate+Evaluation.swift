@@ -35,8 +35,7 @@ private extension AccessibilityPredicate {
     ) -> ExpectationResult {
         switch self {
         case .state(let stateClause):
-            let outcome = stateClause.evaluate(in: currentMatches)
-            return ExpectationResult(met: outcome.met, predicate: self, actual: outcome.actual)
+            return stateClause.evaluate(in: currentMatches).expectation(for: self)
         case .changePredicate(let change):
             return change.evaluate(delta: delta)
         case .noChangePredicate:
@@ -51,8 +50,7 @@ private extension AccessibilityPredicate {
     ) -> ExpectationResult {
         switch self {
         case .state(let stateClause):
-            let outcome = stateClause.evaluate(in: currentMatches)
-            return ExpectationResult(met: outcome.met, predicate: self, actual: outcome.actual)
+            return stateClause.evaluate(in: currentMatches).expectation(for: self)
         case .changePredicate(let change):
             return change.evaluate(accumulatedDelta: accumulatedDelta)
         case .noChangePredicate:
@@ -96,7 +94,7 @@ public extension AccessibilityPredicate.State {
 
     /// Evaluate this state against a single observed interface. For `.all`,
     /// every child state must hold against the same `elements`.
-    func evaluate(in elements: [HeistElement]) -> (met: Bool, actual: String?) {
+    func evaluate(in elements: [HeistElement]) -> PredicateEvaluationResult {
         evaluate(in: ElementMatchSet(elements: elements))
     }
 }
@@ -105,25 +103,37 @@ extension AccessibilityPredicate.State {
     /// Evaluate this state against a path-keyed interface projection. Element
     /// predicates resolve to typed match sets; target ordinals select from the
     /// narrowed set in traversal order.
-    func evaluate(in matches: ElementMatchSet) -> (met: Bool, actual: String?) {
+    func evaluate(in matches: ElementMatchSet) -> PredicateEvaluationResult {
         switch contract {
         case .element(let requirement, let predicate):
             let isPresent = !matches.matching(predicate).isEmpty
             let met = requirement.isMet(isPresent: isPresent)
-            return (met, met ? nil : requirement.failureDescription(for: predicate))
+            return PredicateEvaluationResult(
+                met: met,
+                actual: met ? nil : requirement.failureDescription(for: predicate)
+            )
         case .target(let requirement, let target):
             let isPresent = !matches.matching(target).isEmpty
             let met = requirement.isMet(isPresent: isPresent)
-            return (met, met ? nil : requirement.failureDescription(for: target))
+            return PredicateEvaluationResult(
+                met: met,
+                actual: met ? nil : requirement.failureDescription(for: target)
+            )
         case .all(let states):
             guard !states.isEmpty else {
-                return (false, AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription)
+                return PredicateEvaluationResult(
+                    met: false,
+                    actual: AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription
+                )
             }
             let failures = states.compactMap { state -> String? in
                 let outcome = state.evaluate(in: matches)
                 return outcome.met ? nil : (outcome.actual ?? state.description)
             }
-            return (failures.isEmpty, failures.isEmpty ? nil : failures.joined(separator: "; "))
+            return PredicateEvaluationResult(
+                met: failures.isEmpty,
+                actual: failures.isEmpty ? nil : failures.joined(separator: "; ")
+            )
         }
     }
 }
@@ -209,11 +219,10 @@ public extension AccessibilityPredicate.Change {
         }
         let stateClause: AccessibilityPredicate.State = assertions.count == 1 ? assertions[0] : .all(assertions)
         let outcome = stateClause.evaluate(in: ElementMatchSet(interface: payload.newInterface))
-        return ExpectationResult(
+        return PredicateEvaluationResult(
             met: outcome.met,
-            predicate: nil,
             actual: outcome.met ? nil : "screen changed but new interface failed: \(outcome.actual ?? stateClause.description)"
-        )
+        ).expectation(for: nil)
     }
 
     private static func evaluateScreen(
@@ -228,11 +237,10 @@ public extension AccessibilityPredicate.Change {
         }
         let stateClause: AccessibilityPredicate.State = assertions.count == 1 ? assertions[0] : .all(assertions)
         let outcome = stateClause.evaluate(in: ElementMatchSet(interface: payload.newInterface))
-        return ExpectationResult(
+        return PredicateEvaluationResult(
             met: outcome.met,
-            predicate: nil,
             actual: outcome.met ? nil : "screen changed but new interface failed: \(outcome.actual ?? stateClause.description)"
-        )
+        ).expectation(for: nil)
     }
 
     private static func evaluateElements(

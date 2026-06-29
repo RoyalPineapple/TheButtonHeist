@@ -7,6 +7,17 @@ import TheScore
 
 private let autoStartLogger = ButtonHeistLog.logger(.insideJob(.autostart))
 
+enum XCTestEnvironmentKey: String, CaseIterable, Sendable {
+    case configurationFilePath = "XCTestConfigurationFilePath"
+    case sessionIdentifier = "XCTestSessionIdentifier"
+}
+
+private extension Dictionary where Key == String, Value == String {
+    subscript(_ key: XCTestEnvironmentKey) -> String? {
+        self[key.rawValue]
+    }
+}
+
 /// Holds the auto-start Task handle. Auto-start runs exactly once per
 /// process launch from `@_cdecl` (no actor instance is available at that
 /// point), so the handle lives at file scope under a lock. The handle is
@@ -60,8 +71,7 @@ func theInsideJobAutoStartFromLoad() {
 }
 
 func isRunningUnderXCTest(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
-    environment["XCTestConfigurationFilePath"] != nil
-        || environment["XCTestSessionIdentifier"] != nil
+    XCTestEnvironmentKey.allCases.contains { environment[$0] != nil }
 }
 
 #endif // DEBUG
