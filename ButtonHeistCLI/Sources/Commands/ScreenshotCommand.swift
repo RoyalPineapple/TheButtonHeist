@@ -1,6 +1,6 @@
 import ArgumentParser
 import Foundation
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(

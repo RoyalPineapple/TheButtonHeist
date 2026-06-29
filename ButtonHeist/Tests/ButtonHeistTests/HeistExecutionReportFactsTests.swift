@@ -294,6 +294,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                     durationMs: 2000,
                     intent: .wait(predicate: predicate.description, timeout: 2),
                     evidence: .wait(HeistWaitEvidence(
+                        outcome: .handledElse,
                         actionResult: ActionResult(success: false, method: .wait, message: "timed out after 2s", errorKind: .timeout),
                         expectation: expectation
                     )),
@@ -803,6 +804,7 @@ final class HeistExecutionReportFactsTests: XCTestCase {
                 durationMs: 6,
                 intent: .repeatUntil(predicate: predicate.description, timeout: 2),
                 evidence: .repeatUntil(HeistRepeatUntilEvidence(
+                    outcome: .matched,
                     predicate: predicate,
                     timeout: 2,
                     iterationCount: 1,
@@ -944,7 +946,11 @@ final class HeistExecutionReportFactsTests: XCTestCase {
             status: failure == nil ? .passed : .failed,
             durationMs: 20,
             intent: .wait(predicate: expectation.predicate?.description ?? "predicate", timeout: 0),
-            evidence: .wait(HeistWaitEvidence(actionResult: actionResult, expectation: expectation)),
+            evidence: .wait(HeistWaitEvidence(
+                outcome: failure == nil ? .matched : .failed,
+                actionResult: actionResult,
+                expectation: expectation
+            )),
             failure: failure
         )
     }

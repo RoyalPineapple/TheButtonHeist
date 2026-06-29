@@ -269,7 +269,7 @@ struct PublicDelta: Encodable {
         self.interactionDigest = fields.interactionDigest
         self.transient = fields.transient
         self.edits = fields.edits
-        self.newInterface = fields.screen?.interface.map { PublicInterface(interface: $0, detail: .summary) }
+        self.newInterface = fields.screen?.interface.map(PublicInterface.init(projection:))
         self.omitted = fields.omitted
     }
 }
@@ -534,12 +534,14 @@ struct PublicHeistActionEvidence: Encodable {
 }
 
 struct PublicHeistWaitEvidence: Encodable {
+    let outcome: HeistPredicateEvidenceOutcome
     let result: PublicHeistReportActionResult
     let expectation: PublicExpectationResult
     let baselineSummary: String?
     let finalSummary: String?
 
     init(projection: HeistWaitEvidenceProjection) {
+        self.outcome = projection.outcome
         self.result = PublicHeistReportActionResult(projection: projection.result)
         self.expectation = PublicExpectationResult(projection: projection.expectation)
         self.baselineSummary = projection.baselineSummary
@@ -622,6 +624,7 @@ struct PublicHeistForEachElementEvidence: Encodable {
 }
 
 struct PublicHeistRepeatUntilEvidence: Encodable {
+    let outcome: HeistPredicateEvidenceOutcome
     let predicate: AccessibilityPredicate
     let timeout: Double
     let iterationCount: Int
@@ -632,6 +635,7 @@ struct PublicHeistRepeatUntilEvidence: Encodable {
     let failureReason: String?
 
     init(projection: HeistRepeatUntilEvidenceProjection) {
+        self.outcome = projection.outcome
         self.predicate = projection.predicate
         self.timeout = projection.timeout
         self.iterationCount = projection.iterationCount

@@ -1,5 +1,5 @@
 import ArgumentParser
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 struct SetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(

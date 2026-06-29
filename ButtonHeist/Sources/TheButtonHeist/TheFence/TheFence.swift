@@ -155,11 +155,11 @@ public final class TheFence {
         pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
     }
 
-    /// Execute a typed command request.
-    public func execute(command: Command, arguments: CommandArgumentEnvelope) async throws -> FenceResponse {
+    /// Execute a routed command request.
+    @_spi(ButtonHeistTooling) public func execute(_ request: FenceOperationRequest) async throws -> FenceResponse {
         let parsed: ParsedRequest
         do {
-            parsed = try parseRequest(command: command, arguments: arguments)
+            parsed = try parseRequest(command: request.command, arguments: request.arguments)
         } catch {
             return .failure(error)
         }

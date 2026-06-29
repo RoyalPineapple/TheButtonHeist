@@ -2,8 +2,8 @@ import Foundation
 
 /// Machine-readable failure metadata for formatting and diagnostics.
 public struct FailureDetails: Equatable, Sendable {
-    /// Stable error code for grouping similar failures.
-    public let errorCode: String
+    /// Typed stable failure code for grouping similar failures.
+    public let code: FailureCode
     /// Broad lifecycle phase where the failure occurred.
     public let phase: FailurePhase
     /// Whether retrying the same operation can reasonably succeed.
@@ -11,9 +11,12 @@ public struct FailureDetails: Equatable, Sendable {
     /// Short recovery hint that can be surfaced separately from the message.
     public let hint: String?
 
+    /// Raw JSON/API boundary projection of `code`.
+    public var errorCode: String { code.rawValue }
+
     /// Creates failure metadata from the typed failure taxonomy.
-    public init(errorCode: String, phase: FailurePhase, retryable: Bool, hint: String?) {
-        self.errorCode = errorCode
+    public init(code: FailureCode, phase: FailurePhase, retryable: Bool, hint: String?) {
+        self.code = code
         self.phase = phase
         self.retryable = retryable
         self.hint = hint

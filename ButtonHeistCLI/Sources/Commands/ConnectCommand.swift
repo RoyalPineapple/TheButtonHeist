@@ -1,5 +1,5 @@
 import ArgumentParser
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 /// Connect (or reconnect) to an iOS app with Button Heist enabled.
 struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
@@ -55,10 +55,10 @@ struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
         }
         defer { fence.stop() }
 
-        let response = try await fence.execute(
+        let response = try await fence.execute(FenceOperationRequest(
             command: Self.fenceCommand,
             arguments: Self.fenceArguments()
-        )
+        ))
         CLIRunner.outputResponse(response, format: output.format ?? .auto)
         if response.isFailure {
             throw ExitCode.failure

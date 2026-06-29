@@ -44,6 +44,10 @@ extension TheBrains {
             termination.failureReason(step: step, expectation: progress.expectation)
         }
 
+        var evidenceOutcome: HeistPredicateEvidenceOutcome {
+            termination.evidenceOutcome
+        }
+
         var abortedAtChildPath: String? {
             termination.abortedAtChildPath
         }
@@ -59,6 +63,15 @@ extension TheBrains {
             switch self {
             case .predicateMet:
                 return .passed
+            case .timedOut, .initialObservationUnavailable, .bodyFailed:
+                return .failed
+            }
+        }
+
+        var evidenceOutcome: HeistPredicateEvidenceOutcome {
+            switch self {
+            case .predicateMet:
+                return .matched
             case .timedOut, .initialObservationUnavailable, .bodyFailed:
                 return .failed
             }
@@ -226,15 +239,18 @@ extension TheBrains {
         let status: HeistExecutionStepStatus?
         let failure: HeistFailureDetail?
         let abortedAtChildPath: String?
+        let evidenceOutcome: HeistPredicateEvidenceOutcome?
 
         init(
             status: HeistExecutionStepStatus? = nil,
             failure: HeistFailureDetail? = nil,
-            abortedAtChildPath: String? = nil
+            abortedAtChildPath: String? = nil,
+            evidenceOutcome: HeistPredicateEvidenceOutcome? = nil
         ) {
             self.status = status
             self.failure = failure
             self.abortedAtChildPath = abortedAtChildPath
+            self.evidenceOutcome = evidenceOutcome
         }
     }
 
@@ -620,7 +636,8 @@ extension TheBrains {
                 failure: abortedAtChildPath.map {
                     childFailureDetail(category: .loop, childPath: $0)
                 },
-                abortedAtChildPath: abortedAtChildPath
+                abortedAtChildPath: abortedAtChildPath,
+                evidenceOutcome: .handledElse
             ),
             children: outcome.progress.iterationNodes + elseChildren
         )
@@ -637,6 +654,7 @@ extension TheBrains {
         let failureReason = outcome.failureReason(step: step)
         let children = explicitChildren ?? outcome.progress.iterationNodes
         let abortedAtChildPath = override.abortedAtChildPath ?? outcome.abortedAtChildPath
+        let evidenceOutcome = override.evidenceOutcome ?? outcome.evidenceOutcome
         let failure = override.failure ?? (status == .failed ? failureReason.map {
             HeistFailureDetail(
                 category: .loop,
@@ -655,6 +673,7 @@ extension TheBrains {
                 timeout: step.timeout
             ),
             evidence: .repeatUntil(HeistRepeatUntilEvidence(
+                outcome: evidenceOutcome,
                 predicate: step.predicate,
                 timeout: step.timeout,
                 iterationCount: outcome.progress.iterationCount,
@@ -688,6 +707,9 @@ extension TheBrains {
                 timeout: step.timeout
             ),
             evidence: .repeatUntil(HeistRepeatUntilEvidence(
+                outcome: abortedAtChildPath == nil
+                    ? (progress.expectation.met ? .matched : .continued)
+                    : .failed,
                 predicate: step.predicate,
                 timeout: step.timeout,
                 iterationCount: progress.iterationCount,

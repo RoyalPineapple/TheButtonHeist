@@ -1,5 +1,5 @@
 import XCTest
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 

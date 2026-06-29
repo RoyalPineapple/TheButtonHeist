@@ -1,7 +1,7 @@
 import TheScore
 import ThePlans
 
-public struct FenceParameterSpec: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct FenceParameterSpec: Sendable, Equatable {
 
     public enum ParamType: String, Sendable, Equatable {
         case string
@@ -46,7 +46,7 @@ extension TheFence {
     }
 }
 
-public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
+@_spi(ButtonHeistTooling) public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
     public let rawValue: String
 
     public init?(rawValue: String) {
@@ -59,7 +59,7 @@ public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
     }
 }
 
-public extension FenceParameterKey {
+@_spi(ButtonHeistTooling) public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
     static let argument = Self("argument")
     static let after = Self("after")
@@ -189,12 +189,12 @@ private func jsonSchemaNumber(_ value: Double) -> HeistValue {
     value.rounded(.towardZero) == value ? .int(Int(value)) : .double(value)
 }
 
-public enum MCPExposure: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public enum MCPExposure: Sendable, Equatable {
     case directTool
     case notExposed
 }
 
-public struct MCPToolAnnotationSpec: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct MCPToolAnnotationSpec: Sendable, Equatable {
     public let readOnlyHint: Bool?
     public let idempotentHint: Bool?
 
@@ -207,7 +207,7 @@ public struct MCPToolAnnotationSpec: Sendable, Equatable {
     }
 }
 
-public extension FenceParameterSpec.ParamType {
+@_spi(ButtonHeistTooling) public extension FenceParameterSpec.ParamType {
     var jsonSchemaType: String {
         switch self {
         case .stringArray:
@@ -220,7 +220,7 @@ public extension FenceParameterSpec.ParamType {
     }
 }
 
-public extension FenceCommandDescriptor {
+@_spi(ButtonHeistTooling) public extension FenceCommandDescriptor {
     var inputJSONSchema: HeistValue {
         FenceParameterSpec.jsonInputSchema(
             properties: FenceParameterSpec.jsonSchemaProperties(from: parameters),
@@ -229,7 +229,7 @@ public extension FenceCommandDescriptor {
     }
 }
 
-public extension FenceParameterSpec {
+@_spi(ButtonHeistTooling) public extension FenceParameterSpec {
     func parameters(named key: FenceParameterKey) -> [FenceParameterSpec] {
         let childMatches = objectProperties.flatMap { $0.parameters(named: key) }
             + arrayItemProperties.flatMap { $0.parameters(named: key) }
@@ -265,7 +265,7 @@ public extension FenceParameterSpec {
     }
 }
 
-public enum CLIExposure: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public enum CLIExposure: Sendable, Equatable {
     case directCommand
     case notExposed
 }

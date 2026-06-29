@@ -50,7 +50,7 @@ public struct HeistPlan: Codable, Sendable, Equatable {
             name: name,
             parameter: parameter,
             definitions: definitions.map(HeistPlanAdmissionCandidate.init),
-            body: body
+            body: body.map(HeistStepAdmissionCandidate.init)
         ).validatedForRuntimeSafety()
     }
 

@@ -1,5 +1,5 @@
 import ArgumentParser
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
 extension GestureCLICommandContract {

@@ -33,28 +33,28 @@ public extension ElementPredicate {
     }
 }
 
-struct ElementMatch: Sendable, Hashable {
-    let path: TreePath
-    let traversalOrder: Int
-    let element: HeistElement
+package struct ElementMatch: Sendable, Hashable {
+    package let path: TreePath
+    package let traversalOrder: Int
+    package let element: HeistElement
 
-    static func == (lhs: ElementMatch, rhs: ElementMatch) -> Bool {
+    package static func == (lhs: ElementMatch, rhs: ElementMatch) -> Bool {
         lhs.path == rhs.path
     }
 
-    func hash(into hasher: inout Hasher) {
+    package func hash(into hasher: inout Hasher) {
         hasher.combine(path)
     }
 }
 
-struct ElementMatchSet: Sendable, Equatable {
-    static let empty = ElementMatchSet([])
+package struct ElementMatchSet: Sendable, Equatable {
+    package static let empty = ElementMatchSet([])
 
-    let matches: [ElementMatch]
+    package let matches: [ElementMatch]
 
     private let paths: Set<TreePath>
 
-    init(_ matches: [ElementMatch]) {
+    package init(_ matches: [ElementMatch]) {
         var paths = Set<TreePath>()
         var uniqueMatches: [ElementMatch] = []
         uniqueMatches.reserveCapacity(matches.count)
@@ -67,13 +67,13 @@ struct ElementMatchSet: Sendable, Equatable {
         self.paths = paths
     }
 
-    init(elements: [HeistElement]) {
+    package init(elements: [HeistElement]) {
         self.init(elements.enumerated().map { offset, element in
             ElementMatch(path: TreePath([offset]), traversalOrder: offset, element: element)
         })
     }
 
-    init(interface: Interface) {
+    package init(interface: Interface) {
         let annotationsByPath = interface.annotations.elementByPath
         self.init(interface.tree.pathIndexedElements.enumerated().map { offset, item in
             ElementMatch(
@@ -87,31 +87,31 @@ struct ElementMatchSet: Sendable, Equatable {
         })
     }
 
-    var isEmpty: Bool {
+    package var isEmpty: Bool {
         matches.isEmpty
     }
 
-    var count: Int {
+    package var count: Int {
         matches.count
     }
 
-    var elements: [HeistElement] {
+    package var elements: [HeistElement] {
         matches.map(\.element)
     }
 
-    var orderedPaths: [TreePath] {
+    package var orderedPaths: [TreePath] {
         matches.map(\.path)
     }
 
-    func intersection(_ other: ElementMatchSet) -> ElementMatchSet {
+    package func intersection(_ other: ElementMatchSet) -> ElementMatchSet {
         ElementMatchSet(matches.filter { other.paths.contains($0.path) })
     }
 
-    func union(_ other: ElementMatchSet) -> ElementMatchSet {
+    package func union(_ other: ElementMatchSet) -> ElementMatchSet {
         ElementMatchSet(matches + other.matches).orderedByTraversal()
     }
 
-    func matching(_ predicate: ElementPredicate) -> ElementMatchSet {
+    package func matching(_ predicate: ElementPredicate) -> ElementMatchSet {
         guard predicate.hasPredicates else { return .empty }
         guard let firstCheck = predicate.checks.first else { return .empty }
 
@@ -121,7 +121,7 @@ struct ElementMatchSet: Sendable, Equatable {
         }
     }
 
-    func matching(_ target: ElementTarget) -> ElementMatchSet {
+    package func matching(_ target: ElementTarget) -> ElementMatchSet {
         switch target {
         case .predicate(let predicate, let ordinal):
             let predicateMatches = matching(predicate)

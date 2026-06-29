@@ -1,6 +1,6 @@
 import XCTest
 import ThePlans
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
 
 final class EvidenceMinimumMatcherTests: XCTestCase {

@@ -197,6 +197,7 @@ extension TheBrains {
             wait: wait,
             receipt: receipt,
             failure: failure,
+            outcome: failure == nil ? .matched : .failed,
             path: path,
             start: start
         )
@@ -206,6 +207,7 @@ extension TheBrains {
         wait: WaitStep,
         receipt: HeistWaitReceipt,
         failure: HeistFailureDetail?,
+        outcome: HeistPredicateEvidenceOutcome,
         path: String,
         start: CFAbsoluteTime
     ) -> HeistExecutionStepResult {
@@ -215,7 +217,7 @@ extension TheBrains {
             status: failure == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidence(receipt),
+            evidence: waitEvidence(receipt, outcome: outcome),
             failure: failure
         )
     }
@@ -244,7 +246,7 @@ extension TheBrains {
             status: abortedAtChildPath == nil ? .passed : .failed,
             durationMs: elapsedMilliseconds(since: start),
             intent: waitIntent(wait),
-            evidence: waitEvidence(receipt),
+            evidence: waitEvidence(receipt, outcome: .handledElse),
             failure: abortedAtChildPath.map {
                 childFailureDetail(category: .wait, childPath: $0)
             },
@@ -254,7 +256,18 @@ extension TheBrains {
     }
 
     private func waitEvidence(_ receipt: HeistWaitReceipt) -> HeistStepEvidence {
+        waitEvidence(
+            receipt,
+            outcome: receipt.actionResult.success && receipt.expectation.met ? .matched : .failed
+        )
+    }
+
+    private func waitEvidence(
+        _ receipt: HeistWaitReceipt,
+        outcome: HeistPredicateEvidenceOutcome
+    ) -> HeistStepEvidence {
         .wait(HeistWaitEvidence(
+            outcome: outcome,
             actionResult: receipt.actionResult,
             expectation: receipt.expectation,
             baselineSummary: nil,

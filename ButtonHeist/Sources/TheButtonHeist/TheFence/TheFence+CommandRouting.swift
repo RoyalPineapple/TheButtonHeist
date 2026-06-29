@@ -5,11 +5,11 @@ import TheScore
 ///
 /// This stays separate from `FenceError`: it describes pre-dispatch routing
 /// failures before a concrete Fence command exists.
-public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
-    public let message: String
-    public let details: FailureDetails
+@_spi(ButtonHeistTooling) public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
+    @_spi(ButtonHeistTooling) public let message: String
+    @_spi(ButtonHeistTooling) public let details: FailureDetails
 
-    public init(message: String, details: FailureDetails = FailureDetails(code: .requestInvalid)) {
+    @_spi(ButtonHeistTooling) public init(message: String, details: FailureDetails = FailureDetails(code: .requestInvalid)) {
         self.message = message
         self.details = details
     }
@@ -18,17 +18,17 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
 }
 
 /// Fully routed operation ready to enter TheFence's execution pipeline.
-public struct FenceOperationRequest: Sendable {
-    public let command: TheFence.Command
-    public let arguments: TheFence.CommandArgumentEnvelope
+@_spi(ButtonHeistTooling) public struct FenceOperationRequest: Sendable {
+    @_spi(ButtonHeistTooling) public let command: TheFence.Command
+    @_spi(ButtonHeistTooling) public let arguments: TheFence.CommandArgumentEnvelope
 
-    public init(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope) {
+    @_spi(ButtonHeistTooling) public init(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope) {
         self.command = command
         self.arguments = arguments
     }
 }
 
-public extension TheFence.Command {
+@_spi(ButtonHeistTooling) public extension TheFence.Command {
     static func routeToolCall(named name: String) -> Result<Self, FenceOperationRoutingError> {
         guard let command = Self(rawValue: name),
               command.descriptor.mcpExposure == .directTool else {

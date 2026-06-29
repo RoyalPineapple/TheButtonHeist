@@ -1,6 +1,6 @@
 import Foundation
 import MCP
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 typealias MCPRawArgumentObject = [String: Value]
 

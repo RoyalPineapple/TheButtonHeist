@@ -1,5 +1,5 @@
 import ArgumentParser
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
 /// Shared options for commands that target a UI element by accessibility properties.

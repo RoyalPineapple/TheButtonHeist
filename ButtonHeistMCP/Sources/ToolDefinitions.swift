@@ -1,4 +1,4 @@
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 import MCP
 
 enum ToolDefinitions {

@@ -1,7 +1,7 @@
 import Network
 import XCTest
 import ThePlans
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import TheScore
 
 // MARK: - Test Helpers
@@ -386,7 +386,11 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             status: failure == nil ? .passed : .failed,
             durationMs: heistStepDurationMs,
             intent: .wait(predicate: wait.predicate.description, timeout: wait.timeout),
-            evidence: .wait(HeistWaitEvidence(actionResult: result, expectation: expectation)),
+            evidence: .wait(HeistWaitEvidence(
+                outcome: failure == nil ? .matched : .failed,
+                actionResult: result,
+                expectation: expectation
+            )),
             failure: failure
         )
     }
@@ -468,6 +472,7 @@ final class MockConnection: DeviceConnecting, TransportReachabilityConnecting {
             durationMs: heistStepDurationMs,
             intent: .repeatUntil(predicate: predicate.description, timeout: repeatUntil.timeout),
             evidence: .repeatUntil(HeistRepeatUntilEvidence(
+                outcome: .matched,
                 predicate: predicate,
                 timeout: repeatUntil.timeout,
                 iterationCount: 0,

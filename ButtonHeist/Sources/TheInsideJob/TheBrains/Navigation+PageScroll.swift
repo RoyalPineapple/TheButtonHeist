@@ -30,7 +30,7 @@ extension Navigation {
         case .resolved(let scrollTarget):
             let uiDirection = Self.uiScrollDirection(for: direction)
             let proof = await scrollOnePageAndSettle(
-                scrollTarget, direction: uiDirection
+                scrollTarget, direction: uiDirection, animated: false
             )
             return proof.result == .moved
                 ? .success(method: .scroll)
@@ -66,7 +66,7 @@ extension Navigation {
                     failureKind: .targetUnavailable
                 )
             }
-            switch safecracker.scrollToEdge(scrollView, edge: edge) {
+            switch safecracker.scrollToEdge(scrollView, edge: edge, animated: false) {
             case .moved:
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 stash.refreshTreeAfterViewportMove()

@@ -1,6 +1,6 @@
 import ArgumentParser
 import Foundation
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 enum JSONLinesDefaults {
     static let connectionTimeout: Double = 30.0

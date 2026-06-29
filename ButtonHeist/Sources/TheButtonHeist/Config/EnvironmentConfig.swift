@@ -1,9 +1,58 @@
 import Foundation
 import TheScore
 
-extension Dictionary where Key == String, Value == String {
-    subscript(_ key: EnvironmentKey) -> String? {
-        self[key.rawValue]
+/// Typed client environment projection used by configuration resolution.
+public struct ButtonHeistEnvironment: Equatable, Sendable {
+    public static let empty = ButtonHeistEnvironment()
+
+    private let values: [EnvironmentKey: String]
+
+    public init(
+        device: String? = nil,
+        token: String? = nil,
+        sessionTimeout: String? = nil,
+        connectionTimeout: String? = nil
+    ) {
+        var values: [EnvironmentKey: String] = [:]
+        values[.buttonheistDevice] = device
+        values[.buttonheistToken] = token
+        values[.buttonheistSessionTimeout] = sessionTimeout
+        values[.buttonheistConnectionTimeout] = connectionTimeout
+        self.values = values
+    }
+
+    fileprivate init(rawValues: [String: String]) {
+        self.values = Dictionary(uniqueKeysWithValues: [
+            EnvironmentKey.buttonheistDevice,
+            .buttonheistToken,
+            .buttonheistSessionTimeout,
+            .buttonheistConnectionTimeout,
+        ].compactMap { key in
+            rawValues[key.rawValue].map { (key, $0) }
+        })
+    }
+
+    var device: String? {
+        values[.buttonheistDevice]
+    }
+
+    var token: String? {
+        values[.buttonheistToken]
+    }
+
+    var sessionTimeout: String? {
+        values[.buttonheistSessionTimeout]
+    }
+
+    var connectionTimeout: String? {
+        values[.buttonheistConnectionTimeout]
+    }
+}
+
+/// Foundation bridge for capturing the current process environment.
+public enum ButtonHeistEnvironmentBridge {
+    public static func current() -> ButtonHeistEnvironment {
+        ButtonHeistEnvironment(rawValues: ProcessInfo.processInfo.environment)
     }
 }
 
@@ -42,7 +91,7 @@ public struct EnvironmentConfig: Sendable {
         sessionTimeout: TimeInterval? = nil,
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
-        env: [String: String] = ProcessInfo.processInfo.environment
+        environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
     ) throws -> EnvironmentConfig {
         resolve(
             deviceFilter: deviceFilter,
@@ -51,7 +100,7 @@ public struct EnvironmentConfig: Sendable {
             connectionTimeout: connectionTimeout,
             autoReconnect: autoReconnect,
             fileConfig: try TargetConfigResolver.loadConfig(searchPaths: TargetConfigResolver.searchPaths),
-            env: env
+            environment: environment
         )
     }
 
@@ -64,7 +113,7 @@ public struct EnvironmentConfig: Sendable {
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
         configPath: String?,
-        env: [String: String] = ProcessInfo.processInfo.environment
+        environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
     ) throws -> EnvironmentConfig {
         guard let configPath else {
             return try resolve(
@@ -73,7 +122,7 @@ public struct EnvironmentConfig: Sendable {
                 sessionTimeout: sessionTimeout,
                 connectionTimeout: connectionTimeout,
                 autoReconnect: autoReconnect,
-                env: env
+                environment: environment
             )
         }
         return try resolve(
@@ -83,7 +132,7 @@ public struct EnvironmentConfig: Sendable {
             connectionTimeout: connectionTimeout,
             autoReconnect: autoReconnect,
             configPath: configPath,
-            env: env
+            environment: environment
         )
     }
 
@@ -97,7 +146,7 @@ public struct EnvironmentConfig: Sendable {
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
         configPath: String,
-        env: [String: String] = ProcessInfo.processInfo.environment
+        environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
     ) throws -> EnvironmentConfig {
         let fileConfig = try TargetConfigResolver.loadConfig(from: configPath)
         return resolve(
@@ -107,7 +156,7 @@ public struct EnvironmentConfig: Sendable {
             connectionTimeout: connectionTimeout,
             autoReconnect: autoReconnect,
             fileConfig: fileConfig,
-            env: env
+            environment: environment
         )
     }
 
@@ -118,12 +167,12 @@ public struct EnvironmentConfig: Sendable {
         connectionTimeout: TimeInterval?,
         autoReconnect: Bool,
         fileConfig: ButtonHeistFileConfig?,
-        env: [String: String]
+        environment: ButtonHeistEnvironment
     ) -> EnvironmentConfig {
 
-        let envDevice = env[.buttonheistDevice]
-        let envToken = env[.buttonheistToken]
-        let configTarget = TargetConfigResolver.resolveEffective(config: fileConfig, env: env)
+        let envDevice = environment.device
+        let envToken = environment.token
+        let configTarget = TargetConfigResolver.resolveEffective(config: fileConfig, environment: environment)
 
         let resolvedDevice: String?
         let resolvedToken: String?
@@ -149,7 +198,7 @@ public struct EnvironmentConfig: Sendable {
         let resolvedSessionTimeout: TimeInterval
         if let explicit = sessionTimeout, explicit > 0 {
             resolvedSessionTimeout = explicit
-        } else if let envStr = env[.buttonheistSessionTimeout],
+        } else if let envStr = environment.sessionTimeout,
                   let parsed = Double(envStr), parsed > 0 {
             resolvedSessionTimeout = parsed
         } else {
@@ -159,7 +208,7 @@ public struct EnvironmentConfig: Sendable {
         let resolvedConnectionTimeout: TimeInterval
         if let explicit = connectionTimeout, explicit > 0 {
             resolvedConnectionTimeout = explicit
-        } else if let envStr = env[.buttonheistConnectionTimeout],
+        } else if let envStr = environment.connectionTimeout,
                   let parsed = Double(envStr), parsed > 0 {
             resolvedConnectionTimeout = parsed
         } else {

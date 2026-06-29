@@ -1,5 +1,5 @@
 import AccessibilitySnapshotModel
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
 import Testing
 import ThePlans

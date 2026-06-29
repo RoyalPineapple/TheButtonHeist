@@ -1,6 +1,6 @@
 import Foundation
 import Darwin
-@_spi(ButtonHeistInternals) import ButtonHeist
+@_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) import ButtonHeist
 
 @ButtonHeistActor
 final class JSONLinesSession {
@@ -83,7 +83,7 @@ final class JSONLinesSession {
         }
 
         do {
-            let response = try await fence.execute(command: parsedRequest.command, arguments: parsedRequest.arguments)
+            let response = try await fence.execute(parsedRequest.operation)
             return CLIRunner.ResponseEnvelope(response: response, requestId: parsedRequest.requestId)
         } catch {
             return CLIRunner.ResponseEnvelope(response: .failure(error), requestId: parsedRequest.requestId)

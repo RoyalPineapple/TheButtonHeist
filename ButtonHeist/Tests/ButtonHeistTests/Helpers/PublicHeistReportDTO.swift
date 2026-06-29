@@ -1,6 +1,6 @@
 import ButtonHeistTestSupport
 import Foundation
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 struct PublicHeistReportResponseDTO: Decodable, Equatable {
     let report: PublicHeistReportDTO
@@ -218,6 +218,7 @@ struct PublicHeistActionEvidenceDTO: Decodable, Equatable {
 }
 
 struct PublicHeistWaitEvidenceDTO: Decodable, Equatable {
+    let outcome: String
     let result: PublicHeistActionResultDTO
     let expectation: PublicExpectationResultDTO
     let baselineSummary: String?
@@ -262,6 +263,7 @@ struct PublicHeistForEachElementEvidenceDTO: Decodable, Equatable {
 }
 
 struct PublicHeistRepeatUntilEvidenceDTO: Decodable, Equatable {
+    let outcome: String
     let predicate: JSONValue
     let timeout: Double
     let iterationCount: Int

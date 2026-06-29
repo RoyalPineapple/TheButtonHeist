@@ -27,6 +27,23 @@ public struct TargetConfig: Codable, Sendable, Equatable {
     }
 }
 
+/// Typed selector for a named target in `.buttonheist.json`.
+struct TargetName: RawRepresentable, Hashable, Sendable, Equatable, ExpressibleByStringLiteral, CustomStringConvertible {
+    let rawValue: String
+
+    init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    init(stringLiteral value: String) {
+        self.init(rawValue: value)
+    }
+
+    var description: String {
+        rawValue
+    }
+}
+
 /// Config file schema for `.buttonheist.json` or `~/.config/buttonheist/config.json`.
 /// Contains named targets and an optional default.
 struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
@@ -169,12 +186,12 @@ enum TargetConfigResolver {
     /// 2. Named target from config file
     /// 3. Default target from config file
     static func resolveEffective(
-        targetName: String? = nil,
+        targetName: TargetName? = nil,
         config: ButtonHeistFileConfig? = nil,
-        env: [String: String] = ProcessInfo.processInfo.environment
+        environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()
     ) -> TargetConfig? {
-        let envDevice = env[.buttonheistDevice]
-        let envToken = env[.buttonheistToken]
+        let envDevice = environment.device
+        let envToken = environment.token
 
         if let envDevice {
             return TargetConfig(device: envDevice, token: envToken)
@@ -182,7 +199,7 @@ enum TargetConfigResolver {
 
         guard let config else { return nil }
 
-        let name = targetName ?? config.defaultTarget
+        let name = targetName?.rawValue ?? config.defaultTarget
         guard let name else { return nil }
 
         guard var target = config.targets[name] else { return nil }

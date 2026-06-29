@@ -63,11 +63,7 @@ enum PredicateEvaluation {
         _ predicate: AccessibilityPredicate,
         in trace: AccessibilityTrace
     ) -> ExpectationResult {
-        evaluate(
-            predicate,
-            currentElements: trace.captures.last?.interface.projectedElements ?? [],
-            delta: trace.endpointDelta
-        )
+        predicate.evaluate(in: PredicateEvaluationEvidence(trace: trace))
     }
 
     static func caseMatch(

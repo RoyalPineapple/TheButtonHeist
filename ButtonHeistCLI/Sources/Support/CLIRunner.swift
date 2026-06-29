@@ -1,6 +1,6 @@
 import ArgumentParser
 import Foundation
-@_spi(ButtonHeistInternals) import ButtonHeist
+@_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) import ButtonHeist
 
 /// Shared utility for standalone CLI commands that execute a single TheFence request.
 enum CLIRunner {
@@ -129,7 +129,7 @@ enum CLIRunner {
     ) async throws -> CommandExecution {
         let fence = try await connect(connection: connection, statusMessage: statusMessage)
         do {
-            let response = try await fence.execute(command: command, arguments: arguments)
+            let response = try await fence.execute(FenceOperationRequest(command: command, arguments: arguments))
             return CommandExecution(fence: fence, response: response)
         } catch {
             fence.stop()

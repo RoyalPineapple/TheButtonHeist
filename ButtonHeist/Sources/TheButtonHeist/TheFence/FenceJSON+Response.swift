@@ -137,19 +137,21 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 profile: profile
             )).encode(to: encoder)
         case .screenshot(let path, let payload, let options):
-            try PublicScreenshotResponse(
+            try PublicScreenshotResponse(projection: ScreenshotProjection(
                 path: path,
                 payload: payload,
                 includePNGData: false,
-                includeInterface: options.includeInterface
-            ).encode(to: encoder)
+                includeInterface: options.includeInterface,
+                profile: profile
+            )).encode(to: encoder)
         case .screenshotData(let payload, let options):
-            try PublicScreenshotResponse(
+            try PublicScreenshotResponse(projection: ScreenshotProjection(
                 path: nil,
                 payload: payload,
                 includePNGData: true,
-                includeInterface: options.includeInterface
-            ).encode(to: encoder)
+                includeInterface: options.includeInterface,
+                profile: profile
+            )).encode(to: encoder)
         case .heistExecution(_, let result, let accessibilityTrace):
             try PublicHeistExecutionResponse(projection: HeistReportProjection(
                 result: result,

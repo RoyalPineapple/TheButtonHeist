@@ -17,6 +17,28 @@ public struct PredicateEvaluationResult: Sendable, Equatable {
     }
 }
 
+/// Predicate evidence derived from an observed trace before any lossy endpoint
+/// projection is chosen for reporting.
+public struct PredicateEvaluationEvidence: Sendable, Equatable {
+    public let currentElements: [HeistElement]
+    public let accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+
+    public init(
+        currentElements: [HeistElement],
+        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+    ) {
+        self.currentElements = currentElements
+        self.accumulatedDelta = accumulatedDelta
+    }
+
+    public init(trace: AccessibilityTrace) {
+        self.init(
+            currentElements: trace.captures.last?.interface.projectedElements ?? [],
+            accumulatedDelta: trace.accumulatedDelta
+        )
+    }
+}
+
 /// The outcome of checking an `AccessibilityPredicate` against an observed
 /// interface or transition delta.
 public struct ExpectationResult: Codable, Sendable, Equatable {

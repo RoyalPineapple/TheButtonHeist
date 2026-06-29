@@ -1,5 +1,5 @@
 import XCTest
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
 import ThePlans
 import TheScore

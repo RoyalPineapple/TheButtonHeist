@@ -26,6 +26,16 @@ public extension AccessibilityPredicate {
     ) -> ExpectationResult {
         evaluate(currentMatches: ElementMatchSet(elements: currentElements), accumulatedDelta: accumulatedDelta)
     }
+
+    /// Evaluate against trace-derived predicate evidence. This is the preferred
+    /// surface for action results because change predicates need the whole
+    /// transition window, not only the first-to-last endpoint projection.
+    func evaluate(in evidence: PredicateEvaluationEvidence) -> ExpectationResult {
+        evaluate(
+            currentMatches: ElementMatchSet(elements: evidence.currentElements),
+            accumulatedDelta: evidence.accumulatedDelta
+        )
+    }
 }
 
 private extension AccessibilityPredicate {
@@ -66,9 +76,7 @@ public extension AccessibilityPredicate {
     /// Check this predicate against an `ActionResult`.
     ///
     /// `state` evaluates against the result's final-capture interface;
-    /// `change` evaluates against the result's endpoint delta. Change
-    /// predicates read self-describing deltas such as property updates, so no
-    /// pre-action element resolution is needed.
+    /// `change` evaluates against the full accumulated transition window.
     func validate(against result: ActionResult) -> ExpectationResult {
         guard let trace = result.accessibilityTrace else {
             return ExpectationResult(
@@ -77,10 +85,7 @@ public extension AccessibilityPredicate {
                 actual: "no observed accessibility trace"
             )
         }
-        let currentMatches = trace.captures.last
-            .map { ElementMatchSet(interface: $0.interface) }
-            ?? .empty
-        return evaluate(currentMatches: currentMatches, delta: trace.endpointDelta)
+        return evaluate(in: PredicateEvaluationEvidence(trace: trace))
     }
 }
 
@@ -99,7 +104,7 @@ public extension AccessibilityPredicate.State {
     }
 }
 
-extension AccessibilityPredicate.State {
+package extension AccessibilityPredicate.State {
     /// Evaluate this state against a path-keyed interface projection. Element
     /// predicates resolve to typed match sets; target ordinals select from the
     /// narrowed set in traversal order.

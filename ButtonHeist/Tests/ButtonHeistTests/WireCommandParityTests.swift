@@ -1,6 +1,6 @@
 import XCTest
 import ThePlans
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import TheScore
 
 final class WireCommandParityTests: XCTestCase {

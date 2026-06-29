@@ -1,6 +1,6 @@
 #if os(macOS)
 import XCTest
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class USBDeviceDiscoveryParsingTests: XCTestCase {
 

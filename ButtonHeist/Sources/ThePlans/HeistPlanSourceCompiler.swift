@@ -3,54 +3,58 @@ import Foundation
 public struct HeistPlanSourceCompiler: Sendable {
     public init() {}
 
-    public func compile(
+    public func compileResult(
         _ source: String,
         sourceName: String = "inline-heist-plan"
-    ) throws -> HeistPlan {
+    ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
         do {
             var lexer = HeistPlanSourceLexer(source: source, sourceName: sourceName)
             let tokens = try lexer.lex()
             var parser = HeistPlanSourceParser(tokens: tokens, sourceName: sourceName)
             let plan = try parser.parseProgram()
-            switch plan.runtimeSafetyValidationResult() {
-            case .success(let validated, _):
-                return validated
-            case .failure(let diagnostics):
-                throw HeistPlanSourceCompilerError(diagnostic: diagnostics[0])
-            }
+            return plan.runtimeSafetyValidationResult()
         } catch let error as HeistPlanSourceCompilerError {
-            throw error
+            return .failure(error.diagnostics)
         } catch let error as HeistPlanRuntimeSafetyError {
-            throw HeistPlanSourceCompilerError(diagnostic: error.diagnostics.first ?? HeistBuildDiagnostic(
-                code: "heist.plan.runtime_safety",
-                phase: .planValidation,
-                message: error.description
-            ))
+            return .failure(error.diagnostics)
         } catch {
-            throw HeistPlanSourceCompilerError(
-                code: "heist.plan.runtime_safety",
+            return .failure([HeistBuildDiagnostic(
+                code: .planRuntimeSafety,
                 phase: .planValidation,
-                message: "ButtonHeist source failed runtime safety: \(String(describing: error))",
-                sourceName: sourceName,
-                offset: 0,
-                line: 1,
-                column: 1
-            )
+                message: "ButtonHeist source failed runtime safety: \(String(describing: error))"
+            )])
+        }
+    }
+
+    public func compile(
+        _ source: String,
+        sourceName: String = "inline-heist-plan"
+    ) throws -> HeistPlan {
+        switch compileResult(source, sourceName: sourceName) {
+        case .success(let plan, _):
+            return plan
+        case .failure(let diagnostics):
+            throw HeistPlanSourceCompilerError(diagnostics: diagnostics)
         }
     }
 }
 
 public struct HeistPlanSourceCompilerError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let diagnostic: HeistBuildDiagnostic
+    public let diagnostics: [HeistBuildDiagnostic]
 
-    public var message: String { diagnostic.message }
+    public var diagnostic: HeistBuildDiagnostic { diagnostics.first ?? HeistBuildDiagnostic(
+        code: .sourceInvalidSyntax,
+        phase: .sourceCompilation,
+        message: "ButtonHeist source failed without diagnostics"
+    ) }
+    public var message: String { diagnostics.map(\.message).joined(separator: "\n") }
     public var sourceName: String { diagnostic.sourceSpan?.sourceName ?? "" }
     public var offset: Int { diagnostic.sourceSpan?.offset ?? 0 }
     public var line: Int { diagnostic.sourceSpan?.line ?? 1 }
     public var column: Int { diagnostic.sourceSpan?.column ?? 1 }
 
     public var description: String {
-        diagnostic.renderedMessage
+        diagnostics.map(\.renderedMessage).joined(separator: "\n")
     }
 
     public init(
@@ -80,7 +84,17 @@ public struct HeistPlanSourceCompilerError: Error, Sendable, Equatable, CustomSt
     }
 
     public init(diagnostic: HeistBuildDiagnostic) {
-        self.diagnostic = diagnostic
+        self.init(diagnostics: [diagnostic])
+    }
+
+    public init(diagnostics: [HeistBuildDiagnostic]) {
+        self.diagnostics = diagnostics.isEmpty
+            ? [HeistBuildDiagnostic(
+                code: .sourceInvalidSyntax,
+                phase: .sourceCompilation,
+                message: "ButtonHeist source failed without diagnostics"
+            )]
+            : diagnostics
     }
 }
 

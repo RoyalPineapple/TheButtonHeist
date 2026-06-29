@@ -10,11 +10,11 @@ struct PublicScreenshotResponse: FencePublicJSONResponse {
     let interface: PublicInterface?
     let path: String?
 
-    init(path: String?, payload: ScreenPayload, includePNGData: Bool, includeInterface: Bool) {
-        self.width = payload.width
-        self.height = payload.height
-        self.pngData = includePNGData ? payload.pngData : nil
-        self.interface = includeInterface ? payload.interface.map { PublicInterface(interface: $0, detail: .full) } : nil
-        self.path = path
+    init(projection: ScreenshotProjection) {
+        self.width = projection.width
+        self.height = projection.height
+        self.pngData = projection.pngData
+        self.interface = projection.interface.map(PublicInterface.init(projection:))
+        self.path = projection.path
     }
 }

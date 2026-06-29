@@ -1,6 +1,6 @@
 import Foundation
 import MCP
-@_spi(ButtonHeistInternals) import ButtonHeist
+@_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) import ButtonHeist
 import TheScore
 
 @main
@@ -47,7 +47,7 @@ struct ButtonHeistMCPServer {
         do {
             switch routedToolRequest(try MCPToolRequest(name: params.name, arguments: params.arguments)) {
             case .success(let request):
-                let response = try await fence.execute(command: request.command, arguments: request.arguments)
+                let response = try await fence.execute(request)
                 return renderResponse(response)
             case .failure(let error):
                 return renderResponse(.failure(error))

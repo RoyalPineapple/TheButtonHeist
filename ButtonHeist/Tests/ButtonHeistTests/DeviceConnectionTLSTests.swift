@@ -1,6 +1,6 @@
 import XCTest
 import Network
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class DeviceConnectionTLSTests: XCTestCase {
 

@@ -15,15 +15,8 @@ struct HeistPlanSourceParser {
     mutating func parseProgram() throws -> HeistPlanAdmissionCandidate {
         if startsRootHeistPlan {
             let root = try parseRootHeistPlan()
-            let uncheckedRoot = root.uncheckedPlanForRuntimeSafetyValidation()
             try expect(.eof)
-            return HeistPlanAdmissionCandidate(
-                version: HeistPlan.currentVersion,
-                name: root.name,
-                parameter: root.parameter,
-                definitions: root.definitions,
-                body: uncheckedRoot.body
-            )
+            return root
         }
 
         try rejectForbiddenStatementSyntax()
