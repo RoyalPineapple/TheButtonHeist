@@ -598,6 +598,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 }
 
+@MainActor
 private func executeDirectRuntimeActions(_ commands: [HeistActionCommand]) async throws -> [ActionResult] {
     let job = TheInsideJob.shared
     let shouldRestoreRuntime = !job.brains.semanticObservationIsActive
@@ -630,6 +631,7 @@ private func executeDirectRuntimeActions(_ commands: [HeistActionCommand]) async
     }
 }
 
+@MainActor
 private func stopDirectRuntime(_ job: TheInsideJob, waitForAllClear: Bool) async {
     if waitForAllClear {
         _ = await job.tripwire.waitForAllClear(timeout: SemanticObservationTiming.defaultTimeout)
