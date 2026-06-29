@@ -1,12 +1,12 @@
 import ThePlans
 import AccessibilitySnapshotModel
 
-public struct PathIndexedAccessibilityElement {
-    public let element: AccessibilityElement
-    public let path: TreePath
-    public let traversalIndex: Int
+package struct PathIndexedAccessibilityElement {
+    package let element: AccessibilityElement
+    package let path: TreePath
+    package let traversalIndex: Int
 
-    public init(element: AccessibilityElement, path: TreePath, traversalIndex: Int) {
+    package init(element: AccessibilityElement, path: TreePath, traversalIndex: Int) {
         self.element = element
         self.path = path
         self.traversalIndex = traversalIndex
@@ -20,21 +20,6 @@ public extension AccessibilityHierarchy {
               children.indices.contains(childIndex)
         else { return nil }
         return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
-    }
-
-    func pathIndexedElements(path: TreePath = .root) -> [PathIndexedAccessibilityElement] {
-        switch self {
-        case .element(let element, let traversalIndex):
-            return [PathIndexedAccessibilityElement(
-                element: element,
-                path: path,
-                traversalIndex: traversalIndex
-            )]
-        case .container(_, let children):
-            return children.enumerated().flatMap { index, child in
-                child.pathIndexedElements(path: path.appending(index))
-            }
-        }
     }
 
     func compactMapSubtrees<Result>(
@@ -54,6 +39,23 @@ public extension AccessibilityHierarchy {
     }
 }
 
+package extension AccessibilityHierarchy {
+    func pathIndexedElements(path: TreePath = .root) -> [PathIndexedAccessibilityElement] {
+        switch self {
+        case .element(let element, let traversalIndex):
+            return [PathIndexedAccessibilityElement(
+                element: element,
+                path: path,
+                traversalIndex: traversalIndex
+            )]
+        case .container(_, let children):
+            return children.enumerated().flatMap { index, child in
+                child.pathIndexedElements(path: path.appending(index))
+            }
+        }
+    }
+}
+
 public extension Array where Element == AccessibilityHierarchy {
     func node(at path: TreePath) -> AccessibilityHierarchy? {
         guard let rootIndex = path.indices.first,
@@ -63,6 +65,16 @@ public extension Array where Element == AccessibilityHierarchy {
         return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
     }
 
+    func compactMapSubtrees<Result>(
+        _ transform: (AccessibilityHierarchy, TreePath) -> Result?
+    ) -> [Result] {
+        enumerated().flatMap { index, root in
+            root.compactMapSubtrees(path: TreePath([index]), transform)
+        }
+    }
+}
+
+package extension Array where Element == AccessibilityHierarchy {
     var pathIndexedElements: [PathIndexedAccessibilityElement] {
         enumerated()
             .flatMap { index, root in root.pathIndexedElements(path: TreePath([index])) }
@@ -72,14 +84,6 @@ public extension Array where Element == AccessibilityHierarchy {
                 }
                 return $0.path < $1.path
             }
-    }
-
-    func compactMapSubtrees<Result>(
-        _ transform: (AccessibilityHierarchy, TreePath) -> Result?
-    ) -> [Result] {
-        enumerated().flatMap { index, root in
-            root.compactMapSubtrees(path: TreePath([index]), transform)
-        }
     }
 }
 
