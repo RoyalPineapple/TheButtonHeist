@@ -1,5 +1,15 @@
 import Foundation
 
+struct ParsedPredicateBranches {
+    let cases: [PredicateCase]
+    let elseBody: [HeistStep]?
+}
+
+struct ParsedClosureParameterBlock {
+    let referenceName: HeistReferenceName
+    let body: [HeistStep]
+}
+
 extension HeistPlanSourceParser {
     mutating func parseWaitFor() throws -> HeistStep {
         try expectSymbol("(")
@@ -178,10 +188,7 @@ extension HeistPlanSourceParser {
         return .fail(FailStep(message: message))
     }
 
-    mutating func parsePredicateBranches() throws -> (
-        cases: [PredicateCase],
-        elseBody: [HeistStep]?
-    ) {
+    mutating func parsePredicateBranches() throws -> ParsedPredicateBranches {
         try expectSymbol("{")
         var cases: [PredicateCase] = []
         var elseBody: [HeistStep]?
@@ -207,19 +214,19 @@ extension HeistPlanSourceParser {
                 throw error(token, "branch blocks accept only Case(...) and Else")
             }
         }
-        return (cases, elseBody)
+        return ParsedPredicateBranches(cases: cases, elseBody: elseBody)
     }
 
     mutating func parseSinglePredicateBranches(
         predicate: AccessibilityPredicateExpr,
         chainContext: String
-    ) throws -> (
-        cases: [PredicateCase],
-        elseBody: [HeistStep]?
-    ) {
+    ) throws -> ParsedPredicateBranches {
         let body = try parseHeistBlock()
         let elseBody = try parseLowercaseElseChainIfPresent(chainContext: chainContext)
-        return ([PredicateCase(predicate: predicate, body: body)], elseBody)
+        return ParsedPredicateBranches(
+            cases: [PredicateCase(predicate: predicate, body: body)],
+            elseBody: elseBody
+        )
     }
 
     mutating func parseHeistBlock() throws -> [HeistStep] {
@@ -240,7 +247,7 @@ extension HeistPlanSourceParser {
 
     mutating func parseClosureParameterBlock(
         binding: HeistPlanSourceBinding
-    ) throws -> (referenceName: HeistReferenceName, body: [HeistStep]) {
+    ) throws -> ParsedClosureParameterBlock {
         try expectSymbol("{")
         let localName = try parseIdentifier()
         try expectIdentifier("in")
@@ -249,7 +256,7 @@ extension HeistPlanSourceParser {
         defer { restoreScope(previousScope) }
         bindScopedReference(binding, localName: localName, referenceName: referenceName)
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
-        return (referenceName, body.steps)
+        return ParsedClosureParameterBlock(referenceName: referenceName, body: body.steps)
     }
 
     mutating func parseStringArrayTail() throws -> [String] {

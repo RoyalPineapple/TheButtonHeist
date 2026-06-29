@@ -284,9 +284,12 @@ public enum HeistArtifactCodec {
         _ member: String,
         in packageURL: URL,
         maxBytes: Int
-    ) throws -> (url: URL, data: Data) {
+    ) throws -> ArtifactMemberData {
         let url = try validateArtifactMember(member, in: packageURL, maxBytes: maxBytes)
-        return (url, try readBoundedFile(url, member: member, packageURL: packageURL, maxBytes: maxBytes))
+        return ArtifactMemberData(
+            url: url,
+            data: try readBoundedFile(url, member: member, packageURL: packageURL, maxBytes: maxBytes)
+        )
     }
 
     private static func validateArtifactMember(
@@ -511,6 +514,11 @@ public enum HeistArtifactCodec {
             return .unsupportedPlanVersion(path: source, observed: observed)
         }
     }
+}
+
+private struct ArtifactMemberData {
+    let url: URL
+    let data: Data
 }
 
 private struct HeistArtifactManifestPayload: Decodable {

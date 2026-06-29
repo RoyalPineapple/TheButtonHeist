@@ -1,5 +1,10 @@
 import Foundation
 
+struct StringMatchModeLabelToken {
+    let name: String
+    let token: HeistPlanSourceToken
+}
+
 extension HeistPlanSourceParser {
     mutating func parseTargetExpr() throws -> ElementTargetExpr {
         if let target = try parseTargetRefIfPresent() {
@@ -255,9 +260,9 @@ extension HeistPlanSourceParser {
         return try validatedStringMatch(mode, value: value, field: field, token: token)
     }
 
-    func stringMatchModeLabelTokenIfPresent() -> (name: String, token: HeistPlanSourceToken)? {
+    func stringMatchModeLabelTokenIfPresent() -> StringMatchModeLabelToken? {
         for name in stringMatchModeNames where lookaheadLabel(name) {
-            return (name, currentToken)
+            return StringMatchModeLabelToken(name: name, token: currentToken)
         }
         return nil
     }

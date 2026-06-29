@@ -313,10 +313,10 @@ public struct Interface: Codable, Equatable, Sendable {
     /// Button Heist element projection in VoiceOver traversal order.
     public var projectedElements: [HeistElement] {
         let annotationsByPath = annotations.elementByPath
-        return tree.pathIndexedElements.map { element, path, _ in
+        return tree.pathIndexedElements.map { item in
             HeistElement(
-                accessibilityElement: element,
-                annotation: annotationsByPath[path]
+                accessibilityElement: item.element,
+                annotation: annotationsByPath[item.path]
             )
         }
     }

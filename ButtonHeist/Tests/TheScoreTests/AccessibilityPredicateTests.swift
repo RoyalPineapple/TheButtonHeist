@@ -41,6 +41,14 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertTrue(AccessibilityPredicate.State.exists(ElementPredicate(value: "4")).evaluatePresence(in: elements))
     }
 
+    func testStateEvaluationReturnsNamedResult() {
+        let result: PredicateEvaluationResult = AccessibilityPredicate.State
+            .exists(ElementPredicate(label: "Ready"))
+            .evaluate(in: [makeElement(label: "Ready")])
+
+        XCTAssertEqual(result, PredicateEvaluationResult(met: true))
+    }
+
     func testPresentNarrowsByIdentifierAndValue() {
         let elements = [
             makeElement(label: "Counter", value: "4", identifier: "slider"),

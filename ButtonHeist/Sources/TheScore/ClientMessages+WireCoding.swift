@@ -80,17 +80,30 @@ extension ClientMessage {
 /// switch; Swift's exhaustivity check is the drift detector.
 private func clientMessageWireRepresentation(
     _ message: ClientMessage
-) -> (type: ClientWireMessageType, payload: ClientMessageWirePayload?) {
+) -> ClientMessageWireRepresentation {
     switch message {
-    case .clientHello: return (.clientHello, nil)
-    case .requestInterface(let payload): return (.requestInterface, .requestInterface(payload))
-    case .ping: return (.ping, nil)
-    case .status: return (.status, nil)
-    case .getPasteboard: return (.getPasteboard, nil)
-    case .requestScreen: return (.requestScreen, nil)
-    case .authenticate(let payload): return (.authenticate, .authenticate(payload))
-    case .heistPlan(let payload): return (.heistPlan, .heistPlan(payload))
+    case .clientHello:
+        return ClientMessageWireRepresentation(type: .clientHello, payload: nil)
+    case .requestInterface(let payload):
+        return ClientMessageWireRepresentation(type: .requestInterface, payload: .requestInterface(payload))
+    case .ping:
+        return ClientMessageWireRepresentation(type: .ping, payload: nil)
+    case .status:
+        return ClientMessageWireRepresentation(type: .status, payload: nil)
+    case .getPasteboard:
+        return ClientMessageWireRepresentation(type: .getPasteboard, payload: nil)
+    case .requestScreen:
+        return ClientMessageWireRepresentation(type: .requestScreen, payload: nil)
+    case .authenticate(let payload):
+        return ClientMessageWireRepresentation(type: .authenticate, payload: .authenticate(payload))
+    case .heistPlan(let payload):
+        return ClientMessageWireRepresentation(type: .heistPlan, payload: .heistPlan(payload))
     }
+}
+
+private struct ClientMessageWireRepresentation {
+    let type: ClientWireMessageType
+    let payload: ClientMessageWirePayload?
 }
 
 private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWireMessageType) throws -> ClientMessage {

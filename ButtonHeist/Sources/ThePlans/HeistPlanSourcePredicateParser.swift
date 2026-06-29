@@ -1,5 +1,10 @@
 import Foundation
 
+struct PropertyChangeFields<Value> {
+    let before: Value?
+    let after: Value?
+}
+
 extension HeistPlanSourceParser {
     mutating func parseAccessibilityPredicateExpr() throws -> AccessibilityPredicateExpr {
         let name = try parseDotCallName(allowedPrefixes: [])
@@ -224,14 +229,17 @@ extension HeistPlanSourceParser {
     mutating func parseStringPropertyChangeFields(
         property: String,
         allowsUnlabeledAfter: Bool = false
-    ) throws -> (before: StringMatch<StringExpr>?, after: StringMatch<StringExpr>?) {
+    ) throws -> PropertyChangeFields<StringMatch<StringExpr>> {
         var before: StringMatch<StringExpr>?
         var after: StringMatch<StringExpr>?
         if currentToken.isSymbol(")") {
-            return (nil, nil)
+            return PropertyChangeFields(before: nil, after: nil)
         }
         if allowsUnlabeledAfter && !lookaheadLabel("before") && !lookaheadLabel("after") {
-            return (nil, try parseStringMatchCallArgument(field: "\(property) after"))
+            return PropertyChangeFields(
+                before: nil,
+                after: try parseStringMatchCallArgument(field: "\(property) after")
+            )
         }
         while true {
             if lookaheadLabel("before") {
@@ -253,14 +261,14 @@ extension HeistPlanSourceParser {
             }
             guard consumeSymbol(",") else { break }
         }
-        return (before, after)
+        return PropertyChangeFields(before: before, after: after)
     }
 
-    mutating func parseTraitsPropertyChangeFields() throws -> (before: TraitSetMatch?, after: TraitSetMatch?) {
+    mutating func parseTraitsPropertyChangeFields() throws -> PropertyChangeFields<TraitSetMatch> {
         var before: TraitSetMatch?
         var after: TraitSetMatch?
         if currentToken.isSymbol(")") {
-            return (nil, nil)
+            return PropertyChangeFields(before: nil, after: nil)
         }
         while true {
             if lookaheadLabel("before") {
@@ -282,7 +290,7 @@ extension HeistPlanSourceParser {
             }
             guard consumeSymbol(",") else { break }
         }
-        return (before, after)
+        return PropertyChangeFields(before: before, after: after)
     }
 
     mutating func parseTraitSetMatch(role: String) throws -> TraitSetMatch {
@@ -325,11 +333,11 @@ extension HeistPlanSourceParser {
     mutating func parseTypedPropertyChangeFields<T>(
         property: String,
         parseValue: (inout HeistPlanSourceParser, String) throws -> T
-    ) throws -> (before: T?, after: T?) {
+    ) throws -> PropertyChangeFields<T> {
         var before: T?
         var after: T?
         if currentToken.isSymbol(")") {
-            return (nil, nil)
+            return PropertyChangeFields(before: nil, after: nil)
         }
         while true {
             if lookaheadLabel("before") {
@@ -351,7 +359,7 @@ extension HeistPlanSourceParser {
             }
             guard consumeSymbol(",") else { break }
         }
-        return (before, after)
+        return PropertyChangeFields(before: before, after: after)
     }
 
     mutating func parseActionSetMatch(role: String) throws -> ActionSetMatch {

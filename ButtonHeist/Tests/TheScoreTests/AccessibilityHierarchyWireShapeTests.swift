@@ -26,6 +26,24 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         try payload.assertMissing("elements")
     }
 
+    func testPathIndexedElementsReturnNamedRecords() {
+        let interface = makeTestInterface(nodes: [
+            testContainer(
+                makeTestAccessibilityContainer(type: .list),
+                children: [
+                    testElement(sampleElement(label: "First")),
+                    testElement(sampleElement(label: "Second")),
+                ]
+            ),
+        ])
+
+        let indexed: [PathIndexedAccessibilityElement] = interface.tree.pathIndexedElements
+
+        XCTAssertEqual(indexed.map(\.path), [TreePath([0, 0]), TreePath([0, 1])])
+        XCTAssertEqual(indexed.map(\.traversalIndex), [0, 1])
+        XCTAssertEqual(indexed.map(\.element.label), ["First", "Second"])
+    }
+
     func testContainerCarriesParserContainerAndChildren() throws {
         let interface = makeTestInterface(nodes: [
             testContainer(

@@ -74,20 +74,36 @@ extension ServerMessage {
 /// switch; Swift's exhaustivity check is the drift detector.
 private func serverMessageWireRepresentation(
     _ message: ServerMessage
-) -> (type: ServerWireMessageType, payload: ServerMessageWirePayload?) {
+) -> ServerMessageWireRepresentation {
     switch message {
-    case .serverHello: return (.serverHello, nil)
-    case .authRequired: return (.authRequired, nil)
-    case .pong(let payload): return (.pong, .pong(payload))
-    case .protocolMismatch(let payload): return (.protocolMismatch, .protocolMismatch(payload))
-    case .error(let payload): return (.error, .error(payload))
-    case .sessionLocked(let payload): return (.sessionLocked, .sessionLocked(payload))
-    case .info(let payload): return (.info, .info(payload))
-    case .interface(let payload): return (.interface, .interface(payload))
-    case .actionResult(let payload): return (.actionResult, .actionResult(payload))
-    case .screen(let payload): return (.screen, .screen(payload))
-    case .status(let payload): return (.status, .status(payload))
+    case .serverHello:
+        return ServerMessageWireRepresentation(type: .serverHello, payload: nil)
+    case .authRequired:
+        return ServerMessageWireRepresentation(type: .authRequired, payload: nil)
+    case .pong(let payload):
+        return ServerMessageWireRepresentation(type: .pong, payload: .pong(payload))
+    case .protocolMismatch(let payload):
+        return ServerMessageWireRepresentation(type: .protocolMismatch, payload: .protocolMismatch(payload))
+    case .error(let payload):
+        return ServerMessageWireRepresentation(type: .error, payload: .error(payload))
+    case .sessionLocked(let payload):
+        return ServerMessageWireRepresentation(type: .sessionLocked, payload: .sessionLocked(payload))
+    case .info(let payload):
+        return ServerMessageWireRepresentation(type: .info, payload: .info(payload))
+    case .interface(let payload):
+        return ServerMessageWireRepresentation(type: .interface, payload: .interface(payload))
+    case .actionResult(let payload):
+        return ServerMessageWireRepresentation(type: .actionResult, payload: .actionResult(payload))
+    case .screen(let payload):
+        return ServerMessageWireRepresentation(type: .screen, payload: .screen(payload))
+    case .status(let payload):
+        return ServerMessageWireRepresentation(type: .status, payload: .status(payload))
     }
+}
+
+private struct ServerMessageWireRepresentation {
+    let type: ServerWireMessageType
+    let payload: ServerMessageWirePayload?
 }
 
 private func decodeServerMessage(from payloadDecoder: Decoder?, type: ServerWireMessageType) throws -> ServerMessage {

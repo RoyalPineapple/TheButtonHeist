@@ -1,6 +1,18 @@
 import ThePlans
 import AccessibilitySnapshotModel
 
+public struct PathIndexedAccessibilityElement {
+    public let element: AccessibilityElement
+    public let path: TreePath
+    public let traversalIndex: Int
+
+    public init(element: AccessibilityElement, path: TreePath, traversalIndex: Int) {
+        self.element = element
+        self.path = path
+        self.traversalIndex = traversalIndex
+    }
+}
+
 public extension AccessibilityHierarchy {
     func node(at path: TreePath) -> AccessibilityHierarchy? {
         guard let childIndex = path.indices.first else { return self }
@@ -10,10 +22,14 @@ public extension AccessibilityHierarchy {
         return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
     }
 
-    func pathIndexedElements(path: TreePath = .root) -> [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] {
+    func pathIndexedElements(path: TreePath = .root) -> [PathIndexedAccessibilityElement] {
         switch self {
         case .element(let element, let traversalIndex):
-            return [(element, path, traversalIndex)]
+            return [PathIndexedAccessibilityElement(
+                element: element,
+                path: path,
+                traversalIndex: traversalIndex
+            )]
         case .container(_, let children):
             return children.enumerated().flatMap { index, child in
                 child.pathIndexedElements(path: path.appending(index))
@@ -47,7 +63,7 @@ public extension Array where Element == AccessibilityHierarchy {
         return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
     }
 
-    var pathIndexedElements: [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] {
+    var pathIndexedElements: [PathIndexedAccessibilityElement] {
         enumerated()
             .flatMap { index, root in root.pathIndexedElements(path: TreePath([index])) }
             .sorted {
