@@ -91,10 +91,12 @@ final class InteractionObservation {
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
         before: PostActionObservation.BeforeState,
+        postActionCommitScope: SemanticObservationScope = .visible,
         settleOutcome: SettleSession.Outcome? = nil
     ) async -> ActionResult {
         let settleEvidence = await postActionObservation.settleEvidence(
             before: before,
+            commitScope: postActionCommitScope,
             outcome: settleOutcome
         )
         let finalEvidenceStart = CFAbsoluteTimeGetCurrent()
@@ -134,17 +136,29 @@ final class InteractionObservation {
     func waitForPredicate(
         _ step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil
+        after sequence: SettledObservationSequence? = nil,
+        observationScope: SemanticObservationScope? = nil
     ) async -> HeistWaitReceipt {
-        await predicateWait.wait(for: step, initialTrace: initialTrace, after: sequence)
+        await predicateWait.wait(
+            for: step,
+            initialTrace: initialTrace,
+            after: sequence,
+            observationScope: observationScope
+        )
     }
 
     func waitForPredicate(
         _ step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil
+        after sequence: SettledObservationSequence? = nil,
+        observationScope: SemanticObservationScope? = nil
     ) async -> HeistWaitReceipt {
-        await predicateWait.wait(for: step, initialTrace: initialTrace, after: sequence)
+        await predicateWait.wait(
+            for: step,
+            initialTrace: initialTrace,
+            after: sequence,
+            observationScope: observationScope
+        )
     }
 
     func waitForPredicateCases(

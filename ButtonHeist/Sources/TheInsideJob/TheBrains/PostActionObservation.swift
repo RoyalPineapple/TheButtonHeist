@@ -110,10 +110,12 @@ final class PostActionObservation {
 
     func settleEvidence(
         before: BeforeState,
+        commitScope: SemanticObservationScope = .visible,
         outcome: SettleSession.Outcome?
     ) async -> SettleEvidence {
         let settledObservation = await stash.semanticObservationStream.settlePostActionObservation(
             baselineTripwireSignal: before.tripwireSignal,
+            commitScope: commitScope,
             settleOutcome: outcome
         )
         return SettleEvidence(
@@ -583,7 +585,8 @@ private extension SemanticScreen {
         for (heistId, entry) in elements where !removedIds.contains(heistId) {
             remappedElements[heistId] = Element(
                 heistId: entry.heistId,
-                scrollContentLocation: remap(entry.scrollContentLocation, using: pathMap),
+                scrollMembership: remap(entry.scrollMembership, using: pathMap),
+                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
                 element: entry.element
             )
         }
@@ -597,20 +600,22 @@ private extension SemanticScreen {
                 path: remappedPath,
                 containerName: entry.containerName,
                 contentFrame: entry.contentFrame,
-                scrollContentLocation: remap(entry.scrollContentLocation, using: pathMap)
+                scrollMembership: remap(entry.scrollMembership, using: pathMap),
+                observedScrollContentActivationPoint: entry.observedScrollContentActivationPoint,
+                scrollInventory: entry.scrollInventory
             )
         }
         return SemanticScreen(elements: remappedElements, containers: remappedContainers)
     }
 
     private func remap(
-        _ location: ScrollContentLocation?,
+        _ membership: ScrollMembership?,
         using pathMap: [TreePath: TreePath]
-    ) -> ScrollContentLocation? {
-        guard let location else { return nil }
-        return ScrollContentLocation(
-            origin: location.origin,
-            scrollContainerPath: pathMap[location.scrollContainerPath] ?? location.scrollContainerPath
+    ) -> ScrollMembership? {
+        guard let membership else { return nil }
+        return ScrollMembership(
+            containerPath: pathMap[membership.containerPath] ?? membership.containerPath,
+            index: membership.index
         )
     }
 }
@@ -631,10 +636,15 @@ private extension LiveCapture {
             elementRefs: elementRefs.filter { !removedIds.contains($0.key) },
             containerRefsByPath: Self.remap(containerRefsByPath, using: filteredLiveTree.pathMap),
             containerContentFramesByPath: Self.remap(containerContentFramesByPath, using: filteredLiveTree.pathMap),
-            containerScrollContentLocationsByPath: Self.remapScrollContentLocations(
-                containerScrollContentLocationsByPath,
+            containerScrollMembershipsByPath: Self.remapMemberships(
+                containerScrollMembershipsByPath,
                 using: filteredLiveTree.pathMap
             ),
+            containerObservedScrollContentActivationPointsByPath: Self.remap(
+                containerObservedScrollContentActivationPointsByPath,
+                using: filteredLiveTree.pathMap
+            ),
+            scrollInventoriesByPath: Self.remap(scrollInventoriesByPath, using: filteredLiveTree.pathMap),
             firstResponderHeistId: firstResponderHeistId.flatMap { removedIds.contains($0) ? nil : $0 },
             scrollableContainerViewsByPath: Self.remap(scrollableContainerViewsByPath, using: filteredLiveTree.pathMap)
         )
@@ -652,20 +662,20 @@ private extension LiveCapture {
         )
     }
 
-    private static func remapScrollContentLocations(
-        _ locations: [TreePath: SemanticScreen.ScrollContentLocation],
+    private static func remapMemberships(
+        _ memberships: [TreePath: SemanticScreen.ScrollMembership],
         using pathMap: [TreePath: TreePath]
-    ) -> [TreePath: SemanticScreen.ScrollContentLocation] {
+    ) -> [TreePath: SemanticScreen.ScrollMembership] {
         Dictionary(
-            uniqueKeysWithValues: locations.compactMap { path, location in
+            uniqueKeysWithValues: memberships.compactMap { path, membership in
                 guard let remappedPath = pathMap[path],
-                      let remappedContainerPath = pathMap[location.scrollContainerPath]
+                      let remappedContainerPath = pathMap[membership.containerPath]
                 else { return nil }
                 return (
                     remappedPath,
-                    SemanticScreen.ScrollContentLocation(
-                        origin: location.origin,
-                        scrollContainerPath: remappedContainerPath
+                    SemanticScreen.ScrollMembership(
+                        containerPath: remappedContainerPath,
+                        index: membership.index
                     )
                 )
             }

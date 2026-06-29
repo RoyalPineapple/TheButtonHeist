@@ -48,6 +48,10 @@ final class Navigation {
                 baseline: self.stash.actionDiscoveryBaseline()
             ).screen
         }
+        self.elementInflation.revealKnownTarget = { [weak self] heistId in
+            guard let self else { return nil }
+            return await self.scanForHeistId(heistId)
+        }
     }
 
     // MARK: - Nested Types
@@ -107,17 +111,6 @@ final class Navigation {
         }
     }
 
-    /// Stable signature for visible content-space anchors.
-    struct VisibleAnchorSignature: Hashable, Sendable {
-        private let anchors: [VisibleAnchor]
-
-        init(anchors: [(heistId: HeistId, origin: CGPoint)]) {
-            self.anchors = anchors
-                .map { VisibleAnchor(heistId: $0.heistId, origin: $0.origin) }
-                .sorted()
-        }
-    }
-
     private enum SwipeTargetKeyStorage: Hashable, Sendable {
         case containerName(ContainerName)
         case containerPath(TreePath)
@@ -131,40 +124,6 @@ final class Navigation {
         init(frame: CGRect, contentSize: CGSize) {
             self.frame = CoarseRect(frame)
             self.contentSize = CoarseSize(contentSize)
-        }
-    }
-
-    private struct VisibleAnchor: Hashable, Sendable, Comparable {
-        let heistId: HeistId
-        let origin: CoarsePoint
-
-        init(heistId: HeistId, origin: CGPoint) {
-            self.heistId = heistId
-            self.origin = CoarsePoint(origin)
-        }
-
-        static func < (lhs: VisibleAnchor, rhs: VisibleAnchor) -> Bool {
-            if lhs.heistId != rhs.heistId {
-                return lhs.heistId < rhs.heistId
-            }
-            return lhs.origin < rhs.origin
-        }
-    }
-
-    private struct CoarsePoint: Hashable, Sendable, Comparable {
-        let x: Int
-        let y: Int
-
-        init(_ point: CGPoint) {
-            x = Int(point.x.rounded())
-            y = Int(point.y.rounded())
-        }
-
-        static func < (lhs: CoarsePoint, rhs: CoarsePoint) -> Bool {
-            if lhs.x != rhs.x {
-                return lhs.x < rhs.x
-            }
-            return lhs.y < rhs.y
         }
     }
 
@@ -200,8 +159,8 @@ final class Navigation {
     /// implementations; each watches a different signal because the callers
     /// need different answers:
     ///
-    /// 1. `SettleSwipeLoopState` (here) — visible heistId set + content-space
-    ///    anchor signature, interleaved frame-by-frame with Stash visible observations.
+    /// 1. `SettleSwipeLoopState` (here) — visible heistId set changes,
+    ///    interleaved frame-by-frame with Stash visible observations.
     ///    Answers "did the swipe move us, and has the visible set stopped
     ///    accepting new heistIds?" — the only signal that distinguishes
     ///    spring-bounce-then-settle from edge-rejected gestures.
@@ -222,8 +181,6 @@ final class Navigation {
     struct SettleSwipeLoopState: Equatable {
         let profile: SettleSwipeProfile
         let previousVisibleIds: Set<HeistId>
-        let previousAnchor: VisibleAnchorSignature?
-
         private(set) var moved = false
         private(set) var frame = 0
         private var lastVisibleIds: Set<HeistId>
@@ -232,26 +189,20 @@ final class Navigation {
 
         init(
             profile: SettleSwipeProfile,
-            previousVisibleIds: Set<HeistId>,
-            previousAnchor: VisibleAnchorSignature?
+            previousVisibleIds: Set<HeistId>
         ) {
             self.profile = profile
             self.previousVisibleIds = previousVisibleIds
-            self.previousAnchor = previousAnchor
             self.lastVisibleIds = previousVisibleIds
         }
 
-        /// Advance one frame. Pass the current visible id set, the current
-        /// anchor signature (nil if content-space origins unavailable), and
-        /// the heistIds newly discovered this frame.
+        /// Advance one frame. Pass the current visible id set and the heistIds
+        /// newly discovered this frame.
         mutating func advance(
             visibleIds: Set<HeistId>,
-            anchorSignature: VisibleAnchorSignature?,
             newHeistIds: Set<HeistId>
         ) -> SettleSwipeStep {
-            if let previousAnchor, let anchorSignature {
-                if anchorSignature != previousAnchor { moved = true }
-            } else if visibleIds != previousVisibleIds {
+            if visibleIds != previousVisibleIds {
                 moved = true
             }
 

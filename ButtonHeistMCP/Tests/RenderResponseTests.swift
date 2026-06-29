@@ -28,7 +28,7 @@ struct RenderResponseTests {
             Issue.record("expected second content item to be text")
             return
         }
-        #expect(text.contains(#"group label="Actions" id="actions" containerName="semantic_actions__actions" frame=(0,40,200,100)"#))
+        #expect(text.contains(#"── group "Actions" id="actions" "semantic_actions__actions" frame=(0,40,200,100) ──"#))
     }
 
     @Test("heist render attaches bounded structured report")

@@ -3704,7 +3704,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let compact = response.compactFormatted()
         XCTAssertTrue(
-            compact.contains(#"group label="Actions" id="actions" containerName="semantic_actions__actions""#),
+            compact.contains(#"── group "Actions" id="actions" "semantic_actions__actions" ──"#),
             compact
         )
         XCTAssertFalse(compact.contains("stableId"), compact)

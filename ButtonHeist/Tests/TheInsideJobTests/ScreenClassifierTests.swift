@@ -229,7 +229,7 @@ final class ScreenClassifierTests: XCTestCase {
                     heistId,
                     Screen.ScreenElement(
                         heistId: heistId,
-                        contentSpaceOrigin: nil,
+                        scrollMembership: nil,
                         element: element
                     )
                 )

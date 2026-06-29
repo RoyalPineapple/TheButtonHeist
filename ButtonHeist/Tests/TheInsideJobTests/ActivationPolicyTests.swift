@@ -201,7 +201,7 @@ final class ActivationPolicyTests: XCTestCase {
         )
         let screenElement = TheStash.ScreenElement(
             heistId: heistId,
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: element
         )
         let object = ActivationObject()

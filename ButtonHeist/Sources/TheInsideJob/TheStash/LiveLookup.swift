@@ -54,7 +54,8 @@ struct LiveLookup {
                     entry.heistId,
                     Screen.ScreenElement(
                         heistId: entry.heistId,
-                        scrollContentLocation: observedEntry?.scrollContentLocation,
+                        scrollMembership: observedEntry?.scrollMembership,
+                        observedScrollContentActivationPoint: observedEntry?.observedScrollContentActivationPoint,
                         element: entry.element
                     )
                 )
@@ -78,7 +79,8 @@ struct LiveLookup {
               let observedEntry = observedSemanticWorld.elements[heistId] else { return nil }
         return Screen.ScreenElement(
             heistId: heistId,
-            scrollContentLocation: observedEntry.scrollContentLocation,
+            scrollMembership: observedEntry.scrollMembership,
+            observedScrollContentActivationPoint: observedEntry.observedScrollContentActivationPoint,
             element: liveElement
         )
     }

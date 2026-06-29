@@ -6,7 +6,7 @@ import XCTest
 
 /// Tests for `TheBurglar.buildScreen(from:)`. Validates that a `ParseResult`
 /// is converted into a `Screen` value with the current semantics: heistId
-/// assignment, content-space origins, first-responder detection, and
+/// assignment, scroll membership, first-responder detection, and
 /// screen-name derivation.
 @MainActor
 final class TheBurglarApplyTests: XCTestCase {
@@ -311,9 +311,9 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(translated.bhResolvedActivationPoint, CGPoint(x: 50, y: 60))
     }
 
-    // MARK: - Content space origin
+    // MARK: - Scroll membership
 
-    func testPropagatesContentSpaceOriginForScrollableContainerChild() {
+    func testPropagatesScrollMembershipForScrollableContainerChild() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 100, width: 320, height: 500))
         scrollView.contentSize = CGSize(width: 320, height: 2000)
 
@@ -335,11 +335,10 @@ final class TheBurglarApplyTests: XCTestCase {
             return
         }
 
-        XCTAssertNotNil(screen.findElement(heistId: heistId)?.contentSpaceOrigin,
-                        "Element inside a scrollable container should receive a contentSpaceOrigin")
+        XCTAssertEqual(screen.findElement(heistId: heistId)?.scrollMembership?.containerPath, TreePath([0]))
     }
 
-    func testLeavesContentSpaceOriginNilOutsideScrollableContainer() {
+    func testLeavesScrollMembershipNilOutsideScrollableContainer() {
         let element = makeElement(label: "Plain",
                                   frame: CGRect(x: 0, y: 0, width: 10, height: 10))
         let result = TheBurglar.ParseResult(
@@ -352,8 +351,7 @@ final class TheBurglarApplyTests: XCTestCase {
             return
         }
 
-        XCTAssertNil(screen.findElement(heistId: heistId)?.contentSpaceOrigin,
-                     "Element with no enclosing scroll view should have nil contentSpaceOrigin")
+        XCTAssertNil(screen.findElement(heistId: heistId)?.scrollMembership)
     }
 
     // MARK: - Helpers

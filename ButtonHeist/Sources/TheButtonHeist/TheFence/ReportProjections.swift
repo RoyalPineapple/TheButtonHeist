@@ -182,6 +182,7 @@ struct InterfaceElementProjection: Sendable {
 struct InterfaceContainerProjection: Sendable {
     let container: AccessibilityContainer
     let containerName: String?
+    let scrollInventory: ScrollInventory?
     let observedElementCount: Int
     let truncation: InterfaceSubtreeTruncationProjection?
     let children: [InterfaceNodeProjection]
@@ -350,6 +351,7 @@ struct InterfaceProjection: Sendable {
             return .container(InterfaceContainerProjection(
                 container: container,
                 containerName: context.containerAnnotations[path]?.containerName?.rawValue,
+                scrollInventory: context.containerAnnotations[path]?.scrollInventory,
                 observedElementCount: observedElementCount,
                 truncation: truncation,
                 children: projectedChildren

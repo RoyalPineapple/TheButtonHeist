@@ -303,7 +303,11 @@ extension TheInsideJob {
         _ = await brains.interactionObservation.observeVisibleState(
             timeout: SemanticObservationTiming.defaultTimeout
         )
-        return await brains.executeHeistPlan(plan, argument: argument)
+        let result = await brains.executeHeistPlan(plan, argument: argument)
+        if shouldRestoreRuntime {
+            _ = await tripwire.waitForAllClear(timeout: SemanticObservationTiming.defaultTimeout)
+        }
+        return result
     }
 }
 

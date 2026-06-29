@@ -276,7 +276,7 @@ final class TheStashRotorTests: XCTestCase {
         var elements = screen.semantic.elements
         elements[cachedHeistId] = Screen.ScreenElement(
             heistId: cachedHeistId,
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: AccessibilityElement.make(
                 label: "Cached virtual result",
                 identifier: cachedHeistId.rawValue,
@@ -318,7 +318,7 @@ final class TheStashRotorTests: XCTestCase {
         )
         let screenElement = Screen.ScreenElement(
             heistId: "rotor_host",
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: element
         )
         host.accessibilityCustomRotors = [

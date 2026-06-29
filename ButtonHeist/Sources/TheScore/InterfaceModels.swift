@@ -109,6 +109,16 @@ extension TreePath: Comparable {
     }
 }
 
+public struct ScrollInventory: Codable, Equatable, Hashable, Sendable {
+    public let totalElementCount: Int?
+    public let visibleIndices: [Int]
+
+    public init(totalElementCount: Int?, visibleIndices: [Int]) {
+        self.totalElementCount = totalElementCount
+        self.visibleIndices = visibleIndices
+    }
+}
+
 /// Button Heist metadata attached to one parser element.
 ///
 /// `AccessibilityElement` is the accessibility fact. These annotations are
@@ -118,16 +128,13 @@ extension TreePath: Comparable {
 public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
     public let actions: [ElementAction]
-    public let contentSpaceOrigin: AccessibilityPoint?
 
     public init(
         path: TreePath,
-        actions: [ElementAction],
-        contentSpaceOrigin: AccessibilityPoint? = nil
+        actions: [ElementAction]
     ) {
         self.path = path
         self.actions = actions
-        self.contentSpaceOrigin = contentSpaceOrigin
     }
 }
 
@@ -139,10 +146,16 @@ public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable
 public struct InterfaceContainerAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
     public let containerName: ContainerName?
+    public let scrollInventory: ScrollInventory?
 
-    public init(path: TreePath, containerName: ContainerName?) {
+    public init(
+        path: TreePath,
+        containerName: ContainerName?,
+        scrollInventory: ScrollInventory? = nil
+    ) {
         self.path = path
         self.containerName = containerName
+        self.scrollInventory = scrollInventory
     }
 }
 
@@ -342,8 +355,7 @@ public struct Interface: Codable, Equatable, Sendable {
             guard let annotation = elementsByPath[oldPath] else { return nil }
             return InterfaceElementAnnotation(
                 path: newPath,
-                actions: annotation.actions,
-                contentSpaceOrigin: annotation.contentSpaceOrigin
+                actions: annotation.actions
             )
         }
         let containersByPath = annotations.containerByPath
@@ -354,7 +366,8 @@ public struct Interface: Codable, Equatable, Sendable {
             guard let annotation = containersByPath[oldPath] else { return nil }
             return InterfaceContainerAnnotation(
                 path: newPath,
-                containerName: annotation.containerName
+                containerName: annotation.containerName,
+                scrollInventory: annotation.scrollInventory
             )
         }
         return InterfaceAnnotations(elements: elements, containers: containers)

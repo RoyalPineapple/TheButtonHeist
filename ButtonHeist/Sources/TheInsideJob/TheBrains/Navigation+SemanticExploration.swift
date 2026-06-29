@@ -9,70 +9,20 @@ import ThePlans
 
 extension Navigation {
 
-    struct ContainerPage {
-        let entries: [ContainerPageEntry]
-
-        var elements: [AccessibilityElement] {
-            entries.map(\.element)
-        }
-
-        var origins: [CGPoint?] {
-            entries.map(\.origin)
-        }
-    }
-
-    struct ContainerPageEntry: Equatable {
-        let path: TreePath
-        let heistId: HeistId
-        let element: AccessibilityElement
-        let origin: CGPoint?
-    }
-
-    struct ContainerScan {
-        var accumulated: [ContainerPageEntry]
-    }
-
-    struct ContainerPageReconciliation: Equatable {
-        let entries: [ContainerPageEntry]
-        let overlap: OverlapResult
-        let inserted: [ContainerPageEntry]
-        let previousCount: Int
-    }
-
-    enum ContainerScanResult: Equatable {
-        case foundTarget
-        case completed
-        case omitted(ExplorationOmissionReason)
-    }
-
     struct ContainerExploration {
         let semanticContainer: SemanticScreen.Container
-        let scrollTarget: ScrollableTarget
+        let scrollView: UIScrollView
         let hasHOverflow: Bool
         let hasVOverflow: Bool
-        let ancestorRestorations: [ViewportRestoration]
 
         var container: AccessibilityContainer { semanticContainer.container }
 
         var path: TreePath { semanticContainer.path }
 
-        var direction: UIAccessibilityScrollDirection { hasHOverflow ? .right : .down }
-
-        var leadingEdge: ScrollEdge { hasHOverflow ? .left : .top }
-
         @MainActor
-        var savedVisualOrigin: CGPoint? {
-            guard case .uiScrollView(let scrollView) = scrollTarget else { return nil }
-            return CGPoint(
-                x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-                y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
-            )
+        var savedVisualOrigin: CGPoint {
+            Navigation.visualOrigin(in: scrollView)
         }
-    }
-
-    struct ViewportRestoration {
-        let scrollView: UIScrollView
-        let visualOrigin: CGPoint
     }
 
     struct ExploredScreen {

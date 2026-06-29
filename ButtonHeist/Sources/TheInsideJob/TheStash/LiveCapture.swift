@@ -47,8 +47,16 @@ struct LiveCapture: Equatable {
         snapshot.containerContentFramesByPath
     }
 
-    var containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] {
-        snapshot.containerScrollContentLocationsByPath
+    var containerScrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership] {
+        snapshot.containerScrollMembershipsByPath
+    }
+
+    var containerObservedScrollContentActivationPointsByPath: [TreePath: SemanticScreen.ObservedScrollContentActivationPoint] {
+        snapshot.containerObservedScrollContentActivationPointsByPath
+    }
+
+    var scrollInventoriesByPath: [TreePath: ScrollInventory] {
+        snapshot.scrollInventoriesByPath
     }
 
     var firstResponderHeistId: HeistId? {
@@ -66,7 +74,9 @@ struct LiveCapture: Equatable {
         elementRefs: [HeistId: ElementRef],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
         containerContentFramesByPath: [TreePath: CGRect] = [:],
-        containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] = [:],
+        containerScrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership] = [:],
+        containerObservedScrollContentActivationPointsByPath: [TreePath: SemanticScreen.ObservedScrollContentActivationPoint] = [:],
+        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
@@ -75,7 +85,9 @@ struct LiveCapture: Equatable {
             containerNamesByPath: containerNamesByPath,
             heistIdsByPath: heistIdsByPath,
             containerContentFramesByPath: containerContentFramesByPath,
-            containerScrollContentLocationsByPath: containerScrollContentLocationsByPath
+            containerScrollMembershipsByPath: containerScrollMembershipsByPath,
+            containerObservedScrollContentActivationPointsByPath: containerObservedScrollContentActivationPointsByPath,
+            scrollInventoriesByPath: scrollInventoriesByPath
         )
         let dispatchReferences = DispatchReferences(
             elementRefs: elementRefs,
@@ -153,14 +165,24 @@ struct LiveCapture: Equatable {
         snapshot.containerContentFrame(forPath: path)
     }
 
-    func containerScrollContentLocation(forPath path: TreePath) -> SemanticScreen.ScrollContentLocation? {
-        snapshot.containerScrollContentLocation(forPath: path)
+    func containerScrollMembership(forPath path: TreePath) -> SemanticScreen.ScrollMembership? {
+        snapshot.containerScrollMembership(forPath: path)
+    }
+
+    func containerObservedScrollContentActivationPoint(
+        forPath path: TreePath
+    ) -> SemanticScreen.ObservedScrollContentActivationPoint? {
+        snapshot.containerObservedScrollContentActivationPoint(forPath: path)
+    }
+
+    func scrollInventory(forPath path: TreePath) -> ScrollInventory? {
+        snapshot.scrollInventory(forPath: path)
     }
 
     func scrollView(for element: SemanticScreen.Element) -> UIScrollView? {
         let visibleScrollView = contains(heistId: element.heistId) ? scrollView(for: element.heistId) : nil
-        let pathScrollView = element.scrollContentLocation
-            .flatMap { scrollView(forContainerPath: $0.scrollContainerPath) }
+        let pathScrollView = element.scrollContainerPath
+            .flatMap { scrollView(forContainerPath: $0) }
         return visibleScrollView
             ?? pathScrollView
     }
@@ -174,27 +196,33 @@ struct LiveCapture: Equatable {
     /// Value-only capture metadata retained by settled semantic storage.
     ///
     /// This preserves parser hierarchy, ids, container names, and
-    /// content-space evidence without carrying weak UIKit refs or live dispatch
+    /// scroll membership evidence without carrying weak UIKit refs or live dispatch
     /// lookup tables.
     struct Snapshot: Sendable, Equatable {
         let hierarchy: [AccessibilityHierarchy]
         let containerNamesByPath: [TreePath: ContainerName]
         let heistIdsByPath: [TreePath: HeistId]
         let containerContentFramesByPath: [TreePath: CGRect]
-        let containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation]
+        let containerScrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership]
+        let containerObservedScrollContentActivationPointsByPath: [TreePath: SemanticScreen.ObservedScrollContentActivationPoint]
+        let scrollInventoriesByPath: [TreePath: ScrollInventory]
 
         init(
             hierarchy: [AccessibilityHierarchy],
             containerNamesByPath: [TreePath: ContainerName] = [:],
             heistIdsByPath: [TreePath: HeistId] = [:],
             containerContentFramesByPath: [TreePath: CGRect] = [:],
-            containerScrollContentLocationsByPath: [TreePath: SemanticScreen.ScrollContentLocation] = [:]
+            containerScrollMembershipsByPath: [TreePath: SemanticScreen.ScrollMembership] = [:],
+            containerObservedScrollContentActivationPointsByPath: [TreePath: SemanticScreen.ObservedScrollContentActivationPoint] = [:],
+            scrollInventoriesByPath: [TreePath: ScrollInventory] = [:]
         ) {
             self.hierarchy = hierarchy
             self.containerNamesByPath = containerNamesByPath
             self.heistIdsByPath = heistIdsByPath
             self.containerContentFramesByPath = containerContentFramesByPath
-            self.containerScrollContentLocationsByPath = containerScrollContentLocationsByPath
+            self.containerScrollMembershipsByPath = containerScrollMembershipsByPath
+            self.containerObservedScrollContentActivationPointsByPath = containerObservedScrollContentActivationPointsByPath
+            self.scrollInventoriesByPath = scrollInventoriesByPath
         }
 
         static let empty = Snapshot(
@@ -220,8 +248,18 @@ struct LiveCapture: Equatable {
             containerContentFramesByPath[path]
         }
 
-        func containerScrollContentLocation(forPath path: TreePath) -> SemanticScreen.ScrollContentLocation? {
-            containerScrollContentLocationsByPath[path]
+        func containerScrollMembership(forPath path: TreePath) -> SemanticScreen.ScrollMembership? {
+            containerScrollMembershipsByPath[path]
+        }
+
+        func containerObservedScrollContentActivationPoint(
+            forPath path: TreePath
+        ) -> SemanticScreen.ObservedScrollContentActivationPoint? {
+            containerObservedScrollContentActivationPointsByPath[path]
+        }
+
+        func scrollInventory(forPath path: TreePath) -> ScrollInventory? {
+            scrollInventoriesByPath[path]
         }
     }
 

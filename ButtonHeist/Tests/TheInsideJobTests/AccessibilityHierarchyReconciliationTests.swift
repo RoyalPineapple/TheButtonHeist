@@ -359,135 +359,6 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.elements.map(\.label), ["Row 0", "Row 1", "Row 2", "Row 3"])
     }
 
-    // MARK: - Content-Space Reconciliation (Scroll-Invariant)
-
-    func testContentSpaceFingerprintStableAcrossScrollPositions() {
-        // Same element, different screen-space frames (scroll moved it), same content-space origin.
-        // Window-space fingerprints would differ. Content-space fingerprints must match.
-        let elementPage1 = makeElement(
-            label: "Row 5", identifier: "r5",
-            frame: CGRect(x: 0, y: 220, width: 320, height: 44)  // screen position on page 1
-        )
-        let elementPage2 = makeElement(
-            label: "Row 5", identifier: "r5",
-            frame: CGRect(x: 0, y: 132, width: 320, height: 44)  // screen position on page 2 (scrolled)
-        )
-
-        // Window-space: different (frames differ)
-        XCTAssertNotEqual(elementPage1.contentFingerprint, elementPage2.contentFingerprint,
-                          "Window-space fingerprints differ because frames differ")
-
-        // Content-space: same (both at y=220 in content coordinates)
-        let contentOrigin = CGPoint(x: 0, y: 220)
-        XCTAssertEqual(
-            elementPage1.fingerprint(contentSpaceOrigin: contentOrigin),
-            elementPage2.fingerprint(contentSpaceOrigin: contentOrigin),
-            "Content-space fingerprints match — same row regardless of scroll position"
-        )
-    }
-
-    func testReconcileWithContentSpaceOrigins() {
-        // Simulate scrolling a table view forward by one row.
-        // Screen-space frames shift, but content-space origins are stable.
-        //
-        // Content layout (fixed):
-        //   Row 0: content y=0
-        //   Row 1: content y=44
-        //   Row 2: content y=88
-        //   Row 3: content y=132
-        //
-        // Page 1 viewport (scroll offset 0): rows 0,1,2 visible
-        //   Row 0 screen y=0, Row 1 screen y=44, Row 2 screen y=88
-        //
-        // Page 2 viewport (scroll offset 44): rows 1,2,3 visible
-        //   Row 1 screen y=0, Row 2 screen y=44, Row 3 screen y=88
-        //   (screen frames shifted because viewport moved)
-
-        let page1 = [
-            makeElement(label: "Row 0", identifier: "r0", frame: CGRect(x: 0, y: 0, width: 320, height: 44)),
-            makeElement(label: "Row 1", identifier: "r1", frame: CGRect(x: 0, y: 44, width: 320, height: 44)),
-            makeElement(label: "Row 2", identifier: "r2", frame: CGRect(x: 0, y: 88, width: 320, height: 44)),
-        ]
-        let page1Origins: [CGPoint?] = [
-            CGPoint(x: 0, y: 0),
-            CGPoint(x: 0, y: 44),
-            CGPoint(x: 0, y: 88),
-        ]
-
-        let page2 = [
-            makeElement(label: "Row 1", identifier: "r1", frame: CGRect(x: 0, y: 0, width: 320, height: 44)),   // screen y shifted!
-            makeElement(label: "Row 2", identifier: "r2", frame: CGRect(x: 0, y: 44, width: 320, height: 44)),  // screen y shifted!
-            makeElement(label: "Row 3", identifier: "r3", frame: CGRect(x: 0, y: 88, width: 320, height: 44)),
-        ]
-        let page2Origins: [CGPoint?] = [
-            CGPoint(x: 0, y: 44),   // same content-space y as Row 1 in page 1
-            CGPoint(x: 0, y: 88),   // same content-space y as Row 2 in page 1
-            CGPoint(x: 0, y: 132),
-        ]
-
-        let result = reconcilePage(
-            accumulated: page1,
-            accumulatedOrigins: page1Origins,
-            page: page2,
-            pageOrigins: page2Origins
-        )
-
-        XCTAssertEqual(result.elements.count, 4, "All 4 unique rows")
-        XCTAssertEqual(result.elements.map(\.label), ["Row 0", "Row 1", "Row 2", "Row 3"])
-        XCTAssertEqual(result.overlap.length, 2, "Row 1 and Row 2 overlap via content-space match")
-        XCTAssertEqual(result.inserted.count, 1, "Only Row 3 is new")
-    }
-
-    func testContentSpaceOrderingKeepsRetainedTailInPositionOrder() {
-        let accumulated = [
-            makeElement(label: "A", identifier: "a"),
-            makeElement(label: "B", identifier: "b"),
-            makeElement(label: "C", identifier: "c"),
-            makeElement(label: "D", identifier: "d"),
-            makeElement(label: "E", identifier: "e"),
-            makeElement(label: "F", identifier: "f"),
-            makeElement(label: "G", identifier: "g"),
-        ]
-        let accumulatedOrigins: [CGPoint?] = [
-            CGPoint(x: 0, y: 0),
-            CGPoint(x: 0, y: 100),
-            CGPoint(x: 0, y: 200),
-            CGPoint(x: 0, y: 300),
-            CGPoint(x: 0, y: 400),
-            CGPoint(x: 0, y: 500),
-            CGPoint(x: 0, y: 650),
-        ]
-
-        let page = [
-            makeElement(label: "X", identifier: "x"),
-            makeElement(label: "D", identifier: "d"),
-            makeElement(label: "E", identifier: "e"),
-            makeElement(label: "F", identifier: "f"),
-            makeElement(label: "H", identifier: "h"),
-            makeElement(label: "I", identifier: "i"),
-        ]
-        let pageOrigins: [CGPoint?] = [
-            CGPoint(x: 0, y: 250),
-            CGPoint(x: 0, y: 300),
-            CGPoint(x: 0, y: 400),
-            CGPoint(x: 0, y: 500),
-            CGPoint(x: 0, y: 600),
-            CGPoint(x: 0, y: 700),
-        ]
-
-        let result = reconcilePage(
-            accumulated: accumulated,
-            accumulatedOrigins: accumulatedOrigins,
-            page: page,
-            pageOrigins: pageOrigins,
-            orderingAxis: .vertical
-        )
-
-        XCTAssertEqual(result.overlap.length, 3, "D/E/F anchor the merge")
-        XCTAssertEqual(result.elements.map(\.label), ["A", "B", "C", "X", "D", "E", "F", "H", "G", "I"])
-        XCTAssertEqual(result.inserted.map(\.label), ["X", "H", "I"])
-    }
-
     private func makePathElement(label: String, path: UIBezierPath) -> AccessibilityElement {
         AccessibilityElement(
             description: label,
@@ -513,8 +384,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         // and Int(.infinity) traps. Must use safeBounds.
         let element = makePathElement(label: "empty", path: UIBezierPath())
         _ = element.contentFingerprint
-        _ = element.fingerprint(contentSpaceOrigin: nil)
-        _ = element.fingerprint(contentSpaceOrigin: CGPoint(x: 10, y: 20))
+        _ = element.fingerprint()
     }
 
     func testFingerprintNaNPathDoesNotCrash() {
@@ -523,7 +393,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         path.addLine(to: CGPoint(x: CGFloat.infinity, y: CGFloat.nan))
         let element = makePathElement(label: "nan", path: path)
         _ = element.contentFingerprint
-        _ = element.fingerprint(contentSpaceOrigin: nil)
+        _ = element.fingerprint()
     }
 
     func testFingerprintValidPathStillDeterministic() {
@@ -579,17 +449,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
             frame: CGRect(x: 1e100, y: -1e100, width: CGFloat.greatestFiniteMagnitude, height: 1e200)
         )
         _ = element.contentFingerprint
-        _ = element.fingerprint(contentSpaceOrigin: nil)
-    }
-
-    func testFingerprintHugeContentSpaceOriginDoesNotCrash() {
-        // `contentSpaceOrigin` is unguarded against finite-but-out-of-range values.
-        let element = makeElement(label: "row", frame: CGRect(x: 0, y: 0, width: 100, height: 44))
-        _ = element.fingerprint(contentSpaceOrigin: CGPoint(x: 1e100, y: -1e100))
-        _ = element.fingerprint(contentSpaceOrigin: CGPoint(
-            x: CGFloat.greatestFiniteMagnitude,
-            y: -CGFloat.greatestFiniteMagnitude
-        ))
+        _ = element.fingerprint()
     }
 
     func testFingerprintHugeFinitePathDoesNotCrash() {
@@ -598,7 +458,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         path.addLine(to: CGPoint(x: 1e100, y: 1e100))
         let element = makePathElement(label: "huge-path", path: path)
         _ = element.contentFingerprint
-        _ = element.fingerprint(contentSpaceOrigin: nil)
+        _ = element.fingerprint()
     }
 
     func testWindowSpaceReconcileFailsWithScrolledFrames() {

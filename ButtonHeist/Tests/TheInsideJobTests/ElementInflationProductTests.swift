@@ -359,7 +359,7 @@ final class ElementInflationProductTests: XCTestCase {
         target.accessibilityIdentifier = identifier
         target.accessibilityTraits = .button
 
-        let contentOrigin: CGPoint
+        let frameOrigin: CGPoint
         if nestedInGroup {
             let group = UIView(frame: CGRect(x: 24, y: 860, width: 272, height: 120))
             group.accessibilityLabel = "Payment Actions"
@@ -368,10 +368,10 @@ final class ElementInflationProductTests: XCTestCase {
             target.frame = CGRect(x: 16, y: 40, width: 220, height: 44)
             group.addSubview(target)
             scrollView.addSubview(group)
-            contentOrigin = CGPoint(x: group.frame.minX + target.frame.minX, y: group.frame.minY + target.frame.minY)
+            frameOrigin = CGPoint(x: group.frame.minX + target.frame.minX, y: group.frame.minY + target.frame.minY)
         } else {
             scrollView.addSubview(target)
-            contentOrigin = target.frame.origin
+            frameOrigin = target.frame.origin
         }
 
         scrollView.revealedElements = [target]
@@ -392,7 +392,7 @@ final class ElementInflationProductTests: XCTestCase {
             identifier: identifier,
             label: label,
             knownHeistId: HeistId(rawValue: "known_\(identifier)"),
-            contentOrigin: contentOrigin
+            frameOrigin: frameOrigin
         )
     }
 
@@ -474,7 +474,7 @@ final class ElementInflationProductTests: XCTestCase {
             identifier: identifier,
             label: label,
             knownHeistId: HeistId(rawValue: "known_\(identifier)"),
-            contentOrigin: target.frame.origin
+            frameOrigin: target.frame.origin
         )
     }
 
@@ -539,8 +539,8 @@ final class ElementInflationProductTests: XCTestCase {
             identifier: identifier,
             label: label,
             knownHeistId: HeistId(rawValue: "known_\(identifier)"),
-            innerContentOrigin: innerScrollView.frame.origin,
-            targetContentOrigin: target.frame.origin
+            innerFrameOrigin: innerScrollView.frame.origin,
+            targetFrameOrigin: target.frame.origin
         )
     }
 
@@ -588,32 +588,26 @@ final class ElementInflationProductTests: XCTestCase {
             label: label,
             identifier: identifier,
             frame: CGRect(
-                origin: fixture.contentOrigin,
+                origin: fixture.frameOrigin,
                 size: fixture.target.bounds.size
             )
         )
+        let observedActivationPoint = try observedContentActivationPoint(
+            origin: fixture.frameOrigin,
+            size: fixture.target.bounds.size
+        )
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
-            contentSpaceOrigin: fixture.contentOrigin,
-            scrollContainerPath: scrollContainerPath,
+            scrollMembership: Screen.ScrollMembership(containerPath: scrollContainerPath, index: nil),
+            observedScrollContentActivationPoint: observedActivationPoint,
             element: element
         )
         var elements = screen.semantic.elements
         elements[entry.heistId] = entry
 
-        let liveCapture = LiveCapture(
-            hierarchy: screen.liveCapture.hierarchy,
-            containerNamesByPath: screen.liveCapture.containerNamesByPath,
-            heistIdsByPath: screen.liveCapture.heistIdsByPath,
-            elementRefs: screen.liveCapture.elementRefs,
-            containerRefsByPath: screen.liveCapture.containerRefsByPath,
-            containerScrollContentLocationsByPath: screen.liveCapture.containerScrollContentLocationsByPath,
-            firstResponderHeistId: screen.liveCapture.firstResponderHeistId,
-            scrollableContainerViewsByPath: screen.liveCapture.scrollableContainerViewsByPath
-        )
         targetBrains.stash.installScreenForTesting(Screen(
             semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
-            liveCapture: liveCapture
+            liveCapture: screen.liveCapture
         ))
     }
 
@@ -630,14 +624,18 @@ final class ElementInflationProductTests: XCTestCase {
             identifier: fixture.identifier,
             traits: UIAccessibilityTraits.fromNames(["textEntry"]),
             frame: CGRect(
-                origin: fixture.contentOrigin,
+                origin: fixture.frameOrigin,
                 size: fixture.target.bounds.size
             )
         )
+        let observedActivationPoint = try observedContentActivationPoint(
+            origin: fixture.frameOrigin,
+            size: fixture.target.bounds.size
+        )
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
-            contentSpaceOrigin: fixture.contentOrigin,
-            scrollContainerPath: scrollContainerPath,
+            scrollMembership: Screen.ScrollMembership(containerPath: scrollContainerPath, index: nil),
+            observedScrollContentActivationPoint: observedActivationPoint,
             element: element
         )
         var elements = screen.semantic.elements
@@ -657,7 +655,7 @@ final class ElementInflationProductTests: XCTestCase {
         let screen = brains.stash.settledSemanticScreen
         let entry = Screen.ScreenElement(
             heistId: heistId,
-            scrollContentLocation: nil,
+            scrollMembership: nil,
             element: makeElement(label: label, identifier: identifier)
         )
         var elements = screen.semantic.elements
@@ -689,35 +687,51 @@ final class ElementInflationProductTests: XCTestCase {
             label: fixture.label,
             identifier: fixture.identifier,
             frame: CGRect(
-                origin: fixture.targetContentOrigin,
+                origin: fixture.targetFrameOrigin,
                 size: fixture.target.bounds.size
             )
         )
+        let observedTargetActivationPoint = try observedContentActivationPoint(
+            origin: fixture.targetFrameOrigin,
+            size: fixture.target.bounds.size
+        )
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
-            contentSpaceOrigin: fixture.targetContentOrigin,
-            scrollContainerPath: innerContainerPath,
+            scrollMembership: Screen.ScrollMembership(containerPath: innerContainerPath, index: nil),
+            observedScrollContentActivationPoint: observedTargetActivationPoint,
             element: element
         )
         var elements = screen.semantic.elements
         elements[entry.heistId] = entry
 
         var containers = screen.semantic.containers
+        let observedContainerActivationPoint = try observedContentActivationPoint(
+            origin: fixture.innerFrameOrigin,
+            size: fixture.innerScrollView.frame.size
+        )
         containers[innerContainerPath] = SemanticScreen.Container(
             container: innerContainer,
             path: innerContainerPath,
             containerName: innerContainerName,
             contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size),
-            scrollContentLocation: Screen.ScrollContentLocation(
-                origin: fixture.innerContentOrigin,
-                scrollContainerPath: outerContainerPath
-            )
+            scrollMembership: Screen.ScrollMembership(containerPath: outerContainerPath, index: 1),
+            observedScrollContentActivationPoint: observedContainerActivationPoint
         )
 
         brains.stash.installScreenForTesting(Screen(
             semantic: SemanticScreen(elements: elements, containers: containers),
             liveCapture: screen.liveCapture
         ))
+    }
+
+    private func observedContentActivationPoint(
+        origin: CGPoint,
+        size: CGSize
+    ) throws -> Screen.ObservedScrollContentActivationPoint {
+        try XCTUnwrap(Screen.ObservedScrollContentActivationPoint(CGPoint(
+            x: origin.x + size.width / 2,
+            y: origin.y + size.height / 2
+        )))
     }
 
     private func firstLiveScrollableContainerPath(in screen: Screen) -> TreePath? {
@@ -798,7 +812,7 @@ private struct SemanticRevealFixture {
     let identifier: String
     let label: String
     let knownHeistId: HeistId
-    let contentOrigin: CGPoint
+    let frameOrigin: CGPoint
 
     @MainActor
     func cleanup() {
@@ -815,7 +829,7 @@ private struct TextInputRevealFixture {
     let identifier: String
     let label: String
     let knownHeistId: HeistId
-    let contentOrigin: CGPoint
+    let frameOrigin: CGPoint
 
     @MainActor
     func cleanup() {
@@ -834,8 +848,8 @@ private struct NestedScrollRevealFixture {
     let identifier: String
     let label: String
     let knownHeistId: HeistId
-    let innerContentOrigin: CGPoint
-    let targetContentOrigin: CGPoint
+    let innerFrameOrigin: CGPoint
+    let targetFrameOrigin: CGPoint
 
     @MainActor
     func cleanup() {

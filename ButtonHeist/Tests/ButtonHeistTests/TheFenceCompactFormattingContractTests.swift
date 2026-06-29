@@ -1043,14 +1043,19 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(output, """
         4 elements
-        group label="Actions" id="actions" containerName="semantic_actions__actions"
+        ── group "Actions" id="actions" "semantic_actions__actions" ──
           [0] "Submit" button
-          table rows=3 columns=4 containerName="orders_table"
+          ── table rows=3 columns=4 "orders_table" ──
             [1] "Order ID" staticText
-          tab_bar containerName="main_tabs"
+          ── /orders_table ──
+          ── tab_bar "main_tabs" ──
             [2] "Home" tabBarItem
-        scrollable containerName="main_scroll" viewport=390x400 content=390x1200 scrollAxis=vertical pageScrollsY=3 observedElementCount=1 modal=true
+          ── /main_tabs ──
+        ── /semantic_actions__actions ──
+        ── list "main_scroll" 1 elements modal ──
+          390×400 view, 390×1200 content (4 pages), vertical
           [3] "Bottom" staticText
+        ── /main_scroll ──
         """)
         XCTAssertFalse(output.contains("<"), output)
         XCTAssertFalse(output.contains("semanticGroup"), output)
@@ -1088,17 +1093,21 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let horizontalOutput = FenceResponse.compactInterface(horizontal, detail: .summary)
         let bothOutput = FenceResponse.compactInterface(both, detail: .summary)
         let expectedHorizontalSummary =
-            #"scrollable containerName="horizontal_scroll" viewport=390x400 content=1200x400 "# +
-            #"scrollAxis=horizontal pageScrollsX=3 observedElementCount=1"#
+            """
+            ── list "horizontal_scroll" 1 elements ──
+              390×400 view, 1200×400 content (4 pages), horizontal
+            """
         let expectedBothSummary =
-            #"scrollable containerName="both_axis_scroll" viewport=390x400 content=1200x1200 "# +
-            #"scrollAxis=both pageScrollsX=3 pageScrollsY=3 observedElementCount=1"#
+            """
+            ── list "both_axis_scroll" 1 elements ──
+              390×400 view, 1200×1200 content (4 pages), both
+            """
 
         XCTAssertTrue(
             horizontalOutput.contains(expectedHorizontalSummary),
             horizontalOutput
         )
-        XCTAssertFalse(horizontalOutput.contains("pageScrollsY"), horizontalOutput)
+        XCTAssertFalse(horizontalOutput.contains("vertical"), horizontalOutput)
         XCTAssertTrue(
             bothOutput.contains(expectedBothSummary),
             bothOutput
@@ -1131,10 +1140,12 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(output, """
         5 elements
-        scrollable containerName="long_scroll" viewport=390x400 content=390x1200 scrollAxis=vertical pageScrollsY=3 observedElementCount=4
+        ── list "long_scroll" 4 elements ──
+          390×400 view, 390×1200 content (4 pages), vertical
           [0] "Row 0" staticText
           [1] "Row 1" staticText
-          ... subtree truncated: omitted 2 observed elements (visibleElementBudget=2)
+          ⋮ 2 more
+        ── /long_scroll ──
         [4] "After" staticText
         """)
     }
@@ -1215,8 +1226,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertEqual(output, """
         1 elements
-        group label="Outer" containerName="outer"
-          group label="Empty" containerName="empty"
+        ── group "Outer" "outer" ──
+          ── group "Empty" "empty" ──
+          ── /empty ──
+        ── /outer ──
         ... interface truncated: omitted 1 observed elements (totalNodeBudget=2)
         """)
     }
@@ -1263,12 +1276,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertFalse(output.contains("Row 2"), output)
         XCTAssertFalse(output.contains("Row 3"), output)
         XCTAssertFalse(output.contains("Row 4"), output)
-        XCTAssertTrue(
-            output.contains(
-                "... subtree truncated: omitted 3 observed elements (visibleElementBudget=2)"
-            ),
-            output
-        )
+        XCTAssertTrue(output.contains(#"── list "outer_scroll" 5 elements ──"#), output)
+        XCTAssertTrue(output.contains(#"── list "inner_scroll" 3 elements ──"#), output)
+        XCTAssertTrue(output.contains("⋮ 2 more"), output)
+        XCTAssertTrue(output.contains("⋮ 3 more"), output)
     }
 
     func testPublicInterfaceJSONRendersScrollSummaryFields() throws {
@@ -1286,7 +1297,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try rendering.int("omittedElementCount"), 0)
         try rendering.assertMissing("visibleElementBudget")
         try rendering.assertMissing("totalNodeBudget")
-        XCTAssertEqual(try scrollContainer.string("type"), "scrollable")
+        XCTAssertEqual(try scrollContainer.string("type"), "list")
         XCTAssertEqual(try scrollContainer.double("contentWidth"), 390)
         XCTAssertEqual(try scrollContainer.double("contentHeight"), 1200)
         XCTAssertEqual(try scrollContainer.string("scrollAxis"), "vertical")
@@ -1529,10 +1540,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         let output = FenceResponse.compactInterface(interface, detail: .summary)
 
-        XCTAssertTrue(output.contains(#"label="Actions \"Primary\"\nPane""#), output)
-        XCTAssertTrue(output.contains(#"value="hot\u0001""#), output)
-        XCTAssertTrue(output.contains(#"id="actions\"id""#), output)
-        XCTAssertTrue(output.contains(#"containerName="semantic\n\"actions""#), output)
+        XCTAssertTrue(output.contains(#"── group "Actions \"Primary\"\nPane" value="hot\u0001" id="actions\"id" "semantic\n\"actions" ──"#), output)
         XCTAssertFalse(output.contains("stableId"), output)
     }
 
@@ -1544,11 +1552,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         XCTAssertFalse(summary.contains("frame="), summary)
         XCTAssertTrue(
-            full.contains(#"group label="Actions" id="actions" containerName="semantic_actions__actions" frame=(0,40,200,100)"#),
+            full.contains(#"── group "Actions" id="actions" "semantic_actions__actions" frame=(0,40,200,100) ──"#),
             full
         )
-        XCTAssertTrue(summary.contains(#"scrollable containerName="main_scroll" viewport=390x400 content=390x1200"#), summary)
-        XCTAssertTrue(summary.contains(#"scrollAxis=vertical pageScrollsY=3 observedElementCount=1"#), summary)
+        XCTAssertTrue(summary.contains(#"── list "main_scroll" 1 elements modal ──"#), summary)
+        XCTAssertTrue(summary.contains("390×400 view, 390×1200 content (4 pages), vertical"), summary)
     }
 
     func testHumanInterfaceRendersHierarchyAndRespectsDetail() {
@@ -1585,7 +1593,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(withInterface.hasPrefix("screenshot: 100x200\n4 elements\n"), withInterface)
         XCTAssertTrue(
             withInterface.contains(
-                #"group label="Actions" id="actions" containerName="semantic_actions__actions" frame=(0,40,200,100)"#
+                #"── group "Actions" id="actions" "semantic_actions__actions" frame=(0,40,200,100) ──"#
             ),
             withInterface
         )

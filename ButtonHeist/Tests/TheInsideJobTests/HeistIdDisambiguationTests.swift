@@ -34,8 +34,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
     }
 
     /// Build a `ParseResult` with one scrollable container whose children are
-    /// the given elements. The scroll view is parented to an anchor window
-    /// at the origin so the content-space conversion is the identity transform.
+    /// the given elements.
     private func makeScrollableParseResult(
         elements: [AccessibilityElement]
     ) -> TheBurglar.ParseResult {
@@ -93,7 +92,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
     // MARK: - Regression table
 
-    /// Two same-matcher elements at distinct content-space origins produce
+    /// Two same-matcher elements at distinct scroll positions produce
     /// Phase 2 `_1` / `_2` suffixes.
     func testTwoSameMatcherDuplicatesProducePhase2Suffixes() {
         let upper = makeButton(label: "Row", frame: CGRect(x: 0, y: 0, width: 320, height: 44))

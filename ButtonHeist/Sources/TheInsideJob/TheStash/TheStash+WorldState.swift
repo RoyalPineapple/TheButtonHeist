@@ -164,21 +164,6 @@ extension TheStash {
         return settledBaseline
     }
 
-    func knownContentOriginsByHeistId() -> [HeistId: CGPoint?] {
-        Dictionary(
-            selectElements().map { ($0.heistId, $0.contentSpaceOrigin) },
-            uniquingKeysWith: { first, _ in first }
-        )
-    }
-
-    func visibleContentOriginAnchors() -> [(heistId: HeistId, origin: CGPoint)] {
-        visibleIds.compactMap { heistId in
-            guard let entry = screenElement(heistId: heistId, in: .visible),
-                  let origin = entry.contentSpaceOrigin else { return nil }
-            return (heistId: heistId, origin: origin)
-        }
-    }
-
     func firstResponderScreenElement() -> ScreenElement? {
         guard let heistId = firstResponderHeistId else { return nil }
         return screenElement(heistId: heistId, in: .known)

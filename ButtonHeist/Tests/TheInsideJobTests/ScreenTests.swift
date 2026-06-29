@@ -22,12 +22,14 @@ final class ScreenTests: XCTestCase {
     private func makeEntry(
         heistId: HeistId,
         label: String? = nil,
-        contentSpaceOrigin: CGPoint? = nil
+        scrollContainerPath: TreePath? = nil,
+        scrollIndex: Int? = nil
     ) -> Screen.ScreenElement {
         Screen.ScreenElement(
             heistId: heistId,
-            contentSpaceOrigin: contentSpaceOrigin,
-            scrollContainerPath: contentSpaceOrigin.map { _ in TreePath([0]) },
+            scrollMembership: scrollContainerPath.map {
+                Screen.ScrollMembership(containerPath: $0, index: scrollIndex)
+            },
             element: makeElement(label: label ?? heistId.description)
         )
     }
@@ -76,7 +78,7 @@ final class ScreenTests: XCTestCase {
                 Screen.OffViewportEntry(
                     knownOnly,
                     heistId: "button_known",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                    scrollContainerPath: TreePath([0])
                 )
             ]
         )
@@ -117,18 +119,16 @@ final class ScreenTests: XCTestCase {
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_200)),
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
         )
-        let keptOrigin = CGPoint(x: 0, y: 600)
         let screen = Screen(
             elements: [
                 "old": Screen.ScreenElement(
                     heistId: "old",
-                    contentSpaceOrigin: nil,
+                    scrollMembership: nil,
                     element: removed
                 ),
                 "kept": Screen.ScreenElement(
                     heistId: "kept",
-                    contentSpaceOrigin: keptOrigin,
-                    scrollContainerPath: TreePath([1]),
+                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([1]), index: nil),
                     element: kept
                 ),
             ],
@@ -154,12 +154,9 @@ final class ScreenTests: XCTestCase {
         XCTAssertEqual(pruned.liveCapture.containerNamesByPath[TreePath([0])], "feed")
         XCTAssertEqual(pruned.semantic.containers[TreePath([0])]?.containerName, "feed")
         XCTAssertNil(pruned.semantic.containers[TreePath([1])])
-        XCTAssertEqual(pruned.semantic.elements["kept"]?.scrollContentLocation?.scrollContainerPath, TreePath([0]))
+        XCTAssertEqual(pruned.semantic.elements["kept"]?.scrollMembership?.containerPath, TreePath([0]))
         XCTAssertEqual(interface.annotations.containerByPath[TreePath([0])]?.containerName, "feed")
-        XCTAssertEqual(
-            interface.annotations.elementByPath[TreePath([0, 0])]?.contentSpaceOrigin,
-            AccessibilityPoint(x: Double(keptOrigin.x), y: Double(keptOrigin.y))
-        )
+        XCTAssertNotNil(interface.annotations.elementByPath[TreePath([0, 0])])
         XCTAssertNil(interface.annotations.elementByPath[TreePath([1, 0])])
     }
 
@@ -172,7 +169,7 @@ final class ScreenTests: XCTestCase {
                 Screen.OffViewportEntry(
                     knownOnly,
                     heistId: "button_known",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                    scrollContainerPath: TreePath([0])
                 )
             ],
             firstResponderHeistId: "button_visible"
@@ -355,12 +352,12 @@ final class ScreenTests: XCTestCase {
     func testMergingTakesOtherElementOnConflict() {
         let oldEntry = Screen.ScreenElement(
             heistId: "save_button",
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: makeElement(label: "Save", traits: .button)
         )
         let newEntry = Screen.ScreenElement(
             heistId: "save_button",
-            contentSpaceOrigin: nil,
+            scrollMembership: nil,
             element: makeElement(label: "Save Changes", traits: .button)
         )
         let lhs = Screen(
@@ -380,17 +377,15 @@ final class ScreenTests: XCTestCase {
                        "Conflict resolver should take `other`'s element payload")
     }
 
-    func testMergingTakesOtherOriginEvenWhenOtherIsNil() {
+    func testMergingTakesOtherScrollMembershipEvenWhenOtherIsNil() {
         // Last-read-always-wins: no field-level preservation. If `other`
-        // reports nil contentSpaceOrigin for this heistId, that's the new
-        // truth, even if `self` had a non-nil value previously.
+        // reports nil scroll membership for this heistId, that's the new truth.
         let lhsEntry = makeEntry(
             heistId: "scrolled_row",
-            contentSpaceOrigin: CGPoint(x: 0, y: 400)
+            scrollContainerPath: TreePath([0])
         )
         let rhsEntry = makeEntry(
-            heistId: "scrolled_row",
-            contentSpaceOrigin: nil
+            heistId: "scrolled_row"
         )
         let lhs = Screen(
             elements: ["scrolled_row": lhsEntry],
@@ -405,18 +400,20 @@ final class ScreenTests: XCTestCase {
 
         let merged = lhs.merging(rhs)
 
-        XCTAssertNil(merged.findElement(heistId: "scrolled_row")?.contentSpaceOrigin,
-                     "Last-read-wins: `other`'s nil origin replaces `self`'s value")
+        XCTAssertNil(merged.findElement(heistId: "scrolled_row")?.scrollMembership,
+                     "Last-read-wins: `other`'s nil membership replaces `self`'s value")
     }
 
-    func testMergingTakesOtherOriginWhenBothPresent() {
+    func testMergingTakesOtherScrollMembershipWhenBothPresent() {
         let lhsEntry = makeEntry(
             heistId: "row",
-            contentSpaceOrigin: CGPoint(x: 0, y: 100)
+            scrollContainerPath: TreePath([0]),
+            scrollIndex: 100
         )
         let rhsEntry = makeEntry(
             heistId: "row",
-            contentSpaceOrigin: CGPoint(x: 0, y: 500)
+            scrollContainerPath: TreePath([0]),
+            scrollIndex: 500
         )
         let lhs = Screen(
             elements: ["row": lhsEntry],
@@ -431,9 +428,8 @@ final class ScreenTests: XCTestCase {
 
         let merged = lhs.merging(rhs)
 
-        XCTAssertEqual(merged.findElement(heistId: "row")?.contentSpaceOrigin,
-                       CGPoint(x: 0, y: 500),
-                       "When both screens have an origin, `other`'s wins (newer parse)")
+        XCTAssertEqual(merged.findElement(heistId: "row")?.scrollMembership?.index, 500,
+                       "When both screens have membership, `other`'s wins (newer parse)")
     }
 
     // MARK: - merging — hierarchy / first responder
@@ -493,7 +489,7 @@ final class ScreenTests: XCTestCase {
                 Screen.OffViewportEntry(
                     knownOnly,
                     heistId: "button_known",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                    scrollContainerPath: TreePath([0])
                 )
             ]
         )
@@ -522,7 +518,7 @@ final class ScreenTests: XCTestCase {
                 Screen.OffViewportEntry(
                     knownOnly,
                     heistId: "below_fold_button",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                    scrollContainerPath: TreePath([0])
                 )
             ]
         )
@@ -546,7 +542,7 @@ final class ScreenTests: XCTestCase {
                 Screen.OffViewportEntry(
                     staleKnownOnly,
                     heistId: "stale_below_fold",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                    scrollContainerPath: TreePath([0])
                 ),
             ]
         )
@@ -618,13 +614,12 @@ final class ScreenTests: XCTestCase {
             elements: [
                 "button_scrolled_away": Screen.ScreenElement(
                     heistId: "button_scrolled_away",
-                    contentSpaceOrigin: CGPoint(x: 0, y: 1_000),
-                    scrollContainerPath: TreePath([0]),
+                    scrollMembership: Screen.ScrollMembership(containerPath: TreePath([0]), index: nil),
                     element: scrolledAway
                 ),
                 "button_visible": Screen.ScreenElement(
                     heistId: "button_visible",
-                    contentSpaceOrigin: nil,
+                    scrollMembership: nil,
                     element: visible
                 )
             ],
