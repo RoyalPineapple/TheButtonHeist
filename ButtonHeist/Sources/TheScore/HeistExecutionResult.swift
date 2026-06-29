@@ -390,12 +390,18 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         switch (kind, evidence) {
         case (.action, .action(let evidence)):
             try validatePassedActionEvidence(evidence, codingPath: codingPath)
+        case (.wait, .wait(let evidence)):
+            try validatePassedWaitEvidence(evidence, codingPath: codingPath)
         case (.forEachElement, .forEachElement(let evidence)),
              (.forEachIteration, .forEachElement(let evidence)):
             try validatePassedLoopEvidence(evidence.failureReason, codingPath: codingPath)
         case (.forEachString, .forEachString(let evidence)),
              (.forEachIteration, .forEachString(let evidence)):
             try validatePassedLoopEvidence(evidence.failureReason, codingPath: codingPath)
+        case (.repeatUntil, .repeatUntil(let evidence)):
+            try validatePassedRepeatUntilEvidence(evidence, allowsContinued: false, codingPath: codingPath)
+        case (.repeatUntilIteration, .repeatUntil(let evidence)):
+            try validatePassedRepeatUntilEvidence(evidence, allowsContinued: true, codingPath: codingPath)
         case (.action, _),
              (.wait, _),
              (.conditional, _),
@@ -412,6 +418,28 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         }
     }
 
+    private static func validatePassedWaitEvidence(
+        _ evidence: HeistWaitEvidence,
+        codingPath: [CodingKey]
+    ) throws {
+        switch evidence.outcome {
+        case .matched:
+            guard evidence.actionResult.success && evidence.expectation.met else {
+                throw receiptError(
+                    "passed matched wait step must include successful wait evidence",
+                    codingPath: codingPath + [CodingKeys.evidence]
+                )
+            }
+        case .handledElse:
+            return
+        case .continued, .failed:
+            throw receiptError(
+                "passed wait step must include matched or handled_else evidence outcome",
+                codingPath: codingPath + [CodingKeys.evidence]
+            )
+        }
+    }
+
     private static func validatePassedActionEvidence(
         _ evidence: HeistActionEvidence,
         codingPath: [CodingKey]
@@ -425,6 +453,36 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         if evidence.expectationActionResult?.success == false || evidence.expectation?.met == false {
             throw receiptError(
                 "passed action heist execution step must not include failed expectation evidence",
+                codingPath: codingPath + [CodingKeys.evidence]
+            )
+        }
+    }
+
+    private static func validatePassedRepeatUntilEvidence(
+        _ evidence: HeistRepeatUntilEvidence,
+        allowsContinued: Bool,
+        codingPath: [CodingKey]
+    ) throws {
+        switch evidence.outcome {
+        case .matched:
+            guard evidence.expectation.met, evidence.failureReason == nil else {
+                throw receiptError(
+                    "passed matched repeat_until step must include met predicate evidence",
+                    codingPath: codingPath + [CodingKeys.evidence]
+                )
+            }
+        case .continued:
+            guard allowsContinued, !evidence.expectation.met, evidence.failureReason == nil else {
+                throw receiptError(
+                    "continued repeat_until evidence is only valid for passed non-terminal iterations",
+                    codingPath: codingPath + [CodingKeys.evidence]
+                )
+            }
+        case .handledElse:
+            return
+        case .failed:
+            throw receiptError(
+                "passed repeat_until step must not include failed evidence outcome",
                 codingPath: codingPath + [CodingKeys.evidence]
             )
         }
@@ -765,6 +823,13 @@ public enum HeistStepEvidence: Codable, Sendable, Equatable {
     case warning(HeistExecutionWarning)
 }
 
+public enum HeistPredicateEvidenceOutcome: String, Codable, Sendable, Equatable {
+    case matched
+    case continued
+    case handledElse = "handled_else"
+    case failed
+}
+
 public struct HeistActionEvidence: Codable, Sendable, Equatable {
     public let command: HeistActionCommand?
     public let actionResult: ActionResult?
@@ -785,17 +850,20 @@ public struct HeistActionEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistWaitEvidence: Codable, Sendable, Equatable {
+    public let outcome: HeistPredicateEvidenceOutcome
     public let actionResult: ActionResult
     public let expectation: ExpectationResult
     public let baselineSummary: String?
     public let finalSummary: String?
 
     public init(
+        outcome: HeistPredicateEvidenceOutcome,
         actionResult: ActionResult,
         expectation: ExpectationResult,
         baselineSummary: String? = nil,
         finalSummary: String? = nil
     ) {
+        self.outcome = outcome
         self.actionResult = actionResult
         self.expectation = expectation
         self.baselineSummary = baselineSummary
@@ -871,6 +939,7 @@ public struct HeistForEachElementEvidence: Codable, Sendable, Equatable {
 }
 
 public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
+    public let outcome: HeistPredicateEvidenceOutcome
     public let predicate: AccessibilityPredicate
     public let timeout: Double
     public let iterationCount: Int
@@ -881,6 +950,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
     public let failureReason: String?
 
     public init(
+        outcome: HeistPredicateEvidenceOutcome,
         predicate: AccessibilityPredicate,
         timeout: Double,
         iterationCount: Int,
@@ -890,6 +960,7 @@ public struct HeistRepeatUntilEvidence: Codable, Sendable, Equatable {
         lastObservedSummary: String? = nil,
         failureReason: String? = nil
     ) {
+        self.outcome = outcome
         self.predicate = predicate
         self.timeout = timeout
         self.iterationCount = iterationCount

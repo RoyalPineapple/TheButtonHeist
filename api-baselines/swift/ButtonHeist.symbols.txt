@@ -7,6 +7,11 @@
 # Format: symbol<TAB>graph<TAB>precise-id<TAB>kind<TAB>access<TAB>title<TAB>path<TAB>declaration
 # Format: relationship<TAB>kind<TAB>source-id<TAB>target-id<TAB>source<TAB>target
 
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist0aB11EnvironmentV	swift.struct	public	ButtonHeistEnvironment	ButtonHeistEnvironment	struct ButtonHeistEnvironment
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist0aB11EnvironmentV5emptyACvpZ	swift.type.property	public	empty	ButtonHeistEnvironment.empty	static let empty: ButtonHeistEnvironment
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist0aB11EnvironmentV6device5token14sessionTimeout010connectionG0ACSSSg_A3Htcfc	swift.init	public	init(device:token:sessionTimeout:connectionTimeout:)	ButtonHeistEnvironment.init(device:token:sessionTimeout:connectionTimeout:)	init(device: String? = nil, token: String? = nil, sessionTimeout: String? = nil, connectionTimeout: String? = nil)
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist0aB17EnvironmentBridgeO	swift.enum	public	ButtonHeistEnvironmentBridge	ButtonHeistEnvironmentBridge	enum ButtonHeistEnvironmentBridge
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist0aB17EnvironmentBridgeO7currentAA0abC0VyFZ	swift.type.method	public	current()	ButtonHeistEnvironmentBridge.current()	static func current() -> ButtonHeistEnvironment
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist0aB5ActorC	swift.class	public	ButtonHeistActor	ButtonHeistActor	@globalActor actor ButtonHeistActor
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist0aB5ActorC6sharedACvpZ	swift.type.property	public	shared	ButtonHeistActor.shared	static let shared: ButtonHeistActor
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO	swift.enum	public	FenceError	FenceError	enum FenceError
@@ -30,13 +35,11 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO4hintSSSgvp	swift.pr
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO5phaseAA12FailurePhaseOvp	swift.property	public	phase	FenceError.phase	var phase: FailurePhase { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO9errorCodeSSvp	swift.property	public	errorCode	FenceError.errorCode	var errorCode: String { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO9retryableSbvp	swift.property	public	retryable	FenceError.retryable	var retryable: Bool { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11CLIExposureO	swift.enum	public	CLIExposure	CLIExposure	enum CLIExposure
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11CLIExposureO10notExposedyA2CmF	swift.enum.case	public	CLIExposure.notExposed	CLIExposure.notExposed	case notExposed
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11CLIExposureO13directCommandyA2CmF	swift.enum.case	public	CLIExposure.directCommand	CLIExposure.directCommand	case directCommand
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV	swift.struct	public	FailureCode	FailureCode	struct FailureCode
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV05knownD0AA05KnowncD0OSgvp	swift.property	public	knownCode	FailureCode.knownCode	var knownCode: KnownFailureCode? { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV11defaultHintSSSgvp	swift.property	public	defaultHint	FailureCode.defaultHint	var defaultHint: String? { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV11descriptionSSvp	swift.property	public	description	FailureCode.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV16boundaryRawValueACSS_tcfc	swift.init	public	init(boundaryRawValue:)	FailureCode.init(boundaryRawValue:)	init(boundaryRawValue rawValue: String)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	FailureCode.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV4kindAA010DiagnosticC4KindOSgvp	swift.property	public	kind	FailureCode.kind	var kind: DiagnosticFailureKind? { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV5phaseAA0C5PhaseOSgvp	swift.property	public	phase	FailureCode.phase	var phase: FailurePhase? { get }
@@ -45,13 +48,6 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV8rawValueACSS_tcfc	
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV8rawValueSSvp	swift.property	public	rawValue	FailureCode.rawValue	let rawValue: String
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV9retryableSbSgvp	swift.property	public	retryable	FailureCode.retryable	var retryable: Bool? { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeVyAcA05KnowncD0Ocfc	swift.init	public	init(_:)	FailureCode.init(_:)	init(_ knownCode: KnownFailureCode)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11IdleMonitorC	swift.class	public	IdleMonitor	IdleMonitor	@ButtonHeistActor final class IdleMonitor
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11IdleMonitorC10resetTimeryyF	swift.method	public	resetTimer()	IdleMonitor.resetTimer()	@ButtonHeistActor func resetTimer()
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11IdleMonitorC4stopyyF	swift.method	public	stop()	IdleMonitor.stop()	@ButtonHeistActor func stop()
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11IdleMonitorC7timeout9onTimeoutACSd_yyYbAA0aB5ActorCYcctcfc	swift.init	public	init(timeout:onTimeout:)	IdleMonitor.init(timeout:onTimeout:)	@ButtonHeistActor init(timeout: TimeInterval, onTimeout: @escaping @ButtonHeistActor () -> Void)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11MCPExposureO	swift.enum	public	MCPExposure	MCPExposure	enum MCPExposure
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11MCPExposureO10directToolyA2CmF	swift.enum.case	public	MCPExposure.directTool	MCPExposure.directTool	case directTool
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist11MCPExposureO10notExposedyA2CmF	swift.enum.case	public	MCPExposure.notExposed	MCPExposure.notExposed	case notExposed
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist12FailurePhaseO	swift.enum	public	FailurePhase	FailurePhase	enum FailurePhase
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist12FailurePhaseO14authenticationyA2CmF	swift.enum.case	public	FailurePhase.authentication	FailurePhase.authentication	case authentication
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist12FailurePhaseO19protocolNegotiationyA2CmF	swift.enum.case	public	FailurePhase.protocolNegotiation	FailurePhase.protocolNegotiation	case protocolNegotiation
@@ -95,11 +91,10 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO9isFailureSbvp	sw
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV	swift.struct	public	FailureDetails	FailureDetails	struct FailureDetails
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV4code4hintAcA05KnownC4CodeO_SSSgtcfc	swift.init	public	init(code:hint:)	FailureDetails.init(code:hint:)	init(code knownCode: KnownFailureCode, hint: String? = nil)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV4code5phase9retryable4hintAcA0C4CodeV_AA0C5PhaseOSbSSSgtcfc	swift.init	public	init(code:phase:retryable:hint:)	FailureDetails.init(code:phase:retryable:hint:)	init(code: FailureCode, phase: FailurePhase, retryable: Bool, hint: String?)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV4codeAA0C4CodeVvp	swift.property	public	code	FailureDetails.code	var code: FailureCode { get }
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV4codeAA0C4CodeVvp	swift.property	public	code	FailureDetails.code	let code: FailureCode
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV4hintSSSgvp	swift.property	public	hint	FailureDetails.hint	let hint: String?
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV5phaseAA0C5PhaseOvp	swift.property	public	phase	FailureDetails.phase	let phase: FailurePhase
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV9errorCode5phase9retryable4hintACSS_AA0C5PhaseOSbSSSgtcfc	swift.init	public	init(errorCode:phase:retryable:hint:)	FailureDetails.init(errorCode:phase:retryable:hint:)	init(errorCode: String, phase: FailurePhase, retryable: Bool, hint: String?)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV9errorCodeSSvp	swift.property	public	errorCode	FailureDetails.errorCode	let errorCode: String
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV9errorCodeSSvp	swift.property	public	errorCode	FailureDetails.errorCode	var errorCode: String { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist14FailureDetailsV9retryableSbvp	swift.property	public	retryable	FailureDetails.retryable	let retryable: Bool
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist14PublicJSONRootO	swift.enum	public	PublicJSONRoot	PublicJSONRoot	enum PublicJSONRoot
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist14PublicJSONRootO3anyyA2CmF	swift.enum.case	public	PublicJSONRoot.any	PublicJSONRoot.any	case any
@@ -164,15 +159,14 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV11failureCode
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV4hintSSSgvp	swift.property	public	hint	ConnectionFailure.hint	let hint: String?
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV5phaseAA0D5PhaseOvp	swift.property	public	phase	ConnectionFailure.phase	let phase: FailurePhase
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV7message11failureCode5phase9retryable4hintACSS_AA0dG0VAA0D5PhaseOSbSSSgtcfc	swift.init	public	init(message:failureCode:phase:retryable:hint:)	ConnectionFailure.init(message:failureCode:phase:retryable:hint:)	init(message: String, failureCode: FailureCode, phase: FailurePhase, retryable: Bool, hint: String?)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV7message9errorCode5phase9retryable4hintACSS_SSAA0D5PhaseOSbSSSgtcfc	swift.init	public	init(message:errorCode:phase:retryable:hint:)	ConnectionFailure.init(message:errorCode:phase:retryable:hint:)	init(message: String, errorCode: String, phase: FailurePhase, retryable: Bool, hint: String?)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV7messageSSvp	swift.property	public	message	ConnectionFailure.message	let message: String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV9errorCodeSSvp	swift.property	public	errorCode	ConnectionFailure.errorCode	let errorCode: String
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV9errorCodeSSvp	swift.property	public	errorCode	ConnectionFailure.errorCode	var errorCode: String { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17ConnectionFailureV9retryableSbvp	swift.property	public	retryable	ConnectionFailure.retryable	let retryable: Bool
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV	swift.struct	public	DiagnosticFailure	DiagnosticFailure	struct DiagnosticFailure
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV11failureCodeAA0dF0Vvp	swift.property	public	failureCode	DiagnosticFailure.failureCode	let failureCode: FailureCode
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV14displayMessageSSvp	swift.property	public	displayMessage	DiagnosticFailure.displayMessage	var displayMessage: String { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV16buildDiagnosticsSay8ThePlans0b5BuildC0VGvp	swift.property	public	buildDiagnostics	DiagnosticFailure.buildDiagnostics	let buildDiagnostics: [HeistBuildDiagnostic]
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV4codeSSvp	swift.property	public	code	DiagnosticFailure.code	let code: String
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV4codeSSvp	swift.property	public	code	DiagnosticFailure.code	var code: String { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV4hintSSSgvp	swift.property	public	hint	DiagnosticFailure.hint	var hint: String? { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV4kindAA0cD4KindOvp	swift.property	public	kind	DiagnosticFailure.kind	let kind: DiagnosticFailureKind
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17DiagnosticFailureV5phaseAA0D5PhaseOvp	swift.property	public	phase	DiagnosticFailure.phase	var phase: FailurePhase { get }
@@ -185,130 +179,9 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV	swift.struct
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV12deviceFilterSSSgvp	swift.property	public	deviceFilter	EnvironmentConfig.deviceFilter	let deviceFilter: String?
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV14sessionTimeoutSdvp	swift.property	public	sessionTimeout	EnvironmentConfig.sessionTimeout	let sessionTimeout: TimeInterval
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV18fenceConfigurationAA8TheFenceC0F0Vvp	swift.property	public	fenceConfiguration	EnvironmentConfig.fenceConfiguration	var fenceConfiguration: TheFence.Configuration { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV7resolve12deviceFilter5token14sessionTimeout010connectionJ013autoReconnect10configPath3envACSSSg_ALSdSgAMSbALSDyS2SGtKFZ	swift.type.method	public	resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:configPath:env:)	EnvironmentConfig.resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:configPath:env:)	static func resolve(deviceFilter: String? = nil, token: String? = nil, sessionTimeout: TimeInterval? = nil, connectionTimeout: TimeInterval? = nil, autoReconnect: Bool = true, configPath: String?, env: [String : String] = ProcessInfo.processInfo.environment) throws -> EnvironmentConfig
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV7resolve12deviceFilter5token14sessionTimeout010connectionJ013autoReconnect10configPath3envACSSSg_ALSdSgAMSbSSSDyS2SGtKFZ	swift.type.method	public	resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:configPath:env:)	EnvironmentConfig.resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:configPath:env:)	static func resolve(deviceFilter: String? = nil, token: String? = nil, sessionTimeout: TimeInterval? = nil, connectionTimeout: TimeInterval? = nil, autoReconnect: Bool = true, configPath: String, env: [String : String] = ProcessInfo.processInfo.environment) throws -> EnvironmentConfig
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV7resolve12deviceFilter5token14sessionTimeout010connectionJ013autoReconnect3envACSSSg_AKSdSgALSbSDyS2SGtKFZ	swift.type.method	public	resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:env:)	EnvironmentConfig.resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:env:)	static func resolve(deviceFilter: String? = nil, token: String? = nil, sessionTimeout: TimeInterval? = nil, connectionTimeout: TimeInterval? = nil, autoReconnect: Bool = true, env: [String : String] = ProcessInfo.processInfo.environment) throws -> EnvironmentConfig
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV	swift.struct	public	FenceParameterKey	FenceParameterKey	struct FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV10assertionsACvpZ	swift.type.property	public	assertions	FenceParameterKey.assertions	static let assertions: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV10identifierACvpZ	swift.type.property	public	identifier	FenceParameterKey.identifier	static let identifier: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV10inlineDataACvpZ	swift.type.property	public	inlineData	FenceParameterKey.inlineData	static let inlineData: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV10rotorIndexACvpZ	swift.type.property	public	rotorIndex	FenceParameterKey.rotorIndex	static let rotorIndex: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV11definitionsACvpZ	swift.type.property	public	definitions	FenceParameterKey.definitions	static let definitions: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV11startOffsetACvpZ	swift.type.property	public	startOffset	FenceParameterKey.startOffset	static let startOffset: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV12continuationACvpZ	swift.type.property	public	continuation	FenceParameterKey.continuation	static let continuation: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV12pointToPointACvpZ	swift.type.property	public	pointToPoint	FenceParameterKey.pointToPoint	static let pointToPoint: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV13containerNameACvpZ	swift.type.property	public	containerName	FenceParameterKey.containerName	static let containerName: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV13excludeTraitsACvpZ	swift.type.property	public	excludeTraits	FenceParameterKey.excludeTraits	static let excludeTraits: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV14elementToPointACvpZ	swift.type.property	public	elementToPoint	FenceParameterKey.elementToPoint	static let elementToPoint: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV14pointDirectionACvpZ	swift.type.property	public	pointDirection	FenceParameterKey.pointDirection	static let pointDirection: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV15isModalBoundaryACvpZ	swift.type.property	public	isModalBoundary	FenceParameterKey.isModalBoundary	static let isModalBoundary: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV16elementDirectionACvpZ	swift.type.property	public	elementDirection	FenceParameterKey.elementDirection	static let elementDirection: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV17elementUnitPointsACvpZ	swift.type.property	public	elementUnitPoints	FenceParameterKey.elementUnitPoints	static let elementUnitPoints: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV17replacingExistingACvpZ	swift.type.property	public	replacingExisting	FenceParameterKey.replacingExisting	static let replacingExisting: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV1xACvpZ	swift.type.property	public	x	FenceParameterKey.x	static let x: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV1yACvpZ	swift.type.property	public	y	FenceParameterKey.y	static let y: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV22maxScrollsPerContainerACvpZ	swift.type.property	public	maxScrollsPerContainer	FenceParameterKey.maxScrollsPerContainer	static let maxScrollsPerContainer: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV22maxScrollsPerDiscoveryACvpZ	swift.type.property	public	maxScrollsPerDiscovery	FenceParameterKey.maxScrollsPerDiscovery	static let maxScrollsPerDiscovery: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV2toACvpZ	swift.type.property	public	to	FenceParameterKey.to	static let to: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV3appACvpZ	swift.type.property	public	app	FenceParameterKey.app	static let app: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV3endACvpZ	swift.type.property	public	end	FenceParameterKey.end	static let end: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4bodyACvpZ	swift.type.property	public	body	FenceParameterKey.body	static let body: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4edgeACvpZ	swift.type.property	public	edge	FenceParameterKey.edge	static let edge: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4fromACvpZ	swift.type.property	public	from	FenceParameterKey.from	static let from: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4kindACvpZ	swift.type.property	public	kind	FenceParameterKey.kind	static let kind: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4modeACvpZ	swift.type.property	public	mode	FenceParameterKey.mode	static let mode: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4nameACvpZ	swift.type.property	public	name	FenceParameterKey.name	static let name: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4pathACvpZ	swift.type.property	public	path	FenceParameterKey.path	static let path: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4planACvpZ	swift.type.property	public	plan	FenceParameterKey.plan	static let plan: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4stepACvpZ	swift.type.property	public	step	FenceParameterKey.step	static let step: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4textACvpZ	swift.type.property	public	text	FenceParameterKey.text	static let text: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV4typeACvpZ	swift.type.property	public	type	FenceParameterKey.type	static let type: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5afterACvpZ	swift.type.property	public	after	FenceParameterKey.after	static let after: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5angleACvpZ	swift.type.property	public	angle	FenceParameterKey.angle	static let angle: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5heistACvpZ	swift.type.property	public	heist	FenceParameterKey.heist	static let heist: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5labelACvpZ	swift.type.property	public	label	FenceParameterKey.label	static let label: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5matchACvpZ	swift.type.property	public	match	FenceParameterKey.match	static let match: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5pointACvpZ	swift.type.property	public	point	FenceParameterKey.point	static let point: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5rotorACvpZ	swift.type.property	public	rotor	FenceParameterKey.rotor	static let rotor: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5scaleACvpZ	swift.type.property	public	scale	FenceParameterKey.scale	static let scale: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5startACvpZ	swift.type.property	public	start	FenceParameterKey.start	static let start: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5tokenACvpZ	swift.type.property	public	token	FenceParameterKey.token	static let token: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5valueACvpZ	swift.type.property	public	value	FenceParameterKey.value	static let value: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV5whereACvpZ	swift.type.property	public	where	FenceParameterKey.where	static let `where`: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6absentACvpZ	swift.type.property	public	absent	FenceParameterKey.absent	static let absent: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6actionACvpZ	swift.type.property	public	action	FenceParameterKey.action	static let action: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6beforeACvpZ	swift.type.property	public	before	FenceParameterKey.before	static let before: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6checksACvpZ	swift.type.property	public	checks	FenceParameterKey.checks	static let checks: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6detailACvpZ	swift.type.property	public	detail	FenceParameterKey.detail	static let detail: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6deviceACvpZ	swift.type.property	public	device	FenceParameterKey.device	static let device: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6expectACvpZ	swift.type.property	public	expect	FenceParameterKey.expect	static let expect: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6outputACvpZ	swift.type.property	public	output	FenceParameterKey.output	static let output: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6policyACvpZ	swift.type.property	public	policy	FenceParameterKey.policy	static let policy: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6radiusACvpZ	swift.type.property	public	radius	FenceParameterKey.radius	static let radius: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6scopesACvpZ	swift.type.property	public	scopes	FenceParameterKey.scopes	static let scopes: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6spreadACvpZ	swift.type.property	public	spread	FenceParameterKey.spread	static let spread: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6statesACvpZ	swift.type.property	public	states	FenceParameterKey.states	static let states: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6targetACvpZ	swift.type.property	public	target	FenceParameterKey.target	static let target: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6traitsACvpZ	swift.type.property	public	traits	FenceParameterKey.traits	static let traits: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV6valuesACvpZ	swift.type.property	public	values	FenceParameterKey.values	static let values: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV7commandACvpZ	swift.type.property	public	command	FenceParameterKey.command	static let command: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV7elementACvpZ	swift.type.property	public	element	FenceParameterKey.element	static let element: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV7heistIdACvpZ	swift.type.property	public	heistId	FenceParameterKey.heistId	static let heistId: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV7matcherACvpZ	swift.type.property	public	matcher	FenceParameterKey.matcher	static let matcher: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV7ordinalACvpZ	swift.type.property	public	ordinal	FenceParameterKey.ordinal	static let ordinal: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV7subtreeACvpZ	swift.type.property	public	subtree	FenceParameterKey.subtree	static let subtree: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV7timeoutACvpZ	swift.type.property	public	timeout	FenceParameterKey.timeout	static let timeout: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV7versionACvpZ	swift.type.property	public	version	FenceParameterKey.version	static let version: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8argumentACvpZ	swift.type.property	public	argument	FenceParameterKey.argument	static let argument: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8durationACvpZ	swift.type.property	public	duration	FenceParameterKey.duration	static let duration: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8elementsACvpZ	swift.type.property	public	elements	FenceParameterKey.elements	static let elements: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8newValueACvpZ	swift.type.property	public	newValue	FenceParameterKey.newValue	static let newValue: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8oldValueACvpZ	swift.type.property	public	oldValue	FenceParameterKey.oldValue	static let oldValue: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8propertyACvpZ	swift.type.property	public	property	FenceParameterKey.property	static let property: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	FenceParameterKey.init(rawValue:)	init?(rawValue: String)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8rawValueSSvp	swift.property	public	rawValue	FenceParameterKey.rawValue	let rawValue: String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV8valueRefACvpZ	swift.type.property	public	valueRef	FenceParameterKey.valueRef	static let valueRef: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV9containerACvpZ	swift.type.property	public	container	FenceParameterKey.container	static let container: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV9directionACvpZ	swift.type.property	public	direction	FenceParameterKey.direction	static let direction: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV9endOffsetACvpZ	swift.type.property	public	endOffset	FenceParameterKey.endOffset	static let endOffset: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV9parameterACvpZ	swift.type.property	public	parameter	FenceParameterKey.parameter	static let parameter: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV9predicateACvpZ	swift.type.property	public	predicate	FenceParameterKey.predicate	static let predicate: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV9targetRefACvpZ	swift.type.property	public	targetRef	FenceParameterKey.targetRef	static let targetRef: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV9textRangeACvpZ	swift.type.property	public	textRange	FenceParameterKey.textRange	static let textRange: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist17FenceParameterKeyV9unitPointACvpZ	swift.type.property	public	unitPoint	FenceParameterKey.unitPoint	static let unitPoint: FenceParameterKey
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO	swift.enum	public	FenceCommandFamily	FenceCommandFamily	enum FenceCommandFamily
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO11observationyA2CmF	swift.enum.case	public	FenceCommandFamily.observation	FenceCommandFamily.observation	case observation
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO12heistRuntimeyA2CmF	swift.enum.case	public	FenceCommandFamily.heistRuntime	FenceCommandFamily.heistRuntime	case heistRuntime
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO13spatialActionyA2CmF	swift.enum.case	public	FenceCommandFamily.spatialAction	FenceCommandFamily.spatialAction	case spatialAction
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO13viewportDebugyA2CmF	swift.enum.case	public	FenceCommandFamily.viewportDebug	FenceCommandFamily.viewportDebug	case viewportDebug
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO14semanticActionyA2CmF	swift.enum.case	public	FenceCommandFamily.semanticAction	FenceCommandFamily.semanticAction	case semanticAction
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO7sessionyA2CmF	swift.enum.case	public	FenceCommandFamily.session	FenceCommandFamily.session	case session
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	FenceCommandFamily.init(rawValue:)	init?(rawValue: String)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceCommandFamilyO9assertionyA2CmF	swift.enum.case	public	FenceCommandFamily.assertion	FenceCommandFamily.assertion	case assertion
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV	swift.struct	public	FenceParameterSpec	FenceParameterSpec	struct FenceParameterSpec
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV10enumValuesSaySSGSgvp	swift.property	public	enumValues	FenceParameterSpec.enumValues	let enumValues: [String]?
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV10parameters5namedSayACGAA0cD3KeyV_tF	swift.method	public	parameters(named:)	FenceParameterSpec.parameters(named:)	func parameters(named key: FenceParameterKey) -> [FenceParameterSpec]
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV12defaultValue8TheScore0bG0OSgvp	swift.property	public	defaultValue	FenceParameterSpec.defaultValue	let defaultValue: HeistValue?
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV15jsonInputSchema10properties8required8TheScore0B5ValueOSDySSAIG_SaySSGtFZ	swift.type.method	public	jsonInputSchema(properties:required:)	FenceParameterSpec.jsonInputSchema(properties:required:)	static func jsonInputSchema(properties: [String : HeistValue], required: [String] = []) -> HeistValue
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV16objectPropertiesSayACGvp	swift.property	public	objectProperties	FenceParameterSpec.objectProperties	let objectProperties: [FenceParameterSpec]
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV18jsonSchemaProperty8TheScore0B5ValueOvp	swift.property	public	jsonSchemaProperty	FenceParameterSpec.jsonSchemaProperty	let jsonSchemaProperty: HeistValue
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV18objectPropertyKeysShySSGvp	swift.property	public	objectPropertyKeys	FenceParameterSpec.objectPropertyKeys	var objectPropertyKeys: Set<String> { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV19arrayItemPropertiesSayACGvp	swift.property	public	arrayItemProperties	FenceParameterSpec.arrayItemProperties	let arrayItemProperties: [FenceParameterSpec]
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV20jsonSchemaProperties4fromSDySS8TheScore0B5ValueOGSayACG_tFZ	swift.type.method	public	jsonSchemaProperties(from:)	FenceParameterSpec.jsonSchemaProperties(from:)	static func jsonSchemaProperties(from specs: [FenceParameterSpec]) -> [String : HeistValue]
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV3keySSvp	swift.property	public	key	FenceParameterSpec.key	let key: String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV4typeAC9ParamTypeOvp	swift.property	public	type	FenceParameterSpec.type	let type: FenceParameterSpec.ParamType
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV8requiredSbvp	swift.property	public	required	FenceParameterSpec.required	let required: Bool
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO	swift.enum	public	FenceParameterSpec.ParamType	FenceParameterSpec.ParamType	enum ParamType
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO010jsonSchemaG0SSvp	swift.property	public	jsonSchemaType	FenceParameterSpec.ParamType.jsonSchemaType	var jsonSchemaType: String { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO11stringArrayyA2EmF	swift.enum.case	public	FenceParameterSpec.ParamType.stringArray	FenceParameterSpec.ParamType.stringArray	case stringArray
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO11stringMatchyA2EmF	swift.enum.case	public	FenceParameterSpec.ParamType.stringMatch	FenceParameterSpec.ParamType.stringMatch	case stringMatch
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO5arrayyA2EmF	swift.enum.case	public	FenceParameterSpec.ParamType.array	FenceParameterSpec.ParamType.array	case array
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO6numberyA2EmF	swift.enum.case	public	FenceParameterSpec.ParamType.number	FenceParameterSpec.ParamType.number	case number
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO6objectyA2EmF	swift.enum.case	public	FenceParameterSpec.ParamType.object	FenceParameterSpec.ParamType.object	case object
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO6stringyA2EmF	swift.enum.case	public	FenceParameterSpec.ParamType.string	FenceParameterSpec.ParamType.string	case string
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO7booleanyA2EmF	swift.enum.case	public	FenceParameterSpec.ParamType.boolean	FenceParameterSpec.ParamType.boolean	case boolean
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO7integeryA2EmF	swift.enum.case	public	FenceParameterSpec.ParamType.integer	FenceParameterSpec.ParamType.integer	case integer
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO8rawValueAESgSS_tcfc	swift.init	public	init(rawValue:)	FenceParameterSpec.ParamType.init(rawValue:)	init?(rawValue: String)
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV7resolve12deviceFilter5token14sessionTimeout010connectionJ013autoReconnect10configPath11environmentACSSSg_ALSdSgAMSbAlA0abC0VtKFZ	swift.type.method	public	resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:configPath:environment:)	EnvironmentConfig.resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:configPath:environment:)	static func resolve(deviceFilter: String? = nil, token: String? = nil, sessionTimeout: TimeInterval? = nil, connectionTimeout: TimeInterval? = nil, autoReconnect: Bool = true, configPath: String?, environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()) throws -> EnvironmentConfig
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV7resolve12deviceFilter5token14sessionTimeout010connectionJ013autoReconnect10configPath11environmentACSSSg_ALSdSgAMSbSSAA0abC0VtKFZ	swift.type.method	public	resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:configPath:environment:)	EnvironmentConfig.resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:configPath:environment:)	static func resolve(deviceFilter: String? = nil, token: String? = nil, sessionTimeout: TimeInterval? = nil, connectionTimeout: TimeInterval? = nil, autoReconnect: Bool = true, configPath: String, environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()) throws -> EnvironmentConfig
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist17EnvironmentConfigV7resolve12deviceFilter5token14sessionTimeout010connectionJ013autoReconnect11environmentACSSSg_AKSdSgALSbAA0abC0VtKFZ	swift.type.method	public	resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:environment:)	EnvironmentConfig.resolve(deviceFilter:token:sessionTimeout:connectionTimeout:autoReconnect:environment:)	static func resolve(deviceFilter: String? = nil, token: String? = nil, sessionTimeout: TimeInterval? = nil, connectionTimeout: TimeInterval? = nil, autoReconnect: Bool = true, environment: ButtonHeistEnvironment = ButtonHeistEnvironmentBridge.current()) throws -> EnvironmentConfig
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist19PublicJSONValueNodeO	swift.enum	public	PublicJSONValueNode	PublicJSONValueNode	enum PublicJSONValueNode<Value>
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist19PublicJSONValueNodeO3intyACyxGSicAEmlF	swift.enum.case	public	PublicJSONValueNode.int(_:)	PublicJSONValueNode.int(_:)	case int(Int)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist19PublicJSONValueNodeO4boolyACyxGSbcAEmlF	swift.enum.case	public	PublicJSONValueNode.bool(_:)	PublicJSONValueNode.bool(_:)	case bool(Bool)
@@ -348,17 +221,6 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist21DiagnosticFailureKindO7sessiony
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21DiagnosticFailureKindO7unknownyA2CmF	swift.enum.case	public	DiagnosticFailureKind.unknown	DiagnosticFailureKind.unknown	case unknown
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21DiagnosticFailureKindO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	DiagnosticFailureKind.init(rawValue:)	init?(rawValue: String)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21DiagnosticFailureKindO9discoveryyA2CmF	swift.enum.case	public	DiagnosticFailureKind.discovery	DiagnosticFailureKind.discovery	case discovery
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21FenceCommandReferenceO	swift.enum	public	FenceCommandReference	FenceCommandReference	enum FenceCommandReference
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21FenceCommandReferenceO11mcpMarkdown11descriptorsSSSayAA0cD10DescriptorVG_tFZ	swift.type.method	public	mcpMarkdown(descriptors:)	FenceCommandReference.mcpMarkdown(descriptors:)	static func mcpMarkdown(descriptors: [FenceCommandDescriptor] = TheFence.Command.descriptors) -> String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21FenceCommandReferenceO15commandMarkdown11descriptorsSSSayAA0cD10DescriptorVG_tFZ	swift.type.method	public	commandMarkdown(descriptors:)	FenceCommandReference.commandMarkdown(descriptors:)	static func commandMarkdown(descriptors: [FenceCommandDescriptor] = TheFence.Command.descriptors) -> String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21FenceOperationRequestV	swift.struct	public	FenceOperationRequest	FenceOperationRequest	struct FenceOperationRequest
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21FenceOperationRequestV7command9argumentsAcA03TheC0C7CommandO_AG0I16ArgumentEnvelopeVtcfc	swift.init	public	init(command:arguments:)	FenceOperationRequest.init(command:arguments:)	init(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21FenceOperationRequestV7commandAA03TheC0C7CommandOvp	swift.property	public	command	FenceOperationRequest.command	let command: TheFence.Command
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21FenceOperationRequestV9argumentsAA03TheC0C23CommandArgumentEnvelopeVvp	swift.property	public	arguments	FenceOperationRequest.arguments	let arguments: TheFence.CommandArgumentEnvelope
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21MCPToolAnnotationSpecV	swift.struct	public	MCPToolAnnotationSpec	MCPToolAnnotationSpec	struct MCPToolAnnotationSpec
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21MCPToolAnnotationSpecV12readOnlyHint010idempotentH0ACSbSg_AFtcfc	swift.init	public	init(readOnlyHint:idempotentHint:)	MCPToolAnnotationSpec.init(readOnlyHint:idempotentHint:)	init(readOnlyHint: Bool? = nil, idempotentHint: Bool? = nil)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21MCPToolAnnotationSpecV12readOnlyHintSbSgvp	swift.property	public	readOnlyHint	MCPToolAnnotationSpec.readOnlyHint	let readOnlyHint: Bool?
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist21MCPToolAnnotationSpecV14idempotentHintSbSgvp	swift.property	public	idempotentHint	MCPToolAnnotationSpec.idempotentHint	let idempotentHint: Bool?
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21PublicJSONInputLimitsO	swift.enum	public	PublicJSONInputLimits	PublicJSONInputLimits	enum PublicJSONInputLimits
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21PublicJSONInputLimitsO14maxStringBytesSivpZ	swift.type.property	public	maxStringBytes	PublicJSONInputLimits.maxStringBytes	static let maxStringBytes: Int
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21PublicJSONInputLimitsO15maxNestingDepthSivpZ	swift.type.property	public	maxNestingDepth	PublicJSONInputLimits.maxNestingDepth	static let maxNestingDepth: Int
@@ -405,31 +267,6 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist21TargetConfigLoadErrorV4KindO8ra
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21TargetConfigLoadErrorV4KindO9errorCodeSSvp	swift.property	public	errorCode	TargetConfigLoadError.Kind.errorCode	var errorCode: String { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21TargetConfigLoadErrorV4kindAC4KindOvp	swift.property	public	kind	TargetConfigLoadError.kind	let kind: TargetConfigLoadError.Kind
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist21TargetConfigLoadErrorV4pathSSvp	swift.property	public	path	TargetConfigLoadError.path	let path: String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV	swift.struct	public	FenceCommandDescriptor	FenceCommandDescriptor	struct FenceCommandDescriptor
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV10parametersSayAA0C13ParameterSpecVGvp	swift.property	public	parameters	FenceCommandDescriptor.parameters	let parameters: [FenceParameterSpec]
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV10projectionAA0cD10ProjectionVvp	swift.property	public	projection	FenceCommandDescriptor.projection	let projection: FenceCommandProjection
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV11cliExposureAA11CLIExposureOvp	swift.property	public	cliExposure	FenceCommandDescriptor.cliExposure	var cliExposure: CLIExposure { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV11descriptionSSvp	swift.property	public	description	FenceCommandDescriptor.description	var description: String { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV11mcpExposureAA11MCPExposureOvp	swift.property	public	mcpExposure	FenceCommandDescriptor.mcpExposure	var mcpExposure: MCPExposure { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV14mcpAnnotationsAA21MCPToolAnnotationSpecVSgvp	swift.property	public	mcpAnnotations	FenceCommandDescriptor.mcpAnnotations	var mcpAnnotations: MCPToolAnnotationSpec? { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV15inputJSONSchema8TheScore0B5ValueOvp	swift.property	public	inputJSONSchema	FenceCommandDescriptor.inputJSONSchema	var inputJSONSchema: HeistValue { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV20defaultArgumentValue3for8TheScore0bH0OSgAA0C12ParameterKeyV_tF	swift.method	public	defaultArgumentValue(for:)	FenceCommandDescriptor.defaultArgumentValue(for:)	func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue?
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV21requiredDefaultString3forSSAA0C12ParameterKeyV_tF	swift.method	public	requiredDefaultString(for:)	FenceCommandDescriptor.requiredDefaultString(for:)	func requiredDefaultString(for key: FenceParameterKey) -> String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV21topLevelParameterKeysShySSGvp	swift.property	public	topLevelParameterKeys	FenceCommandDescriptor.topLevelParameterKeys	var topLevelParameterKeys: Set<String> { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV23isPublicRequestContractSbvp	swift.property	public	isPublicRequestContract	FenceCommandDescriptor.isPublicRequestContract	var isPublicRequestContract: Bool { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV24requiredDefaultEnumValue3for2asxAA0C12ParameterKeyV_xmtSYRzSS03RawI0RtzlF	swift.method	public	requiredDefaultEnumValue(for:as:)	FenceCommandDescriptor.requiredDefaultEnumValue(for:as:)	func requiredDefaultEnumValue<E>(for key: FenceParameterKey, as type: E.Type) -> E where E : RawRepresentable, E.RawValue == String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV26elementTargetParameterKeysSaySSGvp	swift.property	public	elementTargetParameterKeys	FenceCommandDescriptor.elementTargetParameterKeys	var elementTargetParameterKeys: [String] { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV2eeoiySbAC_ACtFZ	swift.func.op	public	==(_:_:)	FenceCommandDescriptor.==(_:_:)	static func == (lhs: FenceCommandDescriptor, rhs: FenceCommandDescriptor) -> Bool
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV32requiresConnectionBeforeDispatchSbvp	swift.property	public	requiresConnectionBeforeDispatch	FenceCommandDescriptor.requiresConnectionBeforeDispatch	let requiresConnectionBeforeDispatch: Bool
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV6familyAA0cD6FamilyOvp	swift.property	public	family	FenceCommandDescriptor.family	let family: FenceCommandFamily
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV7commandAA03TheC0C0D0Ovp	swift.property	public	command	FenceCommandDescriptor.command	let command: TheFence.Command
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandDescriptorV9parameter5namedAA0C13ParameterSpecVSgAA0cH3KeyV_tF	swift.method	public	parameter(named:)	FenceCommandDescriptor.parameter(named:)	func parameter(named key: FenceParameterKey) -> FenceParameterSpec?
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandProjectionV	swift.struct	public	FenceCommandProjection	FenceCommandProjection	struct FenceCommandProjection
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandProjectionV11cliExposureAA11CLIExposureOvp	swift.property	public	cliExposure	FenceCommandProjection.cliExposure	let cliExposure: CLIExposure
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandProjectionV11descriptionSSvp	swift.property	public	description	FenceCommandProjection.description	let description: String
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandProjectionV11mcpExposureAA11MCPExposureOvp	swift.property	public	mcpExposure	FenceCommandProjection.mcpExposure	let mcpExposure: MCPExposure
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandProjectionV14mcpAnnotationsAA21MCPToolAnnotationSpecVSgvp	swift.property	public	mcpAnnotations	FenceCommandProjection.mcpAnnotations	let mcpAnnotations: MCPToolAnnotationSpec?
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist22FenceCommandProjectionV23isPublicRequestContractSbvp	swift.property	public	isPublicRequestContract	FenceCommandProjection.isPublicRequestContract	var isPublicRequestContract: Bool { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist22PublicJSONInputDecoderO	swift.enum	public	PublicJSONInputDecoder	PublicJSONInputDecoder	enum PublicJSONInputDecoder
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist22PublicJSONInputDecoderO06decodeB5Value4from4root7context0I15MismatchMessage8TheScore0bG0OSS_AA0C8JSONRootOS2SSgtKFZ	swift.type.method	public	decodeHeistValue(from:root:context:rootMismatchMessage:)	PublicJSONInputDecoder.decodeHeistValue(from:root:context:rootMismatchMessage:)	static func decodeHeistValue(from input: String, root: PublicJSONRoot = .any, context: String = "Public JSON input", rootMismatchMessage: String? = nil) throws -> HeistValue
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist22PublicJSONInputDecoderO6decode_4from4root7context0H15MismatchMessagexxm_10Foundation4DataVAA0C8JSONRootOS2SSgtKSeRzlFZ	swift.type.method	public	decode(_:from:root:context:rootMismatchMessage:)	PublicJSONInputDecoder.decode(_:from:root:context:rootMismatchMessage:)	static func decode<T>(_ type: T.Type, from data: Data, root: PublicJSONRoot = .any, context: String = "Public JSON input", rootMismatchMessage: String? = nil) throws -> T where T : Decodable
@@ -461,53 +298,37 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist24PublicJSONValuePreflightO14vali
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist25ScreenshotResponseOptionsV	swift.struct	public	ScreenshotResponseOptions	ScreenshotResponseOptions	struct ScreenshotResponseOptions
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist25ScreenshotResponseOptionsV16includeInterfaceACSb_tcfc	swift.init	public	init(includeInterface:)	ScreenshotResponseOptions.init(includeInterface:)	init(includeInterface: Bool = true)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist25ScreenshotResponseOptionsV16includeInterfaceSbvp	swift.property	public	includeInterface	ScreenshotResponseOptions.includeInterface	let includeInterface: Bool
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist26FenceOperationRoutingErrorV	swift.struct	public	FenceOperationRoutingError	FenceOperationRoutingError	struct FenceOperationRoutingError
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist26FenceOperationRoutingErrorV16errorDescriptionSSSgvp	swift.property	public	errorDescription	FenceOperationRoutingError.errorDescription	var errorDescription: String? { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist26FenceOperationRoutingErrorV7detailsAA14FailureDetailsVvp	swift.property	public	details	FenceOperationRoutingError.details	let details: FailureDetails
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist26FenceOperationRoutingErrorV7message7detailsACSS_AA14FailureDetailsVtcfc	swift.init	public	init(message:details:)	FenceOperationRoutingError.init(message:details:)	init(message: String, details: FailureDetails = FailureDetails(code: .requestInvalid))
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist26FenceOperationRoutingErrorV7messageSSvp	swift.property	public	message	FenceOperationRoutingError.message	let message: String
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8DefaultsO	swift.enum	public	Defaults	Defaults	enum Defaults
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8DefaultsO15demoAppBundleIDSSvpZ	swift.type.property	public	demoAppBundleID	Defaults.demoAppBundleID	static let demoAppBundleID: String
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC	swift.class	public	TheFence	TheFence	@ButtonHeistActor final class TheFence
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC11junitReport3for9heistName16totalTimeSeconds0C5Score0b5JUnitF0VAH0B15ExecutionResultV_SSSdtF	swift.method	public	junitReport(for:heistName:totalTimeSeconds:)	TheFence.junitReport(for:heistName:totalTimeSeconds:)	@ButtonHeistActor func junitReport(for result: HeistExecutionResult, heistName: String, totalTimeSeconds: Double) -> HeistJUnitReport
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC13ConfigurationV	swift.struct	public	TheFence.Configuration	TheFence.Configuration	struct Configuration
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC13configurationA2C13ConfigurationV_tcfc	swift.init	public	init(configuration:)	TheFence.init(configuration:)	@ButtonHeistActor init(configuration: TheFence.Configuration)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC23CommandArgumentEnvelopeV	swift.struct	public	TheFence.CommandArgumentEnvelope	TheFence.CommandArgumentEnvelope	struct CommandArgumentEnvelope
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC23CommandArgumentEnvelopeV14argumentValuesSDySS0C5Score0B5ValueOGvp	swift.property	public	argumentValues	TheFence.CommandArgumentEnvelope.argumentValues	let argumentValues: [String : HeistValue]
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC23CommandArgumentEnvelopeV6values11fieldPrefixAESDySS0C5Score0B5ValueOG_SSSgtcfc	swift.init	public	init(values:fieldPrefix:)	TheFence.CommandArgumentEnvelope.init(values:fieldPrefix:)	init(values: [String : HeistValue], fieldPrefix: String? = nil)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC24parseExpectationArgumenty0C5Score0B5ValueOSSKFZ	swift.type.method	public	parseExpectationArgument(_:)	TheFence.parseExpectationArgument(_:)	nonisolated static func parseExpectationArgument(_ rawValue: String) throws -> HeistValue
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC4stopyyF	swift.method	public	stop()	TheFence.stop()	@ButtonHeistActor func stop()
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC5startyyYaKF	swift.method	public	start()	TheFence.start()	@ButtonHeistActor func start() async throws
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO	swift.enum	public	TheFence.Command	TheFence.Command	enum Command
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO03runB0yA2EmF	swift.enum.case	public	TheFence.Command.runHeist	TheFence.Command.runHeist	case runHeist
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO05routeE8Envelope_7contexts6ResultOyAA0D16OperationRequestVAA0dJ12RoutingErrorVGAC0e8ArgumentG0V_SStFZ	swift.type.method	public	routeCommandEnvelope(_:context:)	TheFence.Command.routeCommandEnvelope(_:context:)	static func routeCommandEnvelope(_ arguments: TheFence.CommandArgumentEnvelope, context: String) -> Result<FenceOperationRequest, FenceOperationRoutingError>
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO08describeB0yA2EmF	swift.enum.case	public	TheFence.Command.describeHeist	TheFence.Command.describeHeist	case describeHeist
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO09cliDirectE11DescriptorsSayAA0dE10DescriptorVGvpZ	swift.type.property	public	cliDirectCommandDescriptors	TheFence.Command.cliDirectCommandDescriptors	static var cliDirectCommandDescriptors: [FenceCommandDescriptor] { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO10descriptorAA0dE10DescriptorVvp	swift.property	public	descriptor	TheFence.Command.descriptor	var descriptor: FenceCommandDescriptor { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO10editActionyA2EmF	swift.enum.case	public	TheFence.Command.editAction	TheFence.Command.editAction	case editAction
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO10listHeistsyA2EmF	swift.enum.case	public	TheFence.Command.listHeists	TheFence.Command.listHeists	case listHeists
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO11descriptorsSayAA0dE10DescriptorVGvpZ	swift.type.property	public	descriptors	TheFence.Command.descriptors	static var descriptors: [FenceCommandDescriptor] { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO11listDevicesyA2EmF	swift.enum.case	public	TheFence.Command.listDevices	TheFence.Command.listDevices	case listDevices
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO11listTargetsyA2EmF	swift.enum.case	public	TheFence.Command.listTargets	TheFence.Command.listTargets	case listTargets
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO12getInterfaceyA2EmF	swift.enum.case	public	TheFence.Command.getInterface	TheFence.Command.getInterface	case getInterface
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO12oneFingerTapyA2EmF	swift.enum.case	public	TheFence.Command.oneFingerTap	TheFence.Command.oneFingerTap	case oneFingerTap
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO12scrollToEdgeyA2EmF	swift.enum.case	public	TheFence.Command.scrollToEdge	TheFence.Command.scrollToEdge	case scrollToEdge
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO13getPasteboardyA2EmF	swift.enum.case	public	TheFence.Command.getPasteboard	TheFence.Command.getPasteboard	case getPasteboard
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO13routeToolCall5nameds6ResultOyAeA0D21OperationRoutingErrorVGSS_tFZ	swift.type.method	public	routeToolCall(named:)	TheFence.Command.routeToolCall(named:)	static func routeToolCall(named name: String) -> Result<TheFence.Command, FenceOperationRoutingError>
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO13setPasteboardyA2EmF	swift.enum.case	public	TheFence.Command.setPasteboard	TheFence.Command.setPasteboard	case setPasteboard
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO15dismissKeyboardyA2EmF	swift.enum.case	public	TheFence.Command.dismissKeyboard	TheFence.Command.dismissKeyboard	case dismissKeyboard
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO15getSessionStateyA2EmF	swift.enum.case	public	TheFence.Command.getSessionState	TheFence.Command.getSessionState	case getSessionState
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO15scrollToVisibleyA2EmF	swift.enum.case	public	TheFence.Command.scrollToVisible	TheFence.Command.scrollToVisible	case scrollToVisible
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO16cliJSONLinesHelpSSvpZ	swift.type.property	public	cliJSONLinesHelp	TheFence.Command.cliJSONLinesHelp	static var cliJSONLinesHelp: String { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO16routeToolRequest5named9argumentss6ResultOyAA0d9OperationH0VAA0dL12RoutingErrorVGSS_AC0E16ArgumentEnvelopeVtFZ	swift.type.method	public	routeToolRequest(named:arguments:)	TheFence.Command.routeToolRequest(named:arguments:)	static func routeToolRequest(named name: String, arguments: TheFence.CommandArgumentEnvelope) -> Result<FenceOperationRequest, FenceOperationRoutingError>
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO21mcpServerInstructionsSSvpZ	swift.type.property	public	mcpServerInstructions	TheFence.Command.mcpServerInstructions	static var mcpServerInstructions: String { get }
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO23routeCLICommandEnvelope_7contexts6ResultOyAA0D16OperationRequestVAA0dK12RoutingErrorVGAC0e8ArgumentH0V_SStFZ	swift.type.method	public	routeCLICommandEnvelope(_:context:)	TheFence.Command.routeCLICommandEnvelope(_:context:)	static func routeCLICommandEnvelope(_ arguments: TheFence.CommandArgumentEnvelope, context: String) -> Result<FenceOperationRequest, FenceOperationRoutingError>
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO4dragyA2EmF	swift.enum.case	public	TheFence.Command.drag	TheFence.Command.drag	case drag
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO4pingyA2EmF	swift.enum.case	public	TheFence.Command.ping	TheFence.Command.ping	case ping
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO4waityA2EmF	swift.enum.case	public	TheFence.Command.wait	TheFence.Command.wait	case wait
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO5rotoryA2EmF	swift.enum.case	public	TheFence.Command.rotor	TheFence.Command.rotor	case rotor
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO5swipeyA2EmF	swift.enum.case	public	TheFence.Command.swipe	TheFence.Command.swipe	case swipe
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO6familyAA0dE6FamilyOvp	swift.property	public	family	TheFence.Command.family	var family: FenceCommandFamily { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO6scrollyA2EmF	swift.enum.case	public	TheFence.Command.scroll	TheFence.Command.scroll	case scroll
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO7connectyA2EmF	swift.enum.case	public	TheFence.Command.connect	TheFence.Command.connect	case connect
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO7performyA2EmF	swift.enum.case	public	TheFence.Command.perform	TheFence.Command.perform	case perform
@@ -516,7 +337,6 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO8rawValueAESgS
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO8typeTextyA2EmF	swift.enum.case	public	TheFence.Command.typeText	TheFence.Command.typeText	case typeText
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO9getScreenyA2EmF	swift.enum.case	public	TheFence.Command.getScreen	TheFence.Command.getScreen	case getScreen
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7CommandO9longPressyA2EmF	swift.enum.case	public	TheFence.Command.longPress	TheFence.Command.longPress	case longPress
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC7execute7command9argumentsAA0D8ResponseOAC7CommandO_AC0I16ArgumentEnvelopeVtYaKF	swift.method	public	execute(command:arguments:)	TheFence.execute(command:arguments:)	@ButtonHeistActor func execute(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope) async throws -> FenceResponse
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist8TheFenceC8onStatusySSYbAA0aB5ActorCYccSgvp	swift.property	public	onStatus	TheFence.onStatus	@ButtonHeistActor var onStatus: (@ButtonHeistActor (String) -> Void)? { get set }
 symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV	swift.struct	public	ActionStep	ActionStep	struct ActionStep
 symbol	ButtonHeist.symbols.json	s:8ThePlans10ActionStepV11descriptionSSvp	swift.property	public	description	ActionStep.description	var description: String { get }
@@ -1652,6 +1472,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO06changeD0yA
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO08noChangeD0yA2CmF	swift.enum.case	public	AccessibilityPredicate.noChangePredicate	AccessibilityPredicate.noChangePredicate	case noChangePredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO0A5ScoreE8evaluate15currentElements16accumulatedDeltaAD17ExpectationResultVSayAD12HeistElementVG_AD0C5TraceV011AccumulatedJ0VSgtF	swift.method	public	evaluate(currentElements:accumulatedDelta:)	AccessibilityPredicate.evaluate(currentElements:accumulatedDelta:)	func evaluate(currentElements: [HeistElement], accumulatedDelta: AccessibilityTrace.AccumulatedDelta?) -> ExpectationResult
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO0A5ScoreE8evaluate15currentElements5deltaAD17ExpectationResultVSayAD12HeistElementVG_AD0C5TraceV5DeltaOSgtF	swift.method	public	evaluate(currentElements:delta:)	AccessibilityPredicate.evaluate(currentElements:delta:)	func evaluate(currentElements: [HeistElement], delta: AccessibilityTrace.Delta? = nil) -> ExpectationResult
+symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO0A5ScoreE8evaluate2inAD17ExpectationResultVAD0D18EvaluationEvidenceV_tF	swift.method	public	evaluate(in:)	AccessibilityPredicate.evaluate(in:)	func evaluate(in evidence: PredicateEvaluationEvidence) -> ExpectationResult
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO0A5ScoreE8validate7againstAD17ExpectationResultVAD06ActionI0V_tF	swift.method	public	validate(against:)	AccessibilityPredicate.validate(against:)	func validate(against result: ActionResult) -> ExpectationResult
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO11descriptionSSvp	swift.property	public	description	AccessibilityPredicate.description	var description: String { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans22AccessibilityPredicateO14wireTypeValuesSaySSGvpZ	swift.type.property	public	wireTypeValues	AccessibilityPredicate.wireTypeValues	static let wireTypeValues: [String]
@@ -1779,6 +1600,7 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO22unsupport
 symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO25unsupportedInputExtensionyACSS_tcACmF	swift.enum.case	public	HeistArtifactCodecError.unsupportedInputExtension(path:)	HeistArtifactCodecError.unsupportedInputExtension(path:)	case unsupportedInputExtension(path: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO26unsupportedOutputExtensionyACSS_tcACmF	swift.enum.case	public	HeistArtifactCodecError.unsupportedOutputExtension(path:)	HeistArtifactCodecError.unsupportedOutputExtension(path:)	case unsupportedOutputExtension(path: String)
 symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistPlanSourceCompilerV	swift.struct	public	HeistPlanSourceCompiler	HeistPlanSourceCompiler	struct HeistPlanSourceCompiler
+symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistPlanSourceCompilerV13compileResult_10sourceNameAA010ValidationH0OyAA0cD0VAA0C15BuildDiagnosticVGSS_SStF	swift.method	public	compileResult(_:sourceName:)	HeistPlanSourceCompiler.compileResult(_:sourceName:)	func compileResult(_ source: String, sourceName: String = "inline-heist-plan") -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
 symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistPlanSourceCompilerV7compile_10sourceNameAA0cD0VSS_SStKF	swift.method	public	compile(_:sourceName:)	HeistPlanSourceCompiler.compile(_:sourceName:)	func compile(_ source: String, sourceName: String = "inline-heist-plan") throws -> HeistPlan
 symbol	ButtonHeist.symbols.json	s:8ThePlans23HeistPlanSourceCompilerVACycfc	swift.init	public	init()	HeistPlanSourceCompiler.init()	init()
 symbol	ButtonHeist.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV	swift.struct	public	ResolvedRepeatUntilStep	ResolvedRepeatUntilStep	struct ResolvedRepeatUntilStep
@@ -1961,10 +1783,12 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans27HeistDescriptionLookupErrorV13reque
 symbol	ButtonHeist.symbols.json	s:8ThePlans27HeistDescriptionLookupErrorV13requestedNameSSvp	swift.property	public	requestedName	HeistDescriptionLookupError.requestedName	let requestedName: String
 symbol	ButtonHeist.symbols.json	s:8ThePlans27HeistDescriptionLookupErrorV14availableNamesSaySSGvp	swift.property	public	availableNames	HeistDescriptionLookupError.availableNames	let availableNames: [String]
 symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV	swift.struct	public	HeistPlanSourceCompilerError	HeistPlanSourceCompilerError	struct HeistPlanSourceCompilerError
-symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV10diagnosticAA0C15BuildDiagnosticVvp	swift.property	public	diagnostic	HeistPlanSourceCompilerError.diagnostic	let diagnostic: HeistBuildDiagnostic
+symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV10diagnosticAA0C15BuildDiagnosticVvp	swift.property	public	diagnostic	HeistPlanSourceCompilerError.diagnostic	var diagnostic: HeistBuildDiagnostic { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV10diagnosticAcA0C15BuildDiagnosticV_tcfc	swift.init	public	init(diagnostic:)	HeistPlanSourceCompilerError.init(diagnostic:)	init(diagnostic: HeistBuildDiagnostic)
 symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV10sourceNameSSvp	swift.property	public	sourceName	HeistPlanSourceCompilerError.sourceName	var sourceName: String { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV11descriptionSSvp	swift.property	public	description	HeistPlanSourceCompilerError.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV11diagnosticsACSayAA0C15BuildDiagnosticVG_tcfc	swift.init	public	init(diagnostics:)	HeistPlanSourceCompilerError.init(diagnostics:)	init(diagnostics: [HeistBuildDiagnostic])
+symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV11diagnosticsSayAA0C15BuildDiagnosticVGvp	swift.property	public	diagnostics	HeistPlanSourceCompilerError.diagnostics	let diagnostics: [HeistBuildDiagnostic]
 symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV4code5phase7message10sourceName6offset4line6column6length4hintACSS_AA0C10BuildPhaseOS2SS4iSgSSSgtcfc	swift.init	public	init(code:phase:message:sourceName:offset:line:column:length:hint:)	HeistPlanSourceCompilerError.init(code:phase:message:sourceName:offset:line:column:length:hint:)	init(code: String = "heist.source.invalid_syntax", phase: HeistBuildPhase = .sourceCompilation, message: String, sourceName: String, offset: Int, line: Int, column: Int, length: Int? = nil, hint: String? = nil)
 symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV4lineSivp	swift.property	public	line	HeistPlanSourceCompilerError.line	var line: Int { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV6columnSivp	swift.property	public	column	HeistPlanSourceCompilerError.column	var column: Int { get }
@@ -2649,11 +2473,12 @@ symbol	ButtonHeist.symbols.json	s:8TheScore17HeistStepEvidenceO6actionyAcA0c6Act
 symbol	ButtonHeist.symbols.json	s:8TheScore17HeistStepEvidenceO7warningyAcA0C16ExecutionWarningVcACmF	swift.enum.case	public	HeistStepEvidence.warning(_:)	HeistStepEvidence.warning(_:)	case warning(HeistExecutionWarning)
 symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV	swift.struct	public	HeistWaitEvidence	HeistWaitEvidence	struct HeistWaitEvidence
 symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV11expectationAA17ExpectationResultVvp	swift.property	public	expectation	HeistWaitEvidence.expectation	let expectation: ExpectationResult
-symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV12actionResult11expectation15baselineSummary05finalJ0AcA06ActionG0V_AA011ExpectationG0VSSSgALtcfc	swift.init	public	init(actionResult:expectation:baselineSummary:finalSummary:)	HeistWaitEvidence.init(actionResult:expectation:baselineSummary:finalSummary:)	init(actionResult: ActionResult, expectation: ExpectationResult, baselineSummary: String? = nil, finalSummary: String? = nil)
 symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV12actionResultAA06ActionG0Vvp	swift.property	public	actionResult	HeistWaitEvidence.actionResult	let actionResult: ActionResult
 symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV12finalSummarySSSgvp	swift.property	public	finalSummary	HeistWaitEvidence.finalSummary	let finalSummary: String?
 symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV15baselineSummarySSSgvp	swift.property	public	baselineSummary	HeistWaitEvidence.baselineSummary	let baselineSummary: String?
 symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistWaitEvidence.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV7outcome12actionResult11expectation15baselineSummary05finalK0AcA0c9PredicateE7OutcomeO_AA06ActionH0VAA011ExpectationH0VSSSgAOtcfc	swift.init	public	init(outcome:actionResult:expectation:baselineSummary:finalSummary:)	HeistWaitEvidence.init(outcome:actionResult:expectation:baselineSummary:finalSummary:)	init(outcome: HeistPredicateEvidenceOutcome, actionResult: ActionResult, expectation: ExpectationResult, baselineSummary: String? = nil, finalSummary: String? = nil)
+symbol	ButtonHeist.symbols.json	s:8TheScore17HeistWaitEvidenceV7outcomeAA0c9PredicateE7OutcomeOvp	swift.property	public	outcome	HeistWaitEvidence.outcome	let outcome: HeistPredicateEvidenceOutcome
 symbol	ButtonHeist.symbols.json	s:8TheScore18AccessibilityTraceV	swift.struct	public	AccessibilityTrace	AccessibilityTrace	struct AccessibilityTrace
 symbol	ButtonHeist.symbols.json	s:8TheScore18AccessibilityTraceV08endpointD04fromACSgSayACG_tFZ	swift.type.method	public	endpointTrace(from:)	AccessibilityTrace.endpointTrace(from:)	static func endpointTrace(from traces: [AccessibilityTrace]) -> AccessibilityTrace?
 symbol	ButtonHeist.symbols.json	s:8TheScore18AccessibilityTraceV10CaptureRefV	swift.struct	public	AccessibilityTrace.CaptureRef	AccessibilityTrace.CaptureRef	struct CaptureRef
@@ -3004,6 +2829,9 @@ symbol	ButtonHeist.symbols.json	s:8TheScore22HeistReceiptCodecErrorO16jsonDataTo
 symbol	ButtonHeist.symbols.json	s:8TheScore22HeistReceiptCodecErrorO24gzipInitializationFailedyACSS_s5Int32VtcACmF	swift.enum.case	public	HeistReceiptCodecError.gzipInitializationFailed(operation:code:)	HeistReceiptCodecError.gzipInitializationFailed(operation:code:)	case gzipInitializationFailed(operation: String, code: Int32)
 symbol	ButtonHeist.symbols.json	s:8TheScore22HeistReceiptCodecErrorO26gzipCompressedDataTooLargeyACSi_SitcACmF	swift.enum.case	public	HeistReceiptCodecError.gzipCompressedDataTooLarge(limit:observed:)	HeistReceiptCodecError.gzipCompressedDataTooLarge(limit:observed:)	case gzipCompressedDataTooLarge(limit: Int, observed: Int)
 symbol	ButtonHeist.symbols.json	s:8TheScore22HeistReceiptCodecErrorO28gzipDecompressedDataTooLargeyACSi_SitcACmF	swift.enum.case	public	HeistReceiptCodecError.gzipDecompressedDataTooLarge(limit:observed:)	HeistReceiptCodecError.gzipDecompressedDataTooLarge(limit:observed:)	case gzipDecompressedDataTooLarge(limit: Int, observed: Int)
+symbol	ButtonHeist.symbols.json	s:8TheScore22RuntimeKnobEnvironmentV	swift.struct	public	RuntimeKnobEnvironment	RuntimeKnobEnvironment	struct RuntimeKnobEnvironment
+symbol	ButtonHeist.symbols.json	s:8TheScore22RuntimeKnobEnvironmentV5emptyACvpZ	swift.type.property	public	empty	RuntimeKnobEnvironment.empty	static let empty: RuntimeKnobEnvironment
+symbol	ButtonHeist.symbols.json	s:8TheScore22RuntimeKnobEnvironmentV6valuesACSDyAA0cdE3KeyVSSG_tcfc	swift.init	public	init(values:)	RuntimeKnobEnvironment.init(values:)	init(values: [RuntimeKnobEnvironmentKey : String] = [:])
 symbol	ButtonHeist.symbols.json	s:8TheScore22ScrollContainerMetricsO	swift.enum	public	ScrollContainerMetrics	ScrollContainerMetrics	enum ScrollContainerMetrics
 symbol	ButtonHeist.symbols.json	s:8TheScore22ScrollContainerMetricsO11pageOverlapSdvpZ	swift.type.property	public	pageOverlap	ScrollContainerMetrics.pageOverlap	static let pageOverlap: Double
 symbol	ButtonHeist.symbols.json	s:8TheScore22ScrollContainerMetricsO20estimatedPageScrolls13contentLength08viewportJ0SiSd_SdtFZ	swift.type.method	public	estimatedPageScrolls(contentLength:viewportLength:)	ScrollContainerMetrics.estimatedPageScrolls(contentLength:viewportLength:)	static func estimatedPageScrolls(contentLength: Double, viewportLength: Double) -> Int
@@ -3039,7 +2867,7 @@ symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV29defaultPo
 symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV31singleTripwireTickSettleTimeoutSdvp	swift.property	public	singleTripwireTickSettleTimeout	ButtonHeistRuntimeKnobs.singleTripwireTickSettleTimeout	var singleTripwireTickSettleTimeout: TimeInterval { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV35defaultTripwirePulseFramesPerSecondSivpZ	swift.type.property	public	defaultTripwirePulseFramesPerSecond	ButtonHeistRuntimeKnobs.defaultTripwirePulseFramesPerSecond	static let defaultTripwirePulseFramesPerSecond: Int
 symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV7currentACvpZ	swift.type.property	public	current	ButtonHeistRuntimeKnobs.current	static var current: ButtonHeistRuntimeKnobs { get }
-symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV7resolve11environmentACSDyS2SG_tFZ	swift.type.method	public	resolve(environment:)	ButtonHeistRuntimeKnobs.resolve(environment:)	static func resolve(environment: [String : String] = ProcessInfo.processInfo.environment) -> ButtonHeistRuntimeKnobs
+symbol	ButtonHeist.symbols.json	s:8TheScore23ButtonHeistRuntimeKnobsV7resolve11environmentAcA0E15KnobEnvironmentV_tFZ	swift.type.method	public	resolve(environment:)	ButtonHeistRuntimeKnobs.resolve(environment:)	static func resolve(environment: RuntimeKnobEnvironment = RuntimeKnobEnvironmentBridge.current()) -> ButtonHeistRuntimeKnobs
 symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO	swift.enum	public	HeistFailureDiagnostics	HeistFailureDiagnostics	enum HeistFailureDiagnostics
 symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO11elementLine_12displayIndex15includeGeometrySSAA0C7ElementV_SiSgSbtFZ	swift.type.method	public	elementLine(_:displayIndex:includeGeometry:)	HeistFailureDiagnostics.elementLine(_:displayIndex:includeGeometry:)	static func elementLine(_ element: HeistElement, displayIndex: Int? = nil, includeGeometry: Bool = false) -> String
 symbol	ButtonHeist.symbols.json	s:8TheScore23HeistFailureDiagnosticsO12quotedStringyS2SFZ	swift.type.method	public	quotedString(_:)	HeistFailureDiagnostics.quotedString(_:)	static func quotedString(_ value: String) -> String
@@ -3141,9 +2969,10 @@ symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV14iteratio
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV16iterationOrdinalSiSgvp	swift.property	public	iterationOrdinal	HeistRepeatUntilEvidence.iterationOrdinal	let iterationOrdinal: Int?
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV19lastObservedSummarySSSgvp	swift.property	public	lastObservedSummary	HeistRepeatUntilEvidence.lastObservedSummary	let lastObservedSummary: String?
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	HeistRepeatUntilEvidence.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV7outcome9predicate7timeout14iterationCount0J7Ordinal11expectation12actionResult19lastObservedSummary13failureReasonAcA0c9PredicateF7OutcomeO_0A5Plans013AccessibilityU0OSdS2iSgAA011ExpectationO0VAA06ActionO0VSgSSSgAXtcfc	swift.init	public	init(outcome:predicate:timeout:iterationCount:iterationOrdinal:expectation:actionResult:lastObservedSummary:failureReason:)	HeistRepeatUntilEvidence.init(outcome:predicate:timeout:iterationCount:iterationOrdinal:expectation:actionResult:lastObservedSummary:failureReason:)	init(outcome: HeistPredicateEvidenceOutcome, predicate: AccessibilityPredicate, timeout: Double, iterationCount: Int, iterationOrdinal: Int? = nil, expectation: ExpectationResult, actionResult: ActionResult? = nil, lastObservedSummary: String? = nil, failureReason: String? = nil)
+symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV7outcomeAA0c9PredicateF7OutcomeOvp	swift.property	public	outcome	HeistRepeatUntilEvidence.outcome	let outcome: HeistPredicateEvidenceOutcome
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV7timeoutSdvp	swift.property	public	timeout	HeistRepeatUntilEvidence.timeout	let timeout: Double
 symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV9predicate0A5Plans22AccessibilityPredicateOvp	swift.property	public	predicate	HeistRepeatUntilEvidence.predicate	let predicate: AccessibilityPredicate
-symbol	ButtonHeist.symbols.json	s:8TheScore24HeistRepeatUntilEvidenceV9predicate7timeout14iterationCount0I7Ordinal11expectation12actionResult19lastObservedSummary13failureReasonAC0A5Plans22AccessibilityPredicateO_SdS2iSgAA011ExpectationN0VAA06ActionN0VSgSSSgAUtcfc	swift.init	public	init(predicate:timeout:iterationCount:iterationOrdinal:expectation:actionResult:lastObservedSummary:failureReason:)	HeistRepeatUntilEvidence.init(predicate:timeout:iterationCount:iterationOrdinal:expectation:actionResult:lastObservedSummary:failureReason:)	init(predicate: AccessibilityPredicate, timeout: Double, iterationCount: Int, iterationOrdinal: Int? = nil, expectation: ExpectationResult, actionResult: ActionResult? = nil, lastObservedSummary: String? = nil, failureReason: String? = nil)
 symbol	ButtonHeist.symbols.json	s:8TheScore24InterfaceDiscoveryStatusO	swift.enum	public	InterfaceDiscoveryStatus	InterfaceDiscoveryStatus	enum InterfaceDiscoveryStatus
 symbol	ButtonHeist.symbols.json	s:8TheScore24InterfaceDiscoveryStatusO7limitedyA2CmF	swift.enum.case	public	InterfaceDiscoveryStatus.limited	InterfaceDiscoveryStatus.limited	case limited
 symbol	ButtonHeist.symbols.json	s:8TheScore24InterfaceDiscoveryStatusO8completeyA2CmF	swift.enum.case	public	InterfaceDiscoveryStatus.complete	InterfaceDiscoveryStatus.complete	case complete
@@ -3198,6 +3027,22 @@ symbol	ButtonHeist.symbols.json	s:8TheScore25PredicateSelectionContextV7ElementV
 symbol	ButtonHeist.symbols.json	s:8TheScore25PredicateSelectionContextV8elements8screenId12semanticHash5scopeACSayAC7ElementVG_SSSgAkC5ScopeOtcfc	swift.init	public	init(elements:screenId:semanticHash:scope:)	PredicateSelectionContext.init(elements:screenId:semanticHash:scope:)	init(elements: [PredicateSelectionContext.Element], screenId: String? = nil, semanticHash: String? = nil, scope: PredicateSelectionContext.Scope = .visible)
 symbol	ButtonHeist.symbols.json	s:8TheScore25PredicateSelectionContextV8elementsSayAC7ElementVGvp	swift.property	public	elements	PredicateSelectionContext.elements	let elements: [PredicateSelectionContext.Element]
 symbol	ButtonHeist.symbols.json	s:8TheScore25PredicateSelectionContextV8screenIdSSSgvp	swift.property	public	screenId	PredicateSelectionContext.screenId	let screenId: String?
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV	swift.struct	public	RuntimeKnobEnvironmentKey	RuntimeKnobEnvironmentKey	struct RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV15totalNodeBudgetACvpZ	swift.type.property	public	totalNodeBudget	RuntimeKnobEnvironmentKey.totalNodeBudget	static let totalNodeBudget: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV18testRunnerPrefixedACvp	swift.property	public	testRunnerPrefixed	RuntimeKnobEnvironmentKey.testRunnerPrefixed	var testRunnerPrefixed: RuntimeKnobEnvironmentKey { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV20visibleElementBudgetACvpZ	swift.type.property	public	visibleElementBudget	RuntimeKnobEnvironmentKey.visibleElementBudget	static let visibleElementBudget: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV22maxScrollsPerContainerACvpZ	swift.type.property	public	maxScrollsPerContainer	RuntimeKnobEnvironmentKey.maxScrollsPerContainer	static let maxScrollsPerContainer: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV22maxScrollsPerDiscoveryACvpZ	swift.type.property	public	maxScrollsPerDiscovery	RuntimeKnobEnvironmentKey.maxScrollsPerDiscovery	static let maxScrollsPerDiscovery: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV22postScrollLayoutFramesACvpZ	swift.type.property	public	postScrollLayoutFrames	RuntimeKnobEnvironmentKey.postScrollLayoutFrames	static let postScrollLayoutFrames: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV26buttonHeistTotalNodeBudgetACvpZ	swift.type.property	public	buttonHeistTotalNodeBudget	RuntimeKnobEnvironmentKey.buttonHeistTotalNodeBudget	static let buttonHeistTotalNodeBudget: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV26scrollSubtreeElementBudgetACvpZ	swift.type.property	public	scrollSubtreeElementBudget	RuntimeKnobEnvironmentKey.scrollSubtreeElementBudget	static let scrollSubtreeElementBudget: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV28tripwirePulseFramesPerSecondACvpZ	swift.type.property	public	tripwirePulseFramesPerSecond	RuntimeKnobEnvironmentKey.tripwirePulseFramesPerSecond	static let tripwirePulseFramesPerSecond: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV31buttonHeistVisibleElementBudgetACvpZ	swift.type.property	public	buttonHeistVisibleElementBudget	RuntimeKnobEnvironmentKey.buttonHeistVisibleElementBudget	static let buttonHeistVisibleElementBudget: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV33buttonHeistMaxScrollsPerContainerACvpZ	swift.type.property	public	buttonHeistMaxScrollsPerContainer	RuntimeKnobEnvironmentKey.buttonHeistMaxScrollsPerContainer	static let buttonHeistMaxScrollsPerContainer: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV33buttonHeistMaxScrollsPerDiscoveryACvpZ	swift.type.property	public	buttonHeistMaxScrollsPerDiscovery	RuntimeKnobEnvironmentKey.buttonHeistMaxScrollsPerDiscovery	static let buttonHeistMaxScrollsPerDiscovery: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV33buttonHeistPostScrollLayoutFramesACvpZ	swift.type.property	public	buttonHeistPostScrollLayoutFrames	RuntimeKnobEnvironmentKey.buttonHeistPostScrollLayoutFrames	static let buttonHeistPostScrollLayoutFrames: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV37buttonHeistScrollSubtreeElementBudgetACvpZ	swift.type.property	public	buttonHeistScrollSubtreeElementBudget	RuntimeKnobEnvironmentKey.buttonHeistScrollSubtreeElementBudget	static let buttonHeistScrollSubtreeElementBudget: RuntimeKnobEnvironmentKey
+symbol	ButtonHeist.symbols.json	s:8TheScore25RuntimeKnobEnvironmentKeyV39buttonHeistTripwirePulseFramesPerSecondACvpZ	swift.type.property	public	buttonHeistTripwirePulseFramesPerSecond	RuntimeKnobEnvironmentKey.buttonHeistTripwirePulseFramesPerSecond	static let buttonHeistTripwirePulseFramesPerSecond: RuntimeKnobEnvironmentKey
 symbol	ButtonHeist.symbols.json	s:8TheScore26AccessibilityFactStabilityO	swift.enum	public	AccessibilityFactStability	AccessibilityFactStability	enum AccessibilityFactStability
 symbol	ButtonHeist.symbols.json	s:8TheScore26AccessibilityFactStabilityO5stateyA2CmF	swift.enum.case	public	AccessibilityFactStability.state	AccessibilityFactStability.state	case state
 symbol	ButtonHeist.symbols.json	s:8TheScore26AccessibilityFactStabilityO8identityyA2CmF	swift.enum.case	public	AccessibilityFactStability.identity	AccessibilityFactStability.identity	case identity
@@ -3272,6 +3117,11 @@ symbol	ButtonHeist.symbols.json	s:8TheScore27HeistReceiptRecordingStatusO	swift.
 symbol	ButtonHeist.symbols.json	s:8TheScore27HeistReceiptRecordingStatusO6failedyA2CmF	swift.enum.case	public	HeistReceiptRecordingStatus.failed	HeistReceiptRecordingStatus.failed	case failed
 symbol	ButtonHeist.symbols.json	s:8TheScore27HeistReceiptRecordingStatusO6passedyA2CmF	swift.enum.case	public	HeistReceiptRecordingStatus.passed	HeistReceiptRecordingStatus.passed	case passed
 symbol	ButtonHeist.symbols.json	s:8TheScore27HeistReceiptRecordingStatusO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	HeistReceiptRecordingStatus.init(rawValue:)	init?(rawValue: String)
+symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV	swift.struct	public	PredicateEvaluationEvidence	PredicateEvaluationEvidence	struct PredicateEvaluationEvidence
+symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV15currentElements16accumulatedDeltaACSayAA12HeistElementVG_AA18AccessibilityTraceV011AccumulatedI0VSgtcfc	swift.init	public	init(currentElements:accumulatedDelta:)	PredicateEvaluationEvidence.init(currentElements:accumulatedDelta:)	init(currentElements: [HeistElement], accumulatedDelta: AccessibilityTrace.AccumulatedDelta?)
+symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV15currentElementsSayAA12HeistElementVGvp	swift.property	public	currentElements	PredicateEvaluationEvidence.currentElements	let currentElements: [HeistElement]
+symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV16accumulatedDeltaAA18AccessibilityTraceV011AccumulatedG0VSgvp	swift.property	public	accumulatedDelta	PredicateEvaluationEvidence.accumulatedDelta	let accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
+symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateEvaluationEvidenceV5traceAcA18AccessibilityTraceV_tcfc	swift.init	public	init(trace:)	PredicateEvaluationEvidence.init(trace:)	init(trace: AccessibilityTrace)
 symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateSelectionElementIdV	swift.struct	public	PredicateSelectionElementId	PredicateSelectionElementId	struct PredicateSelectionElementId
 symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateSelectionElementIdV11descriptionSSvp	swift.property	public	description	PredicateSelectionElementId.description	var description: String { get }
 symbol	ButtonHeist.symbols.json	s:8TheScore27PredicateSelectionElementIdV1loiySbAC_ACtFZ	swift.func.op	public	<(_:_:)	PredicateSelectionElementId.<(_:_:)	static func < (lhs: PredicateSelectionElementId, rhs: PredicateSelectionElementId) -> Bool
@@ -3294,6 +3144,14 @@ symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceDiscoveryReasonCodeO20cont
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceDiscoveryReasonCodeO20discoveryScrollLimityA2CmF	swift.enum.case	public	InterfaceDiscoveryReasonCode.discoveryScrollLimit	InterfaceDiscoveryReasonCode.discoveryScrollLimit	case discoveryScrollLimit
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceDiscoveryReasonCodeO21leadingEdgeResetLimityA2CmF	swift.enum.case	public	InterfaceDiscoveryReasonCode.leadingEdgeResetLimit	InterfaceDiscoveryReasonCode.leadingEdgeResetLimit	case leadingEdgeResetLimit
 symbol	ButtonHeist.symbols.json	s:8TheScore28InterfaceDiscoveryReasonCodeO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	InterfaceDiscoveryReasonCode.init(rawValue:)	init?(rawValue: String)
+symbol	ButtonHeist.symbols.json	s:8TheScore28RuntimeKnobEnvironmentBridgeO	swift.enum	public	RuntimeKnobEnvironmentBridge	RuntimeKnobEnvironmentBridge	enum RuntimeKnobEnvironmentBridge
+symbol	ButtonHeist.symbols.json	s:8TheScore28RuntimeKnobEnvironmentBridgeO7currentAA0cdE0VyFZ	swift.type.method	public	current()	RuntimeKnobEnvironmentBridge.current()	static func current() -> RuntimeKnobEnvironment
+symbol	ButtonHeist.symbols.json	s:8TheScore29HeistPredicateEvidenceOutcomeO	swift.enum	public	HeistPredicateEvidenceOutcome	HeistPredicateEvidenceOutcome	enum HeistPredicateEvidenceOutcome
+symbol	ButtonHeist.symbols.json	s:8TheScore29HeistPredicateEvidenceOutcomeO11handledElseyA2CmF	swift.enum.case	public	HeistPredicateEvidenceOutcome.handledElse	HeistPredicateEvidenceOutcome.handledElse	case handledElse
+symbol	ButtonHeist.symbols.json	s:8TheScore29HeistPredicateEvidenceOutcomeO6failedyA2CmF	swift.enum.case	public	HeistPredicateEvidenceOutcome.failed	HeistPredicateEvidenceOutcome.failed	case failed
+symbol	ButtonHeist.symbols.json	s:8TheScore29HeistPredicateEvidenceOutcomeO7matchedyA2CmF	swift.enum.case	public	HeistPredicateEvidenceOutcome.matched	HeistPredicateEvidenceOutcome.matched	case matched
+symbol	ButtonHeist.symbols.json	s:8TheScore29HeistPredicateEvidenceOutcomeO8rawValueACSgSS_tcfc	swift.init	public	init(rawValue:)	HeistPredicateEvidenceOutcome.init(rawValue:)	init?(rawValue: String)
+symbol	ButtonHeist.symbols.json	s:8TheScore29HeistPredicateEvidenceOutcomeO9continuedyA2CmF	swift.enum.case	public	HeistPredicateEvidenceOutcome.continued	HeistPredicateEvidenceOutcome.continued	case continued
 symbol	ButtonHeist.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV	swift.struct	public	InterfaceDiscoveryDiagnostics	InterfaceDiscoveryDiagnostics	struct InterfaceDiscoveryDiagnostics
 symbol	ButtonHeist.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV013maxScrollsPerD0Sivp	swift.property	public	maxScrollsPerDiscovery	InterfaceDiscoveryDiagnostics.maxScrollsPerDiscovery	let maxScrollsPerDiscovery: Int
 symbol	ButtonHeist.symbols.json	s:8TheScore29InterfaceDiscoveryDiagnosticsV10nextActionSSSgvp	swift.property	public	nextAction	InterfaceDiscoveryDiagnostics.nextAction	let nextAction: String?
@@ -3380,15 +3238,14 @@ symbol	ButtonHeist@Swift.symbols.json	s:s5ErrorP11ButtonHeistE14displayMessageSS
 symbol	ButtonHeist@Swift.symbols.json	s:s7DecoderP8ThePlansE17rejectUnknownKeys7allowed10additional8typeNameyqd__m_ShySSGSStKs12CaseIterableRd__s9CodingKeyRd__lF	swift.method	public	rejectUnknownKeys(allowed:additional:typeName:)	Decoder.rejectUnknownKeys(allowed:additional:typeName:)	func rejectUnknownKeys<K>(allowed keyType: K.Type, additional allowedFieldNames: Set<String> = [], typeName: String) throws where K : CaseIterable, K : CodingKey
 symbol	ButtonHeist@Swift.symbols.json	s:s7DecoderP8ThePlansE17rejectUnknownKeys7allowed8typeNameyShySSG_SStKF	swift.method	public	rejectUnknownKeys(allowed:typeName:)	Decoder.rejectUnknownKeys(allowed:typeName:)	func rejectUnknownKeys(allowed knownKeys: Set<String>, typeName: String) throws
 
+relationship	conformsTo	s:11ButtonHeist0aB11EnvironmentV	s:SQ	ButtonHeistEnvironment	Swift.Equatable
+relationship	conformsTo	s:11ButtonHeist0aB11EnvironmentV	s:s8SendableP	ButtonHeistEnvironment	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist0aB5ActorC	s:12_Concurrency11GlobalActorP	ButtonHeistActor	_Concurrency.GlobalActor
 relationship	conformsTo	s:11ButtonHeist0aB5ActorC	s:ScA	ButtonHeistActor	_Concurrency.Actor
 relationship	conformsTo	s:11ButtonHeist0aB5ActorC	s:s8SendableP	ButtonHeistActor	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist10FenceErrorO	s:10Foundation14LocalizedErrorP	FenceError	Foundation.LocalizedError
 relationship	conformsTo	s:11ButtonHeist10FenceErrorO	s:s5ErrorP	FenceError	Swift.Error
 relationship	conformsTo	s:11ButtonHeist10FenceErrorO	s:s8SendableP	FenceError	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist11CLIExposureO	s:SH	CLIExposure	Swift.Hashable
-relationship	conformsTo	s:11ButtonHeist11CLIExposureO	s:SQ	CLIExposure	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist11CLIExposureO	s:s8SendableP	CLIExposure	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:SE	FailureCode	Swift.Encodable
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:SH	FailureCode	Swift.Hashable
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:SQ	FailureCode	Swift.Equatable
@@ -3396,10 +3253,6 @@ relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:SY	FailureCode	Swift.Raw
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:Se	FailureCode	Swift.Decodable
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:s23CustomStringConvertibleP	FailureCode	Swift.CustomStringConvertible
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:s8SendableP	FailureCode	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist11IdleMonitorC	s:s8SendableP	IdleMonitor	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist11MCPExposureO	s:SH	MCPExposure	Swift.Hashable
-relationship	conformsTo	s:11ButtonHeist11MCPExposureO	s:SQ	MCPExposure	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist11MCPExposureO	s:s8SendableP	MCPExposure	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist12FailurePhaseO	s:SH	FailurePhase	Swift.Hashable
 relationship	conformsTo	s:11ButtonHeist12FailurePhaseO	s:SQ	FailurePhase	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist12FailurePhaseO	s:SY	FailurePhase	Swift.RawRepresentable
@@ -3439,21 +3292,6 @@ relationship	conformsTo	s:11ButtonHeist17ConnectionFailureV	s:s8SendableP	Connec
 relationship	conformsTo	s:11ButtonHeist17DiagnosticFailureV	s:SQ	DiagnosticFailure	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist17DiagnosticFailureV	s:s8SendableP	DiagnosticFailure	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist17EnvironmentConfigV	s:s8SendableP	EnvironmentConfig	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist17FenceParameterKeyV	s:SH	FenceParameterKey	Swift.Hashable
-relationship	conformsTo	s:11ButtonHeist17FenceParameterKeyV	s:SQ	FenceParameterKey	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist17FenceParameterKeyV	s:SY	FenceParameterKey	Swift.RawRepresentable
-relationship	conformsTo	s:11ButtonHeist17FenceParameterKeyV	s:s8SendableP	FenceParameterKey	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist18FenceCommandFamilyO	s:SH	FenceCommandFamily	Swift.Hashable
-relationship	conformsTo	s:11ButtonHeist18FenceCommandFamilyO	s:SQ	FenceCommandFamily	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist18FenceCommandFamilyO	s:SY	FenceCommandFamily	Swift.RawRepresentable
-relationship	conformsTo	s:11ButtonHeist18FenceCommandFamilyO	s:s12CaseIterableP	FenceCommandFamily	Swift.CaseIterable
-relationship	conformsTo	s:11ButtonHeist18FenceCommandFamilyO	s:s8SendableP	FenceCommandFamily	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist18FenceParameterSpecV	s:SQ	FenceParameterSpec	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist18FenceParameterSpecV	s:s8SendableP	FenceParameterSpec	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO	s:SH	FenceParameterSpec.ParamType	Swift.Hashable
-relationship	conformsTo	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO	s:SQ	FenceParameterSpec.ParamType	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO	s:SY	FenceParameterSpec.ParamType	Swift.RawRepresentable
-relationship	conformsTo	s:11ButtonHeist18FenceParameterSpecV9ParamTypeO	s:s8SendableP	FenceParameterSpec.ParamType	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist19PublicJSONValueNodeO	s:s8SendableP	PublicJSONValueNode	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist19SessionStatePayloadV	s:SQ	SessionStatePayload	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist19SessionStatePayloadV	s:s8SendableP	SessionStatePayload	Swift.Sendable
@@ -3468,9 +3306,6 @@ relationship	conformsTo	s:11ButtonHeist21DiagnosticFailureKindO	s:SH	DiagnosticF
 relationship	conformsTo	s:11ButtonHeist21DiagnosticFailureKindO	s:SQ	DiagnosticFailureKind	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist21DiagnosticFailureKindO	s:SY	DiagnosticFailureKind	Swift.RawRepresentable
 relationship	conformsTo	s:11ButtonHeist21DiagnosticFailureKindO	s:s8SendableP	DiagnosticFailureKind	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist21FenceOperationRequestV	s:s8SendableP	FenceOperationRequest	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist21MCPToolAnnotationSpecV	s:SQ	MCPToolAnnotationSpec	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist21MCPToolAnnotationSpecV	s:s8SendableP	MCPToolAnnotationSpec	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist21PublicJSONInputPolicyV	s:SQ	PublicJSONInputPolicy	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist21PublicJSONInputPolicyV	s:s8SendableP	PublicJSONInputPolicy	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist21PublicJSONInputPolicyV12NullHandlingO	s:SQ	PublicJSONInputPolicy.NullHandling	Swift.Equatable
@@ -3488,10 +3323,6 @@ relationship	conformsTo	s:11ButtonHeist21TargetConfigLoadErrorV4KindO	s:SH	Targe
 relationship	conformsTo	s:11ButtonHeist21TargetConfigLoadErrorV4KindO	s:SQ	TargetConfigLoadError.Kind	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist21TargetConfigLoadErrorV4KindO	s:SY	TargetConfigLoadError.Kind	Swift.RawRepresentable
 relationship	conformsTo	s:11ButtonHeist21TargetConfigLoadErrorV4KindO	s:s8SendableP	TargetConfigLoadError.Kind	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist22FenceCommandDescriptorV	s:SQ	FenceCommandDescriptor	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist22FenceCommandDescriptorV	s:s8SendableP	FenceCommandDescriptor	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist22FenceCommandProjectionV	s:SQ	FenceCommandProjection	Swift.Equatable
-relationship	conformsTo	s:11ButtonHeist22FenceCommandProjectionV	s:s8SendableP	FenceCommandProjection	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist22SessionConnectionPhaseO	s:SH	SessionConnectionPhase	Swift.Hashable
 relationship	conformsTo	s:11ButtonHeist22SessionConnectionPhaseO	s:SQ	SessionConnectionPhase	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist22SessionConnectionPhaseO	s:SY	SessionConnectionPhase	Swift.RawRepresentable
@@ -3500,11 +3331,7 @@ relationship	conformsTo	s:11ButtonHeist24PublicJSONInputViolationO	s:SQ	PublicJS
 relationship	conformsTo	s:11ButtonHeist24PublicJSONInputViolationO	s:s8SendableP	PublicJSONInputViolation	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist25ScreenshotResponseOptionsV	s:SQ	ScreenshotResponseOptions	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist25ScreenshotResponseOptionsV	s:s8SendableP	ScreenshotResponseOptions	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist26FenceOperationRoutingErrorV	s:10Foundation14LocalizedErrorP	FenceOperationRoutingError	Foundation.LocalizedError
-relationship	conformsTo	s:11ButtonHeist26FenceOperationRoutingErrorV	s:s5ErrorP	FenceOperationRoutingError	Swift.Error
-relationship	conformsTo	s:11ButtonHeist26FenceOperationRoutingErrorV	s:s8SendableP	FenceOperationRoutingError	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist8TheFenceC	s:s8SendableP	TheFence	Swift.Sendable
-relationship	conformsTo	s:11ButtonHeist8TheFenceC23CommandArgumentEnvelopeV	s:s8SendableP	TheFence.CommandArgumentEnvelope	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist8TheFenceC7CommandO	s:SH	TheFence.Command	Swift.Hashable
 relationship	conformsTo	s:11ButtonHeist8TheFenceC7CommandO	s:SQ	TheFence.Command	Swift.Equatable
 relationship	conformsTo	s:11ButtonHeist8TheFenceC7CommandO	s:SY	TheFence.Command	Swift.RawRepresentable
@@ -4573,6 +4400,8 @@ relationship	conformsTo	s:8TheScore22HeistReceiptCodecErrorO	s:SQ	HeistReceiptCo
 relationship	conformsTo	s:8TheScore22HeistReceiptCodecErrorO	s:s23CustomStringConvertibleP	HeistReceiptCodecError	Swift.CustomStringConvertible
 relationship	conformsTo	s:8TheScore22HeistReceiptCodecErrorO	s:s5ErrorP	HeistReceiptCodecError	Swift.Error
 relationship	conformsTo	s:8TheScore22HeistReceiptCodecErrorO	s:s8SendableP	HeistReceiptCodecError	Swift.Sendable
+relationship	conformsTo	s:8TheScore22RuntimeKnobEnvironmentV	s:SQ	RuntimeKnobEnvironment	Swift.Equatable
+relationship	conformsTo	s:8TheScore22RuntimeKnobEnvironmentV	s:s8SendableP	RuntimeKnobEnvironment	Swift.Sendable
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:SE	ActionPerformanceTiming	Swift.Encodable
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:SQ	ActionPerformanceTiming	Swift.Equatable
 relationship	conformsTo	s:8TheScore23ActionPerformanceTimingV	s:Se	ActionPerformanceTiming	Swift.Decodable
@@ -4637,6 +4466,9 @@ relationship	conformsTo	s:8TheScore25PredicateSelectionContextV5ScopeO	s:SY	Pred
 relationship	conformsTo	s:8TheScore25PredicateSelectionContextV5ScopeO	s:s8SendableP	PredicateSelectionContext.Scope	Swift.Sendable
 relationship	conformsTo	s:8TheScore25PredicateSelectionContextV7ElementV	s:SQ	PredicateSelectionContext.Element	Swift.Equatable
 relationship	conformsTo	s:8TheScore25PredicateSelectionContextV7ElementV	s:s8SendableP	PredicateSelectionContext.Element	Swift.Sendable
+relationship	conformsTo	s:8TheScore25RuntimeKnobEnvironmentKeyV	s:SH	RuntimeKnobEnvironmentKey	Swift.Hashable
+relationship	conformsTo	s:8TheScore25RuntimeKnobEnvironmentKeyV	s:SQ	RuntimeKnobEnvironmentKey	Swift.Equatable
+relationship	conformsTo	s:8TheScore25RuntimeKnobEnvironmentKeyV	s:s8SendableP	RuntimeKnobEnvironmentKey	Swift.Sendable
 relationship	conformsTo	s:8TheScore26AccessibilityFactStabilityO	s:SH	AccessibilityFactStability	Swift.Hashable
 relationship	conformsTo	s:8TheScore26AccessibilityFactStabilityO	s:SQ	AccessibilityFactStability	Swift.Equatable
 relationship	conformsTo	s:8TheScore26AccessibilityFactStabilityO	s:s8SendableP	AccessibilityFactStability	Swift.Sendable
@@ -4684,6 +4516,8 @@ relationship	conformsTo	s:8TheScore27HeistReceiptRecordingStatusO	s:SH	HeistRece
 relationship	conformsTo	s:8TheScore27HeistReceiptRecordingStatusO	s:SQ	HeistReceiptRecordingStatus	Swift.Equatable
 relationship	conformsTo	s:8TheScore27HeistReceiptRecordingStatusO	s:SY	HeistReceiptRecordingStatus	Swift.RawRepresentable
 relationship	conformsTo	s:8TheScore27HeistReceiptRecordingStatusO	s:s8SendableP	HeistReceiptRecordingStatus	Swift.Sendable
+relationship	conformsTo	s:8TheScore27PredicateEvaluationEvidenceV	s:SQ	PredicateEvaluationEvidence	Swift.Equatable
+relationship	conformsTo	s:8TheScore27PredicateEvaluationEvidenceV	s:s8SendableP	PredicateEvaluationEvidence	Swift.Sendable
 relationship	conformsTo	s:8TheScore27PredicateSelectionElementIdV	s:SH	PredicateSelectionElementId	Swift.Hashable
 relationship	conformsTo	s:8TheScore27PredicateSelectionElementIdV	s:SL	PredicateSelectionElementId	Swift.Comparable
 relationship	conformsTo	s:8TheScore27PredicateSelectionElementIdV	s:SQ	PredicateSelectionElementId	Swift.Equatable
@@ -4709,6 +4543,12 @@ relationship	conformsTo	s:8TheScore28InterfaceDiscoveryReasonCodeO	s:SY	Interfac
 relationship	conformsTo	s:8TheScore28InterfaceDiscoveryReasonCodeO	s:Se	InterfaceDiscoveryReasonCode	Swift.Decodable
 relationship	conformsTo	s:8TheScore28InterfaceDiscoveryReasonCodeO	s:s12CaseIterableP	InterfaceDiscoveryReasonCode	Swift.CaseIterable
 relationship	conformsTo	s:8TheScore28InterfaceDiscoveryReasonCodeO	s:s8SendableP	InterfaceDiscoveryReasonCode	Swift.Sendable
+relationship	conformsTo	s:8TheScore29HeistPredicateEvidenceOutcomeO	s:SE	HeistPredicateEvidenceOutcome	Swift.Encodable
+relationship	conformsTo	s:8TheScore29HeistPredicateEvidenceOutcomeO	s:SH	HeistPredicateEvidenceOutcome	Swift.Hashable
+relationship	conformsTo	s:8TheScore29HeistPredicateEvidenceOutcomeO	s:SQ	HeistPredicateEvidenceOutcome	Swift.Equatable
+relationship	conformsTo	s:8TheScore29HeistPredicateEvidenceOutcomeO	s:SY	HeistPredicateEvidenceOutcome	Swift.RawRepresentable
+relationship	conformsTo	s:8TheScore29HeistPredicateEvidenceOutcomeO	s:Se	HeistPredicateEvidenceOutcome	Swift.Decodable
+relationship	conformsTo	s:8TheScore29HeistPredicateEvidenceOutcomeO	s:s8SendableP	HeistPredicateEvidenceOutcome	Swift.Sendable
 relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:SE	InterfaceDiscoveryDiagnostics	Swift.Encodable
 relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:SQ	InterfaceDiscoveryDiagnostics	Swift.Equatable
 relationship	conformsTo	s:8TheScore29InterfaceDiscoveryDiagnosticsV	s:Se	InterfaceDiscoveryDiagnostics	Swift.Decodable

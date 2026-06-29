@@ -4,7 +4,7 @@ import Foundation
 /// Call `resetTimer()` after each activity event. The timer restarts from zero each time.
 /// When the timeout elapses without a reset, `onTimeout` is called.
 @ButtonHeistActor
-public final class IdleMonitor {
+@_spi(ButtonHeistTooling) public final class IdleMonitor {
     private let timeout: TimeInterval
     private let onTimeout: @ButtonHeistActor () -> Void
     private var timeoutTask: Task<Void, Never>?

@@ -3,7 +3,7 @@ import XCTest
 import ThePlans
 import Network
 import AccessibilitySnapshotModel
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import TheScore
 
 // Shared fixtures and helpers for TheFence test classes. Keeps tests focused
@@ -40,8 +40,13 @@ extension TheFence {
     }
 
     @ButtonHeistActor
+    func execute(command: Command, arguments: CommandArgumentEnvelope) async throws -> FenceResponse {
+        try await execute(FenceOperationRequest(command: command, arguments: arguments))
+    }
+
+    @ButtonHeistActor
     func execute(command: Command, values: [String: HeistValue] = [:]) async throws -> FenceResponse {
-        try await execute(command: command, arguments: CommandArgumentEnvelope(values: values))
+        try await execute(FenceOperationRequest(command: command, arguments: CommandArgumentEnvelope(values: values)))
     }
 }
 

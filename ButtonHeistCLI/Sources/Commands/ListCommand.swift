@@ -1,6 +1,6 @@
 import ArgumentParser
 import Foundation
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 struct ListCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
@@ -20,10 +20,10 @@ struct ListCommand: AsyncParsableCommand, CLICommandContract {
 
         logStatus("Discovering devices...")
         let request: CLIRequestParameters = [:]
-        let response = try await fence.execute(
+        let response = try await fence.execute(FenceOperationRequest(
             command: Self.fenceCommand,
             arguments: Self.fenceArguments(request)
-        )
+        ))
         CLIRunner.outputResponse(response, format: output.format ?? .auto)
     }
 }

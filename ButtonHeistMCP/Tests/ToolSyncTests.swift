@@ -1,7 +1,7 @@
 import Testing
 import MCP
 import Foundation
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 @testable import ButtonHeistMCP
 
 struct ToolSyncTests {

@@ -137,34 +137,80 @@ for check in "${CHECKS[@]}"; do
   report_matches "$label" "$(git_grep "$pattern" "${EXISTING_PATHS[@]}")"
 done
 
+TOOLING_PUBLIC_API_GUARD_PATHS=(
+  ButtonHeist/Sources/TheButtonHeist/Support/IdleMonitor.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ParameterSpec.swift
+  ButtonHeist/Sources/TheButtonHeist/TheFence/FenceCommandReference.swift
+)
+EXISTING_TOOLING_PUBLIC_API_GUARD_PATHS=()
+for path in "${TOOLING_PUBLIC_API_GUARD_PATHS[@]}"; do
+  if [[ -e "$path" ]]; then
+    EXISTING_TOOLING_PUBLIC_API_GUARD_PATHS+=("$path")
+  fi
+done
+
+tooling_plain_public_type_matches="$(
+  git_grep \
+    '^[[:space:]]*public[[:space:]]+(final[[:space:]]+class|struct|enum)[[:space:]]+(IdleMonitor|FenceCommandDescriptor|FenceCommandProjection|FenceCommandFamily|FenceParameterSpec|FenceParameterKey|MCPExposure|MCPToolAnnotationSpec|CLIExposure|FenceCommandReference|FenceOperationRequest|FenceOperationRoutingError|CommandArgumentEnvelope)\b' \
+    "${EXISTING_TOOLING_PUBLIC_API_GUARD_PATHS[@]}"
+)"
+report_matches "tooling-only catalog/schema/reference type in normal public API" "$tooling_plain_public_type_matches"
+
+tooling_plain_public_extension_matches="$(
+  git_grep \
+    '^[[:space:]]*public[[:space:]]+extension[[:space:]]+(TheFence[.]Command|FenceParameterKey|FenceParameterSpec([.]ParamType)?|FenceCommandDescriptor)\b' \
+    "${EXISTING_TOOLING_PUBLIC_API_GUARD_PATHS[@]}"
+)"
+report_matches "tooling-only catalog/schema/reference extension in normal public API" "$tooling_plain_public_extension_matches"
+
 RAW_LOGGER_ALLOWED_LINES=(
   'ButtonHeist/Sources/TheScore/ButtonHeistLog.swift:LINE:        Logger(subsystem: channel.subsystem.rawValue, category: channel.category)'
-  'ButtonHeist/Sources/TheButtonHeist/TheHandoff/TheHandoff+Discovery.swift:LINE:private let handoffDiscoveryLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "discovery")'
-  'ButtonHeist/Sources/TheButtonHeist/TheHandoff/USBDeviceDiscovery.swift:LINE:private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "usb-discovery")'
-  'ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift:LINE:let insideJobLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "server")'
-  'ButtonHeist/Sources/TheButtonHeist/TheHandoff/TheHandoff+Connection.swift:LINE:private let handoffConnectionLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "connection")'
-  'ButtonHeist/Sources/TheInsideJob/TheStash/WireConversion.swift:LINE:private let wireConversionLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "wireConversion")'
-  'ButtonHeist/Sources/TheInsideJob/Lifecycle/AutoStart.swift:LINE:private let autoStartLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "autostart")'
-  'ButtonHeist/Sources/TheInsideJob/Lifecycle/AccessibilityArming.swift:LINE:private let accessibilityArmingLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "accessibility")'
-  'ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceDiscovery.swift:LINE:private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "discovery")'
-  'ButtonHeist/Sources/TheButtonHeist/TheHandoff/HandoffDiscoveryLifecycle.swift:LINE:private let discoveryLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "discovery")'
-  'ButtonHeist/Sources/TheInsideJob/Server/SimpleSocketServer+ClientState.swift:LINE:private let clientStateLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")'
-  'ButtonHeist/Sources/TheInsideJob/Server/TheMuscleAdmission+Authentication.swift:LINE:let muscleAuthenticationLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")'
-  'ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceConnection.swift:LINE:let deviceConnectionLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "connection")'
-  'ButtonHeist/Sources/TheButtonHeist/TheHandoff/DiscoveredDevice+Reachability.swift:LINE:private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "reachability")'
-  'ButtonHeist/Sources/TheButtonHeist/TheHandoff/HandoffServerMessageRouter.swift:LINE:private let serverMessageLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server-message")'
-  'ButtonHeist/Sources/TheInsideJob/Server/SimpleSocketServer+ConnectionAcceptance.swift:LINE:private let connectionLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")'
-  'ButtonHeist/Sources/TheInsideJob/Server/SocketListenerStartup.swift:LINE:private let listenerLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")'
-  'ButtonHeist/Sources/TheInsideJob/Server/BonjourAdvertisement.swift:LINE:private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "transport")'
-  'ButtonHeist/Sources/TheInsideJob/Server/TheMuscleSession.swift:LINE:private let sessionLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")'
-  'ButtonHeist/Sources/TheInsideJob/Server/SimpleSocketServer+Sending.swift:LINE:private let sendLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")'
-  'ButtonHeist/Sources/TheInsideJob/Server/SimpleSocketServer+Receiving.swift:LINE:private let receiveLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")'
-  'ButtonHeist/Sources/TheInsideJob/Server/TheMuscle.swift:LINE:private let muscleLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")'
-  'ButtonHeist/Sources/TheInsideJob/Server/TransportEventStream.swift:LINE:private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "transport")'
 )
 raw_logger_matches="$(git_grep '\bLogger[[:space:]]*\(' "${EXISTING_SOURCE_PATHS[@]}")"
 raw_logger_matches="$(filter_allowed_normalized_lines "$raw_logger_matches" "${RAW_LOGGER_ALLOWED_LINES[@]}")"
-report_matches "direct raw Logger construction outside tracked logger factory and legacy sites" "$raw_logger_matches"
+report_matches "direct raw Logger construction outside ButtonHeistLog.logger" "$raw_logger_matches"
+
+TUPLE_RETURN_GUARD_PATHS=(
+  'ButtonHeist/Sources/ThePlans/HeistCompiler.swift'
+  'ButtonHeist/Sources/ThePlans/HeistPlanSourceCompiler.swift'
+  'ButtonHeist/Sources/ThePlans/HeistSwiftFileCompiler.swift'
+  ':(glob)ButtonHeist/Sources/ThePlans/HeistPlanSource*Parser.swift'
+  ':(glob)ButtonHeist/Sources/TheButtonHeist/TheFence/*.swift'
+)
+TUPLE_RETURN_ALLOWED_LINES=(
+  'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+SwipeDragGestures.swift:LINE:    ) throws -> (key: Intent, payload: TheFence.CommandArgumentEnvelope)'
+)
+tuple_return_matches="$(git_grep '[[:space:]]*->[[:space:]]*\([^)]*,[^)]*\)[?]?' "${TUPLE_RETURN_GUARD_PATHS[@]}")"
+tuple_return_matches="$(filter_allowed_normalized_lines "$tuple_return_matches" "${TUPLE_RETURN_ALLOWED_LINES[@]}")"
+report_matches "tuple return APIs in parser/compiler/fence surfaces" "$tuple_return_matches"
+
+compiler_diagnostic_collapse_matches="$(git_grep 'diagnostics\[[0-9]+\]' ButtonHeist/Sources/ThePlans)"
+report_matches "compiler diagnostic set collapsed by index" "$compiler_diagnostic_collapse_matches"
+
+UNCHECKED_ADMISSION_ALLOWED_PATHS=(
+  '^ButtonHeist/Sources/ThePlans/HeistPlan\+RuntimeValidationAdmission\.swift$'
+  '^ButtonHeist/Sources/ThePlans/HeistPlan\+RuntimeValidationTraversal\.swift$'
+  '^ButtonHeist/Sources/ThePlans/HeistPlanSourceDiagnostics\.swift$'
+)
+unchecked_admission_matches="$(git_grep 'uncheckedPlanForRuntimeSafetyValidation[[:space:]]*\(' ButtonHeist/Sources/ThePlans)"
+unchecked_admission_matches="$(filter_allowed_paths "$unchecked_admission_matches" "${UNCHECKED_ADMISSION_ALLOWED_PATHS[@]}")"
+report_matches "unchecked plan admission outside runtime validation boundary" "$unchecked_admission_matches"
+
+PUBLIC_INTERFACE_RAW_ALLOWED_PATHS=(
+  '^ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON\+Interface\.swift$'
+)
+public_interface_raw_matches="$(git_grep 'PublicInterface[[:space:]]*\([[:space:]]*interface:' "${EXISTING_SOURCE_PATHS[@]}")"
+public_interface_raw_matches="$(filter_allowed_paths "$public_interface_raw_matches" "${PUBLIC_INTERFACE_RAW_ALLOWED_PATHS[@]}")"
+report_matches "raw Interface to PublicInterface projection outside interface JSON boundary" "$public_interface_raw_matches"
+
+public_command_execute_matches="$(git_grep 'public[[:space:]]+func[[:space:]]+execute[[:space:]]*\([[:space:]]*command:' "${EXISTING_SOURCE_PATHS[@]}")"
+report_matches "public command-plus-arguments execution surface" "$public_command_execute_matches"
+
+direct_command_execute_matches="$(git_grep '\.execute[[:space:]]*\([[:space:]]*command:[^)]*arguments:' "${EXISTING_SOURCE_PATHS[@]}")"
+report_matches "direct fence command-plus-arguments call site" "$direct_command_execute_matches"
 
 TOOL_STDOUT_ALLOWED_LINES=(
   'ButtonHeist/Sources/HeistDoctorTool/main.swift:LINE:        FileHandle.standardOutput.write(Data((line + "\n").utf8))'
@@ -238,9 +284,20 @@ heist_compilation_matches="$(filter_allowed_paths "$heist_compilation_matches" "
 report_matches "retired HeistCompilation naming outside compiler compatibility boundary" "$heist_compilation_matches"
 
 KNOWN_FAILURE_PREFIX='(request|discovery|setup|connection|transport|auth|session|protocol|tls|client|server|config|formatting|screen)\.'
+known_failure_constructor_matches="$(
+  for path in "${EXISTING_PATHS[@]}"; do
+    if [[ -d "$path" ]]; then
+      while IFS= read -r file; do
+        perl -0ne 'while (/\b(FailureCode|KnownFailureCode)\s*\(\s*(rawValue|boundaryRawValue):\s*"(request|discovery|setup|connection|transport|auth|session|protocol|tls|client|server|config|formatting|screen)\./sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$file"
+      done < <(find "$path" -type f -name '*.swift')
+    elif [[ "$path" == *.swift ]]; then
+      perl -0ne 'while (/\b(FailureCode|KnownFailureCode)\s*\(\s*(rawValue|boundaryRawValue):\s*"(request|discovery|setup|connection|transport|auth|session|protocol|tls|client|server|config|formatting|screen)\./sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$path"
+    fi
+  done
+)"
 report_matches \
   "raw known failure code construction" \
-  "$(git_grep '\b(FailureCode|KnownFailureCode)[[:space:]]*\([[:space:]]*rawValue:[[:space:]]*"'$KNOWN_FAILURE_PREFIX "${EXISTING_PATHS[@]}")"
+  "$known_failure_constructor_matches"
 
 KNOWN_FAILURE_LITERAL_ALLOWED_PATHS=(
   '^ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence\+FailureDetails\.swift$'
@@ -256,6 +313,20 @@ KNOWN_FAILURE_LITERAL_ALLOWED_PATHS=(
 known_failure_literal_matches="$(git_grep '\berrorCode:[[:space:]]*"'$KNOWN_FAILURE_PREFIX "${EXISTING_PATHS[@]}")"
 known_failure_literal_matches="$(filter_allowed_paths "$known_failure_literal_matches" "${KNOWN_FAILURE_LITERAL_ALLOWED_PATHS[@]}")"
 report_matches "raw known failure-code literal outside failure taxonomy boundary" "$known_failure_literal_matches"
+
+# No raw FailureDetails/ConnectionFailure call sites are allowed; use FailureCode instead.
+failure_raw_initializer_matches="$(
+  for path in "${EXISTING_PATHS[@]}"; do
+    if [[ -d "$path" ]]; then
+      while IFS= read -r file; do
+        perl -0ne 'while (/\b(FailureDetails|ConnectionFailure)\s*\([^)]*\berrorCode:/sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$file"
+      done < <(find "$path" -type f -name '*.swift')
+    elif [[ "$path" == *.swift ]]; then
+      perl -0ne 'while (/\b(FailureDetails|ConnectionFailure)\s*\([^)]*\berrorCode:/sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$path"
+    fi
+  done
+)"
+report_matches "raw failure-domain initializer outside JSON boundary" "$failure_raw_initializer_matches"
 
 if [[ "$status" -ne 0 ]]; then
   cat <<'EOF'

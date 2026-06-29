@@ -1,5 +1,5 @@
 import XCTest
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class PrivateStorageTests: XCTestCase {
 
@@ -28,7 +28,7 @@ final class PrivateStorageTests: XCTestCase {
         XCTAssertEqual(directory.path, "/tmp/buttonheist-storage")
     }
 
-    private func environment(_ values: [StorageEnvironmentKey: String]) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
+    private func environment(_ values: [StorageEnvironmentKey: String]) -> StorageEnvironment {
+        StorageEnvironment(testValues: values)
     }
 }

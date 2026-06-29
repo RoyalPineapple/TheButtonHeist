@@ -1,5 +1,5 @@
 import ArgumentParser
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 struct ListHeistsCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
@@ -97,7 +97,7 @@ private extension CLICommandContract {
     ) async throws {
         let fence = TheFence(configuration: try EnvironmentConfig.resolve(autoReconnect: false).fenceConfiguration)
         defer { fence.stop() }
-        let response = try await fence.execute(command: command, arguments: arguments)
+        let response = try await fence.execute(FenceOperationRequest(command: command, arguments: arguments))
         CLIRunner.outputResponse(response, format: format ?? .auto)
         if response.isFailure {
             throw ExitCode.failure

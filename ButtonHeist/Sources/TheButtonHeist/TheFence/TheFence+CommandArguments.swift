@@ -6,11 +6,11 @@ import TheScore
 extension TheFence {
 
     /// Typed command arguments after external routing has selected a command.
-    public struct CommandArgumentEnvelope: Sendable {
-        public let argumentValues: [String: HeistValue]
+    @_spi(ButtonHeistTooling) public struct CommandArgumentEnvelope: Sendable {
+        @_spi(ButtonHeistTooling) public let argumentValues: [String: HeistValue]
         let argumentFieldPrefix: String?
 
-        public init(
+        @_spi(ButtonHeistTooling) public init(
             values: [String: HeistValue],
             fieldPrefix: String? = nil
         ) {

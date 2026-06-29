@@ -19,13 +19,13 @@ package struct HeistPlanAdmissionCandidate: Codable, Sendable, Equatable {
         name: String? = nil,
         parameter: HeistParameter = .none,
         definitions: [HeistPlanAdmissionCandidate] = [],
-        body: [HeistStep]
+        body: [HeistStepAdmissionCandidate]
     ) {
         self.version = version
         self.name = name
         self.parameter = parameter
         self.definitions = definitions
-        self.body = body.map(HeistStepAdmissionCandidate.init)
+        self.body = body
     }
 
     init(_ plan: HeistPlan) {

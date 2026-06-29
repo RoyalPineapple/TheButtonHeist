@@ -3,7 +3,7 @@
 // in an integration test file per CLAUDE.md naming conventions.
 
 import XCTest
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
 
 final class PendingRequestTrackerIntegrationTests: XCTestCase {

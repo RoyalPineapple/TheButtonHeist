@@ -1,6 +1,6 @@
 import XCTest
 import Network
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 @_spi(ButtonHeistInternals) import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
@@ -14,6 +14,25 @@ private extension AccessibilityTrace.Delta {
         case .screenChanged:
             return AccessibilityTrace.DeltaKind.screenChanged.rawValue
         }
+    }
+}
+
+private struct FailureClassificationExpectation {
+    let kind: DiagnosticFailureKind
+    let phase: FailurePhase
+    let retryable: Bool
+    let hint: String?
+
+    init(
+        _ kind: DiagnosticFailureKind,
+        _ phase: FailurePhase,
+        retryable: Bool,
+        hint: String?
+    ) {
+        self.kind = kind
+        self.phase = phase
+        self.retryable = retryable
+        self.hint = hint
     }
 }
 
@@ -48,6 +67,152 @@ final class TheFenceHandlerTests: XCTestCase {
         Activate(.label(label))
     }
     """
+
+    private static let knownFailureCodeClassificationExpectations: [KnownFailureCode: FailureClassificationExpectation] = [
+        .requestInvalid: .init(.request, .request, retryable: false, hint: "Fix the request shape or arguments before retrying."),
+        .requestMissingTarget: .init(.request, .request, retryable: false, hint: "get_interface()"),
+        .requestAccessibilityTreeUnavailable: .init(
+            .request,
+            .request,
+            retryable: true,
+            hint: "Wait for a traversable app window, then refresh the interface or retry the command."
+        ),
+        .requestElementNotFound: .init(
+            .request,
+            .request,
+            retryable: false,
+            hint: "Refresh the interface and verify the target's accessibility properties."
+        ),
+        .requestTimeout: .init(.request, .request, retryable: true, hint: FenceError.actionTimeoutRecoveryHint),
+        .requestValidationError: .init(
+            .request,
+            .request,
+            retryable: false,
+            hint: "Fix the request so it satisfies the server-side validation rules."
+        ),
+        .requestActionFailed: .init(.request, .request, retryable: false, hint: nil),
+        .discoveryNoDeviceFound: .init(
+            .discovery,
+            .discovery,
+            retryable: true,
+            hint: "Start the app and confirm it advertises a session for The Button Heist."
+        ),
+        .discoveryNoMatchingDevice: .init(
+            .discovery,
+            .discovery,
+            retryable: false,
+            hint: "Check the device filter or target name against 'buttonheist list_devices'."
+        ),
+        .discoveryAmbiguousDeviceTarget: .init(
+            .discovery,
+            .discovery,
+            retryable: false,
+            hint: "Narrow the device target using a unique app name, device name, instance ID, installation ID, "
+                + "simulator UDID, or direct host:port."
+        ),
+        .setupTimeout: .init(
+            .connection,
+            .setup,
+            retryable: true,
+            hint: "Is the app running? Check 'buttonheist list_devices' to see available devices."
+        ),
+        .connectionFailed: .init(
+            .connection,
+            .transport,
+            retryable: true,
+            hint: "Check that the app is running and reachable, then retry."
+        ),
+        .connectionNotConnected: .init(
+            .connection,
+            .request,
+            retryable: true,
+            hint: "Check that the app is running, then retry the command. Use 'buttonheist list_devices' to see available devices."
+        ),
+        .connectionEndpointUnreachable: .init(
+            .connection,
+            .transport,
+            retryable: true,
+            hint: "Check that the app is running at the configured endpoint, then retry the command."
+        ),
+        .transportNetworkError: .init(
+            .connection,
+            .transport,
+            retryable: true,
+            hint: "Check that the app is still running and reachable, then retry."
+        ),
+        .transportBufferOverflow: .init(
+            .connection,
+            .transport,
+            retryable: false,
+            hint: "Request a smaller payload or narrow the interface query before retrying."
+        ),
+        .transportEventBacklogOverflow: .init(
+            .connection,
+            .transport,
+            retryable: true,
+            hint: "Reconnect and retry after reducing event volume or response size."
+        ),
+        .transportServerClosed: .init(
+            .connection,
+            .transport,
+            retryable: true,
+            hint: "Check that the app is still running and reachable, then retry."
+        ),
+        .authFailed: .init(.authentication, .authentication, retryable: false, hint: nil),
+        .sessionLocked: .init(
+            .session,
+            .session,
+            retryable: true,
+            hint: "Wait for the current driver to disconnect or for the session to time out. If this is your own stale session, "
+                + "retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
+        ),
+        .protocolMismatch: .init(
+            .connection,
+            .protocolNegotiation,
+            retryable: false,
+            hint: "Rebuild or reinstall so the CLI, MCP server, and iOS app use the same Button Heist version."
+        ),
+        .tlsCertificateMismatch: .init(
+            .connection,
+            .tls,
+            retryable: false,
+            hint: "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
+        ),
+        .tlsMissingFingerprint: .init(
+            .connection,
+            .tls,
+            retryable: false,
+            hint: "Current clients use token-derived TLS PSK. Rebuild or reinstall, then retry with the configured token."
+        ),
+        .tlsMissingToken: .init(.connection, .tls, retryable: false, hint: "Set BUTTONHEIST_TOKEN, pass --token, or configure a target token."),
+        .clientLocalDisconnect: .init(.client, .client, retryable: false, hint: nil),
+        .clientUnknown: .init(.unknown, .client, retryable: false, hint: nil),
+        .serverGeneral: .init(.server, .server, retryable: false, hint: nil),
+        .configReadFailed: .init(
+            .configuration,
+            .setup,
+            retryable: false,
+            hint: "Verify the config path points to a readable JSON file matching the Button Heist config schema."
+        ),
+        .configDecodeFailed: .init(
+            .configuration,
+            .setup,
+            retryable: false,
+            hint: "Verify the config path points to a readable JSON file matching the Button Heist config schema."
+        ),
+        .formattingJSONEncodingFailed: .init(
+            .client,
+            .client,
+            retryable: false,
+            hint: "Report this diagnostic with the command that produced it."
+        ),
+        .screenInlinePayloadTooLarge: .init(
+            .client,
+            .client,
+            retryable: false,
+            hint: "Omit inlineData or pass output to receive a screenshot artifact path."
+        ),
+    ]
 
     /// Assert that executing a typed operation returns a `.error(...)` response containing the substring.
     @ButtonHeistActor
@@ -417,33 +582,33 @@ final class TheFenceHandlerTests: XCTestCase {
         try second.assertMissing("sourceSpan")
     }
 
-    func testKnownFailureCodesExposeTypedClassification() {
-        let cases: [(KnownFailureCode, String, DiagnosticFailureKind, FailurePhase, Bool)] = [
-            (.requestInvalid, "request.invalid", .request, .request, false),
-            (.discoveryNoDeviceFound, "discovery.no_device_found", .discovery, .discovery, true),
-            (.transportNetworkError, "transport.network_error", .connection, .transport, true),
-            (.requestActionFailed, "request.action_failed", .request, .request, false),
-        ]
+    func testKnownFailureCodesExposeTypedClassification() throws {
+        let expected = Self.knownFailureCodeClassificationExpectations
 
-        for (knownCode, rawValue, kind, phase, retryable) in cases {
+        XCTAssertEqual(Set(expected.keys), Set(KnownFailureCode.allCases))
+
+        for knownCode in KnownFailureCode.allCases {
+            let expectation = try XCTUnwrap(expected[knownCode])
             let code = FailureCode(knownCode)
             let details = FailureDetails(code: knownCode)
 
-            XCTAssertEqual(code.rawValue, rawValue)
+            XCTAssertEqual(code.rawValue, knownCode.rawValue)
             XCTAssertEqual(code.knownCode, knownCode)
-            XCTAssertEqual(code.kind, kind)
-            XCTAssertEqual(code.phase, phase)
-            XCTAssertEqual(code.retryable, retryable)
+            XCTAssertEqual(code.kind, expectation.kind)
+            XCTAssertEqual(code.phase, expectation.phase)
+            XCTAssertEqual(code.retryable, expectation.retryable)
+            XCTAssertEqual(code.defaultHint, expectation.hint)
             XCTAssertEqual(details.code, code)
-            XCTAssertEqual(details.errorCode, rawValue)
-            XCTAssertEqual(details.phase, phase)
-            XCTAssertEqual(details.retryable, retryable)
+            XCTAssertEqual(details.errorCode, knownCode.rawValue)
+            XCTAssertEqual(details.phase, expectation.phase)
+            XCTAssertEqual(details.retryable, expectation.retryable)
+            XCTAssertEqual(details.hint, expectation.hint)
         }
     }
 
     func testCustomFailureCodeUsesExplicitBoundaryValueAndPhaseFallback() {
         let details = FailureDetails(
-            code: FailureCode(rawValue: "plugin.custom_failure"),
+            code: FailureCode(boundaryRawValue: "plugin.custom_failure"),
             phase: .server,
             retryable: false,
             hint: nil

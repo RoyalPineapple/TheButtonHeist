@@ -297,14 +297,20 @@ public struct FailureCode: RawRepresentable, Codable, Sendable, Equatable, Hasha
         self.rawValue = knownCode.rawValue
     }
 
-    /// Boundary initializer for raw public JSON/API values.
-    public init(rawValue: String) {
+    /// Explicit boundary initializer for raw public JSON/API values outside the known taxonomy.
+    public init(boundaryRawValue rawValue: String) {
         self.rawValue = rawValue
+    }
+
+    /// RawRepresentable/Codable compatibility. Prefer `init(_:)` for known codes
+    /// and `init(boundaryRawValue:)` at raw JSON/API boundaries.
+    public init(rawValue: String) {
+        self.init(boundaryRawValue: rawValue)
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        self.init(rawValue: try container.decode(String.self))
+        self.init(boundaryRawValue: try container.decode(String.self))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -314,15 +320,6 @@ public struct FailureCode: RawRepresentable, Codable, Sendable, Equatable, Hasha
 }
 
 public extension FailureDetails {
-    /// Typed failure code. `errorCode` remains the raw JSON/API boundary value.
-    var code: FailureCode {
-        FailureCode(rawValue: errorCode)
-    }
-
-    init(code: FailureCode, phase: FailurePhase, retryable: Bool, hint: String?) {
-        self.init(errorCode: code.rawValue, phase: phase, retryable: retryable, hint: hint)
-    }
-
     init(code knownCode: KnownFailureCode, hint: String? = nil) {
         self.init(
             code: FailureCode(knownCode),
@@ -337,8 +334,6 @@ public extension FailureDetails {
 public struct DiagnosticFailure: Sendable, Equatable {
     /// Typed machine-readable failure code.
     public let failureCode: FailureCode
-    /// Stable machine-readable failure code.
-    public let code: String
     /// Broad diagnostic category for the failure.
     public let kind: DiagnosticFailureKind
     /// User-facing failure message.
@@ -350,6 +345,9 @@ public struct DiagnosticFailure: Sendable, Equatable {
 
     /// Display-ready failure message.
     public var displayMessage: String { message }
+
+    /// Raw JSON/API boundary projection of `failureCode`.
+    public var code: String { failureCode.rawValue }
 
     /// Lifecycle phase where the failure occurred.
     public var phase: FailurePhase { details.phase }
@@ -373,7 +371,6 @@ public struct DiagnosticFailure: Sendable, Equatable {
         buildDiagnostics: [HeistBuildDiagnostic] = []
     ) {
         self.failureCode = details.code
-        self.code = details.code.rawValue
         self.kind = kind ?? DiagnosticFailureKind(details: details)
         self.message = message
         self.details = details
@@ -409,10 +406,12 @@ public struct DiagnosticFailure: Sendable, Equatable {
 public struct ConnectionFailure: Equatable, Sendable {
     public let message: String
     public let failureCode: FailureCode
-    public let errorCode: String
     public let phase: FailurePhase
     public let retryable: Bool
     public let hint: String?
+
+    /// Raw JSON/API boundary projection of `failureCode`.
+    public var errorCode: String { failureCode.rawValue }
 
     public init(
         message: String,
@@ -423,26 +422,9 @@ public struct ConnectionFailure: Equatable, Sendable {
     ) {
         self.message = message
         self.failureCode = failureCode
-        self.errorCode = failureCode.rawValue
         self.phase = phase
         self.retryable = retryable
         self.hint = hint
-    }
-
-    public init(
-        message: String,
-        errorCode: String,
-        phase: FailurePhase,
-        retryable: Bool,
-        hint: String?
-    ) {
-        self.init(
-            message: message,
-            failureCode: FailureCode(rawValue: errorCode),
-            phase: phase,
-            retryable: retryable,
-            hint: hint
-        )
     }
 }
 

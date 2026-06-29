@@ -5,9 +5,46 @@ enum StorageEnvironmentKey: String, Sendable {
     case xdgDataHome = "XDG_DATA_HOME"
 }
 
-private extension Dictionary where Key == String, Value == String {
-    subscript(_ key: StorageEnvironmentKey) -> String? {
-        self[key.rawValue]
+struct StorageEnvironment: Equatable, Sendable {
+    static let empty = StorageEnvironment()
+
+    private let values: [StorageEnvironmentKey: String]
+
+    init(
+        storageDirectory: String? = nil,
+        xdgDataHome: String? = nil
+    ) {
+        var values: [StorageEnvironmentKey: String] = [:]
+        values[.buttonheistStorageDirectory] = storageDirectory
+        values[.xdgDataHome] = xdgDataHome
+        self.values = values
+    }
+
+    init(testValues values: [StorageEnvironmentKey: String]) {
+        self.values = values
+    }
+
+    fileprivate init(rawValues: [String: String]) {
+        self.values = Dictionary(uniqueKeysWithValues: [
+            StorageEnvironmentKey.buttonheistStorageDirectory,
+            .xdgDataHome,
+        ].compactMap { key in
+            rawValues[key.rawValue].map { (key, $0) }
+        })
+    }
+
+    var storageDirectory: String? {
+        values[.buttonheistStorageDirectory]
+    }
+
+    var xdgDataHome: String? {
+        values[.xdgDataHome]
+    }
+}
+
+enum StorageEnvironmentBridge {
+    static func current() -> StorageEnvironment {
+        StorageEnvironment(rawValues: ProcessInfo.processInfo.environment)
     }
 }
 
@@ -16,12 +53,12 @@ enum PrivateStorage {
     // MARK: - Paths
 
     static func resolveBaseDirectory(
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: StorageEnvironment = StorageEnvironmentBridge.current()
     ) -> URL {
-        if let override = environment[.buttonheistStorageDirectory] {
+        if let override = environment.storageDirectory {
             return URL(fileURLWithPath: override)
         }
-        if let xdgDataHome = environment[.xdgDataHome] {
+        if let xdgDataHome = environment.xdgDataHome {
             return URL(fileURLWithPath: xdgDataHome)
                 .appendingPathComponent("buttonheist")
         }

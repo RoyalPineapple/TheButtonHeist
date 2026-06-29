@@ -607,13 +607,17 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testPredicateWaitStateMatchingKeepsTypedSetShape() throws {
         let source = try String(contentsOf: predicateWaitSourceURL(), encoding: .utf8)
+        let evaluationSource = try String(contentsOf: predicateEvaluationSourceURL(), encoding: .utf8)
         let streamTupleReturn = ") -> (state: PredicateObservationStreamState, "
             + "reduction: PredicateObservationReduction)"
 
-        XCTAssertTrue(source.contains("private struct PredicateStateMatch: Hashable, Sendable"))
-        XCTAssertTrue(source.contains("private func intersection(_ other: PredicateStateMatchSet) -> PredicateStateMatchSet"))
+        XCTAssertFalse(source.contains("private struct PredicateStateMatch"))
+        XCTAssertFalse(source.contains("PredicateStateMatchSet"))
+        XCTAssertTrue(source.contains("private let stateMatches: ElementMatchSet"))
+        XCTAssertTrue(source.contains("state.evaluate(in: stateMatches).expectation(for: predicate)"))
         XCTAssertTrue(source.contains("struct PredicateObservationStreamReduction"))
-        XCTAssertTrue(source.contains("PredicateEvaluationResult"))
+        XCTAssertTrue(evaluationSource.contains("func evaluate(in matches: ElementMatchSet) -> PredicateEvaluationResult"))
+        XCTAssertTrue(evaluationSource.contains("return PredicateEvaluationResult("))
         XCTAssertFalse(source.contains(streamTupleReturn))
         XCTAssertFalse(source.contains("elements.filter { predicate.matches($0) }"))
         XCTAssertFalse(source.contains("private func evaluate(_ state: AccessibilityPredicate.State) -> (met: Bool, actual: String?)"))
@@ -1199,6 +1203,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/TheInsideJob/TheBrains/PredicateWait.swift")
+    }
+
+    private func predicateEvaluationSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/TheScore/AccessibilityPredicate+Evaluation.swift")
     }
 
     private func heistExecutionSourceURL() -> URL {

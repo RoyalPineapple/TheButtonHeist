@@ -49,7 +49,7 @@ final class StartupConfigurationTests: XCTestCase {
 
     func testInfoPlistUsedWhenEnvironmentMissing() {
         let configuration = StartupConfiguration.resolve(
-            env: [:],
+            env: .empty,
             infoPlist: makeInfoPlist([
                 .disableAutoStart: true,
                 .token: "plist-token",
@@ -74,7 +74,7 @@ final class StartupConfigurationTests: XCTestCase {
 
     func testInfoPlistBoundaryParsesTypedShapes() {
         let configuration = StartupConfiguration.resolve(
-            env: [:],
+            env: .empty,
             infoPlist: makeInfoPlist([
                 .disableAutoStart: "yes",
                 .fingerprintsEnabled: "no",
@@ -94,7 +94,7 @@ final class StartupConfigurationTests: XCTestCase {
 
     func testMalformedInfoPlistValuesFallBackWithWarnings() {
         let configuration = StartupConfiguration.resolve(
-            env: [:],
+            env: .empty,
             infoPlist: makeInfoPlist([
                 .disableAutoStart: ["true"],
                 .fingerprintsEnabled: ["false"],
@@ -122,7 +122,7 @@ final class StartupConfigurationTests: XCTestCase {
 
     func testInfoPlistStringArraysOnlyResolveForScope() {
         let configuration = StartupConfiguration.resolve(
-            env: [:],
+            env: .empty,
             infoPlist: makeInfoPlist([
                 .token: ["token"],
                 .instanceId: ["instance-id"],
@@ -159,7 +159,7 @@ final class StartupConfigurationTests: XCTestCase {
         )
         XCTAssertEqual(
             StartupConfiguration.resolve(
-                env: [:],
+                env: .empty,
                 infoPlist: makeInfoPlist([.fingerprintsEnabled: false])
             ).fingerprintsEnabled,
             ResolvedStartupValue(value: false, source: .infoPlist)
@@ -284,7 +284,7 @@ final class StartupConfigurationTests: XCTestCase {
     }
 
     func testRuntimeKnobsUseDefaults() {
-        let knobs = InsideJobRuntimeKnobs.resolve(environment: [:])
+        let knobs = InsideJobRuntimeKnobs.resolve(environment: .empty)
 
         XCTAssertEqual(knobs.postScrollLayoutFrames, 3)
         XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 10)
@@ -296,14 +296,14 @@ final class StartupConfigurationTests: XCTestCase {
     }
 
     func testRuntimeKnobsReadEnvironmentFromOneResolver() {
-        let knobs = InsideJobRuntimeKnobs.resolve(environment: [
-            "BH_POST_SCROLL_LAYOUT_FRAMES": "0",
-            "BH_TRIPWIRE_PULSE_HZ": "60",
-            "BH_MAX_SCROLLS_PER_CONTAINER": "25",
-            "BH_MAX_SCROLLS_PER_DISCOVERY": "30",
-            "BH_SCROLL_SUBTREE_ELEMENT_BUDGET": "75",
-            "BH_TOTAL_NODE_BUDGET": "4000"
-        ])
+        let knobs = InsideJobRuntimeKnobs.resolve(environment: RuntimeKnobEnvironment(values: [
+            .postScrollLayoutFrames: "0",
+            .tripwirePulseFramesPerSecond: "60",
+            .maxScrollsPerContainer: "25",
+            .maxScrollsPerDiscovery: "30",
+            .scrollSubtreeElementBudget: "75",
+            .totalNodeBudget: "4000"
+        ]))
 
         XCTAssertEqual(knobs.postScrollLayoutFrames, 0)
         XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 60)
@@ -315,14 +315,14 @@ final class StartupConfigurationTests: XCTestCase {
     }
 
     func testRuntimeKnobsReadTestRunnerPrefixedEnvironmentAndClamp() {
-        let knobs = InsideJobRuntimeKnobs.resolve(environment: [
-            "TEST_RUNNER_BH_POST_SCROLL_LAYOUT_FRAMES": "99",
-            "TEST_RUNNER_BH_TRIPWIRE_PULSE_HZ": "0",
-            "TEST_RUNNER_BH_MAX_SCROLLS_PER_CONTAINER": "9999",
-            "TEST_RUNNER_BH_MAX_SCROLLS_PER_DISCOVERY": "9999",
-            "TEST_RUNNER_BH_SCROLL_SUBTREE_ELEMENT_BUDGET": "9999",
-            "TEST_RUNNER_BH_TOTAL_NODE_BUDGET": "9999"
-        ])
+        let knobs = InsideJobRuntimeKnobs.resolve(environment: RuntimeKnobEnvironment(values: [
+            .postScrollLayoutFrames.testRunnerPrefixed: "99",
+            .tripwirePulseFramesPerSecond.testRunnerPrefixed: "0",
+            .maxScrollsPerContainer.testRunnerPrefixed: "9999",
+            .maxScrollsPerDiscovery.testRunnerPrefixed: "9999",
+            .scrollSubtreeElementBudget.testRunnerPrefixed: "9999",
+            .totalNodeBudget.testRunnerPrefixed: "9999"
+        ]))
 
         XCTAssertEqual(knobs.postScrollLayoutFrames, 10)
         XCTAssertEqual(knobs.tripwirePulseFramesPerSecond, 1)
@@ -387,8 +387,8 @@ extension InfoPlistFixtureValue: ExpressibleByArrayLiteral {
     }
 }
 
-private func environment(_ values: [StartupEnvironmentKey: String]) -> [String: String] {
-    Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
+private func environment(_ values: [StartupEnvironmentKey: String]) -> StartupEnvironment {
+    StartupEnvironment(values: values)
 }
 
 private func environment(_ values: [XCTestEnvironmentKey: String]) -> [String: String] {

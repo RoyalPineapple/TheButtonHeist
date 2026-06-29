@@ -1,6 +1,6 @@
 import ArgumentParser
 import Foundation
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(

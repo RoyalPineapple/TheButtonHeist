@@ -442,7 +442,7 @@ extension FenceResponse {
             return "[" + parts.joined(separator: ", ") + ": " + detail.joined(separator: "; ") + "]"
         case .screenChanged:
             let compactInterface = projection.screen?.interface.map {
-                Self.compactInterface($0, detail: .summary)
+                Self.compactInterface($0)
             } ?? ""
             return "[\(projection.elementCount) elements, screen changed]\n" + compactInterface
         }

@@ -228,6 +228,38 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertEqual(outcome.actual, "screenChanged")
     }
 
+    func testActionResultValidationUsesAccumulatedTraceEvidence() {
+        let baseline = makeTestInterface(elements: [
+            makeElement(label: "Counter", value: "0"),
+        ])
+        let updated = makeTestInterface(elements: [
+            makeElement(label: "Counter", value: "1"),
+        ])
+        let final = makeTestInterface(elements: [
+            makeElement(label: "Counter", value: "0"),
+        ])
+        let trace = AccessibilityTrace(first: baseline)
+            .appending(updated)
+            .appending(final)
+
+        guard case .noChange? = trace.endpointDelta else {
+            return XCTFail("Expected no-change endpoint delta, got \(String(describing: trace.endpointDelta))")
+        }
+
+        let action = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityTrace: trace
+        )
+        let changePredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            element: ElementPredicate(label: "Counter"),
+            change: .value(before: "0", after: "1")
+        ))))
+
+        XCTAssertTrue(changePredicate.validate(against: action).met)
+        XCTAssertFalse(AccessibilityPredicate.noChange.validate(against: action).met)
+    }
+
     func testScreenChangedRequiresTraceEndpointEdge() {
         let result = ActionResult(
             success: true,

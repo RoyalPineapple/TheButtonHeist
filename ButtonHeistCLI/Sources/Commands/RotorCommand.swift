@@ -1,5 +1,5 @@
 import ArgumentParser
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 struct RotorCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(

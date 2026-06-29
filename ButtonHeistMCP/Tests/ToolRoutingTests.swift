@@ -2,7 +2,7 @@ import Foundation
 import MCP
 import Testing
 @testable import ButtonHeistMCP
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 
 struct ToolRoutingTests {
     private typealias Argument = HeistValue

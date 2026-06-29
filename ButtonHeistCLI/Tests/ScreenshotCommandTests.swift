@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 import TheScore
 
 @testable import ButtonHeistCLIExe

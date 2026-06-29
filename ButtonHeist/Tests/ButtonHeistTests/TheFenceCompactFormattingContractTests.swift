@@ -1,7 +1,7 @@
 import XCTest
 import ThePlans
 import AccessibilitySnapshotModel
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
 
 final class TheFenceCompactFormattingContractTests: XCTestCase {

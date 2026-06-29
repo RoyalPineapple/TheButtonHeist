@@ -548,42 +548,14 @@ struct HeistCompilerTests {
     }
 
     @Test
-    func `raw logger construction stays within tracked factory and legacy sites`() throws {
+    func `raw logger construction stays within ButtonHeistLog factory`() throws {
         let root = try repositoryRoot()
         let scorePath = "ButtonHeist/Sources/TheScore/"
-        let handoffPath = "ButtonHeist/Sources/TheButtonHeist/TheHandoff/"
-        let insidePath = "ButtonHeist/Sources/TheInsideJob/"
-        let serverPath = insidePath + "Server/"
-        let handoffSubsystem = "com.buttonheist.thehandoff"
-        let insideSubsystem = "com.buttonheist.theinsidejob"
         let loggerFactoryLine = sourceMatch(
             path: scorePath + "ButtonHeistLog.swift",
             line: "Logger(subsystem: channel.subsystem.rawValue, category: channel.category)"
         )
-        let allowedLoggerLines = Set([loggerFactoryLine] + loggerSourceMatches([
-            (handoffPath + "TheHandoff+Discovery.swift", "private let handoffDiscoveryLogger =", handoffSubsystem, "discovery"),
-            (handoffPath + "USBDeviceDiscovery.swift", "private let logger =", handoffSubsystem, "usb-discovery"),
-            (insidePath + "TheInsideJob.swift", "let insideJobLogger =", insideSubsystem, "server"),
-            (handoffPath + "TheHandoff+Connection.swift", "private let handoffConnectionLogger =", handoffSubsystem, "connection"),
-            (insidePath + "TheStash/WireConversion.swift", "private let wireConversionLogger =", insideSubsystem, "wireConversion"),
-            (insidePath + "Lifecycle/AutoStart.swift", "private let autoStartLogger =", insideSubsystem, "autostart"),
-            (insidePath + "Lifecycle/AccessibilityArming.swift", "private let accessibilityArmingLogger =", insideSubsystem, "accessibility"),
-            (handoffPath + "DeviceDiscovery.swift", "private let logger =", handoffSubsystem, "discovery"),
-            (handoffPath + "HandoffDiscoveryLifecycle.swift", "private let discoveryLogger =", handoffSubsystem, "discovery"),
-            (serverPath + "SimpleSocketServer+ClientState.swift", "private let clientStateLogger =", handoffSubsystem, "server"),
-            (serverPath + "TheMuscleAdmission+Authentication.swift", "let muscleAuthenticationLogger =", insideSubsystem, "auth"),
-            (handoffPath + "DeviceConnection.swift", "let deviceConnectionLogger =", handoffSubsystem, "connection"),
-            (handoffPath + "DiscoveredDevice+Reachability.swift", "private let reachabilityLogger =", handoffSubsystem, "reachability"),
-            (handoffPath + "HandoffServerMessageRouter.swift", "private let serverMessageLogger =", handoffSubsystem, "server-message"),
-            (serverPath + "SimpleSocketServer+ConnectionAcceptance.swift", "private let connectionLogger =", handoffSubsystem, "server"),
-            (serverPath + "SocketListenerStartup.swift", "private let listenerLogger =", handoffSubsystem, "server"),
-            (serverPath + "BonjourAdvertisement.swift", "private let logger =", handoffSubsystem, "transport"),
-            (serverPath + "TheMuscleSession.swift", "private let sessionLogger =", insideSubsystem, "auth"),
-            (serverPath + "SimpleSocketServer+Sending.swift", "private let sendLogger =", handoffSubsystem, "server"),
-            (serverPath + "SimpleSocketServer+Receiving.swift", "private let receiveLogger =", handoffSubsystem, "server"),
-            (serverPath + "TheMuscle.swift", "private let muscleLogger =", insideSubsystem, "auth"),
-            (serverPath + "TransportEventStream.swift", "private let logger =", handoffSubsystem, "transport"),
-        ]))
+        let allowedLoggerLines = Set([loggerFactoryLine])
 
         let observed = try sourceMatches(
             in: productionSwiftFiles(in: root),
@@ -685,7 +657,7 @@ struct HeistCompilerTests {
     @Test
     func `action projection method identity stays typed until JSON encoding`() throws {
         let root = try repositoryRoot()
-        let projectionFile = root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence/ReportProjections.swift")
+        let projectionFile = root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence/ActionProjection.swift")
         let projectionSource = try String(contentsOf: projectionFile, encoding: .utf8)
 
         #expect(projectionSource.contains("enum ActionMethodProjection"))
@@ -753,6 +725,31 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `parser compiler and fence surfaces avoid new tuple return APIs`() throws {
+        let root = try repositoryRoot()
+        let allowedTupleReturns: Set<String> = [
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+SwipeDragGestures.swift:"
+                + "func singleObjectPayloadIntent<Intent>( _: Intent.Type, field: String, expected: String ) "
+                + "throws -> (key: Intent, payload: TheFence.CommandArgumentEnvelope)",
+        ]
+        let tupleReturnPattern = #"\b(?:@\w+(?:\([^)]*\))?\s+"#
+            + #"|(?:public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated)\s+)*"#
+            + #"func\s+\w+[^{=]*?->\s*\([^)]*,[^)]*\)\??"#
+        let functionTupleReturns = try sourceSnippets(
+            in: parserCompilerFenceTupleReturnGuardFiles(in: root),
+            root: root,
+            pattern: tupleReturnPattern
+        )
+
+        let unexpected = functionTupleReturns.subtracting(allowedTupleReturns)
+
+        #expect(
+            unexpected.isEmpty,
+            "Unexpected tuple return APIs in parser/compiler/fence surfaces:\n\(unexpected.sorted().joined(separator: "\n"))"
+        )
+    }
+
+    @Test
     func `public report projections avoid raw dictionary surfaces`() throws {
         let root = try repositoryRoot()
         let projectionSurfacePaths = [
@@ -763,7 +760,12 @@ struct HeistCompilerTests {
             "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+TreeNode.swift",
             "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Session.swift",
             "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift",
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/ReportProjections.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/ActionProjection.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/DeltaProjection.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/HeistEvidenceProjection.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/HeistReportProjection.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/InterfaceProjection.swift",
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift",
             "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting.swift",
             "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact.swift",
             "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Action.swift",
@@ -789,17 +791,128 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `projection JSON does not rebuild public interfaces from raw models`() throws {
+        let root = try repositoryRoot()
+        let productionFiles = try productionSwiftFiles(in: root)
+        let allowedPaths: Set<String> = [
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Interface.swift",
+        ]
+        let unexpected = try sourceMatches(
+            in: productionFiles,
+            root: root,
+            pattern: #"PublicInterface\s*\(\s*interface:"#
+        )
+        .filter { match in
+            guard let path = match.split(separator: ":", maxSplits: 1).first else { return true }
+            return !allowedPaths.contains(String(path))
+        }
+
+        #expect(
+            unexpected.isEmpty,
+            "Unexpected raw Interface -> PublicInterface projection call sites:\n\(unexpected.sorted().joined(separator: "\n"))"
+        )
+
+        let deltaProjection = try String(
+            contentsOf: root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence/DeltaProjection.swift"),
+            encoding: .utf8
+        )
+        #expect(deltaProjection.contains("let interface: InterfaceProjection?"))
+        #expect(deltaProjection.contains("struct ScreenshotProjection"))
+    }
+
+    @Test
+    func `source compiler preserves diagnostic sets through admission boundary`() throws {
+        let root = try repositoryRoot()
+        let compilerSource = try String(
+            contentsOf: root.appendingPathComponent("ButtonHeist/Sources/ThePlans/HeistPlanSourceCompiler.swift"),
+            encoding: .utf8
+        )
+
+        #expect(compilerSource.contains("func compileResult("))
+        #expect(compilerSource.contains("public let diagnostics: [HeistBuildDiagnostic]"))
+        #expect(!compilerSource.contains("diagnostics[0]"))
+        #expect(!compilerSource.contains("throw HeistPlanSourceCompilerError(diagnostic: diagnostics"))
+
+        let plansFiles = try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/ThePlans", isDirectory: true))
+        let allowedUncheckedPaths: Set<String> = [
+            "ButtonHeist/Sources/ThePlans/HeistPlan+RuntimeValidationAdmission.swift",
+            "ButtonHeist/Sources/ThePlans/HeistPlan+RuntimeValidationTraversal.swift",
+            "ButtonHeist/Sources/ThePlans/HeistPlanSourceDiagnostics.swift",
+        ]
+        let unexpectedUncheckedAdmission = try sourceMatches(
+            in: plansFiles,
+            root: root,
+            pattern: #"uncheckedPlanForRuntimeSafetyValidation\s*\("#
+        )
+        .filter { match in
+            guard let path = match.split(separator: ":", maxSplits: 1).first else { return true }
+            return !allowedUncheckedPaths.contains(String(path))
+        }
+
+        #expect(
+            unexpectedUncheckedAdmission.isEmpty,
+            "Unchecked runtime admission escaped validation boundary:\n\(unexpectedUncheckedAdmission.sorted().joined(separator: "\n"))"
+        )
+    }
+
+    @Test
+    func `fence execution ingress stays routed through operation requests`() throws {
+        let root = try repositoryRoot()
+        let productionFiles = try productionSwiftFiles(in: root)
+
+        let publicCommandExecution = try sourceMatches(
+            in: productionFiles,
+            root: root,
+            pattern: #"public\s+func\s+execute\s*\(\s*command:"#
+        )
+        #expect(
+            publicCommandExecution.isEmpty,
+            "Unexpected public command-plus-arguments execution surface:\n\(publicCommandExecution.sorted().joined(separator: "\n"))"
+        )
+
+        let directFenceExecution = try sourceMatches(
+            in: productionFiles,
+            root: root,
+            pattern: #"\.execute\s*\(\s*command:[^)]*arguments:"#
+        )
+        #expect(
+            directFenceExecution.isEmpty,
+            "Unexpected direct fence command-plus-arguments call sites:\n\(directFenceExecution.sorted().joined(separator: "\n"))"
+        )
+
+        let routingSource = try String(
+            contentsOf: root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandRouting.swift"),
+            encoding: .utf8
+        )
+        #expect(routingSource.contains("@_spi(ButtonHeistTooling) public struct FenceOperationRequest"))
+
+        let argumentSource = try String(
+            contentsOf: root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift"),
+            encoding: .utf8
+        )
+        #expect(argumentSource.contains("@_spi(ButtonHeistTooling) public struct CommandArgumentEnvelope"))
+    }
+
+    @Test
     func `legacy compatibility config spellings stay allowlisted`() throws {
         let root = try repositoryRoot()
         let files = try productionSwiftFiles(in: root)
+        let runtimeKnobSource = "ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:"
         let allowedLegacyRuntimeKnobAliases: Set<String> = [
-            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_POST_SCROLL_LAYOUT_FRAMES", "BUTTONHEIST_POST_SCROLL_LAYOUT_FRAMES"],"#,
-            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_TRIPWIRE_PULSE_HZ", "BUTTONHEIST_TRIPWIRE_PULSE_HZ"],"#,
-            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_MAX_SCROLLS_PER_CONTAINER", "BUTTONHEIST_MAX_SCROLLS_PER_CONTAINER"],"#,
-            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_MAX_SCROLLS_PER_DISCOVERY", "BUTTONHEIST_MAX_SCROLLS_PER_DISCOVERY"],"#,
-            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:"BH_SCROLL_SUBTREE_ELEMENT_BUDGET","#,
-            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:"BH_VISIBLE_ELEMENT_BUDGET","#,
-            #"ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:keys: ["BH_TOTAL_NODE_BUDGET", "BUTTONHEIST_TOTAL_NODE_BUDGET"],"#,
+            runtimeKnobSource
+                + #"public static let postScrollLayoutFrames = RuntimeKnobEnvironmentKey("BH_POST_SCROLL_LAYOUT_FRAMES")"#,
+            runtimeKnobSource
+                + #"public static let tripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BH_TRIPWIRE_PULSE_HZ")"#,
+            runtimeKnobSource
+                + #"public static let maxScrollsPerContainer = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_CONTAINER")"#,
+            runtimeKnobSource
+                + #"public static let maxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_DISCOVERY")"#,
+            runtimeKnobSource
+                + #"public static let scrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BH_SCROLL_SUBTREE_ELEMENT_BUDGET")"#,
+            runtimeKnobSource
+                + #"public static let visibleElementBudget = RuntimeKnobEnvironmentKey("BH_VISIBLE_ELEMENT_BUDGET")"#,
+            runtimeKnobSource
+                + #"public static let totalNodeBudget = RuntimeKnobEnvironmentKey("BH_TOTAL_NODE_BUDGET")"#,
         ]
         let legacyRuntimeKnobAliases = try sourceMatches(
             in: files,
@@ -829,10 +942,10 @@ struct HeistCompilerTests {
         let files = try sourceAndTestSwiftFiles(in: root)
         let knownFailurePrefix = #"(request|discovery|setup|connection|transport|auth|session|protocol|tls|client|server|config|formatting|screen)\."#
 
-        let rawConstructorMatches = try sourceMatches(
+        let rawConstructorMatches = try sourceSnippets(
             in: files,
             root: root,
-            pattern: "\\b(FailureCode|KnownFailureCode)\\s*\\(\\s*rawValue:\\s*\"" + knownFailurePrefix
+            pattern: "\\b(FailureCode|KnownFailureCode)\\s*\\(\\s*(rawValue|boundaryRawValue):\\s*\"" + knownFailurePrefix
         )
         #expect(
             rawConstructorMatches.isEmpty,
@@ -860,6 +973,22 @@ struct HeistCompilerTests {
         #expect(
             unexpectedRawLiteralFiles.isEmpty,
             "Unexpected raw known failure-code literals:\n\(unexpectedRawLiteralFiles.sorted().joined(separator: "\n"))"
+        )
+
+        let allowedRawInitializerPaths: Set<String> = []
+        let unexpectedRawInitializerSnippets = try sourceSnippets(
+            in: files,
+            root: root,
+            pattern: "\\b(FailureDetails|ConnectionFailure)\\s*\\([^)]*\\berrorCode:"
+        )
+        .filter { snippet in
+            guard let path = snippet.split(separator: ":", maxSplits: 1).first else { return true }
+            return !allowedRawInitializerPaths.contains(String(path))
+        }
+
+        #expect(
+            unexpectedRawInitializerSnippets.isEmpty,
+            "Unexpected raw failure-domain initializers:\n\(unexpectedRawInitializerSnippets.sorted().joined(separator: "\n"))"
         )
     }
 
@@ -1062,6 +1191,24 @@ private func productionSwiftFiles(in root: URL) throws -> [URL] {
     }
 }
 
+private func parserCompilerFenceTupleReturnGuardFiles(in root: URL) throws -> [URL] {
+    let plansRoot = root.appendingPathComponent("ButtonHeist/Sources/ThePlans", isDirectory: true)
+    let sourceParserFiles = try swiftFiles(in: plansRoot).filter { file in
+        file.lastPathComponent.hasPrefix("HeistPlanSource")
+            && file.lastPathComponent.hasSuffix("Parser.swift")
+    }
+    let compilerFiles = [
+        "ButtonHeist/Sources/ThePlans/HeistCompiler.swift",
+        "ButtonHeist/Sources/ThePlans/HeistPlanSourceCompiler.swift",
+        "ButtonHeist/Sources/ThePlans/HeistSwiftFileCompiler.swift",
+    ].map { root.appendingPathComponent($0) }
+    let fenceFiles = try swiftFiles(
+        in: root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence", isDirectory: true)
+    )
+
+    return sourceParserFiles + compilerFiles + fenceFiles
+}
+
 private func sourceAndTestSwiftFiles(in root: URL) throws -> [URL] {
     let relativeRoots = [
         "ButtonHeist/Sources",
@@ -1133,29 +1280,6 @@ private func repositoryRelativePath(_ file: URL, root: URL) -> String {
 
 private func sourceMatch(path: String, line: String) -> String {
     "\(path):\(line)"
-}
-
-private func loggerSourceMatch(
-    path: String,
-    declaration: String,
-    subsystem: String,
-    category: String
-) -> String {
-    sourceMatch(
-        path: path,
-        line: "\(declaration) Logger(subsystem: \"\(subsystem)\", category: \"\(category)\")"
-    )
-}
-
-private func loggerSourceMatches(_ entries: [(String, String, String, String)]) -> [String] {
-    entries.map { path, declaration, subsystem, category in
-        loggerSourceMatch(
-            path: path,
-            declaration: declaration,
-            subsystem: subsystem,
-            category: category
-        )
-    }
 }
 
 private func jsonStringLiteral(_ value: String) throws -> String {

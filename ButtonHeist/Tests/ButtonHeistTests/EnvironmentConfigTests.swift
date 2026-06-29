@@ -1,11 +1,11 @@
 import XCTest
 import TheScore
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class EnvironmentConfigTests: XCTestCase {
 
     func testDefaultsWithEmptyEnv() throws {
-        let config = resolve(env: [:])
+        let config = resolve(env: .empty)
         XCTAssertNil(config.deviceFilter)
         XCTAssertNil(config.token)
         XCTAssertEqual(config.sessionTimeout, 60.0)
@@ -85,7 +85,7 @@ final class EnvironmentConfigTests: XCTestCase {
             token: "tok",
             connectionTimeout: 15,
             autoReconnect: false,
-            env: [:]
+            env: .empty
         )
         let fence = config.fenceConfiguration
         XCTAssertEqual(fence.deviceFilter, "127.0.0.1:1455")
@@ -103,7 +103,7 @@ final class EnvironmentConfigTests: XCTestCase {
     func testExplicitConfigPathFailurePropagatesDiagnosticError() {
         let path = "/nonexistent/path/.buttonheist.json"
 
-        XCTAssertThrowsError(try EnvironmentConfig.resolve(configPath: path, env: [:])) { error in
+        XCTAssertThrowsError(try EnvironmentConfig.resolve(configPath: path, environment: .empty)) { error in
             guard let error = error as? TargetConfigLoadError else {
                 XCTFail("Expected TargetConfigLoadError, got \(type(of: error))")
                 return
@@ -120,7 +120,7 @@ final class EnvironmentConfigTests: XCTestCase {
         sessionTimeout: TimeInterval? = nil,
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
-        env: [String: String]
+        env: ButtonHeistEnvironment
     ) -> EnvironmentConfig {
         EnvironmentConfig.resolve(
             deviceFilter: deviceFilter,
@@ -129,11 +129,16 @@ final class EnvironmentConfigTests: XCTestCase {
             connectionTimeout: connectionTimeout,
             autoReconnect: autoReconnect,
             fileConfig: nil,
-            env: env
+            environment: env
         )
     }
 
-    private func environment(_ values: [EnvironmentKey: String]) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
+    private func environment(_ values: [EnvironmentKey: String]) -> ButtonHeistEnvironment {
+        ButtonHeistEnvironment(
+            device: values[.buttonheistDevice],
+            token: values[.buttonheistToken],
+            sessionTimeout: values[.buttonheistSessionTimeout],
+            connectionTimeout: values[.buttonheistConnectionTimeout]
+        )
     }
 }

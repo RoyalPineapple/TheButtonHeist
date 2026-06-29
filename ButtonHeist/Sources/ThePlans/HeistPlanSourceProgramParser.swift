@@ -24,7 +24,7 @@ extension HeistPlanSourceParser {
         allowDefinitions: Bool
     ) throws -> ParsedHeistBody {
         var definitions: [HeistPlanAdmissionCandidate] = []
-        var steps: [HeistStep] = []
+        var steps: [HeistStepAdmissionCandidate] = []
         var seenStep = false
         while true {
             skipSemicolons()
@@ -142,7 +142,7 @@ extension HeistPlanSourceParser {
         path: [String],
         parameter: HeistParameter,
         definitions: [HeistPlanAdmissionCandidate],
-        body: [HeistStep]
+        body: [HeistStepAdmissionCandidate]
     ) -> HeistPlanAdmissionCandidate {
         guard let first = path.first else {
             return HeistPlanAdmissionCandidate(parameter: parameter, definitions: definitions, body: body)
@@ -190,7 +190,7 @@ extension HeistPlanSourceParser {
         definition.parameter == .none && definition.body.isEmpty && !definition.definitions.isEmpty
     }
 
-    mutating func parseStatement() throws -> [HeistStep] {
+    mutating func parseStatement() throws -> [HeistStepAdmissionCandidate] {
         let tryPrefix = try parseTryPrefixIfPresent()
         if let tryPrefix {
             if let correction = runHeistCorrectionAfterTryPrefix(startingAt: index) {
@@ -206,52 +206,52 @@ extension HeistPlanSourceParser {
 
         switch name {
         case ["Activate"]:
-            return [try parseActionStep(command: parseElementTargetAction("Activate", makeCommand: HeistActionCommand.activate))]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Activate", makeCommand: HeistActionCommand.activate)))]
         case ["Increment"]:
-            return [try parseActionStep(command: parseElementTargetAction("Increment", makeCommand: HeistActionCommand.increment))]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Increment", makeCommand: HeistActionCommand.increment)))]
         case ["Decrement"]:
-            return [try parseActionStep(command: parseElementTargetAction("Decrement", makeCommand: HeistActionCommand.decrement))]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseElementTargetAction("Decrement", makeCommand: HeistActionCommand.decrement)))]
         case ["TypeText"]:
-            return [try parseActionStep(command: parseTypeTextAction())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseTypeTextAction()))]
         case ["ClearText"]:
-            return [try parseActionStep(command: parseClearTextAction())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseClearTextAction()))]
         case ["CustomAction"]:
-            return [try parseActionStep(command: parseCustomAction())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseCustomAction()))]
         case ["Rotor"]:
-            return [try parseActionStep(command: parseRotorAction())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseRotorAction()))]
         case ["SetPasteboard"]:
-            return [try parseActionStep(command: parseSetPasteboardAction())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseSetPasteboardAction()))]
         case ["TakeScreenshot"]:
-            return [try parseActionStep(command: parseTakeScreenshotAction())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseTakeScreenshotAction()))]
         case ["Edit"]:
-            return [try parseActionStep(command: parseEditAction())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseEditAction()))]
         case ["DismissKeyboard"]:
-            return [try parseActionStep(command: parseDismissKeyboardAction())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseDismissKeyboardAction()))]
         case ["Mechanical", "Tap"]:
-            return [try parseActionStep(command: parseMechanicalTap())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalTap()))]
         case ["Mechanical", "LongPress"]:
-            return [try parseActionStep(command: parseMechanicalLongPress())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalLongPress()))]
         case ["Mechanical", "Swipe"]:
-            return [try parseActionStep(command: parseMechanicalSwipe())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalSwipe()))]
         case ["Mechanical", "Drag"]:
-            return [try parseActionStep(command: parseMechanicalDrag())]
+            return [HeistStepAdmissionCandidate(try parseActionStep(command: parseMechanicalDrag()))]
         case ["WaitFor"]:
-            return [try parseWaitFor()]
+            return [HeistStepAdmissionCandidate(try parseWaitFor())]
         case ["If"]:
-            return [try parseIf()]
+            return [HeistStepAdmissionCandidate(try parseIf())]
         case ["ForEach"]:
-            return [try parseForEach()]
+            return [HeistStepAdmissionCandidate(try parseForEach())]
         case ["RepeatUntil"]:
-            return [try parseRepeatUntil()]
+            return [HeistStepAdmissionCandidate(try parseRepeatUntil())]
         case ["HeistPlan"]:
             let plan = try parseHeistPlanAfterCallee(allowDefinitions: false)
-            return [.heist(plan.uncheckedPlanForRuntimeSafetyValidation())]
+            return [.heist(plan)]
         case ["RunHeist"]:
-            return [try parseRunHeist()]
+            return [HeistStepAdmissionCandidate(try parseRunHeist())]
         case ["Warn"]:
-            return [try parseWarn()]
+            return [HeistStepAdmissionCandidate(try parseWarn())]
         case ["Fail"]:
-            return [try parseFail()]
+            return [HeistStepAdmissionCandidate(try parseFail())]
         default:
             throw error(previous, "unsupported ButtonHeist source statement '\(name.joined(separator: "."))'")
         }

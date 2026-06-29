@@ -377,16 +377,10 @@ private extension HeistPlanning {
             return .failure([HeistPlanningError.emptyInlineSource(commandName: commandName).diagnostic])
         }
 
-        do {
-            return .success(try compileHeistPlanSource(
-                source,
-                sourceName: "\(commandName)-inline.plan"
-            ), diagnostics: [])
-        } catch let error as HeistPlanSourceCompilerError {
-            return .failure([error.diagnostic])
-        } catch {
-            return .failure([HeistPlanningError.invalidPlanSource(String(describing: error)).diagnostic])
-        }
+        return HeistPlanSourceCompiler().compileResult(
+            source,
+            sourceName: "\(commandName)-inline.plan"
+        )
     }
 }
 
@@ -525,7 +519,7 @@ extension HeistPlanSourceParser {
 
 struct ParsedHeistBody {
     let definitions: [HeistPlanAdmissionCandidate]
-    let steps: [HeistStep]
+    let steps: [HeistStepAdmissionCandidate]
 }
 
 struct HeistTryPrefix {

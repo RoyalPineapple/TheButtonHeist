@@ -1,6 +1,6 @@
 import XCTest
 import Network
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 import TheScore
 
 final class TargetConfigTests: XCTestCase {
@@ -115,14 +115,14 @@ final class TargetConfigTests: XCTestCase {
             .buttonheistToken: "env-token",
         ])
 
-        let resolved = TargetConfigResolver.resolveEffective(targetName: "sim1", config: config, env: env)
+        let resolved = TargetConfigResolver.resolveEffective(targetName: "sim1", config: config, environment: env)
         XCTAssertEqual(resolved?.device, "127.0.0.1:9999")
         XCTAssertEqual(resolved?.token, "env-token")
     }
 
     func testEnvDeviceWithoutTokenUsesNilToken() {
         let env = environment([.buttonheistDevice: "127.0.0.1:9999"])
-        let resolved = TargetConfigResolver.resolveEffective(config: nil, env: env)
+        let resolved = TargetConfigResolver.resolveEffective(config: nil, environment: env)
         XCTAssertEqual(resolved?.device, "127.0.0.1:9999")
         XCTAssertNil(resolved?.token)
     }
@@ -132,7 +132,7 @@ final class TargetConfigTests: XCTestCase {
             targets: ["sim1": TargetConfig(device: "127.0.0.1:1455", token: "t1")],
             defaultTarget: nil
         )
-        let resolved = TargetConfigResolver.resolveEffective(targetName: "sim1", config: config, env: [:])
+        let resolved = TargetConfigResolver.resolveEffective(targetName: "sim1", config: config, environment: .empty)
         XCTAssertEqual(resolved?.device, "127.0.0.1:1455")
         XCTAssertEqual(resolved?.token, "t1")
     }
@@ -145,12 +145,12 @@ final class TargetConfigTests: XCTestCase {
             ],
             defaultTarget: "sim2"
         )
-        let resolved = TargetConfigResolver.resolveEffective(config: config, env: [:])
+        let resolved = TargetConfigResolver.resolveEffective(config: config, environment: .empty)
         XCTAssertEqual(resolved?.device, "127.0.0.1:1456")
     }
 
     func testNoConfigNoEnvReturnsNil() {
-        let resolved = TargetConfigResolver.resolveEffective(config: nil, env: [:])
+        let resolved = TargetConfigResolver.resolveEffective(config: nil, environment: .empty)
         XCTAssertNil(resolved)
     }
 
@@ -159,7 +159,7 @@ final class TargetConfigTests: XCTestCase {
             targets: ["sim1": TargetConfig(device: "127.0.0.1:1455")],
             defaultTarget: nil
         )
-        let resolved = TargetConfigResolver.resolveEffective(targetName: "unknown", config: config, env: [:])
+        let resolved = TargetConfigResolver.resolveEffective(targetName: "unknown", config: config, environment: .empty)
         XCTAssertNil(resolved)
     }
 
@@ -169,7 +169,7 @@ final class TargetConfigTests: XCTestCase {
             defaultTarget: "sim1"
         )
         let env = environment([.buttonheistToken: "env-token"])
-        let resolved = TargetConfigResolver.resolveEffective(config: config, env: env)
+        let resolved = TargetConfigResolver.resolveEffective(config: config, environment: env)
         XCTAssertEqual(resolved?.device, "127.0.0.1:1455")
         XCTAssertEqual(resolved?.token, "env-token")
     }
@@ -644,7 +644,12 @@ final class TargetConfigTests: XCTestCase {
         XCTAssertEqual(original, decoded)
     }
 
-    private func environment(_ values: [EnvironmentKey: String]) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
+    private func environment(_ values: [EnvironmentKey: String]) -> ButtonHeistEnvironment {
+        ButtonHeistEnvironment(
+            device: values[.buttonheistDevice],
+            token: values[.buttonheistToken],
+            sessionTimeout: values[.buttonheistSessionTimeout],
+            connectionTimeout: values[.buttonheistConnectionTimeout]
+        )
     }
 }

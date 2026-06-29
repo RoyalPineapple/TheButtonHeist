@@ -1,6 +1,6 @@
 import XCTest
 import Network
-@testable import ButtonHeist
+@_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 /// `@unchecked Sendable` justification: all mutable storage is protected by `lock`.
 private final class SendContentRecorder: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment

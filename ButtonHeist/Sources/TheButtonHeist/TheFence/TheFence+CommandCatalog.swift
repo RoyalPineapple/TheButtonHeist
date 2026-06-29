@@ -1,7 +1,7 @@
 import Foundation
 import TheScore
 
-public enum FenceCommandFamily: String, Sendable, CaseIterable {
+@_spi(ButtonHeistTooling) public enum FenceCommandFamily: String, Sendable, CaseIterable {
     case session
     case observation
     case assertion
@@ -134,7 +134,7 @@ struct FenceCommandExecution: OptionSet, Sendable, Equatable {
     static let payloadCheckedHeistPrimitive = FenceCommandExecution(rawValue: 1 << 2)
 }
 
-public struct FenceCommandDescriptor: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public let family: FenceCommandFamily
     public let requiresConnectionBeforeDispatch: Bool
@@ -221,7 +221,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     }
 }
 
-public struct FenceCommandProjection: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct FenceCommandProjection: Sendable, Equatable {
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
     public let mcpAnnotations: MCPToolAnnotationSpec?
@@ -266,7 +266,7 @@ public struct FenceCommandProjection: Sendable, Equatable {
     }
 }
 
-public extension TheFence.Command {
+@_spi(ButtonHeistTooling) public extension TheFence.Command {
     var descriptor: FenceCommandDescriptor { FenceCommandRegistry.descriptor(for: self) }
 
     var family: FenceCommandFamily { FenceCommandRegistry.family(for: self) }

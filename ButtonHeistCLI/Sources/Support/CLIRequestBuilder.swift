@@ -1,10 +1,17 @@
-import ButtonHeist
+@_spi(ButtonHeistTooling) import ButtonHeist
 import Foundation
 
 struct CLIParsedRequest {
-    let command: TheFence.Command
-    let arguments: TheFence.CommandArgumentEnvelope
+    let operation: FenceOperationRequest
     let requestId: PublicRequestId?
+
+    var command: TheFence.Command {
+        operation.command
+    }
+
+    var arguments: TheFence.CommandArgumentEnvelope {
+        operation.arguments
+    }
 }
 
 struct CLIRequestBuildError: Error, CustomStringConvertible {
@@ -60,8 +67,7 @@ enum CLIRequestBuilder {
             switch TheFence.Command.routeCLICommandEnvelope(envelope.arguments, context: "JSON input") {
             case .success(let routed):
                 return CLIParsedRequest(
-                    command: routed.command,
-                    arguments: routed.arguments,
+                    operation: routed,
                     requestId: requestId
                 )
             case .failure(let error):

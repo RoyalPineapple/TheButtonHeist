@@ -715,7 +715,7 @@ struct PredicateObservationReduction {
 
 struct PredicateObservationEvidence {
     private let snapshot: PredicateObservationSnapshot
-    private let stateMatches: PredicateStateMatchSet
+    private let stateMatches: ElementMatchSet
     private let transition: PredicateTransitionEvidence?
 
     fileprivate init(
@@ -723,7 +723,7 @@ struct PredicateObservationEvidence {
         transition: PredicateTransitionEvidence?
     ) {
         self.snapshot = snapshot
-        self.stateMatches = PredicateStateMatchSet(interface: snapshot.interface)
+        self.stateMatches = ElementMatchSet(interface: snapshot.interface)
         self.transition = transition
     }
 
@@ -746,7 +746,7 @@ struct PredicateObservationEvidence {
     func evaluate(_ predicate: AccessibilityPredicate) -> ExpectationResult {
         switch predicate {
         case .state(let state):
-            return stateMatches.evaluate(state, predicate: predicate)
+            return state.evaluate(in: stateMatches).expectation(for: predicate)
         case .changePredicate, .noChangePredicate:
             guard let transition else {
                 return ExpectationResult(met: false, predicate: predicate, actual: "noTrace")
@@ -779,131 +779,6 @@ private struct PredicateObservationSnapshot {
         self.interface = observation.state.interface
         self.trace = observation.accessibilityTrace
         self.summary = observation.summary
-    }
-}
-
-private struct PredicateStateMatch: Hashable, Sendable {
-    let path: TreePath
-    let traversalOrder: Int
-    let element: HeistElement
-
-    static func == (lhs: PredicateStateMatch, rhs: PredicateStateMatch) -> Bool {
-        lhs.path == rhs.path
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(path)
-    }
-}
-
-private struct PredicateStateMatchSet {
-    static let empty = PredicateStateMatchSet([])
-
-    private let matches: [PredicateStateMatch]
-    private let paths: Set<TreePath>
-
-    init(_ matches: [PredicateStateMatch]) {
-        var paths = Set<TreePath>()
-        var uniqueMatches: [PredicateStateMatch] = []
-        uniqueMatches.reserveCapacity(matches.count)
-
-        for match in matches where paths.insert(match.path).inserted {
-            uniqueMatches.append(match)
-        }
-
-        self.matches = uniqueMatches
-        self.paths = paths
-    }
-
-    init(interface: Interface) {
-        let annotationsByPath = interface.annotations.elementByPath
-        self.init(interface.tree.pathIndexedElements.enumerated().map { traversalOrder, item in
-            PredicateStateMatch(
-                path: item.path,
-                traversalOrder: traversalOrder,
-                element: HeistElement(
-                    accessibilityElement: item.element,
-                    annotation: annotationsByPath[item.path]
-                )
-            )
-        })
-    }
-
-    var isEmpty: Bool {
-        matches.isEmpty
-    }
-
-    var elements: [HeistElement] {
-        matches.map(\.element)
-    }
-
-    func evaluate(
-        _ state: AccessibilityPredicate.State,
-        predicate: AccessibilityPredicate?
-    ) -> ExpectationResult {
-        evaluate(state).expectation(for: predicate)
-    }
-
-    private func evaluate(_ state: AccessibilityPredicate.State) -> PredicateEvaluationResult {
-        switch state.contract {
-        case .element(let requirement, let predicate):
-            let isPresent = !matching(predicate).isEmpty
-            let met = requirement.isMet(isPresent: isPresent)
-            return PredicateEvaluationResult(
-                met: met,
-                actual: met ? nil : requirement.failureDescription(for: predicate)
-            )
-        case .target(let requirement, let target):
-            let isPresent = !matching(target).isEmpty
-            let met = requirement.isMet(isPresent: isPresent)
-            return PredicateEvaluationResult(
-                met: met,
-                actual: met ? nil : requirement.failureDescription(for: target)
-            )
-        case .all(let states):
-            guard !states.isEmpty else {
-                return PredicateEvaluationResult(
-                    met: false,
-                    actual: AccessibilityPredicateContract.Violation.emptyStateAll.evaluationDescription
-                )
-            }
-            let failures = states.compactMap { state -> String? in
-                let outcome = evaluate(state)
-                return outcome.met ? nil : (outcome.actual ?? state.description)
-            }
-            return PredicateEvaluationResult(
-                met: failures.isEmpty,
-                actual: failures.isEmpty ? nil : failures.joined(separator: "; ")
-            )
-        }
-    }
-
-    private func intersection(_ other: PredicateStateMatchSet) -> PredicateStateMatchSet {
-        PredicateStateMatchSet(matches.filter { other.paths.contains($0.path) })
-    }
-
-    private func matching(_ predicate: ElementPredicate) -> PredicateStateMatchSet {
-        guard predicate.hasPredicates else { return .empty }
-        guard let firstCheck = predicate.checks.first else { return .empty }
-
-        let firstMatches = matching(firstCheck)
-        return predicate.checks.dropFirst().reduce(firstMatches) { narrowedMatches, check in
-            narrowedMatches.intersection(matching(check))
-        }
-    }
-
-    private func matching(_ target: ElementTarget) -> PredicateStateMatchSet {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            let predicateMatches = matching(predicate)
-            guard let ordinal else { return predicateMatches }
-            guard predicateMatches.matches.indices.contains(ordinal) else { return .empty }
-            return PredicateStateMatchSet([predicateMatches.matches[ordinal]])
-        }
-    }
-
-    private func matching(_ check: ElementPredicateCheck<String>) -> PredicateStateMatchSet {
-        PredicateStateMatchSet(matches.filter { check.matches($0.element) })
     }
 }
 

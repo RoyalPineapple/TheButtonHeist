@@ -103,6 +103,12 @@ struct StartupInfoPlist: Equatable, Sendable {
     }
 }
 
+enum StartupInfoPlistBridge {
+    static func main() -> StartupInfoPlist {
+        StartupInfoPlist(bundle: .main)
+    }
+}
+
 enum InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
     case bool(Bool)
     case string(String)
@@ -210,11 +216,41 @@ struct StartupEnvironmentKey: RawRepresentable, Hashable, Sendable {
     static let scope = StartupEnvironmentKey(.insideJobScope)
     static let sessionTimeout = StartupEnvironmentKey(.insideJobSessionTimeout)
     static let fingerprintsEnabled = StartupEnvironmentKey(rawValue: "INSIDEJOB_FINGERPRINTS")
+
+    fileprivate static let processProjectionKeys: [StartupEnvironmentKey] = [
+        .disableAutoStart,
+        .token,
+        .instanceId,
+        .port,
+        .scope,
+        .sessionTimeout,
+        .fingerprintsEnabled,
+    ]
 }
 
-private extension Dictionary where Key == String, Value == String {
-    subscript(_ key: StartupEnvironmentKey) -> String? {
-        self[key.rawValue]
+struct StartupEnvironment: Equatable, Sendable {
+    static let empty = StartupEnvironment()
+
+    private let values: [StartupEnvironmentKey: String]
+
+    init(values: [StartupEnvironmentKey: String] = [:]) {
+        self.values = values
+    }
+
+    fileprivate init(rawValues: [String: String]) {
+        self.values = Dictionary(uniqueKeysWithValues: StartupEnvironmentKey.processProjectionKeys.compactMap { key in
+            rawValues[key.rawValue].map { (key, $0) }
+        })
+    }
+
+    subscript(key: StartupEnvironmentKey) -> String? {
+        values[key]
+    }
+}
+
+enum StartupEnvironmentBridge {
+    static func current() -> StartupEnvironment {
+        StartupEnvironment(rawValues: ProcessInfo.processInfo.environment)
     }
 }
 
@@ -253,8 +289,8 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     static func resolve(
-        env: [String: String] = ProcessInfo.processInfo.environment,
-        infoPlist: StartupInfoPlist = StartupInfoPlist(bundle: .main)
+        env: StartupEnvironment = StartupEnvironmentBridge.current(),
+        infoPlist: StartupInfoPlist = StartupInfoPlistBridge.main()
     ) -> StartupConfiguration {
         var warnings: [StartupConfigurationWarning] = []
         let plist = infoPlist
@@ -314,7 +350,7 @@ struct StartupConfiguration: Equatable, Sendable {
     private static func resolveString(
         envKey: StartupEnvironmentKey,
         plistKey: StartupInfoPlistKey,
-        env: [String: String],
+        env: StartupEnvironment,
         plist: StartupInfoPlist,
         absentSource: StartupConfigurationSource,
         warnings: inout [StartupConfigurationWarning]
@@ -337,7 +373,7 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     private static func resolvePort(
-        env: [String: String],
+        env: StartupEnvironment,
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<UInt16> {
@@ -391,7 +427,7 @@ struct StartupConfiguration: Equatable, Sendable {
         plistKey: StartupInfoPlistKey,
         defaultValue: TimeInterval,
         clamp: (TimeInterval) -> TimeInterval,
-        env: [String: String],
+        env: StartupEnvironment,
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<TimeInterval> {
@@ -434,7 +470,7 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     private static func resolveAllowedScopes(
-        env: [String: String],
+        env: StartupEnvironment,
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<Set<ConnectionScope>> {
@@ -477,7 +513,7 @@ struct StartupConfiguration: Equatable, Sendable {
         envKey: StartupEnvironmentKey,
         plistKey: StartupInfoPlistKey,
         defaultValue: Bool,
-        env: [String: String],
+        env: StartupEnvironment,
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<Bool> {
@@ -524,7 +560,7 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     private static func resolveFingerprintsEnabled(
-        env: [String: String],
+        env: StartupEnvironment,
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<Bool> {
