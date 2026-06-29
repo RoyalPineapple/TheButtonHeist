@@ -49,6 +49,12 @@ struct VisibleSemanticObservationEvidence {
     let settleOutcome: SettleOutcome
 }
 
+struct PostActionSettleObservation {
+    let settle: SettleSession.Outcome
+    let event: SettledSemanticObservationEvent?
+    let diagnosticScreen: Screen?
+}
+
 private struct SemanticObservationFulfillmentState {
     typealias EventsByFulfilledScope = [SemanticObservationScope: SettledSemanticObservationEvent]
 
@@ -368,17 +374,17 @@ final class SemanticObservationStream {
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         commitScope: SemanticObservationScope = .visible,
         settleOutcome providedOutcome: SettleSession.Outcome? = nil
-    ) async -> (settle: SettleSession.Outcome, event: SettledSemanticObservationEvent?, diagnosticScreen: Screen?) {
+    ) async -> PostActionSettleObservation {
         guard let stash else {
-            return (
-                SettleSession.Outcome(
+            return PostActionSettleObservation(
+                settle: SettleSession.Outcome(
                     outcome: .cancelled(timeMs: 0),
                     events: [],
                     finalScreen: nil,
                     elementsByKey: [:]
                 ),
-                nil,
-                nil
+                event: nil,
+                diagnosticScreen: nil
             )
         }
         let outcome: SettleSession.Outcome
@@ -397,13 +403,13 @@ final class SemanticObservationStream {
         if case .cancelled = outcome.outcome {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             stash.recordFailedSettleDiagnosticEvidence(outcome.finalScreen)
-            return (outcome, nil, nil)
+            return PostActionSettleObservation(settle: outcome, event: nil, diagnosticScreen: nil)
         }
 
         guard let finalScreen = outcome.finalScreen else {
             latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
             stash.recordFailedSettleDiagnosticEvidence(nil)
-            return (outcome, nil, nil)
+            return PostActionSettleObservation(settle: outcome, event: nil, diagnosticScreen: nil)
         }
         if outcome.outcome.didSettleCleanly {
             let event: SettledSemanticObservationEvent
@@ -413,12 +419,16 @@ final class SemanticObservationStream {
             case .discovery:
                 event = commitSettledDiscoveryObservation(stash.settledSemanticScreen.merging(finalScreen))
             }
-            return (outcome, event, nil)
+            return PostActionSettleObservation(settle: outcome, event: event, diagnosticScreen: nil)
         }
 
         latestSettleFailureDiagnostic = SettleFailureDiagnostic.message(for: outcome)
         stash.recordFailedSettleDiagnosticEvidence(finalScreen)
-        return (outcome, nil, stash.latestFailedSettleDiagnosticEvidence)
+        return PostActionSettleObservation(
+            settle: outcome,
+            event: nil,
+            diagnosticScreen: stash.latestFailedSettleDiagnosticEvidence
+        )
     }
 
     func clearSettledObservationHistory() {

@@ -18,18 +18,18 @@ extension TheBrains {
             return .failure("Could not access accessibility tree")
         }
 
-        guard let (image, bounds) = stash.captureScreen() else {
+        guard let screenCapture = stash.captureScreen() else {
             return .failure("Could not access app window")
         }
 
-        guard let pngData = image.pngData() else {
+        guard let pngData = screenCapture.image.pngData() else {
             return .failure("Failed to encode screen as PNG")
         }
 
         return .success(ScreenPayload(
             pngData: pngData.base64EncodedString(),
-            width: bounds.width,
-            height: bounds.height,
+            width: screenCapture.bounds.width,
+            height: screenCapture.bounds.height,
             interface: observation.interface
         ))
     }

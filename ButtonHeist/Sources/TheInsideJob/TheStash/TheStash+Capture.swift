@@ -6,8 +6,13 @@ import UIKit
 
 extension TheStash {
 
+    struct ScreenCapture {
+        let image: UIImage
+        let bounds: CGRect
+    }
+
     /// Capture the screen by compositing all traversable windows.
-    func captureScreen() -> (image: UIImage, bounds: CGRect)? {
+    func captureScreen() -> ScreenCapture? {
         let windows = tripwire.getTraversableWindows()
         guard let plan = Self.makeScreenCapturePlan(for: windows) else { return nil }
 
@@ -22,7 +27,7 @@ extension TheStash {
                 context.restoreGState()
             }
         }
-        return (image, CGRect(origin: .zero, size: plan.bounds.size))
+        return ScreenCapture(image: image, bounds: CGRect(origin: .zero, size: plan.bounds.size))
     }
 
     struct ScreenCapturePlan {

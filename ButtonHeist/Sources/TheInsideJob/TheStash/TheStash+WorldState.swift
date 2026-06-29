@@ -10,6 +10,11 @@ import TheScore
 
 extension TheStash {
 
+    struct SemanticInterfaceSnapshot {
+        let interface: Interface
+        let hash: String
+    }
+
     /// Clear cached element data (used on suspend).
     func clearCache() {
         clearWorldForLifecycleReset()
@@ -197,17 +202,17 @@ extension TheStash {
     }
 
     /// Single-build semantic variant for state capture and delta projection.
-    func semanticInterfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String) {
+    func semanticInterfaceWithHash(timestamp: Date = Date()) -> SemanticInterfaceSnapshot {
         let interface = semanticInterface(timestamp: timestamp)
-        return (interface, AccessibilityTrace.Capture.hash(interface))
+        return SemanticInterfaceSnapshot(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
     }
 
     func semanticInterfaceWithHash(
         for screen: Screen,
         timestamp: Date = Date()
-    ) -> (interface: Interface, hash: String) {
+    ) -> SemanticInterfaceSnapshot {
         let interface = WireConversion.toSemanticInterface(from: screen, timestamp: timestamp)
-        return (interface, AccessibilityTrace.Capture.hash(interface))
+        return SemanticInterfaceSnapshot(interface: interface, hash: AccessibilityTrace.Capture.hash(interface))
     }
 
     private func clearWorldForLifecycleReset() {
