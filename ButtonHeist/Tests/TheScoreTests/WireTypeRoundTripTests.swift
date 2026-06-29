@@ -138,6 +138,37 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded, ActionPerformanceTiming(settleMs: 74))
     }
 
+    func testActionPerformanceTimingMergingPreservesExistingFieldsAndAppliesOverlay() {
+        let original = ActionPerformanceTiming(
+            beforeObservationMs: 1,
+            targetResolutionMs: 2,
+            actionDispatchMs: 3,
+            interactionMs: 4,
+            settleMs: 5,
+            finalSemanticEvidenceMs: 6,
+            receiptGenerationMs: 7,
+            totalMs: 8
+        )
+        let overlay = ActionPerformanceTiming(
+            targetResolutionMs: 20,
+            interactionMs: 40,
+            receiptGenerationMs: 70,
+            totalMs: 80
+        )
+
+        XCTAssertEqual(original.merging(nil), original)
+        XCTAssertEqual(original.merging(overlay), ActionPerformanceTiming(
+            beforeObservationMs: 1,
+            targetResolutionMs: 20,
+            actionDispatchMs: 3,
+            interactionMs: 40,
+            settleMs: 5,
+            finalSemanticEvidenceMs: 6,
+            receiptGenerationMs: 70,
+            totalMs: 80
+        ))
+    }
+
     func testActionResultRoundTripPreservesTiming() throws {
         let timing = ActionPerformanceTiming(
             beforeObservationMs: 5,
@@ -158,6 +189,41 @@ final class WireTypeRoundTripTests: XCTestCase {
 
         let decoded = try assertRoundTrip(result, encoder: encoder, decoder: decoder)
         XCTAssertEqual(decoded.timing, timing)
+    }
+
+    func testActionResultWithTimingMergesWithoutErasingExistingFields() {
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            timing: ActionPerformanceTiming(
+                beforeObservationMs: 1,
+                targetResolutionMs: 2,
+                actionDispatchMs: 3,
+                interactionMs: 4,
+                settleMs: 5,
+                finalSemanticEvidenceMs: 6,
+                receiptGenerationMs: 7,
+                totalMs: 8
+            )
+        )
+        let overlay = ActionPerformanceTiming(
+            beforeObservationMs: 10,
+            actionDispatchMs: 30,
+            settleMs: 50,
+            finalSemanticEvidenceMs: 60
+        )
+
+        XCTAssertEqual(result.withTiming(nil), result)
+        XCTAssertEqual(result.withTiming(overlay).timing, ActionPerformanceTiming(
+            beforeObservationMs: 10,
+            targetResolutionMs: 2,
+            actionDispatchMs: 30,
+            interactionMs: 4,
+            settleMs: 50,
+            finalSemanticEvidenceMs: 60,
+            receiptGenerationMs: 7,
+            totalMs: 8
+        ))
     }
 
     // MARK: - CustomActionTarget

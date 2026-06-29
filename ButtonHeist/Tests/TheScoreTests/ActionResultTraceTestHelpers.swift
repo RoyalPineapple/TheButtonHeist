@@ -203,7 +203,7 @@ private enum TestActionResultTrace {
                 height: element.frameHeight
             )),
             activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
-            usesDefaultActivationPoint: false,
+            usesDefaultActivationPoint: usesDefaultActivationPoint(element),
             customActions: [],
             customContent: element.customContent?.map {
                 AccessibilityElement.CustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
@@ -212,6 +212,11 @@ private enum TestActionResultTrace {
             accessibilityLanguage: nil,
             respondsToUserInteraction: element.respondsToUserInteraction
         )
+    }
+
+    private static func usesDefaultActivationPoint(_ element: HeistElement) -> Bool {
+        element.activationPointX == element.frameX + (element.frameWidth / 2) &&
+            element.activationPointY == element.frameY + (element.frameHeight / 2)
     }
 
     private static func beforeElements(for edits: ElementEdits, elementCount: Int) -> [HeistElement] {

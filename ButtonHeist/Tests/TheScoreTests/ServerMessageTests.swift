@@ -609,6 +609,19 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    func testActionResultRejectsHeistExecutionPayloadForActivate() throws {
+        let json = """
+        {"success":true,"method":"activate","payload":{"kind":"heistExecution","data":{"steps":[],"durationMs":42}}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("heistExecution ActionResult payload is only valid for heistPlan"),
+                "\(error)"
+            )
+        }
+    }
+
     func testActionResultRejectsValuePayloadForNonValueCarryingMethod() throws {
         let json = """
         {"success":true,"method":"activate","payload":{"kind":"value","data":"Hello"}}

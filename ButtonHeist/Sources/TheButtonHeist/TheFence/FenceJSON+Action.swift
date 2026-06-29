@@ -176,11 +176,6 @@ extension ActionResult {
         return .ok
     }
 
-    /// Error class surfaced to clients; nil on success.
-    var publicErrorClass: String? {
-        success ? nil : (errorKind ?? .actionFailed).rawValue
-    }
-
     /// Canonical public failure projection shared by JSON and compact renderers.
     func diagnosticFailureProjection(fallbackMessage: String) -> ActionFailureProjection? {
         guard !success else { return nil }
