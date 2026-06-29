@@ -7,7 +7,7 @@ import Foundation
 struct DeviceResolutionTarget: Equatable, Sendable {
     enum Kind: Equatable, Sendable {
         case automatic
-        case query(String)
+        case query(DiscoveryResolutionQuery)
         case direct(DiscoveredDevice)
     }
 
@@ -19,13 +19,12 @@ struct DeviceResolutionTarget: Equatable, Sendable {
             return
         }
 
-        let query = filter.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
+        guard let query = DiscoveryResolutionQuery(filter) else {
             self.kind = .automatic
             return
         }
 
-        if let directDevice = DiscoveredDevice.directConnectTarget(from: query) {
+        if let directDevice = DiscoveredDevice.directConnectTarget(from: query.rawValue) {
             self.kind = .direct(directDevice)
             return
         }
@@ -38,7 +37,7 @@ struct DeviceResolutionTarget: Equatable, Sendable {
         case .automatic:
             return "(none)"
         case .query(let query):
-            return query
+            return query.rawValue
         case .direct(let device):
             return device.name
         }

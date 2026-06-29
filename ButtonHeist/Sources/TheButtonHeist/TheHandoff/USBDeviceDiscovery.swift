@@ -19,7 +19,7 @@ final class USBDeviceDiscovery: DeviceDiscovering {
 
     private let port: UInt16
     private var pollTask: Task<Void, Never>?
-    private var knownDevices: [String: DiscoveredDevice] = [:]
+    private var knownDevices: [DiscoveryDeviceID: DiscoveredDevice] = [:]
 
     var onEvent: (@ButtonHeistActor (DiscoveryEvent) -> Void)?
 
@@ -80,13 +80,13 @@ final class USBDeviceDiscovery: DeviceDiscovering {
             return
         }
 
-        var currentIDs = Set<String>()
+        var currentIDs = Set<DiscoveryDeviceID>()
 
         for connectedDevice in connectedDevices {
-            let id = "usb-\(connectedDevice.identifier)"
-            currentIDs.insert(id)
+            let deviceID = DiscoveryDeviceID.usbIdentifier(connectedDevice.identifier)
+            currentIDs.insert(deviceID)
 
-            if knownDevices[id] == nil {
+            if knownDevices[deviceID] == nil {
                 guard let nwPort = NWEndpoint.Port(rawValue: port) else {
                     logger.error("Invalid port number: \(self.port)")
                     return
@@ -96,13 +96,13 @@ final class USBDeviceDiscovery: DeviceDiscovering {
                     port: nwPort
                 )
                 let device = DiscoveredDevice(
-                    id: id,
+                    deviceID: deviceID,
                     name: "\(connectedDevice.name) (USB)",
                     endpoint: endpoint,
                     displayDeviceName: connectedDevice.name,
                     connectionType: .usb
                 )
-                knownDevices[id] = device
+                knownDevices[deviceID] = device
                 logger.info("USB device found: \(connectedDevice.name) at \(ipv6Address):\(self.port)")
                 onEvent?(.found(device))
             }
