@@ -1,26 +1,27 @@
 # Swift Heist Authoring Boundary
 
-The Button Heist's durable language is `HeistPlan`. Canonical heist source is
-the runtime text form of that language; it is parsed by ThePlans and never by
-`swiftc`. Swift files are a trusted local authoring frontend that may generate a
-validated `HeistPlan`, but arbitrary Swift structure is not itself durable
-heist language.
+`HeistPlan` is The Button Heist durable DSL artifact boundary. Canonical heist
+source is the runtime text form of that language; it is parsed by ThePlans and
+never by `swiftc`. Swift files are a trusted local authoring frontend that MAY
+generate a validated `HeistPlan`, but arbitrary Swift structure is not itself
+durable heist language.
 
 Treat checked-in Swift files like product code, but keep the boundary explicit:
 Swift may wrap, select, name, organize, and call heists outside the DSL. If a
-behavior must survive `.heist`, JSON, catalog discovery, MCP
-composition, or canonical rendering, express it as `HeistDef`, `RunHeist`,
-`If`, `WaitFor`, `ForEach`, `Warn`, `Fail`, actions, targets, and expectations.
-Durable loops must use The Button Heist's explicit `ForEach` primitive, not native
-Swift `for`.
+behavior must survive `.heist`, catalog discovery, MCP composition, replay, or
+canonical rendering, it MUST lower to a durable `HeistPlan` expressed as
+`HeistDef`, `RunHeist`, `If`, `WaitFor`, `ForEach`, `Warn`, `Fail`, actions,
+targets, and expectations. Durable loops must use The Button Heist's explicit
+`ForEach` primitive, not native Swift `for`.
 
 `HeistPlan` is the execution model. Humans may author rich Swift DSL files that
-build a `HeistPlan`. Agents should prefer canonical heist source strings
-when sending compact heists through MCP. Standalone `.json` files are explicit
-raw HeistPlan IR for debug, import, and export; generated `.heist` package
-directories store `manifest.json` and canonical `plan.json`. Public MCP tools
-advertise only `plan` source strings and `.heist` artifact `path`s, not the raw
-JSON IR fields.
+build a `HeistPlan`. Agents SHOULD prefer canonical heist source strings when
+sending compact heists through MCP. Generated `.heist` package directories are
+durable artifacts that store `manifest.json` and canonical `plan.json`.
+Standalone `.json` files are generated runtime wire IR for diagnostics and
+tooling; they are not the authoring language. Public MCP tools advertise only
+durable `plan` source strings and `.heist` artifact `path`s, not raw wire IR
+fields or direct viewport/debug/session commands.
 
 Decoding `.json` IR or a `.heist` package reconstructs an executable
 `HeistPlan` with the body, targets, arguments, and expectations required for
@@ -35,10 +36,11 @@ details. In particular, JSON does not recover:
 
 At runtime, The Button Heist executes only `HeistPlan`. Swift result builders are
 convenience for building AST values; they are not the language contract and do
-not preserve Swift source structure. Canonical heist source is the
-constrained runtime authoring language accepted by `run_heist(plan:)`; `.json`
-is raw IR; `.heist` is a generated package artifact. Swift DSL, canonical
-source, and canonical plan JSON are projections of the same AST. That AST
+not preserve Swift source structure. Canonical heist source is the constrained
+runtime authoring language accepted by `run_heist(plan:)` when it parses to a
+durable plan; `.json` is internal/generated raw IR; `.heist` is a durable
+generated package artifact. Swift DSL, canonical source, and canonical plan JSON
+are projections of the same AST. That AST
 belongs to the broader [Accessibility Contract](ACCESSIBILITY-CONTRACT.md):
 semantic intent enters the runtime and settled semantic evidence comes back.
 
@@ -138,7 +140,7 @@ Runtime admission and lint are separate:
 - `.compositionQuality` lint flags composed plans that read like transcripts
   instead of compact semantic tests.
 - `.strictTest` lint treats missing expectations, mechanical commands,
-  viewport/debug action steps, and empty branches as
+  viewport/debug/session action steps, and empty branches as
   test quality failures.
 
 Mechanical commands are explicit escape hatches. Use the namespace to make that
@@ -148,8 +150,8 @@ intent visible:
 Mechanical.Tap(x: 120, y: 400)
 ```
 
-Viewport/debug commands such as `scroll`, `scroll_to_edge`, and
-`scroll_to_visible` are direct inspection commands, not durable Swift Heist
+Viewport/debug/session commands such as `scroll`, `scroll_to_edge`, and
+`scroll_to_visible` are direct client commands, not durable Swift Heist
 primitives. Normal semantic actions do not need pre-action viewport movement.
 `Activate`, `TypeText`, `Increment`, `Decrement`, custom actions, and rotors own
 reveal, element inflation, and live geometry through the runtime pipeline.
@@ -267,8 +269,8 @@ only in the authoring tools:
 
 - `buttonheist run_heist Flow.swift --entry makeHeist` compiles the Swift source
   to a `HeistPlan`, validates that plan for runtime behavior, then sends it down
-  the ordinary `run_heist` path — identical to passing a `.heist` package or
-  canonical ButtonHeist `plan` source.
+  the ordinary `run_heist` path — identical to passing a durable `.heist`
+  package or canonical ButtonHeist `HeistPlan` source.
 - `heist-plan compile Flow.swift --entry makeHeist --output Flow.heist` compiles
   and persists a `.heist` package (or `.json` IR) without running it.
 
@@ -276,13 +278,14 @@ The runtime never compiles arbitrary Swift. Local `.swift` files remain authorin
 tool inputs only: compile them with the CLI or `heist-plan`, then run the
 resulting plan or artifact.
 
-For MCP, `run_heist` accepts canonical ButtonHeist source via the `plan` field.
-That string is not sent to `swiftc` and is not executed as Swift. It is parsed
-by ThePlans as constrained ButtonHeist source, lowered to a `HeistPlan`, and
-validated through the same runtime plan pipeline as `.heist` artifacts and
-compiled Swift authoring output. The MCP tool still does not expose local
-Swift authoring inputs such as
-`source_file` or `entry`.
+For MCP, `run_heist` accepts durable ButtonHeist source via the `plan` field.
+The top-level source MUST parse to a `HeistPlan`. That string is not sent to
+`swiftc` and is not executed as Swift. It is parsed by ThePlans as constrained
+ButtonHeist source, lowered to a `HeistPlan`, and validated through the same
+runtime plan pipeline as `.heist` artifacts and compiled Swift authoring output.
+The MCP tool still does not expose local Swift authoring inputs such as
+`source_file` or `entry`, and it MUST NOT accept direct viewport/debug/session
+commands or raw wire IR as heist source.
 
 This runtime compiler accepts only ButtonHeist DSL constructs: semantic and
 durable mechanical actions, expectations and expectation waivers, `If`,
@@ -360,9 +363,9 @@ Swift Heist does not preserve:
 - arbitrary helper functions or closure structure
 - comments, whitespace, imports, or local constants
 - hidden pre-action viewport movement for semantic actions
-- viewport/debug commands as durable action steps
+- viewport/debug/session commands as durable action steps
 - arbitrary dynamic code over the wire
-- raw JSON IR as the agent-facing authoring format
+- raw JSON wire IR as the agent-facing authoring format
 - generic variables beyond scoped `target_ref` and string refs
 
 The durable language intentionally excludes unbounded loops, sleeps, retries,

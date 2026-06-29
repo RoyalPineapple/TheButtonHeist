@@ -29,13 +29,36 @@ extension TheFence {
     // MARK: - Handler: Executable Commands
 
     func handleClientActionRequest(_ request: ParsedRequest) async throws -> FenceResponse {
-        // Defensive fallback: the execution pipeline wraps every runtime action
-        // command as a one-step heist before this handler can run.
-        .failure(FenceError.invalidRequest("command \"\(request.command.rawValue)\" must execute as a heistPlan"))
+        let messages = try executableRuntimeActions(for: request)
+        guard messages.count == 1 else {
+            return .failure(FenceError.invalidRequest(
+                "command \"\(request.command.rawValue)\" direct dispatch requires exactly one runtime action"
+            ))
+        }
+        guard request.expectationPayload.expectation == nil else {
+            return .failure(FenceError.invalidRequest(
+                "command \"\(request.command.rawValue)\" direct dispatch does not support expect"
+            ))
+        }
+        let command = try HeistActionCommand(runtimeActionMessage: messages.first)
+        let result = try await sendAndAwaitAction(
+            .runtimeAction(command),
+            timeout: directActionTimeout(for: messages.first)
+        )
+        return .action(command: request.command, result: result)
     }
 
     func missingElementTargetResponse(command: String) -> FenceResponse {
         .failure(MissingElementTarget(command: command))
+    }
+
+    private func directActionTimeout(for message: RuntimeActionMessage) -> TimeInterval {
+        switch message {
+        case .typeText:
+            return Timeouts.longActionSeconds
+        default:
+            return Timeouts.actionSeconds
+        }
     }
 
 }

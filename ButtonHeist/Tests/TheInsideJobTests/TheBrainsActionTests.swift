@@ -664,7 +664,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
     }
 
-    func testHeistPlanDispatchesEverySupportedActionCommandThroughRuntime() async throws {
+    func testHeistPlanDispatchesEveryDurableActionCommandThroughRuntime() async throws {
         let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         let commands: [HeistActionCommand] = [
@@ -678,9 +678,6 @@ final class TheBrainsActionTests: XCTestCase {
             .mechanicalLongPress(LongPressTarget(selection: point)),
             .mechanicalSwipe(SwipeTarget(selection: .point(start: .coordinate(ScreenPoint(x: 20, y: 20)), destination: .direction(.left)))),
             .mechanicalDrag(DragTarget(start: .coordinate(ScreenPoint(x: 20, y: 20)), end: ScreenPoint(x: 80, y: 80))),
-            .viewportScroll(ScrollTarget(direction: .down)),
-            .viewportScrollToVisible(.target(target)),
-            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             .editAction(EditActionTarget(action: .paste)),
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),
             .takeScreenshot,
@@ -702,6 +699,20 @@ final class TheBrainsActionTests: XCTestCase {
         }
         XCTAssertEqual(heist.steps.count, commands.count)
         XCTAssertTrue(heist.steps.allSatisfy { $0.status == HeistExecutionStepStatus.passed })
+    }
+
+    func testViewportDebugCommandsResolveForDirectRuntimeDispatch() throws {
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
+        let commands: [(HeistActionCommand, RuntimeActionType)] = [
+            (.viewportScroll(ScrollTarget(direction: .down)), .scroll),
+            (.viewportScrollToVisible(.target(target)), .scrollToVisible),
+            (.viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)), .scrollToEdge),
+        ]
+
+        for (command, expectedType) in commands {
+            XCTAssertNotNil(command.durableHeistActionFailure)
+            XCTAssertEqual(try command.resolveForRuntimeDispatch(in: .empty).runtimeType, expectedType)
+        }
     }
 
     func testHeistActionAndWaitStepsUseSeparateRuntimeTransitions() async throws {
@@ -1626,13 +1637,14 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.reportExpectation?.actual, "no observed accessibility trace")
     }
 
-    func testViewportActionExpectationSettlesWithDiscoveryScope() async throws {
+    func testActionExpectationSettlesWithDiscoveryScope() async throws {
         let observedReady = observedState(labels: ["Long List"])
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedReady],
             execute: { _ in
-                ActionResult(success: true, method: .scrollToEdge)
+                ActionResult(success: true, method: .activate)
             },
             observedScopes: { scope in
                 observedScopes.append(scope)
@@ -1640,7 +1652,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = try HeistPlan(body: [
             .action(try ActionStep(
-                command: .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
+                command: .activate(.target(target)),
                 expectation: WaitStep(
                     predicate: .exists(ElementPredicate(label: "Long List")),
                     timeout: 0.01

@@ -13,8 +13,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_screen` | `observation` | Capture a PNG screenshot with visible interface state. |
 | `get_session_state` | `session` | Inspect connection, device, and last-action session state. |
 | `list_heists` | `heistRuntime` | List the root entry and reusable heists in a plan. Use `detail: "detailed"` when composing against available capabilities. |
-| `perform` | `heistRuntime` | Run one ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement. |
-| `run_heist` | `heistRuntime` | Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`. |
+| `perform` | `heistRuntime` | Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement. |
+| `run_heist` | `heistRuntime` | Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`. |
 
 ## StringMatch
 
@@ -134,7 +134,7 @@ Parameters:
 
 ### `perform`
 
-Run one ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
+Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
 Examples:
 `Activate(.label("Pay")).expect(.change(.screen()))`
@@ -168,7 +168,7 @@ Parameters:
 
 ### `run_heist`
 
-Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`.
+Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.
 
 Author plans as ButtonHeist source, not raw JSON IR:
 `HeistPlan("shop") { ... }`

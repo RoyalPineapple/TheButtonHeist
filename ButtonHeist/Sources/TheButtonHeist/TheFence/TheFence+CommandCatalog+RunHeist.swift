@@ -17,7 +17,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 ],
                 projection: .mcpOnly(
                     """
-                    Run one ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
+                    Run one durable ButtonHeist DSL instruction from `step`: one action or one `WaitFor(...)` statement.
 
                     Examples:
                     `Activate(.label("Pay")).expect(.change(.screen()))`
@@ -50,7 +50,7 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 parameters: [Self.rootArgumentParameter] + Self.planSourceParameters,
                 projection: .cliAndMCP(
                     """
-                    Run a full heist from ButtonHeist DSL source in `plan`, or from a generated `.heist` package at `path`.
+                    Run a durable heist from a ButtonHeist source plan in `plan`, or from a generated `.heist` package at `path`.
 
                     Author plans as ButtonHeist source, not raw JSON IR:
                     `HeistPlan("shop") { ... }`

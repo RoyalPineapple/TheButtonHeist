@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 
+import ThePlans
 import TheScore
 
 /// The getaway driver — runs comms between the wire and the crew.
@@ -80,6 +81,14 @@ final class TheGetaway {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .requestScreen:
             await handleScreen(requestId: requestId, respond: respond)
+        case .runtimeAction(let command):
+            let actionResult = await executeDirectRuntimeAction(command)
+            await recordAndRespond(
+                command: message,
+                actionResult: actionResult,
+                requestId: requestId,
+                respond: respond
+            )
         case .heistPlan(let run):
             let actionResult = await brains.executeHeistPlan(run.plan, argument: run.argument)
             await recordAndRespond(
@@ -88,6 +97,70 @@ final class TheGetaway {
                 requestId: requestId,
                 respond: respond
             )
+        }
+    }
+
+    private func executeDirectRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
+        let method = actionMethod(for: command)
+        guard command.durableHeistActionFailure != nil else {
+            return ActionResult(
+                success: false,
+                method: method,
+                message: "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan",
+                errorKind: .validationError
+            )
+        }
+        guard brains.semanticObservationIsActive else {
+            return brains.runtimeInactiveResult(method: method)
+        }
+        do {
+            return await brains.executeRuntimeAction(try command.resolveForRuntimeDispatch(in: .empty))
+        } catch {
+            return ActionResult(
+                success: false,
+                method: method,
+                message: "Could not resolve direct runtime action: \(error)",
+                errorKind: .validationError
+            )
+        }
+    }
+
+    private func actionMethod(for command: HeistActionCommand) -> ActionMethod {
+        switch command {
+        case .activate:
+            return .activate
+        case .increment:
+            return .increment
+        case .decrement:
+            return .decrement
+        case .customAction:
+            return .customAction
+        case .rotor:
+            return .rotor
+        case .typeText:
+            return .typeText
+        case .mechanicalTap:
+            return .syntheticTap
+        case .mechanicalLongPress:
+            return .syntheticLongPress
+        case .mechanicalSwipe:
+            return .syntheticSwipe
+        case .mechanicalDrag:
+            return .syntheticDrag
+        case .viewportScroll:
+            return .scroll
+        case .viewportScrollToVisible:
+            return .scrollToVisible
+        case .viewportScrollToEdge:
+            return .scrollToEdge
+        case .editAction:
+            return .editAction
+        case .setPasteboard:
+            return .setPasteboard
+        case .takeScreenshot:
+            return .takeScreenshot
+        case .dismissKeyboard:
+            return .resignFirstResponder
         }
     }
 

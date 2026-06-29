@@ -1,5 +1,5 @@
 import Testing
-import ThePlans
+@testable import ThePlans
 
 @Test func `inline plan source simple Activate compiles to HeistPlan`() throws {
     let plan = try HeistPlanSourceCompiler().compile(root("""
@@ -810,6 +810,26 @@ import ThePlans
     #expect(diagnostic.path == "$.body[0].invoke.path")
 }
 
+@Test func `non-durable action admission exposes source diagnostic code and path`() throws {
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .action(try ActionStep(command: .viewportScroll(ScrollTarget(direction: .down)))),
+    ])
+    guard case .failure(let diagnostics) = raw.runtimeSafetyValidationResult(),
+          let diagnostic = diagnostics.first else {
+        Issue.record("Expected non-durable action to fail runtime safety admission")
+        return
+    }
+
+    #expect(diagnostics.count == 1)
+    #expect(diagnostic.code == .nonDurableAction)
+    #expect(diagnostic.code.rawValue == "heist.plan.non_durable_action")
+    #expect(diagnostic.kind == .error)
+    #expect(diagnostic.phase == .planValidation)
+    #expect(diagnostic.path == "$.body[0].action.command")
+    #expect(diagnostic.message == "durable heist action; observed scroll is a viewport debug command, not a durable heist action")
+    #expect(diagnostic.hint == nonDurableHeistActionRepairHint)
+}
+
 @Test func `inline plan source unsupported Swift syntax is rejected`() throws {
     for source in [
         "let x = 1",
@@ -1573,6 +1593,10 @@ private func expect(_ string: String, contains substring: String) {
     }
     #expect(string.contains(substring))
 }
+
+private let nonDurableHeistActionRepairHint =
+    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "this with a canonical durable DSL action."
 
 private enum ParsedHeistStepKind: Equatable {
     case action

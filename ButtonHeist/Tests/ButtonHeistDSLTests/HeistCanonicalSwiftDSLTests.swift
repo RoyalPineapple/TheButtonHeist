@@ -470,23 +470,21 @@ func canonicalSwiftRendererRendersMechanicalActionForms() throws {
 }
 
 @Test
-func nonDurableActionShapeExecutesButFailsCanonicalRendering() throws {
+func nonDurableActionShapeFailsPlanAdmission() throws {
     let command = HeistActionCommand.rotor(
         selection: .index(0),
         target: .target(.predicate(.label("Article"))),
         direction: .next
     )
-    let plan = try HeistPlan(body: [.action(try ActionStep(command: command))])
     let reason = try #require(command.durableHeistActionFailure)
 
-    // Durability is enforced at rendering, not execution: a non-durable shape is
-    // runtime-valid but cannot be rendered to canonical Swift DSL.
-
     do {
-        _ = try plan.canonicalSwiftDSL()
-        Issue.record("Expected non-durable action to fail canonical rendering")
-    } catch let error as HeistCanonicalSwiftDSLError {
-        #expect(error == .unsupportedAction(reason))
+        _ = try HeistPlan(body: [.action(try ActionStep(command: command))])
+        Issue.record("Expected non-durable action to fail plan admission")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        expectNonDurableHeistActionFailure(error.failures, observed: reason)
+    } catch {
+        Issue.record("Expected runtime safety error, got \(error)")
     }
 }
 
@@ -503,24 +501,22 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
     ]
 
     for command in commands {
-        let plan = try HeistPlan(body: [.action(try ActionStep(command: command))])
         let reason = try #require(command.durableHeistActionFailure)
 
         #expect(reason.contains("viewport debug command"))
 
-        // Durability is a canonical DSL concern, not runtime safety:
-        // viewport commands construct as runtime-valid plans but cannot render
-        // to canonical Swift DSL.
-
         do {
-            _ = try plan.canonicalSwiftDSL()
-            Issue.record("Expected containerName viewport action to fail canonical rendering")
-        } catch let error as HeistCanonicalSwiftDSLError {
-            #expect(error == .unsupportedAction(reason))
+            _ = try HeistPlan(body: [.action(try ActionStep(command: command))])
+            Issue.record("Expected viewport action to fail plan admission")
+        } catch let error as HeistPlanRuntimeSafetyError {
+            expectNonDurableHeistActionFailure(error.failures, observed: reason)
+        } catch {
+            Issue.record("Expected runtime safety error, got \(error)")
         }
     }
 
-    let jsonPlan = try JSONDecoder().decode(HeistPlan.self, from: Data("""
+    do {
+        _ = try JSONDecoder().decode(HeistPlan.self, from: Data("""
     {
       "version": 1,
       "body": [
@@ -539,11 +535,32 @@ func viewportDebugActionsAreNotDurableHeistDSL() throws {
       ]
     }
     """.utf8))
-
-    // A decoded viewport plan is runtime-valid for execution but not renderable.
-    #expect(throws: HeistCanonicalSwiftDSLError.self) {
-        _ = try jsonPlan.canonicalSwiftDSL()
+        Issue.record("Expected viewport JSON action to fail plan admission")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        expectNonDurableHeistActionFailure(
+            error.failures,
+            observed: "scroll is a viewport debug command, not a durable heist action"
+        )
+    } catch {
+        Issue.record("Expected runtime safety error, got \(error)")
     }
+}
+
+private let nonDurableHeistActionRepairHint =
+    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "this with a canonical durable DSL action."
+
+private func expectNonDurableHeistActionFailure(
+    _ failures: [HeistPlanRuntimeSafetyFailure],
+    observed: String,
+    path: String = "$.body[0].action.command"
+) {
+    #expect(failures.contains {
+        $0.path == path
+            && $0.contract == "durable heist action"
+            && $0.observed == observed
+            && $0.correction == nonDurableHeistActionRepairHint
+    }, "\(failures)")
 }
 
 #if SWIFT_PACKAGE && (os(macOS) || os(Linux))

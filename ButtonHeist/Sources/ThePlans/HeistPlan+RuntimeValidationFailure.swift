@@ -38,6 +38,10 @@ package struct HeistPlanRuntimeSafetyError: Error, Sendable, Equatable, CustomSt
 }
 
 extension HeistPlanRuntimeSafetyValidator {
+    private static let durableHeistActionCorrection =
+        "Use a direct client command for viewport/debug/session actions, or replace " +
+        "this with a canonical durable DSL action."
+
     mutating func fail(
         path: String,
         contract: String,
@@ -50,6 +54,18 @@ extension HeistPlanRuntimeSafetyValidator {
             observed: observed,
             correction: correction
         ))
+    }
+
+    mutating func failNonDurableAction(
+        at path: HeistTraversalPath,
+        observed: String
+    ) {
+        fail(
+            path: path.description,
+            contract: "durable heist action",
+            observed: observed,
+            correction: Self.durableHeistActionCorrection
+        )
     }
 
     func summarize(_ error: Error) -> String {

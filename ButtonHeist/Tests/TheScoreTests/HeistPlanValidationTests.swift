@@ -22,6 +22,23 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     try raw.validatedForRuntimeSafety()
 }
 
+private let nonDurableHeistActionRepairHint =
+    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "this with a canonical durable DSL action."
+
+private func expectNonDurableHeistActionFailure(
+    _ failures: [HeistPlanRuntimeSafetyFailure],
+    observed: String,
+    path: String = "$.body[0].action.command"
+) {
+    #expect(failures.contains {
+        $0.path == path
+            && $0.contract == "durable heist action"
+            && $0.observed == observed
+            && $0.correction == nonDurableHeistActionRepairHint
+    }, "\(failures)")
+}
+
 private struct EncodedActionStepContract: Decodable {
     let withoutExpectation: String
 
@@ -144,10 +161,9 @@ func `composition quality allows explicit expectation waiver`() throws {
 }
 
 @Test
-func lintFlagsMechanicalCommandsAndViewportSetup() throws {
+func lintFlagsMechanicalCommands() throws {
     let plan = try HeistPlan(body: [
         .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
-        .action(try ActionStep(command: .viewportScroll(ScrollTarget(direction: .down)))),
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
             expectation: WaitStep(predicate: .state(.exists(.label("Done"))), timeout: 1)
@@ -157,8 +173,6 @@ func lintFlagsMechanicalCommandsAndViewportSetup() throws {
     let messages = plan.lint(.strictTest).map(\.message)
 
     #expect(messages.contains("Mechanical command appears in strict semantic-test mode"))
-    #expect(messages.contains("Viewport command appears in strict semantic-test mode"))
-    #expect(messages.contains("Pre-action viewport movement immediately precedes a semantic action"))
 }
 
 @Test
@@ -268,6 +282,62 @@ func runtimeSafetyRejectsInvalidRefs() throws {
     for (label, raw, expected) in cases {
         let failures = runtimeSafetyFailures(for: raw)
         #expect(failures.contains { $0.contract.contains(expected) }, "\(label): \(failures)")
+    }
+}
+
+@Test
+func heistPlanConstructionRejectsNonDurableActions() throws {
+    let command = HeistActionCommand.rotor(
+        selection: .index(0),
+        target: .target(.predicate(.label("Article"))),
+        direction: .next
+    )
+    let expectedFailure = try #require(command.durableHeistActionFailure)
+
+    do {
+        _ = try HeistPlan(body: [.action(try ActionStep(command: command))])
+        Issue.record("Expected non-durable action to fail plan construction")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
+    } catch {
+        Issue.record("Expected runtime safety error, got \(error)")
+    }
+}
+
+@Test
+func heistPlanJSONDecodeRejectsNonDurableActions() throws {
+    let expectedFailure = try #require(
+        HeistActionCommand
+            .viewportScroll(ScrollTarget(selection: .container("scrollable_0_0_40_50"), direction: .down))
+            .durableHeistActionFailure
+    )
+    let json = """
+    {
+      "version": \(HeistPlan.currentVersion),
+      "body": [
+        {
+          "type": "action",
+          "action": {
+            "command": {
+              "type": "scroll",
+              "payload": {
+                "container": "scrollable_0_0_40_50",
+                "direction": "down"
+              }
+            }
+          }
+        }
+      ]
+    }
+    """
+
+    do {
+        _ = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
+        Issue.record("Expected non-durable JSON action to fail plan decode")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
+    } catch {
+        Issue.record("Expected runtime safety error, got \(error)")
     }
 }
 
@@ -411,6 +481,131 @@ func runtimeSafetyEnforcesBounds() throws {
     #expect(contracts.contains("max string length"))
     #expect(contracts.contains("max total string bytes"))
     #expect(contracts.contains("max parameter/ref length"))
+}
+
+@Test
+func runtimeSafetyRequiresForEachElementPositiveLimitUnderConfiguredMax() throws {
+    #expect(throws: HeistPlanError.self) {
+        _ = try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 0,
+            parameter: "target",
+            body: [.warn(WarnStep(message: "body"))]
+        )
+    }
+
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 2,
+            parameter: "target",
+            body: [.warn(WarnStep(message: "body"))]
+        )),
+    ])
+
+    let failures = runtimeSafetyFailures(
+        for: raw,
+        limits: HeistPlanRuntimeSafetyLimits(maxForEachElementLimit: 1)
+    )
+
+    #expect(failures.contains {
+        $0.path == "$.body[0].for_each_element.limit"
+            && $0.contract == "max for_each_element limit"
+            && $0.observed == "2"
+    }, "\(failures)")
+}
+
+@Test
+func runtimeSafetyRequiresForEachStringExplicitValuesUnderConfiguredMax() throws {
+    #expect(throws: HeistPlanError.self) {
+        _ = try ForEachStringStep(
+            values: [],
+            parameter: "item",
+            body: [.warn(WarnStep(message: "body"))]
+        )
+    }
+
+    let raw = HeistPlanAdmissionCandidate(body: [
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            body: [.warn(WarnStep(message: "body"))]
+        )),
+    ])
+
+    let failures = runtimeSafetyFailures(
+        for: raw,
+        limits: HeistPlanRuntimeSafetyLimits(maxForEachStringValues: 1)
+    )
+
+    #expect(failures.contains {
+        $0.path == "$.body[0].for_each_string.values"
+            && $0.contract == "max for_each_string values"
+            && $0.observed == "2 values"
+    }, "\(failures)")
+}
+
+@Test
+func runtimeSafetyRequiresRepeatUntilFiniteTimeoutUnderConfiguredMax() throws {
+    let validTimeouts = [0.0, 1.0]
+    for timeout in validTimeouts {
+        let raw = HeistPlanAdmissionCandidate(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .state(.exists(.label("Done"))),
+                timeout: timeout,
+                body: [.warn(WarnStep(message: "retry"))]
+            )),
+        ])
+
+        let failures = runtimeSafetyFailures(
+            for: raw,
+            limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
+        )
+
+        #expect(failures.isEmpty, "\(timeout): \(failures)")
+    }
+
+    let infinite = HeistPlanAdmissionCandidate(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .state(.exists(.label("Done"))),
+            timeout: .infinity,
+            body: [.warn(WarnStep(message: "retry"))]
+        )),
+    ])
+    let excessive = HeistPlanAdmissionCandidate(body: [
+        .repeatUntil(try RepeatUntilStep(
+            predicate: .state(.exists(.label("Done"))),
+            timeout: 2,
+            body: [.warn(WarnStep(message: "retry"))]
+        )),
+    ])
+
+    #expect(throws: HeistPlanError.self) {
+        _ = try RepeatUntilStep(
+            predicate: .state(.exists(.label("Done"))),
+            timeout: -1,
+            body: [.warn(WarnStep(message: "retry"))]
+        )
+    }
+
+    let infiniteFailures = runtimeSafetyFailures(
+        for: infinite,
+        limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
+    )
+    let excessiveFailures = runtimeSafetyFailures(
+        for: excessive,
+        limits: HeistPlanRuntimeSafetyLimits(maxRepeatUntilTimeout: 1)
+    )
+
+    #expect(infiniteFailures.contains {
+        $0.path == "$.body[0].repeat_until.timeout"
+            && $0.contract == "repeat_until timeout must be finite"
+    }, "\(infiniteFailures)")
+    #expect(excessiveFailures.contains {
+        $0.path == "$.body[0].repeat_until.timeout"
+            && $0.contract == "max repeat_until timeout"
+            && $0.observed == "2 seconds"
+    }, "\(excessiveFailures)")
 }
 
 @Test

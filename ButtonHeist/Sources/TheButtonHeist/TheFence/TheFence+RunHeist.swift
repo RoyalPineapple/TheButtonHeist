@@ -24,8 +24,8 @@ extension TheFence {
     }
 
     /// Dispatch a `HeistPlan` to the device and project its execution into a
-    /// `.heistExecution` response. Single commands and composed heists share
-    /// this one path — a single command is just a one-step plan.
+    /// `.heistExecution` response. Durable single commands and composed heists
+    /// share this one path; transient commands use direct client dispatch.
     func runHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
@@ -52,11 +52,13 @@ extension TheFence {
 
     /// Build a one-step `HeistPlan` for a single executable command, or `nil`
     /// when the command is not an action/wait (e.g. the `get_pasteboard` read,
-    /// interface/screen/session commands) and must use its dedicated handler.
+    /// interface/screen/session commands) or when it is a transient runtime
+    /// action that must use direct client dispatch.
     ///
     /// A `wait` command becomes a single wait step; UI action commands become
     /// action steps carrying the request's `expect` predicate on the final
-    /// step. Any non-heist-valid message falls back to the direct path.
+    /// step. Any non-durable or otherwise non-heist-valid message falls back to
+    /// the direct path.
     func singleStepHeistPlan(for parsed: ParsedRequest) throws -> HeistPlan? {
         guard let runtimeActionMessages = parsed.runtimeActionMessages else { return nil }
         let messages = runtimeActionMessages.values
@@ -72,10 +74,9 @@ extension TheFence {
         var steps: [HeistStep] = []
         for (index, message) in messages.enumerated() {
             let actionCommand = try HeistActionCommand(runtimeActionMessage: message)
-            // Any executable command runs through the one pipeline, including
-            // viewport commands. Heist execution no longer enforces durability
-            // (that is an authoring/DSL concern), so a single command and a
-            // composed heist share the same executor.
+            guard actionCommand.durableHeistActionFailure == nil else {
+                return nil
+            }
             let expectation = index == messages.count - 1 ? expectationStep : nil
             steps.append(.action(try ActionStep(command: actionCommand, expectation: expectation)))
         }

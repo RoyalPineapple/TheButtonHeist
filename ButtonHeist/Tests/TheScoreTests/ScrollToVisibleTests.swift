@@ -31,21 +31,17 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertEqual(matcher.checks, [.label(.exact("Save"))])
     }
 
-    func testScrollToVisibleHeistPlanRoundTrip() throws {
+    func testScrollToVisibleRuntimeActionRoundTrip() throws {
         let target = ScrollToVisibleTarget(
             elementTarget: .predicate(ElementPredicate(label: "Settings", traits: [.header]))
         )
-        let plan = try HeistPlan(body: [
-            .action(try ActionStep(command: .viewportScrollToVisible(.target(target.elementTarget)))),
-        ])
-        let message = ClientMessage.heistPlan(HeistPlanRun(plan: plan))
+        let message = ClientMessage.runtimeAction(.viewportScrollToVisible(.target(target.elementTarget)))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-        guard case .heistPlan(let run) = decoded,
-              case .action(let action)? = run.plan.body.first,
-              case .viewportScrollToVisible(let decodedTarget) = action.command,
+        guard case .runtimeAction(let action) = decoded,
+              case .viewportScrollToVisible(let decodedTarget) = action,
               case .predicate(let matcher, _) = try decodedTarget.resolve(in: .empty) else {
-            return XCTFail("Expected heistPlan with scrollToVisible action")
+            return XCTFail("Expected runtimeAction with scrollToVisible action")
         }
         XCTAssertEqual(matcher.checks, [
             .label(.exact("Settings")),

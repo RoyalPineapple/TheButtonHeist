@@ -782,7 +782,12 @@ final class TheFenceHandlerTests: XCTestCase {
             expectationPayload: TheFence.ExpectationPayload(expectation: nil, timeout: nil)
         )
 
-        let response = try await fence.handleClientActionRequest(parsed)
+        let response: FenceResponse
+        do {
+            response = try await fence.handleClientActionRequest(parsed)
+        } catch {
+            response = FenceResponse.failure(error)
+        }
         let failure = try XCTUnwrap(response.diagnosticFailure)
 
         XCTAssertEqual(failure.failureCode.knownCode, .requestInvalid)
@@ -2406,9 +2411,9 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPublicMutatingCommandsSendOnlyHeistPlanOverDeviceWire() async throws {
+    func testPublicMutatingCommandsUseDurableOrTransientDeviceWire() async throws {
         let target = targetValue(identifier: "target")
-        let cases: [(command: TheFence.Command, arguments: [String: HeistValue])] = [
+        let durableCases: [(command: TheFence.Command, arguments: [String: HeistValue])] = [
             (.activate, ["target": target]),
             (.activate, ["target": target, "action": .string("increment")]),
             (.activate, ["target": target, "action": .string("decrement")]),
@@ -2439,12 +2444,14 @@ final class TheFenceHandlerTests: XCTestCase {
                 ]),
                 "timeout": .double(1),
             ]),
+        ]
+        let transientCases: [(command: TheFence.Command, arguments: [String: HeistValue])] = [
             (.scroll, ["direction": .string(ScrollDirection.down.rawValue)]),
             (.scrollToVisible, ["target": target]),
             (.scrollToEdge, ["edge": .string(ScrollEdge.bottom.rawValue)]),
         ]
 
-        for testCase in cases {
+        for testCase in durableCases {
             let (fence, mockConn) = makeConnectedFence()
 
             _ = try await fence.execute(command: testCase.command, values: testCase.arguments)
@@ -2454,6 +2461,20 @@ final class TheFenceHandlerTests: XCTestCase {
                 return XCTFail("Expected \(testCase.command.rawValue) to send heistPlan, got \(String(describing: mockConn.sent.first?.0))")
             }
             XCTAssertEqual(run.plan.body.count, 1, testCase.command.rawValue)
+        }
+
+        for testCase in transientCases {
+            let (fence, mockConn) = makeConnectedFence()
+
+            _ = try await fence.execute(command: testCase.command, values: testCase.arguments)
+
+            XCTAssertEqual(mockConn.sent.count, 1, testCase.command.rawValue)
+            guard case .runtimeAction(let command) = mockConn.sent.first?.0 else {
+                return XCTFail(
+                    "Expected \(testCase.command.rawValue) to send runtimeAction, got \(String(describing: mockConn.sent.first?.0))"
+                )
+            }
+            XCTAssertNotNil(command.durableHeistActionFailure, testCase.command.rawValue)
         }
     }
 

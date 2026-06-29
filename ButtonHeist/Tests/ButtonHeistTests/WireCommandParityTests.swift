@@ -190,7 +190,7 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryExecutableSingleCommandLowersToTheSameRuntimeActionAsSingleStepPlan() async throws {
+    func testDurableExecutableSingleCommandsLowerToTheSameRuntimeActionAsSingleStepPlan() async throws {
         let (fence, _) = makeConnectedFence()
 
         for command in TheFence.Command.allCases {
@@ -204,6 +204,15 @@ final class WireCommandParityTests: XCTestCase {
             }
             let singleMessages = runtimeActionMessages.values
 
+            let allActionMessagesAreDurable = try singleMessages.allSatisfy { message in
+                if case .wait = message { return true }
+                return try HeistActionCommand(runtimeActionMessage: message).durableHeistActionFailure == nil
+            }
+            if !allActionMessagesAreDurable {
+                XCTAssertNil(singleStepPlan, command.rawValue)
+                continue
+            }
+
             let plan = try XCTUnwrap(singleStepPlan, command.rawValue)
             let heistMessages = plan.body.flatMap(runtimeActions(for:))
 
@@ -216,7 +225,7 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testViewportDebugCommandsAreCLIDirectOnlyAndRouteThroughSingleStepPlan() async throws {
+    func testViewportDebugCommandsAreCLIDirectOnlyAndDoNotRouteThroughSingleStepPlan() async throws {
         let (fence, _) = makeConnectedFence()
 
         for command in [TheFence.Command.scroll, .scrollToVisible, .scrollToEdge] {
@@ -233,8 +242,20 @@ final class WireCommandParityTests: XCTestCase {
             let singleMessages = try fence.executableRuntimeActions(for: request).values
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
-            let plan = try XCTUnwrap(fence.singleStepHeistPlan(for: request), command.rawValue)
+            XCTAssertNil(try fence.singleStepHeistPlan(for: request), command.rawValue)
+        }
+    }
+
+    @ButtonHeistActor
+    func testDurableRuntimeActionCommandsRouteThroughSingleStepPlan() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for command in [TheFence.Command.activate, .oneFingerTap, .typeText, .setPasteboard] {
+            let request = try fence.parseRequest(command: command, values: sampleArguments(for: command))
+            let singleMessages = try fence.executableRuntimeActions(for: request).values
+            let plan = try XCTUnwrap(try fence.singleStepHeistPlan(for: request), command.rawValue)
             let heistMessages = plan.body.flatMap(runtimeActions(for:))
+
             XCTAssertEqual(String(reflecting: heistMessages), String(reflecting: singleMessages), command.rawValue)
         }
     }
@@ -331,6 +352,7 @@ final class WireCommandParityTests: XCTestCase {
             .status,
             .getPasteboard,
             .requestScreen,
+            .runtimeAction(.viewportScroll(ScrollTarget(direction: .down))),
             .heistPlan(HeistPlanRun(plan: try HeistPlan(body: [
                 .action(try ActionStep(command: .activate(.identifier(.literal("target"))))),
             ]))),

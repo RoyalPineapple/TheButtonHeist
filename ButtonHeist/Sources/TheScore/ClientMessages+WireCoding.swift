@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 // MARK: - Coding Keys
 
@@ -94,6 +95,8 @@ private func clientMessageWireRepresentation(
         return ClientMessageWireRepresentation(type: .getPasteboard, payload: nil)
     case .requestScreen:
         return ClientMessageWireRepresentation(type: .requestScreen, payload: nil)
+    case .runtimeAction(let payload):
+        return ClientMessageWireRepresentation(type: .runtimeAction, payload: .runtimeAction(payload))
     case .authenticate(let payload):
         return ClientMessageWireRepresentation(type: .authenticate, payload: .authenticate(payload))
     case .heistPlan(let payload):
@@ -134,6 +137,8 @@ private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWire
     case .requestScreen:
         try noPayload()
         return .requestScreen
+    case .runtimeAction:
+        return .runtimeAction(try HeistActionCommand(from: try payload()))
     case .authenticate:
         return .authenticate(try AuthenticatePayload(from: try payload()))
     case .heistPlan:
@@ -143,12 +148,15 @@ private func decodeClientMessage(from payloadDecoder: Decoder?, type: ClientWire
 
 private enum ClientMessageWirePayload {
     case requestInterface(InterfaceQuery)
+    case runtimeAction(HeistActionCommand)
     case authenticate(AuthenticatePayload)
     case heistPlan(HeistPlanRun)
 
     func encode(to encoder: Encoder) throws {
         switch self {
         case .requestInterface(let payload):
+            try payload.encode(to: encoder)
+        case .runtimeAction(let payload):
             try payload.encode(to: encoder)
         case .authenticate(let payload):
             try payload.encode(to: encoder)

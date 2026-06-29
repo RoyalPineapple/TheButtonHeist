@@ -162,6 +162,7 @@ symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO11clientHelloyA2CmF	swif
 symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO12authenticateyAcA19AuthenticatePayloadVcACmF	swift.enum.case	public	ClientMessage.authenticate(_:)	ClientMessage.authenticate(_:)	case authenticate(AuthenticatePayload)
 symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO13getPasteboardyA2CmF	swift.enum.case	public	ClientMessage.getPasteboard	ClientMessage.getPasteboard	case getPasteboard
 symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO13requestScreenyA2CmF	swift.enum.case	public	ClientMessage.requestScreen	ClientMessage.requestScreen	case requestScreen
+symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO13runtimeActionyAC0A5Plans05HeistF7CommandOcACmF	swift.enum.case	public	ClientMessage.runtimeAction(_:)	ClientMessage.runtimeAction(_:)	case runtimeAction(HeistActionCommand)
 symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO16requestInterfaceyAcA0F5QueryVcACmF	swift.enum.case	public	ClientMessage.requestInterface(_:)	ClientMessage.requestInterface(_:)	case requestInterface(InterfaceQuery)
 symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	ClientMessage.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore13ClientMessageO4pingyA2CmF	swift.enum.case	public	ClientMessage.ping	ClientMessage.ping	case ping
@@ -727,6 +728,7 @@ symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO12authenticateyA
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO13directionNameSSvpZ	swift.type.property	public	directionName	ClientWireMessageType.directionName	static let directionName: String
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO13getPasteboardyA2CmF	swift.enum.case	public	ClientWireMessageType.getPasteboard	ClientWireMessageType.getPasteboard	case getPasteboard
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO13requestScreenyA2CmF	swift.enum.case	public	ClientWireMessageType.requestScreen	ClientWireMessageType.requestScreen	case requestScreen
+symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO13runtimeActionyA2CmF	swift.enum.case	public	ClientWireMessageType.runtimeAction	ClientWireMessageType.runtimeAction	case runtimeAction
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO16requestInterfaceyA2CmF	swift.enum.case	public	ClientWireMessageType.requestInterface	ClientWireMessageType.requestInterface	case requestInterface
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO4pingyA2CmF	swift.enum.case	public	ClientWireMessageType.ping	ClientWireMessageType.ping	case ping
 symbol	TheScore.symbols.json	s:8TheScore21ClientWireMessageTypeO6statusyA2CmF	swift.enum.case	public	ClientWireMessageType.status	ClientWireMessageType.status	case status

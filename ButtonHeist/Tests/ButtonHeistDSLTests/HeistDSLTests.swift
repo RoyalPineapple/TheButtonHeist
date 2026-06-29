@@ -898,6 +898,20 @@ func runHeistBuildsHeistRunSteps() throws {
 }
 
 @Test
+func invalidRunHeistNamesSurfaceBuildDiagnostics() throws {
+    try expectInvalidRunHeistName(
+        "",
+        expectedPath: nil,
+        expectedMessage: "heist invocation path must not be empty"
+    )
+    try expectInvalidRunHeistName(
+        "LibraryScreen..addToCart",
+        expectedPath: "LibraryScreen..addToCart",
+        expectedMessage: "heist invocation path component at index 1 must not be empty"
+    )
+}
+
+@Test
 func runHeistResolvesNamedCapabilityThroughValidation() throws {
     _ = try HeistPlan(
         definitions: [
@@ -1143,6 +1157,35 @@ private func expectBuildFailure(
         Issue.record("Expected HeistPlanBuildError")
     } catch let error as HeistPlanBuildError {
         #expect(error.description.contains(expectedDiagnostic))
+    } catch {
+        Issue.record("Expected HeistPlanBuildError, got \(error)")
+    }
+}
+
+private func expectInvalidRunHeistName(
+    _ name: String,
+    expectedPath: String?,
+    expectedMessage: String
+) throws {
+    let content = RunHeist(name)
+    let contentDiagnostic = try #require(content.heistBuildDiagnostics.first)
+    #expect(content.heistBuildDiagnostics.count == 1)
+    #expect(contentDiagnostic.code == .dslInvalidInvocationPath)
+    #expect(contentDiagnostic.phase == .dslBuild)
+    #expect(contentDiagnostic.path == expectedPath)
+    #expect(contentDiagnostic.message.contains("RunHeist name is invalid"))
+    #expect(contentDiagnostic.message.contains(expectedMessage))
+    #expect(contentDiagnostic.hint == "Use a non-empty dot-separated heist capability name with no empty components.")
+
+    do {
+        _ = try HeistPlan {
+            content
+        }
+        Issue.record("Expected invalid RunHeist name to fail")
+    } catch let error as HeistPlanBuildError {
+        let buildDiagnostic = try #require(error.diagnostics.first)
+        #expect(error.diagnostics.count == 1)
+        #expect(buildDiagnostic == contentDiagnostic)
     } catch {
         Issue.record("Expected HeistPlanBuildError, got \(error)")
     }

@@ -2,19 +2,34 @@
 
 The Button Heist drives iOS apps through the settled accessibility interface. When the app exposes a complete accessibility contract, agents can target declared labels, identifiers, values, traits, and actions instead of calculating screen coordinates.
 
+## Durable boundary
+
+`HeistPlan` is the durable DSL artifact boundary. Anything intended for
+storage, `.heist` packaging, discovery, composition, replay, or canonical
+rendering MUST be represented as a validated `HeistPlan`.
+
+`run_heist` MUST receive a durable plan: canonical ButtonHeist source whose top
+level is `HeistPlan`, or a generated `.heist` artifact path. `perform(step:)`
+MUST receive exactly one durable DSL step. Runtime wire JSON IR is
+internal/generated and MUST NOT be used as the authoring language.
+
+Viewport, debug, observation, and session tools are direct client commands. They
+MAY inspect or control the current live session, but they MUST NOT appear inside
+`HeistPlan` source or `.heist` artifacts.
+
 ## Core loop
 
 1. **Read** — `get_interface` returns the app accessibility state with labels, values, traits, actions, and capture-local diagnostic annotations.
-2. **Act** — use `perform(step:)` with one ButtonHeist DSL step for ordinary app controls. Always attach `.expect(...)` when you know what should change.
+2. **Act** — use `perform(step:)` with one durable ButtonHeist DSL step for ordinary app controls. Always attach `.expect(...)` when you know what should change.
 3. **Read the response** — tool text is the concise summary; `structuredContent` carries the full public JSON receipt. If the delta answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state, call `perform(step:)` with one `WaitFor(...)` statement. The server checks the current settled state first, then watches settled accessibility state until the predicate is true.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
 ## Choosing tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content The Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is The Button Heist's generated name for a container in the current interface capture. It is useful for inspection. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. These are direct client commands, not DSL. Start with `get_interface`; it returns the app accessibility state for the current screen, including content The Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` with a current `containerName` to inspect a container. `containerName` is The Button Heist's generated name for a container in the current interface capture. It is useful for inspection. It is not a semantic target or durable heist selector. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
-**Acting**: `perform(step:)` runs one ButtonHeist DSL instruction. Use it when one line is enough: one action, or one `WaitFor(...)` statement.
+**Acting**: `perform(step:)` runs one durable ButtonHeist DSL instruction. Use it when one line is enough: one action, or one `WaitFor(...)` statement.
 
 Allowed `perform(step:)` statements are one action or one `WaitFor(...)` statement:
 
@@ -39,7 +54,11 @@ Mechanical.Drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 WaitFor(.label("Checkout"), timeout: .seconds(5))
 ```
 
-`perform(step:)` rejects program-shaped source: multiple statements, `HeistPlan`, `HeistDef`, `RunHeist`, `If`, `WaitFor(...).else { ... }`, `ForEach`, `Warn`, and `Fail`. Use `run_heist(plan:)` for those.
+`perform(step:)` accepts one durable DSL step only. It rejects program-shaped
+source: multiple statements, `HeistPlan`, `HeistDef`, `RunHeist`, `If`,
+`WaitFor(...).else { ... }`, `ForEach`, `Warn`, and `Fail`. It also rejects raw
+wire IR and direct viewport/debug/session command text. Use `run_heist(plan:)`
+for durable plans.
 
 **Targets**: element actions share one target grammar:
 
@@ -99,7 +118,10 @@ The shorthand `.expect(.updated(...))` is only sugar for an observed element
 delta. It does not infer the action target. Include `element:` when the update
 must be tied to a durable element predicate.
 
-**Composing**: `run_heist` for typed multi-step plans in a single call. Prefer the `plan` field with canonical ButtonHeist source when authoring compact heists as an agent:
+**Composing**: `run_heist` executes a durable `HeistPlan` in a single call.
+Prefer the `plan` field with canonical ButtonHeist source when authoring compact
+heists as an agent, or pass a generated `.heist` artifact path when reusing a
+stored artifact:
 
 ```swift
 HeistPlan {
@@ -137,7 +159,12 @@ HeistPlan("shop") {
 }
 ```
 
-The `plan` string is ButtonHeist source, not arbitrary Swift. It accepts the canonical DSL constructs rendered by The Button Heist and rejects imports, variables, functions, native Swift control flow, interpolation, custom calls, body-local `try`, `await`, and unbounded loops. JSON plan IR is internal/generated; use source for compact authoring unless you are passing a generated `.heist` artifact path.
+The `plan` string is ButtonHeist source, not arbitrary Swift. Its top level MUST
+be a durable `HeistPlan`. It accepts the canonical DSL constructs rendered by
+The Button Heist and rejects imports, variables, functions, native Swift control
+flow, interpolation, custom calls, body-local `try`, `await`, and unbounded
+loops. JSON plan IR is internal/generated; use source for compact authoring
+unless you are passing a generated `.heist` artifact path.
 
 Use the same source string for discovery before execution. `list_heists(plan:)` shows the root entry and reusable `HeistDef` capabilities; `describe_heist(plan:)` describes one of those entries. These examples are copyable into `run_heist(plan:)` by removing the discovery-specific fields:
 
@@ -165,7 +192,9 @@ HeistPlan("shop") {
 """
 ```
 
-Do not author heists as raw `version`/`name`/`parameter`/`definitions`/`body` JSON. That shape is internal IR for generated artifacts, storage, wire transport, and debugging.
+Do not author heists as raw `version`/`name`/`parameter`/`definitions`/`body`
+JSON. That shape is internal/generated IR for artifacts, storage, wire
+transport, and debugging.
 
 MCP tool arguments are preflighted before The Button Heist converts them into command values. Public machine input is bounded by `PublicJSONInputLimits.maxRequestBytes`, `PublicJSONInputLimits.maxNestingDepth`, and `PublicJSONInputLimits.maxTotalObjectKeys`; the same limits apply to JSON-lines input.
 

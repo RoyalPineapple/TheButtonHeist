@@ -35,9 +35,11 @@ public struct RequestEnvelope: Codable, Sendable {
 /// Messages sent from a connected client to the Inside Job server.
 ///
 /// Public wire requests are limited to transport/session messages, pure
-/// observation reads, and `heistPlan`. Primitive UI mutation does not have a
-/// `ClientMessage` shape; it is compiled into `HeistPlan` at the public boundary
-/// and dispatched inside the runtime as `RuntimeActionMessage`.
+/// observation reads, non-durable transient direct runtime actions, and
+/// `heistPlan`.
+/// Durable UI mutation is compiled into `HeistPlan` at the public boundary and
+/// dispatched inside the runtime as `RuntimeActionMessage`; transient commands
+/// can use `runtimeAction` without creating a heist.
 public enum ClientMessage: Codable, Sendable, Equatable {
     // MARK: - Transport / Session
 
@@ -63,6 +65,12 @@ public enum ClientMessage: Codable, Sendable, Equatable {
 
     /// Request a capture of the current screen
     case requestScreen
+
+    // MARK: - Transient Runtime Action
+
+    /// Execute one non-durable runtime action without wrapping it in a durable
+    /// `HeistPlan`. Intended for viewport/debug/session commands.
+    case runtimeAction(HeistActionCommand)
 
     // MARK: - Heist Execution
 
