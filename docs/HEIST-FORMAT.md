@@ -1,10 +1,21 @@
 # Heist format
 
-The Button Heist has one authored language and one generated artifact format.
+The Button Heist has one durable DSL boundary and one generated artifact
+format.
 
-Humans and agents write ButtonHeist DSL. The runtime executes a validated
-`HeistPlan`. A `.heist` path is a generated package directory that carries that
-plan; it is not a hand-authored JSON file.
+`HeistPlan` is the durable DSL artifact boundary. Anything that must survive
+storage, catalog discovery, MCP composition, replay, or canonical rendering MUST
+lower to a validated `HeistPlan`. Humans and agents SHOULD author canonical
+ButtonHeist DSL source. Swift authoring frontends MAY generate `HeistPlan`
+values locally, but arbitrary Swift structure is not durable language. A
+`.heist` path is a durable generated package directory that carries that plan;
+it is not a hand-authored JSON file.
+
+Direct viewport, debug, and session commands are transient client commands. They
+MAY inspect or control the current live session, but they MUST NOT be stored in a
+`.heist` artifact or represented as durable `HeistPlan` steps.
+
+For the authoring boundary, see [Heist language spec](HEIST-LANGUAGE-SPEC.md).
 
 ## File Roles
 
@@ -12,12 +23,15 @@ plan; it is not a hand-authored JSON file.
 |------|---------|
 | `.swift` | Full Swift source for reusable authored heists, tests, helpers, and local constants. |
 | `plan` source string | ButtonHeist DSL source for MCP/CLI inline authoring. It is Swift-like, but accepts only the DSL constructs The Button Heist can parse and render canonically. |
-| `.heist` | Generated package artifact containing `manifest.json` and `plan.json`. Do not hand-author it. |
-| `.json` | Raw `HeistPlan` JSON IR for internal diagnostics and generated tooling only. It is not public heist authoring input or a public artifact API. |
+| `.heist` | Durable generated package artifact containing `manifest.json` and `plan.json`. Do not hand-author it. |
+| `.json` | Runtime `HeistPlan` wire IR for internal diagnostics and generated tooling only. It is not public heist authoring input or a public artifact API. |
 
-`run_heist` accepts ButtonHeist DSL source through `plan`, or a generated
-`.heist` package through `path`. Public run input does not accept raw structured
-JSON IR fields.
+`run_heist` accepts durable plans only: canonical ButtonHeist source that parses
+to a `HeistPlan`, or a generated `.heist` package through `path`. CLI authoring
+helpers MAY accept trusted local Swift input only by compiling it to a validated
+`HeistPlan` before dispatch. Public run input MUST NOT accept raw structured
+wire IR fields, generated wire payloads, or direct viewport/debug/session
+commands.
 
 ## Package Shape
 
@@ -71,7 +85,8 @@ future sidecars.
 ## Plan JSON
 
 `plan.json` is the canonical generated `HeistPlan` value. It is storage, wire,
-and internal IR. It is not the surface humans or agents should write by hand.
+and internal IR. It is not the surface humans or agents should write by hand,
+and it MUST NOT be treated as the authoring language.
 
 The wire contract is executable, not prose-only. Keep this document aligned
 with:
@@ -210,7 +225,7 @@ Lint is separate quality guidance for authored or composed plans:
 | Mode | Purpose |
 |------|---------|
 | `compositionQuality` | Warns when composed plans look like fragile transcripts. |
-| `strictTest` | Fails missing expectations, mechanical commands, viewport/debug action steps, and empty branches. |
+| `strictTest` | Fails missing expectations, mechanical commands, viewport/debug/session action steps, and empty branches. |
 
 Lint returns structured findings with severity, step path, message, and a fix
 suggestion. It does not replace runtime validation.
@@ -223,7 +238,7 @@ The durable heist AST is small on purpose. It does not support:
 - unbounded loops, sleeps, retries, catch/recover, or arbitrary polling loops
 - native Swift control flow as runtime control flow
 - hidden pre-action viewport movement for semantic actions
-- viewport/debug commands as durable semantic action steps
+- viewport/debug/session commands as durable semantic action steps
 - generic variables or expression evaluation beyond typed string and target refs
 - geometry, runtime IDs, capture-local IDs, or container names as durable selectors
 - unknown JSON keys
@@ -240,12 +255,13 @@ Rules:
 - wait is an assertion primitive and becomes a wait step
 - failed actions add no steps
 - unmet expectations add no steps
-- direct viewport/debug commands add no steps
+- direct viewport/debug/session commands add no steps
 - scroll setup before semantic action adds no setup step
 - coordinate gestures survive only when no semantic element intent exists
 - composed heists should pass composition-quality lint
 
 Composed and authored heists must not depend on scroll position, geometry,
 runtime IDs, capture-local IDs, or container names as semantic identity. Direct
-viewport/debug commands may use a current `containerName` while inspecting the
-live interface, but those commands are not durable heist primitives.
+viewport/debug/session commands may use a current `containerName` while
+inspecting the live interface, but those commands are not durable heist
+primitives.
