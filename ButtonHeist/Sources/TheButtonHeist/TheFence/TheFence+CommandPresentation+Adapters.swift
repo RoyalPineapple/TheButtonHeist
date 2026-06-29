@@ -11,9 +11,9 @@ public extension TheFence.Command {
             \(inlineCode(#".label("Pay")"#)), \(inlineCode(#".identifier("pay_button")"#)), \
             \(inlineCode(#".value("Milk")"#)), \(inlineCode(#".element(.label("Pay"), .traits([.button]))"#)), \
             and \(inlineCode(#".target(.label("Delete"), ordinal: 1)"#)) when duplicates need an ordinal. \
-            Act with \(inlineCode(perform.rawValue)) for one DSL step; use \(inlineCode(runHeist.rawValue)) \
-            for a full \(inlineCode("HeistPlan { ... }")). Runtime ButtonHeist source is the authoring \
-            surface; raw JSON plan IR is internal/generated. \
+            Act with \(inlineCode(perform.rawValue)) for one durable DSL instruction; use \(inlineCode(runHeist.rawValue)) \
+            for a durable heist from \(inlineCode("HeistPlan { ... }")) or a generated \(inlineCode(".heist")) package. \
+            Runtime ButtonHeist source is the authoring surface; raw JSON plan IR is internal/generated. \
             Full guide: docs/MCP-AGENT-GUIDE.md.
             """
     }

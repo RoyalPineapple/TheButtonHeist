@@ -36,7 +36,7 @@ to one-step or composed `HeistPlan`s before crossing the device wire.
 | Homebrew release | Public install surface | `buttonheist`, `buttonheist-mcp`, `heist-plan`, installed `ThePlans` compiler artifacts | `Formula/buttonheist.rb` and `scripts/release-contract.sh` | Formula and release archives use SemVer `MAJOR.MINOR.PATCH`. Experimental `heist-doctor` is intentionally excluded. |
 | CLI commands | Public command surface | `buttonheist <command>` | Generated [Command Reference](reference/commands.md) | Command names, CLI exposure, and parameters are descriptor-owned. Regenerate references after command changes. |
 | JSON-lines input | Public CLI session surface | `buttonheist json_lines` | Generated [Command Reference](reference/commands.md) and `TheFence.Command` descriptors | Each line is a JSON object using CLI-exposed Fence commands. MCP-only tools are excluded. Raw plan IR fields are not the public `run_heist` input shape. |
-| MCP tools | Public agent tool surface | `buttonheist-mcp` tools | Generated [MCP Tool Reference](reference/mcp-tools.md) | Tool names and schemas are descriptor-owned. `perform` is MCP-only; `run_heist` accepts source `plan` or `.heist` `path`. |
+| MCP tools | Public agent tool surface | `buttonheist-mcp` tools | Generated [MCP Tool Reference](reference/mcp-tools.md) | Tool names and schemas are descriptor-owned. `perform` is MCP-only and accepts one durable DSL instruction; `run_heist` accepts durable source `plan` or generated `.heist` `path`. |
 | `.heist` artifact format | Public generated artifact | `<name>.heist/manifest.json` and `plan.json` | [Heist Format](HEIST-FORMAT.md) | Generated package artifact. Do not hand-author it; regenerate artifacts when the plan or manifest contract changes. |
 | Plan DSL/source | Public authoring source | Swift DSL files, canonical ButtonHeist source strings, `heist-plan compile`, `run_heist --plan`, MCP `run_heist(plan:)` | [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md) and [Heist Format](HEIST-FORMAT.md) | Source must compile to canonical `HeistPlan` IR. MCP and JSON-lines should pass source or paths, not raw IR fields. |
 | Config and environment keys | Public runtime configuration | `.buttonheist.json`, `~/.config/buttonheist/config.json`, `BUTTONHEIST_*`, `INSIDEJOB_*` | This document, [Authentication](AUTH.md), and command help | Explicit flags and target config win over environment values where command-specific precedence applies. Unknown keys must fail or be ignored only as documented. |
@@ -159,9 +159,9 @@ state.
 
 Explicit viewport commands are different: `scroll`, `scroll_to_visible`, and
 `scroll_to_edge` expose viewport state because moving the viewport is the
-caller's intent. They are direct viewport/debug commands, not durable heist
-primitives, but they still execute through the heist pipeline as public
-side-effecting commands.
+caller's intent. They are direct client viewport/debug commands, not HeistPlan
+DSL or durable heist primitives, and they execute through direct client
+dispatch as public side-effecting commands.
 
 ## Element Identity
 
@@ -273,8 +273,10 @@ use `--check` to validate committed references without writing.
 
 - `connect` verifies transport, handshake/authentication, and session
   ownership. Observation still starts with `get_interface`.
-- `run_heist` accepts a typed `HeistPlan`; execution uses the same plan contract
-  for source strings and `.heist` artifacts.
+- `perform` accepts one durable ButtonHeist DSL instruction.
+- `run_heist` accepts a durable source plan string or generated `.heist`
+  package at public boundaries; execution uses the typed `HeistPlan` contract
+  after source/package loading.
 - Commands that support `expect` validate the expectation against the action
   result and report the observed outcome.
 - Typed responses serialize to human, compact, and JSON forms from the same
