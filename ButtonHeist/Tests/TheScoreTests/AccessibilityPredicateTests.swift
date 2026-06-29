@@ -966,12 +966,25 @@ final class AccessibilityPredicateTests: XCTestCase {
             file: file,
             line: line
         ) { error in
+            let message = decodingFailureMessage(error)
             XCTAssertTrue(
-                "\(error)".contains(expectedMessage),
-                "Expected error containing \(expectedMessage), got \(error)",
+                message.contains(expectedMessage),
+                "Expected error containing \(expectedMessage), got \(message)",
                 file: file,
                 line: line
             )
+        }
+    }
+
+    private func decodingFailureMessage(_ error: Error) -> String {
+        switch error {
+        case DecodingError.dataCorrupted(let context),
+             DecodingError.keyNotFound(_, let context),
+             DecodingError.typeMismatch(_, let context),
+             DecodingError.valueNotFound(_, let context):
+            return context.debugDescription
+        default:
+            return String(describing: error)
         }
     }
 
