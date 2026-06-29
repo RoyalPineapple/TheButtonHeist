@@ -474,8 +474,9 @@ private struct ForEachMatchSignature: Equatable {
     var count: Int { keys.count }
 
     init(matching: ElementPredicate, elements: [HeistElement]) {
-        keys = elements
-            .filter { matching.matches($0) }
+        keys = ElementMatchSet(elements: elements)
+            .matching(matching)
+            .elements
             .map(Self.key)
     }
 

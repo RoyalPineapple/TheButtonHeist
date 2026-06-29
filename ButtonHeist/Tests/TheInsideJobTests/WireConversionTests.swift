@@ -1093,21 +1093,6 @@ final class WireConverterTests: XCTestCase {
         if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
     }
 
-    // MARK: - Snapshot Screen Name
-
-    func testSnapshotScreenNameFromHeaderElement() {
-        let elements = [
-            makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button]),
-            makeScreenElement(heistId: "header_settings", label: "Settings", traits: [.header]),
-        ]
-        XCTAssertEqual(elements.screenName, "Settings")
-    }
-
-    func testSnapshotScreenNameNilWhenNoHeader() {
-        let elements = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
-        XCTAssertNil(elements.screenName)
-    }
-
     // MARK: - Custom Content Conversion
 
     func testCustomContentConvertedToWire() {

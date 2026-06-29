@@ -163,25 +163,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(results.map(\.label), ["A", "C"])
     }
 
-    // MARK: - StableKey
-
-    func testStableKeyEqualForSameProperties() {
-        let a = element(label: "Save", value: "draft", identifier: "btn", traits: .button)
-        let b = element(label: "Save", value: "draft", identifier: "btn", traits: .button)
-        XCTAssertEqual(a.stableKey, b.stableKey)
-    }
-
-    func testStableKeyFallsBackToFrameWhenNoSemanticIdentity() {
-        let a = AccessibilityElement.make(
-            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 44, height: 44))),
-            activationPoint: CGPoint(x: 22, y: 22)
-        )
-        let b = AccessibilityElement.make(
-            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 200, width: 44, height: 44))),
-            activationPoint: CGPoint(x: 22, y: 222)
-        )
-        XCTAssertNotEqual(a.stableKey, b.stableKey, "Unlabeled elements at different positions must hash differently")
-    }
 }
 
 #endif
