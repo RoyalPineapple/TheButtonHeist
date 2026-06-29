@@ -44,6 +44,63 @@ artifacts, reusable heist definitions, or canonical DSL examples. Live
 composition MAY use them as scratchpad observations, but they MUST add no
 durable steps.
 
+Direct client commands MAY use live container or viewport context while
+inspecting the current interface. Those live names and positions are client
+context only; they MUST NOT be promoted into durable selectors.
+
+## Selector durability
+
+Durable selectors describe semantic element identity, not a captured screen
+instance. A selector is durable when it is built from Button Heist element
+predicates that can be re-resolved after storage, packaging, canonical
+rendering, and replay.
+
+The durable selector forms are:
+
+- exact labels and structured label predicates, such as `.label("Pay")`,
+  `.label(.prefix("Delete"))`, or `.element(.label(.contains("Search")))`
+- accessibility identifiers, such as `.identifier("pay_button")`
+- values, when the value is intentionally part of the element's stable semantic
+  identity or state assertion
+- trait-constrained element selectors, such as
+  `.element(.label("Pay"), .traits([.button]))`
+- ordinal disambiguation only when attached to a semantic base selector, such as
+  `.target(.element(.label("Delete"), .traits([.button])), ordinal: 1)`
+
+Copyable durable selector examples:
+
+```swift
+Activate(.label("Pay"))
+
+Activate(.identifier("pay_button"))
+
+Activate(.element(.label("Pay"), .traits([.button])))
+
+Activate(.target(.element(.label("Delete"), .traits([.button])), ordinal: 1))
+
+WaitFor(.element(.label("Total"), .value("$12.00")), timeout: .seconds(2))
+```
+
+The following forms are not durable selector or context identity:
+
+- index-only selectors, including ordinals with no semantic base selector
+- viewport position, screen location, scroll offset, or visible-row position
+- current focus
+- runtime IDs
+- capture-local IDs
+- generated container names
+- raw coordinate identity
+
+Ordinal is a disambiguator over the current match set for a semantic selector.
+It is not durable identity by itself. Coordinate gestures may be explicit
+mechanical actions, but coordinates do not identify semantic elements and MUST
+NOT be taught as durable selector examples.
+
+Once code-level selector validation exists, durable plan admission MUST reject
+plans that depend on non-durable selector identity. Until then, these forms are
+excluded by this specification, and lint, canonicalization, documentation, and
+generated examples MUST NOT present them as durable selector patterns.
+
 ## Durable DSL examples
 
 Use `HeistPlan` for reusable or multi-step behavior:
