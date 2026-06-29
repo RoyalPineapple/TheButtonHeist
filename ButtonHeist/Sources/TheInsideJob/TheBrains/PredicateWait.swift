@@ -63,11 +63,11 @@ enum PredicateObservationDiagnostics {
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
         after sequence: SettledObservationSequence? = nil,
-        observationScope: SemanticObservationScope? = nil
+        observationScope _: SemanticObservationScope? = nil
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
-        let scope = observationScope ?? step.predicate.observationScope
+        let scope = SemanticObservationScope.discovery
 
         let initialEntry = await observeSemanticState(
             scope: scope,
@@ -87,51 +87,16 @@ enum PredicateObservationDiagnostics {
         var state = WaitPredicateState(predicate: step.predicate)
         var stream = PredicateObservationStreamState()
 
-        if step.predicate.requiresChangeBaseline,
-           let suppliedBaseline = Self.suppliedChangeBaseline(from: initialTrace, entry: entry.event) {
-            let reduced = stream.reducing(
-                entry,
-                predicate: step.predicate,
-                baselineSeed: .supplied(suppliedBaseline)
-            )
-            stream = reduced.state
-            state.record(reduced.reduction)
-            if state.lastEvaluation.met || timeout == 0 {
-                return waitReceipt(
-                    for: step,
-                    state: state,
-                    start: start,
-                    success: state.lastEvaluation.met
-                )
-            }
-        } else if step.predicate.requiresChangeBaseline {
-            let reduced = stream.reducing(
-                entry,
-                predicate: step.predicate,
-                baselineSeed: .currentObservation
-            )
-            stream = reduced.state
-            state.recordBaseline(reduced.reduction)
-            if timeout == 0 {
-                return waitReceipt(
-                    for: step,
-                    state: state,
-                    start: start,
-                    success: false
-                )
-            }
-        } else {
-            let reduced = stream.reducing(entry, predicate: step.predicate)
-            stream = reduced.state
-            state.record(reduced.reduction)
-            if state.lastEvaluation.met || timeout == 0 {
-                return waitReceipt(
-                    for: step,
-                    state: state,
-                    start: start,
-                    success: state.lastEvaluation.met
-                )
-            }
+        let initialOutcome = recordInitialEntry(
+            entry,
+            for: step,
+            initialTrace: initialTrace,
+            timeout: timeout,
+            stream: &stream,
+            state: &state
+        )
+        if case .finished(let success) = initialOutcome {
+            return waitReceipt(for: step, state: state, start: start, success: success)
         }
 
         guard timeout > 0 else {
@@ -148,6 +113,8 @@ enum PredicateObservationDiagnostics {
             changeBaselineSequence: state.changeBaseline?.sequence,
             requiresChangeBaseline: step.predicate.requiresChangeBaseline,
             pollWhenTimeoutZero: false,
+            initialVisibleFingerprint: state.lastVisibleFingerprint,
+            discoveryBootstrap: .ifNoObservation,
             evaluate: { observation, _ in
                 let reduced = stream.reducing(observation, predicate: step.predicate)
                 stream = reduced.state
@@ -170,6 +137,47 @@ enum PredicateObservationDiagnostics {
             start: start,
             success: false
         )
+    }
+
+    private func recordInitialEntry(
+        _ entry: HeistSemanticObservation,
+        for step: ResolvedWaitStep,
+        initialTrace: AccessibilityTrace?,
+        timeout: Double,
+        stream: inout PredicateObservationStreamState,
+        state: inout WaitPredicateState
+    ) -> PredicateInitialObservationOutcome {
+        if step.predicate.requiresChangeBaseline,
+           let suppliedBaseline = Self.suppliedChangeBaseline(from: initialTrace, entry: entry.event) {
+            let reduced = stream.reducing(
+                entry,
+                predicate: step.predicate,
+                baselineSeed: .supplied(suppliedBaseline)
+            )
+            stream = reduced.state
+            state.record(reduced.reduction)
+            return state.lastEvaluation.met || timeout == 0
+                ? .finished(success: state.lastEvaluation.met)
+                : .poll
+        }
+
+        if step.predicate.requiresChangeBaseline {
+            let reduced = stream.reducing(
+                entry,
+                predicate: step.predicate,
+                baselineSeed: .currentObservation
+            )
+            stream = reduced.state
+            state.recordBaseline(reduced.reduction)
+            return timeout == 0 ? .finished(success: false) : .poll
+        }
+
+        let reduced = stream.reducing(entry, predicate: step.predicate)
+        stream = reduced.state
+        state.record(reduced.reduction)
+        return state.lastEvaluation.met || timeout == 0
+            ? .finished(success: state.lastEvaluation.met)
+            : .poll
     }
 
     private func observeSemanticState(
@@ -527,6 +535,11 @@ struct WaitChangeBaseline {
         self.sequence = previous.sequence
         self.capture = capture
     }
+}
+
+enum PredicateInitialObservationOutcome {
+    case finished(success: Bool)
+    case poll
 }
 
 private struct WaitAccumulatedTrace {
@@ -943,6 +956,13 @@ struct PredicatePollingResult<Evaluation> {
     let elapsedMs: Int
 }
 
+private struct PredicatePollingCursor<Evaluation> {
+    var observedSequence: SettledObservationSequence?
+    var changeBaselineSequence: SettledObservationSequence?
+    var lastObservation: HeistSemanticObservation?
+    var lastEvaluation: Evaluation?
+}
+
 struct PredicatePollingEngine<Evaluation> {
     typealias ObservationSource = @MainActor (
         SemanticObservationScope,
@@ -961,6 +981,8 @@ struct PredicatePollingEngine<Evaluation> {
         changeBaselineSequence initialChangeBaselineSequence: SettledObservationSequence? = nil,
         requiresChangeBaseline: Bool,
         pollWhenTimeoutZero: Bool = true,
+        initialVisibleFingerprint: PredicateVisibleFingerprint = .unknown,
+        discoveryBootstrap: PredicateDiscoveryBootstrap = .ifNoObservation,
         evaluate: (HeistSemanticObservation, SettledObservationSequence?) -> Evaluation,
         isMatched: (Evaluation) -> Bool
     ) async -> PredicatePollingResult<Evaluation> {
@@ -974,46 +996,168 @@ struct PredicatePollingEngine<Evaluation> {
         }
 
         let deadline = start + timeout
-        var observedSequence = initialObservedSequence
-        var changeBaselineSequence = initialChangeBaselineSequence
-        var lastObservation: HeistSemanticObservation?
-        var lastEvaluation: Evaluation?
+        var cursor = PredicatePollingCursor<Evaluation>(
+            observedSequence: initialObservedSequence,
+            changeBaselineSequence: initialChangeBaselineSequence
+        )
+        var waitMachine = PredicatePollingState(
+            initialVisibleFingerprint: initialVisibleFingerprint,
+            scope: scope,
+            needsInitialProbe: discoveryBootstrap.needsInitialProbe(
+                initialObservedSequence: initialObservedSequence
+            )
+        )
 
         repeat {
-            let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
-            guard let observation = await observeSemanticState(
-                scope,
-                observedSequence,
-                min(remaining, SemanticObservationTiming.defaultTimeout)
-            ) else {
-                if timeout == 0 { break }
-                continue
-            }
+            let tickStart = CFAbsoluteTimeGetCurrent()
+            let discoveryProbeAlreadyDue = waitMachine.nextProbe == .discovery
+            let visiblePoll = await pollVisibleTick(
+                deadline: deadline,
+                allowSettledWait: timeout > 0 && !discoveryProbeAlreadyDue,
+                cursor: &cursor,
+                requiresChangeBaseline: requiresChangeBaseline,
+                evaluate: evaluate,
+                isMatched: isMatched
+            )
 
-            observedSequence = observation.event.sequence
-            lastObservation = observation
-            if requiresChangeBaseline, changeBaselineSequence == nil {
-                changeBaselineSequence = observation.event.previous?.sequence ?? observation.event.sequence
-            }
-
-            let evaluation = evaluate(observation, changeBaselineSequence)
-            lastEvaluation = evaluation
-            if isMatched(evaluation) {
-                return PredicatePollingResult(
-                    lastObservation: lastObservation,
-                    lastEvaluation: lastEvaluation,
-                    elapsedMs: Self.elapsedMilliseconds(since: start)
+            switch visiblePoll {
+            case .observed(let visibleEvaluation):
+                waitMachine.recordVisibleTick(
+                    .observed(
+                        fingerprint: PredicateVisibleFingerprint(cursor.lastObservation?.visibleFingerprint),
+                        matched: isMatched(visibleEvaluation)
+                    )
                 )
+                if isMatched(visibleEvaluation) {
+                    return PredicatePollingResult(
+                        lastObservation: cursor.lastObservation,
+                        lastEvaluation: cursor.lastEvaluation,
+                        elapsedMs: Self.elapsedMilliseconds(since: start)
+                    )
+                }
+            case .unavailable:
+                waitMachine.recordVisibleTick(.unavailable)
+            }
+
+            if waitMachine.nextProbe == .discovery {
+                let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
+                let discoveryEvaluation = await pollObservation(
+                    scope: .discovery,
+                    timeout: min(remaining, SemanticObservationTiming.defaultTimeout),
+                    cursor: &cursor,
+                    requiresChangeBaseline: requiresChangeBaseline,
+                    evaluate: evaluate
+                )
+
+                if let discoveryEvaluation {
+                    waitMachine.recordDiscoveryProbe()
+                    if isMatched(discoveryEvaluation) {
+                        return PredicatePollingResult(
+                            lastObservation: cursor.lastObservation,
+                            lastEvaluation: cursor.lastEvaluation,
+                            elapsedMs: Self.elapsedMilliseconds(since: start)
+                        )
+                    }
+                } else if timeout == 0 {
+                    break
+                }
             }
 
             if timeout == 0 { break }
+            guard await Self.sleepUntilNextVisibleTick(startedAt: tickStart, deadline: deadline) else { break }
         } while CFAbsoluteTimeGetCurrent() < deadline
 
         return PredicatePollingResult(
-            lastObservation: lastObservation,
-            lastEvaluation: lastEvaluation,
+            lastObservation: cursor.lastObservation,
+            lastEvaluation: cursor.lastEvaluation,
             elapsedMs: Self.elapsedMilliseconds(since: start)
         )
+    }
+
+    @MainActor
+    private func pollVisibleTick(
+        deadline: CFAbsoluteTime,
+        allowSettledWait: Bool,
+        cursor: inout PredicatePollingCursor<Evaluation>,
+        requiresChangeBaseline: Bool,
+        evaluate: (HeistSemanticObservation, SettledObservationSequence?) -> Evaluation,
+        isMatched: (Evaluation) -> Bool
+    ) async -> PredicateVisiblePoll<Evaluation> {
+        var immediateEvaluation: Evaluation?
+        if let evaluation = await pollObservation(
+            scope: .visible,
+            timeout: 0,
+            cursor: &cursor,
+            requiresChangeBaseline: requiresChangeBaseline,
+            evaluate: evaluate
+        ) {
+            if isMatched(evaluation) {
+                return .observed(evaluation)
+            }
+            immediateEvaluation = evaluation
+        }
+
+        guard allowSettledWait else {
+            return immediateEvaluation.map(PredicateVisiblePoll.observed) ?? .unavailable
+        }
+
+        let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
+        guard remaining > 0 else {
+            return immediateEvaluation.map(PredicateVisiblePoll.observed) ?? .unavailable
+        }
+
+        let evaluation = await pollObservation(
+            scope: .visible,
+            timeout: min(remaining, PredicatePollingCadence.visibleTickIntervalSeconds),
+            cursor: &cursor,
+            requiresChangeBaseline: requiresChangeBaseline,
+            evaluate: evaluate
+        )
+        return (evaluation ?? immediateEvaluation).map(PredicateVisiblePoll.observed) ?? .unavailable
+    }
+
+    @MainActor
+    private func pollObservation(
+        scope: SemanticObservationScope,
+        timeout: Double?,
+        cursor: inout PredicatePollingCursor<Evaluation>,
+        requiresChangeBaseline: Bool,
+        evaluate: (HeistSemanticObservation, SettledObservationSequence?) -> Evaluation
+    ) async -> Evaluation? {
+        guard let observation = await observeSemanticState(
+            scope,
+            cursor.observedSequence,
+            timeout
+        ) else {
+            return nil
+        }
+
+        cursor.observedSequence = observation.event.sequence
+        cursor.lastObservation = observation
+        if requiresChangeBaseline, cursor.changeBaselineSequence == nil {
+            cursor.changeBaselineSequence = observation.event.previous?.sequence ?? observation.event.sequence
+        }
+
+        let evaluation = evaluate(observation, cursor.changeBaselineSequence)
+        cursor.lastEvaluation = evaluation
+        return evaluation
+    }
+
+    private static func sleepUntilNextVisibleTick(
+        startedAt tickStart: CFAbsoluteTime,
+        deadline: CFAbsoluteTime
+    ) async -> Bool {
+        let now = CFAbsoluteTimeGetCurrent()
+        let remaining = deadline - now
+        guard remaining > 0 else { return false }
+        let tickElapsed = now - tickStart
+        let sleepSeconds = min(
+            remaining,
+            max(0, PredicatePollingCadence.visibleTickIntervalSeconds - tickElapsed)
+        )
+        guard sleepSeconds > 0 else { return true }
+        let nanoseconds = UInt64((sleepSeconds * 1_000_000_000).rounded(.up))
+        return await Task.cancellableSleep(for: .nanoseconds(nanoseconds))
     }
 
     private static func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
@@ -1021,9 +1165,191 @@ struct PredicatePollingEngine<Evaluation> {
     }
 }
 
+enum PredicateVisiblePoll<Evaluation> {
+    case unavailable
+    case observed(Evaluation)
+}
+
+enum PredicatePollingCadence {
+    static let visibleTickIntervalSeconds: Double = 0.1
+    static let discoveryProbeIntervalVisibleTicks = 5
+}
+
+enum PredicateDiscoveryBootstrap {
+    case ifNoObservation
+    case afterVisibleSeed
+
+    func needsInitialProbe(
+        initialObservedSequence: SettledObservationSequence?
+    ) -> Bool {
+        switch self {
+        case .ifNoObservation:
+            return initialObservedSequence == nil
+        case .afterVisibleSeed:
+            return true
+        }
+    }
+}
+
+enum PredicateNextProbe: Equatable {
+    case visible
+    case discovery
+}
+
+enum PredicateVisibleTick {
+    case unavailable
+    case observed(fingerprint: PredicateVisibleFingerprint, matched: Bool)
+}
+
+enum PredicateVisibleFingerprint: Equatable {
+    case unknown
+    case known(String)
+
+    init(_ rawValue: String?) {
+        if let rawValue {
+            self = .known(rawValue)
+        } else {
+            self = .unknown
+        }
+    }
+
+    func replacingUnknown(with fallback: PredicateVisibleFingerprint) -> PredicateVisibleFingerprint {
+        switch self {
+        case .known:
+            return self
+        case .unknown:
+            return fallback
+        }
+    }
+}
+
+enum PredicatePollingState {
+    case visibleOnly
+    case discovery(PredicateDiscoveryPollingState)
+
+    init(
+        initialVisibleFingerprint: PredicateVisibleFingerprint,
+        scope: SemanticObservationScope,
+        needsInitialProbe: Bool
+    ) {
+        switch scope {
+        case .visible:
+            self = .visibleOnly
+        case .discovery:
+            self = .discovery(needsInitialProbe
+                ? .probeDue(fingerprint: initialVisibleFingerprint, visibleTicksSinceProbe: 0)
+                : .coolingDown(fingerprint: initialVisibleFingerprint, visibleTicksSinceProbe: 0))
+        }
+    }
+
+    var nextProbe: PredicateNextProbe {
+        switch self {
+        case .visibleOnly:
+            return .visible
+        case .discovery(let discovery):
+            return discovery.nextProbe
+        }
+    }
+
+    mutating func recordVisibleTick(_ tick: PredicateVisibleTick) {
+        switch self {
+        case .visibleOnly:
+            return
+        case .discovery(let discovery):
+            self = .discovery(discovery.afterVisibleTick(tick))
+        }
+    }
+
+    mutating func recordDiscoveryProbe() {
+        switch self {
+        case .visibleOnly:
+            return
+        case .discovery(let discovery):
+            self = .discovery(discovery.afterDiscoveryProbe())
+        }
+    }
+}
+
+enum PredicateDiscoveryPollingState {
+    case probeDue(fingerprint: PredicateVisibleFingerprint, visibleTicksSinceProbe: Int)
+    case coolingDown(fingerprint: PredicateVisibleFingerprint, visibleTicksSinceProbe: Int)
+
+    var nextProbe: PredicateNextProbe {
+        switch self {
+        case .probeDue:
+            return .discovery
+        case .coolingDown:
+            return .visible
+        }
+    }
+
+    func afterVisibleTick(_ tick: PredicateVisibleTick) -> PredicateDiscoveryPollingState {
+        switch tick {
+        case .unavailable:
+            return afterVisibleUnavailable()
+        case .observed(let nextFingerprint, let matched):
+            return afterVisibleObserved(nextFingerprint: nextFingerprint, matched: matched)
+        }
+    }
+
+    func afterDiscoveryProbe() -> PredicateDiscoveryPollingState {
+        switch self {
+        case .probeDue(let fingerprint, _),
+             .coolingDown(let fingerprint, _):
+            return .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: 0)
+        }
+    }
+
+    private func afterVisibleUnavailable() -> PredicateDiscoveryPollingState {
+        switch self {
+        case .probeDue(let fingerprint, let ticks):
+            return .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: ticks + 1)
+        case .coolingDown(let fingerprint, let ticks):
+            let nextTicks = ticks + 1
+            return nextTicks >= PredicatePollingCadence.discoveryProbeIntervalVisibleTicks
+                ? .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
+                : .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
+        }
+    }
+
+    private func afterVisibleObserved(
+        nextFingerprint observedFingerprint: PredicateVisibleFingerprint,
+        matched: Bool
+    ) -> PredicateDiscoveryPollingState {
+        switch self {
+        case .probeDue(let previousFingerprint, let ticks):
+            let fingerprint = observedFingerprint.replacingUnknown(with: previousFingerprint)
+            return matched
+                ? .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: 0)
+                : .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: ticks + 1)
+
+        case .coolingDown(let previousFingerprint, let ticks):
+            let fingerprint = observedFingerprint.replacingUnknown(with: previousFingerprint)
+            guard !matched else {
+                return .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: 0)
+            }
+            let nextTicks = ticks + 1
+            if observedFingerprint != previousFingerprint,
+               case .known = observedFingerprint {
+                return .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
+            }
+            return nextTicks >= PredicatePollingCadence.discoveryProbeIntervalVisibleTicks
+                ? .probeDue(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
+                : .coolingDown(fingerprint: fingerprint, visibleTicksSinceProbe: nextTicks)
+        }
+    }
+}
+
+private extension HeistSemanticObservation {
+    var visibleFingerprint: String {
+        state.screen.visibleOnly.semanticHash
+    }
+}
+
 private struct WaitPredicateState {
     var lastTrace: AccessibilityTrace?
     var lastObservationSummary: String?
+    var lastVisibleFingerprint: PredicateVisibleFingerprint = .unknown
     var observedSequence: SettledObservationSequence?
     var changeBaseline: WaitChangeBaseline?
     var sawObservationAfterBaseline = false
@@ -1040,6 +1366,7 @@ private struct WaitPredicateState {
     mutating func record(_ reduction: PredicateObservationReduction) {
         lastTrace = reduction.trace ?? reduction.observation.accessibilityTrace
         lastObservationSummary = reduction.observation.summary
+        lastVisibleFingerprint = .known(reduction.observation.visibleFingerprint)
         lastEvaluation = reduction.expectation
         observedSequence = reduction.observation.event.sequence
         changeBaseline = reduction.changeBaseline
@@ -1049,6 +1376,7 @@ private struct WaitPredicateState {
     mutating func recordBaseline(_ reduction: PredicateObservationReduction) {
         lastTrace = reduction.observation.accessibilityTrace
         lastObservationSummary = reduction.observation.summary
+        lastVisibleFingerprint = .known(reduction.observation.visibleFingerprint)
         observedSequence = reduction.observation.event.sequence
         changeBaseline = reduction.changeBaseline
         sawObservationAfterBaseline = reduction.sawObservationAfterBaseline

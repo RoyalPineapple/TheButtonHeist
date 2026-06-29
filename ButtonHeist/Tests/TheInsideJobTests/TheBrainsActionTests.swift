@@ -1403,10 +1403,10 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
 
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -1434,8 +1434,8 @@ final class TheBrainsActionTests: XCTestCase {
             (makeElement(label: "Ready"), "ready"),
         ])
         let traceMatchedScreen = catchUpScreen
-        let beforeEvent = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(firstSettledScreen)
+        let beforeEvent = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(firstSettledScreen)
         let before = isolatedBrains.postActionObservation.captureSemanticState(
             from: beforeScreen,
             tripwireSignal: .empty,
@@ -1456,9 +1456,9 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(firstSettledScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(firstSettledScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(catchUpScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(catchUpScreen)
         let receipt = await receiptTask.value
 
         XCTAssertTrue(receipt.actionResult.success)
@@ -1484,8 +1484,8 @@ final class TheBrainsActionTests: XCTestCase {
             (makeElement(label: "Grid"), "grid"),
             (makeElement(label: "Ready"), "ready"),
         ])
-        let beforeEvent = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(firstSettledScreen)
+        let beforeEvent = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(firstSettledScreen)
         let before = isolatedBrains.postActionObservation.captureSemanticState(
             from: beforeScreen,
             tripwireSignal: .empty,
@@ -1506,7 +1506,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(firstSettledScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(firstSettledScreen)
         let receipt = await receiptTask.value
 
         XCTAssertFalse(receipt.actionResult.success)
@@ -1577,7 +1577,7 @@ final class TheBrainsActionTests: XCTestCase {
             ))
         }
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
 
         let receipt = await receiptTask.value
 
@@ -1616,7 +1616,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(waitRequests.count, 1)
-        if case .actionEndpoint(let request, observationScope: .visible, trace: nil)? = waitRequests.first {
+        if case .actionEndpoint(let request, observationScope: .discovery, trace: nil)? = waitRequests.first {
             XCTAssertEqual(request, try expectation.resolve(in: .empty))
         } else {
             XCTFail("Expected action endpoint wait request")
@@ -3404,7 +3404,12 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
+        XCTAssertDiagnostic(result.message, contains: [
+            "timed out after",
+            "waiting for element to appear",
+            "known: 0 elements",
+            "last result: element not found",
+        ])
     }
 
     // MARK: - Helpers
@@ -3638,8 +3643,11 @@ final class TheBrainsActionTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        for _ in 0..<50 where stash.semanticObservationStream.settledWaiterCount == 0 {
+        let deadline = CFAbsoluteTimeGetCurrent() + 1
+        while stash.semanticObservationStream.settledWaiterCount == 0,
+              CFAbsoluteTimeGetCurrent() < deadline {
             await Task.yield()
+            guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
         XCTAssertEqual(stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
     }

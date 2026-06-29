@@ -165,11 +165,10 @@ extension TheBrains {
 
     private func actionEndpointObservationScope(for command: RuntimeActionMessage) -> SemanticObservationScope {
         switch command {
-        case .scroll, .scrollToVisible, .scrollToEdge:
-            return .discovery
         case .activate, .increment, .decrement, .performCustomAction, .rotor, .oneFingerTap, .longPress, .swipe, .drag,
-             .typeText, .editAction, .resignFirstResponder, .setPasteboard, .takeScreenshot, .wait:
-            return .visible
+             .typeText, .editAction, .resignFirstResponder, .setPasteboard, .takeScreenshot, .wait,
+             .scroll, .scrollToVisible, .scrollToEdge:
+            return .discovery
         }
     }
 
