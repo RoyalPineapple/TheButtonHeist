@@ -44,14 +44,9 @@ private enum DemoHome {
     }
 
     private static let reanchorLongListIfNeeded = HeistDef<Void>("DemoHome.reanchorLongListIfNeeded") {
-        let reanchorAction = try rawAction(
-            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
-            waiver: "Reanchors the long list before checking navigation chrome"
-        )
-
         If {
             Case(.exists(longListFirstRow)) {
-                reanchorAction
+                WaitFor(.exists(longListFirstRow), timeout: .seconds(1))
             }
             Else {}
         }
@@ -60,11 +55,6 @@ private enum DemoHome {
 
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
-        try rawAction(
-            .viewportScrollToVisible(.label(item)),
-            waiver: "scroll_to_visible is the viewport precondition for the row custom action"
-        )
-
         CustomAction("Add to Cart", on: .label(item))
             .expect(.change(.elements()), timeout: .seconds(2))
     }
@@ -140,14 +130,6 @@ private extension Decimal {
     var dogfoodUSDFormatted: String {
         formatted(.currency(code: "USD"))
     }
-}
-
-private func rawAction(
-    _ command: HeistActionCommand,
-    expectation: WaitStep? = nil,
-    waiver: String? = nil
-) throws -> HeistStep {
-    .action(try ActionStep(command: command, expectation: expectation, expectationWaiver: waiver))
 }
 
 #endif // canImport(UIKit)

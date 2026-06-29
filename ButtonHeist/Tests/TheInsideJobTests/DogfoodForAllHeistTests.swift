@@ -2,7 +2,8 @@
 import XCTest
 
 import ButtonHeistTesting
-import TheInsideJob
+@testable import TheInsideJob
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 private enum DogfoodHome {
     static let openScreen = HeistDef<String>("DemoHome.openScreen", parameter: "screen") { screen in
@@ -65,14 +66,9 @@ private enum DogfoodNavigation {
     }
 
     private static let reanchorLongListIfNeeded = HeistDef<Void>("DogfoodNavigation.reanchorLongListIfNeeded") {
-        let reanchorAction = try rawAction(
-            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
-            waiver: "Reanchors the long list before checking navigation chrome"
-        )
-
         If {
             Case(.exists(longListFirstRow)) {
-                reanchorAction
+                WaitFor(.exists(longListFirstRow), timeout: .seconds(1))
             }
             Else {}
         }
@@ -135,21 +131,8 @@ private enum TodoScreen {
             value: .exact(.literal("Completed"))
         )
         let visibleItem = ElementPredicateTemplate(label: .exact(item))
-        let proveCompletedItem = try rawAction(
-            .viewportScrollToVisible(.target(completedItem, ordinal: 0)),
-            expectation: WaitStep(
-                predicate: .exists(completedItem),
-                timeout: .seconds(4)
-            )
-        )
 
-        try rawAction(
-            .viewportScrollToVisible(.label(item)),
-            expectation: WaitStep(
-                predicate: .exists(visibleItem),
-                timeout: .seconds(4)
-            )
-        )
+        WaitFor(.exists(visibleItem), timeout: .seconds(4))
 
         If {
             Case(.exists(completedItem)) {
@@ -157,9 +140,9 @@ private enum TodoScreen {
             }
             Else {
                 CustomAction("Toggle", on: .label(item))
-                    .withoutExpectation("Completion is proven by the following scroll_to_visible assertion")
+                    .withoutExpectation("Completion is proven by the following wait")
 
-                proveCompletedItem
+                WaitFor(.exists(completedItem), timeout: .seconds(4))
             }
         }
     }
@@ -250,35 +233,10 @@ private enum TouchCanvasScreen {
 }
 
 private enum LongListScreen {
-    static let exerciseViewportRuntimeCommands = HeistDef<Void>("LongList.exerciseViewportRuntimeCommands") {
-        try rawAction(
-            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .top)),
-            expectation: WaitStep(
-                predicate: .exists(.label("Widget 0, Hardware")),
-                timeout: .seconds(8)
-            )
-        )
+    static let topRow = ElementPredicateTemplate(label: .exact("Widget 0, Hardware"))
 
-        try rawAction(
-            .viewportScroll(ScrollTarget(direction: .down)),
-            waiver: "Explicit viewport scroll is the runtime feature under test"
-        )
-
-        try rawAction(
-            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
-            expectation: WaitStep(
-                predicate: .change(.elements()),
-                timeout: .seconds(3)
-            )
-        )
-
-        try rawAction(
-            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
-            expectation: WaitStep(
-                predicate: .exists(.label("Widget 0, Hardware")),
-                timeout: .seconds(8)
-            )
-        )
+    static let openTopAnchor = HeistDef<Void>("LongList.openTopAnchor") {
+        WaitFor(.exists(topRow), timeout: .seconds(8))
     }
 }
 
@@ -541,10 +499,7 @@ final class DogfoodForAllHeistTests: XCTestCase {
                 ElementMatches.matching(activeFixBug),
                 limit: 1
             ) { target in
-                try rawAction(
-                    .viewportScrollToVisible(target),
-                    waiver: "Element iteration already selected the row; scrolling it into view has no durable semantic outcome"
-                )
+                WaitFor(.exists(target), timeout: .seconds(1))
             }
 
             try DogfoodNavigation.backToRoot()
@@ -567,17 +522,43 @@ final class DogfoodForAllHeistTests: XCTestCase {
         XCTAssertTrue(heist.result.actionMethods.contains(.customAction))
     }
 
-    func testViewportRuntimeCommandsUseDemoApp() async throws {
-        let heist = try await runHeist("DogfoodViewportRuntimeCommands") {
+    func testViewportRuntimeCommandsUseDemoAppThroughDirectDispatch() async throws {
+        let openHeist = try await runHeist("DogfoodOpenLongListForViewportRuntimeCommands") {
             try DogfoodHome.openScreen("Long List")
-            try LongListScreen.exerciseViewportRuntimeCommands()
-            try DogfoodNavigation.backToRoot()
+            try LongListScreen.openTopAnchor()
         }
 
-        XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke, .invoke, .invoke])
-        XCTAssertTrue(heist.result.actionMethods.contains(.scroll))
-        XCTAssertTrue(heist.result.actionMethods.contains(.scrollToEdge))
-        XCTAssertTrue(heist.result.actionMethods.contains(.scrollToVisible))
+        XCTAssertEqual(openHeist.result.steps.map(\.kind), [.invoke, .invoke])
+
+        let results = try await executeDirectRuntimeActions([
+            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .top)),
+            .viewportScroll(ScrollTarget(direction: .down)),
+            .viewportScrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
+            .viewportScrollToVisible(.target(.label("Widget 0, Hardware"))),
+        ])
+
+        XCTAssertEqual(results.count, 4)
+
+        let topResult = results[0]
+        XCTAssertTrue(topResult.success, topResult.message ?? "scroll_to_edge top failed")
+        XCTAssertEqual(topResult.method, .scrollToEdge)
+
+        let scrollResult = results[1]
+        XCTAssertTrue(scrollResult.success, scrollResult.message ?? "scroll failed")
+        XCTAssertEqual(scrollResult.method, .scroll)
+
+        let bottomResult = results[2]
+        XCTAssertTrue(bottomResult.success, bottomResult.message ?? "scroll_to_edge bottom failed")
+        XCTAssertEqual(bottomResult.method, .scrollToEdge)
+
+        let visibleResult = results[3]
+        XCTAssertTrue(visibleResult.success, visibleResult.message ?? "scroll_to_visible failed")
+        XCTAssertEqual(visibleResult.method, .scrollToVisible)
+
+        let cleanupHeist = try await runHeist("DogfoodViewportRuntimeCleanup") {
+            try DogfoodNavigation.backToRoot()
+        }
+        XCTAssertEqual(cleanupHeist.result.steps.map(\.kind), [.invoke])
     }
 
     func testFailedDogfoodHeistPreservesInspectableRunResult() async throws {
@@ -617,16 +598,45 @@ final class DogfoodForAllHeistTests: XCTestCase {
     }
 }
 
-private func rawAction(
-    _ command: HeistActionCommand,
-    expectation: WaitStep? = nil,
-    waiver: String? = nil
-) throws -> HeistStep {
-    .action(try ActionStep(
-        command: command,
-        expectation: expectation,
-        expectationWaiver: waiver
-    ))
+private func executeDirectRuntimeActions(_ commands: [HeistActionCommand]) async throws -> [ActionResult] {
+    let job = TheInsideJob.shared
+    let shouldRestoreRuntime = !job.brains.semanticObservationIsActive
+
+    if shouldRestoreRuntime {
+        job.tripwire.startPulse()
+        job.brains.startSemanticObservation()
+        job.brains.safecracker.startKeyboardObservation()
+        job.brains.stash.clearWorldForHeistBootstrap()
+        _ = await job.brains.interactionObservation.observeVisibleState(
+            timeout: SemanticObservationTiming.defaultTimeout
+        )
+    }
+
+    do {
+        var results: [ActionResult] = []
+        for command in commands {
+            let result = await job.brains.executeRuntimeAction(try command.resolveForRuntimeDispatch(in: .empty))
+            results.append(result)
+        }
+        if shouldRestoreRuntime {
+            await stopDirectRuntime(job, waitForAllClear: true)
+        }
+        return results
+    } catch {
+        if shouldRestoreRuntime {
+            await stopDirectRuntime(job, waitForAllClear: false)
+        }
+        throw error
+    }
+}
+
+private func stopDirectRuntime(_ job: TheInsideJob, waitForAllClear: Bool) async {
+    if waitForAllClear {
+        _ = await job.tripwire.waitForAllClear(timeout: SemanticObservationTiming.defaultTimeout)
+    }
+    job.brains.stopSemanticObservation()
+    job.tripwire.stopPulse()
+    job.brains.safecracker.stopKeyboardObservation()
 }
 
 private extension HeistExecutionResult {
