@@ -40,6 +40,7 @@ public extension HeistBuildDiagnosticCode {
 
     static let sourceInvalidSyntax: Self = "heist.source.invalid_syntax"
     static let sourceWaitForGate: Self = "heist.source.wait_for_gate"
+    static let nonDurableAction: Self = "heist.plan.non_durable_action"
     static let planRuntimeSafety: Self = "heist.plan.runtime_safety"
 
     static let planningMissingPlanSource: Self = "heist.planning.missing_plan_source"
@@ -483,14 +484,20 @@ private extension HeistPlanning {
 }
 
 private extension HeistPlanRuntimeSafetyFailure {
+    private static let durableHeistActionContract = "durable heist action"
+
     var diagnostic: HeistBuildDiagnostic {
         HeistBuildDiagnostic(
-            code: .planRuntimeSafety,
+            code: diagnosticCode,
             phase: .planValidation,
             path: path,
             message: "\(contract); observed \(observed)",
             hint: correction
         )
+    }
+
+    var diagnosticCode: HeistBuildDiagnosticCode {
+        contract == Self.durableHeistActionContract ? .nonDurableAction : .planRuntimeSafety
     }
 }
 
