@@ -6,11 +6,11 @@ typealias MCPRawArgumentObject = [String: Value]
 
 struct MCPToolRequest {
     let name: String
-    let arguments: MCPToolArguments
+    let arguments: TheFence.CommandArgumentEnvelope
 
     init(name: String, arguments: MCPRawArgumentObject?) throws {
         self.name = name
-        self.arguments = try MCPToolArguments(arguments)
+        self.arguments = try MCPArgumentInputPreflight.commandEnvelope(arguments)
     }
 }
 
@@ -18,16 +18,20 @@ struct MCPToolArguments {
     let commandEnvelope: TheFence.CommandArgumentEnvelope
 
     init(_ arguments: MCPRawArgumentObject?) throws {
-        commandEnvelope = TheFence.CommandArgumentEnvelope(
-            values: try MCPArgumentInputPreflight.heistValues(arguments)
-        )
+        commandEnvelope = try MCPArgumentInputPreflight.commandEnvelope(arguments)
     }
 }
 
 private enum MCPArgumentInputPreflight {
-    static func heistValues(_ arguments: MCPRawArgumentObject?) throws -> [String: HeistValue] {
+    static func commandEnvelope(_ arguments: MCPRawArgumentObject?) throws -> TheFence.CommandArgumentEnvelope {
         try validate(arguments)
-        return try (arguments ?? [:]).mapValues(heistValue)
+        return TheFence.CommandArgumentEnvelope(
+            values: try heistValues(from: arguments ?? [:])
+        )
+    }
+
+    private static func heistValues(from arguments: MCPRawArgumentObject) throws -> [String: HeistValue] {
+        try arguments.mapValues(heistValue)
     }
 
     private static func validate(

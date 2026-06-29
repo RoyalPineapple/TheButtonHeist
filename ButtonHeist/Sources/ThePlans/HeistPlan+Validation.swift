@@ -91,64 +91,64 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
         }
     }
 
-    private func missingExpectationFinding(path: String) -> HeistPlanLintFinding {
+    private func missingExpectationFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
-            path: path,
+            path: path.description,
             message: "Semantic action has no expectation",
             suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\")"
         )
     }
 
-    private func typeTextTargetFinding(path: String) -> HeistPlanLintFinding {
+    private func typeTextTargetFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
-            path: path,
+            path: path.description,
             message: "TypeText has no semantic target",
             suggestion: "Use TypeText(text, into: target) for durable semantic tests"
         )
     }
 
-    private func mechanicalFinding(path: String) -> HeistPlanLintFinding {
+    private func mechanicalFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
         .init(
             severity: .error,
-            path: path,
+            path: path.description,
             message: "Mechanical command appears in strict semantic-test mode",
             suggestion: "Use semantic actions for normal UI, or keep Mechanical.* only for explicit spatial tests"
         )
     }
 
-    private func viewportFinding(path: String) -> HeistPlanLintFinding {
+    private func viewportFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
         .init(
             severity: .error,
-            path: path,
+            path: path.description,
             message: "Viewport command appears in strict semantic-test mode",
             suggestion: "Semantic actions own reveal and viewport mechanics"
         )
     }
 
-    private func ambientExpectationFinding(path: String) -> HeistPlanLintFinding {
+    private func ambientExpectationFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
         .init(
             severity: .warning,
-            path: path,
+            path: path.description,
             message: "Ambient action has no expectation",
             suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") when this side effect has no durable semantic outcome"
         )
     }
 
-    private func viewportBeforeSemanticActionFinding(path: String) -> HeistPlanLintFinding {
+    private func viewportBeforeSemanticActionFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
-            path: path,
+            path: path.description,
             message: "Pre-action viewport movement immediately precedes a semantic action",
             suggestion: "Remove the viewport movement; semantic actions own reveal and element inflation"
         )
     }
 
-    private func emptyBranchFinding(path: String) -> HeistPlanLintFinding {
+    private func emptyBranchFinding(path: HeistTraversalPath) -> HeistPlanLintFinding {
         .init(
             severity: .error,
-            path: path,
+            path: path.description,
             message: "Branch has no steps",
             suggestion: "Add a step or remove the empty branch"
         )

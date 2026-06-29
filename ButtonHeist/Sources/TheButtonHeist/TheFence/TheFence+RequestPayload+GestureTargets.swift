@@ -4,161 +4,147 @@ import ThePlans
 extension TheFence {
 
     func decodeTapTarget(_ request: CommandArgumentEnvelope) throws -> TapTarget {
-        let target = try decodeGestureTarget(request, as: TapTarget.self)
-        try target.validatePublicGestureUnitPoints()
-        return target
+        try decodePublicGestureTarget(request, as: TapTarget.self)
     }
 
     func decodeLongPressTarget(_ request: CommandArgumentEnvelope) throws -> LongPressTarget {
-        let target = try decodeGestureTarget(request, as: LongPressTarget.self)
-        try target.validatePublicGestureUnitPoints()
-        return target
+        try decodePublicGestureTarget(request, as: LongPressTarget.self)
     }
 
     func decodeSwipeTarget(_ request: CommandArgumentEnvelope) throws -> SwipeTarget {
-        let target = try decodeGestureTarget(request, as: SwipeTarget.self)
-        try target.validatePublicGestureUnitPoints()
-        return target
+        try decodePublicGestureTarget(request, as: SwipeTarget.self)
     }
 
     func decodeDragTarget(_ request: CommandArgumentEnvelope) throws -> DragTarget {
-        let target = try decodeGestureTarget(request, as: DragTarget.self)
-        try target.validatePublicGestureUnitPoints()
-        return target
+        try decodePublicGestureTarget(request, as: DragTarget.self)
     }
 
-    func decodeGestureTarget<T: HeistValuePayloadExpectationProviding>(
+    private func decodePublicGestureTarget<T: PublicGestureTarget>(
         _ request: CommandArgumentEnvelope,
         as type: T.Type
     ) throws -> T {
-        try HeistValuePayloadDecoder.decode(
+        let target = try HeistValuePayloadDecoder.decode(
             .object(request.argumentValues),
             field: "gesture",
             as: type,
             includesRootInField: false
         )
+        try target.validatePublicGestureUnitPoints()
+        return target
     }
 }
 
-extension TapTarget: HeistValuePayloadExpectationProviding {
+private protocol PublicGestureTarget: HeistValuePayloadExpectationProviding {
+    func validatePublicGestureUnitPoints() throws
+}
+
+extension TapTarget: PublicGestureTarget {
     static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
         .gesturePointSelection
     }
 }
 
-extension LongPressTarget: HeistValuePayloadExpectationProviding {
+extension LongPressTarget: PublicGestureTarget {
     static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
         .gesturePointSelection.adding(paths: ["duration": .number])
     }
 }
 
-extension SwipeTarget: HeistValuePayloadExpectationProviding {
+extension SwipeTarget: PublicGestureTarget {
     static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        HeistValuePayloadExpectation(
-            root: .object,
-            paths: HeistValuePayloadExpectation.merged([
-                [
-                    "duration": .number,
-                    "elementDirection": .object,
-                    "elementDirection.element": .object,
-                    "elementDirection.direction": .string,
-                    "elementUnitPoints": .object,
-                    "elementUnitPoints.element": .object,
-                    "elementUnitPoints.start": .object,
-                    "elementUnitPoints.start.x": .number,
-                    "elementUnitPoints.start.y": .number,
-                    "elementUnitPoints.end": .object,
-                    "elementUnitPoints.end.x": .number,
-                    "elementUnitPoints.end.y": .number,
-                    "pointToPoint": .object,
-                    "pointToPoint.start": .object,
-                    "pointToPoint.start.x": .number,
-                    "pointToPoint.start.y": .number,
-                    "pointToPoint.end": .object,
-                    "pointToPoint.end.x": .number,
-                    "pointToPoint.end.y": .number,
-                    "pointDirection": .object,
-                    "pointDirection.start": .object,
-                    "pointDirection.start.x": .number,
-                    "pointDirection.start.y": .number,
-                    "pointDirection.direction": .string,
-                ],
-                HeistValuePayloadExpectation.prefixed(
-                    "elementDirection.element",
-                    HeistValuePayloadExpectation.elementTarget.paths
-                ),
-                HeistValuePayloadExpectation.prefixed(
-                    "elementUnitPoints.element",
-                    HeistValuePayloadExpectation.elementTarget.paths
-                ),
-            ]),
-            arrayItems: HeistValuePayloadExpectation.merged([
-                HeistValuePayloadExpectation.prefixed(
-                    "elementDirection.element",
-                    HeistValuePayloadExpectation.elementTarget.arrayItems
-                ),
-                HeistValuePayloadExpectation.prefixed(
-                    "elementUnitPoints.element",
-                    HeistValuePayloadExpectation.elementTarget.arrayItems
-                ),
-            ])
+        .gesturePayloadExpectation(
+            paths: [
+                "duration": .number,
+                "elementDirection": .object,
+                "elementDirection.element": .object,
+                "elementDirection.direction": .string,
+                "elementUnitPoints": .object,
+                "elementUnitPoints.element": .object,
+                "elementUnitPoints.start": .object,
+                "elementUnitPoints.start.x": .number,
+                "elementUnitPoints.start.y": .number,
+                "elementUnitPoints.end": .object,
+                "elementUnitPoints.end.x": .number,
+                "elementUnitPoints.end.y": .number,
+                "pointToPoint": .object,
+                "pointToPoint.start": .object,
+                "pointToPoint.start.x": .number,
+                "pointToPoint.start.y": .number,
+                "pointToPoint.end": .object,
+                "pointToPoint.end.x": .number,
+                "pointToPoint.end.y": .number,
+                "pointDirection": .object,
+                "pointDirection.start": .object,
+                "pointDirection.start.x": .number,
+                "pointDirection.start.y": .number,
+                "pointDirection.direction": .string,
+            ],
+            elementTargetPaths: [
+                "elementDirection.element",
+                "elementUnitPoints.element",
+            ]
         )
     }
 }
 
-extension DragTarget: HeistValuePayloadExpectationProviding {
+extension DragTarget: PublicGestureTarget {
     static var heistValuePayloadExpectation: HeistValuePayloadExpectation {
-        HeistValuePayloadExpectation(
-            root: .object,
-            paths: HeistValuePayloadExpectation.merged([
-                [
-                    "duration": .number,
-                    "elementToPoint": .object,
-                    "elementToPoint.element": .object,
-                    "elementToPoint.start": .object,
-                    "elementToPoint.start.x": .number,
-                    "elementToPoint.start.y": .number,
-                    "elementToPoint.end": .object,
-                    "elementToPoint.end.x": .number,
-                    "elementToPoint.end.y": .number,
-                    "pointToPoint": .object,
-                    "pointToPoint.start": .object,
-                    "pointToPoint.start.x": .number,
-                    "pointToPoint.start.y": .number,
-                    "pointToPoint.end": .object,
-                    "pointToPoint.end.x": .number,
-                    "pointToPoint.end.y": .number,
-                ],
-                HeistValuePayloadExpectation.prefixed(
-                    "elementToPoint.element",
-                    HeistValuePayloadExpectation.elementTarget.paths
-                ),
-            ]),
-            arrayItems: HeistValuePayloadExpectation.prefixed(
+        .gesturePayloadExpectation(
+            paths: [
+                "duration": .number,
+                "elementToPoint": .object,
+                "elementToPoint.element": .object,
+                "elementToPoint.start": .object,
+                "elementToPoint.start.x": .number,
+                "elementToPoint.start.y": .number,
+                "elementToPoint.end": .object,
+                "elementToPoint.end.x": .number,
+                "elementToPoint.end.y": .number,
+                "pointToPoint": .object,
+                "pointToPoint.start": .object,
+                "pointToPoint.start.x": .number,
+                "pointToPoint.start.y": .number,
+                "pointToPoint.end": .object,
+                "pointToPoint.end.x": .number,
+                "pointToPoint.end.y": .number,
+            ],
+            elementTargetPaths: [
                 "elementToPoint.element",
-                HeistValuePayloadExpectation.elementTarget.arrayItems
-            )
+            ]
         )
     }
 }
 
 private extension HeistValuePayloadExpectation {
     static var gesturePointSelection: HeistValuePayloadExpectation {
+        gesturePayloadExpectation(
+            paths: [
+                "element": .object,
+                "unitPoint": .object,
+                "unitPoint.x": .number,
+                "unitPoint.y": .number,
+                "point": .object,
+                "point.x": .number,
+                "point.y": .number,
+            ],
+            elementTargetPaths: [
+                "element",
+            ]
+        )
+    }
+
+    static func gesturePayloadExpectation(
+        paths: [String: HeistValueExpectedType],
+        elementTargetPaths: [String]
+    ) -> HeistValuePayloadExpectation {
         HeistValuePayloadExpectation(
             root: .object,
-            paths: merged([
-                [
-                    "element": .object,
-                    "unitPoint": .object,
-                    "unitPoint.x": .number,
-                    "unitPoint.y": .number,
-                    "point": .object,
-                    "point.x": .number,
-                    "point.y": .number,
-                ],
-                prefixed("element", HeistValuePayloadExpectation.elementTarget.paths),
-            ]),
-            arrayItems: prefixed("element", HeistValuePayloadExpectation.elementTarget.arrayItems)
+            paths: merged(
+                [paths] + elementTargetPaths.map { prefixed($0, HeistValuePayloadExpectation.elementTarget.paths) }
+            ),
+            arrayItems: merged(
+                elementTargetPaths.map { prefixed($0, HeistValuePayloadExpectation.elementTarget.arrayItems) }
+            )
         )
     }
 

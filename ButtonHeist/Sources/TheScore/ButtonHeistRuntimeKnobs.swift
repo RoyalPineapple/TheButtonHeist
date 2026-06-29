@@ -1,30 +1,30 @@
 import Foundation
 
-public struct RuntimeKnobEnvironmentKey: Hashable, Sendable {
+package struct RuntimeKnobEnvironmentKey: Hashable, Sendable {
     fileprivate let rawValue: String
 
     fileprivate init(_ rawValue: String) {
         self.rawValue = rawValue
     }
 
-    public var testRunnerPrefixed: RuntimeKnobEnvironmentKey {
+    package var testRunnerPrefixed: RuntimeKnobEnvironmentKey {
         RuntimeKnobEnvironmentKey("TEST_RUNNER_\(rawValue)")
     }
 
-    public static let postScrollLayoutFrames = RuntimeKnobEnvironmentKey("BH_POST_SCROLL_LAYOUT_FRAMES")
-    public static let buttonHeistPostScrollLayoutFrames = RuntimeKnobEnvironmentKey("BUTTONHEIST_POST_SCROLL_LAYOUT_FRAMES")
-    public static let tripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BH_TRIPWIRE_PULSE_HZ")
-    public static let buttonHeistTripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BUTTONHEIST_TRIPWIRE_PULSE_HZ")
-    public static let maxScrollsPerContainer = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_CONTAINER")
-    public static let buttonHeistMaxScrollsPerContainer = RuntimeKnobEnvironmentKey("BUTTONHEIST_MAX_SCROLLS_PER_CONTAINER")
-    public static let maxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_DISCOVERY")
-    public static let buttonHeistMaxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BUTTONHEIST_MAX_SCROLLS_PER_DISCOVERY")
-    public static let scrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BH_SCROLL_SUBTREE_ELEMENT_BUDGET")
-    public static let buttonHeistScrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET")
-    public static let visibleElementBudget = RuntimeKnobEnvironmentKey("BH_VISIBLE_ELEMENT_BUDGET")
-    public static let buttonHeistVisibleElementBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_VISIBLE_ELEMENT_BUDGET")
-    public static let totalNodeBudget = RuntimeKnobEnvironmentKey("BH_TOTAL_NODE_BUDGET")
-    public static let buttonHeistTotalNodeBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_TOTAL_NODE_BUDGET")
+    package static let postScrollLayoutFrames = RuntimeKnobEnvironmentKey("BH_POST_SCROLL_LAYOUT_FRAMES")
+    package static let buttonHeistPostScrollLayoutFrames = RuntimeKnobEnvironmentKey("BUTTONHEIST_POST_SCROLL_LAYOUT_FRAMES")
+    package static let tripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BH_TRIPWIRE_PULSE_HZ")
+    package static let buttonHeistTripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BUTTONHEIST_TRIPWIRE_PULSE_HZ")
+    package static let maxScrollsPerContainer = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_CONTAINER")
+    package static let buttonHeistMaxScrollsPerContainer = RuntimeKnobEnvironmentKey("BUTTONHEIST_MAX_SCROLLS_PER_CONTAINER")
+    package static let maxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_DISCOVERY")
+    package static let buttonHeistMaxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BUTTONHEIST_MAX_SCROLLS_PER_DISCOVERY")
+    package static let scrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BH_SCROLL_SUBTREE_ELEMENT_BUDGET")
+    package static let buttonHeistScrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_SCROLL_SUBTREE_ELEMENT_BUDGET")
+    package static let visibleElementBudget = RuntimeKnobEnvironmentKey("BH_VISIBLE_ELEMENT_BUDGET")
+    package static let buttonHeistVisibleElementBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_VISIBLE_ELEMENT_BUDGET")
+    package static let totalNodeBudget = RuntimeKnobEnvironmentKey("BH_TOTAL_NODE_BUDGET")
+    package static let buttonHeistTotalNodeBudget = RuntimeKnobEnvironmentKey("BUTTONHEIST_TOTAL_NODE_BUDGET")
 
     fileprivate static let processProjectionKeys: [RuntimeKnobEnvironmentKey] = {
         let aliases: [RuntimeKnobEnvironmentKey] = [
@@ -47,12 +47,12 @@ public struct RuntimeKnobEnvironmentKey: Hashable, Sendable {
     }()
 }
 
-public struct RuntimeKnobEnvironment: Equatable, Sendable {
-    public static let empty = RuntimeKnobEnvironment()
+package struct RuntimeKnobEnvironment: Equatable, Sendable {
+    package static let empty = RuntimeKnobEnvironment()
 
     private let values: [RuntimeKnobEnvironmentKey: String]
 
-    public init(values: [RuntimeKnobEnvironmentKey: String] = [:]) {
+    package init(values: [RuntimeKnobEnvironmentKey: String] = [:]) {
         self.values = values
     }
 
@@ -67,36 +67,36 @@ public struct RuntimeKnobEnvironment: Equatable, Sendable {
     }
 }
 
-public enum RuntimeKnobEnvironmentBridge {
-    public static func current() -> RuntimeKnobEnvironment {
+package enum RuntimeKnobEnvironmentBridge {
+    package static func current() -> RuntimeKnobEnvironment {
         RuntimeKnobEnvironment(rawValues: ProcessInfo.processInfo.environment)
     }
 }
 
-public struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
-    public let postScrollLayoutFrames: Int
-    public let tripwirePulseFramesPerSecond: Int
-    public let maxScrollsPerContainer: Int
-    public let maxScrollsPerDiscovery: Int
-    public let visibleElementBudget: Int
-    public let totalNodeBudget: Int
+package struct ButtonHeistRuntimeKnobs: Equatable, Sendable {
+    package let postScrollLayoutFrames: Int
+    package let tripwirePulseFramesPerSecond: Int
+    package let maxScrollsPerContainer: Int
+    package let maxScrollsPerDiscovery: Int
+    package let visibleElementBudget: Int
+    package let totalNodeBudget: Int
 
-    public static let defaultPostScrollLayoutFrames = 3
-    public static let defaultTripwirePulseFramesPerSecond = 10
-    public static let defaultMaxScrollsPerContainer = 200
-    public static let defaultMaxScrollsPerDiscovery = 200
-    public static let defaultVisibleElementBudget = 300
-    public static let defaultTotalNodeBudget = 5_000
+    package static let defaultPostScrollLayoutFrames = 3
+    package static let defaultTripwirePulseFramesPerSecond = 10
+    package static let defaultMaxScrollsPerContainer = 200
+    package static let defaultMaxScrollsPerDiscovery = 200
+    package static let defaultVisibleElementBudget = 300
+    package static let defaultTotalNodeBudget = 5_000
 
-    public static var current: ButtonHeistRuntimeKnobs {
+    package static var current: ButtonHeistRuntimeKnobs {
         resolve()
     }
 
-    public var singleTripwireTickSettleTimeout: TimeInterval {
+    package var singleTripwireTickSettleTimeout: TimeInterval {
         max(0.05, 2.0 / Double(tripwirePulseFramesPerSecond))
     }
 
-    public static func resolve(
+    package static func resolve(
         environment: RuntimeKnobEnvironment = RuntimeKnobEnvironmentBridge.current()
     ) -> ButtonHeistRuntimeKnobs {
         ButtonHeistRuntimeKnobs(

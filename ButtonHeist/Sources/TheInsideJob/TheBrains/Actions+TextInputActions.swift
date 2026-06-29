@@ -82,13 +82,23 @@ extension Actions {
             }
         }
 
-        return .success(method: .typeText, subjectEvidence: focusResult.subjectEvidence)
+        return .success(
+            method: .typeText,
+            payload: Self.liveTextInputValue(for: focusResult.resolvedObject).map(ResultPayload.value),
+            subjectEvidence: focusResult.subjectEvidence,
+            resolvedElementId: focusResult.resolvedElementId
+        )
     }
 
     func typeTextPayload(
         for target: TypeTextTarget,
+        resolvedElementId: HeistId?,
         in afterState: PostActionObservation.BeforeState
     ) -> ResultPayload? {
+        if let resolvedElementId,
+           let value = afterState.screen.findElement(heistId: resolvedElementId)?.element.value {
+            return .value(value)
+        }
         guard let elementTarget = target.elementTarget else { return nil }
         return Self.textInputValue(for: elementTarget, in: afterState.interface.projectedElements)
             .map(ResultPayload.value)
@@ -110,16 +120,43 @@ extension Actions {
     private struct TextInputFocusResult {
         let failure: TheSafecracker.InteractionResult?
         let subjectEvidence: ActionSubjectEvidence?
+        let resolvedElementId: HeistId?
+        let resolvedObject: NSObject?
         let currentValue: String?
 
-        static let focused = TextInputFocusResult(failure: nil, subjectEvidence: nil, currentValue: nil)
+        static var focused: TextInputFocusResult {
+            TextInputFocusResult(
+                failure: nil,
+                subjectEvidence: nil,
+                resolvedElementId: nil,
+                resolvedObject: nil,
+                currentValue: nil
+            )
+        }
 
-        static func focused(_ evidence: ActionSubjectEvidence, currentValue: String?) -> TextInputFocusResult {
-            TextInputFocusResult(failure: nil, subjectEvidence: evidence, currentValue: currentValue)
+        static func focused(
+            _ evidence: ActionSubjectEvidence,
+            resolvedElementId: HeistId,
+            resolvedObject: NSObject,
+            currentValue: String?
+        ) -> TextInputFocusResult {
+            TextInputFocusResult(
+                failure: nil,
+                subjectEvidence: evidence,
+                resolvedElementId: resolvedElementId,
+                resolvedObject: resolvedObject,
+                currentValue: currentValue
+            )
         }
 
         static func failed(_ failure: TheSafecracker.InteractionResult) -> TextInputFocusResult {
-            TextInputFocusResult(failure: failure, subjectEvidence: nil, currentValue: nil)
+            TextInputFocusResult(
+                failure: failure,
+                subjectEvidence: nil,
+                resolvedElementId: nil,
+                resolvedObject: nil,
+                currentValue: nil
+            )
         }
     }
 
@@ -143,6 +180,7 @@ extension Actions {
 
         let liveTarget: TheStash.LiveActionTarget
         let subjectEvidence: ActionSubjectEvidence
+        let resolvedElementId: HeistId
         switch await navigation.elementInflation.inflate(
             for: elementTarget,
             method: .typeText,
@@ -151,6 +189,7 @@ extension Actions {
         case .inflated(let inflatedTarget):
             liveTarget = inflatedTarget.liveTarget
             subjectEvidence = inflatedTarget.subjectEvidence(source: .textInputTarget)
+            resolvedElementId = inflatedTarget.screenElement.heistId
         case .failed(let failure):
             return .failed(failure.interactionResult(commandMethod: .typeText))
         }
@@ -177,7 +216,12 @@ extension Actions {
                 )
             ))
         }
-        return .focused(subjectEvidence, currentValue: liveTarget.element.value)
+        return .focused(
+            subjectEvidence,
+            resolvedElementId: resolvedElementId,
+            resolvedObject: liveTarget.object,
+            currentValue: liveTarget.element.value
+        )
     }
 
     private func waitForActiveTextInput() async -> Bool {
@@ -198,6 +242,21 @@ extension Actions {
             }
             guard matches.count == 1 else { return nil }
             return matches[0].value
+        }
+    }
+
+    private static func liveTextInputValue(for object: NSObject?) -> String? {
+        switch object {
+        case let textField as UITextField:
+            return textField.text
+        case let textView as UITextView:
+            return textView.text
+        case let searchBar as UISearchBar:
+            return searchBar.text
+        case let object?:
+            return object.accessibilityValue
+        case nil:
+            return nil
         }
     }
 

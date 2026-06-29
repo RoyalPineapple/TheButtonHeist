@@ -1,7 +1,7 @@
 import Foundation
 
 struct ResolvedStringLoopPayloadValidationContext {
-    let path: String
+    let path: HeistTraversalPath
     let depth: Int
     let scope: HeistReferenceScope
     let environment: HeistExecutionEnvironment
@@ -64,7 +64,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         if stepCount > limits.maxTotalSteps, !reportedStepLimit {
             reportedStepLimit = true
             fail(
-                path: context.path,
+                path: context.path.description,
                 contract: "max total heist steps",
                 observed: "\(stepCount) steps",
                 correction: "Use \(limits.maxTotalSteps) steps or fewer."
@@ -72,7 +72,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         }
         if context.depth > limits.maxNestedStepDepth {
             fail(
-                path: context.path,
+                path: context.path.description,
                 contract: "max nested step depth",
                 observed: "depth \(context.depth)",
                 correction: "Flatten this heist to depth \(limits.maxNestedStepDepth) or less."
@@ -124,18 +124,18 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func visitWarn(_ warn: WarnStep, context: HeistTraversalContext) {
-        addString(warn.message, path: "\(context.path).message", role: "warn message")
+        addString(warn.message, path: context.path.child(.message).description, role: "warn message")
     }
 
     mutating func visitFail(_ fail: FailStep, context: HeistTraversalContext) {
-        addString(fail.message, path: "\(context.path).message", role: "fail message")
+        addString(fail.message, path: context.path.child(.message).description, role: "fail message")
     }
 
     mutating func visitHeist(_ plan: HeistPlan, context: HeistTraversalContext) {
         validatePlanHeader(plan, path: context.path, requiresName: false)
         if plan.parameter != .none {
             fail(
-                path: "\(context.path).parameter",
+                path: context.path.child(.parameter).description,
                 contract: "inline heist group must not declare a parameter",
                 observed: plan.parameter.kind.rawValue,
                 correction: "Use RunHeist with a named capability when a heist needs an argument."
@@ -149,13 +149,13 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validatePlanHeader(
         _ plan: HeistPlan,
-        path: String,
+        path: HeistTraversalPath,
         requiresName: Bool
     ) {
         if requiresName {
             guard let name = plan.name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 fail(
-                    path: "\(path).name",
+                    path: path.child(.name).description,
                     contract: "heist definitions must have a non-empty name",
                     observed: "missing name",
                     correction: "Name every heist in a definitions array."
@@ -164,12 +164,12 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             }
         }
         if let name = plan.name {
-            validateParameter(name, path: "\(path).name", role: "heist definition name")
+            validateParameter(name, path: path.child(.name).description, role: "heist definition name")
         }
-        validateParameterDeclaration(plan.parameter, path: "\(path).parameter")
+        validateParameterDeclaration(plan.parameter, path: path.child(.parameter))
         if plan.body.isEmpty, plan.definitions.isEmpty {
             fail(
-                path: "\(path).body",
+                path: path.child(.body).description,
                 contract: "heist plan must contain a body or nested definitions",
                 observed: "empty heist",
                 correction: "Add body steps, or use this plan only as a namespace with nested definitions."
@@ -177,12 +177,12 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         }
     }
 
-    mutating func validateDefinitions(_ definitions: [HeistPlan], path: String) {
+    mutating func validateDefinitions(_ definitions: [HeistPlan], path: HeistTraversalPath) {
         definitionCount += definitions.count
         if definitionCount > limits.maxDefinitions, !reportedDefinitionLimit {
             reportedDefinitionLimit = true
             fail(
-                path: path,
+                path: path.description,
                 contract: "max total heist definitions",
                 observed: "\(definitionCount) definitions",
                 correction: "Use \(limits.maxDefinitions) definitions or fewer."
@@ -196,7 +196,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             }
             if seen.contains(name) {
                 fail(
-                    path: "\(path)[\(index)].name",
+                    path: path.index(index).child(.name).description,
                     contract: "duplicate heist definition names are not allowed in the same scope",
                     observed: "\"\(escaped(name))\"",
                     correction: "Rename one definition or put it in a different namespace."
@@ -206,21 +206,25 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         }
     }
 
-    mutating func validateParameterDeclaration(_ parameter: HeistParameter, path: String) {
+    mutating func validateParameterDeclaration(_ parameter: HeistParameter, path: HeistTraversalPath) {
         guard let name = parameter.name else { return }
-        validateParameter(name, path: "\(path).name", role: "\(parameter.kind.rawValue) parameter")
+        validateParameter(name, path: path.child(.name).description, role: "\(parameter.kind.rawValue) parameter")
     }
 
     mutating func validateInvocation(_ step: HeistInvocationStep, context: HeistTraversalContext) {
         let invocationPath = step.invocationPath
         for (index, component) in invocationPath.components.enumerated() {
-            validateParameter(component, path: "\(context.path).path[\(index)]", role: "heist run path component")
+            validateParameter(
+                component,
+                path: context.path.child(.path).index(index).description,
+                role: "heist run path component"
+            )
         }
-        validateArgument(step.argument, path: "\(context.path).argument", scope: context.scope)
-        guard let resolved = context.resolveInvocation(path: invocationPath.components) else {
+        validateArgument(step.argument, path: context.path.child(.argument), scope: context.scope)
+        guard let resolved = context.resolveInvocation(path: invocationPath) else {
             if invocationPath.components.count > 1 {
                 fail(
-                    path: "\(context.path).path",
+                    path: context.path.child(.path).description,
                     contract: "heist run path must resolve to a declared exported capability",
                     observed: invocationPath.dottedName,
                     correction: "No export named '\(invocationPath.dottedName)' in this plan; declare it in a Namespace block or use a local nested capability."
@@ -228,7 +232,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
                 return
             }
             fail(
-                path: "\(context.path).path",
+                path: context.path.child(.path).description,
                 contract: "heist run path must resolve to a local capability",
                 observed: invocationPath.dottedName,
                 correction: "Define this heist in the current scope or qualify it through an exported namespace."
@@ -238,7 +242,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         let resolvedName = resolved.qualifiedName
         if let cycle = context.callGraphCycle(closing: resolvedName) {
             fail(
-                path: "\(context.path).path",
+                path: context.path.child(.path).description,
                 contract: "heist runs must not be recursive",
                 observed: cycle.displayPath,
                 correction: "Remove the recursive heist run cycle."
@@ -247,7 +251,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         }
         guard step.argument.kind == resolved.definition.parameter.kind else {
             fail(
-                path: "\(context.path).argument",
+                path: context.path.child(.argument).description,
                 contract: "heist run argument type must match the target parameter",
                 observed: "\(step.argument.kind.rawValue) for \(resolved.definition.parameter.kind.rawValue)",
                 correction: "Pass the argument shape declared by the named capability."
@@ -258,7 +262,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             _ = try context.environment.binding(argument: step.argument, to: resolved.definition.parameter)
         } catch {
             fail(
-                path: "\(context.path).argument",
+                path: context.path.child(.argument).description,
                 contract: "heist run argument must bind to the target parameter",
                 observed: summarize(error),
                 correction: "Use a finite semantic value matching the named capability parameter."
@@ -266,30 +270,30 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         }
     }
 
-    mutating func validateArgument(_ argument: HeistArgument, path: String, scope: HeistReferenceScope) {
+    mutating func validateArgument(_ argument: HeistArgument, path: HeistTraversalPath, scope: HeistReferenceScope) {
         switch argument {
         case .none:
             break
         case .string(let value):
-            validateString(value, path: "\(path).value", scope: scope)
+            validateString(value, path: path.child(.value).description, scope: scope)
         case .elementTarget(let target):
-            validateTarget(target, path: "\(path).target", scope: scope)
+            validateTarget(target, path: path.child(.target).description, scope: scope)
         }
     }
 
     mutating func validateAction(
         _ action: ActionStep,
-        path: String,
+        path: HeistTraversalPath,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
-        validateCommand(action.command, path: "\(path).command", scope: scope, environment: environment)
+        validateCommand(action.command, path: path.child(.command), scope: scope, environment: environment)
         if let waiver = action.expectationWaiver {
-            addString(waiver, path: "\(path).without_expectation", role: "expectation waiver")
+            addString(waiver, path: path.child(.withoutExpectation).description, role: "expectation waiver")
         }
         for diagnostic in action.expectationValidationDiagnostics {
             fail(
-                path: "\(path).expectation",
+                path: path.child(.expectation).description,
                 contract: "action expectation composition must be supported and unambiguous",
                 observed: diagnostic.message,
                 correction: diagnostic.hint ?? "Use one change predicate plus optional state predicates, or split unrelated waits into explicit WaitFor steps."
@@ -299,11 +303,11 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validateCommand(
         _ command: HeistActionCommand,
-        path: String,
+        path: HeistTraversalPath,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
-        validateCommandExpressions(command, path: path, scope: scope)
+        validateCommandExpressions(command, path: path.description, scope: scope)
         // Durability (serialize/render canonically) is an authoring concern, not
         // an execution one. It is enforced where heists are persisted or rendered
         // as canonical Swift DSL, not here, so a transient plan can execute any
@@ -312,7 +316,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             try command.assertResolvedPayloadAdmissible(in: environment)
         } catch {
             fail(
-                path: path,
+                path: path.description,
                 contract: "resolved command payload must satisfy the heist action payload contract",
                 observed: summarize(error),
                 correction: "Use values and refs that lower to a valid \(command.wireType.rawValue) command payload."
@@ -322,14 +326,14 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validateWait(
         _ wait: WaitStep,
-        path: String,
+        path: HeistTraversalPath,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
-        validatePredicate(wait.predicate, path: "\(path).predicate", depth: 1, scope: scope)
+        validatePredicate(wait.predicate, path: path.child(.predicate).description, depth: 1, scope: scope)
         guard wait.timeout >= 0 else {
             fail(
-                path: "\(path).timeout",
+                path: path.child(.timeout).description,
                 contract: "wait timeout must be non-negative",
                 observed: "\(wait.timeout)",
                 correction: "Use a timeout of 0 or more seconds."
@@ -344,7 +348,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             ))
         } catch {
             fail(
-                path: path,
+                path: path.description,
                 contract: "resolved wait predicate must satisfy the heist wait payload contract",
                 observed: summarize(error),
                 correction: "Use scoped refs and predicate values that lower to a valid wait command."
@@ -354,16 +358,16 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validatePredicateCase(
         _ predicateCase: PredicateCase,
-        path: String,
+        path: HeistTraversalPath,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
-        validatePredicate(predicateCase.predicate, path: "\(path).predicate", depth: 1, scope: scope)
+        validatePredicate(predicateCase.predicate, path: path.child(.predicate).description, depth: 1, scope: scope)
         do {
             _ = try predicateCase.predicate.resolve(in: environment)
         } catch {
             fail(
-                path: "\(path).predicate",
+                path: path.child(.predicate).description,
                 contract: "predicate refs must resolve in the current heist scope",
                 observed: summarize(error),
                 correction: "Use target_ref or string refs only inside the loop body that defines them."
@@ -373,13 +377,13 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validateForEachElement(
         _ step: ForEachElementStep,
-        path: String
+        path: HeistTraversalPath
     ) {
-        validateElementPredicate(step.matching, path: "\(path).matching")
-        validateParameter(step.parameter, path: "\(path).parameter", role: "for_each_element parameter")
+        validateElementPredicate(step.matching, path: path.child(.matching).description)
+        validateParameter(step.parameter, path: path.child(.parameter).description, role: "for_each_element parameter")
         if step.limit > limits.maxForEachElementLimit {
             fail(
-                path: "\(path).limit",
+                path: path.child(.limit).description,
                 contract: "max for_each_element limit",
                 observed: "\(step.limit)",
                 correction: "Use a limit of \(limits.maxForEachElementLimit) or less."
@@ -389,7 +393,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
 
     mutating func validateForEachString(
         _ step: ForEachStringStep,
-        path: String,
+        path: HeistTraversalPath,
         bodyDepth: Int,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
@@ -397,40 +401,40 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         rootDefinitionScope: HeistDefinitionScope,
         callGraph: HeistCallGraph?
     ) {
-        validateParameter(step.parameter, path: "\(path).parameter", role: "for_each_string parameter")
+        validateParameter(step.parameter, path: path.child(.parameter).description, role: "for_each_string parameter")
         if step.values.count > limits.maxForEachStringValues {
             fail(
-                path: "\(path).values",
+                path: path.child(.values).description,
                 contract: "max for_each_string values",
                 observed: "\(step.values.count) values",
                 correction: "Use \(limits.maxForEachStringValues) values or fewer."
             )
         }
         for (index, value) in step.values.enumerated() {
-            addString(value, path: "\(path).values[\(index)]", role: "for_each_string value")
+            addString(value, path: path.child(.values).index(index).description, role: "for_each_string value")
         }
 
         for (index, value) in step.values.enumerated() {
             validateResolvedStringLoopPayloads(
                 step.body,
                 context: ResolvedStringLoopPayloadValidationContext(
-                    path: "\(path).body",
+                    path: path.child(.body),
                     depth: bodyDepth,
                     scope: scope.bindingString(step.parameter),
                     environment: environment.binding(string: value, to: step.parameter),
                     definitionScope: definitionScope,
                     rootDefinitionScope: rootDefinitionScope,
                     callGraph: callGraph,
-                    valuePath: "\(path).values[\(index)]"
+                    valuePath: path.child(.values).index(index).description
                 )
             )
         }
     }
 
-    mutating func validateRepeatUntil(_ step: RepeatUntilStep, path: String) {
+    mutating func validateRepeatUntil(_ step: RepeatUntilStep, path: HeistTraversalPath) {
         guard step.timeout >= 0 else {
             fail(
-                path: "\(path).timeout",
+                path: path.child(.timeout).description,
                 contract: "repeat_until timeout must be non-negative",
                 observed: "\(step.timeout)",
                 correction: "Use a timeout of 0 or more seconds."
@@ -439,7 +443,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         }
         guard !step.body.isEmpty else {
             fail(
-                path: "\(path).body",
+                path: path.child(.body).description,
                 contract: "repeat_until body must not be empty",
                 observed: "empty body",
                 correction: "Add at least one action to repeat, or use WaitFor for passive waiting."

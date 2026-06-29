@@ -33,7 +33,8 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request: CLIRequestParameters = [.timeout: .double(timeout)]
+        var request = CLIRequestParameters()
+        request.set(.timeout, timeout)
         request.set(.text, text)
         let target = try element.parsedTarget()
 

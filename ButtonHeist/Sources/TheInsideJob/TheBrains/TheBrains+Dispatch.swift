@@ -65,7 +65,7 @@ extension TheBrains {
             return await performInteraction(
                 method: .typeText,
                 observationScope: .discovery,
-                afterStatePayload: { self.actions.typeTextPayload(for: target, in: $0) },
+                afterStatePayload: { self.actions.typeTextPayload(for: target, resolvedElementId: $1, in: $0) },
                 interaction: { await self.actions.executeTypeText(target) }
             )
         case .scroll(let target):
@@ -115,7 +115,7 @@ extension TheBrains {
         observationScope: SemanticObservationScope = .visible,
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
-        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
+        afterStatePayload: ((PostActionObservation.BeforeState, HeistId?) -> ResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
@@ -141,7 +141,9 @@ extension TheBrains {
             method: result.method,
             message: result.message,
             payload: result.payload,
-            afterStatePayload: afterStatePayload,
+            afterStatePayload: afterStatePayload.map { payload in
+                { afterState in payload(afterState, result.resolvedElementId) }
+            },
             errorKind: Self.actionErrorKind(for: result),
             subjectEvidence: result.subjectEvidence,
             activationTrace: result.activationTrace,

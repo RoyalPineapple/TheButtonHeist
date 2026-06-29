@@ -1,9 +1,9 @@
 import Foundation
 
-public struct HeistPlanSourceCompiler: Sendable {
-    public init() {}
+package struct HeistPlanSourceCompiler: Sendable {
+    package init() {}
 
-    public func compileResult(
+    package func compileResult(
         _ source: String,
         sourceName: String = "inline-heist-plan"
     ) -> ValidationResult<HeistPlan, HeistBuildDiagnostic> {
@@ -26,7 +26,7 @@ public struct HeistPlanSourceCompiler: Sendable {
         }
     }
 
-    public func compile(
+    package func compile(
         _ source: String,
         sourceName: String = "inline-heist-plan"
     ) throws -> HeistPlan {
@@ -35,25 +35,25 @@ public struct HeistPlanSourceCompiler: Sendable {
     }
 }
 
-public struct HeistPlanSourceCompilerError: Error, Sendable, Equatable, CustomStringConvertible {
-    public let diagnostics: [HeistBuildDiagnostic]
+package struct HeistPlanSourceCompilerError: Error, Sendable, Equatable, CustomStringConvertible {
+    package let diagnostics: [HeistBuildDiagnostic]
 
-    public var diagnostic: HeistBuildDiagnostic { diagnostics.first ?? HeistBuildDiagnostic(
+    package var diagnostic: HeistBuildDiagnostic { diagnostics.first ?? HeistBuildDiagnostic(
         code: .sourceInvalidSyntax,
         phase: .sourceCompilation,
         message: "ButtonHeist source failed without diagnostics"
     ) }
-    public var message: String { diagnostics.map(\.message).joined(separator: "\n") }
-    public var sourceName: String { diagnostic.sourceSpan?.sourceName ?? "" }
-    public var offset: Int { diagnostic.sourceSpan?.offset ?? 0 }
-    public var line: Int { diagnostic.sourceSpan?.line ?? 1 }
-    public var column: Int { diagnostic.sourceSpan?.column ?? 1 }
+    package var message: String { diagnostics.map(\.message).joined(separator: "\n") }
+    package var sourceName: String { diagnostic.sourceSpan?.sourceName ?? "" }
+    package var offset: Int { diagnostic.sourceSpan?.offset ?? 0 }
+    package var line: Int { diagnostic.sourceSpan?.line ?? 1 }
+    package var column: Int { diagnostic.sourceSpan?.column ?? 1 }
 
-    public var description: String {
+    package var description: String {
         diagnostics.map(\.renderedMessage).joined(separator: "\n")
     }
 
-    public init(
+    package init(
         code: String = "heist.source.invalid_syntax",
         phase: HeistBuildPhase = .sourceCompilation,
         message: String,
@@ -79,11 +79,11 @@ public struct HeistPlanSourceCompilerError: Error, Sendable, Equatable, CustomSt
         ))
     }
 
-    public init(diagnostic: HeistBuildDiagnostic) {
+    package init(diagnostic: HeistBuildDiagnostic) {
         self.init(diagnostics: [diagnostic])
     }
 
-    public init(diagnostics: [HeistBuildDiagnostic]) {
+    package init(diagnostics: [HeistBuildDiagnostic]) {
         self.diagnostics = diagnostics.isEmpty
             ? [HeistBuildDiagnostic(
                 code: .sourceInvalidSyntax,

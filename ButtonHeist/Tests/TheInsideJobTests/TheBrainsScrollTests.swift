@@ -80,9 +80,11 @@ final class TheBrainsScrollTests: XCTestCase {
             throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
         }
 
-        let unsafeTargets = brains.stash.scrollableContainerViewsByPath.values.filter(
-            \.bhIsUnsafeForProgrammaticScrolling
-        )
+        var seenUnsafeTargets = Set<ObjectIdentifier>()
+        let unsafeTargets = brains.stash.scrollableContainerViewsByPath.values.filter {
+            guard $0.bhIsUnsafeForProgrammaticScrolling else { return false }
+            return seenUnsafeTargets.insert(ObjectIdentifier($0)).inserted
+        }
         let unsafeOffsets = Dictionary(
             uniqueKeysWithValues: unsafeTargets.map { (ObjectIdentifier($0), $0.contentOffset) }
         )

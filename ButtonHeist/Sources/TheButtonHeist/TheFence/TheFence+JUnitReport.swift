@@ -16,7 +16,7 @@ extension TheFence {
         heistName: String,
         totalTimeSeconds: Double
     ) -> HeistJUnitReport {
-        let projection = HeistReportProjection(result: result, netDelta: nil, profile: .junit)
+        let projection = HeistReportProjection(result: result, accessibilityTrace: nil, profile: .junit)
         let steps = junitSteps(projection: projection)
         return HeistJUnitReport(
             heistName: heistName,
@@ -32,7 +32,7 @@ extension TheFence {
     /// Output-only step entries for the JUnit report, walked from the execution
     /// receipt tree in execution order.
     func junitSteps(result: HeistExecutionResult) -> [HeistJUnitReport.StepResult] {
-        junitSteps(projection: HeistReportProjection(result: result, netDelta: nil, profile: .junit))
+        junitSteps(projection: HeistReportProjection(result: result, accessibilityTrace: nil, profile: .junit))
     }
 
     func junitSteps(projection: HeistReportProjection) -> [HeistJUnitReport.StepResult] {

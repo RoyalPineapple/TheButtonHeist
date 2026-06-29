@@ -9,6 +9,17 @@ struct PublicHeistReportResponseDTO: Decodable, Equatable {
 struct PublicHeistReportDTO: Decodable, Equatable {
     let summary: PublicHeistReportSummaryDTO
     let nodes: [PublicHeistReportNodeDTO]
+    let netDelta: PublicHeistDeltaDTO?
+
+    init(
+        summary: PublicHeistReportSummaryDTO,
+        nodes: [PublicHeistReportNodeDTO],
+        netDelta: PublicHeistDeltaDTO? = nil
+    ) {
+        self.summary = summary
+        self.nodes = nodes
+        self.netDelta = netDelta
+    }
 }
 
 struct PublicHeistReportSummaryDTO: Decodable, Equatable {

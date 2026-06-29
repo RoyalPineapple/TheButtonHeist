@@ -25,7 +25,7 @@ extension TheGetaway {
             instanceId: identity.sessionId.uuidString,
             instanceIdentifier: identity.effectiveInstanceId,
             listeningPort: listeningPort,
-            simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
+            simulatorUDID: ProcessInfo.processInfo.environment[.udid],
             vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString,
             tlsActive: identity.tlsActive
         )

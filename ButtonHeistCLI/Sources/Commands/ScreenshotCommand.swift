@@ -24,7 +24,7 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     func run() async throws {
-        var request: CLIRequestParameters = [:]
+        var request = CLIRequestParameters()
         if let outputPath = output {
             request.set(.output, outputPath)
         }

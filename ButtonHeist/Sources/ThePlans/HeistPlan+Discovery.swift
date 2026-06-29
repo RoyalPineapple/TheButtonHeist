@@ -568,7 +568,7 @@ private struct HeistSemanticSurfaceBuilder {
         invocationStack: [String]
     ) {
         guard let resolved = definitionScope.resolveInvocation(
-            path: invocation.invocationPath.components,
+            path: invocation.invocationPath,
             rootScope: rootDefinitionScope
         ) else { return }
         appendUnique(resolved.qualifiedName, to: &nestedRunHeists)

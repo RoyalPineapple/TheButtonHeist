@@ -48,10 +48,9 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Invalid edge '\(edge)'. Valid: \(Self.catalogAllowedValuesDescription(for: .edge))")
         }
 
-        var request: CLIRequestParameters = [
-            .edge: .string(scrollEdge),
-            .timeout: .double(timeoutOption.timeout),
-        ]
+        var request = CLIRequestParameters()
+        request.set(.edge, scrollEdge)
+        request.set(.timeout, timeoutOption.timeout)
         let target: ElementTarget?
         if let container {
             request.set(.container, container)

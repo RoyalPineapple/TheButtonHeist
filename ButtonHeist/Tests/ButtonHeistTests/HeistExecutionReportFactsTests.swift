@@ -51,6 +51,47 @@ final class HeistExecutionReportFactsTests: XCTestCase {
         XCTAssertEqual(result.steps.first?.reportTarget, .predicate(ElementPredicate(label: "Delete")))
     }
 
+    func testReportDTOCarriesStepStoryForProjectionAdapters() {
+        let result = HeistExecutionResult(
+            steps: [
+                actionStep(
+                    command: .activate(.target(.predicate(ElementPredicate(label: "Delete")))),
+                    actionResult: ActionResult(
+                        success: false,
+                        method: .activate,
+                        message: "Delete not found",
+                        errorKind: .elementNotFound
+                    ),
+                    failure: HeistFailureDetail(
+                        category: .targetResolution,
+                        contract: "action dispatch succeeds",
+                        observed: "Delete not found"
+                    )
+                ),
+            ],
+            durationMs: 5,
+            abortedAtPath: "$.body[0]"
+        )
+
+        let summary = HeistExecutionReportSummaryDTO(result: result)
+        let report = result.steps[0].reportDTO
+
+        XCTAssertEqual(summary.executedTopLevelStepCount, 1)
+        XCTAssertEqual(summary.executedNodeCount, 1)
+        XCTAssertEqual(summary.outputReceiptNodeCount, 1)
+        XCTAssertEqual(summary.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(report.path, "$.body[0]")
+        XCTAssertEqual(report.kind, "action")
+        XCTAssertEqual(report.displayName, "activate")
+        XCTAssertEqual(report.commandName, "activate")
+        XCTAssertEqual(report.target, .predicate(ElementPredicate(label: "Delete")))
+        XCTAssertEqual(report.status, .failed)
+        XCTAssertEqual(report.message, "Delete not found")
+        XCTAssertEqual(report.failureMessage, "Delete not found")
+        XCTAssertEqual(report.failureCategory, .targetResolution)
+        XCTAssertEqual(report.actionErrorKind, .elementNotFound)
+    }
+
     func testAbortedResultContainsOnlyExecutedSteps() {
         let result = HeistExecutionResult(
             steps: [

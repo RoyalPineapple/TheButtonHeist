@@ -1,7 +1,7 @@
 import Foundation
 
 @_spi(ButtonHeistInternals) public struct FenceResponsePresenter: Sendable {
-    public let profile: ProjectionProfile
+    let profile: ProjectionProfile
 
     public init(profile: ProjectionProfile = .summary) {
         self.profile = profile

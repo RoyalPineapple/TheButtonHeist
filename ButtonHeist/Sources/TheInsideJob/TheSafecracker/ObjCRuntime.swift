@@ -269,31 +269,47 @@ extension ObjCRuntime.ClassMessage {
 
 /// The only raw Objective-C bridge primitive in this file.
 ///
-/// It owns `AnyObject`, `perform`, and IMP casting so the rest of the runtime
-/// bridge can expose NSObject-backed Swift APIs.
+/// It owns raw Objective-C receiver dispatch, `perform`, and IMP casting so
+/// the rest of the runtime bridge can expose NSObject-backed Swift APIs.
 private struct RawObjCMessageBridge {
 
-    private typealias IMPInt = @convention(c) (AnyObject, Selector, Int) -> Void
-    private typealias IMPBool = @convention(c) (AnyObject, Selector, Bool) -> Void
-    private typealias IMPDouble = @convention(c) (AnyObject, Selector, Double) -> Void
-    private typealias IMPPointer = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
-    private typealias IMPPointBool = @convention(c) (AnyObject, Selector, CGPoint, Bool) -> Void
-    private typealias IMPObjectBoolVoid = @convention(c) (AnyObject, Selector, AnyObject, Bool) -> Void
-    private typealias IMPObjectBool = @convention(c) (AnyObject, Selector, AnyObject) -> Bool
-    private typealias IMPPointRadiusObject = @convention(c) (AnyObject, Selector, CGPoint, CGFloat) -> AnyObject?
+    private typealias RawObjectiveCReceiver = AnyObject
 
-    private let target: AnyObject
+    private typealias IMPInt = @convention(c) (RawObjectiveCReceiver, Selector, Int) -> Void
+    private typealias IMPBool = @convention(c) (RawObjectiveCReceiver, Selector, Bool) -> Void
+    private typealias IMPDouble = @convention(c) (RawObjectiveCReceiver, Selector, Double) -> Void
+    private typealias IMPPointer = @convention(c) (RawObjectiveCReceiver, Selector, UnsafeMutableRawPointer) -> Void
+    private typealias IMPPointBool = @convention(c) (RawObjectiveCReceiver, Selector, CGPoint, Bool) -> Void
+    private typealias IMPObjectBoolVoid = @convention(c) (
+        RawObjectiveCReceiver,
+        Selector,
+        RawObjectiveCReceiver,
+        Bool
+    ) -> Void
+    private typealias IMPObjectBool = @convention(c) (
+        RawObjectiveCReceiver,
+        Selector,
+        RawObjectiveCReceiver
+    ) -> Bool
+    private typealias IMPPointRadiusObject = @convention(c) (
+        RawObjectiveCReceiver,
+        Selector,
+        CGPoint,
+        CGFloat
+    ) -> RawObjectiveCReceiver?
+
+    private let target: RawObjectiveCReceiver
     private let selector: Selector
 
     init?<Target: NSObject>(target: Target, selector: Selector) {
-        let receiver = target as AnyObject
+        let receiver = target as RawObjectiveCReceiver
         guard receiver.responds(to: selector) else { return nil }
         self.target = receiver
         self.selector = selector
     }
 
     init?(targetClass: AnyClass, selector: Selector) {
-        let receiver = targetClass as AnyObject
+        let receiver = targetClass as RawObjectiveCReceiver
         guard receiver.responds(to: selector) else { return nil }
         self.target = receiver
         self.selector = selector

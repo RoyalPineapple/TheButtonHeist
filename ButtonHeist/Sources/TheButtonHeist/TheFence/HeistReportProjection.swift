@@ -30,14 +30,14 @@ struct HeistReportSummaryProjection: Sendable {
             : nil
     }
 
-    init(result: HeistExecutionResult, outputReceiptNodeCount: Int) {
-        executedTopLevelStepCount = result.executedTopLevelStepCount
-        executedNodeCount = result.executedNodeCount
-        self.outputReceiptNodeCount = outputReceiptNodeCount
-        abortedAtPath = result.abortedAtPath
-        durationMs = result.durationMs
-        expectationsChecked = result.expectationsChecked
-        expectationsMet = result.expectationsMet
+    init(summary: HeistExecutionReportSummaryDTO) {
+        executedTopLevelStepCount = summary.executedTopLevelStepCount
+        executedNodeCount = summary.executedNodeCount
+        outputReceiptNodeCount = summary.outputReceiptNodeCount
+        abortedAtPath = summary.abortedAtPath
+        durationMs = summary.durationMs
+        expectationsChecked = summary.expectationsChecked
+        expectationsMet = summary.expectationsMet
     }
 }
 
@@ -66,13 +66,30 @@ struct HeistReportProjection: Sendable {
 
     init(
         result: HeistExecutionResult,
+        accessibilityTrace: AccessibilityTrace?,
+        profile: ProjectionProfile
+    ) {
+        self.init(
+            result: result,
+            netDelta: accessibilityTrace?.meaningfulEndpointDelta,
+            profile: profile.heistReport
+        )
+    }
+
+    init(
+        result: HeistExecutionResult,
         netDelta: AccessibilityTrace.Delta?,
         profile: ProjectionProfile
     ) {
         status = result.abortedAtPath == nil ? .ok : .partial
         nodes = result.steps.map { HeistReportNodeProjection(step: $0, profile: profile) }
         outputNodes = nodes.flatMap(\.flattened)
-        summary = HeistReportSummaryProjection(result: result, outputReceiptNodeCount: outputNodes.count)
+        let reportSummary = HeistExecutionReportSummaryDTO(result: result)
+        precondition(
+            outputNodes.count == reportSummary.outputReceiptNodeCount,
+            "heist report projection output nodes must match TheScore report summary"
+        )
+        summary = HeistReportSummaryProjection(summary: reportSummary)
         failedStepPath = result.failedStepPath
         failureScreenshotSummary = result.failureScreenshotSummary
         failureInterfaceDump = result.failureInterfaceDump(
@@ -82,6 +99,12 @@ struct HeistReportProjection: Sendable {
         finalScreenId = result.traceResultsInExecutionOrder
             .compactMap { $0.accessibilityTrace?.endpointScreenId }
             .last
+    }
+}
+
+private extension ProjectionProfile {
+    var heistReport: ProjectionProfile {
+        kind == .summary ? .mcp : self
     }
 }
 
@@ -107,33 +130,32 @@ struct HeistReportNodeProjection: Sendable {
     let children: [HeistReportNodeProjection]
 
     init(step: HeistExecutionStepResult, profile: ProjectionProfile) {
-        let reportedFailureMessage = step.reportFailureMessage
-        let reportedActionErrorKind = step.reportActionResult?.success == false ? step.reportActionResult?.errorKind : nil
+        let report = step.reportDTO
 
-        path = step.path
-        kind = step.reportStepName
-        capability = step.invocationEvidence?.invocation?.capabilityName
-        displayName = step.reportDisplayName
-        commandName = step.reportCommandName
-        target = step.reportTarget
-        status = step.status
-        message = step.reportMessage
+        path = report.path
+        kind = report.kind
+        capability = report.capabilityName
+        displayName = report.displayName
+        commandName = report.commandName
+        target = report.target
+        status = report.status
+        message = report.message
         durationMs = step.durationMs
         intent = step.intent
         evidence = HeistReportEvidenceProjection(step: step, profile: profile)
-        failureMessage = reportedFailureMessage
+        failureMessage = report.failureMessage
         failure = step.failure.map {
             HeistReportFailureProjection(
                 detail: $0,
-                message: reportedFailureMessage ?? $0.observed,
-                actionErrorKind: reportedActionErrorKind
+                message: report.failureMessage ?? $0.observed,
+                actionErrorKind: report.actionErrorKind
             )
         }
-        failureCategory = step.failure?.category
+        failureCategory = report.failureCategory
         abortedAtChildPath = step.abortedAtChildPath
-        expectation = step.reportExpectation.map { ExpectationProjection(result: $0) }
-        actionErrorKind = reportedActionErrorKind
-        traceDelta = step.traceEvidenceResult?.accessibilityTrace?.endpointDelta.map {
+        expectation = report.expectation.map { ExpectationProjection(result: $0) }
+        actionErrorKind = report.actionErrorKind
+        traceDelta = report.traceEvidenceResult?.accessibilityTrace?.endpointDelta.map {
             DeltaProjection(delta: $0, profile: profile, includeScreenInterface: true)
         }
         children = step.children.map { HeistReportNodeProjection(step: $0, profile: profile) }

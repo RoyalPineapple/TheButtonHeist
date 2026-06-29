@@ -671,15 +671,17 @@ final class ElementInflationProductTests: XCTestCase {
     ) throws {
         let screen = try XCTUnwrap(brains.stash.refreshLiveCapture())
         let outerContainerPath = try XCTUnwrap(
-            firstLiveScrollableContainerPath(in: screen),
-            "Expected nested fixture to expose a live outer scroll container. \(scrollContainerDiagnostics(in: screen))"
+            liveScrollableContainerPath(for: fixture.outerScrollView, in: screen),
+            "Expected nested fixture to expose the live outer scroll view. \(scrollContainerDiagnostics(in: screen))"
         )
-        let innerContainerPath = outerContainerPath.appending(1)
-        let innerContainer = AccessibilityContainer(
+        let innerContainerPath = try liveScrollableContainerPath(for: fixture.innerScrollView, in: screen)
+            ?? outerContainerPath.appending(innerScrollViewChildIndex(in: fixture))
+        let capturedInnerContainer = screen.semantic.containers[innerContainerPath]
+        let innerContainer = capturedInnerContainer?.container ?? AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(fixture.innerScrollView.contentSize)),
             frame: AccessibilityRect(fixture.innerScrollView.frame)
         )
-        let innerContainerName = TheBurglar.containerName(
+        let innerContainerName = capturedInnerContainer?.containerName ?? TheBurglar.containerName(
             for: innerContainer,
             contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size)
         )
@@ -705,7 +707,8 @@ final class ElementInflationProductTests: XCTestCase {
         elements[entry.heistId] = entry
 
         var containers = screen.semantic.containers
-        let observedContainerActivationPoint = try observedContentActivationPoint(
+        let observedContainerActivationPoint = try capturedInnerContainer?.observedScrollContentActivationPoint
+            ?? observedContentActivationPoint(
             origin: fixture.innerFrameOrigin,
             size: fixture.innerScrollView.frame.size
         )
@@ -714,7 +717,8 @@ final class ElementInflationProductTests: XCTestCase {
             path: innerContainerPath,
             containerName: innerContainerName,
             contentFrame: CGRect(origin: .zero, size: fixture.innerScrollView.frame.size),
-            scrollMembership: Screen.ScrollMembership(containerPath: outerContainerPath, index: 1),
+            scrollMembership: capturedInnerContainer?.scrollMembership
+                ?? Screen.ScrollMembership(containerPath: outerContainerPath, index: nil),
             observedScrollContentActivationPoint: observedContainerActivationPoint
         )
 
@@ -740,6 +744,25 @@ final class ElementInflationProductTests: XCTestCase {
             return item.path
         }
         return nil
+    }
+
+    private func liveScrollableContainerPath(for scrollView: UIScrollView, in screen: Screen) -> TreePath? {
+        let matchingPaths = screen.liveCapture.scrollableContainerViewsByPath
+            .compactMap { path, ref -> TreePath? in
+                guard ref.view === scrollView else { return nil }
+                return path
+            }
+            .sorted { $0.indices.lexicographicallyPrecedes($1.indices) }
+        return matchingPaths.first {
+            screen.liveCapture.containerObject(forPath: $0) === scrollView
+        } ?? matchingPaths.first
+    }
+
+    private func innerScrollViewChildIndex(in fixture: NestedScrollRevealFixture) throws -> Int {
+        try XCTUnwrap(
+            fixture.outerScrollView.subviews.firstIndex { $0 === fixture.innerScrollView },
+            "Expected nested fixture inner scroll view to be a direct child of the outer scroll view"
+        )
     }
 
     private func scrollContainerDiagnostics(in screen: Screen) -> String {

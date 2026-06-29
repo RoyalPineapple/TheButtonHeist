@@ -286,6 +286,7 @@
 		79189AE84F80634FF2B7E83A /* ProjectionProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A36A594E8C856D1F98C1E9 /* ProjectionProfile.swift */; };
 		7A480BA7DC53F19D48C26E2D /* TaskTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDF31EB8DC13C78BB2FE3B6D /* TaskTracker.swift */; };
 		7B2899A9C5140C622B93EEBC /* HeistStep.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA6CDE58E5D939DDC2D8E6D8 /* HeistStep.swift */; };
+		7C00CFC452C1B4808FABFDA8 /* SimulatorEnvironmentKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1811DE55A0026DD7C6A888F /* SimulatorEnvironmentKey.swift */; };
 		7C171E0C9479C3EAD5757469 /* TheSafecrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 424717FB3ECFCCEA52B1971B /* TheSafecrackerTests.swift */; };
 		7C9216379B68310FC37B5236 /* ServerTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F75B66F13FE91D3C14861B /* ServerTransportTests.swift */; };
 		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
@@ -1278,6 +1279,7 @@
 		A0E4125D91BDBBE45E6C66F9 /* TheBurglarContainerFramesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBurglarContainerFramesTests.swift; sourceTree = "<group>"; };
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A157E62B4AF73FED96E8D56E /* TaskTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskTrackerTests.swift; sourceTree = "<group>"; };
+		A1811DE55A0026DD7C6A888F /* SimulatorEnvironmentKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatorEnvironmentKey.swift; sourceTree = "<group>"; };
 		A1D079603D15A568B7F751AA /* StartupConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupConfigurationTests.swift; sourceTree = "<group>"; };
 		A23BFDA702935F9635FDA847 /* AccessibilityHierarchyReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityHierarchyReconciliationTests.swift; sourceTree = "<group>"; };
 		A25BA8ABD0C4B2099F15F829 /* HeistExecutionResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistExecutionResult.swift; sourceTree = "<group>"; };
@@ -1850,6 +1852,7 @@
 				3A84F7B0E5395FF0F4803775 /* InsideJobTransportRuntime.swift */,
 				1AE9BC7276FB55DC2248D7FF /* PageOverlap.swift */,
 				1FD518EA5D88763EF7FF435E /* SafeGeometryHashing.swift */,
+				A1811DE55A0026DD7C6A888F /* SimulatorEnvironmentKey.swift */,
 				0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */,
 			);
 			path = TheInsideJob;
@@ -3086,6 +3089,7 @@
 				ACD8CD478747DADBFEB7405C /* TheMuscleAdmission.swift in Sources */,
 				F8A47A10FCD3C55B5E93C294 /* TheMuscleSession.swift in Sources */,
 				509F9383450AF3A4309F76E0 /* TransportEventStream.swift in Sources */,
+				7C00CFC452C1B4808FABFDA8 /* SimulatorEnvironmentKey.swift in Sources */,
 				40888A351E80D3B4B46A1003 /* CancellableSleep.swift in Sources */,
 				99E0AE6F2E320BF69B6D9E8F /* GeometryValidation.swift in Sources */,
 				37B4B9C76D5CDA76A5FE69C1 /* ScreenMetrics.swift in Sources */,

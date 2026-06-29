@@ -265,7 +265,7 @@ private struct HeistCallGraphBuilder {
             collectEdges(in: plan.body, caller: caller, definitionScope: inlineScope, rootDefinitionScope: inlineScope)
         case .invoke(let invocation):
             guard let resolved = definitionScope.resolveInvocation(
-                path: invocation.invocationPath.components,
+                path: invocation.invocationPath,
                 rootScope: rootDefinitionScope
             ) else { return }
             nodes.insert(resolved.qualifiedName)

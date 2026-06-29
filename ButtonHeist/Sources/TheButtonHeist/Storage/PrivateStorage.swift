@@ -175,13 +175,17 @@ enum PrivateStorage {
 
 }
 
+/// FileManager exposes file attributes through an untyped Foundation map. Keep
+/// that bridge named and private so storage code stays permission-typed.
+private typealias FoundationFileAttributeDictionary = [FileAttributeKey: Any]
+
 private struct PrivateFileAttributes {
     let permissions: PrivateFilePermissions
 
     static let privateDirectory = PrivateFileAttributes(permissions: .ownerOnlyDirectory)
     static let privateFile = PrivateFileAttributes(permissions: .ownerOnlyFile)
 
-    var foundationAttributes: [FileAttributeKey: Any] {
+    var foundationAttributes: FoundationFileAttributeDictionary {
         [.posixPermissions: permissions.rawValue]
     }
 }

@@ -33,17 +33,14 @@ struct CLIRequestBuildError: Error, CustomStringConvertible {
 enum CLIRequestBuilder {
 
     static func arguments(
-        parameters: CLIRequestParameters = [:],
+        parameters: CLIRequestParameters = CLIRequestParameters(),
         target: ElementTarget? = nil
     ) -> TheFence.CommandArgumentEnvelope {
-        var values = Dictionary(
-            parameters.map { ($0.key.rawValue, $0.value) },
-            uniquingKeysWith: { _, newest in newest }
-        )
+        var parameters = parameters
         if let target {
-            values[FenceParameterKey.target.rawValue] = targetValue(target)
+            parameters.set(.target, targetObject(target))
         }
-        return TheFence.CommandArgumentEnvelope(values: values)
+        return TheFence.CommandArgumentEnvelope(values: parameters.rawValues)
     }
 
     static func parsedRequest(from line: String) throws -> CLIParsedRequest {
@@ -110,34 +107,34 @@ enum CLIRequestBuilder {
     }
 
     static func targetValue(_ target: ElementTarget) -> HeistValue {
-        .object(targetObject(target))
+        targetObject(target).heistValue
     }
 
-    static func targetObject(_ target: ElementTarget) -> [String: HeistValue] {
+    static func targetObject(_ target: ElementTarget) -> CLIRequestObject {
         switch target {
         case .predicate(let predicate, let ordinal):
             var object = predicateArgumentValues(predicate)
             if let ordinal {
-                object[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
+                object.set(.ordinal, ordinal)
             }
             return object
         }
     }
 
-    private static func predicateArgumentValues(_ predicate: ElementPredicate) -> [String: HeistValue] {
-        var object: [String: HeistValue] = [:]
+    private static func predicateArgumentValues(_ predicate: ElementPredicate) -> CLIRequestObject {
+        var object = CLIRequestObject()
         for check in predicate.checks {
             switch check {
             case .label(let match):
-                appendStringMatch(match, to: FenceParameterKey.label.rawValue, in: &object)
+                appendStringMatch(match, to: .label, in: &object)
             case .identifier(let match):
-                appendStringMatch(match, to: FenceParameterKey.identifier.rawValue, in: &object)
+                appendStringMatch(match, to: .identifier, in: &object)
             case .value(let match):
-                appendStringMatch(match, to: FenceParameterKey.value.rawValue, in: &object)
+                appendStringMatch(match, to: .value, in: &object)
             case .traits(let traits):
-                appendTraits(traits, to: FenceParameterKey.traits.rawValue, in: &object)
+                appendTraits(traits, to: .traits, in: &object)
             case .excludeTraits(let traits):
-                appendTraits(traits, to: FenceParameterKey.excludeTraits.rawValue, in: &object)
+                appendTraits(traits, to: .excludeTraits, in: &object)
             }
         }
         return object
@@ -145,16 +142,16 @@ enum CLIRequestBuilder {
 
     private static func appendStringMatch(
         _ match: StringMatch<String>,
-        to key: String,
-        in object: inout [String: HeistValue]
+        to key: FenceParameterKey,
+        in object: inout CLIRequestObject
     ) {
-        appendOneOrManyValue(stringMatchValue(match), to: key, in: &object)
+        object.appendOneOrMany(stringMatchValue(match), for: key)
     }
 
     private static func appendTraits(
         _ traits: Set<HeistTrait>,
-        to key: String,
-        in object: inout [String: HeistValue]
+        to key: FenceParameterKey,
+        in object: inout CLIRequestObject
     ) {
         guard !traits.isEmpty else { return }
         var values: [HeistValue]
@@ -164,29 +161,14 @@ enum CLIRequestBuilder {
             values = []
         }
         values.append(contentsOf: traits.sorted { $0.rawValue < $1.rawValue }.map { .string($0.rawValue) })
-        object[key] = .array(values)
-    }
-
-    private static func appendOneOrManyValue(
-        _ value: HeistValue,
-        to key: String,
-        in object: inout [String: HeistValue]
-    ) {
-        switch object[key] {
-        case nil:
-            object[key] = value
-        case .array(let existing)?:
-            object[key] = .array(existing + [value])
-        case let existing?:
-            object[key] = .array([existing, value])
-        }
+        object.set(key, .array(values))
     }
 
     private static func stringMatchValue(_ match: StringMatch<String>) -> HeistValue {
-        .object([
-            FenceParameterKey.mode.rawValue: .string(match.mode.rawValue),
-            FenceParameterKey.value.rawValue: .string(match.value),
-        ])
+        CLIRequestObject([
+            (.mode, .string(match.mode.rawValue)),
+            (.value, .string(match.value)),
+        ]).heistValue
     }
 }
 

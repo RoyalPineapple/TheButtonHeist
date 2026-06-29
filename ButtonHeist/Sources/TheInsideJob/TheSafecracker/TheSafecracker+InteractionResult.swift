@@ -12,6 +12,7 @@ extension TheSafecracker {
         let message: String?
         let payload: ResultPayload?
         let subjectEvidence: ActionSubjectEvidence?
+        let resolvedElementId: HeistId?
         let activationTrace: ActivationTrace?
         let timing: ActionPerformanceTiming?
         /// Structural reason for failure when `success == false`. Lets dispatch code
@@ -25,6 +26,7 @@ extension TheSafecracker {
             message: String?,
             payload: ResultPayload?,
             subjectEvidence: ActionSubjectEvidence?,
+            resolvedElementId: HeistId?,
             activationTrace: ActivationTrace?,
             timing: ActionPerformanceTiming? = nil,
             failureKind: FailureKind? = nil
@@ -34,6 +36,7 @@ extension TheSafecracker {
             self.message = message
             self.payload = payload
             self.subjectEvidence = subjectEvidence
+            self.resolvedElementId = resolvedElementId
             self.activationTrace = activationTrace
             self.timing = timing
             self.failureKind = failureKind
@@ -44,6 +47,7 @@ extension TheSafecracker {
             message: String? = nil,
             payload: ResultPayload? = nil,
             subjectEvidence: ActionSubjectEvidence? = nil,
+            resolvedElementId: HeistId? = nil,
             activationTrace: ActivationTrace? = nil
         ) -> InteractionResult {
             InteractionResult(
@@ -52,6 +56,7 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: subjectEvidence,
+                resolvedElementId: resolvedElementId,
                 activationTrace: activationTrace
             )
         }
@@ -61,6 +66,7 @@ extension TheSafecracker {
             message: String,
             payload: ResultPayload? = nil,
             subjectEvidence: ActionSubjectEvidence? = nil,
+            resolvedElementId: HeistId? = nil,
             activationTrace: ActivationTrace? = nil,
             failureKind: FailureKind? = nil
         ) -> InteractionResult {
@@ -70,6 +76,7 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: subjectEvidence,
+                resolvedElementId: resolvedElementId,
                 activationTrace: activationTrace,
                 failureKind: failureKind
             )
@@ -83,6 +90,7 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: evidence,
+                resolvedElementId: resolvedElementId,
                 activationTrace: activationTrace,
                 timing: timing,
                 failureKind: failureKind
@@ -97,6 +105,7 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: subjectEvidence,
+                resolvedElementId: resolvedElementId,
                 activationTrace: trace,
                 timing: timing,
                 failureKind: failureKind
@@ -111,6 +120,7 @@ extension TheSafecracker {
                 message: message,
                 payload: payload,
                 subjectEvidence: subjectEvidence,
+                resolvedElementId: resolvedElementId,
                 activationTrace: activationTrace,
                 timing: self.timing?.merging(timing) ?? timing,
                 failureKind: failureKind

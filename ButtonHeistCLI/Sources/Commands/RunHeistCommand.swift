@@ -184,7 +184,8 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
                 )
             }
             // Forward the artifact path; the fence reads the package into a HeistPlan.
-            var request: CLIRequestParameters = [.path: .string(path)]
+            var request = CLIRequestParameters()
+            request.set(.path, path)
             if let argument {
                 request.set(.argument, try parseRootArgument(argument))
             }
@@ -201,7 +202,8 @@ struct RunHeistCommand: AsyncParsableCommand, CLICommandContract {
         guard !inline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ValidationError("--plan must be ButtonHeist DSL source")
         }
-        var request: CLIRequestParameters = [.plan: .string(inline)]
+        var request = CLIRequestParameters()
+        request.set(.plan, inline)
         if let argument {
             request.set(.argument, try parseRootArgument(argument))
         }
