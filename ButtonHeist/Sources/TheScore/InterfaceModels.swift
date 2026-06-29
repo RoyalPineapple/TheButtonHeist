@@ -317,7 +317,7 @@ public struct InterfaceDiscoveryDiagnostics: Codable, Equatable, Sendable {
 
 public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, Sendable {
     public let containerName: ContainerName?
-    public let type: String
+    public let type: ContainerTypeName
     public let reasonCodes: [InterfaceDiscoveryReasonCode]
     public let scrollAxis: ScrollContainerAxis?
     public let viewportWidth: Double?
@@ -327,7 +327,7 @@ public struct InterfaceDiscoveryOmittedContainer: Codable, Equatable, Hashable, 
 
     public init(
         containerName: ContainerName? = nil,
-        type: String,
+        type: ContainerTypeName,
         reasonCodes: [InterfaceDiscoveryReasonCode],
         scrollAxis: ScrollContainerAxis? = nil,
         viewportWidth: Double? = nil,
@@ -355,7 +355,7 @@ extension InterfaceDiscoveryOmittedContainer: Comparable {
         let leftName = left.containerName?.rawValue ?? ""
         let rightName = right.containerName?.rawValue ?? ""
         if leftName != rightName { return leftName < rightName }
-        if left.type != right.type { return left.type < right.type }
+        if left.type != right.type { return left.type.rawValue < right.type.rawValue }
 
         let leftViewportWidth = left.viewportWidth ?? 0
         let rightViewportWidth = right.viewportWidth ?? 0

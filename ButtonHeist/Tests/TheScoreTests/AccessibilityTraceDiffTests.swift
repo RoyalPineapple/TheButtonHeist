@@ -178,9 +178,33 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let update = try XCTUnwrap(edits.updated.single)
         XCTAssertEqual(update.before.label, "Charge $0.00")
         XCTAssertEqual(update.after.label, "Review sale 1 item")
-        XCTAssertEqual(update.changes.map(\.property), [.value])
+        XCTAssertEqual(update.changes.map(\.property), [.label, .identifier, .value])
         XCTAssertEqual(delta.testElementEdits, edits)
         XCTAssertFalse(try XCTUnwrap(delta.testInteractionDigest).elementSetChanged)
+    }
+
+    func testTraceIdentityReportsLabelOnlyChangeAsElementUpdate() throws {
+        let beforeElement = makeElement(label: "Total", traits: [.staticText])
+        let afterElement = makeElement(label: "Total $12.00", traits: [.staticText])
+        let before = makeTraceIdentityInterface([
+            (element: beforeElement, identity: "total-label"),
+        ])
+        let after = makeTraceIdentityInterface([
+            (element: afterElement, identity: "total-label"),
+        ])
+
+        let edits = ElementEdits.between(before, after)
+        let delta = captureDelta(before: before, after: after)
+
+        XCTAssertTrue(edits.added.isEmpty)
+        XCTAssertTrue(edits.removed.isEmpty)
+        let update = try XCTUnwrap(edits.updated.single)
+        XCTAssertEqual(update.changes.map(\.property), [.label])
+        XCTAssertEqual(update.changes.first?.oldValue, .text("Total"))
+        XCTAssertEqual(update.changes.first?.newValue, .text("Total $12.00"))
+        guard case .elementsChanged = delta else {
+            return XCTFail("Expected elementsChanged for trace-identity label update, got \(delta)")
+        }
     }
 
     func testDifferentTraceIdentitiesDoNotFallBackToContentPairing() {

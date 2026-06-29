@@ -115,8 +115,6 @@ func projectElementStateChange(
 ) -> ElementUpdate? {
     var changes: [PropertyChange] = []
 
-    // label is identity (pairing key), not an update property — paired elements
-    // share it by construction, so no label PropertyChange is emitted.
     appendSemanticChanges(old: old, new: new, to: &changes)
 
     if includeGeometry {
@@ -132,6 +130,8 @@ private func appendSemanticChanges(
     new: HeistElement,
     to changes: inout [PropertyChange]
 ) {
+    appendChangeIfNeeded(LabelProperty.self, old: old, new: new, to: &changes)
+    appendChangeIfNeeded(IdentifierProperty.self, old: old, new: new, to: &changes)
     appendChangeIfNeeded(ValueProperty.self, old: old, new: new, to: &changes)
     appendChangeIfNeeded(TraitsProperty.self, old: old, new: new, to: &changes)
     appendChangeIfNeeded(HintProperty.self, old: old, new: new, to: &changes)

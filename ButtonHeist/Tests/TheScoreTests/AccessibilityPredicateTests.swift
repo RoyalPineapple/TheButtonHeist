@@ -1081,6 +1081,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         afterTraits: [HeistTrait]
     ) -> PropertyChange {
         switch property {
+        case .label:
+            return .label(old: old, new: new)
+        case .identifier:
+            return .identifier(old: old, new: new)
         case .value:
             return .value(old: old, new: new)
         case .hint:
@@ -1099,6 +1103,10 @@ final class AccessibilityPredicateTests: XCTestCase {
         traits: [HeistTrait]
     ) -> HeistElement {
         switch property {
+        case .label:
+            return makeElement(label: value ?? label, traits: traits)
+        case .identifier:
+            return makeElement(label: label, identifier: value, traits: traits)
         case .value:
             return makeElement(label: label, value: value, traits: traits)
         case .traits:
