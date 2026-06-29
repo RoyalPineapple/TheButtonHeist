@@ -2,6 +2,26 @@ import Foundation
 
 /// Directed graph of named local heist capability calls.
 public struct HeistCallGraph: Sendable, Equatable {
+    struct Node: Sendable, Equatable, Hashable, Comparable, CustomStringConvertible {
+        let name: String
+
+        init(_ name: String) {
+            self.name = name
+        }
+
+        init(namePath: [String]) {
+            self.init(HeistInvocationPath.render(namePath))
+        }
+
+        var description: String {
+            name
+        }
+
+        static func < (lhs: Node, rhs: Node) -> Bool {
+            lhs.name < rhs.name
+        }
+    }
+
     /// A resolved `RunHeist` edge from one definition body to another definition.
     public struct Edge: Sendable, Equatable, Hashable {
         public let caller: String
@@ -10,6 +30,24 @@ public struct HeistCallGraph: Sendable, Equatable {
         public init(caller: String, callee: String) {
             self.caller = caller
             self.callee = callee
+        }
+
+        init(_ edge: NodeEdge) {
+            self.init(caller: edge.caller.name, callee: edge.callee.name)
+        }
+    }
+
+    struct NodeEdge: Sendable, Equatable, Hashable {
+        let caller: Node
+        let callee: Node
+
+        init(caller: Node, callee: Node) {
+            self.caller = caller
+            self.callee = callee
+        }
+
+        init(_ edge: Edge) {
+            self.init(caller: Node(edge.caller), callee: Node(edge.callee))
         }
     }
 
@@ -21,9 +59,21 @@ public struct HeistCallGraph: Sendable, Equatable {
             self.path = path
         }
 
+        init(_ cycle: NodeCycle) {
+            self.init(path: cycle.path.map(\.name))
+        }
+
         /// Human-readable cycle path, e.g. `A -> B -> A`.
         public var displayPath: String {
             path.joined(separator: " -> ")
+        }
+    }
+
+    struct NodeCycle: Error, Sendable, Equatable {
+        let path: [Node]
+
+        var displayPath: String {
+            path.map(\.name).joined(separator: " -> ")
         }
     }
 
@@ -31,10 +81,12 @@ public struct HeistCallGraph: Sendable, Equatable {
 
     public let nodes: Set<String>
     public let edges: Set<Edge>
+    let typedNodes: Set<Node>
+    let typedEdges: Set<NodeEdge>
 
     /// Whether every resolved `RunHeist` edge can be topologically ordered.
     public var isAcyclic: Bool {
-        switch topologicalOrder() {
+        switch topologicalNodeOrder() {
         case .success:
             return true
         case .failure:
@@ -47,27 +99,49 @@ public struct HeistCallGraph: Sendable, Equatable {
     public init(plan: HeistPlan) {
         var builder = HeistCallGraphBuilder()
         builder.collect(plan: plan)
-        nodes = builder.nodes
-        edges = builder.edges
+        self.init(typedNodes: builder.nodes, typedEdges: builder.edges)
     }
 
     public init(nodes: Set<String>, edges: Set<Edge>) {
-        self.nodes = nodes.union(edges.flatMap { [$0.caller, $0.callee] })
-        self.edges = edges
+        self.init(
+            typedNodes: Set(nodes.map(Node.init)),
+            typedEdges: Set(edges.map(NodeEdge.init))
+        )
+    }
+
+    private init(typedNodes: Set<Node>, typedEdges: Set<NodeEdge>) {
+        var allTypedNodes = typedNodes
+        for edge in typedEdges {
+            allTypedNodes.insert(edge.caller)
+            allTypedNodes.insert(edge.callee)
+        }
+        self.typedNodes = allTypedNodes
+        self.typedEdges = typedEdges
+        nodes = Set(allTypedNodes.map(\.name))
+        edges = Set(typedEdges.map(Edge.init))
     }
 
     // MARK: - Ordering
 
     public func topologicalOrder() -> Result<[String], Cycle> {
-        var incomingCounts = Dictionary(uniqueKeysWithValues: nodes.map { ($0, 0) })
-        edges.forEach { incomingCounts[$0.callee, default: 0] += 1 }
+        switch topologicalNodeOrder() {
+        case .success(let order):
+            return .success(order.map(\.name))
+        case .failure(let cycle):
+            return .failure(Cycle(cycle))
+        }
+    }
 
-        let outgoing = Dictionary(grouping: edges, by: \.caller)
+    func topologicalNodeOrder() -> Result<[Node], NodeCycle> {
+        var incomingCounts = Dictionary(uniqueKeysWithValues: typedNodes.map { ($0, 0) })
+        typedEdges.forEach { incomingCounts[$0.callee, default: 0] += 1 }
+
+        let outgoing = Dictionary(grouping: typedEdges, by: \.caller)
         var ready = incomingCounts
             .filter { $0.value == 0 }
             .map(\.key)
             .sorted()
-        var order: [String] = []
+        var order: [Node] = []
 
         while let node = ready.first {
             ready.removeFirst()
@@ -81,48 +155,48 @@ public struct HeistCallGraph: Sendable, Equatable {
             }
         }
 
-        guard order.count == nodes.count else {
-            return .failure(witnessCycle())
+        guard order.count == typedNodes.count else {
+            return .failure(witnessNodeCycle())
         }
         return .success(order)
     }
 
     // MARK: - Cycle Witnesses
 
-    func cycle(closing callee: String, in invocationStack: [String]) -> Cycle? {
+    func nodeCycle(closing callee: Node, in invocationStack: [Node]) -> NodeCycle? {
         guard let caller = invocationStack.last,
-              edges.contains(Edge(caller: caller, callee: callee))
+              typedEdges.contains(NodeEdge(caller: caller, callee: callee))
         else { return nil }
-        return Self.cycle(closing: callee, in: invocationStack)
+        return Self.nodeCycle(closing: callee, in: invocationStack)
     }
 
-    static func cycle(closing callee: String, in invocationStack: [String]) -> Cycle? {
+    static func nodeCycle(closing callee: Node, in invocationStack: [Node]) -> NodeCycle? {
         guard let startIndex = invocationStack.firstIndex(of: callee) else { return nil }
-        return Cycle(path: Array(invocationStack[startIndex...]) + [callee])
+        return NodeCycle(path: Array(invocationStack[startIndex...]) + [callee])
     }
 
-    private func witnessCycle() -> Cycle {
+    private func witnessNodeCycle() -> NodeCycle {
         enum VisitState {
             case visiting
             case visited
         }
 
-        let outgoing = Dictionary(grouping: edges, by: \.caller)
-        var states: [String: VisitState] = [:]
-        var stack: [String] = []
+        let outgoing = Dictionary(grouping: typedEdges, by: \.caller)
+        var states: [Node: VisitState] = [:]
+        var stack: [Node] = []
 
-        func cyclePath(closing node: String) -> [String] {
+        func cyclePath(closing node: Node) -> [Node] {
             guard let startIndex = stack.firstIndex(of: node) else { return stack + [node] }
             return Array(stack[startIndex...]) + [node]
         }
 
-        func visit(_ node: String) -> Cycle? {
+        func visit(_ node: Node) -> NodeCycle? {
             states[node] = .visiting
             stack.append(node)
             for callee in (outgoing[node] ?? []).map(\.callee).sorted() {
                 switch states[callee] {
                 case .visiting:
-                    return Cycle(path: cyclePath(closing: callee))
+                    return NodeCycle(path: cyclePath(closing: callee))
                 case .visited:
                     continue
                 case nil:
@@ -136,21 +210,21 @@ public struct HeistCallGraph: Sendable, Equatable {
             return nil
         }
 
-        for node in nodes.sorted() where states[node] == nil {
+        for node in typedNodes.sorted() where states[node] == nil {
             if let cycle = visit(node) {
                 return cycle
             }
         }
 
-        return Cycle(path: [])
+        return NodeCycle(path: [])
     }
 }
 
 // MARK: - Graph Building
 
 private struct HeistCallGraphBuilder {
-    var nodes: Set<String> = []
-    var edges: Set<HeistCallGraph.Edge> = []
+    var nodes: Set<HeistCallGraph.Node> = []
+    var edges: Set<HeistCallGraph.NodeEdge> = []
 
     mutating func collect(plan: HeistPlan) {
         let rootScope = HeistDefinitionScope(definitions: plan.definitions)
@@ -175,13 +249,13 @@ private struct HeistCallGraphBuilder {
         rootDefinitionScope: HeistDefinitionScope
     ) {
         let namePath = definitionScope.pathPrefix + [definition.name ?? ""]
-        let qualifiedName = HeistInvocationPath.render(namePath)
-        nodes.insert(qualifiedName)
+        let definitionNode = HeistCallGraph.Node(namePath: namePath)
+        nodes.insert(definitionNode)
 
         let childScope = HeistDefinitionScope(definitions: definition.definitions, pathPrefix: namePath)
         collectEdges(
             in: definition.body,
-            caller: qualifiedName,
+            caller: definitionNode,
             definitionScope: childScope,
             rootDefinitionScope: rootDefinitionScope
         )
@@ -190,7 +264,7 @@ private struct HeistCallGraphBuilder {
 
     private mutating func collectEdges(
         in steps: [HeistStep],
-        caller: String,
+        caller: HeistCallGraph.Node,
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope
     ) {
@@ -206,7 +280,7 @@ private struct HeistCallGraphBuilder {
 
     private mutating func collectEdges(
         in step: HeistStep,
-        caller: String,
+        caller: HeistCallGraph.Node,
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope
     ) {
@@ -268,8 +342,9 @@ private struct HeistCallGraphBuilder {
                 path: invocation.invocationPath,
                 rootScope: rootDefinitionScope
             ) else { return }
-            nodes.insert(resolved.qualifiedName)
-            edges.insert(HeistCallGraph.Edge(caller: caller, callee: resolved.qualifiedName))
+            let callee = resolved.callGraphNode
+            nodes.insert(callee)
+            edges.insert(HeistCallGraph.NodeEdge(caller: caller, callee: callee))
         }
     }
 
