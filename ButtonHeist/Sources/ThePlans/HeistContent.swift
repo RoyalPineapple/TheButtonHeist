@@ -354,18 +354,30 @@ public struct HeistDef<Input>: Sendable {
 }
 
 public struct HeistInvocationContent: HeistContent {
-    public let invocation: HeistInvocationStep
+    private static let invalidInvocationPlaceholder = HeistInvocationStep(
+        invocationPath: try! HeistInvocationPath(components: ["invalid"]),
+        argument: .none
+    )
+
+    fileprivate let invocationStep: HeistInvocationStep?
+    public var invocation: HeistInvocationStep {
+        invocationStep ?? Self.invalidInvocationPlaceholder
+    }
+
     public let heistDefinitions: [HeistPlan]
     let explicitExpectationTimeout: Double?
     let expectationValidationDiagnostics: [HeistBuildDiagnostic]
+    private let invocationValidationDiagnostics: [HeistBuildDiagnostic]
 
-    public var heistSteps: [HeistStep] { [.invoke(invocation)] }
+    public var heistSteps: [HeistStep] {
+        invocationStep.map { [.invoke($0)] } ?? []
+    }
 
     public var heistBuildDiagnostics: [HeistBuildDiagnostic] {
-        expectationValidationDiagnostics.map {
+        invocationValidationDiagnostics + expectationValidationDiagnostics.map {
             HeistBuildDiagnostic.dslBuild(
                 code: .dslInvalidInvocationExpectation,
-                path: invocation.capabilityName,
+                path: invocationStep?.capabilityName ?? invocationValidationDiagnostics.first?.path,
                 message: $0.message,
                 hint: $0.hint
             )
@@ -378,10 +390,19 @@ public struct HeistInvocationContent: HeistContent {
         explicitExpectationTimeout: Double? = nil,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
-        self.invocation = invocation
+        self.invocationStep = invocation
         self.heistDefinitions = heistDefinitions
         self.explicitExpectationTimeout = explicitExpectationTimeout
         self.expectationValidationDiagnostics = expectationValidationDiagnostics
+        self.invocationValidationDiagnostics = []
+    }
+
+    init(invalidDiagnostics: [HeistBuildDiagnostic]) {
+        self.invocationStep = nil
+        self.heistDefinitions = []
+        self.explicitExpectationTimeout = nil
+        self.expectationValidationDiagnostics = []
+        self.invocationValidationDiagnostics = invalidDiagnostics
     }
 }
 
@@ -390,12 +411,14 @@ public extension HeistInvocationContent {
         _ predicate: AccessibilityPredicateExpr,
         timeout: Double? = nil
     ) -> HeistInvocationContent {
+        guard let invocationStep else { return self }
+
         let timeoutResult = composeExpectationTimeout(
-            existing: invocation.expectation,
+            existing: invocationStep.expectation,
             existingExplicit: explicitExpectationTimeout,
             nextExplicit: timeout
         )
-        let predicateResult = invocation.expectation.map {
+        let predicateResult = invocationStep.expectation.map {
             composeExpectationPredicates(existing: $0.predicate, next: predicate)
         } ?? ExpectationPredicateComposition(predicate: predicate, diagnostics: [])
         let validationDiagnostics = expectationValidationDiagnostics
@@ -404,8 +427,8 @@ public extension HeistInvocationContent {
 
         return HeistInvocationContent(
             invocation: HeistInvocationStep(
-                invocationPath: invocation.invocationPath,
-                argument: invocation.argument,
+                invocationPath: invocationStep.invocationPath,
+                argument: invocationStep.argument,
                 expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
             ),
             heistDefinitions: heistDefinitions,
@@ -504,13 +527,22 @@ public func RunHeist(_ name: String, _ input: ElementTargetExpr) -> HeistInvocat
 }
 
 private func runHeistInvocation(_ name: String, argument: HeistArgument) -> HeistInvocationContent {
-    HeistInvocationContent(
-        invocation: HeistInvocationStep(
-            invocationPath: HeistInvocationPath.preconditionValidated(dottedName: name),
-            argument: argument
-        ),
-        heistDefinitions: []
-    )
+    do {
+        return HeistInvocationContent(
+            invocation: HeistInvocationStep(
+                invocationPath: try HeistInvocationPath(dottedName: name),
+                argument: argument
+            ),
+            heistDefinitions: []
+        )
+    } catch {
+        return HeistInvocationContent(invalidDiagnostics: [.dslBuild(
+            code: .dslInvalidInvocationPath,
+            path: name.isEmpty ? nil : name,
+            message: "RunHeist name is invalid: \(String(describing: error))",
+            hint: "Use a non-empty dot-separated heist capability name with no empty components."
+        )])
+    }
 }
 // swiftlint:enable identifier_name
 

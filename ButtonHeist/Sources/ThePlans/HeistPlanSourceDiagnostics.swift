@@ -36,6 +36,7 @@ public extension HeistBuildDiagnosticCode {
     static let dslInvalidForEachElement: Self = "heist.dsl.invalid_for_each_element"
     static let dslInvalidForEachString: Self = "heist.dsl.invalid_for_each_string"
     static let dslInvalidInvocationExpectation: Self = "heist.dsl.invalid_invocation_expectation"
+    static let dslInvalidInvocationPath: Self = "heist.dsl.invalid_invocation_path"
     static let dslInvalidRepeatUntil: Self = "heist.dsl.invalid_repeat_until"
 
     static let sourceInvalidSyntax: Self = "heist.source.invalid_syntax"
