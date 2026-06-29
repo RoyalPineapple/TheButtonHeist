@@ -341,18 +341,18 @@ private enum InfoPlistFixtureValue {
     case double(Double)
     case stringArray([String])
 
-    var propertyListValue: Any {
+    var propertyListObject: NSObject {
         switch self {
         case .bool(let value):
-            return value
+            return NSNumber(value: value)
         case .string(let value):
-            return value
+            return NSString(string: value)
         case .integer(let value):
-            return value
+            return NSNumber(value: value)
         case .double(let value):
-            return value
+            return NSNumber(value: value)
         case .stringArray(let value):
-            return value
+            return NSArray(array: value)
         }
     }
 }
@@ -401,8 +401,10 @@ private func makeInfoPlist(
     line: UInt = #line
 ) -> StartupInfoPlist {
     do {
-        let propertyList: [String: Any] = Dictionary(
-            uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value.propertyListValue) }
+        let propertyList = NSDictionary(
+            dictionary: Dictionary(
+                uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value.propertyListObject) }
+            )
         )
         let data = try PropertyListSerialization.data(
             fromPropertyList: propertyList,
