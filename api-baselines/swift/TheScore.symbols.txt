@@ -1136,6 +1136,7 @@ symbol	TheScore.symbols.json	s:8TheScore9InterfaceV11annotationsAA0C11Annotation
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV11diagnosticsAA0C11DiagnosticsVSgvp	swift.property	public	diagnostics	Interface.diagnostics	let diagnostics: InterfaceDiagnostics?
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV15withDiagnosticsyAcA0cE0VSgF	swift.method	public	withDiagnostics(_:)	Interface.withDiagnostics(_:)	func withDiagnostics(_ diagnostics: InterfaceDiagnostics?) -> Interface
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV17projectedElementsSayAA12HeistElementVGvp	swift.property	public	projectedElements	Interface.projectedElements	var projectedElements: [HeistElement] { get }
+symbol	TheScore.symbols.json	s:8TheScore9InterfaceV2eeoiySbAC_ACtFZ	swift.func.op	public	==(_:_:)	Interface.==(_:_:)	static func == (lhs: Interface, rhs: Interface) -> Bool
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	Interface.init(from:)	init(from decoder: any Decoder) throws
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV4treeSay26AccessibilitySnapshotModel0E9HierarchyOGvp	swift.property	public	tree	Interface.tree	let tree: [AccessibilityHierarchy]
 symbol	TheScore.symbols.json	s:8TheScore9InterfaceV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	Interface.encode(to:)	func encode(to encoder: any Encoder) throws

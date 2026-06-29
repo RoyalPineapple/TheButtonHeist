@@ -51,7 +51,6 @@ struct DiscoveryRegistry {
         }
 
         guard visibleServiceName != serviceName else {
-            visibleServiceNameByIdentity[identity] = serviceName
             return []
         }
 
@@ -64,11 +63,7 @@ struct DiscoveryRegistry {
         return [.found(device)]
     }
 
-    mutating func recordLost(serviceName: String) -> [DiscoveryMutation] {
-        recordLost(serviceName: DiscoveryServiceName(serviceName))
-    }
-
-    private mutating func recordLost(serviceName: DiscoveryServiceName) -> [DiscoveryMutation] {
+    mutating func recordLost(_ serviceName: DiscoveryServiceName) -> [DiscoveryMutation] {
         guard let removed = advertisementsByServiceName.removeValue(forKey: serviceName) else {
             return []
         }

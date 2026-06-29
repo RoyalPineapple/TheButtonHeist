@@ -63,11 +63,13 @@ enum AccessibilityTraceMoveInference {
         removedByKey: [ElementDiffPairingKey: ElementDiffRecord],
         addedByKey: [ElementDiffPairingKey: ElementDiffRecord]
     ) -> [FunctionalElementPair<ElementDiffPairingKey>] {
-        let removed = removedByKey.map { key, element in
-            ElementPairingCandidate(key: key, signature: pairingSignature(for: element.element))
+        let removed = removedByKey.compactMap { key, element -> ElementPairingCandidate<ElementDiffPairingKey>? in
+            guard key.traceIdentity == nil else { return nil }
+            return ElementPairingCandidate(key: key, signature: pairingSignature(for: element.element))
         }
-        let added = addedByKey.map { key, element in
-            ElementPairingCandidate(key: key, signature: pairingSignature(for: element.element))
+        let added = addedByKey.compactMap { key, element -> ElementPairingCandidate<ElementDiffPairingKey>? in
+            guard key.traceIdentity == nil else { return nil }
+            return ElementPairingCandidate(key: key, signature: pairingSignature(for: element.element))
         }
         return inferFunctionalPairs(removed: removed, added: added)
     }

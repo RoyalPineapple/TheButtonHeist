@@ -62,7 +62,13 @@ struct InterfaceSelector {
                 accessibilityElement: element,
                 annotation: annotation
             ).matches(predicate) else { return nil }
-            return InterfaceLeafCandidate(node: node, path: path, traversalIndex: traversalIndex, annotation: annotation)
+            return InterfaceLeafCandidate(
+                node: node,
+                path: path,
+                traversalIndex: traversalIndex,
+                annotation: annotation,
+                traceIdentity: interface.traceIdentities[path]
+            )
         }
         return selectedInterface(forLeafCandidates: candidates)
     }
@@ -131,12 +137,21 @@ struct InterfaceSelector {
             timestamp: interface.timestamp,
             tree: [candidate.node],
             annotations: annotations(for: candidate),
-            diagnostics: interface.diagnostics
+            diagnostics: interface.diagnostics,
+            traceIdentities: traceIdentities(for: candidate)
         )
     }
 
     private func annotations(for candidate: InterfaceSubtreeCandidate) -> InterfaceAnnotations {
         interface.annotations(
+            forSubtree: candidate.node,
+            originalPath: candidate.originalPath,
+            rootPath: TreePath([0])
+        )
+    }
+
+    private func traceIdentities(for candidate: InterfaceSubtreeCandidate) -> InterfaceTraceIdentities {
+        interface.traceIdentities(
             forSubtree: candidate.node,
             originalPath: candidate.originalPath,
             rootPath: TreePath([0])
@@ -150,15 +165,18 @@ struct InterfaceSelector {
             guard let annotation = candidate.annotation else { return nil }
             return InterfaceElementAnnotation(
                 path: TreePath([index]),
-                actions: annotation.actions,
-                traceIdentity: annotation.traceIdentity
+                actions: annotation.actions
             )
         }
+        let traceIdentities = Dictionary(uniqueKeysWithValues: orderedCandidates.enumerated().compactMap { index, candidate in
+            candidate.traceIdentity.map { (TreePath([index]), $0) }
+        })
         return Interface(
             timestamp: interface.timestamp,
             tree: tree,
             annotations: InterfaceAnnotations(elements: elementAnnotations),
-            diagnostics: interface.diagnostics
+            diagnostics: interface.diagnostics,
+            traceIdentities: InterfaceTraceIdentities(traceIdentities)
         )
     }
 }
@@ -168,6 +186,7 @@ private struct InterfaceLeafCandidate: Comparable {
     let path: TreePath
     let traversalIndex: Int
     let annotation: InterfaceElementAnnotation?
+    let traceIdentity: TraceElementIdentity?
 
     static func == (lhs: InterfaceLeafCandidate, rhs: InterfaceLeafCandidate) -> Bool {
         lhs.traversalIndex == rhs.traversalIndex && lhs.path == rhs.path

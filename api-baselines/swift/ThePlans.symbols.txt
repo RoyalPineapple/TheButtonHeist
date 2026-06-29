@@ -412,9 +412,9 @@ symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV	swift.struct	pu
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV11displayPathSSvp	swift.property	public	displayPath	HeistCallGraph.Cycle.displayPath	var displayPath: String { get }
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV4pathAESaySSG_tcfc	swift.init	public	init(path:)	HeistCallGraph.Cycle.init(path:)	init(path: [String])
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV4pathSaySSGvp	swift.property	public	path	HeistCallGraph.Cycle.path	let path: [String]
-symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5edgesShyAC4EdgeVGvp	swift.property	public	edges	HeistCallGraph.edges	let edges: Set<HeistCallGraph.Edge>
+symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5edgesShyAC4EdgeVGvp	swift.property	public	edges	HeistCallGraph.edges	var edges: Set<HeistCallGraph.Edge> { get }
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5nodes5edgesACShySSG_ShyAC4EdgeVGtcfc	swift.init	public	init(nodes:edges:)	HeistCallGraph.init(nodes:edges:)	init(nodes: Set<String>, edges: Set<HeistCallGraph.Edge>)
-symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5nodesShySSGvp	swift.property	public	nodes	HeistCallGraph.nodes	let nodes: Set<String>
+symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV5nodesShySSGvp	swift.property	public	nodes	HeistCallGraph.nodes	var nodes: Set<String> { get }
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistCallGraphV9isAcyclicSbvp	swift.property	public	isAcyclic	HeistCallGraph.isAcyclic	var isAcyclic: Bool { get }
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistParameterO	swift.enum	public	HeistParameter	HeistParameter	enum HeistParameter
 symbol	ThePlans.symbols.json	s:8ThePlans14HeistParameterO13elementTargetyAcA0C13ReferenceNameV_tcACmF	swift.enum.case	public	HeistParameter.elementTarget(name:)	HeistParameter.elementTarget(name:)	case elementTarget(name: HeistReferenceName)

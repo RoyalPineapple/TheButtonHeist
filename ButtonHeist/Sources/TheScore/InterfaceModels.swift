@@ -128,23 +128,13 @@ public struct ScrollInventory: Codable, Equatable, Hashable, Sendable {
 public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
     public let actions: [ElementAction]
-    package let traceIdentity: TraceElementIdentity?
 
     public init(
         path: TreePath,
         actions: [ElementAction]
     ) {
-        self.init(path: path, actions: actions, traceIdentity: nil)
-    }
-
-    package init(
-        path: TreePath,
-        actions: [ElementAction],
-        traceIdentity: TraceElementIdentity?
-    ) {
         self.path = path
         self.actions = actions
-        self.traceIdentity = traceIdentity
     }
 }
 
@@ -228,6 +218,20 @@ public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable {
 
     public var containerByPath: [TreePath: InterfaceContainerAnnotation] {
         Dictionary(containers.map { ($0.path, $0) }, uniquingKeysWith: { _, latest in latest })
+    }
+}
+
+package struct InterfaceTraceIdentities: Equatable, Sendable {
+    package static let empty = InterfaceTraceIdentities()
+
+    package let byPath: [TreePath: TraceElementIdentity]
+
+    package init(_ byPath: [TreePath: TraceElementIdentity] = [:]) {
+        self.byPath = byPath
+    }
+
+    package subscript(path: TreePath) -> TraceElementIdentity? {
+        byPath[path]
     }
 }
 
@@ -373,6 +377,7 @@ public struct Interface: Codable, Equatable, Sendable {
     public let tree: [AccessibilityHierarchy]
     public let annotations: InterfaceAnnotations
     public let diagnostics: InterfaceDiagnostics?
+    package let traceIdentities: InterfaceTraceIdentities
 
     /// Button Heist element projection in VoiceOver traversal order.
     public var projectedElements: [HeistElement] {
@@ -394,7 +399,7 @@ public struct Interface: Codable, Equatable, Sendable {
                     accessibilityElement: item.element,
                     annotation: annotation
                 ),
-                traceIdentity: annotation?.traceIdentity
+                traceIdentity: traceIdentities[item.path]
             )
         }
     }
@@ -409,6 +414,28 @@ public struct Interface: Codable, Equatable, Sendable {
         self.tree = tree
         self.annotations = annotations
         self.diagnostics = diagnostics
+        self.traceIdentities = .empty
+    }
+
+    package init(
+        timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations = .empty,
+        diagnostics: InterfaceDiagnostics? = nil,
+        traceIdentities: InterfaceTraceIdentities
+    ) {
+        self.timestamp = timestamp
+        self.tree = tree
+        self.annotations = annotations
+        self.diagnostics = diagnostics
+        self.traceIdentities = traceIdentities
+    }
+
+    public static func == (lhs: Interface, rhs: Interface) -> Bool {
+        lhs.timestamp == rhs.timestamp &&
+            lhs.tree == rhs.tree &&
+            lhs.annotations == rhs.annotations &&
+            lhs.diagnostics == rhs.diagnostics
     }
 
     public func withDiagnostics(_ diagnostics: InterfaceDiagnostics?) -> Interface {
@@ -416,7 +443,8 @@ public struct Interface: Codable, Equatable, Sendable {
             timestamp: timestamp,
             tree: tree,
             annotations: annotations,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            traceIdentities: traceIdentities
         )
     }
 
@@ -433,8 +461,7 @@ public struct Interface: Codable, Equatable, Sendable {
             guard let annotation = elementsByPath[oldPath] else { return nil }
             return InterfaceElementAnnotation(
                 path: newPath,
-                actions: annotation.actions,
-                traceIdentity: annotation.traceIdentity
+                actions: annotation.actions
             )
         }
         let containersByPath = annotations.containerByPath
@@ -450,6 +477,21 @@ public struct Interface: Codable, Equatable, Sendable {
             )
         }
         return InterfaceAnnotations(elements: elements, containers: containers)
+    }
+
+    package func traceIdentities(
+        forSubtree node: AccessibilityHierarchy,
+        originalPath: TreePath,
+        rootPath: TreePath
+    ) -> InterfaceTraceIdentities {
+        let identities = node.compactMapSubtrees(path: rootPath) { node, newPath -> (TreePath, TraceElementIdentity)? in
+            guard case .element = node else { return nil }
+            let relativePath = Array(newPath.indices.dropFirst(rootPath.indices.count))
+            let oldPath = TreePath(originalPath.indices + relativePath)
+            guard let identity = traceIdentities[oldPath] else { return nil }
+            return (newPath, identity)
+        }
+        return InterfaceTraceIdentities(Dictionary(uniqueKeysWithValues: identities))
     }
 
 }

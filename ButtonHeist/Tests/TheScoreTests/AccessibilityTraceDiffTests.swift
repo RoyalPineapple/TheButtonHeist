@@ -183,6 +183,53 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(delta.testInteractionDigest).elementSetChanged)
     }
 
+    func testDifferentTraceIdentitiesDoNotFallBackToContentPairing() {
+        let beforeElement = makeElement(label: "Continue", value: "ready", traits: [.button])
+        let afterElement = makeElement(label: "Continue", value: "done", traits: [.button])
+        let before = makeTraceIdentityInterface([
+            (element: beforeElement, identity: "before-action"),
+        ])
+        let after = makeTraceIdentityInterface([
+            (element: afterElement, identity: "after-action"),
+        ])
+
+        let edits = ElementEdits.between(before, after)
+
+        XCTAssertTrue(edits.updated.isEmpty)
+        XCTAssertEqual(edits.removed, [beforeElement])
+        XCTAssertEqual(edits.added, [afterElement])
+    }
+
+    func testTraceIdentityPresenceMismatchDoesNotPair() {
+        let beforeElement = makeElement(label: "Continue", value: "ready", traits: [.button])
+        let afterElement = makeElement(label: "Continue", value: "done", traits: [.button])
+        let before = makeTraceIdentityInterface([
+            (element: beforeElement, identity: "action"),
+        ])
+        let after = makeTestInterface(elements: [afterElement])
+
+        let edits = ElementEdits.between(before, after)
+
+        XCTAssertTrue(edits.updated.isEmpty)
+        XCTAssertEqual(edits.removed, [beforeElement])
+        XCTAssertEqual(edits.added, [afterElement])
+    }
+
+    func testTraceIdentityDoesNotEncodeInPublicInterfaceJSON() throws {
+        let interface = makeTraceIdentityInterface([
+            (element: makeElement(label: "Continue", traits: [.button]), identity: "private-action-id"),
+        ])
+
+        let data = try JSONEncoder().encode(interface)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        let decoded = try JSONDecoder().decode(Interface.self, from: data)
+
+        XCTAssertFalse(json.contains("traceIdentity"))
+        XCTAssertFalse(json.contains("private-action-id"))
+        XCTAssertEqual(decoded, interface)
+        XCTAssertNil(decoded.projectedElementRecords.single?.traceIdentity)
+    }
+
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
         let beforeInterface = makeTestInterface(
             nodes: [
@@ -514,14 +561,17 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let annotations = elements.enumerated().map { index, entry in
             InterfaceElementAnnotation(
                 path: TreePath([index]),
-                actions: entry.element.actions,
-                traceIdentity: TraceElementIdentity(entry.identity)
+                actions: entry.element.actions
             )
         }
+        let traceIdentities = Dictionary(uniqueKeysWithValues: elements.enumerated().map { index, entry in
+            (TreePath([index]), TraceElementIdentity(entry.identity))
+        })
         return Interface(
             timestamp: timestamp,
             tree: tree,
-            annotations: InterfaceAnnotations(elements: annotations)
+            annotations: InterfaceAnnotations(elements: annotations),
+            traceIdentities: InterfaceTraceIdentities(traceIdentities)
         )
     }
 

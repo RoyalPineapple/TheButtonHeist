@@ -121,17 +121,6 @@ struct DeviceResolver {
         }
     }
 
-    static func selectDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {
-        let target = DeviceResolutionTarget(filter: filter)
-        if case .direct(let directDevice) = target.kind {
-            return directDevice
-        }
-        guard case .selected(let device) = selection(from: devices, target: target) else {
-            return nil
-        }
-        return device
-    }
-
     private enum Selection {
         case selected(DiscoveredDevice)
         case missing

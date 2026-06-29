@@ -79,6 +79,78 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(TheBrains.actionErrorKind(for: result), .accessibilityTreeUnavailable)
     }
 
+    func testInteractionResultDecoratorsPreserveExistingFieldsAndMergeTiming() {
+        let element = HeistElement(
+            description: "Checkout",
+            label: "Checkout",
+            value: nil,
+            identifier: "checkout_button",
+            traits: [.button],
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            actions: [.activate]
+        )
+        let originalEvidence = ActionSubjectEvidence(
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Checkout", traits: [.button])),
+            element: element
+        )
+        let replacementEvidence = ActionSubjectEvidence(
+            source: .elementGestureTarget,
+            target: .predicate(ElementPredicate(identifier: "checkout_button")),
+            element: element
+        )
+        let activationTrace = ActivationTrace(
+            axActivateReturned: false,
+            tapActivationDispatched: true,
+            tapActivationPoint: ScreenPoint(x: 50, y: 22),
+            tapActivationSucceeded: true
+        )
+        let success = TheSafecracker.InteractionResult.success(
+            method: .activate,
+            message: "completed",
+            payload: .value("ok"),
+            subjectEvidence: originalEvidence,
+            resolvedElementId: "checkout_button"
+        )
+        .withTiming(ActionPerformanceTiming(beforeObservationMs: 5, totalMs: 20))
+        .withSubjectEvidence(replacementEvidence)
+        .withActivationTrace(activationTrace)
+        .withTiming(ActionPerformanceTiming(settleMs: 7, totalMs: 30))
+
+        XCTAssertTrue(success.success)
+        XCTAssertEqual(success.method, .activate)
+        XCTAssertEqual(success.message, "completed")
+        XCTAssertEqual(success.payload, .value("ok"))
+        XCTAssertEqual(success.subjectEvidence, replacementEvidence)
+        XCTAssertEqual(success.resolvedElementId, "checkout_button")
+        XCTAssertEqual(success.activationTrace, activationTrace)
+        XCTAssertEqual(success.timing, ActionPerformanceTiming(
+            beforeObservationMs: 5,
+            settleMs: 7,
+            totalMs: 30
+        ))
+
+        let failure = TheSafecracker.InteractionResult.failure(
+            .activate,
+            message: "missing",
+            payload: .value("fallback"),
+            failureKind: .targetUnavailable
+        )
+        .withActivationTrace(activationTrace)
+        .withTiming(ActionPerformanceTiming(targetResolutionMs: 11))
+
+        XCTAssertFalse(failure.success)
+        XCTAssertEqual(failure.payload, .value("fallback"))
+        XCTAssertEqual(failure.activationTrace, activationTrace)
+        XCTAssertEqual(failure.timing, ActionPerformanceTiming(targetResolutionMs: 11))
+        guard case .targetUnavailable? = failure.failureKind else {
+            return XCTFail("Expected targetUnavailable failure kind, got \(String(describing: failure.failureKind))")
+        }
+    }
+
     func testPostActionObservationFailureDoesNotInferNotFoundFromActionIdentity() async {
         let before = brains.postActionObservation.captureSemanticState()
 

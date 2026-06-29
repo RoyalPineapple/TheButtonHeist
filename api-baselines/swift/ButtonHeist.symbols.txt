@@ -121,7 +121,7 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist15PublicRequestIdO6stringyACSScAC
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist16DiscoveredDeviceV	swift.struct	public	DiscoveredDevice	DiscoveredDevice	struct DiscoveredDevice
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist16DiscoveredDeviceV2eeoiySbAC_ACtFZ	swift.func.op	public	==(_:_:)	DiscoveredDevice.==(_:_:)	static func == (lhs: DiscoveredDevice, rhs: DiscoveredDevice) -> Bool
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist16DiscoveredDeviceV2id4name8endpoint13simulatorUDID14installationId07displayD4Name08instanceK014connectionTypeACSS_SS7Network10NWEndpointOSSSgA3O8TheScore15ConnectionScopeOSgtcfc	swift.init	public	init(id:name:endpoint:simulatorUDID:installationId:displayDeviceName:instanceId:connectionType:)	DiscoveredDevice.init(id:name:endpoint:simulatorUDID:installationId:displayDeviceName:instanceId:connectionType:)	init(id: String, name: String, endpoint: NWEndpoint, simulatorUDID: String? = nil, installationId: String? = nil, displayDeviceName: String? = nil, instanceId: String? = nil, connectionType: ConnectionScope? = nil)
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist16DiscoveredDeviceV2idSSvp	swift.property	public	id	DiscoveredDevice.id	let id: String
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist16DiscoveredDeviceV2idSSvp	swift.property	public	id	DiscoveredDevice.id	var id: String { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist16DiscoveredDeviceV4hash4intoys6HasherVz_tF	swift.method	public	hash(into:)	DiscoveredDevice.hash(into:)	func hash(into hasher: inout Hasher)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist16KnownFailureCodeO	swift.enum	public	KnownFailureCode	KnownFailureCode	enum KnownFailureCode
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist16KnownFailureCodeO10authFailedyA2CmF	swift.enum.case	public	KnownFailureCode.authFailed	KnownFailureCode.authFailed	case authFailed
@@ -767,9 +767,9 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV	swift.struct
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV11displayPathSSvp	swift.property	public	displayPath	HeistCallGraph.Cycle.displayPath	var displayPath: String { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV4pathAESaySSG_tcfc	swift.init	public	init(path:)	HeistCallGraph.Cycle.init(path:)	init(path: [String])
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5CycleV4pathSaySSGvp	swift.property	public	path	HeistCallGraph.Cycle.path	let path: [String]
-symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5edgesShyAC4EdgeVGvp	swift.property	public	edges	HeistCallGraph.edges	let edges: Set<HeistCallGraph.Edge>
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5edgesShyAC4EdgeVGvp	swift.property	public	edges	HeistCallGraph.edges	var edges: Set<HeistCallGraph.Edge> { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5nodes5edgesACShySSG_ShyAC4EdgeVGtcfc	swift.init	public	init(nodes:edges:)	HeistCallGraph.init(nodes:edges:)	init(nodes: Set<String>, edges: Set<HeistCallGraph.Edge>)
-symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5nodesShySSGvp	swift.property	public	nodes	HeistCallGraph.nodes	let nodes: Set<String>
+symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV5nodesShySSGvp	swift.property	public	nodes	HeistCallGraph.nodes	var nodes: Set<String> { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistCallGraphV9isAcyclicSbvp	swift.property	public	isAcyclic	HeistCallGraph.isAcyclic	var isAcyclic: Bool { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistParameterO	swift.enum	public	HeistParameter	HeistParameter	enum HeistParameter
 symbol	ButtonHeist.symbols.json	s:8ThePlans14HeistParameterO13elementTargetyAcA0C13ReferenceNameV_tcACmF	swift.enum.case	public	HeistParameter.elementTarget(name:)	HeistParameter.elementTarget(name:)	case elementTarget(name: HeistReferenceName)
@@ -3181,6 +3181,7 @@ symbol	ButtonHeist.symbols.json	s:8TheScore9InterfaceV11annotationsAA0C11Annotat
 symbol	ButtonHeist.symbols.json	s:8TheScore9InterfaceV11diagnosticsAA0C11DiagnosticsVSgvp	swift.property	public	diagnostics	Interface.diagnostics	let diagnostics: InterfaceDiagnostics?
 symbol	ButtonHeist.symbols.json	s:8TheScore9InterfaceV15withDiagnosticsyAcA0cE0VSgF	swift.method	public	withDiagnostics(_:)	Interface.withDiagnostics(_:)	func withDiagnostics(_ diagnostics: InterfaceDiagnostics?) -> Interface
 symbol	ButtonHeist.symbols.json	s:8TheScore9InterfaceV17projectedElementsSayAA12HeistElementVGvp	swift.property	public	projectedElements	Interface.projectedElements	var projectedElements: [HeistElement] { get }
+symbol	ButtonHeist.symbols.json	s:8TheScore9InterfaceV2eeoiySbAC_ACtFZ	swift.func.op	public	==(_:_:)	Interface.==(_:_:)	static func == (lhs: Interface, rhs: Interface) -> Bool
 symbol	ButtonHeist.symbols.json	s:8TheScore9InterfaceV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	Interface.init(from:)	init(from decoder: any Decoder) throws
 symbol	ButtonHeist.symbols.json	s:8TheScore9InterfaceV4treeSay26AccessibilitySnapshotModel0E9HierarchyOGvp	swift.property	public	tree	Interface.tree	let tree: [AccessibilityHierarchy]
 symbol	ButtonHeist.symbols.json	s:8TheScore9InterfaceV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	Interface.encode(to:)	func encode(to encoder: any Encoder) throws

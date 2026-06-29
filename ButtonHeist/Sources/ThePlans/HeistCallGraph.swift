@@ -79,10 +79,16 @@ public struct HeistCallGraph: Sendable, Equatable {
 
     // MARK: - Properties
 
-    public let nodes: Set<String>
-    public let edges: Set<Edge>
     let typedNodes: Set<Node>
     let typedEdges: Set<NodeEdge>
+
+    public var nodes: Set<String> {
+        Set(typedNodes.map(\.name))
+    }
+
+    public var edges: Set<Edge> {
+        Set(typedEdges.map(Edge.init))
+    }
 
     /// Whether every resolved `RunHeist` edge can be topologically ordered.
     public var isAcyclic: Bool {
@@ -117,8 +123,6 @@ public struct HeistCallGraph: Sendable, Equatable {
         }
         self.typedNodes = allTypedNodes
         self.typedEdges = typedEdges
-        nodes = Set(allTypedNodes.map(\.name))
-        edges = Set(typedEdges.map(Edge.init))
     }
 
     // MARK: - Ordering

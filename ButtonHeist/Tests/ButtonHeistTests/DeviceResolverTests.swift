@@ -5,50 +5,6 @@ import TheScore
 
 final class DeviceResolverTests: XCTestCase {
 
-    // MARK: - selectDevice
-
-    @ButtonHeistActor
-    func testSelectDeviceSingleDeviceNoFilter() async {
-        let device = makeDevice(id: "dev1", name: "MyApp#abc")
-        let result = DeviceResolver.selectDevice(from: [device], filter: nil)
-        XCTAssertEqual(result?.id, "dev1")
-    }
-
-    @ButtonHeistActor
-    func testSelectDeviceMultipleDevicesNoFilterReturnsNil() async {
-        let devices = [
-            makeDevice(id: "dev1", name: "App1#a"),
-            makeDevice(id: "dev2", name: "App2#b"),
-        ]
-        let result = DeviceResolver.selectDevice(from: devices, filter: nil)
-        XCTAssertNil(result)
-    }
-
-    @ButtonHeistActor
-    func testSelectDeviceEmptyArrayReturnsNil() async {
-        let result = DeviceResolver.selectDevice(from: [], filter: nil)
-        XCTAssertNil(result)
-    }
-
-    @ButtonHeistActor
-    func testSelectDeviceWithFilterMatchesFirst() async {
-        let devices = [
-            makeDevice(id: "dev1", name: "MyApp#abc"),
-            makeDevice(id: "dev2", name: "OtherApp#def"),
-        ]
-        let result = DeviceResolver.selectDevice(from: devices, filter: "MyApp")
-        XCTAssertEqual(result?.id, "dev1")
-    }
-
-    @ButtonHeistActor
-    func testSelectDeviceWithFilterNoMatch() async {
-        let devices = [
-            makeDevice(id: "dev1", name: "MyApp#abc"),
-        ]
-        let result = DeviceResolver.selectDevice(from: devices, filter: "Nonexistent")
-        XCTAssertNil(result)
-    }
-
     // MARK: - directConnectTarget fast path
 
     @ButtonHeistActor

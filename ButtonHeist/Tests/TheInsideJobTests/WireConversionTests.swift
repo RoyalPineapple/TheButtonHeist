@@ -52,6 +52,12 @@ private extension ElementEdits {
     var updatedOptional: [ElementUpdate]? { updated.isEmpty ? nil : updated }
 }
 
+private extension Array {
+    var single: Element? {
+        count == 1 ? self[0] : nil
+    }
+}
+
 private extension AccessibilityHierarchy {
     var testLabel: String? {
         guard case .element(let element, _) = self else { return nil }
@@ -339,6 +345,56 @@ final class WireConverterTests: XCTestCase {
             return XCTFail("Expected container root")
         }
         XCTAssertTrue(info.isModalBoundary)
+    }
+
+    func testSemanticInterfaceAnnotatesTraceIdentityFromHeistIds() throws {
+        let screenElement = makeScreenElement(
+            heistId: "checkout_button",
+            label: "Checkout",
+            traits: [.button],
+            respondsToUserInteraction: true
+        )
+        let screen = Screen(
+            elements: ["checkout_button": screenElement],
+            hierarchy: [.element(screenElement.element, traversalIndex: 0)],
+            heistIdsByPath: [TreePath([0]): "checkout_button"],
+            firstResponderHeistId: nil
+        )
+
+        let interface = WireConversion.toSemanticInterface(from: screen)
+        let record = try XCTUnwrap(interface.projectedElementRecords.single)
+
+        XCTAssertEqual(record.element.label, "Checkout")
+        XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "checkout_button").traceElementIdentity)
+    }
+
+    func testInterfaceSelectionPreservesTraceIdentityAnnotations() throws {
+        let first = makeScreenElement(heistId: "first_button", label: "First", traits: [.button])
+        let second = makeScreenElement(heistId: "second_button", label: "Second", traits: [.button])
+        let screen = Screen(
+            elements: [
+                "first_button": first,
+                "second_button": second,
+            ],
+            hierarchy: [
+                .element(first.element, traversalIndex: 0),
+                .element(second.element, traversalIndex: 1),
+            ],
+            heistIdsByPath: [
+                TreePath([0]): "first_button",
+                TreePath([1]): "second_button",
+            ],
+            firstResponderHeistId: nil
+        )
+        let interface = WireConversion.toSemanticInterface(from: screen)
+
+        let selected = try InterfaceSelector(interface: interface).select(InterfaceQuery(
+            matcher: ElementPredicate(label: "Second")
+        ))
+        let record = try XCTUnwrap(selected.projectedElementRecords.single)
+
+        XCTAssertEqual(record.element.label, "Second")
+        XCTAssertEqual(record.traceIdentity, HeistId(rawValue: "second_button").traceElementIdentity)
     }
 
     func testDiscoveryInterfaceGraftsKnownOffViewportElementsUnderScrollContainer() throws {
