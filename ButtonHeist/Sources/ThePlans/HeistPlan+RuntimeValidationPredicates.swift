@@ -194,16 +194,12 @@ extension HeistPlanRuntimeSafetyValidator {
             break
         case .hint(let change):
             validateStringPropertyChange(change, path: path)
-        case .actions(let change):
-            validateStringPropertyChange(change, path: path)
-        case .frame(let change):
-            validateStringPropertyChange(change, path: path)
-        case .activationPoint(let change):
-            validateStringPropertyChange(change, path: path)
+        case .actions, .frame, .activationPoint:
+            break
         case .customContent(let change):
-            validateStringPropertyChange(change, path: path)
+            validateNestedStringPropertyChange(change, path: path)
         case .rotors(let change):
-            validateStringPropertyChange(change, path: path)
+            validateNestedStringPropertyChange(change, path: path)
         }
     }
 
@@ -228,16 +224,12 @@ extension HeistPlanRuntimeSafetyValidator {
             break
         case .hint(let change):
             validateStringPropertyChange(change, path: path, scope: scope)
-        case .actions(let change):
-            validateStringPropertyChange(change, path: path, scope: scope)
-        case .frame(let change):
-            validateStringPropertyChange(change, path: path, scope: scope)
-        case .activationPoint(let change):
-            validateStringPropertyChange(change, path: path, scope: scope)
+        case .actions, .frame, .activationPoint:
+            break
         case .customContent(let change):
-            validateStringPropertyChange(change, path: path, scope: scope)
+            validateNestedStringPropertyChange(change, path: path, scope: scope)
         case .rotors(let change):
-            validateStringPropertyChange(change, path: path, scope: scope)
+            validateNestedStringPropertyChange(change, path: path, scope: scope)
         }
     }
 
@@ -251,6 +243,50 @@ extension HeistPlanRuntimeSafetyValidator {
         }
         if let after = change.after {
             validateString(after, path: "\(path).after", scope: scope)
+        }
+    }
+
+    private mutating func validateNestedStringPropertyChange<P: ElementPropertyKind>(
+        _ change: ElementPropertyChange<P>,
+        path: String
+    ) where P.Checker: NestedStringMatchContainer, P.Checker.Payload == String {
+        if let before = change.before {
+            validateNestedStrings(before, path: "\(path).before")
+        }
+        if let after = change.after {
+            validateNestedStrings(after, path: "\(path).after")
+        }
+    }
+
+    private mutating func validateNestedStrings<Container: NestedStringMatchContainer>(
+        _ container: Container,
+        path: String
+    ) where Container.Payload == String {
+        for nested in container.nestedStringMatches {
+            validateString(nested.match, path: "\(path).\(nested.path)", role: nested.role)
+        }
+    }
+
+    private mutating func validateNestedStringPropertyChange<P: ElementPropertyKind>(
+        _ change: ElementPropertyChangeExpr<P>,
+        path: String,
+        scope: HeistReferenceScope
+    ) where P.ExprChecker: NestedStringMatchContainer, P.ExprChecker.Payload == StringExpr {
+        if let before = change.before {
+            validateNestedStrings(before, path: "\(path).before", scope: scope)
+        }
+        if let after = change.after {
+            validateNestedStrings(after, path: "\(path).after", scope: scope)
+        }
+    }
+
+    private mutating func validateNestedStrings<Container: NestedStringMatchContainer>(
+        _ container: Container,
+        path: String,
+        scope: HeistReferenceScope
+    ) where Container.Payload == StringExpr {
+        for nested in container.nestedStringMatches {
+            validateString(nested.match, path: "\(path).\(nested.path)", scope: scope)
         }
     }
 
@@ -313,6 +349,37 @@ private extension StatePredicateExpr {
             return .target(.absent, target)
         case .all(let states):
             return .all(states)
+        }
+    }
+}
+
+private struct NestedStringMatch<Payload: StringMatchPayload & Codable> {
+    let path: String
+    let role: String
+    let match: StringMatch<Payload>
+}
+
+private protocol NestedStringMatchContainer {
+    associatedtype Payload: StringMatchPayload & Codable
+
+    var nestedStringMatches: [NestedStringMatch<Payload>] { get }
+}
+
+extension CustomContentMatch: NestedStringMatchContainer {
+    fileprivate var nestedStringMatches: [NestedStringMatch<Value>] {
+        [
+            label.map { NestedStringMatch(path: "label", role: "custom content label", match: $0) },
+            value.map { NestedStringMatch(path: "value", role: "custom content value", match: $0) },
+        ].compactMap { $0 }
+    }
+}
+
+extension RotorSetMatch: NestedStringMatchContainer {
+    fileprivate var nestedStringMatches: [NestedStringMatch<Value>] {
+        include.enumerated().map { index, match in
+            NestedStringMatch(path: "include[\(index)]", role: "rotor include", match: match)
+        } + exclude.enumerated().map { index, match in
+            NestedStringMatch(path: "exclude[\(index)]", role: "rotor exclude", match: match)
         }
     }
 }

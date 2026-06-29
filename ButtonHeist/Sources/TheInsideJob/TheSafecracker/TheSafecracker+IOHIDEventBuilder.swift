@@ -15,6 +15,18 @@ import UIKit
 
 extension TheSafecracker {
 
+    struct HIDEvent {
+        private let pointer: UnsafeMutableRawPointer
+
+        fileprivate init(_ pointer: UnsafeMutableRawPointer) {
+            self.pointer = pointer
+        }
+
+        func withUnsafePointer<Result>(_ body: (UnsafeMutableRawPointer) -> Result) -> Result {
+            body(pointer)
+        }
+    }
+
     // MARK: - TouchEvent
 
     /// An assembled UIEvent ready to deliver to UIApplication.
@@ -27,28 +39,34 @@ extension TheSafecracker {
 
         /// Package touches into a UIEvent with matching IOHIDEvent data.
         init?(touches: [SyntheticTouch]) {
-            guard let event: UIEvent = ObjCRuntime.message("_touchesEvent", to: UIApplication.shared)?.call() else {
+            guard let event: UIEvent = ObjCRuntime.message(.applicationTouchesEvent, to: UIApplication.shared)?.call() else {
                 insideJobLogger.error("UIApplication doesn't respond to _touchesEvent")
                 return nil
             }
-            ObjCRuntime.message("_clearTouches", to: event)?.call()
-
-            let hidEvent = SafecrackerIOHIDEventBuilder.createEvent(for: touches)
-
-            if let hidEvent {
-                ObjCRuntime.message("_setHIDEvent:", to: event)?.call(hidEvent)
-                for syntheticTouch in touches {
-                    syntheticTouch.setHIDEvent(hidEvent)
-                }
+            guard let clearTouches = ObjCRuntime.message(.eventClearTouches, to: event) else {
+                insideJobLogger.error("UIEvent doesn't respond to _clearTouches")
+                return nil
+            }
+            guard let addTouch = ObjCRuntime.message(.eventAddTouchForDelayedDelivery, to: event) else {
+                insideJobLogger.error("UIEvent doesn't respond to _addTouch:forDelayedDelivery:")
+                return nil
+            }
+            guard let hidEvent = SafecrackerIOHIDEventBuilder.createEvent(for: touches) else {
+                insideJobLogger.error("Failed to create IOHIDEvent for synthetic touches")
+                return nil
+            }
+            guard let setHIDEvent = ObjCRuntime.message(.eventSetHIDEvent, to: event) else {
+                insideJobLogger.error("UIEvent doesn't respond to _setHIDEvent:")
+                return nil
             }
 
-            // `_addTouch:forDelayedDelivery:` mixes object and value args.
-            if let msg = ObjCRuntime.message("_addTouch:forDelayedDelivery:", to: event) {
-                typealias AddTouchFn = @convention(c) (AnyObject, Selector, UITouch, Bool) -> Void // swiftlint:disable:this nesting
-                let addTouch = msg.imp(as: AddTouchFn.self)
-                for syntheticTouch in touches {
-                    addTouch(event, msg.selector, syntheticTouch.touch, false)
-                }
+            clearTouches.call()
+            hidEvent.withUnsafePointer {
+                setHIDEvent.call($0)
+            }
+            for syntheticTouch in touches {
+                syntheticTouch.setHIDEvent(hidEvent)
+                addTouch.send(syntheticTouch.touch, false)
             }
 
             self.event = event
@@ -68,7 +86,7 @@ extension TheSafecracker {
 @MainActor
 private final class SafecrackerIOHIDEventBuilder {
 
-    static func createEvent(for fingers: [TheSafecracker.SyntheticTouch]) -> UnsafeMutableRawPointer? {
+    static func createEvent(for fingers: [TheSafecracker.SyntheticTouch]) -> TheSafecracker.HIDEvent? {
         let timestamp = mach_absolute_time()
         let anyTouching = fingers.contains { $0.phase != .ended && $0.phase != .cancelled }
 
@@ -124,7 +142,7 @@ private final class SafecrackerIOHIDEventBuilder {
             }
         }
 
-        return handEvent
+        return TheSafecracker.HIDEvent(handEvent)
     }
 }
 

@@ -212,6 +212,29 @@ import ThePlans
     #expect(broadBeforeAfter == expectedBroadBeforeAfter)
 }
 
+@Test func `inline plan source custom content update queries label and value`() throws {
+    let plan = try HeistPlanSourceCompiler().compile(root(#"""
+    WaitFor(.change(.elements(.updated(.customContent(after: .match(
+        label: "Status",
+        value: .contains("Ready"),
+        isImportant: true
+    ))))))
+    """#))
+    let expected = try HeistPlan(body: [
+        .wait(WaitStep(predicate: .change(.elements(.updatedElement(ElementUpdatePredicateExpr(
+            change: .customContent(after: CustomContentMatch<StringExpr>.match(
+                label: .exact(.literal("Status")),
+                value: .contains(.literal("Ready")),
+                isImportant: true
+            ))
+        )))))),
+    ])
+
+    #expect(plan == expected)
+    #expect(try plan.canonicalSwiftDSL().contains(#".customContent(after: .match(label: "Status", value: .contains("Ready"), isImportant: true))"#))
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `inline plan source accepts direct delta change predicates`() throws {
     let appeared = try HeistPlanSourceCompiler().compile(root(#"""
     Activate(.label("Add")).expect(.change(.appeared(.label("Back"))))

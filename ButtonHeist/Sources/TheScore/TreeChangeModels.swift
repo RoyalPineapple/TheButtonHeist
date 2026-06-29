@@ -182,13 +182,6 @@ public extension ElementPropertyValueKind {
     }
 }
 
-public extension ElementPropertyValueKind where Checker == StringMatch<String> {
-    static func matches(_ checker: Checker, value: Value?) -> Bool {
-        guard let value else { return false }
-        return checker.matches(displayText(for: value))
-    }
-}
-
 public struct ElementPropertyValueChange<P: ElementPropertyValueKind>: Codable, Sendable {
     public let old: P.Value?
     public let new: P.Value?
@@ -546,6 +539,11 @@ extension ValueProperty: ElementPropertyValueKind {
         value
     }
 
+    public static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
+        guard let value else { return false }
+        return checker.matches(value)
+    }
+
     public static func erasedValue(_ value: String) -> ElementPropertyValue {
         .text(value)
     }
@@ -573,8 +571,8 @@ extension TraitsProperty: ElementPropertyValueKind {
     public static func matches(_ checker: TraitSetMatch, value: [HeistTrait]?) -> Bool {
         guard let value else { return false }
         let traits = Set(value)
-        return checker.include.allSatisfy { traits.contains($0) }
-            && checker.exclude.allSatisfy { !traits.contains($0) }
+        return checker.include.isSubset(of: traits)
+            && checker.exclude.isDisjoint(with: traits)
     }
 
     public static func erasedValue(_ value: [HeistTrait]) -> ElementPropertyValue {
@@ -597,6 +595,11 @@ extension HintProperty: ElementPropertyValueKind {
         value
     }
 
+    public static func matches(_ checker: StringMatch<String>, value: String?) -> Bool {
+        guard let value else { return false }
+        return checker.matches(value)
+    }
+
     public static func erasedValue(_ value: String) -> ElementPropertyValue {
         .text(value)
     }
@@ -615,6 +618,13 @@ extension ActionsProperty: ElementPropertyValueKind {
 
     public static func displayText(for value: [ElementAction]) -> String {
         value.map(\.description).joined(separator: ", ")
+    }
+
+    public static func matches(_ checker: ActionSetMatch, value: [ElementAction]?) -> Bool {
+        guard let value else { return false }
+        let actions = Set(value)
+        return checker.include.isSubset(of: actions)
+            && checker.exclude.isDisjoint(with: actions)
     }
 
     public static func erasedValue(_ value: [ElementAction]) -> ElementPropertyValue {
@@ -642,6 +652,14 @@ extension FrameProperty: ElementPropertyValueKind {
         value.displayText
     }
 
+    public static func matches(_ checker: ElementFrameMatch, value: ElementPropertyFrame?) -> Bool {
+        guard let value else { return false }
+        return checker.x.map { $0 == value.x } ?? true
+            && checker.y.map { $0 == value.y } ?? true
+            && checker.width.map { $0 == value.width } ?? true
+            && checker.height.map { $0 == value.height } ?? true
+    }
+
     public static func erasedValue(_ value: ElementPropertyFrame) -> ElementPropertyValue {
         .frame(value)
     }
@@ -663,6 +681,12 @@ extension ActivationPointProperty: ElementPropertyValueKind {
 
     public static func displayText(for value: ElementPropertyPoint) -> String {
         value.displayText
+    }
+
+    public static func matches(_ checker: ElementPointMatch, value: ElementPropertyPoint?) -> Bool {
+        guard let value else { return false }
+        return checker.x.map { $0 == value.x } ?? true
+            && checker.y.map { $0 == value.y } ?? true
     }
 
     public static func erasedValue(_ value: ElementPropertyPoint) -> ElementPropertyValue {
@@ -693,6 +717,15 @@ extension CustomContentProperty: ElementPropertyValueKind {
         }.joined(separator: "; ")
     }
 
+    public static func matches(_ checker: CustomContentMatch<String>, value: [HeistCustomContent]?) -> Bool {
+        guard let value else { return false }
+        return value.contains { content in
+            (checker.label.map { $0.matches(content.label) } ?? true)
+                && (checker.value.map { $0.matches(content.value) } ?? true)
+                && (checker.isImportant.map { $0 == content.isImportant } ?? true)
+        }
+    }
+
     public static func erasedValue(_ value: [HeistCustomContent]) -> ElementPropertyValue {
         .customContent(value)
     }
@@ -712,6 +745,16 @@ extension RotorsProperty: ElementPropertyValueKind {
 
     public static func displayText(for value: [HeistRotor]) -> String {
         value.map(\.name).joined(separator: ", ")
+    }
+
+    public static func matches(_ checker: RotorSetMatch<String>, value: [HeistRotor]?) -> Bool {
+        guard let value else { return false }
+        let rotorNames = value.map(\.name)
+        return checker.include.allSatisfy { match in
+            rotorNames.contains { match.matches($0) }
+        } && checker.exclude.allSatisfy { match in
+            !rotorNames.contains { match.matches($0) }
+        }
     }
 
     public static func erasedValue(_ value: [HeistRotor]) -> ElementPropertyValue {

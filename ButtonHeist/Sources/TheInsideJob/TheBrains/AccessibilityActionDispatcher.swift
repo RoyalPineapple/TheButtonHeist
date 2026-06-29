@@ -9,12 +9,6 @@ import UIKit
 @MainActor
 final class AccessibilityActionDispatcher {
 
-    private typealias CustomActionSelectorIMP = @convention(c) (
-        AnyObject,
-        Selector,
-        UIAccessibilityCustomAction
-    ) -> Bool
-
     enum ActivateOutcome {
         case success
         case objectDeallocated
@@ -63,16 +57,11 @@ final class AccessibilityActionDispatcher {
         if let handler = action.actionHandler {
             return handler(action) ? .succeeded : .declined
         }
-        if let target = action.target {
-            let receiver = target as AnyObject
-            guard receiver.responds(to: action.selector) else {
+        if let receiver = action.target as? NSObject {
+            guard let message = ObjCRuntime.message(.accessibilityCustomAction(action.selector), to: receiver) else {
                 return .noSuchAction
             }
-            let implementation = unsafeBitCast(
-                receiver.method(for: action.selector),
-                to: CustomActionSelectorIMP.self
-            )
-            return implementation(receiver, action.selector, action) ? .succeeded : .declined
+            return message.call(action) ? .succeeded : .declined
         }
         return .noSuchAction
     }

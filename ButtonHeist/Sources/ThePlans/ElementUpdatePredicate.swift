@@ -30,32 +30,32 @@ public enum HintProperty: ElementPropertyKind {
 }
 
 public enum ActionsProperty: ElementPropertyKind {
-    public typealias Checker = StringMatch<String>
-    public typealias ExprChecker = StringMatch<StringExpr>
+    public typealias Checker = ActionSetMatch
+    public typealias ExprChecker = ActionSetMatch
     public static let property = ElementProperty.actions
 }
 
 public enum FrameProperty: ElementPropertyKind {
-    public typealias Checker = StringMatch<String>
-    public typealias ExprChecker = StringMatch<StringExpr>
+    public typealias Checker = ElementFrameMatch
+    public typealias ExprChecker = ElementFrameMatch
     public static let property = ElementProperty.frame
 }
 
 public enum ActivationPointProperty: ElementPropertyKind {
-    public typealias Checker = StringMatch<String>
-    public typealias ExprChecker = StringMatch<StringExpr>
+    public typealias Checker = ElementPointMatch
+    public typealias ExprChecker = ElementPointMatch
     public static let property = ElementProperty.activationPoint
 }
 
 public enum CustomContentProperty: ElementPropertyKind {
-    public typealias Checker = StringMatch<String>
-    public typealias ExprChecker = StringMatch<StringExpr>
+    public typealias Checker = CustomContentMatch<String>
+    public typealias ExprChecker = CustomContentMatch<StringExpr>
     public static let property = ElementProperty.customContent
 }
 
 public enum RotorsProperty: ElementPropertyKind {
-    public typealias Checker = StringMatch<String>
-    public typealias ExprChecker = StringMatch<StringExpr>
+    public typealias Checker = RotorSetMatch<String>
+    public typealias ExprChecker = RotorSetMatch<StringExpr>
     public static let property = ElementProperty.rotors
 }
 
@@ -109,6 +109,281 @@ extension TraitSetMatch: CustomStringConvertible {
             include.isEmpty ? nil : "include=[\(include.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]",
             exclude.isEmpty ? nil : "exclude=[\(exclude.canonicalHeistTraitArray.map { ".\($0.rawValue)" }.joined(separator: ", "))]",
         ].compactMap { $0 })
+    }
+}
+
+/// Required and forbidden actions in an element's action list.
+public struct ActionSetMatch: Codable, Sendable, Equatable {
+    public let include: Set<ElementAction>
+    public let exclude: Set<ElementAction>
+
+    public init(include: Set<ElementAction> = [], exclude: Set<ElementAction> = []) {
+        self.include = include
+        self.exclude = exclude
+    }
+
+    public static func include(_ actions: Set<ElementAction>) -> Self {
+        Self(include: actions)
+    }
+
+    public static func exclude(_ actions: Set<ElementAction>) -> Self {
+        Self(exclude: actions)
+    }
+
+    public static func match(include: Set<ElementAction> = [], exclude: Set<ElementAction> = []) -> Self {
+        Self(include: include, exclude: exclude)
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case include, exclude
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "action set match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            include: Set(try container.decodeIfPresent([ElementAction].self, forKey: .include) ?? []),
+            exclude: Set(try container.decodeIfPresent([ElementAction].self, forKey: .exclude) ?? [])
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(include.canonicalElementActionArray, forKey: .include)
+        try container.encode(exclude.canonicalElementActionArray, forKey: .exclude)
+    }
+}
+
+extension ActionSetMatch: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("actions", [
+            include.isEmpty ? nil : "include=[\(include.canonicalElementActionArray.map(\.description).joined(separator: ", "))]",
+            exclude.isEmpty ? nil : "exclude=[\(exclude.canonicalElementActionArray.map(\.description).joined(separator: ", "))]",
+        ].compactMap { $0 })
+    }
+}
+
+/// Integer geometry checker for a captured accessibility frame.
+public struct ElementFrameMatch: Codable, Sendable, Equatable {
+    public let x: Int?
+    public let y: Int?
+    public let width: Int?
+    public let height: Int?
+
+    public init(x: Int? = nil, y: Int? = nil, width: Int? = nil, height: Int? = nil) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public static func exact(x: Int, y: Int, width: Int, height: Int) -> Self {
+        Self(x: x, y: y, width: width, height: height)
+    }
+
+    public static func match(x: Int? = nil, y: Int? = nil, width: Int? = nil, height: Int? = nil) -> Self {
+        Self(x: x, y: y, width: width, height: height)
+    }
+}
+
+extension ElementFrameMatch: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("frame", [
+            x.map { "x=\($0)" },
+            y.map { "y=\($0)" },
+            width.map { "width=\($0)" },
+            height.map { "height=\($0)" },
+        ].compactMap { $0 })
+    }
+}
+
+/// Integer geometry checker for a captured accessibility activation point.
+public struct ElementPointMatch: Codable, Sendable, Equatable {
+    public let x: Int?
+    public let y: Int?
+
+    public init(x: Int? = nil, y: Int? = nil) {
+        self.x = x
+        self.y = y
+    }
+
+    public static func exact(x: Int, y: Int) -> Self {
+        Self(x: x, y: y)
+    }
+
+    public static func match(x: Int? = nil, y: Int? = nil) -> Self {
+        Self(x: x, y: y)
+    }
+}
+
+extension ElementPointMatch: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("activationPoint", [
+            x.map { "x=\($0)" },
+            y.map { "y=\($0)" },
+        ].compactMap { $0 })
+    }
+}
+
+/// Field-level checker for one custom-content item in the element's custom content list.
+public struct CustomContentMatch<Value: StringMatchPayload>: Sendable, Equatable where Value: Codable {
+    public let label: StringMatch<Value>?
+    public let value: StringMatch<Value>?
+    public let isImportant: Bool?
+
+    public init(
+        label: StringMatch<Value>? = nil,
+        value: StringMatch<Value>? = nil,
+        isImportant: Bool? = nil
+    ) {
+        self.label = label
+        self.value = value
+        self.isImportant = isImportant
+    }
+
+    public static func match(
+        label: StringMatch<Value>? = nil,
+        value: StringMatch<Value>? = nil,
+        isImportant: Bool? = nil
+    ) -> Self {
+        Self(label: label, value: value, isImportant: isImportant)
+    }
+
+    public func map<NewValue: StringMatchPayload>(
+        _ transform: (Value) throws -> NewValue
+    ) rethrows -> CustomContentMatch<NewValue> where NewValue: Codable {
+        try CustomContentMatch<NewValue>(
+            label: label?.map(transform),
+            value: value?.map(transform),
+            isImportant: isImportant
+        )
+    }
+}
+
+extension CustomContentMatch: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case label, value, isImportant
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "custom content match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            label: try container.decodeIfPresent(StringMatch<Value>.self, forKey: .label),
+            value: try container.decodeIfPresent(StringMatch<Value>.self, forKey: .value),
+            isImportant: try container.decodeIfPresent(Bool.self, forKey: .isImportant)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(value, forKey: .value)
+        try container.encodeIfPresent(isImportant, forKey: .isImportant)
+    }
+}
+
+extension CustomContentMatch: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("customContent", [
+            label.map { "label=\($0)" },
+            value.map { "value=\($0)" },
+            isImportant.map { "isImportant=\($0)" },
+        ].compactMap { $0 })
+    }
+}
+
+/// Required and forbidden rotor names in an element's rotor list.
+public struct RotorSetMatch<Value: StringMatchPayload>: Sendable, Equatable where Value: Codable {
+    public let include: [StringMatch<Value>]
+    public let exclude: [StringMatch<Value>]
+
+    public init(include: [StringMatch<Value>] = [], exclude: [StringMatch<Value>] = []) {
+        self.include = include
+        self.exclude = exclude
+    }
+
+    public static func include(_ names: [StringMatch<Value>]) -> Self {
+        Self(include: names)
+    }
+
+    public static func exclude(_ names: [StringMatch<Value>]) -> Self {
+        Self(exclude: names)
+    }
+
+    public static func match(include: [StringMatch<Value>] = [], exclude: [StringMatch<Value>] = []) -> Self {
+        Self(include: include, exclude: exclude)
+    }
+
+    public func map<NewValue: StringMatchPayload>(
+        _ transform: (Value) throws -> NewValue
+    ) rethrows -> RotorSetMatch<NewValue> where NewValue: Codable {
+        try RotorSetMatch<NewValue>(
+            include: include.map { try $0.map(transform) },
+            exclude: exclude.map { try $0.map(transform) }
+        )
+    }
+}
+
+public extension RotorSetMatch where Value == String {
+    static func include(_ names: [String]) -> Self {
+        include(names.map { StringMatch<String>.exact($0) })
+    }
+
+    static func exclude(_ names: [String]) -> Self {
+        exclude(names.map { StringMatch<String>.exact($0) })
+    }
+}
+
+public extension RotorSetMatch where Value == StringExpr {
+    static func include(_ names: [String]) -> Self {
+        include(names.map { StringMatch<StringExpr>.exact(.literal($0)) })
+    }
+
+    static func exclude(_ names: [String]) -> Self {
+        exclude(names.map { StringMatch<StringExpr>.exact(.literal($0)) })
+    }
+}
+
+extension RotorSetMatch: Codable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case include, exclude
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "rotor set match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            include: try container.decodeIfPresent([StringMatch<Value>].self, forKey: .include) ?? [],
+            exclude: try container.decodeIfPresent([StringMatch<Value>].self, forKey: .exclude) ?? []
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(include, forKey: .include)
+        try container.encode(exclude, forKey: .exclude)
+    }
+}
+
+extension RotorSetMatch: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("rotors", [
+            include.isEmpty ? nil : "include=[\(include.map(\.description).joined(separator: ", "))]",
+            exclude.isEmpty ? nil : "exclude=[\(exclude.map(\.description).joined(separator: ", "))]",
+        ].compactMap { $0 })
+    }
+}
+
+private extension CustomContentMatch where Value == StringExpr {
+    func resolve(in environment: HeistExecutionEnvironment) throws -> CustomContentMatch<String> {
+        try map { try $0.resolve(in: environment) }
+    }
+}
+
+private extension RotorSetMatch where Value == StringExpr {
+    func resolve(in environment: HeistExecutionEnvironment) throws -> RotorSetMatch<String> {
+        try map { try $0.resolve(in: environment) }
     }
 }
 
@@ -192,36 +467,36 @@ public enum AnyPropertyChange: Codable, Sendable, Equatable {
     }
 
     public static func actions(
-        before: StringMatch<String>? = nil,
-        after: StringMatch<String>? = nil
+        before: ActionSetMatch? = nil,
+        after: ActionSetMatch? = nil
     ) -> Self {
         .actions(ElementPropertyChange(before: before, after: after))
     }
 
     public static func frame(
-        before: StringMatch<String>? = nil,
-        after: StringMatch<String>? = nil
+        before: ElementFrameMatch? = nil,
+        after: ElementFrameMatch? = nil
     ) -> Self {
         .frame(ElementPropertyChange(before: before, after: after))
     }
 
     public static func activationPoint(
-        before: StringMatch<String>? = nil,
-        after: StringMatch<String>? = nil
+        before: ElementPointMatch? = nil,
+        after: ElementPointMatch? = nil
     ) -> Self {
         .activationPoint(ElementPropertyChange(before: before, after: after))
     }
 
     public static func customContent(
-        before: StringMatch<String>? = nil,
-        after: StringMatch<String>? = nil
+        before: CustomContentMatch<String>? = nil,
+        after: CustomContentMatch<String>? = nil
     ) -> Self {
         .customContent(ElementPropertyChange(before: before, after: after))
     }
 
     public static func rotors(
-        before: StringMatch<String>? = nil,
-        after: StringMatch<String>? = nil
+        before: RotorSetMatch<String>? = nil,
+        after: RotorSetMatch<String>? = nil
     ) -> Self {
         .rotors(ElementPropertyChange(before: before, after: after))
     }
@@ -265,20 +540,11 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
                 after: change.after?.map(StringExpr.literal)
             ))
         case .actions(let change):
-            self = .actions(ElementPropertyChangeExpr(
-                before: change.before?.map(StringExpr.literal),
-                after: change.after?.map(StringExpr.literal)
-            ))
+            self = .actions(ElementPropertyChangeExpr(before: change.before, after: change.after))
         case .frame(let change):
-            self = .frame(ElementPropertyChangeExpr(
-                before: change.before?.map(StringExpr.literal),
-                after: change.after?.map(StringExpr.literal)
-            ))
+            self = .frame(ElementPropertyChangeExpr(before: change.before, after: change.after))
         case .activationPoint(let change):
-            self = .activationPoint(ElementPropertyChangeExpr(
-                before: change.before?.map(StringExpr.literal),
-                after: change.after?.map(StringExpr.literal)
-            ))
+            self = .activationPoint(ElementPropertyChangeExpr(before: change.before, after: change.after))
         case .customContent(let change):
             self = .customContent(ElementPropertyChangeExpr(
                 before: change.before?.map(StringExpr.literal),
@@ -307,20 +573,11 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
                 after: try change.after?.resolve(in: environment)
             ))
         case .actions(let change):
-            return .actions(ElementPropertyChange(
-                before: try change.before?.resolve(in: environment),
-                after: try change.after?.resolve(in: environment)
-            ))
+            return .actions(ElementPropertyChange(before: change.before, after: change.after))
         case .frame(let change):
-            return .frame(ElementPropertyChange(
-                before: try change.before?.resolve(in: environment),
-                after: try change.after?.resolve(in: environment)
-            ))
+            return .frame(ElementPropertyChange(before: change.before, after: change.after))
         case .activationPoint(let change):
-            return .activationPoint(ElementPropertyChange(
-                before: try change.before?.resolve(in: environment),
-                after: try change.after?.resolve(in: environment)
-            ))
+            return .activationPoint(ElementPropertyChange(before: change.before, after: change.after))
         case .customContent(let change):
             return .customContent(ElementPropertyChange(
                 before: try change.before?.resolve(in: environment),
@@ -369,36 +626,36 @@ public enum AnyPropertyChangeExpr: Codable, Sendable, Equatable {
     }
 
     public static func actions(
-        before: StringMatch<StringExpr>? = nil,
-        after: StringMatch<StringExpr>? = nil
+        before: ActionSetMatch? = nil,
+        after: ActionSetMatch? = nil
     ) -> Self {
         .actions(ElementPropertyChangeExpr(before: before, after: after))
     }
 
     public static func frame(
-        before: StringMatch<StringExpr>? = nil,
-        after: StringMatch<StringExpr>? = nil
+        before: ElementFrameMatch? = nil,
+        after: ElementFrameMatch? = nil
     ) -> Self {
         .frame(ElementPropertyChangeExpr(before: before, after: after))
     }
 
     public static func activationPoint(
-        before: StringMatch<StringExpr>? = nil,
-        after: StringMatch<StringExpr>? = nil
+        before: ElementPointMatch? = nil,
+        after: ElementPointMatch? = nil
     ) -> Self {
         .activationPoint(ElementPropertyChangeExpr(before: before, after: after))
     }
 
     public static func customContent(
-        before: StringMatch<StringExpr>? = nil,
-        after: StringMatch<StringExpr>? = nil
+        before: CustomContentMatch<StringExpr>? = nil,
+        after: CustomContentMatch<StringExpr>? = nil
     ) -> Self {
         .customContent(ElementPropertyChangeExpr(before: before, after: after))
     }
 
     public static func rotors(
-        before: StringMatch<StringExpr>? = nil,
-        after: StringMatch<StringExpr>? = nil
+        before: RotorSetMatch<StringExpr>? = nil,
+        after: RotorSetMatch<StringExpr>? = nil
     ) -> Self {
         .rotors(ElementPropertyChangeExpr(before: before, after: after))
     }
@@ -786,6 +1043,29 @@ private extension ElementPropertyChangeExpr {
             before.map { "before=\($0)" },
             after.map { "after=\($0)" },
         ].compactMap { $0 })
+    }
+}
+
+private extension Set where Element == ElementAction {
+    var canonicalElementActionArray: [ElementAction] {
+        sorted { lhs, rhs in
+            lhs.canonicalSortKey < rhs.canonicalSortKey
+        }
+    }
+}
+
+private extension ElementAction {
+    var canonicalSortKey: String {
+        switch self {
+        case .activate:
+            return "0:activate"
+        case .increment:
+            return "1:increment"
+        case .decrement:
+            return "2:decrement"
+        case .custom(let name):
+            return "3:\(name)"
+        }
     }
 }
 
