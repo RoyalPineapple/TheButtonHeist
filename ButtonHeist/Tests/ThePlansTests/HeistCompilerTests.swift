@@ -729,10 +729,13 @@ struct HeistCompilerTests {
             "ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift:"
                 + "private static func matcherTraitSortKey(_ trait: HeistTrait) -> (Int, String)",
         ]
+        let functionTupleReturnPattern = #"\b(?:@\w+(?:\([^)]*\))?\s+"#
+            + #"|(?:public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated)\s+)*"#
+            + #"func\s+\w+[^{=]*?->\s*\([^)]*,[^)]*\)\??"#
         let functionTupleReturns = try sourceSnippets(
             in: pipelineFiles,
             root: root,
-            pattern: #"\b(?:@\w+(?:\([^)]*\))?\s+|(?:public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated)\s+)*func\s+\w+[^{=]*?->\s*\([^)]*,[^)]*\)\??"#
+            pattern: functionTupleReturnPattern
         )
         let closureTupleReturns = try sourceSnippets(
             in: pipelineFiles,
