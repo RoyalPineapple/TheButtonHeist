@@ -236,8 +236,10 @@ struct InterfaceProjection: Sendable {
         var remainingElements: Int?
         tree = interface.tree.enumerated().compactMap { index, node in
             Self.project(
-                node,
-                path: TreePath([index]),
+                InterfaceNodeProjectionRequest(
+                    node: node,
+                    path: TreePath([index])
+                ),
                 context: context,
                 counter: &counter,
                 remainingElements: &remainingElements
@@ -251,13 +253,12 @@ struct InterfaceProjection: Sendable {
     }
 
     private static func project(
-        _ node: AccessibilityHierarchy,
-        path: TreePath,
+        _ request: InterfaceNodeProjectionRequest,
         context: InterfaceProjectionContext,
         counter: inout Int,
         remainingElements: inout Int?
     ) -> InterfaceNodeProjection? {
-        switch node {
+        switch request.node {
         case .element(let element, _):
             let order = counter
             counter += 1
@@ -271,7 +272,7 @@ struct InterfaceProjection: Sendable {
             context.stats.recordRenderedElement()
             let projected = HeistElement(
                 accessibilityElement: element,
-                annotation: context.elementAnnotations[path]
+                annotation: context.elementAnnotations[request.path]
             )
             return .element(InterfaceElementProjection(element: projected, order: order))
 
@@ -286,77 +287,56 @@ struct InterfaceProjection: Sendable {
                 return nil
             }
 
-            let budgetCap = max(0, context.visibleElementBudget)
-            let isScrollable: Bool = {
-                if case .scrollable = container.type { return true }
-                return false
-            }()
-            let shouldTruncate = isScrollable && observedElementCount > budgetCap
-            let parentRemainingBefore = remainingElements
-            var scrollRemainingElements: Int?
-            var projectedChildren: [InterfaceNodeProjection] = []
-
-            if shouldTruncate {
-                scrollRemainingElements = min(parentRemainingBefore ?? budgetCap, budgetCap)
-                for (index, child) in children.enumerated() {
-                    if let projectedChild = project(
-                        child,
-                        path: path.appending(index),
-                        context: context,
-                        counter: &counter,
-                        remainingElements: &scrollRemainingElements
-                    ) {
-                        projectedChildren.append(projectedChild)
-                    }
-                }
-            } else {
-                for (index, child) in children.enumerated() {
-                    if let projectedChild = project(
-                        child,
-                        path: path.appending(index),
-                        context: context,
-                        counter: &counter,
-                        remainingElements: &remainingElements
-                    ) {
-                        projectedChildren.append(projectedChild)
-                    }
-                }
-            }
-
-            let truncation: InterfaceSubtreeTruncationProjection?
-            if shouldTruncate {
-                let effectiveBudget = min(parentRemainingBefore ?? budgetCap, budgetCap)
-                let renderedElementCount = max(0, effectiveBudget - (scrollRemainingElements ?? 0))
-                if let parentRemainingBefore {
-                    remainingElements = max(0, parentRemainingBefore - renderedElementCount)
-                }
-                let omittedElementCount = max(0, observedElementCount - renderedElementCount)
-                let scrollBudgetHit = (scrollRemainingElements ?? 0) <= 0
-                if scrollBudgetHit, omittedElementCount > 0 {
-                    context.stats.recordTruncatedScrollContainer()
-                    truncation = InterfaceSubtreeTruncationProjection(
-                        reason: .scrollSubtreeElementBudget,
-                        observedElementCount: observedElementCount,
-                        renderedElementCount: renderedElementCount,
-                        omittedElementCount: omittedElementCount,
-                        visibleElementBudget: budgetCap
-                    )
-                } else {
-                    truncation = nil
-                }
-            } else {
-                truncation = nil
-            }
+            let scrollPolicy = ScrollSubtreeProjectionPolicy(
+                container: container,
+                observedElementCount: observedElementCount,
+                visibleElementBudget: context.visibleElementBudget,
+                parentRemainingElementBudget: remainingElements
+            )
+            let childResult = projectChildren(
+                InterfaceChildrenProjectionRequest(
+                    children: children,
+                    parentPath: request.path,
+                    remainingElementBudget: scrollPolicy.childRemainingElementBudget
+                ),
+                context: context,
+                counter: &counter
+            )
+            remainingElements = scrollPolicy.parentRemainingElementBudget(after: childResult)
+            let truncation = scrollPolicy.truncation(after: childResult, stats: context.stats)
 
             return .container(InterfaceContainerProjection(
                 container: container,
-                containerName: context.containerAnnotations[path]?.containerName?.rawValue,
-                scrollInventory: context.containerAnnotations[path]?.scrollInventory,
+                containerName: context.containerAnnotations[request.path]?.containerName?.rawValue,
+                scrollInventory: context.containerAnnotations[request.path]?.scrollInventory,
                 observedElementCount: observedElementCount,
                 truncation: truncation,
-                children: projectedChildren
+                children: childResult.children
             ))
         }
+    }
+
+    private static func projectChildren(
+        _ request: InterfaceChildrenProjectionRequest,
+        context: InterfaceProjectionContext,
+        counter: inout Int
+    ) -> InterfaceChildrenProjectionResult {
+        var remainingElementBudget = request.remainingElementBudget
+        let children = request.children.enumerated().compactMap { index, child in
+            project(
+                InterfaceNodeProjectionRequest(
+                    node: child,
+                    path: request.parentPath.appending(index)
+                ),
+                context: context,
+                counter: &counter,
+                remainingElements: &remainingElementBudget
+            )
+        }
+        return InterfaceChildrenProjectionResult(
+            children: children,
+            remainingElementBudget: remainingElementBudget
+        )
     }
 }
 
@@ -367,6 +347,86 @@ private struct InterfaceProjectionContext {
     let stats: InterfaceProjectionStats
     let elementAnnotations: [TreePath: InterfaceElementAnnotation]
     let containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+}
+
+private struct InterfaceNodeProjectionRequest {
+    let node: AccessibilityHierarchy
+    let path: TreePath
+}
+
+private struct InterfaceChildrenProjectionRequest {
+    let children: [AccessibilityHierarchy]
+    let parentPath: TreePath
+    let remainingElementBudget: Int?
+}
+
+private struct InterfaceChildrenProjectionResult {
+    let children: [InterfaceNodeProjection]
+    let remainingElementBudget: Int?
+}
+
+private struct ScrollSubtreeProjectionPolicy {
+    let observedElementCount: Int
+    let visibleElementBudget: Int
+    let parentRemainingElementBudget: Int?
+    let isActive: Bool
+
+    init(
+        container: AccessibilityContainer,
+        observedElementCount: Int,
+        visibleElementBudget: Int,
+        parentRemainingElementBudget: Int?
+    ) {
+        self.observedElementCount = observedElementCount
+        self.visibleElementBudget = max(0, visibleElementBudget)
+        self.parentRemainingElementBudget = parentRemainingElementBudget
+        isActive = Self.isScrollable(container) && observedElementCount > self.visibleElementBudget
+    }
+
+    var childRemainingElementBudget: Int? {
+        guard isActive else { return parentRemainingElementBudget }
+        return effectiveElementBudget
+    }
+
+    func parentRemainingElementBudget(after result: InterfaceChildrenProjectionResult) -> Int? {
+        guard isActive else { return result.remainingElementBudget }
+        guard let parentRemainingElementBudget else { return nil }
+        return max(0, parentRemainingElementBudget - renderedElementCount(after: result))
+    }
+
+    func truncation(
+        after result: InterfaceChildrenProjectionResult,
+        stats: InterfaceProjectionStats
+    ) -> InterfaceSubtreeTruncationProjection? {
+        guard isActive else { return nil }
+
+        let renderedElementCount = renderedElementCount(after: result)
+        let omittedElementCount = max(0, observedElementCount - renderedElementCount)
+        let scrollBudgetHit = (result.remainingElementBudget ?? 0) <= 0
+        guard scrollBudgetHit, omittedElementCount > 0 else { return nil }
+
+        stats.recordTruncatedScrollContainer()
+        return InterfaceSubtreeTruncationProjection(
+            reason: .scrollSubtreeElementBudget,
+            observedElementCount: observedElementCount,
+            renderedElementCount: renderedElementCount,
+            omittedElementCount: omittedElementCount,
+            visibleElementBudget: visibleElementBudget
+        )
+    }
+
+    private var effectiveElementBudget: Int {
+        min(parentRemainingElementBudget ?? visibleElementBudget, visibleElementBudget)
+    }
+
+    private func renderedElementCount(after result: InterfaceChildrenProjectionResult) -> Int {
+        max(0, effectiveElementBudget - (result.remainingElementBudget ?? 0))
+    }
+
+    private static func isScrollable(_ container: AccessibilityContainer) -> Bool {
+        if case .scrollable = container.type { return true }
+        return false
+    }
 }
 
 private final class InterfaceProjectionStats {
