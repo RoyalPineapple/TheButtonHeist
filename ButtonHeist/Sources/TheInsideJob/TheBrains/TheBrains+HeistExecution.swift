@@ -136,14 +136,64 @@ extension TheBrains {
         case failed(HeistExecutionStepResult)
     }
 
-    private enum HeistStepExecutionPhase {
-        case running
+    private enum HeistExecutionPhase: Equatable {
+        case ready
+        case executing(path: String)
         case aborted(failedPath: String)
+        case completed
+    }
 
-        func reducing(after result: HeistExecutionStepResult) -> HeistStepExecutionPhase {
-            guard case .running = self, result.isFailure else { return self }
-            return .aborted(failedPath: result.path)
+    private struct HeistExecutionState {
+        private(set) var phase: HeistExecutionPhase = .ready
+
+        mutating func beginStep(at path: String) -> HeistExecutionStepDecision {
+            switch phase {
+            case .ready:
+                phase = .executing(path: path)
+                return .execute
+            case .aborted(let failedPath):
+                return .skip(abortedPath: failedPath)
+            case .executing(let activePath):
+                preconditionFailure(
+                    "Cannot begin heist step \(path) while \(activePath) is executing"
+                )
+            case .completed:
+                preconditionFailure("Cannot begin heist step \(path) after execution completed")
+            }
         }
+
+        mutating func finishStep(_ result: HeistExecutionStepResult) {
+            guard case .executing = phase else {
+                preconditionFailure(
+                    "Cannot finish heist step \(result.path) while execution phase is \(phase)"
+                )
+            }
+            phase = result.isFailure ? .aborted(failedPath: result.path) : .ready
+        }
+
+        mutating func finishPlan() -> HeistExecutionCompletion {
+            switch phase {
+            case .ready:
+                phase = .completed
+                return HeistExecutionCompletion(abortedPath: nil)
+            case .aborted(let failedPath):
+                phase = .completed
+                return HeistExecutionCompletion(abortedPath: failedPath)
+            case .executing(let activePath):
+                preconditionFailure("Cannot complete heist plan while \(activePath) is executing")
+            case .completed:
+                preconditionFailure("Cannot complete heist plan twice")
+            }
+        }
+    }
+
+    private enum HeistExecutionStepDecision: Equatable {
+        case execute
+        case skip(abortedPath: String)
+    }
+
+    private struct HeistExecutionCompletion: Equatable {
+        let abortedPath: String?
     }
 
     func executeHeistPlan(_ plan: HeistPlan, argument: HeistArgument = .none) async -> ActionResult {
@@ -248,17 +298,17 @@ extension TheBrains {
         path: String = "$.body"
     ) async -> [HeistExecutionStepResult] {
         var stepResults: [HeistExecutionStepResult] = []
-        var phase = HeistStepExecutionPhase.running
+        var executionState = HeistExecutionState()
 
         for (index, step) in steps.enumerated() {
             let stepPath = "\(path)[\(index)]"
 
-            switch phase {
-            case .aborted:
+            switch executionState.beginStep(at: stepPath) {
+            case .skip:
                 stepResults.append(skippedHeistStep(step, path: stepPath, scope: scope))
                 continue
 
-            case .running:
+            case .execute:
                 let stepResult = await executeHeistStep(
                     step,
                     index: index,
@@ -268,10 +318,11 @@ extension TheBrains {
                     scope: scope
                 )
                 stepResults.append(stepResult)
-                phase = phase.reducing(after: stepResult)
+                executionState.finishStep(stepResult)
             }
         }
 
+        _ = executionState.finishPlan()
         return stepResults
     }
 

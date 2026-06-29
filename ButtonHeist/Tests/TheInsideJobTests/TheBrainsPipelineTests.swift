@@ -613,9 +613,21 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(source.contains("private struct PredicateStateMatch: Hashable, Sendable"))
         XCTAssertTrue(source.contains("private func intersection(_ other: PredicateStateMatchSet) -> PredicateStateMatchSet"))
         XCTAssertTrue(source.contains("struct PredicateObservationStreamReduction"))
+        XCTAssertTrue(source.contains("PredicateEvaluationResult"))
         XCTAssertFalse(source.contains(streamTupleReturn))
         XCTAssertFalse(source.contains("elements.filter { predicate.matches($0) }"))
         XCTAssertFalse(source.contains("private func evaluate(_ state: AccessibilityPredicate.State) -> (met: Bool, actual: String?)"))
+    }
+
+    func testHeistExecutionUsesExplicitStateMachine() throws {
+        let source = try String(contentsOf: heistExecutionSourceURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("private struct HeistExecutionState"))
+        XCTAssertTrue(source.contains("private enum HeistExecutionPhase: Equatable"))
+        XCTAssertTrue(source.contains("mutating func beginStep(at path: String) -> HeistExecutionStepDecision"))
+        XCTAssertTrue(source.contains("mutating func finishStep(_ result: HeistExecutionStepResult)"))
+        XCTAssertTrue(source.contains("mutating func finishPlan() -> HeistExecutionCompletion"))
+        XCTAssertFalse(source.contains("private enum HeistStepExecutionPhase"))
     }
 
     func testPredicatePollingStateProbesDiscoveryInitiallyThenUsesVisibleTickCadence() {
@@ -1187,6 +1199,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/TheInsideJob/TheBrains/PredicateWait.swift")
+    }
+
+    private func heistExecutionSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift")
     }
 
     private func makeElement(label: String) -> AccessibilityElement {
