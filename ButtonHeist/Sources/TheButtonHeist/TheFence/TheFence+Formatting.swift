@@ -122,13 +122,13 @@ extension FenceResponse {
         return failure.errorCode
     }
 
-    private func formatTargetList(_ targets: [String: TargetConfig], defaultTarget: String?) -> String {
+    private func formatTargetList(_ targets: [TargetName: TargetConfig], defaultTarget: TargetName?) -> String {
         if targets.isEmpty { return "No targets configured" }
         var output = "\(targets.count) target(s):\n"
-        for name in targets.keys.sorted() {
+        for name in targets.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
             guard let target = targets[name] else { continue }
             let isDefault = name == defaultTarget ? " (default)" : ""
-            output += "  \(name): \(target.device)\(isDefault)\n"
+            output += "  \(name.rawValue): \(target.device)\(isDefault)\n"
         }
         return output.trimmingCharacters(in: .newlines)
     }

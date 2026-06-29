@@ -35,6 +35,12 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO4hintSSSgvp	swift.pr
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO5phaseAA12FailurePhaseOvp	swift.property	public	phase	FenceError.phase	var phase: FailurePhase { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO9errorCodeSSvp	swift.property	public	errorCode	FenceError.errorCode	var errorCode: String { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist10FenceErrorO9retryableSbvp	swift.property	public	retryable	FenceError.retryable	var retryable: Bool { get }
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist10TargetNameV	swift.struct	public	TargetName	TargetName	struct TargetName
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist10TargetNameV11descriptionSSvp	swift.property	public	description	TargetName.description	var description: String { get }
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist10TargetNameV4fromACs7Decoder_p_tKcfc	swift.init	public	init(from:)	TargetName.init(from:)	init(from decoder: any Decoder) throws
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist10TargetNameV6encode2toys7Encoder_p_tKF	swift.method	public	encode(to:)	TargetName.encode(to:)	func encode(to encoder: any Encoder) throws
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist10TargetNameV8rawValueACSS_tcfc	swift.init	public	init(rawValue:)	TargetName.init(rawValue:)	init(rawValue: String)
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist10TargetNameV8rawValueSSvp	swift.property	public	rawValue	TargetName.rawValue	let rawValue: String
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV	swift.struct	public	FailureCode	FailureCode	struct FailureCode
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV05knownD0AA05KnowncD0OSgvp	swift.property	public	knownCode	FailureCode.knownCode	var knownCode: KnownFailureCode? { get }
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist11FailureCodeV11defaultHintSSSgvp	swift.property	public	defaultHint	FailureCode.defaultHint	var defaultHint: String? { get }
@@ -83,7 +89,7 @@ symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO6actionyAcA03TheC
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO6statusyACSb_SSSgtcACmF	swift.enum.case	public	FenceResponse.status(connected:deviceName:)	FenceResponse.status(connected:deviceName:)	case status(connected: Bool, deviceName: String?)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO7devicesyACSayAA16DiscoveredDeviceVGcACmF	swift.enum.case	public	FenceResponse.devices(_:)	FenceResponse.devices(_:)	case devices([DiscoveredDevice])
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO7failureyACs5Error_pFZ	swift.type.method	public	failure(_:)	FenceResponse.failure(_:)	static func failure(_ error: any Error) -> FenceResponse
-symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO7targetsyACSDySSAA12TargetConfigVG_SSSgtcACmF	swift.enum.case	public	FenceResponse.targets(_:defaultTarget:)	FenceResponse.targets(_:defaultTarget:)	case targets([String : TargetConfig], defaultTarget: String?)
+symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO7targetsyACSDyAA10TargetNameVAA0F6ConfigVG_AFSgtcACmF	swift.enum.case	public	FenceResponse.targets(_:defaultTarget:)	FenceResponse.targets(_:defaultTarget:)	case targets([TargetName : TargetConfig], defaultTarget: TargetName?)
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO8jsonData16outputFormatting10Foundation0F0VAF11JSONEncoderC06OutputH0V_tKF	swift.method	public	jsonData(outputFormatting:)	FenceResponse.jsonData(outputFormatting:)	func jsonData(outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]) throws -> Data
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO8jsonData9requestId16outputFormatting10Foundation0F0VAA013PublicRequestH0OSg_AG11JSONEncoderC06OutputJ0VtKF	swift.method	public	jsonData(requestId:outputFormatting:)	FenceResponse.jsonData(requestId:outputFormatting:)	func jsonData(requestId: PublicRequestId?, outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]) throws -> Data
 symbol	ButtonHeist.symbols.json	s:11ButtonHeist13FenceResponseO9interfaceyAC8TheScore9InterfaceV_AA0H6DetailOtcACmF	swift.enum.case	public	FenceResponse.interface(_:detail:)	FenceResponse.interface(_:detail:)	case interface(Interface, detail: InterfaceDetail = .summary)
@@ -979,7 +985,14 @@ symbol	ButtonHeist.symbols.json	s:8ThePlans16ResolvedWaitStepV7timeoutSdvp	swift
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ResolvedWaitStepV9predicate7timeoutAcA22AccessibilityPredicateO_Sdtcfc	swift.init	public	init(predicate:timeout:)	ResolvedWaitStep.init(predicate:timeout:)	init(predicate: AccessibilityPredicate, timeout: Double = defaultWaitTimeout)
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ResolvedWaitStepV9predicateAA22AccessibilityPredicateOvp	swift.property	public	predicate	ResolvedWaitStep.predicate	let predicate: AccessibilityPredicate
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO	swift.enum	public	ValidationResult	ValidationResult	enum ValidationResult<Value, Diagnostic> where Value : Sendable, Diagnostic : Sendable
+symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO11diagnosticsSayq_Gvp	swift.property	public	diagnostics	ValidationResult.diagnostics	var diagnostics: [Diagnostic] { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO14mapDiagnosticsyACyxqd__Gqd__q_XEs8SendableRd__lF	swift.method	public	mapDiagnostics(_:)	ValidationResult.mapDiagnostics(_:)	func mapDiagnostics<NewDiagnostic>(_ transform: (Diagnostic) -> NewDiagnostic) -> ValidationResult<Value, NewDiagnostic> where NewDiagnostic : Sendable
+symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO18failureDiagnosticsSayq_GSgvp	swift.property	public	failureDiagnostics	ValidationResult.failureDiagnostics	var failureDiagnostics: [Diagnostic]? { get }
+symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO3get7orThrowxqd__Sayq_GXE_tKs5ErrorRd__lF	swift.method	public	get(orThrow:)	ValidationResult.get(orThrow:)	func get<Failure>(orThrow makeError: ([Diagnostic]) -> Failure) throws -> Value where Failure : Error
+symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO3mapyACyqd__q_Gqd__xXEs8SendableRd__lF	swift.method	public	map(_:)	ValidationResult.map(_:)	func map<NewValue>(_ transform: (Value) -> NewValue) -> ValidationResult<NewValue, Diagnostic> where NewValue : Sendable
+symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO5valuexSgvp	swift.property	public	value	ValidationResult.value	var value: Value? { get }
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO7failureyACyxq_GSayq_GcAEms8SendableRzsAGR_r0_lF	swift.enum.case	public	ValidationResult.failure(_:)	ValidationResult.failure(_:)	case failure([Diagnostic])
+symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO7flatMapyACyqd__q_GAExXEs8SendableRd__lF	swift.method	public	flatMap(_:)	ValidationResult.flatMap(_:)	func flatMap<NewValue>(_ transform: (Value) -> ValidationResult<NewValue, Diagnostic>) -> ValidationResult<NewValue, Diagnostic> where NewValue : Sendable
 symbol	ButtonHeist.symbols.json	s:8ThePlans16ValidationResultO7successyACyxq_Gx_Sayq_GtcAEms8SendableRzsAGR_r0_lF	swift.enum.case	public	ValidationResult.success(_:diagnostics:)	ValidationResult.success(_:diagnostics:)	case success(Value, diagnostics: [Diagnostic])
 symbol	ButtonHeist.symbols.json	s:8ThePlans16immediateTimeoutSdvp	swift.var	public	immediateTimeout	immediateTimeout	let immediateTimeout: Double
 symbol	ButtonHeist.symbols.json	s:8ThePlans17AnyPropertyChangeO	swift.enum	public	AnyPropertyChange	AnyPropertyChange	enum AnyPropertyChange
@@ -3246,6 +3259,13 @@ relationship	conformsTo	s:11ButtonHeist0aB5ActorC	s:s8SendableP	ButtonHeistActor
 relationship	conformsTo	s:11ButtonHeist10FenceErrorO	s:10Foundation14LocalizedErrorP	FenceError	Foundation.LocalizedError
 relationship	conformsTo	s:11ButtonHeist10FenceErrorO	s:s5ErrorP	FenceError	Swift.Error
 relationship	conformsTo	s:11ButtonHeist10FenceErrorO	s:s8SendableP	FenceError	Swift.Sendable
+relationship	conformsTo	s:11ButtonHeist10TargetNameV	s:SE	TargetName	Swift.Encodable
+relationship	conformsTo	s:11ButtonHeist10TargetNameV	s:SH	TargetName	Swift.Hashable
+relationship	conformsTo	s:11ButtonHeist10TargetNameV	s:SQ	TargetName	Swift.Equatable
+relationship	conformsTo	s:11ButtonHeist10TargetNameV	s:SY	TargetName	Swift.RawRepresentable
+relationship	conformsTo	s:11ButtonHeist10TargetNameV	s:Se	TargetName	Swift.Decodable
+relationship	conformsTo	s:11ButtonHeist10TargetNameV	s:s23CustomStringConvertibleP	TargetName	Swift.CustomStringConvertible
+relationship	conformsTo	s:11ButtonHeist10TargetNameV	s:s8SendableP	TargetName	Swift.Sendable
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:SE	FailureCode	Swift.Encodable
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:SH	FailureCode	Swift.Hashable
 relationship	conformsTo	s:11ButtonHeist11FailureCodeV	s:SQ	FailureCode	Swift.Equatable

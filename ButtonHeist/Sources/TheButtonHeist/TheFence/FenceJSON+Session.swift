@@ -107,9 +107,11 @@ struct PublicTargetsResponse: FencePublicJSONResponse {
     let targets: [String: PublicTargetConfig]
     let `default`: String?
 
-    init(targets: [String: TargetConfig], defaultTarget: String?) {
-        self.targets = targets.mapValues(PublicTargetConfig.init)
-        self.default = defaultTarget
+    init(targets: [TargetName: TargetConfig], defaultTarget: TargetName?) {
+        self.targets = Dictionary(uniqueKeysWithValues: targets.map { name, target in
+            (name.rawValue, PublicTargetConfig(target: target))
+        })
+        self.default = defaultTarget?.rawValue
     }
 }
 

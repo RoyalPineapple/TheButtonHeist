@@ -492,7 +492,7 @@ extension ElementPredicateCheck: Codable where Value: Codable {
         case kind, match, values
     }
 
-    private enum Kind: String, Codable {
+    package enum Kind: String, Codable, CaseIterable {
         case label, identifier, value, traits, excludeTraits
     }
 

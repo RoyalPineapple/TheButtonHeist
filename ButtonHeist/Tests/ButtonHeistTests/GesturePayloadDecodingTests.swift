@@ -101,7 +101,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
                     "end": screenPointValue(x: 30, y: 40),
                 ]),
             ],
-            equals: "schema validation failed for swipe: observed mixed or missing gesture intent; expected exactly one swipe intent"
+            equals: "swipe accepts exactly one gesture intent"
         )
     }
 
@@ -109,7 +109,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
     func testSwipeRejectsMissingIntentPayload() async {
         await assertValidationError(
             command: .swipe,
-            equals: "schema validation failed for swipe: observed mixed or missing gesture intent; expected exactly one swipe intent"
+            equals: "swipe requires a start target or point and an end point or direction"
         )
     }
 
@@ -169,7 +169,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
                     "end": screenPointValue(x: 100, y: 200),
                 ]),
             ],
-            equals: "schema validation failed for drag: observed mixed or missing gesture intent; expected exactly one drag intent"
+            equals: "drag accepts exactly one gesture intent"
         )
     }
 
@@ -177,7 +177,7 @@ final class GesturePayloadDecodingTests: XCTestCase {
     func testDragRejectsMissingIntentPayload() async {
         await assertValidationError(
             command: .drag,
-            equals: "schema validation failed for drag: observed mixed or missing gesture intent; expected exactly one drag intent"
+            equals: "drag intent requires element, element with unitPoint, or ScreenPoint"
         )
     }
 

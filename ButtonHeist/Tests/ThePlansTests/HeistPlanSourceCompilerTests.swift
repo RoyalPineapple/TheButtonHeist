@@ -845,7 +845,7 @@ import ThePlans
         rawStructuredJSONIRFields: ["body", "version"]
     ))
 
-    guard case .failure(let diagnostics) = result, let diagnostic = diagnostics.first else {
+    guard let diagnostic = result.failureDiagnostics?.first else {
         Issue.record("Expected raw JSON IR fields to fail planning admission")
         return
     }

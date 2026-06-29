@@ -25,6 +25,7 @@ check_generated_project() {
 
 run_step "Release contract and parser pin" "$SCRIPT_DIR/validate-release-contract.sh"
 run_step "Package manifest drift guard" "$SCRIPT_DIR/check-package-manifest-drift.sh"
+run_step "Invalid Swift source-shape guard" "$SCRIPT_DIR/reject-invalid-swift-shapes.sh"
 run_step "Swift public API baselines" "$SCRIPT_DIR/check-swift-api-baseline.sh"
 run_step "Generated reference docs check" "$SCRIPT_DIR/render-command-reference.sh" --check
 run_step "Generated project check" check_generated_project

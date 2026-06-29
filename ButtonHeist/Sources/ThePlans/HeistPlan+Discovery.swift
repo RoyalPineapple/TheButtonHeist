@@ -591,29 +591,8 @@ private struct HeistSemanticSurfaceBuilder {
     }
 
     mutating func collectTargets(from command: HeistActionCommand) {
-        switch command {
-        case .activate(let target), .increment(let target), .decrement(let target), .viewportScrollToVisible(let target):
-            appendTargetPredicate(target)
-        case .customAction(_, let target):
-            appendTargetPredicate(target)
-        case .rotor(_, let target, _):
-            appendTargetPredicate(target)
-        case .typeText(_, let target, _):
-            if let target { appendTargetPredicate(target) }
-        case .mechanicalTap(let target):
-            appendTargetPredicate(target.selection)
-        case .mechanicalLongPress(let target):
-            appendTargetPredicate(target.selection)
-        case .mechanicalSwipe(let target):
-            appendTargetPredicates(target.selection)
-        case .mechanicalDrag(let target):
-            appendTargetPredicates(target.selection)
-        case .viewportScroll(let target):
-            appendTargetPredicate(target.selection)
-        case .viewportScrollToEdge(let target):
-            appendTargetPredicate(target.selection)
-        case .editAction, .setPasteboard, .takeScreenshot, .dismissKeyboard:
-            break
+        for occurrence in command.targetOccurrences {
+            appendTargetPredicate(occurrence)
         }
     }
 
@@ -650,32 +629,11 @@ private struct HeistSemanticSurfaceBuilder {
         }
     }
 
-    mutating func appendTargetPredicate(_ selection: GesturePointSelection) {
-        switch selection {
-        case .element(let target), .elementUnitPoint(let target, _):
+    mutating func appendTargetPredicate(_ occurrence: HeistActionCommandTargetOccurrence) {
+        switch occurrence.target {
+        case .expression(let target):
             appendTargetPredicate(target)
-        case .coordinate:
-            break
-        }
-    }
-
-    mutating func appendTargetPredicate(_ selection: ScrollContainerSelection) {
-        if case .element(let target) = selection {
-            appendTargetPredicate(target)
-        }
-    }
-
-    mutating func appendTargetPredicates(_ selection: SwipeGestureSelection) {
-        switch selection {
-        case .unitElement(let target, _, _), .elementDirection(let target, _):
-            appendTargetPredicate(target)
-        case .point(let start, _):
-            appendTargetPredicate(start)
-        }
-    }
-
-    mutating func appendTargetPredicates(_ selection: DragGestureSelection) {
-        if case .elementToPoint(let target, _, _) = selection {
+        case .element(let target):
             appendTargetPredicate(target)
         }
     }

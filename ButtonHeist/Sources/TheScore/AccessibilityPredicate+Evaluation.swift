@@ -16,7 +16,10 @@ public extension AccessibilityPredicate {
         currentElements: [HeistElement],
         delta: AccessibilityTrace.Delta? = nil
     ) -> ExpectationResult {
-        evaluate(currentMatches: ElementMatchSet(elements: currentElements), delta: delta)
+        evaluate(
+            currentMatches: ElementMatchSet(elements: currentElements),
+            changeEvidence: ChangeEvaluationEvidence(delta: delta)
+        )
     }
 
     /// Evaluate against an observed interface and cumulative wait-window change facts.
@@ -24,7 +27,10 @@ public extension AccessibilityPredicate {
         currentElements: [HeistElement],
         accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
     ) -> ExpectationResult {
-        evaluate(currentMatches: ElementMatchSet(elements: currentElements), accumulatedDelta: accumulatedDelta)
+        evaluate(
+            currentMatches: ElementMatchSet(elements: currentElements),
+            changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: accumulatedDelta)
+        )
     }
 
     /// Evaluate against trace-derived predicate evidence. This is the preferred
@@ -33,7 +39,7 @@ public extension AccessibilityPredicate {
     func evaluate(in evidence: PredicateEvaluationEvidence) -> ExpectationResult {
         evaluate(
             currentMatches: ElementMatchSet(elements: evidence.currentElements),
-            accumulatedDelta: evidence.accumulatedDelta
+            changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: evidence.accumulatedDelta)
         )
     }
 }
@@ -41,31 +47,16 @@ public extension AccessibilityPredicate {
 private extension AccessibilityPredicate {
     func evaluate(
         currentMatches: ElementMatchSet,
-        delta: AccessibilityTrace.Delta?
+        changeEvidence: ChangeEvaluationEvidence
     ) -> ExpectationResult {
         switch self {
         case .state(let stateClause):
             return stateClause.evaluate(in: currentMatches).expectation(for: self)
         case .changePredicate(let change):
-            return change.evaluate(delta: delta)
+            return change.evaluate(changeEvidence: changeEvidence, placement: .predicateRoot)
         case .noChangePredicate:
-            let met = delta?.isNoChange == true
-            return ExpectationResult(met: met, predicate: self, actual: met ? nil : delta?.kindDescription ?? "noTrace")
-        }
-    }
-
-    func evaluate(
-        currentMatches: ElementMatchSet,
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
-    ) -> ExpectationResult {
-        switch self {
-        case .state(let stateClause):
-            return stateClause.evaluate(in: currentMatches).expectation(for: self)
-        case .changePredicate(let change):
-            return change.evaluate(accumulatedDelta: accumulatedDelta)
-        case .noChangePredicate:
-            let met = accumulatedDelta?.isNoChange == true
-            return ExpectationResult(met: met, predicate: self, actual: met ? nil : accumulatedDelta?.kindDescription ?? "noTrace")
+            let met = changeEvidence.isNoChange
+            return ExpectationResult(met: met, predicate: self, actual: met ? nil : changeEvidence.kindDescription)
         }
     }
 }
@@ -149,17 +140,19 @@ public extension AccessibilityPredicate.Change {
     func evaluate(
         delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
-        evaluate(delta: delta, placement: .predicateRoot)
+        evaluate(changeEvidence: ChangeEvaluationEvidence(delta: delta), placement: .predicateRoot)
     }
 
     func evaluate(
         accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
     ) -> ExpectationResult {
-        evaluate(accumulatedDelta: accumulatedDelta, placement: .predicateRoot)
+        evaluate(changeEvidence: ChangeEvaluationEvidence(accumulatedDelta: accumulatedDelta), placement: .predicateRoot)
     }
+}
 
-    private func evaluate(
-        delta: AccessibilityTrace.Delta?,
+fileprivate extension AccessibilityPredicate.Change {
+    func evaluate(
+        changeEvidence: ChangeEvaluationEvidence,
         placement: AccessibilityPredicateContract.ChangePlacement
     ) -> ExpectationResult {
         if let violation = contract.violation(in: placement) {
@@ -169,43 +162,16 @@ public extension AccessibilityPredicate.Change {
         switch contract {
         case .any:
             result = ExpectationResult(
-                met: delta?.isSemanticChange == true,
+                met: changeEvidence.isSemanticChange,
                 predicate: nil,
-                actual: delta?.kindDescription ?? "noTrace"
+                actual: changeEvidence.kindDescription
             )
         case .screen(let assertions):
-            result = Self.evaluateScreen(assertions: assertions, delta: delta)
+            result = Self.evaluateScreen(assertions: assertions, changeEvidence: changeEvidence)
         case .elements(let assertions):
-            result = Self.evaluateElements(assertions: assertions, delta: delta)
+            result = Self.evaluateElements(assertions: assertions, changeEvidence: changeEvidence)
         case .all(let changes):
-            let results = changes.map { $0.evaluate(delta: delta, placement: .scope) }
-            let failures = results.compactMap { $0.met ? nil : ($0.actual ?? $0.predicate?.description) }
-            result = ExpectationResult(met: failures.isEmpty, predicate: nil, actual: failures.isEmpty ? nil : failures.joined(separator: "; "))
-        }
-        return ExpectationResult(met: result.met, predicate: .change(self), actual: result.actual)
-    }
-
-    private func evaluate(
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?,
-        placement: AccessibilityPredicateContract.ChangePlacement
-    ) -> ExpectationResult {
-        if let violation = contract.violation(in: placement) {
-            return ExpectationResult(met: false, predicate: .change(self), actual: violation.evaluationDescription)
-        }
-        let result: ExpectationResult
-        switch contract {
-        case .any:
-            result = ExpectationResult(
-                met: accumulatedDelta?.isSemanticChange == true,
-                predicate: nil,
-                actual: accumulatedDelta?.kindDescription ?? "noTrace"
-            )
-        case .screen(let assertions):
-            result = Self.evaluateScreen(assertions: assertions, accumulatedDelta: accumulatedDelta)
-        case .elements(let assertions):
-            result = Self.evaluateElements(assertions: assertions, accumulatedDelta: accumulatedDelta)
-        case .all(let changes):
-            let results = changes.map { $0.evaluate(accumulatedDelta: accumulatedDelta, placement: .scope) }
+            let results = changes.map { $0.evaluate(changeEvidence: changeEvidence, placement: .scope) }
             let failures = results.compactMap { $0.met ? nil : ($0.actual ?? $0.predicate?.description) }
             result = ExpectationResult(met: failures.isEmpty, predicate: nil, actual: failures.isEmpty ? nil : failures.joined(separator: "; "))
         }
@@ -214,28 +180,10 @@ public extension AccessibilityPredicate.Change {
 
     private static func evaluateScreen(
         assertions: [AccessibilityPredicate.State],
-        delta: AccessibilityTrace.Delta?
+        changeEvidence: ChangeEvaluationEvidence
     ) -> ExpectationResult {
-        guard case .screenChanged(let payload)? = delta else {
-            return ExpectationResult(met: false, predicate: nil, actual: delta?.kindDescription ?? "noTrace")
-        }
-        guard !assertions.isEmpty else {
-            return ExpectationResult(met: true, predicate: nil, actual: AccessibilityTrace.DeltaKind.screenChanged.rawValue)
-        }
-        let stateClause: AccessibilityPredicate.State = assertions.count == 1 ? assertions[0] : .all(assertions)
-        let outcome = stateClause.evaluate(in: ElementMatchSet(interface: payload.newInterface))
-        return PredicateEvaluationResult(
-            met: outcome.met,
-            actual: outcome.met ? nil : "screen changed but new interface failed: \(outcome.actual ?? stateClause.description)"
-        ).expectation(for: nil)
-    }
-
-    private static func evaluateScreen(
-        assertions: [AccessibilityPredicate.State],
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
-    ) -> ExpectationResult {
-        guard let payload = accumulatedDelta?.screenChanged else {
-            return ExpectationResult(met: false, predicate: nil, actual: accumulatedDelta?.kindDescription ?? "noTrace")
+        guard let payload = changeEvidence.screenChanged else {
+            return ExpectationResult(met: false, predicate: nil, actual: changeEvidence.kindDescription)
         }
         guard !assertions.isEmpty else {
             return ExpectationResult(met: true, predicate: nil, actual: AccessibilityTrace.DeltaKind.screenChanged.rawValue)
@@ -250,27 +198,10 @@ public extension AccessibilityPredicate.Change {
 
     private static func evaluateElements(
         assertions: [ElementDeltaPredicate],
-        delta: AccessibilityTrace.Delta?
+        changeEvidence: ChangeEvaluationEvidence
     ) -> ExpectationResult {
-        guard case .elementsChanged(let payload)? = delta else {
-            return ExpectationResult(met: false, predicate: nil, actual: delta?.kindDescription ?? "noTrace")
-        }
-        guard !assertions.isEmpty else {
-            return ExpectationResult(met: true, predicate: nil, actual: AccessibilityTrace.DeltaKind.elementsChanged.rawValue)
-        }
-        let failures = assertions.compactMap { assertion -> String? in
-            let result = evaluateElementDelta(assertion, edits: payload.edits)
-            return result.met ? nil : (result.actual ?? assertion.description)
-        }
-        return ExpectationResult(met: failures.isEmpty, predicate: nil, actual: failures.isEmpty ? nil : failures.joined(separator: "; "))
-    }
-
-    private static func evaluateElements(
-        assertions: [ElementDeltaPredicate],
-        accumulatedDelta: AccessibilityTrace.AccumulatedDelta?
-    ) -> ExpectationResult {
-        guard let payload = accumulatedDelta?.elementsChanged else {
-            return ExpectationResult(met: false, predicate: nil, actual: accumulatedDelta?.kindDescription ?? "noTrace")
+        guard let payload = changeEvidence.elementsChanged else {
+            return ExpectationResult(met: false, predicate: nil, actual: changeEvidence.kindDescription)
         }
         guard !assertions.isEmpty else {
             return ExpectationResult(met: true, predicate: nil, actual: AccessibilityTrace.DeltaKind.elementsChanged.rawValue)
@@ -296,13 +227,6 @@ public extension AccessibilityPredicate.Change {
         case .updatedElement(let update):
             return evaluateUpdated(update: update, edits: edits)
         }
-    }
-
-    private static func evaluateUpdated(
-        update: ElementUpdatePredicate,
-        delta: AccessibilityTrace.Delta?
-    ) -> ExpectationResult {
-        evaluateUpdated(update: update, edits: delta?.elementEdits ?? ElementEdits())
     }
 
     private static func evaluateUpdated(
@@ -348,7 +272,84 @@ public extension AccessibilityPredicate.Change {
     }
 }
 
-// MARK: - Delta Facts
+// MARK: - Change Evidence
+
+private enum ChangeEvaluationEvidence {
+    case missing
+    case delta(AccessibilityTrace.Delta)
+    case accumulatedDelta(AccessibilityTrace.AccumulatedDelta)
+
+    init(delta: AccessibilityTrace.Delta?) {
+        if let delta {
+            self = .delta(delta)
+        } else {
+            self = .missing
+        }
+    }
+
+    init(accumulatedDelta: AccessibilityTrace.AccumulatedDelta?) {
+        if let accumulatedDelta {
+            self = .accumulatedDelta(accumulatedDelta)
+        } else {
+            self = .missing
+        }
+    }
+
+    var kindDescription: String {
+        switch self {
+        case .missing:
+            return "noTrace"
+        case .delta(let delta):
+            return delta.kindDescription
+        case .accumulatedDelta(let accumulatedDelta):
+            return accumulatedDelta.kindDescription
+        }
+    }
+
+    var isNoChange: Bool {
+        switch self {
+        case .missing:
+            return false
+        case .delta(let delta):
+            return delta.isNoChange
+        case .accumulatedDelta(let accumulatedDelta):
+            return accumulatedDelta.isNoChange
+        }
+    }
+
+    var isSemanticChange: Bool {
+        switch self {
+        case .missing:
+            return false
+        case .delta(let delta):
+            return delta.isSemanticChange
+        case .accumulatedDelta(let accumulatedDelta):
+            return accumulatedDelta.isSemanticChange
+        }
+    }
+
+    var screenChanged: AccessibilityTrace.ScreenChanged? {
+        switch self {
+        case .missing:
+            return nil
+        case .delta(let delta):
+            return delta.screenChanged
+        case .accumulatedDelta(let accumulatedDelta):
+            return accumulatedDelta.screenChanged
+        }
+    }
+
+    var elementsChanged: AccessibilityTrace.ElementsChanged? {
+        switch self {
+        case .missing:
+            return nil
+        case .delta(let delta):
+            return delta.elementsChanged
+        case .accumulatedDelta(let accumulatedDelta):
+            return accumulatedDelta.elementsChanged
+        }
+    }
+}
 
 private extension AccessibilityTrace.Delta {
     var kindDescription: String {
@@ -356,14 +357,6 @@ private extension AccessibilityTrace.Delta {
         case .noChange: return AccessibilityTrace.DeltaKind.noChange.rawValue
         case .elementsChanged: return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
         case .screenChanged: return AccessibilityTrace.DeltaKind.screenChanged.rawValue
-        }
-    }
-
-    var satisfiesElementsChanged: Bool {
-        switch self {
-        case .noChange: return false
-        case .elementsChanged: return true
-        case .screenChanged: return false
         }
     }
 
@@ -376,8 +369,13 @@ private extension AccessibilityTrace.Delta {
         !isNoChange
     }
 
-    var elementEdits: ElementEdits {
-        if case .elementsChanged(let payload) = self { return payload.edits }
-        return ElementEdits()
+    var screenChanged: AccessibilityTrace.ScreenChanged? {
+        if case .screenChanged(let payload) = self { return payload }
+        return nil
+    }
+
+    var elementsChanged: AccessibilityTrace.ElementsChanged? {
+        if case .elementsChanged(let payload) = self { return payload }
+        return nil
     }
 }

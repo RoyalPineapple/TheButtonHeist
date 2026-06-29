@@ -30,12 +30,8 @@ public struct HeistPlanSourceCompiler: Sendable {
         _ source: String,
         sourceName: String = "inline-heist-plan"
     ) throws -> HeistPlan {
-        switch compileResult(source, sourceName: sourceName) {
-        case .success(let plan, _):
-            return plan
-        case .failure(let diagnostics):
-            throw HeistPlanSourceCompilerError(diagnostics: diagnostics)
-        }
+        try compileResult(source, sourceName: sourceName)
+            .get(orThrow: HeistPlanSourceCompilerError.init(diagnostics:))
     }
 }
 

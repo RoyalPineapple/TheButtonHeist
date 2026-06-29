@@ -345,15 +345,11 @@ public struct HeistDef<Input>: Sendable {
     }
 
     fileprivate func invocation(argument: HeistArgument) throws -> HeistInvocationContent {
-        switch definitionResult {
-        case .success(let definition, _):
-            return HeistInvocationContent(
-                invocation: HeistInvocationStep(path: path, argument: argument),
-                heistDefinitions: [definition]
-            )
-        case .failure(let diagnostics):
-            throw HeistDefinitionBuildError(diagnostics: diagnostics)
-        }
+        let definition = try definitionResult.get(orThrow: HeistDefinitionBuildError.init(diagnostics:))
+        return HeistInvocationContent(
+            invocation: HeistInvocationStep(path: path, argument: argument),
+            heistDefinitions: [definition]
+        )
     }
 }
 
@@ -449,21 +445,11 @@ extension HeistDef: HeistContent {
     public var heistSteps: [HeistStep] { [] }
 
     public var heistDefinitions: [HeistPlan] {
-        switch definitionResult {
-        case .success(let definition, _):
-            return [definition]
-        case .failure:
-            return []
-        }
+        definitionResult.value.map { [$0] } ?? []
     }
 
     public var heistBuildDiagnostics: [HeistBuildDiagnostic] {
-        switch definitionResult {
-        case .success:
-            return []
-        case .failure(let diagnostics):
-            return diagnostics
-        }
+        definitionResult.failureDiagnostics ?? []
     }
 }
 

@@ -10,7 +10,7 @@ extension TheFence {
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
         let predicate = try ExpectationPayload.parseRequiredPredicate(input.argumentValues["predicate"])
-        return decodedExecutablePayload(.wait(WaitTarget(
+        return runtimeActionDispatch(.wait(WaitTarget(
             predicate: predicate,
             timeout: try input.schemaNumber("timeout")
         )))

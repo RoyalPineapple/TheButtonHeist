@@ -3,7 +3,7 @@ import Foundation
 extension TheFence {
 
     struct ConnectRequest {
-        let targetName: String?
+        let targetName: TargetName?
         let device: String?
         let token: String?
     }
@@ -96,7 +96,7 @@ extension TheFence {
 
     private func decodeConnectRequest(_ arguments: CommandArgumentEnvelope) throws -> ConnectRequest {
         ConnectRequest(
-            targetName: try arguments.schemaString("target"),
+            targetName: try arguments.schemaString("target").map(TargetName.init(rawValue:)),
             device: try arguments.schemaString("device"),
             token: try arguments.schemaString("token")
         )
