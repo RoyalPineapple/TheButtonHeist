@@ -40,6 +40,40 @@ import Testing
             }
         }
     }
+
+    @Test func `server phase writes stay in lifecycle runtime owners`() throws {
+        let observed = try sourceAssignmentCounts(
+            identifier: "serverPhase",
+            relativeRoot: "ButtonHeist/Sources/TheInsideJob",
+            excluding: [
+                "ButtonHeist/Sources/TheInsideJob/Server/SimpleSocketServer.swift",
+            ]
+        )
+
+        #expect(
+            observed == [
+                "ButtonHeist/Sources/TheInsideJob/InsideJobAppLifecycle.swift": 2,
+                "ButtonHeist/Sources/TheInsideJob/InsideJobRuntimeLease.swift": 1,
+                "ButtonHeist/Sources/TheInsideJob/InsideJobTransportRuntime.swift": 3,
+            ],
+            "Unexpected TheInsideJob serverPhase writes: \(observed)"
+        )
+    }
+
+    @Test func `tls activity writes stay in runtime activation and token cleanup`() throws {
+        let observed = try sourceAssignmentCounts(
+            identifier: "tlsActive",
+            relativeRoot: "ButtonHeist/Sources/TheInsideJob"
+        )
+
+        #expect(
+            observed == [
+                "ButtonHeist/Sources/TheInsideJob/InsideJobRuntimeLease.swift": 1,
+                "ButtonHeist/Sources/TheInsideJob/InsideJobTransportRuntime.swift": 2,
+            ],
+            "Unexpected TheInsideJob tlsActive writes: \(observed)"
+        )
+    }
 }
 
 #if canImport(UIKit)
@@ -72,4 +106,36 @@ private func repositoryRoot() -> URL {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
+}
+
+private func sourceAssignmentCounts(
+    identifier: String,
+    relativeRoot: String,
+    excluding excludedPaths: Set<String> = []
+) throws -> [String: Int] {
+    let repoRoot = repositoryRoot()
+    let root = repoRoot.appendingPathComponent(relativeRoot)
+    let escapedIdentifier = NSRegularExpression.escapedPattern(for: identifier)
+    let regex = try NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])\#(escapedIdentifier)\s*="#)
+    guard let enumerator = FileManager.default.enumerator(
+        at: root,
+        includingPropertiesForKeys: nil,
+        options: [.skipsHiddenFiles]
+    ) else {
+        return [:]
+    }
+
+    var counts: [String: Int] = [:]
+    for case let url as URL in enumerator where url.pathExtension == "swift" {
+        let relativePath = url.path.replacingOccurrences(of: repoRoot.path + "/", with: "")
+        guard !excludedPaths.contains(relativePath) else { continue }
+
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        let matchCount = regex.numberOfMatches(in: source, range: range)
+        if matchCount > 0 {
+            counts[relativePath] = matchCount
+        }
+    }
+    return counts
 }
