@@ -22,7 +22,7 @@ struct RepairScreen {
                 hint: nonEmpty(element.hint),
                 traits: element.traits,
                 actions: element.actions,
-                rotors: element.rotors?.map(\.name) ?? [],
+                rotors: element.rotors?.map { HeistRepairRotorIdentity(rawValue: $0.name) } ?? [],
                 siblingText: siblingText,
                 headerText: headerText
             )

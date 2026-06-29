@@ -76,7 +76,7 @@ enum HeistRepairSuggestionRenderer {
             lastSuccess: request.lastSuccess,
             currentFailure: request.currentFailure
         )
-        reasons.append(contentsOf: candidate.reasons)
+        reasons.append(contentsOf: candidate.reasons.map(RepairSuggestionReason.scoring))
         reasons.append(contentsOf: afterEvidenceReasons(
             lastSuccess: request.lastSuccess,
             currentFailure: request.currentFailure
@@ -85,16 +85,16 @@ enum HeistRepairSuggestionRenderer {
         var caveats = candidate.caveats
         if selection.candidate.tier == .ordinalDisambiguation,
            !request.lastSuccess.target.hasOrdinal {
-            caveats.append("Suggested matcher uses ordinal as last-resort disambiguation.")
+            caveats.append(.ordinalDisambiguation)
         }
         if tiedBestCount > 1 {
-            caveats.append("Multiple candidates have the same semantic score.")
+            caveats.append(.tiedBestCandidates)
         }
         if request.lastSuccess.afterDelta == nil, request.lastSuccess.afterSnapshot != nil {
-            caveats.append("Last successful evidence used a full after snapshot because compact diff was unavailable.")
+            caveats.append(.lastSuccessfulFullAfterSnapshotFallback)
         }
         if request.currentFailure.afterDelta == nil, request.currentFailure.afterSnapshot != nil {
-            caveats.append("Current failure evidence used a full after snapshot because compact diff was unavailable.")
+            caveats.append(.currentFailureFullAfterSnapshotFallback)
         }
 
         return HeistRepairSuggestion(
@@ -111,8 +111,8 @@ enum HeistRepairSuggestionRenderer {
                 tiedBestCount: tiedBestCount,
                 failureKind: failureKind
             ),
-            reasons: unique(reasons),
-            caveats: unique(caveats)
+            reasons: unique(reasons).map(\.prose),
+            caveats: unique(caveats).map(\.prose)
         )
     }
 
@@ -122,30 +122,30 @@ enum HeistRepairSuggestionRenderer {
         selection: MinimumPredicateSelection,
         lastSuccess: HeistStepRepairEvidence,
         currentFailure: HeistStepRepairEvidence
-    ) -> [String] {
-        var reasons = [
-            "Old target resolved to one element in the last successful before snapshot.",
+    ) -> [RepairSuggestionReason] {
+        var reasons: [RepairSuggestionReason] = [
+            .oldTargetResolvedInLastSuccessfulSnapshot,
         ]
         switch currentResolution {
         case .resolved:
-            reasons.append("Old target still resolves, but the resolved element does not support the requested action.")
+            reasons.append(.oldTargetResolvesWithoutRequestedAction)
         case .notFound(let matchCount):
-            reasons.append("Old target resolves to \(matchCount) elements in the new before snapshot.")
+            reasons.append(.oldTargetCurrentMatchCount(matchCount))
         case .ambiguous(_, let matchCount):
-            reasons.append("Old target resolves to \(matchCount) elements in the new before snapshot.")
+            reasons.append(.oldTargetCurrentMatchCount(matchCount))
         }
-        reasons.append("Suggested matcher resolves exactly one element in the new before snapshot.")
+        reasons.append(.suggestedMatcherResolvesExactlyOneElement)
         if selection.candidate.tier == .ordinalDisambiguation {
-            reasons.append("No semantic-only matcher was unique for the successor element.")
+            reasons.append(.noSemanticOnlyMatcherUnique)
         }
         if lastSuccess.target != currentFailure.target {
-            reasons.append("Current failure evidence supplied a different target; repair compared against the last successful target.")
+            reasons.append(.currentFailureSuppliedDifferentTarget)
         }
         if failureKind == .missingTarget {
-            reasons.append("Best successor was selected from semantic continuity after the old target went missing.")
+            reasons.append(.missingTargetSuccessorSelected)
         }
         if failureKind == .ambiguousTarget {
-            reasons.append("Best successor was selected from the ambiguous current matches.")
+            reasons.append(.ambiguousTargetSuccessorSelected)
         }
         return reasons
     }
@@ -153,45 +153,49 @@ enum HeistRepairSuggestionRenderer {
     private static func afterEvidenceReasons(
         lastSuccess: HeistStepRepairEvidence,
         currentFailure: HeistStepRepairEvidence
-    ) -> [String] {
-        var reasons: [String] = []
-        if let reason = deltaReason(prefix: "Last successful after diff", delta: lastSuccess.afterDelta) {
+    ) -> [RepairSuggestionReason] {
+        var reasons: [RepairSuggestionReason] = []
+        if let reason = deltaReason(source: .lastSuccess, delta: lastSuccess.afterDelta) {
             reasons.append(reason)
         }
-        if let reason = deltaReason(prefix: "Current failure after diff", delta: currentFailure.afterDelta) {
+        if let reason = deltaReason(source: .currentFailure, delta: currentFailure.afterDelta) {
             reasons.append(reason)
         }
         if let expectation = lastSuccess.result.expectation, expectation.met {
-            reasons.append("Last successful result met its expectation.")
+            reasons.append(.lastSuccessfulExpectationMet)
         }
         if let expectation = currentFailure.result.expectation, !expectation.met {
-            reasons.append("Current failure result did not meet its expectation.")
+            reasons.append(.currentFailureExpectationUnmet)
         }
         return reasons
     }
 
-    private static func deltaReason(prefix: String, delta: AccessibilityTrace.Delta?) -> String? {
+    private static func deltaReason(
+        source: RepairEvidenceSource,
+        delta: AccessibilityTrace.Delta?
+    ) -> RepairSuggestionReason? {
         guard let delta else { return nil }
         switch delta {
         case .noChange:
-            return "\(prefix) observed no semantic change."
+            return .afterDiff(source, .noSemanticChange)
         case .screenChanged:
-            return "\(prefix) observed a screen change."
+            return .afterDiff(source, .screenChange)
         case .elementsChanged(let payload):
             if let valueChange = payload.edits.updated
                 .flatMap(\.changes)
                 .first(where: { $0.property == .value }) {
-                let old = valueChange.oldDisplayText ?? "nil"
-                let new = valueChange.newDisplayText ?? "nil"
-                return "\(prefix) observed value change from \(old) to \(new)."
+                return .afterDiff(
+                    source,
+                    .valueChange(old: valueChange.oldDisplayText, new: valueChange.newDisplayText)
+                )
             }
             if !payload.edits.added.isEmpty {
-                return "\(prefix) observed semantic elements added."
+                return .afterDiff(source, .semanticElementsAdded)
             }
             if !payload.edits.removed.isEmpty {
-                return "\(prefix) observed semantic elements removed."
+                return .afterDiff(source, .semanticElementsRemoved)
             }
-            return "\(prefix) observed element changes."
+            return .afterDiff(source, .elementChanges)
         }
     }
 

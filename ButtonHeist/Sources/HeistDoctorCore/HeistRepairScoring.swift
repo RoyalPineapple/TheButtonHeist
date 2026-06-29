@@ -41,7 +41,7 @@ enum RepairCandidateScorer {
         into score: inout CandidateScore
     ) {
         guard context.preferredCandidates.contains(candidate.id) else { return }
-        score.add(25, reason: "Old target is one of the current matches.")
+        score.add(25, reason: .oldTargetIsCurrentMatch)
     }
 
     private static func scoreIdentifierContinuity(
@@ -53,7 +53,7 @@ enum RepairCandidateScorer {
               let oldIdentifier = stableIdentifier(context.old.identifier),
               ElementPredicate.stringEquals(identifier, oldIdentifier)
         else { return }
-        score.add(90, reason: "Accessibility identifier is unchanged.", signal: .identifier)
+        score.add(90, reason: .identifierUnchanged, signal: .identifier)
     }
 
     private static func scoreTextContinuity(
@@ -66,8 +66,8 @@ enum RepairCandidateScorer {
             oldValue: context.old.label,
             exactPoints: 50,
             renamePoints: 35,
-            exactReason: "Label is unchanged.",
-            renameReason: "Label is a close semantic rename.",
+            exactReason: .labelUnchanged,
+            renameReason: .labelSemanticRename,
             into: &score
         )
         scoreTextPair(
@@ -75,8 +75,8 @@ enum RepairCandidateScorer {
             oldValue: context.old.value,
             exactPoints: 20,
             renamePoints: 20,
-            exactReason: "Value is unchanged.",
-            renameReason: "Value is a close semantic rename.",
+            exactReason: .valueUnchanged,
+            renameReason: .valueSemanticRename,
             into: &score
         )
     }
@@ -86,8 +86,8 @@ enum RepairCandidateScorer {
         oldValue: String?,
         exactPoints: Int,
         renamePoints: Int,
-        exactReason: String,
-        renameReason: String,
+        exactReason: RepairScoringReason,
+        renameReason: RepairScoringReason,
         into score: inout CandidateScore
     ) {
         guard let value = nonEmpty(value), let oldValue = nonEmpty(oldValue) else { return }
@@ -111,17 +111,19 @@ enum RepairCandidateScorer {
     ) {
         let traitOverlap = context.oldStableTraits.intersection(stableTraits(element))
         if !traitOverlap.isEmpty {
-            score.add(min(30, traitOverlap.count * 15), reason: "Control role traits are compatible.")
+            score.add(min(30, traitOverlap.count * 15), reason: .controlRoleTraitsCompatible)
         }
 
         let actionOverlap = Set(context.old.actions).intersection(element.actions)
         if !actionOverlap.isEmpty {
-            score.add(10, reason: "Element actions are compatible.")
+            score.add(10, reason: .elementActionsCompatible)
         }
 
-        let rotorOverlap = Set((context.old.rotors ?? []).map(\.name)).intersection((element.rotors ?? []).map(\.name))
+        let oldRotors = Set((context.old.rotors ?? []).map { HeistRepairRotorIdentity(rawValue: $0.name) })
+        let currentRotors = Set((element.rotors ?? []).map { HeistRepairRotorIdentity(rawValue: $0.name) })
+        let rotorOverlap = oldRotors.intersection(currentRotors)
         if !rotorOverlap.isEmpty {
-            score.add(5, reason: "Rotor capability is compatible.")
+            score.add(5, reason: .rotorCapabilityCompatible)
         }
     }
 
@@ -136,7 +138,7 @@ enum RepairCandidateScorer {
            siblingContextIsLocal(oldCount: context.oldSiblingText.count, candidateCount: candidateSiblingText.count) {
             score.add(
                 min(45, siblingOverlap.count * 35),
-                reason: "Sibling row context is preserved.",
+                reason: .siblingRowContextPreserved,
                 signal: .neighborContext
             )
         }
@@ -146,7 +148,7 @@ enum RepairCandidateScorer {
             let isDiscriminatingHeader = context.compatibleCandidateCount <= 3
             score.add(
                 min(20, headerOverlap.count * 10),
-                reason: "Header context is preserved.",
+                reason: .headerContextPreserved,
                 signal: isDiscriminatingHeader ? .neighborContext : nil
             )
         }
@@ -159,12 +161,12 @@ enum RepairCandidateScorer {
     ) {
         let identityText = normalizedIdentityText(element)
         if !context.afterEvidence.isDisjoint(with: identityText) {
-            score.add(5, reason: "After-diff evidence mentions the same semantic element.", signal: .afterEvidence)
+            score.add(5, reason: .afterDiffEvidenceMatchesElement, signal: .afterEvidence)
         }
         if !context.expectationEvidence.isDisjoint(with: identityText) {
             score.add(
                 5,
-                reason: "Expectation evidence mentions the same semantic element.",
+                reason: .expectationEvidenceMatchesElement,
                 signal: .expectationEvidence
             )
         }
@@ -178,7 +180,7 @@ enum RepairCandidateScorer {
         if context.actionFamily.isKnown {
             scoreKnownActionFamily(element, context: context, into: &score)
         } else if context.failureKind == .missingTarget, context.currentElementCount == 1 {
-            score.add(25, reason: "It is the only current semantic candidate.")
+            score.add(25, reason: .onlyCurrentSemanticCandidate)
         }
     }
 
@@ -189,12 +191,12 @@ enum RepairCandidateScorer {
     ) {
         guard context.actionFamily.isSupported(by: element) else {
             score.add(-40)
-            score.caveats.append("Candidate does not expose the same action family.")
+            score.caveats.append(.candidateDoesNotExposeSameActionFamily)
             return
         }
-        score.add(15, reason: "Element supports the same action family.")
+        score.add(15, reason: .elementSupportsSameActionFamily)
         if context.failureKind == .missingTarget, context.compatibleCandidateCount == 1 {
-            score.add(25, reason: "It is the only current element with a compatible action family.")
+            score.add(25, reason: .onlyCurrentElementWithCompatibleActionFamily)
         }
     }
 }
@@ -215,13 +217,13 @@ struct CandidateScoringContext: Sendable, Equatable {
 
 private struct CandidateScore: Sendable, Equatable {
     private(set) var value = 0
-    var reasons: [String] = []
-    var caveats: [String] = []
+    var reasons: [RepairScoringReason] = []
+    var caveats: [RepairCaveat] = []
     private(set) var continuitySignals = Set<CandidateContinuitySignal>()
 
     mutating func add(
         _ points: Int,
-        reason: String? = nil,
+        reason: RepairScoringReason? = nil,
         signal: CandidateContinuitySignal? = nil
     ) {
         value += points
@@ -237,8 +239,8 @@ private struct CandidateScore: Sendable, Equatable {
 struct ScoredCandidate: Sendable, Equatable {
     let element: RepairScreen.Element
     let score: Int
-    let reasons: [String]
-    let caveats: [String]
+    let reasons: [RepairScoringReason]
+    let caveats: [RepairCaveat]
     let continuitySignals: Set<CandidateContinuitySignal>
 
     struct Rank: Sendable, Equatable, Comparable {

@@ -6,7 +6,7 @@ enum RepairActionFamily: Sendable, Equatable {
     case activate
     case increment
     case decrement
-    case customAction(String?)
+    case customAction(HeistRepairCustomActionIdentity?)
     case rotor
     case textInput
     case unknown
@@ -20,7 +20,7 @@ enum RepairActionFamily: Sendable, Equatable {
         case .decrement:
             self = .decrement
         case .performCustomAction:
-            self = .customAction(actionIdentity.customActionName)
+            self = .customAction(actionIdentity.customAction)
         case .rotor:
             self = .rotor
         case .typeText:
@@ -49,10 +49,10 @@ enum RepairActionFamily: Sendable, Equatable {
                 if case .custom(let name) = action { return name }
                 return nil
             }
-            guard let name, !name.isEmpty else {
+            guard let name, !name.rawValue.isEmpty else {
                 return !customActions.isEmpty
             }
-            return customActions.contains { ElementPredicate.stringEquals($0, name) }
+            return customActions.contains { ElementPredicate.stringEquals($0, name.rawValue) }
         case .rotor:
             return element.rotors?.isEmpty == false
         case .textInput:
