@@ -1,4 +1,11 @@
 import Foundation
+import TheScore
+
+extension Dictionary where Key == String, Value == String {
+    subscript(_ key: EnvironmentKey) -> String? {
+        self[key.rawValue]
+    }
+}
 
 /// Resolved configuration from environment variables, config files, and explicit overrides.
 /// Use `resolve()` to build this from the current environment, then access `.fenceConfiguration`
@@ -114,8 +121,8 @@ public struct EnvironmentConfig: Sendable {
         env: [String: String]
     ) -> EnvironmentConfig {
 
-        let envDevice = env[EnvironmentKey.buttonheistDevice.rawValue]
-        let envToken = env[EnvironmentKey.buttonheistToken.rawValue]
+        let envDevice = env[.buttonheistDevice]
+        let envToken = env[.buttonheistToken]
         let configTarget = TargetConfigResolver.resolveEffective(config: fileConfig, env: env)
 
         let resolvedDevice: String?
@@ -142,7 +149,7 @@ public struct EnvironmentConfig: Sendable {
         let resolvedSessionTimeout: TimeInterval
         if let explicit = sessionTimeout, explicit > 0 {
             resolvedSessionTimeout = explicit
-        } else if let envStr = env["BUTTONHEIST_SESSION_TIMEOUT"],
+        } else if let envStr = env[.buttonheistSessionTimeout],
                   let parsed = Double(envStr), parsed > 0 {
             resolvedSessionTimeout = parsed
         } else {
@@ -152,7 +159,7 @@ public struct EnvironmentConfig: Sendable {
         let resolvedConnectionTimeout: TimeInterval
         if let explicit = connectionTimeout, explicit > 0 {
             resolvedConnectionTimeout = explicit
-        } else if let envStr = env[EnvironmentKey.buttonheistConnectionTimeout.rawValue],
+        } else if let envStr = env[.buttonheistConnectionTimeout],
                   let parsed = Double(envStr), parsed > 0 {
             resolvedConnectionTimeout = parsed
         } else {

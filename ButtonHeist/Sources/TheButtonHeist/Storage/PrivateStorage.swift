@@ -1,14 +1,27 @@
 import Foundation
 
+enum StorageEnvironmentKey: String, Sendable {
+    case buttonheistStorageDirectory = "BUTTONHEIST_STORAGE_DIR"
+    case xdgDataHome = "XDG_DATA_HOME"
+}
+
+private extension Dictionary where Key == String, Value == String {
+    subscript(_ key: StorageEnvironmentKey) -> String? {
+        self[key.rawValue]
+    }
+}
+
 enum PrivateStorage {
 
     // MARK: - Paths
 
-    static func resolveBaseDirectory() -> URL {
-        if let override = ProcessInfo.processInfo.environment["BUTTONHEIST_STORAGE_DIR"] {
+    static func resolveBaseDirectory(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL {
+        if let override = environment[.buttonheistStorageDirectory] {
             return URL(fileURLWithPath: override)
         }
-        if let xdgDataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"] {
+        if let xdgDataHome = environment[.xdgDataHome] {
             return URL(fileURLWithPath: xdgDataHome)
                 .appendingPathComponent("buttonheist")
         }

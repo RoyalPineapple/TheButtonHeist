@@ -110,10 +110,10 @@ final class TargetConfigTests: XCTestCase {
             targets: ["sim1": TargetConfig(device: "127.0.0.1:1455", token: "config-token")],
             defaultTarget: "sim1"
         )
-        let env = [
-            "BUTTONHEIST_DEVICE": "127.0.0.1:9999",
-            "BUTTONHEIST_TOKEN": "env-token",
-        ]
+        let env = environment([
+            .buttonheistDevice: "127.0.0.1:9999",
+            .buttonheistToken: "env-token",
+        ])
 
         let resolved = TargetConfigResolver.resolveEffective(targetName: "sim1", config: config, env: env)
         XCTAssertEqual(resolved?.device, "127.0.0.1:9999")
@@ -121,7 +121,7 @@ final class TargetConfigTests: XCTestCase {
     }
 
     func testEnvDeviceWithoutTokenUsesNilToken() {
-        let env = ["BUTTONHEIST_DEVICE": "127.0.0.1:9999"]
+        let env = environment([.buttonheistDevice: "127.0.0.1:9999"])
         let resolved = TargetConfigResolver.resolveEffective(config: nil, env: env)
         XCTAssertEqual(resolved?.device, "127.0.0.1:9999")
         XCTAssertNil(resolved?.token)
@@ -168,7 +168,7 @@ final class TargetConfigTests: XCTestCase {
             targets: ["sim1": TargetConfig(device: "127.0.0.1:1455", token: "config-token")],
             defaultTarget: "sim1"
         )
-        let env = ["BUTTONHEIST_TOKEN": "env-token"]
+        let env = environment([.buttonheistToken: "env-token"])
         let resolved = TargetConfigResolver.resolveEffective(config: config, env: env)
         XCTAssertEqual(resolved?.device, "127.0.0.1:1455")
         XCTAssertEqual(resolved?.token, "env-token")
@@ -642,5 +642,9 @@ final class TargetConfigTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)
         XCTAssertEqual(original, decoded)
+    }
+
+    private func environment(_ values: [EnvironmentKey: String]) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
     }
 }
