@@ -474,14 +474,14 @@ extension AccessibilityTrace.InteractionDigest {
         between before: AccessibilityTrace.Capture,
         and after: AccessibilityTrace.Capture
     ) {
-        let beforeElements = before.interface.projectedElements
-        let afterElements = after.interface.projectedElements
+        let beforeRecords = before.interface.projectedElementRecords.map(ElementDiffRecord.init)
+        let afterRecords = after.interface.projectedElementRecords.map(ElementDiffRecord.init)
         self.init(
-            elementCountBefore: beforeElements.count,
-            elementCountAfter: afterElements.count,
+            elementCountBefore: beforeRecords.count,
+            elementCountAfter: afterRecords.count,
             elementSetChanged: AccessibilityTraceElementDiff.pairingKeyMultisetDiffers(
-                beforeElements: beforeElements,
-                afterElements: afterElements
+                beforeRecords: beforeRecords,
+                afterRecords: afterRecords
             ),
             screenIdBefore: before.screenId,
             screenIdAfter: after.screenId,

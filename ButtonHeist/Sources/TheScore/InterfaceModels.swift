@@ -128,13 +128,61 @@ public struct ScrollInventory: Codable, Equatable, Hashable, Sendable {
 public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
     public let actions: [ElementAction]
+    package let traceIdentity: TraceElementIdentity?
 
     public init(
         path: TreePath,
         actions: [ElementAction]
     ) {
+        self.init(path: path, actions: actions, traceIdentity: nil)
+    }
+
+    package init(
+        path: TreePath,
+        actions: [ElementAction],
+        traceIdentity: TraceElementIdentity?
+    ) {
         self.path = path
         self.actions = actions
+        self.traceIdentity = traceIdentity
+    }
+}
+
+/// Opaque element identity used only by trace-backed diffing.
+///
+/// Public element projections stay content-shaped. When a capture has stronger
+/// semantic identity metadata, diffing can pair by this value and keep
+/// label/identifier churn from masquerading as remove/add churn.
+package struct TraceElementIdentity: Codable, Equatable, Hashable, Sendable, Comparable, CustomStringConvertible {
+    package let rawValue: String
+
+    package init(_ rawValue: String) {
+        precondition(!rawValue.isEmpty, "TraceElementIdentity cannot be empty")
+        self.rawValue = rawValue
+    }
+
+    package init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        guard !rawValue.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "TraceElementIdentity cannot be empty"
+            ))
+        }
+        self.rawValue = rawValue
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    package var description: String {
+        rawValue
+    }
+
+    package static func < (lhs: TraceElementIdentity, rhs: TraceElementIdentity) -> Bool {
+        lhs.rawValue < rhs.rawValue
     }
 }
 
@@ -180,6 +228,22 @@ public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable {
 
     public var containerByPath: [TreePath: InterfaceContainerAnnotation] {
         Dictionary(containers.map { ($0.path, $0) }, uniquingKeysWith: { _, latest in latest })
+    }
+}
+
+package struct InterfaceElementRecord: Equatable, Sendable {
+    package let path: TreePath
+    package let element: HeistElement
+    package let traceIdentity: TraceElementIdentity?
+
+    package init(
+        path: TreePath,
+        element: HeistElement,
+        traceIdentity: TraceElementIdentity? = nil
+    ) {
+        self.path = path
+        self.element = element
+        self.traceIdentity = traceIdentity
     }
 }
 
@@ -312,11 +376,25 @@ public struct Interface: Codable, Equatable, Sendable {
 
     /// Button Heist element projection in VoiceOver traversal order.
     public var projectedElements: [HeistElement] {
+        projectedElementRecords.map(\.element)
+    }
+
+    /// Trace-aware element projection in VoiceOver traversal order.
+    ///
+    /// `projectedElements` intentionally stays a public, content-only view.
+    /// Diffing uses records so optional trace identity can participate in
+    /// pairing without leaking into `HeistElement`.
+    package var projectedElementRecords: [InterfaceElementRecord] {
         let annotationsByPath = annotations.elementByPath
         return tree.pathIndexedElements.map { item in
-            HeistElement(
-                accessibilityElement: item.element,
-                annotation: annotationsByPath[item.path]
+            let annotation = annotationsByPath[item.path]
+            return InterfaceElementRecord(
+                path: item.path,
+                element: HeistElement(
+                    accessibilityElement: item.element,
+                    annotation: annotation
+                ),
+                traceIdentity: annotation?.traceIdentity
             )
         }
     }
@@ -355,7 +433,8 @@ public struct Interface: Codable, Equatable, Sendable {
             guard let annotation = elementsByPath[oldPath] else { return nil }
             return InterfaceElementAnnotation(
                 path: newPath,
-                actions: annotation.actions
+                actions: annotation.actions,
+                traceIdentity: annotation.traceIdentity
             )
         }
         let containersByPath = annotations.containerByPath

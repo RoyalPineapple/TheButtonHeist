@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import CryptoKit
 import UIKit
 
 import TheScore
@@ -42,6 +43,13 @@ struct HeistId: RawRepresentable, Hashable, Sendable, Codable, Comparable, Custo
 
     var predicateSelectionElementId: PredicateSelectionElementId {
         PredicateSelectionElementId(rawValue: rawValue)
+    }
+
+    var traceElementIdentity: TraceElementIdentity {
+        let digest = SHA256.hash(data: Data(rawValue.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return TraceElementIdentity("heist-id:sha256:\(digest)")
     }
 }
 

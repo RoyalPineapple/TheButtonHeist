@@ -54,8 +54,9 @@ enum AccessibilityTraceDiff {
         interactionDigest: AccessibilityTrace.InteractionDigest,
         transient: [HeistElement]
     ) -> AccessibilityTrace.Delta {
-        let beforeElements = before.projectedElements
-        let afterElements = after.projectedElements
+        let beforeRecords = before.projectedElementRecords.map(ElementDiffRecord.init)
+        let afterRecords = after.projectedElementRecords.map(ElementDiffRecord.init)
+        let afterElements = afterRecords.map(\.element)
 
         if isScreenChange {
             return .screenChanged(AccessibilityTrace.ScreenChanged(
@@ -77,13 +78,13 @@ enum AccessibilityTraceDiff {
         }
 
         let edits = AccessibilityTraceElementDiff.projectElementEdits(
-            beforeElements: beforeElements,
-            afterElements: afterElements
+            beforeRecords: beforeRecords,
+            afterRecords: afterRecords
         )
         let unpairedEdits = interactionDigest.elementSetChanged
             ? AccessibilityTraceElementDiff.projectElementEditsWithoutMoveSuppression(
-                beforeElements: beforeElements,
-                afterElements: afterElements
+                beforeRecords: beforeRecords,
+                afterRecords: afterRecords
             )
             : nil
         return projectElementDelta(

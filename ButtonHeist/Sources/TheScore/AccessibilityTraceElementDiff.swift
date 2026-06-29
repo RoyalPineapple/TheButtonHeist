@@ -8,14 +8,24 @@ enum AccessibilityTraceElementDiff {
         beforeElements: [HeistElement],
         afterElements: [HeistElement]
     ) -> ElementEdits {
+        projectElementEdits(
+            beforeRecords: beforeElements.map(ElementDiffRecord.init),
+            afterRecords: afterElements.map(ElementDiffRecord.init)
+        )
+    }
+
+    static func projectElementEdits(
+        beforeRecords: [ElementDiffRecord],
+        afterRecords: [ElementDiffRecord]
+    ) -> ElementEdits {
         let edits = projectElementEditsWithoutMoveSuppression(
-            beforeElements: beforeElements,
-            afterElements: afterElements
+            beforeRecords: beforeRecords,
+            afterRecords: afterRecords
         )
         return AccessibilityTraceMoveInference.suppressElementChurnFromFunctionalMoves(
             edits: edits,
-            beforeElements: beforeElements,
-            afterElements: afterElements
+            beforeRecords: beforeRecords,
+            afterRecords: afterRecords
         )
     }
 
@@ -23,8 +33,18 @@ enum AccessibilityTraceElementDiff {
         beforeElements: [HeistElement],
         afterElements: [HeistElement]
     ) -> ElementEdits {
-        let oldByKey = Dictionary(grouping: beforeElements, by: \.diffPairingKey)
-        let newByKey = Dictionary(grouping: afterElements, by: \.diffPairingKey)
+        projectElementEditsWithoutMoveSuppression(
+            beforeRecords: beforeElements.map(ElementDiffRecord.init),
+            afterRecords: afterElements.map(ElementDiffRecord.init)
+        )
+    }
+
+    static func projectElementEditsWithoutMoveSuppression(
+        beforeRecords: [ElementDiffRecord],
+        afterRecords: [ElementDiffRecord]
+    ) -> ElementEdits {
+        let oldByKey = Dictionary(grouping: beforeRecords, by: \.diffPairingKey)
+        let newByKey = Dictionary(grouping: afterRecords, by: \.diffPairingKey)
         let allKeys = Set(oldByKey.keys).union(newByKey.keys).sorted()
 
         var updated: [ElementUpdate] = []
@@ -36,9 +56,9 @@ enum AccessibilityTraceElementDiff {
             let newEls = newByKey[key] ?? []
             let pairCount = min(oldEls.count, newEls.count)
             updated += zip(oldEls.prefix(pairCount), newEls.prefix(pairCount))
-                .compactMap { projectElementStateChange(old: $0, new: $1) }
-            removed += Array(oldEls.suffix(from: pairCount))
-            added += newEls.suffix(from: pairCount)
+                .compactMap { projectElementStateChange(old: $0.element, new: $1.element) }
+            removed += oldEls.suffix(from: pairCount).map(\.element)
+            added += newEls.suffix(from: pairCount).map(\.element)
         }
 
         return ElementEdits(added: added, removed: removed, updated: updated)
@@ -48,15 +68,43 @@ enum AccessibilityTraceElementDiff {
         beforeElements: [HeistElement],
         afterElements: [HeistElement]
     ) -> Bool {
-        pairingKeyCounts(beforeElements) != pairingKeyCounts(afterElements)
+        pairingKeyMultisetDiffers(
+            beforeRecords: beforeElements.map(ElementDiffRecord.init),
+            afterRecords: afterElements.map(ElementDiffRecord.init)
+        )
     }
 
-    private static func pairingKeyCounts(_ elements: [HeistElement]) -> [ElementDiffPairingKey: Int] {
+    static func pairingKeyMultisetDiffers(
+        beforeRecords: [ElementDiffRecord],
+        afterRecords: [ElementDiffRecord]
+    ) -> Bool {
+        pairingKeyCounts(beforeRecords) != pairingKeyCounts(afterRecords)
+    }
+
+    private static func pairingKeyCounts(_ elements: [ElementDiffRecord]) -> [ElementDiffPairingKey: Int] {
         var counts: [ElementDiffPairingKey: Int] = [:]
         for element in elements {
             counts[element.diffPairingKey, default: 0] += 1
         }
         return counts
+    }
+}
+
+struct ElementDiffRecord: Equatable, Sendable {
+    let element: HeistElement
+    let traceIdentity: TraceElementIdentity?
+
+    init(element: HeistElement, traceIdentity: TraceElementIdentity? = nil) {
+        self.element = element
+        self.traceIdentity = traceIdentity
+    }
+
+    init(_ element: HeistElement) {
+        self.init(element: element)
+    }
+
+    init(_ record: InterfaceElementRecord) {
+        self.init(element: record.element, traceIdentity: record.traceIdentity)
     }
 }
 
@@ -116,17 +164,56 @@ private func appendChangeIfNeeded<P: ElementPropertyValueKind>(
 // MARK: - Diff Pairing Key
 
 struct ElementDiffPairingKey: Hashable, Sendable, Comparable {
+    let traceIdentity: TraceElementIdentity?
     let text: String
     let identityTraits: Set<HeistTrait>
 
     init(element: HeistElement) {
+        self.init(record: ElementDiffRecord(element))
+    }
+
+    init(record: ElementDiffRecord) {
+        traceIdentity = record.traceIdentity
+        let element = record.element
         text = Self.identityText(for: element)
         identityTraits = Set(element.traits.filter {
             !AccessibilityPolicy.transientTraits.contains($0)
         })
     }
 
+    static func == (lhs: ElementDiffPairingKey, rhs: ElementDiffPairingKey) -> Bool {
+        switch (lhs.traceIdentity, rhs.traceIdentity) {
+        case let (left?, right?):
+            return left == right
+        case (nil, nil):
+            return lhs.text == rhs.text && lhs.identityTraits == rhs.identityTraits
+        case (.some, nil), (nil, .some):
+            return false
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        if let traceIdentity {
+            hasher.combine(0)
+            hasher.combine(traceIdentity)
+        } else {
+            hasher.combine(1)
+            hasher.combine(text)
+            hasher.combine(identityTraits)
+        }
+    }
+
     static func < (lhs: ElementDiffPairingKey, rhs: ElementDiffPairingKey) -> Bool {
+        switch (lhs.traceIdentity, rhs.traceIdentity) {
+        case let (left?, right?):
+            return left < right
+        case (.some, nil):
+            return true
+        case (nil, .some):
+            return false
+        case (nil, nil):
+            break
+        }
         guard lhs.text == rhs.text else { return lhs.text < rhs.text }
         return lhs.orderedIdentityTraitRawValues
             .lexicographicallyPrecedes(rhs.orderedIdentityTraitRawValues)
@@ -154,5 +241,11 @@ extension HeistElement {
     /// so transient state changes (selected, focused) don't break pairing.
     var diffPairingKey: ElementDiffPairingKey {
         ElementDiffPairingKey(element: self)
+    }
+}
+
+extension ElementDiffRecord {
+    var diffPairingKey: ElementDiffPairingKey {
+        ElementDiffPairingKey(record: self)
     }
 }

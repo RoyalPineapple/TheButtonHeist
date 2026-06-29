@@ -139,7 +139,8 @@ extension TheStash {
                     nextTraversalIndex += 1
                     elementAnnotations.append(InterfaceElementAnnotation(
                         path: childPath,
-                        actions: buildActions(for: entry.element)
+                        actions: buildActions(for: entry.element),
+                        traceIdentity: entry.heistId.traceElementIdentity
                     ))
                 case .container(let entry):
                     guard emittedContainerPaths.insert(entry.path).inserted else {
@@ -208,7 +209,8 @@ extension TheStash {
         let annotations = entries.enumerated().map { index, entry in
             InterfaceElementAnnotation(
                 path: TreePath([index]),
-                actions: buildActions(for: entry.element)
+                actions: buildActions(for: entry.element),
+                traceIdentity: entry.heistId.traceElementIdentity
             )
         }
         return Interface(
@@ -225,7 +227,8 @@ extension TheStash {
             guard case .element(let element, _) = node else { return nil }
             return InterfaceElementAnnotation(
                 path: path,
-                actions: buildActions(for: element)
+                actions: buildActions(for: element),
+                traceIdentity: screen.liveCapture.heistId(forPath: path)?.traceElementIdentity
             )
         }
     }
