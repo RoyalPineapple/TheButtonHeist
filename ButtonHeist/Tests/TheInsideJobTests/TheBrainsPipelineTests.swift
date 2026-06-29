@@ -519,7 +519,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -563,9 +563,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(beforeScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(beforeScreen)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(matchedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(matchedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -593,7 +593,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        _ = isolatedBrains.stash.semanticObservationStream.commitSettledVisibleObservation(observedScreen)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledDiscoveryObservation(observedScreen)
 
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
@@ -612,6 +612,212 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(source.contains("private func intersection(_ other: PredicateStateMatchSet) -> PredicateStateMatchSet"))
         XCTAssertFalse(source.contains("elements.filter { predicate.matches($0) }"))
         XCTAssertFalse(source.contains("private func evaluate(_ state: AccessibilityPredicate.State) -> (met: Bool, actual: String?)"))
+    }
+
+    func testPredicatePollingStateProbesDiscoveryInitiallyThenUsesVisibleTickCadence() {
+        var state = PredicatePollingState(
+            initialVisibleFingerprint: .known("visible-a"),
+            scope: .discovery,
+            needsInitialProbe: true
+        )
+
+        XCTAssertEqual(state.nextProbe, .discovery)
+        state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
+        XCTAssertEqual(state.nextProbe, .discovery)
+
+        state.recordDiscoveryProbe()
+        XCTAssertEqual(state.nextProbe, .visible)
+
+        for _ in 0..<(PredicatePollingCadence.discoveryProbeIntervalVisibleTicks - 1) {
+            state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
+            XCTAssertEqual(state.nextProbe, .visible)
+        }
+
+        state.recordVisibleTick(.observed(fingerprint: .known("visible-a"), matched: false))
+        XCTAssertEqual(state.nextProbe, .discovery)
+    }
+
+    func testPredicatePollingStateProbesDiscoveryWhenVisibleChangesWithoutMatch() {
+        var state = PredicatePollingState(
+            initialVisibleFingerprint: .known("visible-a"),
+            scope: .discovery,
+            needsInitialProbe: false
+        )
+
+        XCTAssertEqual(state.nextProbe, .visible)
+        state.recordVisibleTick(.observed(fingerprint: .known("visible-b"), matched: false))
+
+        XCTAssertEqual(state.nextProbe, .discovery)
+    }
+
+    func testPredicatePollingStateDoesNotProbeDiscoveryWhenVisibleChangeMatches() {
+        var state = PredicatePollingState(
+            initialVisibleFingerprint: .known("visible-a"),
+            scope: .discovery,
+            needsInitialProbe: false
+        )
+
+        state.recordVisibleTick(.observed(fingerprint: .known("visible-b"), matched: true))
+
+        XCTAssertEqual(state.nextProbe, .visible)
+    }
+
+    func testPredicatePollingEngineKeepsVisibleTicksBetweenDiscoveryProbes() async {
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Never")))
+        var observedScopes: [SemanticObservationScope] = []
+        var sequence: SettledObservationSequence = 0
+        let engine = PredicatePollingEngine<ExpectationResult> { scope, _, _ in
+            observedScopes.append(scope)
+            sequence += 1
+            return self.pollingObservation(
+                label: scope == .visible ? "Visible" : "Discovery-\(sequence.rawValue)",
+                scope: scope,
+                sequence: sequence
+            )
+        }
+
+        let result = await engine.poll(
+            scope: .discovery,
+            timeout: 0.25,
+            requiresChangeBaseline: false,
+            evaluate: { observation, _ in
+                PredicateEvaluation.evaluate(predicate, in: observation)
+            },
+            isMatched: \.met
+        )
+
+        XCTAssertFalse(result.lastEvaluation?.met ?? true)
+        XCTAssertEqual(observedScopes.prefix(2), [.visible, .discovery])
+        XCTAssertEqual(observedScopes.filter { $0 == .discovery }.count, 1)
+        XCTAssertGreaterThanOrEqual(observedScopes.filter { $0 == .visible }.count, 2)
+    }
+
+    func testPredicatePollingEngineReturnsVisibleMatchBeforeDiscoveryProbe() async {
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
+        var observedScopes: [SemanticObservationScope] = []
+        var sequence: SettledObservationSequence = 1
+        let engine = PredicatePollingEngine<ExpectationResult> { scope, _, _ in
+            observedScopes.append(scope)
+            sequence += 1
+            return self.pollingObservation(
+                label: scope == .visible ? "Ready" : "Discovery",
+                scope: scope,
+                sequence: sequence
+            )
+        }
+
+        let result = await engine.poll(
+            scope: .discovery,
+            timeout: 1,
+            after: 1,
+            requiresChangeBaseline: false,
+            initialVisibleFingerprint: .known("previous-visible-fingerprint"),
+            discoveryBootstrap: .afterInitialDiscoveryAttempt,
+            evaluate: { observation, _ in
+                PredicateEvaluation.evaluate(predicate, in: observation)
+            },
+            isMatched: \.met
+        )
+
+        XCTAssertTrue(result.lastEvaluation?.met == true)
+        XCTAssertEqual(observedScopes, [.visible])
+    }
+
+    func testPredicatePollingEngineDefersDiscoveryAfterInitialDiscoveryAttempt() async {
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
+        var observedScopes: [SemanticObservationScope] = []
+        var observedTimeouts: [Double?] = []
+        var sequence: SettledObservationSequence = 1
+        let engine = PredicatePollingEngine<ExpectationResult> { scope, _, timeout in
+            observedScopes.append(scope)
+            observedTimeouts.append(timeout)
+            guard scope == .discovery else { return nil }
+            sequence += 1
+            return self.pollingObservation(
+                label: "Still Loading",
+                scope: scope,
+                sequence: sequence
+            )
+        }
+
+        let result = await engine.poll(
+            scope: .discovery,
+            timeout: 0.25,
+            after: 1,
+            requiresChangeBaseline: false,
+            initialVisibleFingerprint: .known("visible-seed"),
+            discoveryBootstrap: .afterInitialDiscoveryAttempt,
+            evaluate: { observation, _ in
+                PredicateEvaluation.evaluate(predicate, in: observation)
+            },
+            isMatched: \.met
+        )
+
+        XCTAssertNil(result.lastEvaluation)
+        XCTAssertFalse(observedScopes.contains(.discovery))
+        XCTAssertEqual(observedTimeouts.first.flatMap { $0 }, 0)
+    }
+
+    func testPredicateWaitStartsWithDiscoveryThenUsesVisibleTicks() async {
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
+        var observedScopes: [SemanticObservationScope] = []
+        var sequence: SettledObservationSequence = 0
+        let wait = PredicateWait(
+            observeEvent: { scope, _, _ in
+                observedScopes.append(scope)
+                sequence += 1
+                return self.pollingObservation(
+                    label: scope == .discovery ? "Loading" : "Ready",
+                    scope: scope,
+                    sequence: sequence
+                ).event
+            },
+            latestEvent: { nil },
+            latestSettleFailure: { nil },
+            semanticObservation: { event in
+                self.brains.postActionObservation.semanticObservation(from: event)
+            },
+            presenceTimeoutMessage: { _, _ in nil }
+        )
+
+        let receipt = await wait.wait(
+            for: WaitStep(predicate: predicate, timeout: 1)
+        )
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertEqual(Array(observedScopes.prefix(2)), [.discovery, .visible])
+    }
+
+    func testPredicateWaitReturnsFromInitialDiscoveryMatch() async {
+        let predicate = AccessibilityPredicate.state(.exists(ElementPredicate(label: "Ready")))
+        var observedScopes: [SemanticObservationScope] = []
+        var sequence: SettledObservationSequence = 0
+        let wait = PredicateWait(
+            observeEvent: { scope, _, _ in
+                observedScopes.append(scope)
+                sequence += 1
+                return self.pollingObservation(
+                    label: "Ready",
+                    scope: scope,
+                    sequence: sequence
+                ).event
+            },
+            latestEvent: { nil },
+            latestSettleFailure: { nil },
+            semanticObservation: { event in
+                self.brains.postActionObservation.semanticObservation(from: event)
+            },
+            presenceTimeoutMessage: { _, _ in nil }
+        )
+
+        let receipt = await wait.wait(
+            for: WaitStep(predicate: predicate, timeout: 1)
+        )
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertTrue(receipt.expectation.met)
+        XCTAssertEqual(observedScopes, [.discovery])
     }
 
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
@@ -962,8 +1168,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        for _ in 0..<50 where stash.semanticObservationStream.settledWaiterCount == 0 {
+        let deadline = CFAbsoluteTimeGetCurrent() + 1
+        while stash.semanticObservationStream.settledWaiterCount == 0,
+              CFAbsoluteTimeGetCurrent() < deadline {
             await Task.yield()
+            guard await Task.cancellableSleep(for: .milliseconds(5)) else { break }
         }
         XCTAssertEqual(stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
     }
@@ -990,6 +1199,39 @@ final class TheBrainsPipelineTests: XCTestCase {
             return (element, entry.heistId)
         }
         return .makeForTests(elements: pairs)
+    }
+
+    private func pollingObservation(
+        label: String,
+        scope: SemanticObservationScope,
+        sequence: SettledObservationSequence
+    ) -> HeistSemanticObservation {
+        let screen = makeScreen(elements: [
+            (label, .staticText, HeistId(rawValue: "polling_\(label)")),
+        ])
+        let settled = SettledSemanticObservation(
+            sequence: sequence,
+            scope: scope,
+            screen: screen,
+            tripwireSignal: .empty
+        )
+        let state = brains.postActionObservation.captureSemanticState(from: settled)
+        let trace = AccessibilityTrace(capture: state.capture)
+        let event = SettledSemanticObservationEvent(
+            sequence: sequence,
+            scope: scope,
+            observation: settled,
+            previous: nil,
+            trace: trace,
+            delta: trace.endpointDelta
+        )
+        return HeistSemanticObservation(
+            event: event,
+            state: state,
+            accessibilityTrace: trace,
+            delta: event.delta,
+            summary: "known: \(state.interface.projectedElements.count) elements"
+        )
     }
 
     private func activationSubjectEvidence(
