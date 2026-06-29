@@ -65,7 +65,6 @@ extension TheBrains {
                 )
             }
             let actionResult = await runtime.execute(resolvedCommand)
-            let endpointObservationScope = actionEndpointObservationScope(for: resolvedCommand)
             guard actionResult.success, let expectation else {
                 return actionResultNode(
                     command: command,
@@ -81,8 +80,7 @@ extension TheBrains {
                 path: path,
                 start: start,
                 runtime: runtime,
-                environment: environment,
-                observationScope: endpointObservationScope
+                environment: environment
             )
 
         case .wait(let wait, let scope):
@@ -104,8 +102,7 @@ extension TheBrains {
         path: String,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment,
-        observationScope: SemanticObservationScope
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
         let resolvedWait: ResolvedWaitStep
         do {
@@ -122,7 +119,6 @@ extension TheBrains {
         }
         let receipt = await runtime.wait(.actionEndpoint(
             resolvedWait,
-            observationScope: observationScope,
             trace: actionResult.accessibilityTrace
         ))
         let failure = expectationFailure(
@@ -161,15 +157,6 @@ extension TheBrains {
             evidence: .action(HeistActionEvidence(command: command, actionResult: actionResult)),
             failure: failure
         )
-    }
-
-    private func actionEndpointObservationScope(for command: RuntimeActionMessage) -> SemanticObservationScope {
-        switch command {
-        case .activate, .increment, .decrement, .performCustomAction, .rotor, .oneFingerTap, .longPress, .swipe, .drag,
-             .typeText, .editAction, .resignFirstResponder, .setPasteboard, .takeScreenshot, .wait,
-             .scroll, .scrollToVisible, .scrollToEdge:
-            return .discovery
-        }
     }
 
     private func waitStepResult(

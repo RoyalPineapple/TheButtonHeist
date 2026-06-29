@@ -30,15 +30,13 @@ enum PredicateObservationDiagnostics {
     func wait(
         for step: WaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil,
-        observationScope: SemanticObservationScope? = nil
+        after sequence: SettledObservationSequence? = nil
     ) async -> HeistWaitReceipt {
         do {
             return await wait(
                 for: try step.resolve(in: .empty),
                 initialTrace: initialTrace,
-                after: sequence,
-                observationScope: observationScope
+                after: sequence
             )
         } catch {
             let predicate = Self.unresolvedWaitPredicate()
@@ -62,8 +60,7 @@ enum PredicateObservationDiagnostics {
     func wait(
         for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace? = nil,
-        after sequence: SettledObservationSequence? = nil,
-        observationScope _: SemanticObservationScope? = nil
+        after sequence: SettledObservationSequence? = nil
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = Self.clampedWaitTimeout(step.timeout)
@@ -634,7 +631,7 @@ struct PredicateObservationStreamState {
         _ observation: HeistSemanticObservation,
         predicate: AccessibilityPredicate,
         baselineSeed: PredicateObservationBaselineSeed = .preserve
-    ) -> (state: PredicateObservationStreamState, reduction: PredicateObservationReduction) {
+    ) -> PredicateObservationStreamReduction {
         var baseline = changeBaseline
         var trace = accumulatedTrace
         var shouldAppendToChangeWindow = baseline != nil
@@ -679,15 +676,20 @@ struct PredicateObservationStreamState {
             evidence: evidence,
             expectation: PredicateEvaluation.evaluate(predicate, in: evidence)
         )
-        return (
-            PredicateObservationStreamState(
+        return PredicateObservationStreamReduction(
+            state: PredicateObservationStreamState(
                 changeBaseline: baseline,
                 accumulatedTrace: trace,
                 latestReduction: reduction
             ),
-            reduction
+            reduction: reduction
         )
     }
+}
+
+struct PredicateObservationStreamReduction {
+    let state: PredicateObservationStreamState
+    let reduction: PredicateObservationReduction
 }
 
 struct PredicateObservationReduction {

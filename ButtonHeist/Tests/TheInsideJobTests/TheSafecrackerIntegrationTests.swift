@@ -11,22 +11,38 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
     private var safecracker: TheSafecracker!
     private var window: UIWindow!
+    private var hostView: UIView!
 
     override func setUp() async throws {
         safecracker = TheSafecracker()
         safecracker.startKeyboardObservation()
 
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first
-        window = scene?.windows.first
-        XCTAssertNotNil(window, "Test host must provide a key window")
+        await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
+
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .white
+
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.windowLevel = .alert + 80
+        window.rootViewController = viewController
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+
+        self.window = window
+        hostView = viewController.view
     }
 
     override func tearDown() async throws {
+        window?.endEditing(true)
         safecracker.stopKeyboardObservation()
         safecracker = nil
+        hostView = nil
+        window?.isHidden = true
+        window?.rootViewController = nil
         window = nil
+        await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
     }
 
     // MARK: - Touch Injection
@@ -40,7 +56,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     func testLongPressDoesNotCrash() async throws {
         let button = UIButton(type: .system)
         button.frame = CGRect(x: 50, y: 300, width: 200, height: 44)
-        window.addSubview(button)
+        hostView.addSubview(button)
         defer { button.removeFromSuperview() }
 
         let screenPoint = button.convert(
@@ -88,9 +104,9 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         textField.autocapitalizationType = .none
         textField.isAccessibilityElement = true
         textField.accessibilityLabel = "TypeTest"
-        window.addSubview(textField)
+        hostView.addSubview(textField)
 
-        textField.becomeFirstResponder()
+        XCTAssertTrue(textField.becomeFirstResponder())
         try await waitForActiveTextInput()
 
         let result = await safecracker.typeText("hello")
@@ -103,11 +119,11 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     func testActiveTextInputRequiresFocusedEditableResponder() async throws {
         let textField = UITextField()
         textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)
-        window.addSubview(textField)
+        hostView.addSubview(textField)
 
         XCTAssertFalse(safecracker.hasActiveTextInput())
 
-        textField.becomeFirstResponder()
+        XCTAssertTrue(textField.becomeFirstResponder())
         try await waitForActiveTextInput()
         XCTAssertTrue(safecracker.hasActiveTextInput())
 
@@ -119,9 +135,9 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     func testResignFirstResponder() async {
         let textField = UITextField()
         textField.frame = CGRect(x: 50, y: 500, width: 200, height: 44)
-        window.addSubview(textField)
+        hostView.addSubview(textField)
 
-        textField.becomeFirstResponder()
+        XCTAssertTrue(textField.becomeFirstResponder())
         XCTAssertTrue(textField.isFirstResponder)
 
         let result = safecracker.resignFirstResponder()
@@ -144,6 +160,15 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
             XCTFail("Active text input not available after 2s")
             return
         }
+    }
+
+    private func requireForegroundWindowScene() throws -> UIWindowScene {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            throw XCTSkip("No foreground-active UIWindowScene available in test host")
+        }
+        return scene
     }
 
     /// Resign first responder, remove the text field, and wait for the

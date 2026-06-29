@@ -1,107 +1,354 @@
 #if canImport(UIKit)
 #if DEBUG
-// swiftlint:disable nesting
 import UIKit
 
 /// Type-safe wrappers for ObjC runtime dispatch to private UIKit APIs.
 ///
-/// ## Why this exists
-///
-/// UIKit's touch injection system (`UITouch`, `UIEvent`, `UIKeyboardImpl`, etc.)
-/// exposes critical functionality only through private methods that don't appear
-/// in any public header. Calling them from Swift normally requires three steps of
-/// boilerplate at every call site:
-///
-/// 1. **Look up the selector by name** — `NSSelectorFromString("setPhase:")`
-/// 2. **Check the object responds** — `touch.responds(to: sel)`
-/// 3. **Dispatch** — `perform(_:with:)` for object args, or IMP extraction +
-///    `unsafeBitCast` for value types like `Int` and `Bool` that `perform` can't carry.
-///
-/// This utility collapses all three into one expression:
-///
-///     ObjCRuntime.message("setPhase:", to: touch)?.call(phase.rawValue)
-///
-/// If the selector doesn't exist (Apple removed it), `message` returns `nil`
-/// and the whole chain no-ops — no crash.
-///
-/// ## The two dispatch paths
-///
-/// ObjC method calls send a *message* (selector + args) to an object. Swift's
-/// `perform(_:with:)` does this but can only pass object arguments.
-///
-/// For value types we use the **IMP** (implementation pointer) — a raw C function
-/// pointer the ObjC runtime stores for each method. `object.method(for: sel)`
-/// returns it, we `unsafeBitCast` to the correct `@convention(c)` signature and
-/// call directly. This is what `objc_msgSend` does under the hood.
-///
-/// The `IMP*` typealiases define these C signatures. Every IMP takes `(self, _cmd)`
-/// — the receiver and selector — then the actual arguments.
-///
+/// Runtime selectors are modeled as typed method values. Each method carries a
+/// phantom argument signature, so call sites can only invoke the method with the
+/// Swift shape it was declared to accept. Raw Objective-C `id` dispatch,
+/// `perform`, and IMP casting stay isolated in `RawObjCMessageBridge`.
 enum ObjCRuntime {
 
-    /// A verified target + selector pair. Created by `message(_:to:)`.
-    /// The selector is guaranteed present — all `call` methods are safe to invoke.
-    struct Message {
-        let target: AnyObject
-        let selector: Selector
+    enum NoArguments {}
+    enum IntArgument {}
+    enum BoolArgument {}
+    enum DoubleArgument {}
+    enum PointerArgument {}
+    enum PointBoolArguments {}
 
-        // MARK: - IMP Signatures (self, _cmd, ...args)
+    struct ObjectArgument<Argument: NSObject> {}
+    struct ObjectBoolArguments<Argument: NSObject> {}
+    struct ObjectReturningBoolArgument<Argument: NSObject> {}
+    struct PointRadiusArguments<Result: NSObject> {}
 
-        private typealias IMPInt = @convention(c) (AnyObject, Selector, Int) -> Void
-        private typealias IMPBool = @convention(c) (AnyObject, Selector, Bool) -> Void
-        private typealias IMPDouble = @convention(c) (AnyObject, Selector, Double) -> Void
-        private typealias IMPPointer = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
-        private typealias IMPPointBool = @convention(c) (AnyObject, Selector, CGPoint, Bool) -> Void
+    struct ClassName: Equatable, CustomStringConvertible {
+        let rawValue: String
 
-        // MARK: - Void Dispatch
-
-        func call() { _ = target.perform(selector) }
-        func call(_ arg: AnyObject) { _ = target.perform(selector, with: arg) }
-        func call(_ value: Int) { imp(as: IMPInt.self)(target, selector, value) }
-        func call(_ value: Bool) { imp(as: IMPBool.self)(target, selector, value) }
-        func call(_ value: Double) { imp(as: IMPDouble.self)(target, selector, value) }
-        func call(_ ptr: UnsafeMutableRawPointer) { imp(as: IMPPointer.self)(target, selector, ptr) }
-        func call(_ point: CGPoint, _ flag: Bool) { imp(as: IMPPointBool.self)(target, selector, point, flag) }
-
-        // MARK: - Returning Dispatch
-        //
-        // Uses takeUnretainedValue() — assumes +0 (unretained) return semantics,
-        // which is correct for property getters and singleton accessors. Do NOT
-        // use for +1 factory methods (e.g., create/copy/new) without switching
-        // to takeRetainedValue().
-
-        /// Return type `R` is inferred from assignment context.
-        func call<R: AnyObject>() -> R? {
-            target.perform(selector)?.takeUnretainedValue() as? R
+        fileprivate init(_ rawValue: String) {
+            self.rawValue = rawValue
         }
 
-        /// Pass an object arg, return typed result.
-        func call<R: AnyObject>(_ arg: AnyObject) -> R? {
-            target.perform(selector, with: arg)?.takeUnretainedValue() as? R
+        var description: String { rawValue }
+    }
+
+    struct ObjectMethod<Arguments>: CustomStringConvertible {
+        let rawValue: String
+        fileprivate let selector: Selector
+
+        fileprivate init(_ rawValue: String) {
+            self.rawValue = rawValue
+            selector = NSSelectorFromString(rawValue)
         }
 
-        // MARK: - Raw IMP Dispatch
+        fileprivate init(_ selector: Selector) {
+            self.rawValue = NSStringFromSelector(selector)
+            self.selector = selector
+        }
 
-        /// Raw IMP cast to a `@convention(c)` type. Use for signatures that
-        /// don't fit the `call` overloads (mixed object + value args, etc.).
-        func imp<F>(as type: F.Type) -> F {
-            unsafeBitCast(target.method(for: selector), to: F.self)
+        var description: String { rawValue }
+    }
+
+    struct ClassMethod<Arguments>: CustomStringConvertible {
+        let rawValue: String
+        fileprivate let selector: Selector
+
+        fileprivate init(_ rawValue: String) {
+            self.rawValue = rawValue
+            selector = NSSelectorFromString(rawValue)
+        }
+
+        var description: String { rawValue }
+    }
+
+    /// A verified object + typed selector pair. Created by `message(_:to:)`.
+    struct Message<Target: NSObject, Arguments> {
+        let target: Target
+        let method: ObjectMethod<Arguments>
+        private let bridge: RawObjCMessageBridge
+
+        fileprivate init?(target: Target, method: ObjectMethod<Arguments>) {
+            guard let bridge = RawObjCMessageBridge(target: target, selector: method.selector) else {
+                return nil
+            }
+            self.target = target
+            self.method = method
+            self.bridge = bridge
+        }
+    }
+
+    /// A verified class object + typed selector pair. Created by
+    /// `classMessage(_:on:)`.
+    struct ClassMessage<Arguments> {
+        let method: ClassMethod<Arguments>
+        private let bridge: RawObjCMessageBridge
+
+        fileprivate init?(targetClass: AnyClass, method: ClassMethod<Arguments>) {
+            guard let bridge = RawObjCMessageBridge(targetClass: targetClass, selector: method.selector) else {
+                return nil
+            }
+            self.method = method
+            self.bridge = bridge
         }
     }
 
     // MARK: - Factory
 
-    /// Resolve a selector on a target. Returns `nil` if it doesn't respond.
-    static func message(_ name: String, to target: AnyObject) -> Message? {
-        let sel = NSSelectorFromString(name)
-        guard target.responds(to: sel) else { return nil }
-        return Message(target: target, selector: sel)
+    static func message<Target: NSObject, Arguments>(
+        _ method: ObjectMethod<Arguments>,
+        to target: Target
+    ) -> Message<Target, Arguments>? {
+        Message(target: target, method: method)
     }
 
-    /// Resolve a class method on a private class, both looked up by name.
-    static func classMessage(_ selectorName: String, on className: String) -> Message? {
-        guard let cls = NSClassFromString(className) else { return nil }
-        return message(selectorName, to: cls as AnyObject)
+    static func classMessage<Arguments>(
+        _ method: ClassMethod<Arguments>,
+        on className: ClassName
+    ) -> ClassMessage<Arguments>? {
+        guard let cls = NSClassFromString(className.rawValue) else { return nil }
+        return ClassMessage(targetClass: cls, method: method)
+    }
+}
+
+// MARK: - Typed Method Catalog
+
+extension ObjCRuntime.ClassName {
+    static let uiKeyboardImpl = ObjCRuntime.ClassName("UIKeyboardImpl")
+    static let uiHitTestContext = ObjCRuntime.ClassName("_UIHitTestContext")
+}
+
+extension ObjCRuntime.ClassMethod where Arguments == ObjCRuntime.NoArguments {
+    static let sharedInstance = ObjCRuntime.ClassMethod<Arguments>("sharedInstance")
+}
+
+extension ObjCRuntime.ClassMethod where Arguments == ObjCRuntime.PointRadiusArguments<NSObject> {
+    static let contextWithPointRadius = ObjCRuntime.ClassMethod<Arguments>("contextWithPoint:radius:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.NoArguments {
+    static let keyboardDelegate = ObjCRuntime.ObjectMethod<Arguments>("delegate")
+    static let keyboardTaskQueue = ObjCRuntime.ObjectMethod<Arguments>("taskQueue")
+    static let keyboardWaitUntilAllTasksAreFinished = ObjCRuntime.ObjectMethod<Arguments>(
+        "waitUntilAllTasksAreFinished"
+    )
+    static let applicationTouchesEvent = ObjCRuntime.ObjectMethod<Arguments>("_touchesEvent")
+    static let eventClearTouches = ObjCRuntime.ObjectMethod<Arguments>("_clearTouches")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectArgument<NSString> {
+    static let keyboardAddInputString = ObjCRuntime.ObjectMethod<Arguments>("addInputString:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectArgument<UIWindow> {
+    static let touchSetWindow = ObjCRuntime.ObjectMethod<Arguments>("setWindow:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectArgument<UIResponder> {
+    static let touchSetView = ObjCRuntime.ObjectMethod<Arguments>("setView:")
+    static let touchSetGestureView = ObjCRuntime.ObjectMethod<Arguments>("setGestureView:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectArgument<NSObject> {
+    static let viewHitTestWithContext = ObjCRuntime.ObjectMethod<Arguments>("_hitTestWithContext:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.IntArgument {
+    static let touchSetPhase = ObjCRuntime.ObjectMethod<Arguments>("setPhase:")
+    static let touchSetTapCount = ObjCRuntime.ObjectMethod<Arguments>("setTapCount:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.BoolArgument {
+    static let touchSetIsFirstTouchForView = ObjCRuntime.ObjectMethod<Arguments>("_setIsFirstTouchForView:")
+    static let touchSetIsTap = ObjCRuntime.ObjectMethod<Arguments>("setIsTap:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.DoubleArgument {
+    static let touchSetTimestamp = ObjCRuntime.ObjectMethod<Arguments>("setTimestamp:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.PointerArgument {
+    static let eventSetHIDEvent = ObjCRuntime.ObjectMethod<Arguments>("_setHIDEvent:")
+    static let touchSetHIDEvent = ObjCRuntime.ObjectMethod<Arguments>("_setHidEvent:")
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.PointBoolArguments {
+    static let touchSetLocationInWindow = ObjCRuntime.ObjectMethod<Arguments>(
+        "_setLocationInWindow:resetPrevious:"
+    )
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectBoolArguments<UITouch> {
+    static let eventAddTouchForDelayedDelivery = ObjCRuntime.ObjectMethod<Arguments>(
+        "_addTouch:forDelayedDelivery:"
+    )
+}
+
+extension ObjCRuntime.ObjectMethod where Arguments == ObjCRuntime.ObjectReturningBoolArgument<UIAccessibilityCustomAction> {
+    static func accessibilityCustomAction(_ selector: Selector) -> Self {
+        Self(selector)
+    }
+}
+
+// MARK: - Typed Object Calls
+
+extension ObjCRuntime.Message where Arguments == ObjCRuntime.NoArguments {
+    func call() {
+        bridge.sendVoid()
+    }
+
+    func call<Result: NSObject>() -> Result? {
+        bridge.sendObject()
+    }
+}
+
+extension ObjCRuntime.Message {
+    func send<Argument: NSObject>(_ argument: Argument) where Arguments == ObjCRuntime.ObjectArgument<Argument> {
+        bridge.sendVoid(argument)
+    }
+
+    func call<Argument: NSObject, Result: NSObject>(_ argument: Argument) -> Result?
+        where Arguments == ObjCRuntime.ObjectArgument<Argument> {
+        bridge.sendObject(argument)
+    }
+
+    func send<Argument: NSObject>(_ argument: Argument, _ flag: Bool)
+        where Arguments == ObjCRuntime.ObjectBoolArguments<Argument> {
+        bridge.sendVoid(argument, flag)
+    }
+
+    func call<Argument: NSObject>(_ argument: Argument) -> Bool
+        where Arguments == ObjCRuntime.ObjectReturningBoolArgument<Argument> {
+        bridge.sendBool(argument)
+    }
+}
+
+extension ObjCRuntime.Message where Arguments == ObjCRuntime.IntArgument {
+    func call(_ value: Int) {
+        bridge.sendVoid(value)
+    }
+}
+
+extension ObjCRuntime.Message where Arguments == ObjCRuntime.BoolArgument {
+    func call(_ value: Bool) {
+        bridge.sendVoid(value)
+    }
+}
+
+extension ObjCRuntime.Message where Arguments == ObjCRuntime.DoubleArgument {
+    func call(_ value: Double) {
+        bridge.sendVoid(value)
+    }
+}
+
+extension ObjCRuntime.Message where Arguments == ObjCRuntime.PointerArgument {
+    func call(_ pointer: UnsafeMutableRawPointer) {
+        bridge.sendVoid(pointer)
+    }
+}
+
+extension ObjCRuntime.Message where Arguments == ObjCRuntime.PointBoolArguments {
+    func call(_ point: CGPoint, resetPrevious: Bool) {
+        bridge.sendVoid(point, resetPrevious)
+    }
+}
+
+// MARK: - Typed Class Calls
+
+extension ObjCRuntime.ClassMessage where Arguments == ObjCRuntime.NoArguments {
+    func call<Result: NSObject>() -> Result? {
+        bridge.sendObject()
+    }
+}
+
+extension ObjCRuntime.ClassMessage {
+    func call<Result: NSObject>(_ point: CGPoint, radius: CGFloat) -> Result?
+        where Arguments == ObjCRuntime.PointRadiusArguments<Result> {
+        bridge.sendObject(point, radius: radius)
+    }
+}
+
+/// The only raw Objective-C bridge primitive in this file.
+///
+/// It owns `AnyObject`, `perform`, and IMP casting so the rest of the runtime
+/// bridge can expose NSObject-backed Swift APIs.
+private struct RawObjCMessageBridge {
+
+    private typealias IMPInt = @convention(c) (AnyObject, Selector, Int) -> Void
+    private typealias IMPBool = @convention(c) (AnyObject, Selector, Bool) -> Void
+    private typealias IMPDouble = @convention(c) (AnyObject, Selector, Double) -> Void
+    private typealias IMPPointer = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
+    private typealias IMPPointBool = @convention(c) (AnyObject, Selector, CGPoint, Bool) -> Void
+    private typealias IMPObjectBoolVoid = @convention(c) (AnyObject, Selector, AnyObject, Bool) -> Void
+    private typealias IMPObjectBool = @convention(c) (AnyObject, Selector, AnyObject) -> Bool
+    private typealias IMPPointRadiusObject = @convention(c) (AnyObject, Selector, CGPoint, CGFloat) -> AnyObject?
+
+    private let target: AnyObject
+    private let selector: Selector
+
+    init?<Target: NSObject>(target: Target, selector: Selector) {
+        let receiver = target as AnyObject
+        guard receiver.responds(to: selector) else { return nil }
+        self.target = receiver
+        self.selector = selector
+    }
+
+    init?(targetClass: AnyClass, selector: Selector) {
+        let receiver = targetClass as AnyObject
+        guard receiver.responds(to: selector) else { return nil }
+        self.target = receiver
+        self.selector = selector
+    }
+
+    func sendVoid() {
+        _ = target.perform(selector)
+    }
+
+    func sendVoid<Argument: NSObject>(_ argument: Argument) {
+        _ = target.perform(selector, with: argument)
+    }
+
+    func sendVoid(_ value: Int) {
+        imp(as: IMPInt.self)(target, selector, value)
+    }
+
+    func sendVoid(_ value: Bool) {
+        imp(as: IMPBool.self)(target, selector, value)
+    }
+
+    func sendVoid(_ value: Double) {
+        imp(as: IMPDouble.self)(target, selector, value)
+    }
+
+    func sendVoid(_ pointer: UnsafeMutableRawPointer) {
+        imp(as: IMPPointer.self)(target, selector, pointer)
+    }
+
+    func sendVoid(_ point: CGPoint, _ flag: Bool) {
+        imp(as: IMPPointBool.self)(target, selector, point, flag)
+    }
+
+    func sendVoid<Argument: NSObject>(_ argument: Argument, _ flag: Bool) {
+        imp(as: IMPObjectBoolVoid.self)(target, selector, argument, flag)
+    }
+
+    func sendObject<Result: NSObject>() -> Result? {
+        target.perform(selector)?.takeUnretainedValue() as? Result
+    }
+
+    func sendObject<Argument: NSObject, Result: NSObject>(_ argument: Argument) -> Result? {
+        target.perform(selector, with: argument)?.takeUnretainedValue() as? Result
+    }
+
+    func sendObject<Result: NSObject>(_ point: CGPoint, radius: CGFloat) -> Result? {
+        imp(as: IMPPointRadiusObject.self)(target, selector, point, radius) as? Result
+    }
+
+    func sendBool<Argument: NSObject>(_ argument: Argument) -> Bool {
+        imp(as: IMPObjectBool.self)(target, selector, argument)
+    }
+
+    private func imp<Function>(as type: Function.Type) -> Function {
+        unsafeBitCast(target.method(for: selector), to: Function.self)
     }
 }
 

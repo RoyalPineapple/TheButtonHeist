@@ -607,9 +607,13 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testPredicateWaitStateMatchingKeepsTypedSetShape() throws {
         let source = try String(contentsOf: predicateWaitSourceURL(), encoding: .utf8)
+        let streamTupleReturn = ") -> (state: PredicateObservationStreamState, "
+            + "reduction: PredicateObservationReduction)"
 
         XCTAssertTrue(source.contains("private struct PredicateStateMatch: Hashable, Sendable"))
         XCTAssertTrue(source.contains("private func intersection(_ other: PredicateStateMatchSet) -> PredicateStateMatchSet"))
+        XCTAssertTrue(source.contains("struct PredicateObservationStreamReduction"))
+        XCTAssertFalse(source.contains(streamTupleReturn))
         XCTAssertFalse(source.contains("elements.filter { predicate.matches($0) }"))
         XCTAssertFalse(source.contains("private func evaluate(_ state: AccessibilityPredicate.State) -> (met: Bool, actual: String?)"))
     }

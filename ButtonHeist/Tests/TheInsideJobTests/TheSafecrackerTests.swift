@@ -28,6 +28,9 @@ final class KeyboardInjectionTaskQueue: NSObject {
 
 @MainActor
 final class KeyboardInjectionKeyboardImpl: NSObject {
+    private typealias AddInputStringMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectArgument<NSString>>
+    private typealias KeyboardNoArgumentMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.NoArguments>
+
     let inputDelegate = KeyboardInjectionTextInputDelegate()
     var taskQueueObject: KeyboardInjectionTaskQueue? = KeyboardInjectionTaskQueue()
     private(set) var inputStrings: [String] = []
@@ -49,11 +52,26 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
 
     @MainActor
     func bridge(missingSelector selector: String? = nil) -> KeyboardBridge {
-        let injection = UIKeyboardImplTextInjection(impl: self) { name, target in
-            guard name != selector else { return nil }
-            return ObjCRuntime.message(name, to: target)
-        }
+        let injection = UIKeyboardImplTextInjection(impl: self, runtime: runtime(missingSelector: selector))
         return KeyboardBridge(impl: self, textInjection: injection)
+    }
+
+    @MainActor
+    func runtime(missingSelector selector: String? = nil) -> UIKeyboardImplTextInjection.Runtime {
+        UIKeyboardImplTextInjection.Runtime(
+            addInputString: { target in
+                guard AddInputStringMethod.keyboardAddInputString.rawValue != selector else { return nil }
+                return ObjCRuntime.message(.keyboardAddInputString, to: target)
+            },
+            taskQueue: { target in
+                guard KeyboardNoArgumentMethod.keyboardTaskQueue.rawValue != selector else { return nil }
+                return ObjCRuntime.message(.keyboardTaskQueue, to: target)
+            },
+            waitUntilAllTasksAreFinished: { target in
+                guard KeyboardNoArgumentMethod.keyboardWaitUntilAllTasksAreFinished.rawValue != selector else { return nil }
+                return ObjCRuntime.message(.keyboardWaitUntilAllTasksAreFinished, to: target)
+            }
+        )
     }
 }
 
@@ -184,10 +202,10 @@ final class TheSafecrackerTests: XCTestCase {
 
     func testTextInjectionReportsMissingAddInputStringSelector() {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
-        let injection = UIKeyboardImplTextInjection(impl: keyboardImpl) { name, target in
-            guard name != "addInputString:" else { return nil }
-            return ObjCRuntime.message(name, to: target)
-        }
+        let injection = UIKeyboardImplTextInjection(
+            impl: keyboardImpl,
+            runtime: keyboardImpl.runtime(missingSelector: "addInputString:")
+        )
 
         let result = injection.type("h")
 
@@ -204,10 +222,10 @@ final class TheSafecrackerTests: XCTestCase {
 
     func testTextInjectionReportsMissingDrainSelectorAfterDispatch() {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
-        let injection = UIKeyboardImplTextInjection(impl: keyboardImpl) { name, target in
-            guard name != "waitUntilAllTasksAreFinished" else { return nil }
-            return ObjCRuntime.message(name, to: target)
-        }
+        let injection = UIKeyboardImplTextInjection(
+            impl: keyboardImpl,
+            runtime: keyboardImpl.runtime(missingSelector: "waitUntilAllTasksAreFinished")
+        )
 
         let result = injection.type("h")
 

@@ -160,15 +160,15 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .hint(let change):
             return renderStringPropertyChange("hint", before: change.before, after: change.after)
         case .actions(let change):
-            return renderStringPropertyChange("actions", before: change.before, after: change.after)
+            return renderPropertyChange("actions", before: change.before, after: change.after, render: render(actionSet:))
         case .frame(let change):
-            return renderStringPropertyChange("frame", before: change.before, after: change.after)
+            return renderPropertyChange("frame", before: change.before, after: change.after, render: render(frame:))
         case .activationPoint(let change):
-            return renderStringPropertyChange("activationPoint", before: change.before, after: change.after)
+            return renderPropertyChange("activationPoint", before: change.before, after: change.after, render: render(point:))
         case .customContent(let change):
-            return renderStringPropertyChange("customContent", before: change.before, after: change.after)
+            return renderPropertyChange("customContent", before: change.before, after: change.after, render: render(customContent:))
         case .rotors(let change):
-            return renderStringPropertyChange("rotors", before: change.before, after: change.after)
+            return renderPropertyChange("rotors", before: change.before, after: change.after, render: render(rotorSet:))
         }
     }
 
@@ -181,16 +181,33 @@ extension HeistCanonicalSwiftDSLRenderer {
         case .hint(let change):
             return try renderStringPropertyChange("hint", before: change.before, after: change.after, environment: environment)
         case .actions(let change):
-            return try renderStringPropertyChange("actions", before: change.before, after: change.after, environment: environment)
+            return renderPropertyChange("actions", before: change.before, after: change.after, render: render(actionSet:))
         case .frame(let change):
-            return try renderStringPropertyChange("frame", before: change.before, after: change.after, environment: environment)
+            return renderPropertyChange("frame", before: change.before, after: change.after, render: render(frame:))
         case .activationPoint(let change):
-            return try renderStringPropertyChange("activationPoint", before: change.before, after: change.after, environment: environment)
+            return renderPropertyChange("activationPoint", before: change.before, after: change.after, render: render(point:))
         case .customContent(let change):
-            return try renderStringPropertyChange("customContent", before: change.before, after: change.after, environment: environment)
+            return try renderPropertyChange("customContent", before: change.before, after: change.after) {
+                try render(customContent: $0, environment: environment)
+            }
         case .rotors(let change):
-            return try renderStringPropertyChange("rotors", before: change.before, after: change.after, environment: environment)
+            return try renderPropertyChange("rotors", before: change.before, after: change.after) {
+                try render(rotorSet: $0, environment: environment)
+            }
         }
+    }
+
+    func renderPropertyChange<Checker>(
+        _ name: String,
+        before: Checker?,
+        after: Checker?,
+        render: (Checker) throws -> String
+    ) rethrows -> String {
+        let fields = try [
+            before.map { "before: \(try render($0))" },
+            after.map { "after: \(try render($0))" },
+        ].compactMap { $0 }
+        return ".\(name)(\(fields.joined(separator: ", ")))"
     }
 
     func renderStringPropertyChange(
@@ -240,6 +257,144 @@ extension HeistCanonicalSwiftDSLRenderer {
             return ".exclude(\(renderTraitArray(match.exclude)))"
         default:
             return ".match(include: \(renderTraitArray(match.include)), exclude: \(renderTraitArray(match.exclude)))"
+        }
+    }
+
+    func render(actionSet match: ActionSetMatch) -> String {
+        switch (match.include.isEmpty, match.exclude.isEmpty) {
+        case (false, true):
+            return ".include(\(renderActionArray(match.include)))"
+        case (true, false):
+            return ".exclude(\(renderActionArray(match.exclude)))"
+        default:
+            return ".match(include: \(renderActionArray(match.include)), exclude: \(renderActionArray(match.exclude)))"
+        }
+    }
+
+    func render(frame match: ElementFrameMatch) -> String {
+        if let x = match.x, let y = match.y, let width = match.width, let height = match.height {
+            return ".exact(x: \(x), y: \(y), width: \(width), height: \(height))"
+        }
+        let fields = renderIntegerFields([
+            ("x", match.x),
+            ("y", match.y),
+            ("width", match.width),
+            ("height", match.height),
+        ])
+        return ".match(\(fields))"
+    }
+
+    func render(point match: ElementPointMatch) -> String {
+        if let x = match.x, let y = match.y {
+            return ".exact(x: \(x), y: \(y))"
+        }
+        let fields = renderIntegerFields([
+            ("x", match.x),
+            ("y", match.y),
+        ])
+        return ".match(\(fields))"
+    }
+
+    func render(customContent match: CustomContentMatch<String>) -> String {
+        let fields = renderCustomContentFields(
+            label: match.label.map(renderFieldArgument),
+            value: match.value.map(renderFieldArgument),
+            isImportant: match.isImportant
+        )
+        return ".match(\(fields))"
+    }
+
+    func render(customContent match: CustomContentMatch<StringExpr>, environment: RenderEnvironment) throws -> String {
+        let fields = try renderCustomContentFields(
+            label: match.label.map { try renderFieldArgument($0, environment: environment) },
+            value: match.value.map { try renderFieldArgument($0, environment: environment) },
+            isImportant: match.isImportant
+        )
+        return ".match(\(fields))"
+    }
+
+    func render(rotorSet match: RotorSetMatch<String>) -> String {
+        switch (match.include.isEmpty, match.exclude.isEmpty) {
+        case (false, true):
+            return ".include(\(renderStringMatchArray(match.include)))"
+        case (true, false):
+            return ".exclude(\(renderStringMatchArray(match.exclude)))"
+        default:
+            return ".match(include: \(renderStringMatchArray(match.include)), exclude: \(renderStringMatchArray(match.exclude)))"
+        }
+    }
+
+    func render(rotorSet match: RotorSetMatch<StringExpr>, environment: RenderEnvironment) throws -> String {
+        switch (match.include.isEmpty, match.exclude.isEmpty) {
+        case (false, true):
+            return try ".include(\(renderStringMatchArray(match.include, environment: environment)))"
+        case (true, false):
+            return try ".exclude(\(renderStringMatchArray(match.exclude, environment: environment)))"
+        default:
+            let include = try renderStringMatchArray(match.include, environment: environment)
+            let exclude = try renderStringMatchArray(match.exclude, environment: environment)
+            return ".match(include: \(include), exclude: \(exclude))"
+        }
+    }
+
+    private func renderIntegerFields(_ fields: [(String, Int?)]) -> String {
+        fields.compactMap { name, value in
+            value.map { "\(name): \($0)" }
+        }.joined(separator: ", ")
+    }
+
+    private func renderCustomContentFields(
+        label: String?,
+        value: String?,
+        isImportant: Bool?
+    ) -> String {
+        [
+            label.map { "label: \($0)" },
+            value.map { "value: \($0)" },
+            isImportant.map { "isImportant: \($0)" },
+        ].compactMap { $0 }.joined(separator: ", ")
+    }
+
+    private func renderActionArray(_ actions: Set<ElementAction>) -> String {
+        "[\(actions.sorted { $0.canonicalSortKey < $1.canonicalSortKey }.map(render(action:)).joined(separator: ", "))]"
+    }
+
+    private func render(action: ElementAction) -> String {
+        switch action {
+        case .activate:
+            return ".activate"
+        case .increment:
+            return ".increment"
+        case .decrement:
+            return ".decrement"
+        case .custom(let name):
+            return ".custom(\(quote(name)))"
+        }
+    }
+
+    private func renderStringMatchArray(_ matches: [StringMatch<String>]) -> String {
+        "[\(matches.map(renderFieldArgument).joined(separator: ", "))]"
+    }
+
+    private func renderStringMatchArray(
+        _ matches: [StringMatch<StringExpr>],
+        environment: RenderEnvironment
+    ) throws -> String {
+        try "[\(matches.map { try renderFieldArgument($0, environment: environment) }.joined(separator: ", "))]"
+    }
+}
+
+private extension ElementAction {
+    var canonicalSortKey: String {
+        switch self {
+        case .activate:
+            return "0:activate"
+        case .increment:
+            return "1:increment"
+        case .decrement:
+            return "2:decrement"
+        case .custom(let name):
+            return "3:\(name)"
         }
     }
 }

@@ -403,6 +403,138 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertTrue(enabledLoss.validate(against: action).met)
     }
 
+    func testElementUpdatedMatchesTypedActionChecker() throws {
+        let update = try XCTUnwrap(projectElementStateChange(
+            old: makeElement(label: "Stepper", actions: [.increment]),
+            new: makeElement(label: "Stepper", actions: [.increment, .activate]),
+            includeGeometry: false
+        ))
+        let action = makeResult(success: true, delta: .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [update]))))
+
+        let predicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            change: .actions(ElementPropertyChange<ActionsProperty>(
+                before: ActionSetMatch.exclude(Set<ElementAction>([.activate])),
+                after: ActionSetMatch.include(Set<ElementAction>([.activate]))
+            ))
+        ))))
+        let mismatch = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            change: .actions(ElementPropertyChange<ActionsProperty>(
+                after: ActionSetMatch.exclude(Set<ElementAction>([.activate]))
+            ))
+        ))))
+
+        XCTAssertTrue(predicate.validate(against: action).met)
+        XCTAssertFalse(mismatch.validate(against: action).met)
+    }
+
+    func testElementUpdatedMatchesTypedGeometryCheckers() throws {
+        let frameUpdate = try XCTUnwrap(projectElementStateChange(
+            old: makeElement(label: "Card", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44),
+            new: makeElement(label: "Card", frameX: 12, frameY: 20, frameWidth: 120, frameHeight: 44)
+        ))
+        let pointUpdate = try XCTUnwrap(projectElementStateChange(
+            old: makeElement(label: "Knob", activationPointX: 10, activationPointY: 12),
+            new: makeElement(label: "Knob", activationPointX: 42, activationPointY: 64)
+        ))
+        let action = makeResult(success: true, delta: .elementsChanged(.init(
+            elementCount: 2,
+            edits: ElementEdits(updated: [frameUpdate, pointUpdate])
+        )))
+
+        let framePredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            change: .frame(ElementPropertyChange<FrameProperty>(
+                after: ElementFrameMatch.exact(x: 12, y: 20, width: 120, height: 44)
+            ))
+        ))))
+        let pointPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            change: .activationPoint(ElementPropertyChange<ActivationPointProperty>(
+                after: ElementPointMatch.exact(x: 42, y: 64)
+            ))
+        ))))
+        let mismatch = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            change: .frame(ElementPropertyChange<FrameProperty>(
+                after: ElementFrameMatch.match(x: 13)
+            ))
+        ))))
+
+        XCTAssertTrue(framePredicate.validate(against: action).met)
+        XCTAssertTrue(pointPredicate.validate(against: action).met)
+        XCTAssertFalse(mismatch.validate(against: action).met)
+    }
+
+    func testElementUpdatedMatchesTypedCustomContentAndRotorCheckers() throws {
+        let customContent = HeistCustomContent(label: "Status", value: "Ready to submit", isImportant: true)
+        let customUpdate = try XCTUnwrap(projectElementStateChange(
+            old: makeElement(label: "Form", customContent: [HeistCustomContent(label: "Help", value: "Optional", isImportant: false)]),
+            new: makeElement(label: "Form", customContent: [customContent]),
+            includeGeometry: false
+        ))
+        let rotorUpdate = try XCTUnwrap(projectElementStateChange(
+            old: makeElement(label: "Article", rotors: [HeistRotor(name: "Links")]),
+            new: makeElement(label: "Article", rotors: [HeistRotor(name: "Headings"), HeistRotor(name: "Links")]),
+            includeGeometry: false
+        ))
+        let action = makeResult(success: true, delta: .elementsChanged(.init(
+            elementCount: 2,
+            edits: ElementEdits(updated: [customUpdate, rotorUpdate])
+        )))
+
+        let customPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            change: .customContent(ElementPropertyChange<CustomContentProperty>(
+                after: CustomContentMatch.match(
+                    label: StringMatch<String>.exact("Status"),
+                    value: StringMatch<String>.contains("Ready"),
+                    isImportant: true
+                )
+            ))
+        ))))
+        let rotorPredicate = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            change: .rotors(ElementPropertyChange<RotorsProperty>(
+                before: RotorSetMatch.exclude([StringMatch<String>.exact("Headings")]),
+                after: RotorSetMatch.include([StringMatch<String>.contains("Head")])
+            ))
+        ))))
+        let mismatch = AccessibilityPredicate.change(.elements(.updatedElement(ElementUpdatePredicate(
+            change: .customContent(ElementPropertyChange<CustomContentProperty>(
+                after: CustomContentMatch.match(
+                    label: StringMatch<String>.exact("Status"),
+                    isImportant: false
+                )
+            ))
+        ))))
+
+        XCTAssertTrue(customPredicate.validate(against: action).met)
+        XCTAssertTrue(rotorPredicate.validate(against: action).met)
+        XCTAssertFalse(mismatch.validate(against: action).met)
+    }
+
+    func testElementUpdatedRejectsStringCheckersForNonTextPropertiesAtDecodeBoundary() {
+        for property in ["traits", "actions", "frame", "activationPoint", "customContent", "rotors"] {
+            let json = Data("""
+            {
+              "type": "change",
+              "scopes": [
+                {
+                  "type": "elements",
+                  "assertions": [
+                    {
+                      "type": "updated",
+                      "property": "\(property)",
+                      "after": "activate"
+                    }
+                  ]
+                }
+              ]
+            }
+            """.utf8)
+
+            XCTAssertThrowsError(
+                try JSONDecoder().decode(AccessibilityPredicate.self, from: json),
+                "\(property) accepted a string-shaped update checker"
+            )
+        }
+    }
+
     func testElementUpdatedNoFiltersMetWhenAnyUpdatesExist() {
         let delta = makeUpdateDelta(label: "counter", property: .value, old: "a", new: "b")
         let action = makeResult(success: true, delta: delta)
@@ -697,7 +829,16 @@ final class AccessibilityPredicateTests: XCTestCase {
         value: String? = nil,
         identifier: String? = nil,
         hint: String? = nil,
-        traits: [HeistTrait] = []
+        traits: [HeistTrait] = [],
+        frameX: Double = 0,
+        frameY: Double = 0,
+        frameWidth: Double = 100,
+        frameHeight: Double = 44,
+        activationPointX: Double? = nil,
+        activationPointY: Double? = nil,
+        customContent: [HeistCustomContent]? = nil,
+        rotors: [HeistRotor]? = nil,
+        actions: [ElementAction] = []
     ) -> HeistElement {
         HeistElement(
             description: label ?? "",
@@ -706,8 +847,15 @@ final class AccessibilityPredicateTests: XCTestCase {
             identifier: identifier,
             hint: hint,
             traits: traits,
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            actions: []
+            frameX: frameX,
+            frameY: frameY,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight,
+            activationPointX: activationPointX,
+            activationPointY: activationPointY,
+            customContent: customContent,
+            rotors: rotors,
+            actions: actions
         )
     }
 

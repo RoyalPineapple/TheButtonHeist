@@ -90,35 +90,64 @@ final class UIKeyboardImplTextInjection {
 
     static let strategyName = "UIKeyboardImplTextInjection"
 
-    private let impl: AnyObject
-    private let resolveMessage: (String, AnyObject) -> ObjCRuntime.Message?
+    private typealias AddInputStringMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.ObjectArgument<NSString>>
+    private typealias KeyboardNoArgumentMethod = ObjCRuntime.ObjectMethod<ObjCRuntime.NoArguments>
+
+    struct Runtime: Sendable {
+        var addInputString: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.ObjectArgument<NSString>>?
+        var taskQueue: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.NoArguments>?
+        var waitUntilAllTasksAreFinished: @Sendable (NSObject) -> ObjCRuntime.Message<NSObject, ObjCRuntime.NoArguments>?
+
+        static let live = Runtime(
+            addInputString: { ObjCRuntime.message(.keyboardAddInputString, to: $0) },
+            taskQueue: { ObjCRuntime.message(.keyboardTaskQueue, to: $0) },
+            waitUntilAllTasksAreFinished: {
+                ObjCRuntime.message(.keyboardWaitUntilAllTasksAreFinished, to: $0)
+            }
+        )
+    }
+
+    private let impl: NSObject
+    private let runtime: Runtime
 
     init(
-        impl: AnyObject,
-        resolveMessage: @escaping (String, AnyObject) -> ObjCRuntime.Message? = { ObjCRuntime.message($0, to: $1) }
+        impl: NSObject,
+        runtime: Runtime = .live
     ) {
         self.impl = impl
-        self.resolveMessage = resolveMessage
+        self.runtime = runtime
     }
 
     func type(_ character: Character) -> KeyboardTextInjectionResult {
         let text = String(character)
-        guard let addInputString = resolveMessage("addInputString:", impl) else {
-            return .failed(.missingSelector("addInputString:", strategy: Self.strategyName, character: text))
+        guard let addInputString = runtime.addInputString(impl) else {
+            return .failed(.missingSelector(
+                AddInputStringMethod.keyboardAddInputString.rawValue,
+                strategy: Self.strategyName,
+                character: text
+            ))
         }
-        addInputString.call(text as AnyObject)
+        addInputString.send(text as NSString)
         return drainTaskQueue(character: text)
     }
 
     func drainTaskQueue(character: String?) -> KeyboardTextInjectionResult {
-        guard let taskQueueMessage = resolveMessage("taskQueue", impl) else {
-            return .failed(.missingSelector("taskQueue", strategy: Self.strategyName, character: character))
+        guard let taskQueueMessage = runtime.taskQueue(impl) else {
+            return .failed(.missingSelector(
+                KeyboardNoArgumentMethod.keyboardTaskQueue.rawValue,
+                strategy: Self.strategyName,
+                character: character
+            ))
         }
-        guard let taskQueue: AnyObject = taskQueueMessage.call() else {
+        guard let taskQueue: NSObject = taskQueueMessage.call() else {
             return .failed(.unavailableTaskQueue(strategy: Self.strategyName, character: character))
         }
-        guard let waitUntilAllTasksAreFinished = resolveMessage("waitUntilAllTasksAreFinished", taskQueue) else {
-            return .failed(.missingSelector("waitUntilAllTasksAreFinished", strategy: Self.strategyName, character: character))
+        guard let waitUntilAllTasksAreFinished = runtime.waitUntilAllTasksAreFinished(taskQueue) else {
+            return .failed(.missingSelector(
+                KeyboardNoArgumentMethod.keyboardWaitUntilAllTasksAreFinished.rawValue,
+                strategy: Self.strategyName,
+                character: character
+            ))
         }
         waitUntilAllTasksAreFinished.call()
         return .dispatched
@@ -128,21 +157,21 @@ final class UIKeyboardImplTextInjection {
 /// Type-safe wrapper around `UIKeyboardImpl` private API.
 ///
 /// All keyboard text injection in Button Heist routes through this bridge.
-/// It encapsulates the seven ObjC selectors needed to talk to UIKeyboardImpl
-/// behind clean Swift methods, matching the KIF testing framework's approach.
+/// It encapsulates the ObjC selectors needed to talk to UIKeyboardImpl behind
+/// clean Swift methods, matching the KIF testing framework's approach.
 ///
 /// Uses `sharedInstance` (not `activeInstance`) so it works with both software
 /// and hardware keyboards — `activeInstance` returns nil when a hardware
 /// keyboard is connected.
 ///
-/// `@MainActor` justification: wraps a UIKit singleton (`AnyObject`); the
+/// `@MainActor` justification: wraps a UIKit singleton (`NSObject`); the
 /// stored impl is non-Sendable.
 @MainActor struct KeyboardBridge { // swiftlint:disable:this agent_main_actor_value_type
 
-    private let impl: AnyObject
+    private let impl: NSObject
     private let textInjection: UIKeyboardImplTextInjection
 
-    init(impl: AnyObject, textInjection: UIKeyboardImplTextInjection? = nil) {
+    init(impl: NSObject, textInjection: UIKeyboardImplTextInjection? = nil) {
         self.impl = impl
         self.textInjection = textInjection ?? UIKeyboardImplTextInjection(impl: impl)
     }
@@ -150,7 +179,7 @@ final class UIKeyboardImplTextInjection {
     /// Resolve the UIKeyboardImpl singleton. Returns nil if the class or
     /// selector is missing (should never happen on supported iOS versions).
     static func shared() -> KeyboardBridge? {
-        guard let impl: AnyObject = ObjCRuntime.classMessage("sharedInstance", on: "UIKeyboardImpl")?.call() else {
+        guard let impl: NSObject = ObjCRuntime.classMessage(.sharedInstance, on: .uiKeyboardImpl)?.call() else {
             return nil
         }
         return KeyboardBridge(impl: impl)
@@ -158,8 +187,8 @@ final class UIKeyboardImplTextInjection {
 
     /// The keyboard's current input delegate, if any.
     /// Non-nil when a text field or text view is focused.
-    var delegate: AnyObject? {
-        ObjCRuntime.message("delegate", to: impl)?.call()
+    var delegate: NSObject? {
+        ObjCRuntime.message(.keyboardDelegate, to: impl)?.call()
     }
 
     /// Whether the delegate conforms to UIKeyInput (i.e., can accept text).

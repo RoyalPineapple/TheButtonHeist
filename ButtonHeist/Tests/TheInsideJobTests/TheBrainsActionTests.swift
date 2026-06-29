@@ -1616,7 +1616,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(waitRequests.count, 1)
-        if case .actionEndpoint(let request, observationScope: .discovery, trace: nil)? = waitRequests.first {
+        if case .actionEndpoint(let request, trace: nil)? = waitRequests.first {
             XCTAssertEqual(request, try expectation.resolve(in: .empty))
         } else {
             XCTFail("Expected action endpoint wait request")
@@ -3689,6 +3689,7 @@ final class TheBrainsActionTests: XCTestCase {
                 let waitStep = request.step
                 let initialTrace = request.initialTrace
                 let afterSequence = request.afterSequence
+                let observationScope = SemanticObservationScope.discovery
                 if let wait {
                     return self.heistWaitReceipt(for: waitStep, result: await wait(request))
                 }
@@ -3707,7 +3708,7 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 if waitStep.timeout == 0,
                    afterSequence == nil,
-                   let observation = observationSource.immediate(scope: request.observationScope) {
+                   let observation = observationSource.immediate(scope: observationScope) {
                     let expectation = PredicateEvaluation.evaluate(waitStep.predicate, in: observation)
                     let result = ActionResult(
                         success: expectation.met,
@@ -3724,7 +3725,7 @@ final class TheBrainsActionTests: XCTestCase {
                     )
                 }
                 guard let observation = observationSource.next(
-                    scope: request.observationScope,
+                    scope: observationScope,
                     timeout: waitStep.timeout
                 ) else {
                     let expectation = ExpectationResult(

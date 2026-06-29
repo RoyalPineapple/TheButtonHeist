@@ -20,6 +20,53 @@ import UIKit
 
 extension TheSafecracker {
 
+    private struct TouchMutationRuntime {
+        let setWindow: ObjCRuntime.Message<UITouch, ObjCRuntime.ObjectArgument<UIWindow>>
+        let setView: ObjCRuntime.Message<UITouch, ObjCRuntime.ObjectArgument<UIResponder>>
+        let setGestureView: ObjCRuntime.Message<UITouch, ObjCRuntime.ObjectArgument<UIResponder>>?
+        let setLocationInWindow: ObjCRuntime.Message<UITouch, ObjCRuntime.PointBoolArguments>
+        let setPhase: ObjCRuntime.Message<UITouch, ObjCRuntime.IntArgument>
+        let setTapCount: ObjCRuntime.Message<UITouch, ObjCRuntime.IntArgument>
+        let setIsFirstTouchForView: ObjCRuntime.Message<UITouch, ObjCRuntime.BoolArgument>?
+        let setIsTap: ObjCRuntime.Message<UITouch, ObjCRuntime.BoolArgument>?
+        let setTimestamp: ObjCRuntime.Message<UITouch, ObjCRuntime.DoubleArgument>
+        let setHIDEvent: ObjCRuntime.Message<UITouch, ObjCRuntime.PointerArgument>?
+
+        static func resolve(for touch: UITouch) -> TouchMutationRuntime? {
+            guard let setWindow = require(.touchSetWindow, for: touch),
+                  let setView = require(.touchSetView, for: touch),
+                  let setLocationInWindow = require(.touchSetLocationInWindow, for: touch),
+                  let setPhase = require(.touchSetPhase, for: touch),
+                  let setTapCount = require(.touchSetTapCount, for: touch),
+                  let setTimestamp = require(.touchSetTimestamp, for: touch)
+            else { return nil }
+
+            return TouchMutationRuntime(
+                setWindow: setWindow,
+                setView: setView,
+                setGestureView: ObjCRuntime.message(.touchSetGestureView, to: touch),
+                setLocationInWindow: setLocationInWindow,
+                setPhase: setPhase,
+                setTapCount: setTapCount,
+                setIsFirstTouchForView: ObjCRuntime.message(.touchSetIsFirstTouchForView, to: touch),
+                setIsTap: ObjCRuntime.message(.touchSetIsTap, to: touch),
+                setTimestamp: setTimestamp,
+                setHIDEvent: ObjCRuntime.message(.touchSetHIDEvent, to: touch)
+            )
+        }
+
+        private static func require<Arguments>(
+            _ method: ObjCRuntime.ObjectMethod<Arguments>,
+            for touch: UITouch
+        ) -> ObjCRuntime.Message<UITouch, Arguments>? {
+            let message = ObjCRuntime.message(method, to: touch)
+            if message == nil {
+                insideJobLogger.error("UITouch doesn't respond to \(method.rawValue, privacy: .public)")
+            }
+            return message
+        }
+    }
+
     // MARK: - TouchTarget
 
     /// A resolved hit test result: window + point + gesture responder.
@@ -37,7 +84,7 @@ extension TheSafecracker {
     @MainActor struct TouchTarget { // swiftlint:disable:this agent_main_actor_value_type
         let window: UIWindow
         let windowPoint: CGPoint
-        let responder: AnyObject
+        let responder: UIResponder
 
         /// Resolve the correct gesture target for a screen point.
         static func resolve(at screenPoint: CGPoint, in window: UIWindow) -> TouchTarget {
@@ -49,45 +96,27 @@ extension TheSafecracker {
         /// Create a fully configured touch bound to this target.
         /// Sets window, view, gestureView, location, phase, timestamp in one shot.
         func makeTouch(phase: UITouch.Phase) -> SyntheticTouch? {
-            let touch = UITouch()
-            ObjCRuntime.message("setWindow:", to: touch)?.call(window)
-            ObjCRuntime.message("setView:", to: touch)?.call(responder)
-            ObjCRuntime.message("setGestureView:", to: touch)?.call(responder)
-
-            if let locationMsg = ObjCRuntime.message("_setLocationInWindow:resetPrevious:", to: touch) {
-                locationMsg.call(windowPoint, true)
-            } else {
-                touch.setValue(windowPoint, forKey: "locationInWindow")
-            }
-
-            ObjCRuntime.message("setPhase:", to: touch)?.call(phase.rawValue)
-            ObjCRuntime.message("setTapCount:", to: touch)?.call(1)
-            ObjCRuntime.message("_setIsFirstTouchForView:", to: touch)?.call(true)
-            ObjCRuntime.message("setIsTap:", to: touch)?.call(true)
-            ObjCRuntime.message("setTimestamp:", to: touch)?.call(ProcessInfo.processInfo.systemUptime)
-
-            return SyntheticTouch(touch: touch, location: windowPoint, phase: phase)
+            SyntheticTouch(target: self, phase: phase)
         }
 
         // MARK: - Private: Hit Test Resolution
 
-        private static func resolveHitTestTarget(in window: UIWindow, at windowPoint: CGPoint) -> AnyObject {
+        private static func resolveHitTestTarget(in window: UIWindow, at windowPoint: CGPoint) -> UIResponder {
             let standardHitView = window.hitTest(windowPoint, with: nil) ?? window
 
             guard #available(iOS 18.0, *),
-                  let createMsg = ObjCRuntime.classMessage("contextWithPoint:radius:", on: "_UIHitTestContext") else {
+                  let createContext = ObjCRuntime.classMessage(.contextWithPointRadius, on: .uiHitTestContext) else {
                 return standardHitView
             }
 
-            typealias ContextFn = @convention(c) (AnyObject, Selector, CGPoint, CGFloat) -> AnyObject? // swiftlint:disable:this nesting
-            guard let context = createMsg.imp(as: ContextFn.self)(createMsg.target, createMsg.selector, windowPoint, 0) else {
+            guard let context: NSObject = createContext.call(windowPoint, radius: 0) else {
                 return standardHitView
             }
 
             var currentView: UIView? = standardHitView
             while let view = currentView {
-                if let msg = ObjCRuntime.message("_hitTestWithContext:", to: view),
-                   let result: AnyObject = msg.call(context) {
+                if let msg = ObjCRuntime.message(.viewHitTestWithContext, to: view),
+                   let result: UIResponder = msg.call(context) {
                     return result
                 }
                 currentView = view.superview
@@ -106,22 +135,46 @@ extension TheSafecracker {
     /// `@MainActor` justification: wraps a UITouch reference.
     @MainActor struct SyntheticTouch { // swiftlint:disable:this agent_main_actor_value_type
         let touch: UITouch
+        private let runtime: TouchMutationRuntime
         private(set) var location: CGPoint
         private(set) var phase: UITouch.Phase
+
+        fileprivate init?(
+            target: TouchTarget,
+            phase: UITouch.Phase
+        ) {
+            let touch = UITouch()
+            guard let runtime = TouchMutationRuntime.resolve(for: touch) else {
+                return nil
+            }
+
+            runtime.setWindow.send(target.window)
+            runtime.setView.send(target.responder)
+            runtime.setGestureView?.send(target.responder)
+            runtime.setLocationInWindow.call(target.windowPoint, resetPrevious: true)
+            runtime.setPhase.call(phase.rawValue)
+            runtime.setTapCount.call(1)
+            runtime.setIsFirstTouchForView?.call(true)
+            runtime.setIsTap?.call(true)
+            runtime.setTimestamp.call(ProcessInfo.processInfo.systemUptime)
+
+            self.touch = touch
+            self.runtime = runtime
+            self.location = target.windowPoint
+            self.phase = phase
+        }
 
         /// Update phase and timestamp atomically for the next event cycle.
         mutating func update(phase: UITouch.Phase) {
             self.phase = phase
-            ObjCRuntime.message("setPhase:", to: touch)?.call(phase.rawValue)
-            ObjCRuntime.message("setTimestamp:", to: touch)?.call(ProcessInfo.processInfo.systemUptime)
+            runtime.setPhase.call(phase.rawValue)
+            runtime.setTimestamp.call(ProcessInfo.processInfo.systemUptime)
         }
 
         /// Update location for move events.
         mutating func update(location: CGPoint) {
             self.location = location
-            if let msg = ObjCRuntime.message("_setLocationInWindow:resetPrevious:", to: touch) {
-                msg.call(location, false)
-            }
+            runtime.setLocationInWindow.call(location, resetPrevious: false)
         }
 
         /// Update both phase and location in one step.
@@ -131,8 +184,11 @@ extension TheSafecracker {
         }
 
         /// Attach an IOHIDEvent to this touch.
-        func setHIDEvent(_ hidEvent: UnsafeMutableRawPointer) {
-            ObjCRuntime.message("_setHidEvent:", to: touch)?.call(hidEvent)
+        func setHIDEvent(_ hidEvent: HIDEvent) {
+            guard let setHIDEvent = runtime.setHIDEvent else { return }
+            hidEvent.withUnsafePointer {
+                setHIDEvent.call($0)
+            }
         }
     }
 

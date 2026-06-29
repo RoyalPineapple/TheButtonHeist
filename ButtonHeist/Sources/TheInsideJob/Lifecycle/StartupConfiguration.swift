@@ -49,7 +49,6 @@ enum StartupConfigurationWarning: Equatable, Sendable {
 enum StartupInfoPlistKey: String, CaseIterable, Sendable {
     case disableAutoStart = "InsideJobDisableAutoStart"
     case fingerprintsEnabled = "InsideJobFingerprintsEnabled"
-    case disableFingerprints = "InsideJobDisableFingerprints"
     case token = "InsideJobToken"
     case instanceId = "InsideJobInstanceId"
     case port = "InsideJobPort"
@@ -198,7 +197,6 @@ struct StartupConfiguration: Equatable, Sendable {
     static let minimumSessionTimeout: TimeInterval = 1.0
     static let maximumSessionTimeout: TimeInterval = 3600.0
     static let fingerprintsEnabledEnvironmentKey = "INSIDEJOB_FINGERPRINTS"
-    static let disableFingerprintsEnvironmentKey = "INSIDEJOB_DISABLE_FINGERPRINTS"
 
     let disableAutoStart: ResolvedStartupValue<Bool>
     let fingerprintsEnabled: ResolvedStartupValue<Bool>
@@ -516,34 +514,12 @@ struct StartupConfiguration: Equatable, Sendable {
             ))
         }
 
-        if let envValue = env[disableFingerprintsEnvironmentKey] {
-            if let parsed = parseBool(envValue) {
-                return ResolvedStartupValue(value: !parsed, source: .environment)
-            }
-            warnings.append(.invalidValueIgnored(
-                key: disableFingerprintsEnvironmentKey,
-                source: .environment,
-                value: envValue
-            ))
-        }
-
         if let plistValue = plist[.fingerprintsEnabled] {
             if let parsed = parseBool(plistValue) {
                 return ResolvedStartupValue(value: parsed, source: .infoPlist)
             }
             warnings.append(.invalidValueIgnored(
                 key: StartupInfoPlistKey.fingerprintsEnabled.rawValue,
-                source: .infoPlist,
-                value: String(describing: plistValue)
-            ))
-        }
-
-        if let plistValue = plist[.disableFingerprints] {
-            if let parsed = parseBool(plistValue) {
-                return ResolvedStartupValue(value: !parsed, source: .infoPlist)
-            }
-            warnings.append(.invalidValueIgnored(
-                key: StartupInfoPlistKey.disableFingerprints.rawValue,
                 source: .infoPlist,
                 value: String(describing: plistValue)
             ))

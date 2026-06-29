@@ -142,7 +142,7 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(configuration, expected)
     }
 
-    func testFingerprintsConfigResolvesPositiveAndLegacyDisableKeys() {
+    func testFingerprintsConfigResolvesPositiveEnableKey() {
         XCTAssertEqual(
             StartupConfiguration.resolve(
                 env: ["INSIDEJOB_FINGERPRINTS": "false"],
@@ -152,15 +152,15 @@ final class StartupConfigurationTests: XCTestCase {
         )
         XCTAssertEqual(
             StartupConfiguration.resolve(
-                env: ["INSIDEJOB_DISABLE_FINGERPRINTS": "true"],
-                infoPlist: makeInfoPlist(["InsideJobFingerprintsEnabled": true])
+                env: ["INSIDEJOB_FINGERPRINTS": "true"],
+                infoPlist: makeInfoPlist(["InsideJobFingerprintsEnabled": false])
             ).fingerprintsEnabled,
-            ResolvedStartupValue(value: false, source: .environment)
+            ResolvedStartupValue(value: true, source: .environment)
         )
         XCTAssertEqual(
             StartupConfiguration.resolve(
                 env: [:],
-                infoPlist: makeInfoPlist(["InsideJobDisableFingerprints": true])
+                infoPlist: makeInfoPlist(["InsideJobFingerprintsEnabled": false])
             ).fingerprintsEnabled,
             ResolvedStartupValue(value: false, source: .infoPlist)
         )
