@@ -92,6 +92,32 @@ final class RuntimeLeaseObservationTests: XCTestCase {
         XCTAssertEqual(UIApplication.shared.isIdleTimerDisabled, idleTimerBaseline)
     }
 
+    func testSuspendReleasePreservesLatestSettleFailureDiagnostic() async {
+        lease.activate(on: job)
+        let diagnostic = await recordSettleFailureDiagnostic()
+
+        await lease.release(from: job, policy: .suspend)?.value
+
+        XCTAssertEqual(job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic, diagnostic)
+        XCTAssertTrue(job.lifecycleObservationActive)
+        XCTAssertFalse(job.brains.semanticObservationIsActive)
+        XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
+        XCTAssertFalse(job.tripwire.isPulseRunning)
+    }
+
+    func testStopReleasePreservesLatestSettleFailureDiagnostic() async {
+        lease.activate(on: job)
+        let diagnostic = await recordSettleFailureDiagnostic()
+
+        await lease.release(from: job, policy: .stop)?.value
+
+        XCTAssertEqual(job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic, diagnostic)
+        XCTAssertFalse(job.lifecycleObservationActive)
+        XCTAssertFalse(job.brains.semanticObservationIsActive)
+        XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
+        XCTAssertFalse(job.tripwire.isPulseRunning)
+    }
+
     func testInactiveCommandFailsWithoutStartingObservation() async {
         let result = await job.brains.executeRuntimeAction(.activate(.predicate(ElementPredicate(label: "Save"))))
 
@@ -100,6 +126,26 @@ final class RuntimeLeaseObservationTests: XCTestCase {
         XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
+    }
+
+    private func recordSettleFailureDiagnostic() async -> String {
+        let outcome = SettleSession.Outcome(
+            outcome: .timedOut(timeMs: 17),
+            events: [],
+            finalScreen: Screen.makeForTests(),
+            elementsByKey: [:],
+            instabilityDescription: "runtime lease diagnostic"
+        )
+        _ = await job.brains.stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: job.tripwire.tripwireSignal(),
+            settleOutcome: outcome
+        )
+        guard let diagnostic = job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic else {
+            XCTFail("Expected settle failure diagnostic")
+            return ""
+        }
+        XCTAssertTrue(diagnostic.contains("runtime lease diagnostic"))
+        return diagnostic
     }
 }
 

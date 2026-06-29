@@ -33,6 +33,41 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         await harness.job.stop()
     }
 
+    func testStartWhileRunningDoesNotCreateAnotherLease() async throws {
+        let harness = makeRuntimeHarness(actualPort: 23456)
+        try await harness.job.start()
+
+        guard case .running(let originalLease) = harness.job.serverPhase else {
+            return XCTFail("Expected running phase, got \(harness.job.serverPhase)")
+        }
+
+        try await harness.job.start()
+
+        guard case .running(let currentLease) = harness.job.serverPhase else {
+            return XCTFail("Expected running phase, got \(harness.job.serverPhase)")
+        }
+        XCTAssertTrue(currentLease === originalLease)
+        assertRunning(harness.job, transport: harness.transport, actualPort: 23456)
+        XCTAssertEqual(harness.startCallCount(), 1)
+        XCTAssertEqual(harness.stopCallCount(), 0)
+
+        await harness.job.stop()
+    }
+
+    func testStartWhileSuspendedDoesNotResumeRuntime() async throws {
+        let harness = makeRuntimeHarness(actualPort: 23456)
+        try await harness.job.start()
+
+        await harness.job.suspend()
+        try await harness.job.start()
+
+        assertSuspendedPreservingLifecycleObservation(harness.job)
+        XCTAssertEqual(harness.startCallCount(), 1)
+        XCTAssertEqual(harness.stopCallCount(), 1)
+
+        await harness.job.stop()
+    }
+
     func testSuspendFromRunningReachesSuspendedAndPreservesLifecycleObservation() async throws {
         let harness = makeRuntimeHarness()
         try await harness.job.start()
@@ -44,6 +79,71 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         XCTAssertFalse(harness.job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(harness.job.tripwire.isPulseRunning)
         XCTAssertEqual(harness.stopCallCount(), 1)
+
+        await harness.job.stop()
+    }
+
+    func testDuplicateResumeWhileResumingKeepsSingleAttempt() async throws {
+        let resumeStartGate = RuntimeStartGate()
+        let harness = makeRuntimeHarness(startOverride: { invocation, _, _ in
+            guard invocation > 1 else { return 23456 }
+            await resumeStartGate.enterAndWaitForRelease()
+            return 23457
+        })
+        try await harness.job.start()
+        await harness.job.suspend()
+
+        await harness.job.resume()
+        await resumeStartGate.waitUntilEntered()
+        guard case .resuming(let originalResumeID, let resumeTask) = harness.job.serverPhase else {
+            return XCTFail("Expected resuming phase, got \(harness.job.serverPhase)")
+        }
+
+        await harness.job.resume()
+
+        guard case .resuming(let currentResumeID, _) = harness.job.serverPhase else {
+            return XCTFail("Expected resuming phase, got \(harness.job.serverPhase)")
+        }
+        XCTAssertEqual(currentResumeID, originalResumeID)
+        XCTAssertEqual(harness.startCallCount(), 2)
+
+        resumeStartGate.release()
+        await resumeTask.value
+
+        assertRunning(harness.job, transport: harness.transport, actualPort: 23457)
+        XCTAssertEqual(harness.startCallCount(), 2)
+
+        await harness.job.stop()
+    }
+
+    func testFailedResumeReturnsToSuspendedAndPreservesLifecycleDiagnostic() async throws {
+        let resumeStartGate = RuntimeStartGate()
+        let harness = makeRuntimeHarness(startOverride: { invocation, _, _ in
+            guard invocation > 1 else { return 23456 }
+            await resumeStartGate.enterAndWaitForRelease()
+            throw RuntimeStartFailure.resumeFailed
+        })
+        try await harness.job.start()
+        await harness.job.suspend()
+        let diagnostic = await recordSettleFailureDiagnostic(on: harness.job)
+
+        await harness.job.resume()
+        await resumeStartGate.waitUntilEntered()
+        guard case .resuming(_, let resumeTask) = harness.job.serverPhase else {
+            return XCTFail("Expected resuming phase, got \(harness.job.serverPhase)")
+        }
+
+        resumeStartGate.release()
+        await resumeTask.value
+
+        assertSuspendedPreservingLifecycleObservation(harness.job)
+        XCTAssertEqual(
+            harness.job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic,
+            diagnostic
+        )
+        XCTAssertFalse(harness.job.brains.semanticObservationIsActive)
+        XCTAssertFalse(harness.job.brains.stash.semanticObservationStream.isActive)
+        XCTAssertFalse(harness.job.tripwire.isPulseRunning)
 
         await harness.job.stop()
     }
@@ -69,25 +169,31 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
 
     private func makeRuntimeHarness(
         actualPort: UInt16 = 34567,
+        startOverride: (@MainActor (_ invocation: Int, _ requestedPort: UInt16, _ bindToLoopback: Bool) async throws -> UInt16)? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> (
         job: TheInsideJob,
         transport: ServerTransport,
+        startCallCount: @MainActor () -> Int,
         stopCallCount: @MainActor () -> Int
     ) {
         let token = "runtime-lifecycle-test-token"
         let scopes: Set<ConnectionScope> = [.simulator]
         let transport = ServerTransport(token: token, allowedScopes: scopes)
-        let stopCounter = StopCounter()
+        let counters = RuntimeCallCounters()
 
         transport.startOverride = { requestedPort, bindToLoopback in
+            counters.startCount += 1
             XCTAssertEqual(requestedPort, 0, file: file, line: line)
             XCTAssertTrue(bindToLoopback, file: file, line: line)
+            if let startOverride {
+                return try await startOverride(counters.startCount, requestedPort, bindToLoopback)
+            }
             return actualPort
         }
         transport.stopOverride = {
-            stopCounter.value += 1
+            counters.stopCount += 1
             return Task {}
         }
 
@@ -101,7 +207,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
             }
         )
 
-        return (job, transport, { stopCounter.value })
+        return (job, transport, { counters.startCount }, { counters.stopCount })
     }
 
     private func assertRunning(
@@ -160,8 +266,67 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         }
     }
 
-    private final class StopCounter {
-        var value = 0
+    private func recordSettleFailureDiagnostic(on job: TheInsideJob) async -> String {
+        let outcome = SettleSession.Outcome(
+            outcome: .timedOut(timeMs: 17),
+            events: [],
+            finalScreen: Screen.makeForTests(),
+            elementsByKey: [:],
+            instabilityDescription: "runtime lifecycle diagnostic"
+        )
+        _ = await job.brains.stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: job.tripwire.tripwireSignal(),
+            settleOutcome: outcome
+        )
+        guard let diagnostic = job.brains.stash.semanticObservationStream.latestSettleFailureDiagnostic else {
+            XCTFail("Expected settle failure diagnostic")
+            return ""
+        }
+        XCTAssertTrue(diagnostic.contains("runtime lifecycle diagnostic"))
+        return diagnostic
+    }
+
+    private enum RuntimeStartFailure: Error {
+        case resumeFailed
+    }
+
+    private final class RuntimeCallCounters {
+        var startCount = 0
+        var stopCount = 0
+    }
+
+    @MainActor
+    private final class RuntimeStartGate {
+        private var entered = false
+        private var released = false
+        private var enteredWaiters: [CheckedContinuation<Void, Never>] = []
+        private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+
+        func enterAndWaitForRelease() async {
+            entered = true
+            let waiters = enteredWaiters
+            enteredWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+
+            guard !released else { return }
+            await withCheckedContinuation { continuation in
+                releaseWaiters.append(continuation)
+            }
+        }
+
+        func waitUntilEntered() async {
+            guard !entered else { return }
+            await withCheckedContinuation { continuation in
+                enteredWaiters.append(continuation)
+            }
+        }
+
+        func release() {
+            released = true
+            let waiters = releaseWaiters
+            releaseWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+        }
     }
 }
 

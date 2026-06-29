@@ -41,6 +41,20 @@ import Testing
         }
     }
 
+    @Test func `startup and resume leases share transport setup and callback wiring`() throws {
+        let source = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheInsideJob/InsideJobTransportRuntime.swift"
+        )
+
+        #expect(sourceOccurrenceCount("startRuntimeLease(phase: .startup", in: source) == 1)
+        #expect(sourceOccurrenceCount("startRuntimeLease(phase: .resume", in: source) == 1)
+        #expect(sourceOccurrenceCount("transportFactory(token, runtimeConfiguration.allowedScopes)", in: source) == 1)
+        #expect(sourceOccurrenceCount("installTransportOverflowHandler(transport)", in: source) == 1)
+        #expect(sourceOccurrenceCount("await getaway.wireTransport(transport)", in: source) == 1)
+        #expect(sourceOccurrenceCount("try await transport.start(", in: source) == 1)
+        #expect(sourceOccurrenceCount("cleanupFailedTransportStartup(transport)", in: source) == 1)
+    }
+
     @Test func `server phase writes stay in lifecycle runtime owners`() throws {
         let observed = try sourceAssignmentCounts(
             identifier: "serverPhase",
@@ -98,6 +112,10 @@ import Testing
 
 private func sourceFile(relativePath: String) throws -> String {
     try String(contentsOf: repositoryRoot().appendingPathComponent(relativePath), encoding: .utf8)
+}
+
+private func sourceOccurrenceCount(_ needle: String, in source: String) -> Int {
+    source.components(separatedBy: needle).count - 1
 }
 
 private func repositoryRoot() -> URL {
