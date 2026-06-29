@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@_spi(ButtonHeistInternals) import ThePlans
+@_spi(ButtonHeistInternals) @testable import ThePlans
 
 @Test func `action command contract table covers every wire command type`() throws {
     let coveredTypes = actionCommandContractCases.map(\.wireType.rawValue).sorted()
@@ -91,15 +91,22 @@ import Testing
         #expect(testCase.command.durableHeistActionFailure == testCase.durabilityFailure)
         #expect(testCase.command.reportTarget == testCase.reportTarget)
 
-        let plan = try HeistPlan(body: [.action(try ActionStep(command: testCase.command))])
+        let raw = HeistPlanAdmissionCandidate(body: [.action(try ActionStep(command: testCase.command))])
         if let canonicalLine = testCase.canonicalLine {
+            let plan = try raw.validatedForRuntimeSafety()
             let expectedSource = canonicalPlanSource(canonicalLine)
             #expect(try plan.canonicalSwiftDSL() == expectedSource)
             #expect(try HeistPlanSourceCompiler().compile(expectedSource) == plan)
         } else {
             let expectedFailure = try #require(testCase.durabilityFailure)
+            let failures = runtimeSafetyFailures(for: raw)
+            expectNonDurableHeistActionFailure(failures, observed: expectedFailure)
+            let uncheckedPlan = HeistPlan(
+                runtimeValidatedVersion: HeistPlan.currentVersion,
+                body: [.action(try ActionStep(command: testCase.command))]
+            )
             #expect(throws: HeistCanonicalSwiftDSLError.unsupportedAction(expectedFailure)) {
-                _ = try plan.canonicalSwiftDSL()
+                _ = try uncheckedPlan.canonicalSwiftDSL()
             }
         }
     }
@@ -398,6 +405,23 @@ private func runtimeSafetyFailures(for raw: HeistPlanAdmissionCandidate) -> [Hei
         Issue.record("Expected runtime safety error, got \(error)")
         return []
     }
+}
+
+private let nonDurableHeistActionRepairHint =
+    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "this with a canonical durable DSL action."
+
+private func expectNonDurableHeistActionFailure(
+    _ failures: [HeistPlanRuntimeSafetyFailure],
+    observed: String,
+    path: String = "$.body[0].action.command"
+) {
+    #expect(failures.contains {
+        $0.path == path
+            && $0.contract == "durable heist action"
+            && $0.observed == observed
+            && $0.correction == nonDurableHeistActionRepairHint
+    }, "\(failures)")
 }
 
 private func expectDataCorrupted(

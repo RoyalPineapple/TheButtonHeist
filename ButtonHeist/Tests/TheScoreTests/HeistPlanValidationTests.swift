@@ -22,6 +22,23 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
     try raw.validatedForRuntimeSafety()
 }
 
+private let nonDurableHeistActionRepairHint =
+    "Use a direct client command for viewport/debug/session actions, or replace " +
+    "this with a canonical durable DSL action."
+
+private func expectNonDurableHeistActionFailure(
+    _ failures: [HeistPlanRuntimeSafetyFailure],
+    observed: String,
+    path: String = "$.body[0].action.command"
+) {
+    #expect(failures.contains {
+        $0.path == path
+            && $0.contract == "durable heist action"
+            && $0.observed == observed
+            && $0.correction == nonDurableHeistActionRepairHint
+    }, "\(failures)")
+}
+
 private struct EncodedActionStepContract: Decodable {
     let withoutExpectation: String
 
@@ -144,10 +161,9 @@ func `composition quality allows explicit expectation waiver`() throws {
 }
 
 @Test
-func lintFlagsMechanicalCommandsAndViewportSetup() throws {
+func lintFlagsMechanicalCommands() throws {
     let plan = try HeistPlan(body: [
         .action(try ActionStep(command: .mechanicalTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
-        .action(try ActionStep(command: .viewportScroll(ScrollTarget(direction: .down)))),
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
             expectation: WaitStep(predicate: .state(.exists(.label("Done"))), timeout: 1)
@@ -157,8 +173,6 @@ func lintFlagsMechanicalCommandsAndViewportSetup() throws {
     let messages = plan.lint(.strictTest).map(\.message)
 
     #expect(messages.contains("Mechanical command appears in strict semantic-test mode"))
-    #expect(messages.contains("Viewport command appears in strict semantic-test mode"))
-    #expect(messages.contains("Pre-action viewport movement immediately precedes a semantic action"))
 }
 
 @Test
@@ -268,6 +282,62 @@ func runtimeSafetyRejectsInvalidRefs() throws {
     for (label, raw, expected) in cases {
         let failures = runtimeSafetyFailures(for: raw)
         #expect(failures.contains { $0.contract.contains(expected) }, "\(label): \(failures)")
+    }
+}
+
+@Test
+func heistPlanConstructionRejectsNonDurableActions() throws {
+    let command = HeistActionCommand.rotor(
+        selection: .index(0),
+        target: .target(.predicate(.label("Article"))),
+        direction: .next
+    )
+    let expectedFailure = try #require(command.durableHeistActionFailure)
+
+    do {
+        _ = try HeistPlan(body: [.action(try ActionStep(command: command))])
+        Issue.record("Expected non-durable action to fail plan construction")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
+    } catch {
+        Issue.record("Expected runtime safety error, got \(error)")
+    }
+}
+
+@Test
+func heistPlanJSONDecodeRejectsNonDurableActions() throws {
+    let expectedFailure = try #require(
+        HeistActionCommand
+            .viewportScroll(ScrollTarget(selection: .container("scrollable_0_0_40_50"), direction: .down))
+            .durableHeistActionFailure
+    )
+    let json = """
+    {
+      "version": \(HeistPlan.currentVersion),
+      "body": [
+        {
+          "type": "action",
+          "action": {
+            "command": {
+              "type": "scroll",
+              "payload": {
+                "container": "scrollable_0_0_40_50",
+                "direction": "down"
+              }
+            }
+          }
+        }
+      ]
+    }
+    """
+
+    do {
+        _ = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
+        Issue.record("Expected non-durable JSON action to fail plan decode")
+    } catch let error as HeistPlanRuntimeSafetyError {
+        expectNonDurableHeistActionFailure(error.failures, observed: expectedFailure)
+    } catch {
+        Issue.record("Expected runtime safety error, got \(error)")
     }
 }
 

@@ -308,10 +308,9 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         environment: HeistExecutionEnvironment
     ) {
         validateCommandExpressions(command, path: path.description, scope: scope)
-        // Durability (serialize/render canonically) is an authoring concern, not
-        // an execution one. It is enforced where heists are persisted or rendered
-        // as canonical Swift DSL, not here, so a transient plan can execute any
-        // valid command, including viewport commands.
+        if let failure = command.durableHeistActionFailure {
+            failNonDurableAction(at: path, observed: failure)
+        }
         do {
             try command.assertResolvedPayloadAdmissible(in: environment)
         } catch {
