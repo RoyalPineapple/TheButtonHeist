@@ -361,25 +361,22 @@ public struct HeistInvocationContent: HeistContent {
         return HeistInvocationStep(invocationPath: path, argument: .none)
     }()
 
-    fileprivate let invocationStep: HeistInvocationStep?
-    public var invocation: HeistInvocationStep {
-        invocationStep ?? Self.invalidInvocationPlaceholder
-    }
-
+    public let invocation: HeistInvocationStep
     public let heistDefinitions: [HeistPlan]
     let explicitExpectationTimeout: Double?
     let expectationValidationDiagnostics: [HeistBuildDiagnostic]
+    private let emitsInvocationStep: Bool
     private let invocationValidationDiagnostics: [HeistBuildDiagnostic]
 
     public var heistSteps: [HeistStep] {
-        invocationStep.map { [.invoke($0)] } ?? []
+        emitsInvocationStep ? [.invoke(invocation)] : []
     }
 
     public var heistBuildDiagnostics: [HeistBuildDiagnostic] {
         invocationValidationDiagnostics + expectationValidationDiagnostics.map {
             HeistBuildDiagnostic.dslBuild(
                 code: .dslInvalidInvocationExpectation,
-                path: invocationStep?.capabilityName ?? invocationValidationDiagnostics.first?.path,
+                path: emitsInvocationStep ? invocation.capabilityName : invocationValidationDiagnostics.first?.path,
                 message: $0.message,
                 hint: $0.hint
             )
@@ -392,18 +389,20 @@ public struct HeistInvocationContent: HeistContent {
         explicitExpectationTimeout: Double? = nil,
         expectationValidationDiagnostics: [HeistBuildDiagnostic] = []
     ) {
-        self.invocationStep = invocation
+        self.invocation = invocation
         self.heistDefinitions = heistDefinitions
         self.explicitExpectationTimeout = explicitExpectationTimeout
         self.expectationValidationDiagnostics = expectationValidationDiagnostics
+        self.emitsInvocationStep = true
         self.invocationValidationDiagnostics = []
     }
 
     init(invalidDiagnostics: [HeistBuildDiagnostic]) {
-        self.invocationStep = nil
+        self.invocation = Self.invalidInvocationPlaceholder
         self.heistDefinitions = []
         self.explicitExpectationTimeout = nil
         self.expectationValidationDiagnostics = []
+        self.emitsInvocationStep = false
         self.invocationValidationDiagnostics = invalidDiagnostics
     }
 }
@@ -413,14 +412,14 @@ public extension HeistInvocationContent {
         _ predicate: AccessibilityPredicateExpr,
         timeout: Double? = nil
     ) -> HeistInvocationContent {
-        guard let invocationStep else { return self }
+        guard emitsInvocationStep else { return self }
 
         let timeoutResult = composeExpectationTimeout(
-            existing: invocationStep.expectation,
+            existing: invocation.expectation,
             existingExplicit: explicitExpectationTimeout,
             nextExplicit: timeout
         )
-        let predicateResult = invocationStep.expectation.map {
+        let predicateResult = invocation.expectation.map {
             composeExpectationPredicates(existing: $0.predicate, next: predicate)
         } ?? ExpectationPredicateComposition(predicate: predicate, diagnostics: [])
         let validationDiagnostics = expectationValidationDiagnostics
@@ -429,8 +428,8 @@ public extension HeistInvocationContent {
 
         return HeistInvocationContent(
             invocation: HeistInvocationStep(
-                invocationPath: invocationStep.invocationPath,
-                argument: invocationStep.argument,
+                invocationPath: invocation.invocationPath,
+                argument: invocation.argument,
                 expectation: WaitStep(predicate: predicateResult.predicate, timeout: timeoutResult.timeout)
             ),
             heistDefinitions: heistDefinitions,
