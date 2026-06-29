@@ -7,6 +7,12 @@ import ThePlans
 @MainActor
 final class SafecrackerTouchInjection {
 
+    private let fingerprints: TheFingerprints
+
+    init(fingerprints: TheFingerprints) {
+        self.fingerprints = fingerprints
+    }
+
     /// Simulate a tap at the given screen coordinates.
     /// Yields to the main run loop between began and ended phases so that
     /// SwiftUI gesture recognizers (which process events asynchronously)
@@ -67,7 +73,10 @@ final class SafecrackerTouchInjection {
 
     private func performTouchTap(at point: CGPoint) async -> Bool {
         guard var touchState = beginTouch(at: point) else { return false }
-        guard await Task.cancellableSleep(for: TheSafecracker.gestureYieldDelay) else { return false }
+        guard await Task.cancellableSleep(for: TheSafecracker.gestureYieldDelay) else {
+            fingerprints.endTracking()
+            return false
+        }
         return endTouch(&touchState.touch)
     }
 
@@ -103,6 +112,7 @@ final class SafecrackerTouchInjection {
         }
 
         event.send()
+        fingerprints.beginTracking(at: [point])
         return (touch, window)
     }
 
@@ -115,6 +125,7 @@ final class SafecrackerTouchInjection {
 
         guard let event = TheSafecracker.TouchEvent(touches: [touch]) else { return false }
         event.send()
+        fingerprints.updateTracking(to: [point])
         return true
     }
 
@@ -128,6 +139,7 @@ final class SafecrackerTouchInjection {
     }
 
     private func endTouch(_ touch: inout TheSafecracker.SyntheticTouch) -> Bool {
+        defer { fingerprints.endTracking() }
         touch.update(phase: .ended)
 
         guard let event = TheSafecracker.TouchEvent(touches: [touch]) else {

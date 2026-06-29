@@ -13,8 +13,15 @@ import ThePlans
 final class TheSafecracker {
 
     private let keyboardInput = SafecrackerKeyboardInput()
-    private let touchInjection = SafecrackerTouchInjection()
+    private let fingerprints: TheFingerprints
+    private let touchInjection: SafecrackerTouchInjection
     private let editActions = SafecrackerEditActions()
+
+    init(fingerprintsEnabled: Bool = true) {
+        let fingerprints = TheFingerprints(isEnabled: fingerprintsEnabled)
+        self.fingerprints = fingerprints
+        self.touchInjection = SafecrackerTouchInjection(fingerprints: fingerprints)
+    }
 
     var keyboardBridgeProvider: () -> KeyboardBridge? {
         get { keyboardInput.keyboardBridgeProvider }
@@ -57,6 +64,11 @@ final class TheSafecracker {
 
     func resignFirstResponder() -> Bool {
         editActions.resignFirstResponder()
+    }
+
+    func showFingerprint(at point: CGPoint) {
+        guard GeometryValidation.validateScreenPoint(point) == nil else { return }
+        fingerprints.show(at: point)
     }
 
     func tap(at point: CGPoint) async -> Bool {

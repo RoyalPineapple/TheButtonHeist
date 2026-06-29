@@ -46,6 +46,7 @@ extension TheInsideJob {
             "instanceIdentifier=\(effectiveInstanceId)(\(runtimeConfiguration.instanceIdSource.label))",
             "allowedScopes=\(scopeNames)(\(runtimeConfiguration.allowedScopesSource.label))",
             "sessionTimeout=\(runtimeConfiguration.sessionReleaseTimeout.value)s(\(runtimeConfiguration.sessionReleaseTimeout.source.label))",
+            "fingerprints=\(runtimeConfiguration.fingerprintsEnabled)(\(runtimeConfiguration.fingerprintsEnabledSource.label))",
             "tls=psk",
             bonjourDescription
         ].joined(separator: " ")

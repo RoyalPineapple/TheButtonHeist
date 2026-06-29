@@ -22,6 +22,7 @@ private let autoStartTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialSta
 /// - INSIDEJOB_PORT / InsideJobPort: Fixed TCP port to listen on (0 or unset = any available)
 /// - INSIDEJOB_SCOPE / InsideJobScope: Allowed connection scopes
 /// - INSIDEJOB_SESSION_TIMEOUT / InsideJobSessionTimeout: Session release timeout
+/// - INSIDEJOB_FINGERPRINTS / InsideJobFingerprintsEnabled: Visual fingerprints overlay
 @_cdecl("TheInsideJob_autoStartFromLoad")
 func theInsideJobAutoStartFromLoad() {
     autoStartLogger.info("========== AUTO-START BEGIN ==========")

@@ -48,6 +48,8 @@ enum StartupConfigurationWarning: Equatable, Sendable {
 
 enum StartupInfoPlistKey: String, CaseIterable, Sendable {
     case disableAutoStart = "InsideJobDisableAutoStart"
+    case fingerprintsEnabled = "InsideJobFingerprintsEnabled"
+    case disableFingerprints = "InsideJobDisableFingerprints"
     case token = "InsideJobToken"
     case instanceId = "InsideJobInstanceId"
     case port = "InsideJobPort"
@@ -195,14 +197,37 @@ struct StartupConfiguration: Equatable, Sendable {
     static let defaultSessionTimeout: TimeInterval = 30.0
     static let minimumSessionTimeout: TimeInterval = 1.0
     static let maximumSessionTimeout: TimeInterval = 3600.0
+    static let fingerprintsEnabledEnvironmentKey = "INSIDEJOB_FINGERPRINTS"
+    static let disableFingerprintsEnvironmentKey = "INSIDEJOB_DISABLE_FINGERPRINTS"
 
     let disableAutoStart: ResolvedStartupValue<Bool>
+    let fingerprintsEnabled: ResolvedStartupValue<Bool>
     let token: ResolvedStartupValue<String?>
     let instanceId: ResolvedStartupValue<String?>
     let preferredPort: ResolvedStartupValue<UInt16>
     let allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>
     let sessionTimeout: ResolvedStartupValue<TimeInterval>
     let warnings: [StartupConfigurationWarning]
+
+    init(
+        disableAutoStart: ResolvedStartupValue<Bool>,
+        token: ResolvedStartupValue<String?>,
+        instanceId: ResolvedStartupValue<String?>,
+        preferredPort: ResolvedStartupValue<UInt16>,
+        allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>,
+        sessionTimeout: ResolvedStartupValue<TimeInterval>,
+        fingerprintsEnabled: ResolvedStartupValue<Bool> = ResolvedStartupValue(value: true, source: .defaultValue),
+        warnings: [StartupConfigurationWarning]
+    ) {
+        self.disableAutoStart = disableAutoStart
+        self.fingerprintsEnabled = fingerprintsEnabled
+        self.token = token
+        self.instanceId = instanceId
+        self.preferredPort = preferredPort
+        self.allowedScopes = allowedScopes
+        self.sessionTimeout = sessionTimeout
+        self.warnings = warnings
+    }
 
     static func resolve(
         env: [String: String] = ProcessInfo.processInfo.environment,
@@ -211,9 +236,14 @@ struct StartupConfiguration: Equatable, Sendable {
         var warnings: [StartupConfigurationWarning] = []
         let plist = infoPlist
         let disableAutoStart = resolveBool(
-            envKey: .insideJobDisable,
+            envKey: EnvironmentKey.insideJobDisable.rawValue,
             plistKey: .disableAutoStart,
             defaultValue: false,
+            env: env,
+            plist: plist,
+            warnings: &warnings
+        )
+        let fingerprintsEnabled = resolveFingerprintsEnabled(
             env: env,
             plist: plist,
             warnings: &warnings
@@ -253,6 +283,7 @@ struct StartupConfiguration: Equatable, Sendable {
             preferredPort: preferredPort,
             allowedScopes: allowedScopes,
             sessionTimeout: sessionTimeout,
+            fingerprintsEnabled: fingerprintsEnabled,
             warnings: warnings
         )
     }
@@ -420,18 +451,18 @@ struct StartupConfiguration: Equatable, Sendable {
     }
 
     private static func resolveBool(
-        envKey: EnvironmentKey,
+        envKey: String,
         plistKey: StartupInfoPlistKey,
         defaultValue: Bool,
         env: [String: String],
         plist: StartupInfoPlist,
         warnings: inout [StartupConfigurationWarning]
     ) -> ResolvedStartupValue<Bool> {
-        if let envValue = env[envKey.rawValue] {
+        if let envValue = env[envKey] {
             if let parsed = parseBool(envValue) {
                 return ResolvedStartupValue(value: parsed, source: .environment)
             }
-            warnings.append(.invalidValueIgnored(key: envKey.rawValue, source: .environment, value: envValue))
+            warnings.append(.invalidValueIgnored(key: envKey, source: .environment, value: envValue))
         }
 
         if let plistValue = plist[plistKey] {
@@ -467,6 +498,58 @@ struct StartupConfiguration: Equatable, Sendable {
             return parseBool(string)
         }
         return nil
+    }
+
+    private static func resolveFingerprintsEnabled(
+        env: [String: String],
+        plist: StartupInfoPlist,
+        warnings: inout [StartupConfigurationWarning]
+    ) -> ResolvedStartupValue<Bool> {
+        if let envValue = env[fingerprintsEnabledEnvironmentKey] {
+            if let parsed = parseBool(envValue) {
+                return ResolvedStartupValue(value: parsed, source: .environment)
+            }
+            warnings.append(.invalidValueIgnored(
+                key: fingerprintsEnabledEnvironmentKey,
+                source: .environment,
+                value: envValue
+            ))
+        }
+
+        if let envValue = env[disableFingerprintsEnvironmentKey] {
+            if let parsed = parseBool(envValue) {
+                return ResolvedStartupValue(value: !parsed, source: .environment)
+            }
+            warnings.append(.invalidValueIgnored(
+                key: disableFingerprintsEnvironmentKey,
+                source: .environment,
+                value: envValue
+            ))
+        }
+
+        if let plistValue = plist[.fingerprintsEnabled] {
+            if let parsed = parseBool(plistValue) {
+                return ResolvedStartupValue(value: parsed, source: .infoPlist)
+            }
+            warnings.append(.invalidValueIgnored(
+                key: StartupInfoPlistKey.fingerprintsEnabled.rawValue,
+                source: .infoPlist,
+                value: String(describing: plistValue)
+            ))
+        }
+
+        if let plistValue = plist[.disableFingerprints] {
+            if let parsed = parseBool(plistValue) {
+                return ResolvedStartupValue(value: !parsed, source: .infoPlist)
+            }
+            warnings.append(.invalidValueIgnored(
+                key: StartupInfoPlistKey.disableFingerprints.rawValue,
+                source: .infoPlist,
+                value: String(describing: plistValue)
+            ))
+        }
+
+        return ResolvedStartupValue(value: true, source: .defaultValue)
     }
 }
 

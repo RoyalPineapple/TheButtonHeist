@@ -77,6 +77,7 @@ final class StartupConfigurationTests: XCTestCase {
             env: [:],
             infoPlist: makeInfoPlist([
                 "InsideJobDisableAutoStart": "yes",
+                "InsideJobFingerprintsEnabled": "no",
                 "InsideJobPort": 5151.0,
                 "InsideJobScope": "simulator,network",
                 "InsideJobSessionTimeout": " 120.5 "
@@ -84,6 +85,7 @@ final class StartupConfigurationTests: XCTestCase {
         )
 
         XCTAssertEqual(configuration.disableAutoStart, ResolvedStartupValue(value: true, source: .infoPlist))
+        XCTAssertEqual(configuration.fingerprintsEnabled, ResolvedStartupValue(value: false, source: .infoPlist))
         XCTAssertEqual(configuration.preferredPort, ResolvedStartupValue(value: 5151, source: .infoPlist))
         XCTAssertEqual(configuration.allowedScopes, ResolvedStartupValue(value: [.simulator, .network], source: .infoPlist))
         XCTAssertEqual(configuration.sessionTimeout, ResolvedStartupValue(value: 120.5, source: .infoPlist))
@@ -95,6 +97,7 @@ final class StartupConfigurationTests: XCTestCase {
             env: [:],
             infoPlist: makeInfoPlist([
                 "InsideJobDisableAutoStart": ["true"],
+                "InsideJobFingerprintsEnabled": ["false"],
                 "InsideJobToken": 42,
                 "InsideJobPort": 12.5,
                 "InsideJobScope": ["simulator", "bogus"],
@@ -103,12 +106,14 @@ final class StartupConfigurationTests: XCTestCase {
         )
 
         XCTAssertEqual(configuration.disableAutoStart, ResolvedStartupValue(value: false, source: .defaultValue))
+        XCTAssertEqual(configuration.fingerprintsEnabled, ResolvedStartupValue(value: true, source: .defaultValue))
         XCTAssertEqual(configuration.token, ResolvedStartupValue(value: nil, source: .generated))
         XCTAssertEqual(configuration.preferredPort, ResolvedStartupValue(value: 0, source: .defaultValue))
         XCTAssertEqual(configuration.allowedScopes, ResolvedStartupValue(value: ConnectionScope.default, source: .defaultValue))
         XCTAssertEqual(configuration.sessionTimeout, ResolvedStartupValue(value: 30.0, source: .defaultValue))
         XCTAssertEqual(configuration.warnings, [
             .invalidValueIgnored(key: "InsideJobDisableAutoStart", source: .infoPlist, value: "[\"true\"]"),
+            .invalidValueIgnored(key: "InsideJobFingerprintsEnabled", source: .infoPlist, value: "[\"false\"]"),
             .invalidValueIgnored(key: "InsideJobPort", source: .infoPlist, value: "12.5"),
             .invalidValueIgnored(key: "InsideJobScope", source: .infoPlist, value: "[\"simulator\", \"bogus\"]"),
             .invalidValueIgnored(key: "InsideJobSessionTimeout", source: .infoPlist, value: "soon")
@@ -135,6 +140,30 @@ final class StartupConfigurationTests: XCTestCase {
             warnings: []
         )
         XCTAssertEqual(configuration, expected)
+    }
+
+    func testFingerprintsConfigResolvesPositiveAndLegacyDisableKeys() {
+        XCTAssertEqual(
+            StartupConfiguration.resolve(
+                env: ["INSIDEJOB_FINGERPRINTS": "false"],
+                infoPlist: makeInfoPlist(["InsideJobFingerprintsEnabled": true])
+            ).fingerprintsEnabled,
+            ResolvedStartupValue(value: false, source: .environment)
+        )
+        XCTAssertEqual(
+            StartupConfiguration.resolve(
+                env: ["INSIDEJOB_DISABLE_FINGERPRINTS": "true"],
+                infoPlist: makeInfoPlist(["InsideJobFingerprintsEnabled": true])
+            ).fingerprintsEnabled,
+            ResolvedStartupValue(value: false, source: .environment)
+        )
+        XCTAssertEqual(
+            StartupConfiguration.resolve(
+                env: [:],
+                infoPlist: makeInfoPlist(["InsideJobDisableFingerprints": true])
+            ).fingerprintsEnabled,
+            ResolvedStartupValue(value: false, source: .infoPlist)
+        )
     }
 
     func testEmptyTokenAndInstanceIdAreIgnoredWithWarnings() {
@@ -208,7 +237,8 @@ final class StartupConfigurationTests: XCTestCase {
             token: "api-token",
             instanceId: "api-id",
             allowedScopes: [.network],
-            port: 4242
+            port: 4242,
+            fingerprintsEnabled: false
         )
 
         XCTAssertEqual(runtimeConfiguration.token, "api-token")
@@ -220,6 +250,8 @@ final class StartupConfigurationTests: XCTestCase {
         XCTAssertEqual(runtimeConfiguration.allowedScopes, [.network])
         XCTAssertEqual(runtimeConfiguration.allowedScopesSource, .api)
         XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
+        XCTAssertFalse(runtimeConfiguration.fingerprintsEnabled)
+        XCTAssertEqual(runtimeConfiguration.fingerprintsEnabledSource, .api)
     }
 
     func testRuntimeConfigurationUsesExplicitStartupSnapshotForSessionDefaults() {

@@ -27,6 +27,7 @@ struct ActivationPolicy {
     var accessibilityActivate: @MainActor (TheStash.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome
     var refreshAndResolve: @MainActor () async -> RefreshResult
     var activationPointDispatch: @MainActor (CGPoint) async -> Bool
+    var showFingerprint: @MainActor (CGPoint) -> Void
 
     @MainActor
     func apply(to _: TheStash.LiveActionTarget) async -> TheSafecracker.InteractionResult {
@@ -45,6 +46,7 @@ struct ActivationPolicy {
 
         let activateOutcome = accessibilityActivate(refreshedLiveTarget)
         if activateOutcome == .success {
+            showFingerprint(refreshedLiveTarget.activationPoint)
             return .success(
                 method: .activate,
                 activationTrace: ActivationTrace(
