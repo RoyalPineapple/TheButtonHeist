@@ -39,12 +39,28 @@ import Testing
             "Drag" + "Input",
             "Bounded" + "UnitPoint",
             "single" + "ObjectPayloadIntent",
+            "decode" + "GestureTarget(",
         ]
 
         for snippet in forbidden {
             #expect(
                 !source.contains(snippet),
                 "gesture payload parsing should use shared typed payload decoding instead of \(snippet)"
+            )
+        }
+
+        #expect(source.contains("private protocol PublicGestureTarget"))
+        #expect(source.contains("static func gesturePayloadExpectation("))
+
+        let duplicatedElementTargetExpectationPatterns = [
+            #"prefixed\s*\(\s*"elementDirection\.element""#,
+            #"prefixed\s*\(\s*"elementUnitPoints\.element""#,
+            #"prefixed\s*\(\s*"elementToPoint\.element""#,
+        ]
+        for pattern in duplicatedElementTargetExpectationPatterns {
+            #expect(
+                source.range(of: pattern, options: .regularExpression) == nil,
+                "gesture payload expectations should route element target schemas through gesturePayloadExpectation"
             )
         }
     }
@@ -94,6 +110,41 @@ import Testing
         )
     }
 
+    @Test func `doc reference and projection implementation controls stay out of public SPI`() throws {
+        let referenceSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceCommandReference.swift"
+        )
+        #expect(referenceSource.contains("package enum FenceCommandReference"))
+        #expect(!referenceSource.contains("@_spi(ButtonHeistTooling) public enum FenceCommandReference"))
+        #expect(!referenceSource.contains("public enum FenceCommandReference"))
+        #expect(!referenceSource.contains("public static func commandMarkdown"))
+        #expect(!referenceSource.contains("public static func mcpMarkdown"))
+
+        let projectionSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift"
+        )
+        #expect(projectionSource.contains("struct ProjectionLimits: Sendable, Equatable"))
+        #expect(projectionSource.contains("@_spi(ButtonHeistInternals) public struct ProjectionProfile"))
+        for forbidden in [
+            "@_spi(ButtonHeistInternals) public struct ProjectionLimits",
+            "public struct ProjectionLimits",
+            "public enum Kind",
+            "public let kind",
+            "public let limits",
+            "public init(kind: Kind, limits: ProjectionLimits)",
+        ] {
+            #expect(
+                !projectionSource.contains(forbidden),
+                "Projection internals should not be exported through SPI/public API: \(forbidden)"
+            )
+        }
+
+        let presenterSource = try sourceFile(
+            relativePath: "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift"
+        )
+        #expect(!presenterSource.contains("public let profile: ProjectionProfile"))
+    }
+
     @Test func `SPI public surfaces stay explicitly allowlisted`() throws {
         let root = repositoryRoot()
         let files = try [
@@ -115,6 +166,88 @@ import Testing
             "Unexpected SPI-public declarations:\n\(unexpected.sorted().joined(separator: "\n"))"
         )
     }
+
+    @Test func `CLI command requests stay behind typed boundary containers`() throws {
+        let root = repositoryRoot()
+        let commandFiles = try swiftFiles(
+            in: root.appendingPathComponent("ButtonHeistCLI/Sources/Commands", isDirectory: true)
+        )
+        let forbiddenPattern = [
+            #"CLIRequestParameters\s*=\s*\["#,
+            #"\[FenceParameterKey\s*:\s*HeistValue\]"#,
+            #"\[String\s*:\s*HeistValue\]"#,
+            #"\.object\s*\(\s*Dictionary"#,
+            #"\.object\s*\(\s*\["#,
+        ].joined(separator: "|")
+        let unexpected = try sourceMatches(in: commandFiles, root: root, pattern: forbiddenPattern)
+
+        #expect(
+            unexpected.isEmpty,
+            """
+            CLI command adapters should build request arguments through \
+            CLIRequestParameters/CLIRequestObject instead of ad hoc maps:
+            \(unexpected.sorted().joined(separator: "\n"))
+            """
+        )
+
+        let contract = try sourceFile(relativePath: "ButtonHeistCLI/Sources/Support/CLICommandContract.swift")
+        #expect(contract.contains("struct CLIRequestParameters:"))
+        #expect(contract.contains("struct CLIRequestObject:"))
+        #expect(!contract.contains("typealias CLIRequestParameters"))
+    }
+
+    @Test func `CLI gesture payloads stay named typed envelopes`() throws {
+        let source = try sourceFile(relativePath: "ButtonHeistCLI/Sources/Commands/GestureCommands.swift")
+
+        #expect(source.contains("struct CLIGesturePayload:"))
+        #expect(source.contains("static func elementDirection("))
+        #expect(source.contains("static func pointToPoint("))
+
+        for forbidden in [
+            "objects: [(FenceParameterKey, [FenceParameterKey: HeistValue]?)]",
+            "static func valueObject",
+            "static func pointObject",
+            "static func requiredPointObject",
+        ] {
+            #expect(
+                !source.contains(forbidden),
+                "gesture commands should use named typed payload envelopes instead of \(forbidden)"
+            )
+        }
+    }
+
+    @Test func `MCP raw Value maps stay at input preflight boundary`() throws {
+        let root = repositoryRoot()
+        let mcpFiles = try swiftFiles(
+            in: root.appendingPathComponent("ButtonHeistMCP/Sources", isDirectory: true)
+        )
+        let rawValueMapMatches = try sourceMatches(
+            in: mcpFiles,
+            root: root,
+            pattern: #"\[String\s*:\s*Value\]"#
+        )
+        let unexpectedRawValueMaps = rawValueMapMatches.filter {
+            !$0.hasPrefix("ButtonHeistMCP/Sources/MCPArgumentInputPreflight.swift:typealias MCPRawArgumentObject")
+        }
+
+        #expect(
+            unexpectedRawValueMaps.isEmpty,
+            """
+            Raw MCP Value maps should be named at MCPArgumentInputPreflight and \
+            not leak deeper into request routing:
+            \(unexpectedRawValueMaps.sorted().joined(separator: "\n"))
+            """
+        )
+
+        let preflight = try sourceFile(relativePath: "ButtonHeistMCP/Sources/MCPArgumentInputPreflight.swift")
+        #expect(preflight.contains("let arguments: TheFence.CommandArgumentEnvelope"))
+        #expect(preflight.contains("static func commandEnvelope("))
+        #expect(!preflight.contains("let arguments: MCPToolArguments"))
+        #expect(!preflight.contains("static func heistValues(_ arguments: MCPRawArgumentObject?) throws -> [String: HeistValue]"))
+
+        let main = try sourceFile(relativePath: "ButtonHeistMCP/Sources/main.swift")
+        #expect(!main.contains("request.arguments.commandEnvelope"))
+    }
 }
 
 private let allowedSPIPublicDeclarations: Set<String> = [
@@ -123,16 +256,8 @@ private let allowedSPIPublicDeclarations: Set<String> = [
             "@_spi(ButtonHeistTooling) public final class IdleMonitor {"
         ),
         allowedSPI(
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceCommandReference.swift",
-            "@_spi(ButtonHeistTooling) public enum FenceCommandReference {"
-        ),
-        allowedSPI(
             "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift",
             "@_spi(ButtonHeistInternals) public struct FenceResponsePresenter: Sendable {"
-        ),
-        allowedSPI(
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift",
-            "@_spi(ButtonHeistInternals) public struct ProjectionLimits: Sendable, Equatable {"
         ),
         allowedSPI(
             "ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift",

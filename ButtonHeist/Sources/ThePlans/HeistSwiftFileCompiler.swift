@@ -1,6 +1,42 @@
 import Foundation
 
 #if os(macOS) || os(Linux)
+private struct HeistSwiftFileCompilerEnvironmentKey: RawRepresentable, Hashable, Sendable, CustomStringConvertible {
+    let rawValue: String
+
+    init(rawValue: String) {
+        precondition(!rawValue.isEmpty, "Environment key must not be empty")
+        self.rawValue = rawValue
+    }
+
+    private init(_ rawValue: String) {
+        self.init(rawValue: rawValue)
+    }
+
+    var description: String {
+        rawValue
+    }
+
+    static let thePlansBuildDirectory = Self("HEIST_THEPLANS_BUILD_DIR")
+    static let path = Self("PATH")
+    static let builtProductsDirectory = Self("BUILT_PRODUCTS_DIR")
+    static let targetBuildDirectory = Self("TARGET_BUILD_DIR")
+    static let configurationBuildDirectory = Self("CONFIGURATION_BUILD_DIR")
+    static let sourceCompilerTrace = Self("HEIST_SOURCE_COMPILER_TRACE")
+
+    static let xcodeProductsDirectories: [HeistSwiftFileCompilerEnvironmentKey] = [
+        .builtProductsDirectory,
+        .targetBuildDirectory,
+        .configurationBuildDirectory,
+    ]
+}
+
+private extension Dictionary where Key == String, Value == String {
+    subscript(_ key: HeistSwiftFileCompilerEnvironmentKey) -> String? {
+        self[key.rawValue]
+    }
+}
+
 struct HeistSwiftFileCompiler: Sendable {
     let packageRoot: URL?
 
@@ -328,7 +364,7 @@ private enum LocalThePlansPackage {
 /// directories are searched. Every route feeds the same compile path, and a miss
 /// reports what was searched and how to fix it.
 private struct ThePlansBuildArtifacts {
-    static let environmentOverrideKey = "HEIST_THEPLANS_BUILD_DIR"
+    static let environmentOverrideKey = HeistSwiftFileCompilerEnvironmentKey.thePlansBuildDirectory
 
     let buildDirectory: URL
     let swiftcArguments: [String]
@@ -471,7 +507,7 @@ private struct ThePlansBuildArtifacts {
     }
 
     private static func pathDirectories() -> [URL] {
-        let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        let path = ProcessInfo.processInfo.environment[.path] ?? ""
         return path
             .split(separator: ":", omittingEmptySubsequences: true)
             .map { URL(fileURLWithPath: String($0), isDirectory: true).standardizedFileURL }
@@ -572,12 +608,7 @@ private struct ThePlansBuildArtifacts {
     }
 
     private static func candidateXcodeProductsDirectories(packageRoot: URL) -> [URL] {
-        let environmentKeys = [
-            "BUILT_PRODUCTS_DIR",
-            "TARGET_BUILD_DIR",
-            "CONFIGURATION_BUILD_DIR",
-        ]
-        let environmentDirectories = environmentKeys.compactMap { key -> URL? in
+        let environmentDirectories = HeistSwiftFileCompilerEnvironmentKey.xcodeProductsDirectories.compactMap { key -> URL? in
             guard let value = ProcessInfo.processInfo.environment[key], !value.isEmpty else {
                 return nil
             }
@@ -741,7 +772,7 @@ private enum ProcessRunner {
 
 private enum HeistSwiftFileCompilerTrace {
     static func write(_ message: String) {
-        guard ProcessInfo.processInfo.environment["HEIST_SOURCE_COMPILER_TRACE"] == "1" else {
+        guard ProcessInfo.processInfo.environment[.sourceCompilerTrace] == "1" else {
             return
         }
 

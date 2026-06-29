@@ -57,11 +57,11 @@ extension FenceResponse {
                 profile: profile
             )
         case .heistExecution(_, let result, let accessibilityTrace):
-            return compactHeistFormatted(
-                result,
-                netDelta: accessibilityTrace?.meaningfulEndpointDelta,
-                profile: profile.kind == .summary ? .mcp : profile
-            )
+            return compactHeistFormatted(HeistReportProjection(
+                result: result,
+                accessibilityTrace: accessibilityTrace,
+                profile: profile
+            ))
         case .heistCatalog(let catalog):
             return compactHeistCatalog(catalog)
         case .heistDescription(let description):

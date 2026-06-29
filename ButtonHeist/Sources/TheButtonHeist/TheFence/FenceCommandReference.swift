@@ -7,9 +7,9 @@ import ThePlans
 /// descriptors, then renders stable reference artifacts. Adapters and docs can
 /// project from this surface without owning command names, defaults, grouping,
 /// or parameter shape.
-@_spi(ButtonHeistTooling) public enum FenceCommandReference {
+package enum FenceCommandReference {
 
-    public static func commandMarkdown(
+    package static func commandMarkdown(
         descriptors: [FenceCommandDescriptor] = TheFence.Command.descriptors
     ) -> String {
         let sortedDescriptors = descriptors
@@ -47,7 +47,7 @@ import ThePlans
         return finalizedMarkdown(lines)
     }
 
-    public static func mcpMarkdown(
+    package static func mcpMarkdown(
         descriptors: [FenceCommandDescriptor] = TheFence.Command.descriptors
     ) -> String {
         let sortedDescriptors = descriptors

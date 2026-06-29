@@ -59,10 +59,9 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         let predicateValue = try resolvedPredicateValue()
-        let request: CLIRequestParameters = [
-            .timeout: .double(timeout),
-            .predicate: predicateValue,
-        ]
+        var request = CLIRequestParameters()
+        request.set(.timeout, timeout)
+        request.set(.predicate, predicateValue)
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

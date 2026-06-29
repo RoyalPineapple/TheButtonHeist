@@ -4,14 +4,6 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactHeistFormatted(
-        _ result: HeistExecutionResult,
-        netDelta: AccessibilityTrace.Delta?,
-        profile: ProjectionProfile = .mcp
-    ) -> String {
-        compactHeistFormatted(HeistReportProjection(result: result, netDelta: netDelta, profile: profile))
-    }
-
     func compactHeistFormatted(_ projection: HeistReportProjection) -> String {
         var text = "heist: \(projection.summary.executedTopLevelStepCount) top-level steps in \(projection.summary.durationMs)ms"
         if let abortedAtPath = projection.summary.abortedAtPath {

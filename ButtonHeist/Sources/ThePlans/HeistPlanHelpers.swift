@@ -19,7 +19,8 @@ public enum HeistPlanError: Error, Sendable, Equatable {
 
 public extension HeistPlan {
     func heistDefinition(at path: [String]) -> HeistPlan? {
-        HeistDefinitionScope(definitions: definitions).resolve(path: path)?.definition
+        guard let invocationPath = try? HeistInvocationPath(components: path) else { return nil }
+        return HeistDefinitionScope(definitions: definitions).resolve(path: invocationPath)?.definition
     }
 }
 

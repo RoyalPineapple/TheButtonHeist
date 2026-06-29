@@ -1,7 +1,57 @@
 import Foundation
 
+enum HeistTraversalPathField: String, Sendable {
+    case action
+    case argument
+    case body
+    case cases
+    case command
+    case conditional
+    case definitions
+    case elseBody = "else_body"
+    case expectation
+    case fail
+    case forEachElement = "for_each_element"
+    case forEachString = "for_each_string"
+    case heist
+    case invoke
+    case limit
+    case matching
+    case message
+    case name
+    case parameter
+    case path
+    case predicate
+    case repeatUntil = "repeat_until"
+    case target
+    case timeout
+    case value
+    case values
+    case wait
+    case warn
+    case withoutExpectation = "without_expectation"
+}
+
+struct HeistTraversalPath: Sendable, Equatable, Hashable, CustomStringConvertible {
+    static let root = HeistTraversalPath(description: "$")
+
+    let description: String
+
+    private init(description: String) {
+        self.description = description
+    }
+
+    func child(_ field: HeistTraversalPathField) -> HeistTraversalPath {
+        HeistTraversalPath(description: "\(description).\(field.rawValue)")
+    }
+
+    func index(_ index: Int) -> HeistTraversalPath {
+        HeistTraversalPath(description: "\(description)[\(index)]")
+    }
+}
+
 struct HeistTraversalContext {
-    let path: String
+    let path: HeistTraversalPath
     let depth: Int
     let stepIndex: Int?
     let nextStep: HeistStep?
@@ -67,7 +117,7 @@ struct HeistPlanTraversal {
         let rootEnvironment = HeistExecutionEnvironment.runtimeSafetyPlaceholder(for: plan.parameter)
         let rootDefinitionScope = HeistDefinitionScope(definitions: plan.definitions)
         let context = HeistTraversalContext(
-            path: "$",
+            path: .root,
             depth: 0,
             stepIndex: nil,
             nextStep: nil,
@@ -81,7 +131,7 @@ struct HeistPlanTraversal {
         visitor.visitPlan(plan, context: context)
         walkDefinitions(
             plan.definitions,
-            path: "$.definitions",
+            path: .root.child(.definitions),
             depth: 1,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
@@ -90,7 +140,7 @@ struct HeistPlanTraversal {
         )
         walk(
             steps: plan.body,
-            path: "$.body",
+            path: .root.child(.body),
             depth: 1,
             scope: rootScope,
             environment: rootEnvironment,
@@ -104,7 +154,7 @@ struct HeistPlanTraversal {
 
     func walk<V: HeistPlanTraversalVisitor>(
         steps: [HeistStep],
-        path: String,
+        path: HeistTraversalPath,
         depth: Int,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
@@ -116,7 +166,7 @@ struct HeistPlanTraversal {
     ) {
         for (index, step) in steps.enumerated() {
             let context = HeistTraversalContext(
-                path: "\(path)[\(index)]",
+                path: path.index(index),
                 depth: depth,
                 stepIndex: index,
                 nextStep: steps.dropFirst(index + 1).first,
@@ -139,12 +189,12 @@ struct HeistPlanTraversal {
         visitor.visitStep(step, context: context)
         switch step {
         case .action(let action):
-            let actionContext = context.child(path: "\(context.path).action")
+            let actionContext = context.child(path: context.path.child(.action))
             visitor.visitAction(action, context: actionContext)
             if let expectation = action.expectation {
                 visitor.visitWait(
                     expectation,
-                    context: actionContext.child(path: "\(actionContext.path).expectation")
+                    context: actionContext.child(path: actionContext.path.child(.expectation))
                 )
             }
         case .wait(let wait):
@@ -158,9 +208,9 @@ struct HeistPlanTraversal {
         case .repeatUntil(let repeatUntil):
             walk(repeatUntil, context: context, visitor: &visitor)
         case .warn(let warn):
-            visitor.visitWarn(warn, context: context.child(path: "\(context.path).warn"))
+            visitor.visitWarn(warn, context: context.child(path: context.path.child(.warn)))
         case .fail(let fail):
-            visitor.visitFail(fail, context: context.child(path: "\(context.path).fail"))
+            visitor.visitFail(fail, context: context.child(path: context.path.child(.fail)))
         case .heist(let plan):
             walkInlineHeist(plan, context: context, visitor: &visitor)
         case .invoke(let invoke):
@@ -173,7 +223,7 @@ struct HeistPlanTraversal {
         context: HeistTraversalContext,
         visitor: inout V
     ) {
-        let conditionalContext = context.child(path: "\(context.path).conditional")
+        let conditionalContext = context.child(path: context.path.child(.conditional))
         visitor.visitConditional(conditional, context: conditionalContext)
         walk(cases: conditional.cases, elseBody: conditional.elseBody, branchContext: conditionalContext, visitor: &visitor)
     }
@@ -183,10 +233,10 @@ struct HeistPlanTraversal {
         context: HeistTraversalContext,
         visitor: inout V
     ) {
-        let waitContext = context.child(path: "\(context.path).wait")
+        let waitContext = context.child(path: context.path.child(.wait))
         visitor.visitWait(wait, context: waitContext)
         guard let elseBody = wait.elseBody else { return }
-        let elseContext = waitContext.child(path: "\(waitContext.path).else_body")
+        let elseContext = waitContext.child(path: waitContext.path.child(.elseBody))
         visitor.visitElseBody(elseBody, context: elseContext)
         walk(
             steps: elseBody,
@@ -207,11 +257,11 @@ struct HeistPlanTraversal {
         context: HeistTraversalContext,
         visitor: inout V
     ) {
-        let forEachContext = context.child(path: "\(context.path).for_each_element")
+        let forEachContext = context.child(path: context.path.child(.forEachElement))
         visitor.visitForEachElement(forEach, context: forEachContext)
         walk(
             steps: forEach.body,
-            path: "\(forEachContext.path).body",
+            path: forEachContext.path.child(.body),
             depth: context.depth + 1,
             scope: context.scope.bindingTarget(forEach.parameter),
             environment: context.environment.binding(target: .predicate(forEach.matching), to: forEach.parameter),
@@ -228,11 +278,11 @@ struct HeistPlanTraversal {
         context: HeistTraversalContext,
         visitor: inout V
     ) {
-        let forEachContext = context.child(path: "\(context.path).for_each_string")
+        let forEachContext = context.child(path: context.path.child(.forEachString))
         visitor.visitForEachString(forEach, context: forEachContext)
         walk(
             steps: forEach.body,
-            path: "\(forEachContext.path).body",
+            path: forEachContext.path.child(.body),
             depth: context.depth + 1,
             scope: context.scope.bindingString(forEach.parameter),
             environment: context.environment.binding(string: forEach.values.first ?? "", to: forEach.parameter),
@@ -249,15 +299,15 @@ struct HeistPlanTraversal {
         context: HeistTraversalContext,
         visitor: inout V
     ) {
-        let repeatContext = context.child(path: "\(context.path).repeat_until")
+        let repeatContext = context.child(path: context.path.child(.repeatUntil))
         visitor.visitRepeatUntil(repeatUntil, context: repeatContext)
         visitor.visitWait(
             WaitStep(predicate: repeatUntil.predicate, timeout: repeatUntil.timeout),
-            context: repeatContext.child(path: "\(repeatContext.path).predicate")
+            context: repeatContext.child(path: repeatContext.path.child(.predicate))
         )
         walk(
             steps: repeatUntil.body,
-            path: "\(repeatContext.path).body",
+            path: repeatContext.path.child(.body),
             depth: context.depth + 1,
             scope: context.scope,
             environment: context.environment,
@@ -268,7 +318,7 @@ struct HeistPlanTraversal {
             visitor: &visitor
         )
         guard let elseBody = repeatUntil.elseBody else { return }
-        let elseContext = repeatContext.child(path: "\(repeatContext.path).else_body")
+        let elseContext = repeatContext.child(path: repeatContext.path.child(.elseBody))
         visitor.visitElseBody(elseBody, context: elseContext)
         walk(
             steps: elseBody,
@@ -291,14 +341,14 @@ struct HeistPlanTraversal {
     ) {
         let inlineDefinitionScope = HeistDefinitionScope(definitions: plan.definitions)
         let heistContext = context.child(
-            path: "\(context.path).heist",
+            path: context.path.child(.heist),
             definitionScope: inlineDefinitionScope,
             rootDefinitionScope: inlineDefinitionScope
         )
         visitor.visitHeist(plan, context: heistContext)
         walkDefinitions(
             plan.definitions,
-            path: "\(heistContext.path).definitions",
+            path: heistContext.path.child(.definitions),
             depth: context.depth + 1,
             definitionScope: heistContext.definitionScope,
             rootDefinitionScope: heistContext.rootDefinitionScope,
@@ -307,7 +357,7 @@ struct HeistPlanTraversal {
         )
         walk(
             steps: plan.body,
-            path: "\(heistContext.path).body",
+            path: heistContext.path.child(.body),
             depth: context.depth + 1,
             scope: context.scope,
             environment: context.environment,
@@ -324,22 +374,22 @@ struct HeistPlanTraversal {
         context: HeistTraversalContext,
         visitor: inout V
     ) {
-        let invokeContext = context.child(path: "\(context.path).invoke")
+        let invokeContext = context.child(path: context.path.child(.invoke))
         visitor.visitInvoke(invoke, context: invokeContext)
         if let expectation = invoke.expectation {
             visitor.visitWait(
                 expectation,
-                context: invokeContext.child(path: "\(invokeContext.path).expectation")
+                context: invokeContext.child(path: invokeContext.path.child(.expectation))
             )
         }
-        guard let resolved = context.resolveInvocation(path: invoke.path) else { return }
+        guard let resolved = context.resolveInvocation(path: invoke.invocationPath) else { return }
         let resolvedName = resolved.qualifiedName
         guard context.callGraphCycle(closing: resolvedName) == nil,
               let environment = try? context.environment.binding(argument: invoke.argument, to: resolved.definition.parameter)
         else { return }
         walk(
             steps: resolved.definition.body,
-            path: "\(invokeContext.path).body",
+            path: invokeContext.path.child(.body),
             depth: context.depth + 1,
             scope: context.scope.binding(parameter: resolved.definition.parameter),
             environment: environment,
@@ -358,11 +408,14 @@ struct HeistPlanTraversal {
         visitor: inout V
     ) {
         for (index, predicateCase) in cases.enumerated() {
-            let caseContext = branchContext.nestedBranch(path: "\(branchContext.path).cases[\(index)]", stepIndex: index)
+            let caseContext = branchContext.nestedBranch(
+                path: branchContext.path.child(.cases).index(index),
+                stepIndex: index
+            )
             visitor.visitPredicateCase(predicateCase, context: caseContext)
             walk(
                 steps: predicateCase.body,
-                path: "\(caseContext.path).body",
+                path: caseContext.path.child(.body),
                 depth: branchContext.depth + 1,
                 scope: branchContext.scope,
                 environment: branchContext.environment,
@@ -374,7 +427,7 @@ struct HeistPlanTraversal {
             )
         }
         if let elseBody {
-            let elseContext = branchContext.nestedBranch(path: "\(branchContext.path).else_body", stepIndex: nil)
+            let elseContext = branchContext.nestedBranch(path: branchContext.path.child(.elseBody), stepIndex: nil)
             visitor.visitElseBody(elseBody, context: elseContext)
             walk(
                 steps: elseBody,
@@ -393,7 +446,7 @@ struct HeistPlanTraversal {
 
     private func walkDefinitions<V: HeistPlanTraversalVisitor>(
         _ definitions: [HeistPlan],
-        path: String,
+        path: HeistTraversalPath,
         depth: Int,
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
@@ -418,7 +471,7 @@ struct HeistPlanTraversal {
                 }
             }
             let definitionContext = HeistTraversalContext(
-                path: "\(path)[\(index)]",
+                path: path.index(index),
                 depth: depth,
                 stepIndex: nil,
                 nextStep: nil,
@@ -432,7 +485,7 @@ struct HeistPlanTraversal {
             visitor.visitDefinition(definition, context: definitionContext)
             walkDefinitions(
                 definition.definitions,
-                path: "\(definitionContext.path).definitions",
+                path: definitionContext.path.child(.definitions),
                 depth: depth + 1,
                 definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: currentDefinitionPath),
                 rootDefinitionScope: rootDefinitionScope,
@@ -441,7 +494,7 @@ struct HeistPlanTraversal {
             )
             walk(
                 steps: definition.body,
-                path: "\(definitionContext.path).body",
+                path: definitionContext.path.child(.body),
                 depth: depth + 1,
                 scope: scope,
                 environment: environment,
@@ -457,7 +510,7 @@ struct HeistPlanTraversal {
 
 extension HeistTraversalContext {
     func child(
-        path: String,
+        path: HeistTraversalPath,
         depth: Int? = nil,
         definitionScope: HeistDefinitionScope? = nil,
         rootDefinitionScope: HeistDefinitionScope? = nil
@@ -476,7 +529,7 @@ extension HeistTraversalContext {
         )
     }
 
-    func nestedBranch(path: String, stepIndex: Int?) -> HeistTraversalContext {
+    func nestedBranch(path: HeistTraversalPath, stepIndex: Int?) -> HeistTraversalContext {
         HeistTraversalContext(
             path: path,
             depth: depth + 1,
@@ -491,7 +544,7 @@ extension HeistTraversalContext {
         )
     }
 
-    func resolveInvocation(path: [String]) -> ResolvedHeistDefinition? {
+    func resolveInvocation(path: HeistInvocationPath) -> ResolvedHeistDefinition? {
         definitionScope.resolveInvocation(path: path, rootScope: rootDefinitionScope)
     }
 
@@ -549,11 +602,11 @@ struct HeistDefinitionScope {
         self.pathPrefix = pathPrefix
     }
 
-    func resolve(path: [String]) -> ResolvedHeistDefinition? {
-        guard let first = path.first else { return nil }
+    func resolve(path: HeistInvocationPath) -> ResolvedHeistDefinition? {
+        guard let first = path.components.first else { return nil }
         guard let direct = definitions.first(where: { $0.name == first }) else { return nil }
         return resolve(
-            remaining: Array(path.dropFirst()),
+            remaining: Array(path.components.dropFirst()),
             definition: direct,
             namePath: pathPrefix + [first]
         )
@@ -565,7 +618,10 @@ struct HeistDefinitionScope {
         namePath: [String]
     ) -> ResolvedHeistDefinition? {
         guard let next = remaining.first else {
-            return ResolvedHeistDefinition(definition: definition, qualifiedName: namePath.joined(separator: "."), namePath: namePath)
+            return ResolvedHeistDefinition(
+                definition: definition,
+                invocationPath: HeistInvocationPath.preconditionValidated(components: namePath)
+            )
         }
         guard let child = definition.definitions.first(where: { $0.name == next }) else { return nil }
         return resolve(
@@ -575,11 +631,11 @@ struct HeistDefinitionScope {
         )
     }
 
-    func resolveInvocation(path: [String], rootScope: HeistDefinitionScope) -> ResolvedHeistDefinition? {
+    func resolveInvocation(path: HeistInvocationPath, rootScope: HeistDefinitionScope) -> ResolvedHeistDefinition? {
         if let local = resolve(path: path) {
             return local
         }
-        guard path.count > 1 else { return nil }
+        guard path.components.count > 1 else { return nil }
         return rootScope.resolve(path: path)
     }
 }
@@ -600,6 +656,13 @@ extension HeistExecutionEnvironment {
 
 struct ResolvedHeistDefinition {
     let definition: HeistPlan
-    let qualifiedName: String
-    let namePath: [String]
+    let invocationPath: HeistInvocationPath
+
+    var qualifiedName: String {
+        invocationPath.dottedName
+    }
+
+    var namePath: [String] {
+        invocationPath.components
+    }
 }

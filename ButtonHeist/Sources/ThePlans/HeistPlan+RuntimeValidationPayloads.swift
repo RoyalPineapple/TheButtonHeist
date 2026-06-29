@@ -17,7 +17,7 @@ struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
             try action.command.assertResolvedPayloadAdmissible(in: context.environment)
         } catch {
             fail(
-                path: context.path,
+                path: context.path.description,
                 contract: "string loop value must lower through the heist action payload contract",
                 observed: "\(valuePath) resolved to \(summarize(error))",
                 correction: "Use loop string values that keep every referenced command payload valid."
@@ -34,7 +34,7 @@ struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
             ))
         } catch {
             fail(
-                path: context.path,
+                path: context.path.description,
                 contract: "string loop value must resolve wait predicates",
                 observed: "\(valuePath) resolved to \(summarize(error))",
                 correction: "Use loop string values that keep every referenced wait predicate valid."

@@ -30,7 +30,8 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         let editAction = try Self.canonicalAction(action)
-        let request: CLIRequestParameters = [.action: .string(editAction)]
+        var request = CLIRequestParameters()
+        request.set(.action, editAction)
 
         try await CLIRunner.run(
             connection: connection,

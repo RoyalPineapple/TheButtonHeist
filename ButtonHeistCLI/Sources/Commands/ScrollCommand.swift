@@ -48,10 +48,9 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
         }
 
-        var request: CLIRequestParameters = [
-            .direction: .string(scrollDirection),
-            .timeout: .double(timeoutOption.timeout),
-        ]
+        var request = CLIRequestParameters()
+        request.set(.direction, scrollDirection)
+        request.set(.timeout, timeoutOption.timeout)
         let target: ElementTarget?
         if let container {
             request.set(.container, container)

@@ -2,48 +2,111 @@ import ArgumentParser
 @_spi(ButtonHeistTooling) import ButtonHeist
 import ThePlans
 
+struct CLIPointArgument: Equatable {
+    let x: Double
+    let y: Double
+
+    static func required(x: Double?, y: Double?, label: String) throws -> Self {
+        guard let x, let y else {
+            throw ValidationError("Must specify \(label) x/y coordinates together")
+        }
+        return Self(x: x, y: y)
+    }
+
+    var object: CLIRequestObject {
+        CLIRequestObject([
+            (.x, .double(x)),
+            (.y, .double(y)),
+        ])
+    }
+
+    var value: HeistValue {
+        object.heistValue
+    }
+}
+
+struct CLIGesturePayload: Equatable {
+    let key: FenceParameterKey
+    let object: CLIRequestObject
+
+    static func element(_ target: ElementTarget) -> Self {
+        Self(key: .element, object: CLIRequestBuilder.targetObject(target))
+    }
+
+    static func point(_ point: CLIPointArgument) -> Self {
+        Self(key: .point, object: point.object)
+    }
+
+    static func elementUnitPoints(
+        element: ElementTarget,
+        start: CLIPointArgument,
+        end: CLIPointArgument
+    ) -> Self {
+        Self(
+            key: .elementUnitPoints,
+            object: CLIRequestObject([
+                (.element, CLIRequestBuilder.targetValue(element)),
+                (.start, start.value),
+                (.end, end.value),
+            ])
+        )
+    }
+
+    static func elementDirection(element: ElementTarget, direction: String) -> Self {
+        Self(
+            key: .elementDirection,
+            object: CLIRequestObject([
+                (.element, CLIRequestBuilder.targetValue(element)),
+                (.direction, .string(direction)),
+            ])
+        )
+    }
+
+    static func pointDirection(start: CLIPointArgument, direction: String) -> Self {
+        Self(
+            key: .pointDirection,
+            object: CLIRequestObject([
+                (.start, start.value),
+                (.direction, .string(direction)),
+            ])
+        )
+    }
+
+    static func pointToPoint(start: CLIPointArgument, end: CLIPointArgument) -> Self {
+        Self(
+            key: .pointToPoint,
+            object: CLIRequestObject([
+                (.start, start.value),
+                (.end, end.value),
+            ])
+        )
+    }
+
+    static func elementToPoint(element: ElementTarget, end: CLIPointArgument) -> Self {
+        Self(
+            key: .elementToPoint,
+            object: CLIRequestObject([
+                (.element, CLIRequestBuilder.targetValue(element)),
+                (.end, end.value),
+            ])
+        )
+    }
+}
+
 extension GestureCLICommandContract {
     static func gestureRequest(
-        parameters: CLIRequestParameters = [:],
-        objects: [(FenceParameterKey, [FenceParameterKey: HeistValue]?)] = []
+        parameters: CLIRequestParameters = CLIRequestParameters(),
+        _ payloads: CLIGesturePayload...
     ) throws -> TheFence.CommandArgumentEnvelope {
         var merged = parameters
-        for (key, value) in objects {
-            if let value {
-                merged[key] = .object(Dictionary(
-                    value.map { ($0.key.rawValue, $0.value) },
-                    uniquingKeysWith: { _, newest in newest }
-                ))
-            }
+        for payload in payloads {
+            merged.set(payload.key, payload.object)
         }
         return fenceArguments(merged)
     }
 
-    static func elementObject(_ target: ElementTarget) -> [FenceParameterKey: HeistValue] {
-        Dictionary(
-            CLIRequestBuilder.targetObject(target).compactMap { key, value in
-                FenceParameterKey(rawValue: key).map { ($0, value) }
-            },
-            uniquingKeysWith: { _, newest in newest }
-        )
-    }
-
-    static func pointObject(x: Double, y: Double) -> [FenceParameterKey: HeistValue] {
-        [.x: .double(x), .y: .double(y)]
-    }
-
-    static func valueObject(_ object: [FenceParameterKey: HeistValue]) -> HeistValue {
-        .object(Dictionary(
-            object.map { ($0.key.rawValue, $0.value) },
-            uniquingKeysWith: { _, newest in newest }
-        ))
-    }
-
-    static func requiredPointObject(x: Double?, y: Double?, label: String) throws -> [FenceParameterKey: HeistValue] {
-        guard let x, let y else {
-            throw ValidationError("Must specify \(label) x/y coordinates together")
-        }
-        return pointObject(x: x, y: y)
+    static func elementObject(_ target: ElementTarget) -> CLIRequestObject {
+        CLIRequestBuilder.targetObject(target)
     }
 
     @ButtonHeistActor
@@ -98,9 +161,9 @@ struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
 
         let request: TheFence.CommandArgumentEnvelope
         if let target = try element.parsedTarget() {
-            request = try Self.gestureRequest(objects: [(.element, Self.elementObject(target))])
+            request = try Self.gestureRequest(.element(target))
         } else {
-            request = try Self.gestureRequest(objects: [(.point, Self.requiredPointObject(x: x, y: y, label: "--x/--y"))])
+            request = try Self.gestureRequest(.point(CLIPointArgument.required(x: x, y: y, label: "--x/--y")))
         }
         try await Self.sendGesture(request, connection: connection, output: output)
     }
@@ -132,15 +195,17 @@ struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
         }
 
         let request: TheFence.CommandArgumentEnvelope
+        var parameters = CLIRequestParameters()
+        parameters.set(.duration, duration)
         if let target = try element.parsedTarget() {
             request = try Self.gestureRequest(
-                parameters: [.duration: .double(duration)],
-                objects: [(.element, Self.elementObject(target))]
+                parameters: parameters,
+                .element(target)
             )
         } else {
             request = try Self.gestureRequest(
-                parameters: [.duration: .double(duration)],
-                objects: [(.point, Self.requiredPointObject(x: x, y: y, label: "--x/--y"))]
+                parameters: parameters,
+                .point(CLIPointArgument.required(x: x, y: y, label: "--x/--y"))
             )
         }
         try await Self.sendGesture(request, connection: connection, output: output)
@@ -228,20 +293,18 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             swipeDirection = nil
         }
 
-        var parameters: CLIRequestParameters = [:]
-        if let duration { parameters[.duration] = .double(duration) }
+        var parameters = CLIRequestParameters()
+        if let duration { parameters.set(.duration, duration) }
         let request: TheFence.CommandArgumentEnvelope
         if let startUnitX, let startUnitY, let endUnitX, let endUnitY {
             let target = try element.requireTarget()
             request = try Self.gestureRequest(
                 parameters: parameters,
-                objects: [
-                    (.elementUnitPoints, [
-                        .element: Self.valueObject(Self.elementObject(target)),
-                        .start: Self.valueObject(Self.pointObject(x: startUnitX, y: startUnitY)),
-                        .end: Self.valueObject(Self.pointObject(x: endUnitX, y: endUnitY)),
-                    ]),
-                ]
+                .elementUnitPoints(
+                    element: target,
+                    start: CLIPointArgument(x: startUnitX, y: startUnitY),
+                    end: CLIPointArgument(x: endUnitX, y: endUnitY)
+                )
             )
         } else if let target = try element.parsedTarget() {
             guard let swipeDirection else {
@@ -249,32 +312,23 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             }
             request = try Self.gestureRequest(
                 parameters: parameters,
-                objects: [
-                    (.elementDirection, [
-                        .element: Self.valueObject(Self.elementObject(target)),
-                        .direction: .string(swipeDirection),
-                    ]),
-                ]
+                .elementDirection(element: target, direction: swipeDirection)
             )
         } else if let swipeDirection {
             request = try Self.gestureRequest(
                 parameters: parameters,
-                objects: [
-                    (.pointDirection, [
-                        .start: Self.valueObject(Self.requiredPointObject(x: fromX, y: fromY, label: "--from-x/--from-y")),
-                        .direction: .string(swipeDirection),
-                    ]),
-                ]
+                .pointDirection(
+                    start: CLIPointArgument.required(x: fromX, y: fromY, label: "--from-x/--from-y"),
+                    direction: swipeDirection
+                )
             )
         } else {
             request = try Self.gestureRequest(
                 parameters: parameters,
-                objects: [
-                    (.pointToPoint, [
-                        .start: Self.valueObject(Self.requiredPointObject(x: fromX, y: fromY, label: "--from-x/--from-y")),
-                        .end: Self.valueObject(Self.requiredPointObject(x: toX, y: toY, label: "--to-x/--to-y")),
-                    ]),
-                ]
+                .pointToPoint(
+                    start: CLIPointArgument.required(x: fromX, y: fromY, label: "--from-x/--from-y"),
+                    end: CLIPointArgument.required(x: toX, y: toY, label: "--to-x/--to-y")
+                )
             )
         }
         try await Self.sendGesture(request, connection: connection, output: output)
@@ -312,8 +366,8 @@ struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             throw ValidationError("Must specify --identifier, -l, or --from-x/--from-y coordinates")
         }
 
-        var parameters: CLIRequestParameters = [:]
-        if let duration { parameters[.duration] = .double(duration) }
+        var parameters = CLIRequestParameters()
+        if let duration { parameters.set(.duration, duration) }
         let request: TheFence.CommandArgumentEnvelope
         if let target = try element.parsedTarget() {
             guard fromX == nil, fromY == nil else {
@@ -321,22 +375,18 @@ struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             }
             request = try Self.gestureRequest(
                 parameters: parameters,
-                objects: [
-                    (.elementToPoint, [
-                        .element: Self.valueObject(Self.elementObject(target)),
-                        .end: Self.valueObject(Self.pointObject(x: toX, y: toY)),
-                    ]),
-                ]
+                .elementToPoint(
+                    element: target,
+                    end: CLIPointArgument(x: toX, y: toY)
+                )
             )
         } else {
             request = try Self.gestureRequest(
                 parameters: parameters,
-                objects: [
-                    (.pointToPoint, [
-                        .start: Self.valueObject(Self.requiredPointObject(x: fromX, y: fromY, label: "--from-x/--from-y")),
-                        .end: Self.valueObject(Self.pointObject(x: toX, y: toY)),
-                    ]),
-                ]
+                .pointToPoint(
+                    start: CLIPointArgument.required(x: fromX, y: fromY, label: "--from-x/--from-y"),
+                    end: CLIPointArgument(x: toX, y: toY)
+                )
             )
         }
         try await Self.sendGesture(request, connection: connection, output: output)

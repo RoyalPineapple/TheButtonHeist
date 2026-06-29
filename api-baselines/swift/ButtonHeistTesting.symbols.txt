@@ -1221,10 +1221,6 @@ symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO21in
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO22unsupportedPlanVersionyACSS_SitcACmF	swift.enum.case	public	HeistArtifactCodecError.unsupportedPlanVersion(path:observed:)	HeistArtifactCodecError.unsupportedPlanVersion(path:observed:)	case unsupportedPlanVersion(path: String, observed: Int)
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO25unsupportedInputExtensionyACSS_tcACmF	swift.enum.case	public	HeistArtifactCodecError.unsupportedInputExtension(path:)	HeistArtifactCodecError.unsupportedInputExtension(path:)	case unsupportedInputExtension(path: String)
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23HeistArtifactCodecErrorO26unsupportedOutputExtensionyACSS_tcACmF	swift.enum.case	public	HeistArtifactCodecError.unsupportedOutputExtension(path:)	HeistArtifactCodecError.unsupportedOutputExtension(path:)	case unsupportedOutputExtension(path: String)
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23HeistPlanSourceCompilerV	swift.struct	public	HeistPlanSourceCompiler	HeistPlanSourceCompiler	struct HeistPlanSourceCompiler
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23HeistPlanSourceCompilerV13compileResult_10sourceNameAA010ValidationH0OyAA0cD0VAA0C15BuildDiagnosticVGSS_SStF	swift.method	public	compileResult(_:sourceName:)	HeistPlanSourceCompiler.compileResult(_:sourceName:)	func compileResult(_ source: String, sourceName: String = "inline-heist-plan") -> ValidationResult<HeistPlan, HeistBuildDiagnostic>
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23HeistPlanSourceCompilerV7compile_10sourceNameAA0cD0VSS_SStKF	swift.method	public	compile(_:sourceName:)	HeistPlanSourceCompiler.compile(_:sourceName:)	func compile(_ source: String, sourceName: String = "inline-heist-plan") throws -> HeistPlan
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23HeistPlanSourceCompilerVACycfc	swift.init	public	init()	HeistPlanSourceCompiler.init()	init()
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV	swift.struct	public	ResolvedRepeatUntilStep	ResolvedRepeatUntilStep	struct ResolvedRepeatUntilStep
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV4bodySayAA05HeistF0OGvp	swift.property	public	body	ResolvedRepeatUntilStep.body	let body: [HeistStep]
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans23ResolvedRepeatUntilStepV7timeoutSdvp	swift.property	public	timeout	ResolvedRepeatUntilStep.timeout	let timeout: Double
@@ -1404,18 +1400,6 @@ symbol	ButtonHeistTesting.symbols.json	s:8ThePlans27HeistDescriptionLookupErrorV
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans27HeistDescriptionLookupErrorV13requestedName14availableNamesACSS_SaySSGtcfc	swift.init	public	init(requestedName:availableNames:)	HeistDescriptionLookupError.init(requestedName:availableNames:)	init(requestedName: String, availableNames: [String])
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans27HeistDescriptionLookupErrorV13requestedNameSSvp	swift.property	public	requestedName	HeistDescriptionLookupError.requestedName	let requestedName: String
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans27HeistDescriptionLookupErrorV14availableNamesSaySSGvp	swift.property	public	availableNames	HeistDescriptionLookupError.availableNames	let availableNames: [String]
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV	swift.struct	public	HeistPlanSourceCompilerError	HeistPlanSourceCompilerError	struct HeistPlanSourceCompilerError
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV10diagnosticAA0C15BuildDiagnosticVvp	swift.property	public	diagnostic	HeistPlanSourceCompilerError.diagnostic	var diagnostic: HeistBuildDiagnostic { get }
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV10diagnosticAcA0C15BuildDiagnosticV_tcfc	swift.init	public	init(diagnostic:)	HeistPlanSourceCompilerError.init(diagnostic:)	init(diagnostic: HeistBuildDiagnostic)
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV10sourceNameSSvp	swift.property	public	sourceName	HeistPlanSourceCompilerError.sourceName	var sourceName: String { get }
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV11descriptionSSvp	swift.property	public	description	HeistPlanSourceCompilerError.description	var description: String { get }
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV11diagnosticsACSayAA0C15BuildDiagnosticVG_tcfc	swift.init	public	init(diagnostics:)	HeistPlanSourceCompilerError.init(diagnostics:)	init(diagnostics: [HeistBuildDiagnostic])
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV11diagnosticsSayAA0C15BuildDiagnosticVGvp	swift.property	public	diagnostics	HeistPlanSourceCompilerError.diagnostics	let diagnostics: [HeistBuildDiagnostic]
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV4code5phase7message10sourceName6offset4line6column6length4hintACSS_AA0C10BuildPhaseOS2SS4iSgSSSgtcfc	swift.init	public	init(code:phase:message:sourceName:offset:line:column:length:hint:)	HeistPlanSourceCompilerError.init(code:phase:message:sourceName:offset:line:column:length:hint:)	init(code: String = "heist.source.invalid_syntax", phase: HeistBuildPhase = .sourceCompilation, message: String, sourceName: String, offset: Int, line: Int, column: Int, length: Int? = nil, hint: String? = nil)
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV4lineSivp	swift.property	public	line	HeistPlanSourceCompilerError.line	var line: Int { get }
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV6columnSivp	swift.property	public	column	HeistPlanSourceCompilerError.column	var column: Int { get }
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV6offsetSivp	swift.property	public	offset	HeistPlanSourceCompilerError.offset	var offset: Int { get }
-symbol	ButtonHeistTesting.symbols.json	s:8ThePlans28HeistPlanSourceCompilerErrorV7messageSSvp	swift.property	public	message	HeistPlanSourceCompilerError.message	var message: String { get }
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans2IfV	swift.struct	public	If	If	struct If
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans2IfV10heistStepsSayAA9HeistStepOGvp	swift.property	public	heistSteps	If.heistSteps	let heistSteps: [HeistStep]
 symbol	ButtonHeistTesting.symbols.json	s:8ThePlans2IfV16heistDefinitionsSayAA9HeistPlanVGvp	swift.property	public	heistDefinitions	If.heistDefinitions	let heistDefinitions: [HeistPlan]
@@ -2226,7 +2210,6 @@ relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:10Foundation14Lo
 relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:s23CustomStringConvertibleP	HeistArtifactCodecError	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:s5ErrorP	HeistArtifactCodecError	Swift.Error
 relationship	conformsTo	s:8ThePlans23HeistArtifactCodecErrorO	s:s8SendableP	HeistArtifactCodecError	Swift.Sendable
-relationship	conformsTo	s:8ThePlans23HeistPlanSourceCompilerV	s:s8SendableP	HeistPlanSourceCompiler	Swift.Sendable
 relationship	conformsTo	s:8ThePlans23ResolvedRepeatUntilStepV	s:SQ	ResolvedRepeatUntilStep	Swift.Equatable
 relationship	conformsTo	s:8ThePlans23ResolvedRepeatUntilStepV	s:s8SendableP	ResolvedRepeatUntilStep	Swift.Sendable
 relationship	conformsTo	s:8ThePlans24ElementPredicateTemplateV	s:SE	ElementPredicateTemplate	Swift.Encodable
@@ -2294,10 +2277,6 @@ relationship	conformsTo	s:8ThePlans27HeistDescriptionLookupErrorV	s:SQ	HeistDesc
 relationship	conformsTo	s:8ThePlans27HeistDescriptionLookupErrorV	s:s23CustomStringConvertibleP	HeistDescriptionLookupError	Swift.CustomStringConvertible
 relationship	conformsTo	s:8ThePlans27HeistDescriptionLookupErrorV	s:s5ErrorP	HeistDescriptionLookupError	Swift.Error
 relationship	conformsTo	s:8ThePlans27HeistDescriptionLookupErrorV	s:s8SendableP	HeistDescriptionLookupError	Swift.Sendable
-relationship	conformsTo	s:8ThePlans28HeistPlanSourceCompilerErrorV	s:SQ	HeistPlanSourceCompilerError	Swift.Equatable
-relationship	conformsTo	s:8ThePlans28HeistPlanSourceCompilerErrorV	s:s23CustomStringConvertibleP	HeistPlanSourceCompilerError	Swift.CustomStringConvertible
-relationship	conformsTo	s:8ThePlans28HeistPlanSourceCompilerErrorV	s:s5ErrorP	HeistPlanSourceCompilerError	Swift.Error
-relationship	conformsTo	s:8ThePlans28HeistPlanSourceCompilerErrorV	s:s8SendableP	HeistPlanSourceCompilerError	Swift.Sendable
 relationship	conformsTo	s:8ThePlans2IfV	s:8ThePlans12HeistContentP	If	HeistContent
 relationship	conformsTo	s:8ThePlans30AccessibilityPredicateContractO	s:SQ	AccessibilityPredicateContract	Swift.Equatable
 relationship	conformsTo	s:8ThePlans30AccessibilityPredicateContractO	s:s8SendableP	AccessibilityPredicateContract	Swift.Sendable

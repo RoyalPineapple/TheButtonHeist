@@ -62,25 +62,18 @@ struct StartupInfoPlist: Equatable, Sendable {
     init(bundle: Bundle) {
         self.init { key in
             guard let object = bundle.object(forInfoDictionaryKey: key) else { return nil }
-            return InfoPlistValue(object: object as AnyObject)
+            return FoundationInfoPlistBridge.value(from: object)
         }
     }
 
     init(contentsOf url: URL) {
-        guard let data = try? Data(contentsOf: url),
-              let propertyList = try? PropertyListSerialization.propertyList(
-                from: data,
-                options: [],
-                format: nil
-              ),
-              let dictionary = propertyList as? NSDictionary else {
+        guard let dictionary = FoundationInfoPlistBridge.dictionary(contentsOf: url) else {
             self.init(values: [:])
             return
         }
 
         self.init { key in
-            guard let object = dictionary.object(forKey: key) else { return nil }
-            return InfoPlistValue(object: object as AnyObject)
+            dictionary[key]
         }
     }
 
@@ -116,24 +109,6 @@ enum InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
     case double(Double)
     case stringArray([String])
     case unsupported(String)
-
-    init(object: AnyObject) {
-        if let string = object as? String {
-            self = .string(string)
-        } else if let strings = object as? [String] {
-            self = .stringArray(strings)
-        } else if let number = object as? NSNumber {
-            if number.isBooleanPropertyListValue {
-                self = .bool(number.boolValue)
-            } else if CFNumberIsFloatType(number as CFNumber) {
-                self = .double(number.doubleValue)
-            } else {
-                self = .integer(Int(truncating: number))
-            }
-        } else {
-            self = .unsupported(String(describing: object))
-        }
-    }
 
     var bool: Bool? {
         if case .bool(let value) = self {
@@ -189,6 +164,60 @@ enum InfoPlistValue: Equatable, Sendable, CustomStringConvertible {
 
     private static func describe(_ strings: [String]) -> String {
         "[" + strings.map(\.debugDescription).joined(separator: ", ") + "]"
+    }
+}
+
+private struct FoundationInfoPlistDictionary {
+    private let values: [String: InfoPlistValue]
+
+    init(values: [String: InfoPlistValue]) {
+        self.values = values
+    }
+
+    subscript(key: String) -> InfoPlistValue? {
+        values[key]
+    }
+}
+
+/// Foundation's Bundle and property-list APIs vend raw plist objects. Keep
+/// that `Any` bridge here and expose only typed `InfoPlistValue` to callers.
+private enum FoundationInfoPlistBridge {
+    static func dictionary(contentsOf url: URL) -> FoundationInfoPlistDictionary? {
+        guard let data = try? Data(contentsOf: url),
+              let propertyList = try? PropertyListSerialization.propertyList(
+                from: data,
+                options: [],
+                format: nil
+              ),
+              let dictionary = propertyList as? NSDictionary else {
+            return nil
+        }
+
+        var values: [String: InfoPlistValue] = [:]
+        for (key, object) in dictionary {
+            guard let key = key as? String else { continue }
+            values[key] = value(from: object)
+        }
+        return FoundationInfoPlistDictionary(values: values)
+    }
+
+    static func value(from object: Any) -> InfoPlistValue {
+        if let string = object as? String {
+            return .string(string)
+        }
+        if let strings = object as? [String] {
+            return .stringArray(strings)
+        }
+        if let number = object as? NSNumber {
+            if number.isBooleanPropertyListValue {
+                return .bool(number.boolValue)
+            }
+            if CFNumberIsFloatType(number as CFNumber) {
+                return .double(number.doubleValue)
+            }
+            return .integer(Int(truncating: number))
+        }
+        return .unsupported(String(describing: object))
     }
 }
 

@@ -46,7 +46,8 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
         }
 
-        var request: CLIRequestParameters = [.direction: .string(rotorDirection)]
+        var request = CLIRequestParameters()
+        request.set(.direction, rotorDirection)
         if let rotor { request.set(.rotor, rotor) }
         if let rotorIndex { request.set(.rotorIndex, rotorIndex) }
 

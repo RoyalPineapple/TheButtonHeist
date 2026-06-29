@@ -368,34 +368,22 @@ struct PublicPropertyChange: Encodable {
 struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let status: PublicStatus
     let report: PublicHeistReport
-    let executedTopLevelStepCount: Int
-    let executedNodeCount: Int
-    let outputReceiptNodeCount: Int
-    let durationMs: Int
-    let abortedAtPath: String?
-    let expectations: PublicHeistExpectations?
-    let netDelta: PublicDelta?
 
     init(projection: HeistReportProjection) {
         self.status = PublicStatus(projection.status)
         self.report = PublicHeistReport(projection: projection)
-        self.executedTopLevelStepCount = projection.summary.executedTopLevelStepCount
-        self.executedNodeCount = projection.summary.executedNodeCount
-        self.outputReceiptNodeCount = projection.summary.outputReceiptNodeCount
-        self.durationMs = projection.summary.durationMs
-        self.abortedAtPath = projection.summary.abortedAtPath
-        self.expectations = projection.summary.expectations.map { PublicHeistExpectations(projection: $0) }
-        self.netDelta = projection.netDelta.map { PublicDelta(projection: $0) }
     }
 }
 
 struct PublicHeistReport: Encodable {
     let summary: PublicHeistReportSummary
     let nodes: [PublicHeistReportNode]
+    let netDelta: PublicHeistDelta?
 
     init(projection: HeistReportProjection) {
         self.summary = PublicHeistReportSummary(projection: projection.summary)
         self.nodes = projection.nodes.map { PublicHeistReportNode(projection: $0) }
+        self.netDelta = projection.netDelta.map { PublicHeistDelta(projection: $0) }
     }
 }
 

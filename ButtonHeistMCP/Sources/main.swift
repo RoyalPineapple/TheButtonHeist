@@ -6,7 +6,7 @@ import TheScore
 @main
 struct ButtonHeistMCPServer {
     static func main() async throws {
-        let (fence, idleMonitor) = try await setUp()
+        let context = try await setUp()
 
         let server = Server(
             name: "buttonheist",
@@ -20,7 +20,7 @@ struct ButtonHeistMCPServer {
         }
 
         await server.withMethodHandler(CallTool.self) { params in
-            await handleToolCall(params, fence: fence, idleMonitor: idleMonitor)
+            await handleToolCall(params, context: context)
         }
 
         try await server.start(transport: StdioTransport())
@@ -28,26 +28,25 @@ struct ButtonHeistMCPServer {
     }
 
     @ButtonHeistActor
-    private static func setUp() throws -> (TheFence, IdleMonitor) {
+    private static func setUp() throws -> MCPServerContext {
         let config = try EnvironmentConfig.resolve()
         let fence = TheFence(configuration: config.fenceConfiguration)
         let idleMonitor = IdleMonitor(timeout: config.sessionTimeout) { [fence] in
             fence.stop()
         }
-        return (fence, idleMonitor)
+        return MCPServerContext(fence: fence, idleMonitor: idleMonitor)
     }
 
     @ButtonHeistActor
     private static func handleToolCall(
         _ params: CallTool.Parameters,
-        fence: TheFence,
-        idleMonitor: IdleMonitor
+        context: MCPServerContext
     ) async -> CallTool.Result {
-        defer { idleMonitor.resetTimer() }
+        defer { context.idleMonitor.resetTimer() }
         do {
             switch routedToolRequest(try MCPToolRequest(name: params.name, arguments: params.arguments)) {
             case .success(let request):
-                let response = try await fence.execute(request)
+                let response = try await context.fence.execute(request)
                 return renderResponse(response)
             case .failure(let error):
                 return renderResponse(.failure(error))
@@ -61,7 +60,7 @@ struct ButtonHeistMCPServer {
     static func routedToolRequest(_ request: MCPToolRequest) -> Result<FenceOperationRequest, FenceOperationRoutingError> {
         return TheFence.Command.routeToolRequest(
             named: request.name,
-            arguments: request.arguments.commandEnvelope
+            arguments: request.arguments
         )
     }
 
@@ -119,6 +118,11 @@ struct ButtonHeistMCPServer {
         }
     }
 
+}
+
+private struct MCPServerContext {
+    let fence: TheFence
+    let idleMonitor: IdleMonitor
 }
 
 private struct MCPStructuredErrorFallback {

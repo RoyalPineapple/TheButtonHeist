@@ -449,6 +449,68 @@ struct HeistCompilerTests {
     }
 
     @Test
+    func `tooling-only helpers and report DTOs are package scoped`() throws {
+        let root = try repositoryRoot()
+        let sourceCompiler = try String(
+            contentsOf: root.appendingPathComponent("ButtonHeist/Sources/ThePlans/HeistPlanSourceCompiler.swift"),
+            encoding: .utf8
+        )
+        #expect(sourceCompiler.contains("package struct HeistPlanSourceCompiler: Sendable"))
+        #expect(sourceCompiler.contains("package struct HeistPlanSourceCompilerError"))
+
+        for forbidden in [
+            "public struct HeistPlanSourceCompiler",
+            "public struct HeistPlanSourceCompilerError",
+        ] {
+            #expect(!sourceCompiler.contains(forbidden), "Source compiler helper leaked public API: \(forbidden)")
+        }
+
+        let runtimeKnobs = try String(
+            contentsOf: root.appendingPathComponent("ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift"),
+            encoding: .utf8
+        )
+        for required in [
+            "package struct RuntimeKnobEnvironmentKey",
+            "package struct RuntimeKnobEnvironment",
+            "package enum RuntimeKnobEnvironmentBridge",
+            "package struct ButtonHeistRuntimeKnobs",
+        ] {
+            #expect(runtimeKnobs.contains(required), "Runtime knob helper is not package scoped: \(required)")
+        }
+
+        for forbidden in [
+            "public struct RuntimeKnobEnvironmentKey",
+            "public struct RuntimeKnobEnvironment",
+            "public enum RuntimeKnobEnvironmentBridge",
+            "public struct ButtonHeistRuntimeKnobs",
+        ] {
+            #expect(!runtimeKnobs.contains(forbidden), "Runtime knob helper leaked public API: \(forbidden)")
+        }
+
+        let reportFacts = try String(
+            contentsOf: root.appendingPathComponent("ButtonHeist/Sources/TheScore/HeistExecutionResult+Report.swift"),
+            encoding: .utf8
+        )
+        for required in [
+            "package struct HeistExecutionReportSummaryDTO",
+            "package struct HeistExecutionStepReportDTO",
+            "package extension HeistExecutionStepResult",
+        ] {
+            #expect(reportFacts.contains(required), "Report DTO helper is not package scoped: \(required)")
+        }
+
+        for forbidden in [
+            "@_spi(ButtonHeistInternals) public struct HeistExecutionReportSummaryDTO",
+            "@_spi(ButtonHeistInternals) public struct HeistExecutionStepReportDTO",
+            "public struct HeistExecutionReportSummaryDTO",
+            "public struct HeistExecutionStepReportDTO",
+            "@_spi(ButtonHeistInternals) var reportDTO",
+        ] {
+            #expect(!reportFacts.contains(forbidden), "Report DTO helper leaked public or SPI API: \(forbidden)")
+        }
+    }
+
+    @Test
     func `heist-plan stdout writes are routed through local output sink`() throws {
         let root = try repositoryRoot()
         let files = try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/HeistPlanTool", isDirectory: true))
@@ -859,7 +921,7 @@ struct HeistCompilerTests {
         )
 
         #expect(compilerSource.contains("func compileResult("))
-        #expect(compilerSource.contains("public let diagnostics: [HeistBuildDiagnostic]"))
+        #expect(compilerSource.contains("package let diagnostics: [HeistBuildDiagnostic]"))
         #expect(!compilerSource.contains("diagnostics[0]"))
         #expect(!compilerSource.contains("throw HeistPlanSourceCompilerError(diagnostic: diagnostics"))
 
@@ -930,19 +992,19 @@ struct HeistCompilerTests {
         let runtimeKnobSource = "ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift:"
         let allowedLegacyRuntimeKnobAliases: Set<String> = [
             runtimeKnobSource
-                + #"public static let postScrollLayoutFrames = RuntimeKnobEnvironmentKey("BH_POST_SCROLL_LAYOUT_FRAMES")"#,
+                + #"package static let postScrollLayoutFrames = RuntimeKnobEnvironmentKey("BH_POST_SCROLL_LAYOUT_FRAMES")"#,
             runtimeKnobSource
-                + #"public static let tripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BH_TRIPWIRE_PULSE_HZ")"#,
+                + #"package static let tripwirePulseFramesPerSecond = RuntimeKnobEnvironmentKey("BH_TRIPWIRE_PULSE_HZ")"#,
             runtimeKnobSource
-                + #"public static let maxScrollsPerContainer = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_CONTAINER")"#,
+                + #"package static let maxScrollsPerContainer = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_CONTAINER")"#,
             runtimeKnobSource
-                + #"public static let maxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_DISCOVERY")"#,
+                + #"package static let maxScrollsPerDiscovery = RuntimeKnobEnvironmentKey("BH_MAX_SCROLLS_PER_DISCOVERY")"#,
             runtimeKnobSource
-                + #"public static let scrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BH_SCROLL_SUBTREE_ELEMENT_BUDGET")"#,
+                + #"package static let scrollSubtreeElementBudget = RuntimeKnobEnvironmentKey("BH_SCROLL_SUBTREE_ELEMENT_BUDGET")"#,
             runtimeKnobSource
-                + #"public static let visibleElementBudget = RuntimeKnobEnvironmentKey("BH_VISIBLE_ELEMENT_BUDGET")"#,
+                + #"package static let visibleElementBudget = RuntimeKnobEnvironmentKey("BH_VISIBLE_ELEMENT_BUDGET")"#,
             runtimeKnobSource
-                + #"public static let totalNodeBudget = RuntimeKnobEnvironmentKey("BH_TOTAL_NODE_BUDGET")"#,
+                + #"package static let totalNodeBudget = RuntimeKnobEnvironmentKey("BH_TOTAL_NODE_BUDGET")"#,
         ]
         let legacyRuntimeKnobAliases = try sourceMatches(
             in: files,
@@ -1023,19 +1085,78 @@ struct HeistCompilerTests {
     }
 
     @Test
-    func `broad Any existential use stays limited to the Foundation attributes bridge`() throws {
+    func `broad Any existential use stays limited to typed Foundation bridges`() throws {
         let root = try repositoryRoot()
+        let productionFiles = try productionSwiftFiles(in: root)
         let allowedAnyLines: Set<String> = [
-            "ButtonHeist/Sources/TheButtonHeist/Storage/PrivateStorage.swift:var foundationAttributes: [FileAttributeKey: Any] {",
+            "ButtonHeist/Sources/TheButtonHeist/Storage/PrivateStorage.swift:private typealias FoundationFileAttributeDictionary = [FileAttributeKey: Any]",
+            "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift:static func value(from object: Any) -> InfoPlistValue {",
         ]
         let observed = try sourceMatches(
-            in: productionSwiftFiles(in: root),
+            in: productionFiles,
             root: root,
             pattern: #"(:|->|\[[^]]*:|Dictionary\s*<[^>]+,|Array\s*<|Set\s*<|\bany\s+)\s*Any\b"#
         )
         let unexpected = observed.subtracting(allowedAnyLines)
 
         #expect(unexpected.isEmpty, "Unexpected broad Any existential uses:\n\(unexpected.sorted().joined(separator: "\n"))")
+
+        let allowedDictionaryBridgeLines: Set<String> = [
+            "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift:let dictionary = propertyList as? NSDictionary else {",
+        ]
+        let unexpectedDictionaryBridgeLines = try sourceMatches(
+            in: productionFiles,
+            root: root,
+            pattern: #"\bNS(Mutable)?Dictionary\b"#
+        )
+        .subtracting(allowedDictionaryBridgeLines)
+
+        #expect(
+            unexpectedDictionaryBridgeLines.isEmpty,
+            "Unexpected Foundation dictionary bridges:\n\(unexpectedDictionaryBridgeLines.sorted().joined(separator: "\n"))"
+        )
+    }
+
+    @Test
+    func `raw AnyObject and ObjC perform dispatch stay limited to typed boundaries`() throws {
+        let root = try repositoryRoot()
+        let productionFiles = try productionSwiftFiles(in: root)
+
+        let allowedAnyObjectLines: Set<String> = [
+            "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift:protocol DeviceConnecting: AnyObject {",
+            "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift:protocol DeviceDiscovering: AnyObject {",
+            "ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceProtocols.swift:protocol TransportReachabilityConnecting: AnyObject {",
+            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:private typealias RawObjectiveCReceiver = AnyObject",
+        ]
+        let unexpectedAnyObjectLines = try sourceMatches(
+            in: productionFiles,
+            root: root,
+            pattern: #"\bAnyObject\b"#
+        )
+        .subtracting(allowedAnyObjectLines)
+
+        #expect(
+            unexpectedAnyObjectLines.isEmpty,
+            "Unexpected raw AnyObject uses:\n\(unexpectedAnyObjectLines.sorted().joined(separator: "\n"))"
+        )
+
+        let allowedSelectorPerformLines: Set<String> = [
+            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:_ = target.perform(selector)",
+            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:_ = target.perform(selector, with: argument)",
+            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:target.perform(selector)?.takeUnretainedValue() as? Result",
+            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/ObjCRuntime.swift:target.perform(selector, with: argument)?.takeUnretainedValue() as? Result",
+        ]
+        let unexpectedSelectorPerformLines = try sourceMatches(
+            in: productionFiles,
+            root: root,
+            pattern: #"\.perform\s*\(\s*selector\b"#
+        )
+        .subtracting(allowedSelectorPerformLines)
+
+        #expect(
+            unexpectedSelectorPerformLines.isEmpty,
+            "Unexpected selector perform dispatch:\n\(unexpectedSelectorPerformLines.sorted().joined(separator: "\n"))"
+        )
     }
 
     @Test

@@ -17,7 +17,7 @@ extension TheInsideJob {
 
         transport.advertise(
             serviceName: serviceName,
-            simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
+            simulatorUDID: ProcessInfo.processInfo.environment[.udid],
             installationId: runtimeConfiguration.sessionIdentity.installationId,
             instanceId: effectiveInstanceId,
             additionalTXT: [

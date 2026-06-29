@@ -27,7 +27,8 @@ struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         let target = try element.requireTarget()
 
-        let request: CLIRequestParameters = [.timeout: .double(timeout)]
+        var request = CLIRequestParameters()
+        request.set(.timeout, timeout)
 
         try await CLIRunner.run(
             connection: connection,

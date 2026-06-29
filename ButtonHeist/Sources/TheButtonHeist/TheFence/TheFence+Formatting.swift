@@ -51,14 +51,12 @@ extension FenceResponse {
                 payload: payload,
                 options: options
             )
-        case .heistExecution(_, let result, _):
-            var text = "Heist: \(result.executedTopLevelStepCount) top-level step(s) executed in \(result.durationMs)ms"
-            if let abortedAtPath = result.abortedAtPath { text += " (stopped at \(abortedAtPath))" }
-            let checked = result.expectationsChecked
-            if checked > 0 {
-                text += " [expectations: \(result.expectationsMet)/\(checked) met]"
-            }
-            return text
+        case .heistExecution(_, let result, let accessibilityTrace):
+            return humanHeistFormatted(HeistReportProjection(
+                result: result,
+                accessibilityTrace: accessibilityTrace,
+                profile: .summary
+            ))
         case .heistCatalog(let catalog):
             return formatHeistCatalogHuman(catalog)
         case .heistDescription(let description):
@@ -88,6 +86,17 @@ extension FenceResponse {
             }
             return "Session: not connected"
         }
+    }
+
+    private func humanHeistFormatted(_ projection: HeistReportProjection) -> String {
+        var text = "Heist: \(projection.summary.executedTopLevelStepCount) top-level step(s) executed in \(projection.summary.durationMs)ms"
+        if let abortedAtPath = projection.summary.abortedAtPath {
+            text += " (stopped at \(abortedAtPath))"
+        }
+        if let expectations = projection.summary.expectations {
+            text += " [expectations: \(expectations.met)/\(expectations.checked) met]"
+        }
+        return text
     }
 
     private static func formatPongHuman(_ payload: PongPayload) -> String {

@@ -1,3 +1,4 @@
+import ButtonHeistTestSupport
 import XCTest
 import ThePlans
 import AccessibilitySnapshotModel
@@ -658,12 +659,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
         let json = try publicJSONProbe(response)
         let report = try publicHeistReportResponseDTO(response).report
-        let expectations = try json.object("expectations")
         let reportExpectations = try json.object("report").object("summary").object("expectations")
 
-        XCTAssertEqual(try json.int("executedTopLevelStepCount"), 2)
-        XCTAssertEqual(try json.int("executedNodeCount"), 2)
-        XCTAssertEqual(try json.int("outputReceiptNodeCount"), 2)
+        try assertHeistReportRootOmitsSummaryDuplicates(json)
         XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
             executedTopLevelStepCount: 2,
             executedNodeCount: 2,
@@ -671,8 +669,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             durationMs: 5,
             abortedAtPath: nil
         ))
-        XCTAssertEqual(try expectations.int("checked"), 1)
-        XCTAssertEqual(try expectations.int("met"), 1)
         XCTAssertEqual(try reportExpectations.int("checked"), 1)
         XCTAssertEqual(try reportExpectations.int("met"), 1)
         XCTAssertTrue(response.compactFormatted().contains("heist: 2 top-level steps in 5ms"))
@@ -704,6 +700,39 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         try json.assertMissing("method")
         XCTAssertTrue(compact.contains("heist: 1 top-level steps in 3ms"), compact)
         XCTAssertTrue(compact.contains("[0] activate"), compact)
+    }
+
+    func testPublicHeistJSONProjectsNetDeltaInsideReport() throws {
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))))),
+        ])
+        let response = FenceResponse.heistExecution(
+            plan: plan,
+            result: HeistExecutionResult(
+                steps: [
+                    actionReceiptStep(
+                        command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
+                        result: ActionResult(success: true, method: .activate)
+                    ),
+                ],
+                durationMs: 3
+            ),
+            accessibilityTrace: makeReceiptTestTrace(
+                before: makeReceiptTestInterface(elementCount: 0),
+                after: makeReceiptTestInterface(elementCount: 2)
+            )
+        )
+
+        let json = try publicJSONProbe(response)
+        let report = try publicHeistReportResponseDTO(response).report
+        let reportProbe = try json.object("report")
+        let netDeltaProbe = try reportProbe.object("netDelta")
+
+        try assertHeistReportRootOmitsSummaryDuplicates(json)
+        XCTAssertEqual(report.netDelta?.kind, "elementsChanged")
+        XCTAssertEqual(report.netDelta?.elementCount, 2)
+        XCTAssertEqual(try netDeltaProbe.string("kind"), "elementsChanged")
+        XCTAssertEqual(try netDeltaProbe.int("elementCount"), 2)
     }
 
     func testCompactHeistFormattingReportsFailStepMessage() throws {
@@ -781,9 +810,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let report = try publicHeistReportResponseDTO(response).report
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(try json.int("executedTopLevelStepCount"), 2)
-        XCTAssertEqual(try json.int("executedNodeCount"), 2)
-        XCTAssertEqual(try json.int("outputReceiptNodeCount"), 3)
+        try assertHeistReportRootOmitsSummaryDuplicates(json)
         XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
             executedTopLevelStepCount: 2,
             executedNodeCount: 2,
@@ -1020,9 +1047,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let children = try rootProbe.array("children")
         let compact = response.compactFormatted()
 
-        XCTAssertEqual(try json.int("executedTopLevelStepCount"), 1)
-        XCTAssertEqual(try json.int("executedNodeCount"), 5)
-        XCTAssertEqual(try json.int("outputReceiptNodeCount"), 5)
+        try assertHeistReportRootOmitsSummaryDuplicates(json)
         XCTAssertEqual(report.summary, PublicHeistReportSummaryDTO(
             executedTopLevelStepCount: 1,
             executedNodeCount: 5,
@@ -1036,6 +1061,25 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(try children.map { try $0.string("kind") }, ["for_each_iteration", "for_each_iteration"])
         XCTAssertTrue(compact.contains("heist: 1 top-level steps in 30ms"), compact)
         XCTAssertTrue(compact.contains("[0] for_each_string -> error: for_each_string stopped"), compact)
+    }
+
+    private func assertHeistReportRootOmitsSummaryDuplicates(
+        _ json: JSONProbe,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        do {
+            try json.assertMissing("executedTopLevelStepCount")
+            try json.assertMissing("executedNodeCount")
+            try json.assertMissing("outputReceiptNodeCount")
+            try json.assertMissing("durationMs")
+            try json.assertMissing("abortedAtPath")
+            try json.assertMissing("expectations")
+            try json.assertMissing("netDelta")
+        } catch {
+            XCTFail("\(error)", file: file, line: line)
+            throw error
+        }
     }
 
     func testCompactInterfaceRendersNestedContainersAndElements() {

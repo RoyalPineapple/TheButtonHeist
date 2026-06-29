@@ -3,7 +3,116 @@ import ArgumentParser
 import Foundation
 import ThePlans
 
-typealias CLIRequestParameters = [FenceParameterKey: HeistValue]
+struct CLIRequestParameters: Equatable {
+    private var values: [FenceParameterKey: HeistValue]
+
+    init() {
+        values = [:]
+    }
+
+    init(_ fields: [(FenceParameterKey, HeistValue)]) {
+        values = Dictionary(fields, uniquingKeysWith: { _, newest in newest })
+    }
+
+    subscript(_ key: FenceParameterKey) -> HeistValue? {
+        get { values[key] }
+        set { values[key] = newValue }
+    }
+
+    var rawValues: [String: HeistValue] {
+        Dictionary(
+            values.map { ($0.key.rawValue, $0.value) },
+            uniquingKeysWith: { _, newest in newest }
+        )
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: HeistValue) {
+        values[key] = value
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: CLIRequestObject) {
+        set(key, value.heistValue)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: String) {
+        set(key, .string(value))
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Int) {
+        set(key, .int(value))
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Double) {
+        set(key, .double(value))
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Bool) {
+        set(key, .bool(value))
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: [String]) {
+        set(key, .array(value.map(HeistValue.string)))
+    }
+}
+
+struct CLIRequestObject: Equatable {
+    private var values: [FenceParameterKey: HeistValue]
+
+    init() {
+        values = [:]
+    }
+
+    init(_ fields: [(FenceParameterKey, HeistValue)]) {
+        values = Dictionary(fields, uniquingKeysWith: { _, newest in newest })
+    }
+
+    subscript(_ key: FenceParameterKey) -> HeistValue? {
+        get { values[key] }
+        set { values[key] = newValue }
+    }
+
+    var heistValue: HeistValue {
+        .object(rawValues)
+    }
+
+    var rawValues: [String: HeistValue] {
+        Dictionary(
+            values.map { ($0.key.rawValue, $0.value) },
+            uniquingKeysWith: { _, newest in newest }
+        )
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: HeistValue) {
+        values[key] = value
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: String) {
+        set(key, .string(value))
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Int) {
+        set(key, .int(value))
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Double) {
+        set(key, .double(value))
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: [String]) {
+        set(key, .array(value.map(HeistValue.string)))
+    }
+
+    mutating func appendOneOrMany(_ value: HeistValue, for key: FenceParameterKey) {
+        switch values[key] {
+        case nil:
+            values[key] = value
+        case .array(let existing)?:
+            values[key] = .array(existing + [value])
+        case let existing?:
+            values[key] = .array([existing, value])
+        }
+    }
+}
 
 /// Marker for CLI commands backed by the Fence command catalog.
 ///
@@ -123,7 +232,7 @@ extension CLICommandContract {
     }
 
     static func fenceArguments(
-        _ parameters: CLIRequestParameters = [:],
+        _ parameters: CLIRequestParameters = CLIRequestParameters(),
         target: ElementTarget? = nil
     ) -> TheFence.CommandArgumentEnvelope {
         CLIRequestBuilder.arguments(parameters: parameters, target: target)
@@ -150,31 +259,5 @@ extension CLICommandContract {
     ) -> String? {
         let values = catalogAllowedValues(for: key)
         return values.contains(value) ? value : nil
-    }
-}
-
-extension Dictionary where Key == FenceParameterKey, Value == HeistValue {
-    mutating func set(_ key: FenceParameterKey, _ value: HeistValue) {
-        self[key] = value
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: String) {
-        set(key, .string(value))
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Int) {
-        set(key, .int(value))
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Double) {
-        set(key, .double(value))
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Bool) {
-        set(key, .bool(value))
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: [String]) {
-        set(key, .array(value.map(HeistValue.string)))
     }
 }

@@ -1,14 +1,14 @@
 import TheScore
 
-@_spi(ButtonHeistInternals) public struct ProjectionLimits: Sendable, Equatable {
-    public let visibleElementBudget: Int
-    public let totalNodeBudget: Int
-    public let deltaElementsPerBucket: Int
-    public let screenPreviewElements: Int
-    public let caseResults: Int
-    public let failureInterfaceElements: Int
+struct ProjectionLimits: Sendable, Equatable {
+    let visibleElementBudget: Int
+    let totalNodeBudget: Int
+    let deltaElementsPerBucket: Int
+    let screenPreviewElements: Int
+    let caseResults: Int
+    let failureInterfaceElements: Int
 
-    public init(
+    init(
         visibleElementBudget: Int,
         totalNodeBudget: Int,
         deltaElementsPerBucket: Int,
@@ -24,7 +24,7 @@ import TheScore
         self.failureInterfaceElements = max(0, failureInterfaceElements)
     }
 
-    public static func current(
+    static func current(
         deltaElementsPerBucket: Int = Int.max,
         screenPreviewElements: Int = Int.max,
         caseResults: Int = Int.max,
@@ -40,7 +40,7 @@ import TheScore
         )
     }
 
-    public static func current(
+    static func current(
         visibleElementBudget: Int,
         totalNodeBudget: Int,
         deltaElementsPerBucket: Int = Int.max,
@@ -60,17 +60,17 @@ import TheScore
 }
 
 @_spi(ButtonHeistInternals) public struct ProjectionProfile: Sendable, Equatable {
-    public enum Kind: String, Sendable, Equatable {
+    enum Kind: String, Sendable, Equatable {
         case summary
         case full
         case mcp
         case junit
     }
 
-    public let kind: Kind
-    public let limits: ProjectionLimits
+    let kind: Kind
+    let limits: ProjectionLimits
 
-    public init(kind: Kind, limits: ProjectionLimits) {
+    init(kind: Kind, limits: ProjectionLimits) {
         self.kind = kind
         self.limits = limits
     }

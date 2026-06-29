@@ -34,12 +34,12 @@ struct InterfaceDiscoveryLimitOptions: ParsableArguments {
     var maxScrollsPerDiscovery: Int?
 
     var parameters: CLIRequestParameters {
-        var parameters: CLIRequestParameters = [:]
+        var parameters = CLIRequestParameters()
         if let maxScrollsPerContainer {
-            parameters.set(.maxScrollsPerContainer, .int(maxScrollsPerContainer))
+            parameters.set(.maxScrollsPerContainer, maxScrollsPerContainer)
         }
         if let maxScrollsPerDiscovery {
-            parameters.set(.maxScrollsPerDiscovery, .int(maxScrollsPerDiscovery))
+            parameters.set(.maxScrollsPerDiscovery, maxScrollsPerDiscovery)
         }
         return parameters
     }

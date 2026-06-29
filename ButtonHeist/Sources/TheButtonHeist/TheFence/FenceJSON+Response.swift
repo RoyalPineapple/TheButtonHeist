@@ -155,8 +155,8 @@ struct PublicResponseModel: FencePublicJSONResponse {
         case .heistExecution(_, let result, let accessibilityTrace):
             try PublicHeistExecutionResponse(projection: HeistReportProjection(
                 result: result,
-                netDelta: accessibilityTrace?.meaningfulEndpointDelta,
-                profile: profile.kind == .summary ? .mcp : profile
+                accessibilityTrace: accessibilityTrace,
+                profile: profile
             )).encode(to: encoder)
         case .heistCatalog(let catalog):
             try PublicHeistCatalogResponse(catalog: catalog).encode(to: encoder)

@@ -179,9 +179,7 @@ report_matches "tooling-only catalog/schema/reference extension in normal public
 
 SPI_PUBLIC_ALLOWED_LINES=(
   'ButtonHeist/Sources/TheButtonHeist/Support/IdleMonitor.swift:LINE:@_spi(ButtonHeistTooling) public final class IdleMonitor {'
-  'ButtonHeist/Sources/TheButtonHeist/TheFence/FenceCommandReference.swift:LINE:@_spi(ButtonHeistTooling) public enum FenceCommandReference {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift:LINE:@_spi(ButtonHeistInternals) public struct FenceResponsePresenter: Sendable {'
-  'ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift:LINE:@_spi(ButtonHeistInternals) public struct ProjectionLimits: Sendable, Equatable {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift:LINE:@_spi(ButtonHeistInternals) public struct ProjectionProfile: Sendable, Equatable {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift:LINE:    @_spi(ButtonHeistTooling) public struct CommandArgumentEnvelope: Sendable {'
   'ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift:LINE:        @_spi(ButtonHeistTooling) public let argumentValues: [String: HeistValue]'
@@ -214,6 +212,23 @@ spi_public_matches="$(git_grep '@_spi\([^)]*\)[[:space:]]+public[[:space:]]+' "$
 spi_public_matches="$(filter_allowed_normalized_lines "$spi_public_matches" "${SPI_PUBLIC_ALLOWED_LINES[@]}")"
 report_matches "new SPI-public declaration outside explicit allowlist" "$spi_public_matches"
 
+projection_public_internals_matches="$(
+  git_grep \
+    '^[[:space:]]*(@_spi\([^)]*\)[[:space:]]+)?public[[:space:]]+(struct[[:space:]]+ProjectionLimits\b|enum[[:space:]]+Kind\b|let[[:space:]]+(profile|kind|limits)\b|init[[:space:]]*\([[:space:]]*kind:)' \
+    ButtonHeist/Sources/TheButtonHeist/TheFence/ProjectionProfile.swift \
+    ButtonHeist/Sources/TheButtonHeist/TheFence/FenceResponsePresenter.swift
+)"
+report_matches "response projection implementation control in public or SPI API" "$projection_public_internals_matches"
+
+tooling_public_implementation_type_matches="$(
+  git_grep \
+    '^[[:space:]]*public[[:space:]]+(struct|enum)[[:space:]]+(HeistPlanSourceCompiler|HeistPlanSourceCompilerError|RuntimeKnobEnvironmentKey|RuntimeKnobEnvironment|RuntimeKnobEnvironmentBridge|ButtonHeistRuntimeKnobs|HeistExecutionReportSummaryDTO|HeistExecutionStepReportDTO)\b' \
+    ButtonHeist/Sources/ThePlans/HeistPlanSourceCompiler.swift \
+    ButtonHeist/Sources/TheScore/ButtonHeistRuntimeKnobs.swift \
+    ButtonHeist/Sources/TheScore/HeistExecutionResult+Report.swift
+)"
+report_matches "tooling-only implementation helper in public API" "$tooling_public_implementation_type_matches"
+
 RAW_LOGGER_ALLOWED_LINES=(
   'ButtonHeist/Sources/TheScore/ButtonHeistLog.swift:LINE:        Logger(subsystem: channel.subsystem.rawValue, category: channel.category)'
 )
@@ -227,9 +242,10 @@ TUPLE_RETURN_GUARD_PATHS=(
   'ButtonHeist/Sources/ThePlans/HeistSwiftFileCompiler.swift'
   ':(glob)ButtonHeist/Sources/ThePlans/HeistPlanSource*Parser.swift'
   ':(glob)ButtonHeist/Sources/TheButtonHeist/TheFence/*.swift'
+  'ButtonHeistMCP/Sources/main.swift'
 )
 tuple_return_matches="$(git_grep '[[:space:]]*->[[:space:]]*\([^)]*,[^)]*\)[?]?' "${TUPLE_RETURN_GUARD_PATHS[@]}")"
-report_matches "tuple return APIs in parser/compiler/fence surfaces" "$tuple_return_matches"
+report_matches "tuple return APIs in parser/compiler/fence/MCP surfaces" "$tuple_return_matches"
 
 GESTURE_PAYLOAD_GUARD_PATHS=(
   ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RequestPayload+GestureTargets.swift
@@ -241,8 +257,16 @@ for path in "${GESTURE_PAYLOAD_GUARD_PATHS[@]}"; do
     EXISTING_GESTURE_PAYLOAD_GUARD_PATHS+=("$path")
   fi
 done
-gesture_payload_helper_matches="$(git_grep '\b(SwipeInput|DragInput|BoundedUnitPoint|singleObjectPayloadIntent)\b' "${EXISTING_GESTURE_PAYLOAD_GUARD_PATHS[@]}")"
+gesture_payload_helper_matches="$(git_grep '\b(SwipeInput|DragInput|BoundedUnitPoint|singleObjectPayloadIntent|decodeGestureTarget)\b' "${EXISTING_GESTURE_PAYLOAD_GUARD_PATHS[@]}")"
 report_matches "retired gesture-local payload decoder/helper" "$gesture_payload_helper_matches"
+
+gesture_expectation_prefix_matches="$(
+  for path in "${EXISTING_GESTURE_PAYLOAD_GUARD_PATHS[@]}"; do
+    [[ -f "$path" ]] || continue
+    perl -0ne 'while (/prefixed\s*\(\s*"(elementDirection\.element|elementUnitPoints\.element|elementToPoint\.element)"/sg) { my $before = substr($_, 0, $-[0]); my $line = ($before =~ tr/\n//) + 1; my $match = $&; $match =~ s/\s+/ /g; $match =~ s/^\s+|\s+$//g; print "$ARGV:$line:$match\n"; }' "$path"
+  done
+)"
+report_matches "duplicated gesture element-target expectation prefix" "$gesture_expectation_prefix_matches"
 
 compiler_diagnostic_collapse_matches="$(git_grep 'diagnostics\[[0-9]+\]' ButtonHeist/Sources/ThePlans)"
 report_matches "compiler diagnostic set collapsed by index" "$compiler_diagnostic_collapse_matches"

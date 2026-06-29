@@ -22,12 +22,11 @@ struct GetSessionStateCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request: CLIRequestParameters = [:]
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             command: Self.fenceCommand,
-            arguments: Self.fenceArguments(request)
+            arguments: Self.fenceArguments()
         )
     }
 }

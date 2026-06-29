@@ -46,10 +46,7 @@ final class ElementTargetOptionsTests: XCTestCase {
             return XCTFail("Expected semantic target object")
         }
 
-        XCTAssertEqual(
-            Dictionary(object.map { ($0.key.rawValue, $0.value) }, uniquingKeysWith: { _, newest in newest }),
-            semanticObject
-        )
+        XCTAssertEqual(object.heistValue, .object(semanticObject))
         XCTAssertEqual(object[.label], .object([
             "mode": .string("exact"),
             "value": .string("Save"),
@@ -63,6 +60,35 @@ final class ElementTargetOptionsTests: XCTestCase {
             "value": .string("1"),
         ]))
         XCTAssertEqual(object[.traits], .array([.string("button")]))
+    }
+
+    func testCLIRequestObjectsAccumulateRepeatedTypedKeysBeforeWireRendering() {
+        var object = CLIRequestObject()
+
+        object.appendOneOrMany(.string("button"), for: .traits)
+        object.appendOneOrMany(.string("selected"), for: .traits)
+
+        XCTAssertEqual(object[.traits], .array([.string("button"), .string("selected")]))
+        XCTAssertEqual(object.rawValues, [
+            FenceParameterKey.traits.rawValue: .array([.string("button"), .string("selected")]),
+        ])
+    }
+
+    func testCLIRequestParametersSetNestedObjectsThroughTypedKeys() {
+        let targetObject = CLIRequestObject([
+            (.label, .object([
+                FenceParameterKey.mode.rawValue: .string("exact"),
+                FenceParameterKey.value.rawValue: .string("Save"),
+            ])),
+        ])
+        var parameters = CLIRequestParameters()
+
+        parameters.set(.target, targetObject)
+
+        XCTAssertEqual(parameters[.target], targetObject.heistValue)
+        XCTAssertEqual(parameters.rawValues, [
+            FenceParameterKey.target.rawValue: targetObject.heistValue,
+        ])
     }
 
     func testOrdinalOnlyIsRejectedAtTypedTargetBoundary() throws {

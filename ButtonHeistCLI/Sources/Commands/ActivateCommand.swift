@@ -39,7 +39,7 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         let target = try element.requireTarget()
 
-        var request: CLIRequestParameters = [:]
+        var request = CLIRequestParameters()
         if let action {
             request.set(.action, action)
         }

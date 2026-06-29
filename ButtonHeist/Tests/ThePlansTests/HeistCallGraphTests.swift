@@ -134,6 +134,40 @@ private struct EncodedInvocationStepContract: Decodable {
     }
 }
 
+@Test func `traversal path builder renders stable diagnostic paths`() {
+    let path = HeistTraversalPath.root
+        .child(.body)
+        .index(0)
+        .child(.conditional)
+        .child(.cases)
+        .index(1)
+        .child(.body)
+
+    #expect(path.description == "$.body[0].conditional.cases[1].body")
+}
+
+@Test func `definition resolution preserves typed invocation identity`() throws {
+    let checkout = HeistPlan(
+        runtimeValidatedVersion: HeistPlan.currentVersion,
+        name: "Checkout",
+        body: [.warn(WarnStep(message: "checkout"))]
+    )
+    let cart = HeistPlan(
+        runtimeValidatedVersion: HeistPlan.currentVersion,
+        name: "Cart",
+        definitions: [checkout],
+        body: []
+    )
+    let scope = HeistDefinitionScope(definitions: [cart])
+    let invocationPath = try HeistInvocationPath(components: ["Cart", "Checkout"])
+
+    let resolved = try #require(scope.resolveInvocation(path: invocationPath, rootScope: scope))
+
+    #expect(resolved.invocationPath == invocationPath)
+    #expect(resolved.qualifiedName == "Cart.Checkout")
+    #expect(resolved.namePath == ["Cart", "Checkout"])
+}
+
 @Test func `invocation step decode rejects empty path and components`() throws {
     expectDataCorrupted("empty invocation path", contains: "heist invocation path must not be empty") {
         _ = try JSONDecoder().decode(HeistInvocationStep.self, from: Data("""
