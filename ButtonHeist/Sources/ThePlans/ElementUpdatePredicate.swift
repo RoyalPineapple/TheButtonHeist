@@ -184,6 +184,29 @@ public struct ElementFrameMatch: Codable, Sendable, Equatable {
     public static func match(x: Int? = nil, y: Int? = nil, width: Int? = nil, height: Int? = nil) -> Self {
         Self(x: x, y: y, width: width, height: height)
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x, y, width, height
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "frame match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decodeIfPresent(Int.self, forKey: .x),
+            y: try container.decodeIfPresent(Int.self, forKey: .y),
+            width: try container.decodeIfPresent(Int.self, forKey: .width),
+            height: try container.decodeIfPresent(Int.self, forKey: .height)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(x, forKey: .x)
+        try container.encodeIfPresent(y, forKey: .y)
+        try container.encodeIfPresent(width, forKey: .width)
+        try container.encodeIfPresent(height, forKey: .height)
+    }
 }
 
 extension ElementFrameMatch: CustomStringConvertible {
@@ -213,6 +236,25 @@ public struct ElementPointMatch: Codable, Sendable, Equatable {
 
     public static func match(x: Int? = nil, y: Int? = nil) -> Self {
         Self(x: x, y: y)
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x, y
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "activation point match")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decodeIfPresent(Int.self, forKey: .x),
+            y: try container.decodeIfPresent(Int.self, forKey: .y)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(x, forKey: .x)
+        try container.encodeIfPresent(y, forKey: .y)
     }
 }
 
