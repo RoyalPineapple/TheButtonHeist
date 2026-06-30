@@ -32,3 +32,28 @@ func `parser helpers expose named result values`() {
     #expect(labelToken.name == "exact")
     #expect(labelToken.token == token)
 }
+
+@Test
+func `dotted path definition builder exposes a named result value`() throws {
+    let heistContent = try SourceShapeRepository(filePath: #filePath)
+        .requiredFile(relativePath: "ButtonHeist/Sources/ThePlans/HeistContent.swift")
+    let resultType = try #require(heistContent.firstBlock(
+        matching: #"private struct DottedPathDefinitionBuild\b"#
+    ))
+    let helper = try #require(heistContent.firstBlock(
+        matching: #"private static func buildDefinitionFromDottedPath\("#
+    ))
+
+    #expect(resultType.contents.contains("private struct DottedPathDefinitionBuild: Sendable, Equatable"))
+    #expect(resultType.contents.contains("let pathComponents: [String]"))
+    #expect(resultType.contents.contains(
+        "let definitionResult: ValidationResult<HeistPlan, HeistBuildDiagnostic>"
+    ))
+
+    #expect(!helper.contents.contains(") -> ("))
+    #expect(helper.contents.contains(") -> DottedPathDefinitionBuild"))
+    #expect(!helper.contents.contains("(components:"))
+    #expect(!helper.contents.contains("definition: ValidationResult<HeistPlan, HeistBuildDiagnostic>"))
+    #expect(try !heistContent.containsMatch(#"\bresult\.components\b"#))
+    #expect(try !heistContent.containsMatch(#"\bresult\.definition\b"#))
+}
