@@ -398,14 +398,14 @@ final class PostActionObservation {
     }
 
     struct ActionOutcomeSuccess {
-        let payload: ResultPayload?
-        let afterStatePayload: ((BeforeState) -> ResultPayload?)?
+        let payload: ActionResultPayload?
+        let afterStatePayload: ((BeforeState) -> ActionResultPayload?)?
         let subjectEvidence: ActionSubjectEvidence?
         let activationTrace: ActivationTrace?
 
         init(
-            payload: ResultPayload? = nil,
-            afterStatePayload: ((BeforeState) -> ResultPayload?)? = nil,
+            payload: ActionResultPayload? = nil,
+            afterStatePayload: ((BeforeState) -> ActionResultPayload?)? = nil,
             subjectEvidence: ActionSubjectEvidence? = nil,
             activationTrace: ActivationTrace? = nil
         ) {
@@ -418,12 +418,12 @@ final class PostActionObservation {
 
     struct ActionOutcomeFailure {
         let errorKind: ErrorKind
-        let payload: ResultPayload?
+        let payload: ActionResultPayload?
         let activationTrace: ActivationTrace?
 
         init(
             errorKind: ErrorKind,
-            payload: ResultPayload? = nil,
+            payload: ActionResultPayload? = nil,
             activationTrace: ActivationTrace? = nil
         ) {
             self.errorKind = errorKind
@@ -510,7 +510,7 @@ extension ActionResult {
         method: ActionMethod,
         capture: AccessibilityTrace.Capture,
         message: String?,
-        payload: ResultPayload?,
+        payload: ActionResultPayload?,
         outcome: PostActionReceiptOutcome,
         accessibilityTrace: AccessibilityTrace? = nil,
         subjectEvidence: ActionSubjectEvidence? = nil,
@@ -539,7 +539,7 @@ extension ActionResult {
         method: ActionMethod,
         capture: AccessibilityTrace.Capture,
         message: String?,
-        payload: ResultPayload?,
+        payload: ActionResultPayload?,
         errorKind: ErrorKind = .actionFailed,
         subjectEvidence: ActionSubjectEvidence? = nil,
         activationTrace: ActivationTrace? = nil,
@@ -561,7 +561,7 @@ extension ActionResult {
 
     @MainActor private static func cancelledPostActionResult(
         method: ActionMethod,
-        payload: ResultPayload?,
+        payload: ActionResultPayload?,
         subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace?,
         before: PostActionObservation.BeforeState,
@@ -581,7 +581,7 @@ extension ActionResult {
 
     @MainActor private static func parseFailurePostActionResult(
         method: ActionMethod,
-        payload: ResultPayload?,
+        payload: ActionResultPayload?,
         subjectEvidence: ActionSubjectEvidence?,
         activationTrace: ActivationTrace?,
         before: PostActionObservation.BeforeState,
@@ -606,7 +606,7 @@ private enum PostActionReceiptOutcome {
 }
 
 private extension PostActionObservation.ActionOutcome {
-    var payload: ResultPayload? {
+    var payload: ActionResultPayload? {
         switch self {
         case .success(let success):
             return success.payload
@@ -642,7 +642,7 @@ private extension PostActionObservation.ActionOutcome {
         }
     }
 
-    func resolvedPayload(after state: PostActionObservation.BeforeState) -> ResultPayload? {
+    func resolvedPayload(after state: PostActionObservation.BeforeState) -> ActionResultPayload? {
         switch self {
         case .success(let success):
             return success.afterStatePayload?(state) ?? success.payload

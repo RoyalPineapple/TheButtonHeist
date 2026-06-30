@@ -116,7 +116,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testActionResultWithValueField() throws {
-        let result = ActionResult.success(method: .typeText, payload: .value("hello world"))
+        let result = ActionResult.success(payload: .typeText("hello world"))
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 

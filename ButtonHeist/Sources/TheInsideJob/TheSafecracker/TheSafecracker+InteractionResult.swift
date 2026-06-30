@@ -16,7 +16,7 @@ extension TheSafecracker {
             return false
         }
 
-        var payload: ResultPayload? {
+        var payload: ActionResultPayload? {
             if case .success(let success) = outcome { return success.payload }
             return nil
         }
@@ -67,13 +67,31 @@ extension TheSafecracker {
         static func success(
             method: ActionMethod,
             message: String? = nil,
-            payload: ResultPayload? = nil,
             subjectEvidence: ActionSubjectEvidence? = nil,
             resolvedElementId: HeistId? = nil,
             activationTrace: ActivationTrace? = nil
         ) -> InteractionResult {
             InteractionResult(
                 method: method,
+                message: message,
+                outcome: .success(InteractionSuccess(
+                    payload: nil,
+                    subjectEvidence: subjectEvidence,
+                    resolvedElementId: resolvedElementId,
+                    activationTrace: activationTrace
+                ))
+            )
+        }
+
+        static func success(
+            payload: ActionResultPayload,
+            message: String? = nil,
+            subjectEvidence: ActionSubjectEvidence? = nil,
+            resolvedElementId: HeistId? = nil,
+            activationTrace: ActivationTrace? = nil
+        ) -> InteractionResult {
+            InteractionResult(
+                method: payload.method,
                 message: message,
                 outcome: .success(InteractionSuccess(
                     payload: payload,
@@ -184,14 +202,14 @@ extension TheSafecracker {
     }
 
     struct InteractionSuccess {
-        let payload: ResultPayload?
+        let payload: ActionResultPayload?
         let subjectEvidence: ActionSubjectEvidence?
         let resolvedElementId: HeistId?
         let activationTrace: ActivationTrace?
         let timing: ActionPerformanceTiming?
 
         init(
-            payload: ResultPayload? = nil,
+            payload: ActionResultPayload? = nil,
             subjectEvidence: ActionSubjectEvidence? = nil,
             resolvedElementId: HeistId? = nil,
             activationTrace: ActivationTrace? = nil,

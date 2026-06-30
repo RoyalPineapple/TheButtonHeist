@@ -36,11 +36,10 @@ import TheScore
         self.accessibilityTrace = AccessibilityTrace(capture: capture)
     }
 
-    func success(payload: ResultPayload? = nil) -> ActionResult {
+    func success() -> ActionResult {
         ActionResult.success(
             method: method,
             message: message,
-            payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,
@@ -50,12 +49,42 @@ import TheScore
         )
     }
 
-    func failure(errorKind: ErrorKind = .actionFailed, payload: ResultPayload? = nil) -> ActionResult {
+    func success(payload: ActionResultPayload?) -> ActionResult {
+        guard let payload else { return success() }
+        precondition(payload.method == method, "ActionResultBuilder payload method must match builder method")
+        return ActionResult.success(
+            payload: payload,
+            message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+
+    func failure(errorKind: ErrorKind = .actionFailed) -> ActionResult {
         ActionResult.failure(
             method: method,
             errorKind: errorKind,
             message: message,
+            accessibilityTrace: accessibilityTrace,
+            settled: settled,
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence,
+            activationTrace: activationTrace,
+            timing: timing
+        )
+    }
+
+    func failure(errorKind: ErrorKind = .actionFailed, payload: ActionResultPayload?) -> ActionResult {
+        guard let payload else { return failure(errorKind: errorKind) }
+        precondition(payload.method == method, "ActionResultBuilder payload method must match builder method")
+        return ActionResult.failure(
             payload: payload,
+            errorKind: errorKind,
+            message: message,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
             settleTimeMs: settleTimeMs,

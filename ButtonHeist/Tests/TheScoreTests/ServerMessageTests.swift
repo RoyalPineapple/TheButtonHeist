@@ -201,7 +201,7 @@ final class ServerMessageTests: XCTestCase {
     // MARK: - ActionResult Tests
 
     func testActionResultWithValue() throws {
-        let result = ActionResult.success(method: .typeText, payload: .value("Hello World"))
+        let result = ActionResult.success(payload: .typeText("Hello World"))
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -236,7 +236,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultPayloadValueWireShape() throws {
-        let result = ActionResult.success(method: .typeText, payload: .value("Hi"))
+        let result = ActionResult.success(payload: .typeText("Hi"))
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")
@@ -252,7 +252,7 @@ final class ServerMessageTests: XCTestCase {
             timestamp: Date(timeIntervalSince1970: 0),
             interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         )
-        let result = ActionResult.success(method: .takeScreenshot, payload: .screenshot(screen))
+        let result = ActionResult.success(payload: .screenshot(screen))
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
@@ -270,7 +270,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultPayloadHeistExecutionWireShape() throws {
         let heist = HeistExecutionResult.passed(steps: [], durationMs: 42)
-        let result = ActionResult.success(method: .heistPlan, payload: .heistExecution(heist))
+        let result = ActionResult.success(payload: .heistExecution(heist))
 
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
@@ -364,7 +364,7 @@ final class ServerMessageTests: XCTestCase {
             ),
             textRange: RotorTextRange(text: "@maria", startOffset: 10, endOffset: 16, rangeDescription: "[10..<16]")
         )
-        let result = ActionResult.success(method: .rotor, payload: .rotor(rotor))
+        let result = ActionResult.success(payload: .rotor(rotor))
         let data = try JSONEncoder().encode(result)
         let json = try JSONProbe(data: data)
         let payload = try json.object("payload")

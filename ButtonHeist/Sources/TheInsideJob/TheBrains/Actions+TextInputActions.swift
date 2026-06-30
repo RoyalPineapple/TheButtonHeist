@@ -29,16 +29,18 @@ extension Actions {
             return failure.interactionResult(commandMethod: .setPasteboard)
         }
         UIPasteboard.general.string = target.text
-        return .success(method: .setPasteboard, payload: .value(target.text))
+        return .success(payload: .setPasteboard(target.text))
     }
 
     func executeGetPasteboard() -> TheSafecracker.InteractionResult {
         let text = UIPasteboard.general.string
-        return .success(
-            method: .getPasteboard,
-            message: text == nil ? "Pasteboard is empty or contains non-text data" : nil,
-            payload: text.map(ResultPayload.value)
-        )
+        guard let text else {
+            return .success(
+                method: .getPasteboard,
+                message: "Pasteboard is empty or contains non-text data"
+            )
+        }
+        return .success(payload: .getPasteboard(text))
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
@@ -82,9 +84,15 @@ extension Actions {
             }
         }
 
+        if let value = Self.liveTextInputValue(for: focusResult.resolvedObject) {
+            return .success(
+                payload: .typeText(value),
+                subjectEvidence: focusResult.subjectEvidence,
+                resolvedElementId: focusResult.resolvedElementId
+            )
+        }
         return .success(
             method: .typeText,
-            payload: Self.liveTextInputValue(for: focusResult.resolvedObject).map(ResultPayload.value),
             subjectEvidence: focusResult.subjectEvidence,
             resolvedElementId: focusResult.resolvedElementId
         )
@@ -94,14 +102,14 @@ extension Actions {
         for target: TypeTextTarget,
         resolvedElementId: HeistId?,
         in afterState: PostActionObservation.BeforeState
-    ) -> ResultPayload? {
+    ) -> ActionResultPayload? {
         if let resolvedElementId,
            let value = afterState.screen.findElement(heistId: resolvedElementId)?.element.value {
-            return .value(value)
+            return .typeText(value)
         }
         guard let elementTarget = target.elementTarget else { return nil }
         return Self.textInputValue(for: elementTarget, in: afterState.interface.projectedElements)
-            .map(ResultPayload.value)
+            .map(ActionResultPayload.typeText)
     }
 
     private func typeTextInjectionFailureMessage(

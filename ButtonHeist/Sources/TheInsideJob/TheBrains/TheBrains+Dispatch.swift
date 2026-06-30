@@ -126,7 +126,7 @@ extension TheBrains {
         observationScope: SemanticObservationScope = .visible,
         beforeStateScope: SemanticObservationScope = .visible,
         postActionCommitScope: SemanticObservationScope = .visible,
-        afterStatePayload: ((PostActionPayloadContext) -> ResultPayload?)? = nil,
+        afterStatePayload: ((PostActionPayloadContext) -> ActionResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
