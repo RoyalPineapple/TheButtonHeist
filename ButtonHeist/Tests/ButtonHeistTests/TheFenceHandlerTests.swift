@@ -771,6 +771,90 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(failure.details.retryable, true)
     }
 
+    func testAuthFailureMappingPreservesSourceHint() throws {
+        let hint = "Retry with the configured token."
+        let response = FenceResponse.failure(HandoffConnectionError.disconnected(
+            .authFailed("Invalid token", hint: hint)
+        ))
+        let failure = try XCTUnwrap(response.diagnosticFailure)
+
+        XCTAssertEqual(failure.failureCode, FailureCode(.authFailed))
+        XCTAssertEqual(failure.code, KnownFailureCode.authFailed.rawValue)
+        XCTAssertEqual(failure.kind, .authentication)
+        XCTAssertEqual(failure.phase, .authentication)
+        XCTAssertEqual(failure.retryable, false)
+        XCTAssertEqual(failure.hint, hint)
+        XCTAssertEqual(failure.details.hint, hint)
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("code"), KnownFailureCode.authFailed.rawValue)
+        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.authentication.rawValue)
+        XCTAssertEqual(try json.string("phase"), FailurePhase.authentication.rawValue)
+        XCTAssertEqual(try json.string("hint"), hint)
+
+        let detailsJSON = try json.object("details")
+        XCTAssertEqual(try detailsJSON.string("code"), KnownFailureCode.authFailed.rawValue)
+        XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.authentication.rawValue)
+        XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.authentication.rawValue)
+        XCTAssertEqual(try detailsJSON.string("hint"), hint)
+    }
+
+    func testAuthFailureMappingPreservesReason() throws {
+        let reason = "Invalid token"
+        let response = FenceResponse.failure(HandoffConnectionError.disconnected(
+            .authFailed(reason, hint: "Retry with the configured token.")
+        ))
+        let failure = try XCTUnwrap(response.diagnosticFailure)
+
+        XCTAssertEqual(failure.failureCode, FailureCode(.authFailed))
+        XCTAssertTrue(failure.message.contains(reason), failure.message)
+        XCTAssertEqual(failure.hint, "Retry with the configured token.")
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("code"), KnownFailureCode.authFailed.rawValue)
+        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.authentication.rawValue)
+        XCTAssertTrue(try json.string("message").contains(reason))
+    }
+
+    @ButtonHeistActor
+    func testTransportSendFailureUsesNetworkDiagnosticShape() async throws {
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(autoReconnect: false))
+        mockConn.sendOutcome = .failed(.transportFailed(DeviceTransportFailure(.posix(.ECONNRESET))))
+
+        let response: FenceResponse
+        do {
+            response = try await fence.execute(command: .getInterface)
+        } catch {
+            response = FenceResponse.failure(error)
+        }
+        let failure = try XCTUnwrap(response.diagnosticFailure)
+
+        XCTAssertEqual(failure.failureCode, FailureCode(.transportNetworkError))
+        XCTAssertNotEqual(failure.failureCode, FailureCode(.requestActionFailed))
+        XCTAssertEqual(failure.code, KnownFailureCode.transportNetworkError.rawValue)
+        XCTAssertEqual(failure.kind, .connection)
+        XCTAssertEqual(failure.phase, .transport)
+        XCTAssertEqual(failure.retryable, true)
+        XCTAssertEqual(failure.hint, KnownFailureCode.transportNetworkError.defaultHint)
+        XCTAssertTrue(failure.message.contains("posix"), failure.message)
+        XCTAssertFalse(failure.message.contains(KnownFailureCode.requestActionFailed.rawValue), failure.message)
+
+        let json = try publicJSONProbe(response).object()
+        XCTAssertEqual(try json.string("status"), "error")
+        XCTAssertEqual(try json.string("code"), KnownFailureCode.transportNetworkError.rawValue)
+        XCTAssertEqual(try json.string("errorCode"), KnownFailureCode.transportNetworkError.rawValue)
+        XCTAssertEqual(try json.string("kind"), DiagnosticFailureKind.connection.rawValue)
+        XCTAssertEqual(try json.string("phase"), FailurePhase.transport.rawValue)
+        XCTAssertTrue(try json.bool("retryable"))
+        XCTAssertEqual(try json.string("hint"), KnownFailureCode.transportNetworkError.defaultHint)
+
+        let detailsJSON = try json.object("details")
+        XCTAssertEqual(try detailsJSON.string("code"), KnownFailureCode.transportNetworkError.rawValue)
+        XCTAssertEqual(try detailsJSON.string("kind"), DiagnosticFailureKind.connection.rawValue)
+        XCTAssertEqual(try detailsJSON.string("phase"), FailurePhase.transport.rawValue)
+        XCTAssertTrue(try detailsJSON.bool("retryable"))
+    }
+
     @ButtonHeistActor
     func testDefensiveClientActionFallbackUsesTypedFailureDetails() async throws {
         let fence = TheFence(configuration: .init())
