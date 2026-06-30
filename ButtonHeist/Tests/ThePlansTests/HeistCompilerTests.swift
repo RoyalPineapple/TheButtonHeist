@@ -874,66 +874,24 @@ struct HeistCompilerTests {
     }
 
     @Test
-    func `pipeline surfaces avoid new tuple return APIs`() throws {
+    func `production source avoids tuple return APIs while allowing closure local tuples`() throws {
         let root = try repositoryRoot()
-        let pipelineFiles = try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/TheInsideJob/TheBrains", isDirectory: true))
-            + swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/TheInsideJob/TheStash", isDirectory: true))
-            + [
-                root.appendingPathComponent("ButtonHeist/Sources/TheScore/AccessibilityPredicate+Evaluation.swift"),
-                root.appendingPathComponent("ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift"),
-            ]
-        let allowedTupleReturns: Set<String> = [
-            "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+Capture.swift:"
-                + "func captureScreen() -> (image: UIImage, bounds: CGRect)?",
-            "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+WorldState.swift:"
-                + "func semanticInterfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String)",
-            "ButtonHeist/Sources/TheInsideJob/TheStash/TheStash+WorldState.swift:"
-                + "func semanticInterfaceWithHash( for screen: Screen, timestamp: Date = Date() ) "
-                + "-> (interface: Interface, hash: String)",
-            "ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift:"
-                + "private static func matcherTraitSortKey(_ trait: HeistTrait) -> (Int, String)",
-        ]
-        let functionTupleReturnPattern = #"\b(?:@\w+(?:\([^)]*\))?\s+"#
-            + #"|(?:public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated)\s+)*"#
-            + #"func\s+\w+[^{=]*?->\s*\([^)]*,[^)]*\)\??"#
-        let functionTupleReturns = try sourceSnippets(
-            in: pipelineFiles,
+        let tupleReturnAPIPattern = #"(?m)(?:^\s*(?:(?:@\w+(?:\([^)]*\))?|public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated|final|override)\s+)*"#
+            + #"func\s+\w+[^{=;]*?\)\s*(?:async\s+)?(?:(?:throws|rethrows)\s+)?->\s*\((?!\s*@Sendable\b)[^()]*,[^()]*\)\??"#
+            + #"|^\s*(?:(?:public|package|internal|private|fileprivate)\s+)*typealias\s+\w+[^=\n]*=[^;\n]*->\s*\((?!\s*@Sendable\b)[^()]*,[^()]*\)\??)"#
+        let tupleReturnAPIs = try sourceSnippets(
+            in: productionSwiftFiles(in: root),
             root: root,
-            pattern: functionTupleReturnPattern
+            pattern: tupleReturnAPIPattern
         )
-        let closureTupleReturns = try sourceSnippets(
-            in: pipelineFiles,
-            root: root,
-            pattern: #"\b(?:typealias|let|var)\b[^\n=]*[:=][^\n]*->\s*\([^)\n]*,[^)\n]*\)\??"#
-        )
-        let unexpected = functionTupleReturns
-            .union(closureTupleReturns)
-            .subtracting(allowedTupleReturns)
 
         #expect(
-            unexpected.isEmpty,
-            "Unexpected non-local tuple return APIs in pipeline surfaces:\n\(unexpected.sorted().joined(separator: "\n"))"
-        )
-    }
-
-    @Test
-    func `parser compiler and fence surfaces avoid new tuple return APIs`() throws {
-        let root = try repositoryRoot()
-        let allowedTupleReturns: Set<String> = []
-        let tupleReturnPattern = #"\b(?:@\w+(?:\([^)]*\))?\s+"#
-            + #"|(?:public|package|internal|private|fileprivate|static|class|mutating|nonmutating|nonisolated)\s+)*"#
-            + #"func\s+\w+[^{=]*?->\s*\([^)]*,[^)]*\)\??"#
-        let functionTupleReturns = try sourceSnippets(
-            in: parserCompilerFenceTupleReturnGuardFiles(in: root),
-            root: root,
-            pattern: tupleReturnPattern
-        )
-
-        let unexpected = functionTupleReturns.subtracting(allowedTupleReturns)
-
-        #expect(
-            unexpected.isEmpty,
-            "Unexpected tuple return APIs in parser/compiler/fence surfaces:\n\(unexpected.sorted().joined(separator: "\n"))"
+            tupleReturnAPIs.isEmpty,
+            """
+            Unexpected production tuple return APIs. Use a named value type for \
+            non-local return surfaces; closure-local tuple transforms are allowed:
+            \(tupleReturnAPIs.sorted().joined(separator: "\n"))
+            """
         )
     }
 
@@ -1466,24 +1424,6 @@ private func productionSwiftFiles(in root: URL) throws -> [URL] {
     return try relativeRoots.flatMap { relativeRoot in
         try swiftFiles(in: root.appendingPathComponent(relativeRoot, isDirectory: true))
     }
-}
-
-private func parserCompilerFenceTupleReturnGuardFiles(in root: URL) throws -> [URL] {
-    let plansRoot = root.appendingPathComponent("ButtonHeist/Sources/ThePlans", isDirectory: true)
-    let sourceParserFiles = try swiftFiles(in: plansRoot).filter { file in
-        file.lastPathComponent.hasPrefix("HeistPlanSource")
-            && file.lastPathComponent.hasSuffix("Parser.swift")
-    }
-    let compilerFiles = [
-        "ButtonHeist/Sources/ThePlans/HeistCompiler.swift",
-        "ButtonHeist/Sources/ThePlans/HeistPlanSourceCompiler.swift",
-        "ButtonHeist/Sources/ThePlans/HeistSwiftFileCompiler.swift",
-    ].map { root.appendingPathComponent($0) }
-    let fenceFiles = try swiftFiles(
-        in: root.appendingPathComponent("ButtonHeist/Sources/TheButtonHeist/TheFence", isDirectory: true)
-    )
-
-    return sourceParserFiles + compilerFiles + fenceFiles
 }
 
 private func sourceAndTestSwiftFiles(in root: URL) throws -> [URL] {
