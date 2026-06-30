@@ -1014,24 +1014,34 @@ struct HeistCompilerTests {
         #expect(!compilerSource.contains("throw HeistPlanSourceCompilerError(diagnostic: diagnostics"))
 
         let plansFiles = try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources/ThePlans", isDirectory: true))
-        let allowedUncheckedPaths: Set<String> = [
-            "ButtonHeist/Sources/ThePlans/HeistPlan+RuntimeValidationAdmission.swift",
-            "ButtonHeist/Sources/ThePlans/HeistPlan+RuntimeValidationTraversal.swift",
-            "ButtonHeist/Sources/ThePlans/HeistPlanSourceDiagnostics.swift",
-        ]
-        let unexpectedUncheckedAdmission = try sourceMatches(
+        let removedUncheckedAdmission = try sourceMatches(
             in: plansFiles,
             root: root,
             pattern: #"uncheckedPlanForRuntimeSafetyValidation\s*\("#
         )
+        #expect(
+            removedUncheckedAdmission.isEmpty,
+            "Unexpected unchecked runtime admission bridge:\n\(removedUncheckedAdmission.sorted().joined(separator: "\n"))"
+        )
+
+        let allowedDraftPaths: Set<String> = [
+            "ButtonHeist/Sources/ThePlans/HeistPlan+RuntimeValidationAdmission.swift",
+            "ButtonHeist/Sources/ThePlans/HeistPlan+RuntimeValidationTraversal.swift",
+            "ButtonHeist/Sources/ThePlans/HeistPlanSourceControlFlowParser.swift",
+        ]
+        let unexpectedDraftAdmission = try sourceMatches(
+            in: plansFiles,
+            root: root,
+            pattern: #"runtimeSafetyTraversalDraft(?:Plan|Step)?\b"#
+        )
         .filter { match in
             guard let path = match.split(separator: ":", maxSplits: 1).first else { return true }
-            return !allowedUncheckedPaths.contains(String(path))
+            return !allowedDraftPaths.contains(String(path))
         }
 
         #expect(
-            unexpectedUncheckedAdmission.isEmpty,
-            "Unchecked runtime admission escaped validation boundary:\n\(unexpectedUncheckedAdmission.sorted().joined(separator: "\n"))"
+            unexpectedDraftAdmission.isEmpty,
+            "Runtime safety traversal draft escaped admission/parser boundary:\n\(unexpectedDraftAdmission.sorted().joined(separator: "\n"))"
         )
     }
 

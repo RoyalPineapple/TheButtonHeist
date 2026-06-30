@@ -3,8 +3,7 @@ import Foundation
 struct ResolvedStringLoopPayloadValidationContext {
     let path: HeistTraversalPath
     let depth: Int
-    let scope: HeistReferenceScope
-    let environment: HeistExecutionEnvironment
+    let referenceBindings: HeistReferenceBindingContext
     let definitionScope: HeistDefinitionScope
     let rootDefinitionScope: HeistDefinitionScope
     let callGraph: HeistCallGraph?
@@ -32,10 +31,10 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func validate(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPlan {
-        let plan = raw.uncheckedPlanForRuntimeSafetyValidation()
-        let failures = failures(in: plan)
+        let draft = HeistRuntimeSafetyTraversalDraft(candidate: raw)
+        let failures = failures(in: draft.plan)
         guard failures.isEmpty else { throw HeistPlanRuntimeSafetyError(failures: failures) }
-        return plan
+        return draft.plan
     }
 
     mutating func failures(in plan: HeistPlan) -> [HeistPlanRuntimeSafetyFailure] {
@@ -111,8 +110,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             step,
             path: context.path,
             bodyDepth: context.depth + 1,
-            scope: context.scope,
-            environment: context.environment,
+            referenceBindings: context.referenceBindings,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             callGraph: context.callGraph
@@ -258,7 +256,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             return
         }
         do {
-            _ = try context.environment.binding(argument: step.argument, to: resolved.definition.parameter)
+            _ = try context.referenceBindings.binding(argument: step.argument, to: resolved.definition.parameter)
         } catch {
             fail(
                 path: context.path.child(.argument).description,
@@ -393,8 +391,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
         _ step: ForEachStringStep,
         path: HeistTraversalPath,
         bodyDepth: Int,
-        scope: HeistReferenceScope,
-        environment: HeistExecutionEnvironment,
+        referenceBindings: HeistReferenceBindingContext,
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
         callGraph: HeistCallGraph?
@@ -418,8 +415,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
                 context: ResolvedStringLoopPayloadValidationContext(
                     path: path.child(.body),
                     depth: bodyDepth,
-                    scope: scope.bindingString(step.parameter),
-                    environment: environment.binding(string: value, to: step.parameter),
+                    referenceBindings: referenceBindings.binding(string: value, to: step.parameter),
                     definitionScope: definitionScope,
                     rootDefinitionScope: rootDefinitionScope,
                     callGraph: callGraph,
@@ -477,8 +473,7 @@ struct HeistPlanRuntimeSafetyValidator: HeistPlanTraversalVisitor {
             steps: steps,
             path: context.path,
             depth: context.depth,
-            scope: context.scope,
-            environment: context.environment,
+            referenceBindings: context.referenceBindings,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             callGraph: context.callGraph,

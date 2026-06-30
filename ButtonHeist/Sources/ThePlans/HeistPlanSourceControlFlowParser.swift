@@ -237,7 +237,7 @@ extension HeistPlanSourceParser {
     mutating func parseHeistBlock() throws -> [HeistStep] {
         try expectSymbol("{")
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
-        return body.steps.map(\.uncheckedStepForRuntimeSafetyValidation)
+        return body.steps.map(\.runtimeSafetyTraversalDraftStep)
     }
 
     mutating func parseLowercaseElseChainIfPresent(chainContext: String) throws -> [HeistStep]? {
@@ -263,7 +263,7 @@ extension HeistPlanSourceParser {
         let body = try parseHeistBody(untilRightBrace: true, allowDefinitions: false)
         return ParsedClosureParameterBlock(
             referenceName: referenceName,
-            body: body.steps.map(\.uncheckedStepForRuntimeSafetyValidation)
+            body: body.steps.map(\.runtimeSafetyTraversalDraftStep)
         )
     }
 

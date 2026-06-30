@@ -149,11 +149,26 @@ func `heist planning compiles inline ButtonHeist DSL source`() throws {
 }
 
 @Test
+func `heist planning admission request carries one closed source`() throws {
+    let artifact = try HeistPlanning.admissionRequest(
+        commandName: "run_heist",
+        path: "/tmp/SearchFlow.heist",
+        inlineDSL: nil
+    )
+    let inline = try HeistPlanning.admissionRequest(
+        commandName: "run_heist",
+        path: nil,
+        inlineDSL: #"HeistPlan("sourceFlow") { Warn("from source") }"#
+    )
+
+    #expect(artifact.source == .artifactPath("/tmp/SearchFlow.heist"))
+    #expect(inline.source == .inlineDSL(#"HeistPlan("sourceFlow") { Warn("from source") }"#))
+}
+
+@Test
 func `heist planning admission rejects missing public source`() throws {
     do {
-        _ = try HeistPlanning.admitPlanSource(from: HeistPlanSourceAdmissionRequest(
-            commandName: "run_heist"
-        ))
+        _ = try HeistPlanning.admissionRequest(commandName: "run_heist", path: nil, inlineDSL: nil)
         Issue.record("Expected missing plan source to fail")
     } catch {
         #expect(String(describing: error).contains("requires exactly one plan source"))
@@ -163,11 +178,11 @@ func `heist planning admission rejects missing public source`() throws {
 @Test
 func `heist planning admission rejects multiple public sources`() throws {
     do {
-        _ = try HeistPlanning.admitPlanSource(from: HeistPlanSourceAdmissionRequest(
+        _ = try HeistPlanning.admissionRequest(
             commandName: "run_heist",
             path: "/tmp/SearchFlow.heist",
             inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#
-        ))
+        )
         Issue.record("Expected multiple plan sources to fail")
     } catch {
         #expect(String(describing: error).contains("accepts exactly one plan source"))
@@ -179,7 +194,7 @@ func `heist planning admission rejects inline source when policy is artifact onl
     do {
         _ = try HeistPlanning.admitPlanSource(from: HeistPlanSourceAdmissionRequest(
             commandName: "heist-plan",
-            inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#,
+            source: .inlineDSL(#"HeistPlan("searchFlow") { Warn("from source") }"#),
             sourcePolicy: .artifactOnly
         ))
         Issue.record("Expected inline source to fail for artifact-only admission")
@@ -209,12 +224,10 @@ func `heist planning rejects standalone raw json path as public source`() throws
 @Test
 func `heist planning rejects raw structured JSON IR fields as public source`() throws {
     do {
-        _ = try HeistPlanning.loadValidatedPlan(from: HeistPlanSourceAdmissionRequest(
+        try HeistPlanning.rejectRawStructuredJSONIRFields(
             commandName: "run_heist",
-            path: "/tmp/SearchFlow.heist",
-            inlineDSL: #"HeistPlan("searchFlow") { Warn("from source") }"#,
-            rawStructuredJSONIRFields: ["version", "body"]
-        ))
+            fields: ["version", "body"]
+        )
         Issue.record("Expected raw structured JSON fields to fail")
     } catch {
         #expect(String(describing: error).contains("raw JSON HeistPlan IR field"))

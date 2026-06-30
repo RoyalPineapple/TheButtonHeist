@@ -2171,11 +2171,11 @@ final class TheBrainsActionTests: XCTestCase {
     func testHeistExecutionRuntimeRejectsSelfInvocationOutsideLocalScopeWhenValidationIsBypassed() async throws {
         let runtime = heistRuntime(observations: [])
         let recursiveName = "repeatHeist"
-        let plan = HeistPlanAdmissionCandidate(definitions: [
-            HeistPlanAdmissionCandidate(name: recursiveName, body: [
+        let plan = HeistPlan(runtimeValidatedVersion: HeistPlan.currentVersion, definitions: [
+            HeistPlan(runtimeValidatedVersion: HeistPlan.currentVersion, name: recursiveName, body: [
                 .invoke(HeistInvocationStep(path: [recursiveName])),
             ]),
-        ], body: []).uncheckedPlanForRuntimeSafetyValidation()
+        ], body: [])
 
         let results = await brains.executeHeistSteps(
             [.invoke(HeistInvocationStep(path: [recursiveName]))],

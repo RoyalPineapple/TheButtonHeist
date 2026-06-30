@@ -55,12 +55,19 @@ struct HeistTraversalContext {
     let depth: Int
     let stepIndex: Int?
     let nextStep: HeistStep?
-    let scope: HeistReferenceScope
-    let environment: HeistExecutionEnvironment
+    let referenceBindings: HeistReferenceBindingContext
     let definitionScope: HeistDefinitionScope
     let rootDefinitionScope: HeistDefinitionScope
     let invocationStack: [HeistCallGraph.Node]
     let callGraph: HeistCallGraph?
+
+    var scope: HeistReferenceScope {
+        referenceBindings.scope
+    }
+
+    var environment: HeistExecutionEnvironment {
+        referenceBindings.environment
+    }
 }
 
 protocol HeistPlanTraversalVisitor {
@@ -113,16 +120,14 @@ struct HeistPlanTraversal {
         visitor: inout V
     ) {
         let callGraph = callGraph ?? HeistCallGraph(plan: plan)
-        let rootScope = HeistReferenceScope.empty.binding(parameter: plan.parameter)
-        let rootEnvironment = HeistExecutionEnvironment.runtimeSafetyPlaceholder(for: plan.parameter)
+        let rootBindings = HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: plan.parameter)
         let rootDefinitionScope = HeistDefinitionScope(definitions: plan.definitions)
         let context = HeistTraversalContext(
             path: .root,
             depth: 0,
             stepIndex: nil,
             nextStep: nil,
-            scope: rootScope,
-            environment: rootEnvironment,
+            referenceBindings: rootBindings,
             definitionScope: rootDefinitionScope,
             rootDefinitionScope: rootDefinitionScope,
             invocationStack: [],
@@ -142,8 +147,7 @@ struct HeistPlanTraversal {
             steps: plan.body,
             path: .root.child(.body),
             depth: 1,
-            scope: rootScope,
-            environment: rootEnvironment,
+            referenceBindings: rootBindings,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: [],
@@ -156,8 +160,7 @@ struct HeistPlanTraversal {
         steps: [HeistStep],
         path: HeistTraversalPath,
         depth: Int,
-        scope: HeistReferenceScope,
-        environment: HeistExecutionEnvironment,
+        referenceBindings: HeistReferenceBindingContext,
         definitionScope: HeistDefinitionScope,
         rootDefinitionScope: HeistDefinitionScope,
         invocationStack: [HeistCallGraph.Node] = [],
@@ -170,8 +173,7 @@ struct HeistPlanTraversal {
                 depth: depth,
                 stepIndex: index,
                 nextStep: steps.dropFirst(index + 1).first,
-                scope: scope,
-                environment: environment,
+                referenceBindings: referenceBindings,
                 definitionScope: definitionScope,
                 rootDefinitionScope: rootDefinitionScope,
                 invocationStack: invocationStack,
@@ -242,8 +244,7 @@ struct HeistPlanTraversal {
             steps: elseBody,
             path: elseContext.path,
             depth: context.depth + 1,
-            scope: context.scope,
-            environment: context.environment,
+            referenceBindings: context.referenceBindings,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -263,8 +264,10 @@ struct HeistPlanTraversal {
             steps: forEach.body,
             path: forEachContext.path.child(.body),
             depth: context.depth + 1,
-            scope: context.scope.bindingTarget(forEach.parameter),
-            environment: context.environment.binding(target: .predicate(forEach.matching), to: forEach.parameter),
+            referenceBindings: context.referenceBindings.binding(
+                target: .predicate(forEach.matching),
+                to: forEach.parameter
+            ),
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -284,8 +287,10 @@ struct HeistPlanTraversal {
             steps: forEach.body,
             path: forEachContext.path.child(.body),
             depth: context.depth + 1,
-            scope: context.scope.bindingString(forEach.parameter),
-            environment: context.environment.binding(string: forEach.values.first ?? "", to: forEach.parameter),
+            referenceBindings: context.referenceBindings.binding(
+                string: forEach.values.first ?? "",
+                to: forEach.parameter
+            ),
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -309,8 +314,7 @@ struct HeistPlanTraversal {
             steps: repeatUntil.body,
             path: repeatContext.path.child(.body),
             depth: context.depth + 1,
-            scope: context.scope,
-            environment: context.environment,
+            referenceBindings: context.referenceBindings,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -324,8 +328,7 @@ struct HeistPlanTraversal {
             steps: elseBody,
             path: elseContext.path,
             depth: context.depth + 1,
-            scope: context.scope,
-            environment: context.environment,
+            referenceBindings: context.referenceBindings,
             definitionScope: context.definitionScope,
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -359,8 +362,7 @@ struct HeistPlanTraversal {
             steps: plan.body,
             path: heistContext.path.child(.body),
             depth: context.depth + 1,
-            scope: context.scope,
-            environment: context.environment,
+            referenceBindings: context.referenceBindings,
             definitionScope: heistContext.definitionScope,
             rootDefinitionScope: heistContext.rootDefinitionScope,
             invocationStack: context.invocationStack,
@@ -385,14 +387,16 @@ struct HeistPlanTraversal {
         guard let resolved = context.resolveInvocation(path: invoke.invocationPath) else { return }
         let resolvedNode = resolved.callGraphNode
         guard context.callGraphCycle(closing: resolvedNode) == nil,
-              let environment = try? context.environment.binding(argument: invoke.argument, to: resolved.definition.parameter)
+              let referenceBindings = try? context.referenceBindings.binding(
+                argument: invoke.argument,
+                to: resolved.definition.parameter
+              )
         else { return }
         walk(
             steps: resolved.definition.body,
             path: invokeContext.path.child(.body),
             depth: context.depth + 1,
-            scope: context.scope.binding(parameter: resolved.definition.parameter),
-            environment: environment,
+            referenceBindings: referenceBindings,
             definitionScope: HeistDefinitionScope(definitions: resolved.definition.definitions, pathPrefix: resolved.namePath),
             rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: context.invocationStack + [resolvedNode],
@@ -417,8 +421,7 @@ struct HeistPlanTraversal {
                 steps: predicateCase.body,
                 path: caseContext.path.child(.body),
                 depth: branchContext.depth + 1,
-                scope: branchContext.scope,
-                environment: branchContext.environment,
+                referenceBindings: branchContext.referenceBindings,
                 definitionScope: branchContext.definitionScope,
                 rootDefinitionScope: branchContext.rootDefinitionScope,
                 invocationStack: branchContext.invocationStack,
@@ -433,8 +436,7 @@ struct HeistPlanTraversal {
                 steps: elseBody,
                 path: elseContext.path,
                 depth: branchContext.depth + 1,
-                scope: branchContext.scope,
-                environment: branchContext.environment,
+                referenceBindings: branchContext.referenceBindings,
                 definitionScope: branchContext.definitionScope,
                 rootDefinitionScope: branchContext.rootDefinitionScope,
                 invocationStack: branchContext.invocationStack,
@@ -457,26 +459,13 @@ struct HeistPlanTraversal {
         for (index, definition) in definitions.enumerated() {
             let currentDefinitionPath = definitionScope.pathPrefix + [definition.name ?? ""]
             let currentDefinitionNode = HeistCallGraph.Node(namePath: currentDefinitionPath)
-            var scope = HeistReferenceScope.empty
-            var environment = HeistExecutionEnvironment.empty
-            if let parameterName = definition.parameter.name {
-                scope = scope.binding(parameter: definition.parameter)
-                switch definition.parameter {
-                case .none:
-                    break
-                case .string:
-                    environment = environment.binding(string: "__heist_parameter__", to: parameterName)
-                case .elementTarget:
-                    environment = environment.binding(target: .predicate(.identifier("__heist_parameter__")), to: parameterName)
-                }
-            }
+            let referenceBindings = HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: definition.parameter)
             let definitionContext = HeistTraversalContext(
                 path: path.index(index),
                 depth: depth,
                 stepIndex: nil,
                 nextStep: nil,
-                scope: scope,
-                environment: environment,
+                referenceBindings: referenceBindings,
                 definitionScope: definitionScope,
                 rootDefinitionScope: rootDefinitionScope,
                 invocationStack: [],
@@ -496,8 +485,7 @@ struct HeistPlanTraversal {
                 steps: definition.body,
                 path: definitionContext.path.child(.body),
                 depth: depth + 1,
-                scope: scope,
-                environment: environment,
+                referenceBindings: referenceBindings,
                 definitionScope: HeistDefinitionScope(definitions: definition.definitions, pathPrefix: currentDefinitionPath),
                 rootDefinitionScope: rootDefinitionScope,
                 invocationStack: [currentDefinitionNode],
@@ -520,8 +508,7 @@ extension HeistTraversalContext {
             depth: depth ?? self.depth,
             stepIndex: stepIndex,
             nextStep: nextStep,
-            scope: scope,
-            environment: environment,
+            referenceBindings: referenceBindings,
             definitionScope: definitionScope ?? self.definitionScope,
             rootDefinitionScope: rootDefinitionScope ?? self.rootDefinitionScope,
             invocationStack: invocationStack,
@@ -535,8 +522,7 @@ extension HeistTraversalContext {
             depth: depth + 1,
             stepIndex: stepIndex,
             nextStep: nil,
-            scope: scope,
-            environment: environment,
+            referenceBindings: referenceBindings,
             definitionScope: definitionScope,
             rootDefinitionScope: rootDefinitionScope,
             invocationStack: invocationStack,
@@ -552,45 +538,6 @@ extension HeistTraversalContext {
         let cycle = callGraph?.nodeCycle(closing: resolvedNode, in: invocationStack)
             ?? HeistCallGraph.nodeCycle(closing: resolvedNode, in: invocationStack)
         return cycle.map(HeistCallGraph.Cycle.init)
-    }
-}
-
-struct HeistReferenceScope {
-    static let empty = HeistReferenceScope()
-
-    var targetRefs: Set<HeistReferenceName> = []
-    var stringRefs: Set<HeistReferenceName> = []
-
-    func bindingTarget(_ reference: HeistReferenceName) -> HeistReferenceScope {
-        var copy = self
-        copy.targetRefs.insert(reference)
-        return copy
-    }
-
-    func bindingTarget(_ reference: String) -> HeistReferenceScope {
-        bindingTarget(HeistReferenceName(rawValue: reference))
-    }
-
-    func bindingString(_ reference: HeistReferenceName) -> HeistReferenceScope {
-        var copy = self
-        copy.stringRefs.insert(reference)
-        return copy
-    }
-
-    func bindingString(_ reference: String) -> HeistReferenceScope {
-        bindingString(HeistReferenceName(rawValue: reference))
-    }
-
-    func binding(parameter: HeistParameter) -> HeistReferenceScope {
-        guard let reference = parameter.name else { return self }
-        switch parameter {
-        case .none:
-            return self
-        case .string:
-            return bindingString(reference)
-        case .elementTarget:
-            return bindingTarget(reference)
-        }
     }
 }
 
@@ -638,20 +585,6 @@ struct HeistDefinitionScope {
         }
         guard path.components.count > 1 else { return nil }
         return rootScope.resolve(path: path)
-    }
-}
-
-extension HeistExecutionEnvironment {
-    static func runtimeSafetyPlaceholder(for parameter: HeistParameter) -> HeistExecutionEnvironment {
-        guard let parameterName = parameter.name else { return .empty }
-        switch parameter {
-        case .none:
-            return .empty
-        case .string:
-            return .empty.binding(string: "__heist_parameter__", to: parameterName)
-        case .elementTarget:
-            return .empty.binding(target: .predicate(.identifier("__heist_parameter__")), to: parameterName)
-        }
     }
 }
 

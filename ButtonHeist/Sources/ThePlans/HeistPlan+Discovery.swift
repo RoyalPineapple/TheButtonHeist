@@ -271,7 +271,7 @@ private extension HeistPlan {
     }
 
     static func discoveryEnvironment(for parameter: HeistParameter) -> HeistExecutionEnvironment {
-        HeistExecutionEnvironment.runtimeSafetyPlaceholder(for: parameter)
+        HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: parameter).environment
     }
 
     func catalogEntry(

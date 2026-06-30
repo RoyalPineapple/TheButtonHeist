@@ -196,12 +196,21 @@ private extension TheFence {
         // Admission: accept exactly one public source shape for a plan. ThePlans
         // then returns a RuntimeSafety-validated executable `HeistPlan`.
         try CommandArgumentEnvelopeLimits.validateHeistPlanSource(arguments, field: commandName)
-        switch HeistPlanning.loadValidatedPlanResult(from: HeistPlanSourceAdmissionRequest(
+        let path = try arguments.schemaString(.path)
+        let inlineDSL = try arguments.schemaString(.plan)
+        let requestResult = HeistPlanning.rejectRawStructuredJSONIRFieldsResult(
             commandName: commandName,
-            path: try arguments.schemaString(.path),
-            inlineDSL: try arguments.schemaString(.plan),
-            rawStructuredJSONIRFields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys)
-        )) {
+            fields: rawStructuredJSONIRFields(in: arguments, dropping: droppingPlanKeys)
+        )
+        .flatMap {
+            HeistPlanning.admissionRequestResult(
+                commandName: commandName,
+                path: path,
+                inlineDSL: inlineDSL
+            )
+        }
+        .flatMap { HeistPlanning.loadValidatedPlanResult(from: $0) }
+        switch requestResult {
         case .success(let plan, _):
             return plan
         case .failure(let diagnostics):
