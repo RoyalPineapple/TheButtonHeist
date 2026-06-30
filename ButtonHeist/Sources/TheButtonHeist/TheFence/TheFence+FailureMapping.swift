@@ -6,7 +6,6 @@ extension FenceError {
     init(_ connectionError: HandoffConnectionError) {
         switch connectionError {
         case .connectionFailed(let message): self = .connectionFailed(message)
-        case .disconnected(.authFailed(let reason, hint: _)): self = .authFailed(reason)
         case .disconnected(.sessionLocked(let message)): self = .sessionLocked(message)
         case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))
         case .timeout: self = .connectionTimeout
@@ -23,7 +22,20 @@ extension FenceError {
         case .encodingFailed(let failure):
             self = .actionFailed("Failed to send request: \(failure.description)")
         case .transportFailed(let failure):
-            self = .actionFailed("Transport send failed: \(failure.description)")
+            self = .connectionFailure(ConnectionFailure(deviceTransportFailure: failure))
         }
+    }
+}
+
+private extension ConnectionFailure {
+    init(deviceTransportFailure failure: DeviceTransportFailure) {
+        let details = FailureDetails(code: .transportNetworkError)
+        self.init(
+            message: "Transport send failed: \(failure.description)",
+            failureCode: details.code,
+            phase: details.phase,
+            retryable: details.retryable,
+            hint: details.hint
+        )
     }
 }
