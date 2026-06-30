@@ -1,5 +1,6 @@
 import XCTest
- import TheScore
+import ThePlans
+import TheScore
 
 final class HeistElementTests: XCTestCase {
 
@@ -124,14 +125,10 @@ final class HeistElementTests: XCTestCase {
         """
         let decoded = try JSONDecoder().decode(HeistElement.self, from: Data(json.utf8))
         let encoded = try JSONEncoder().encode(decoded)
-        let encodedObject = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
-        let encodedActions = try XCTUnwrap(encodedObject?["actions"] as? [Any])
+        let encodedProjection = try JSONDecoder().decode(EncodedElementActionsProjection.self, from: encoded)
 
         XCTAssertEqual(decoded.actions, [.activate, .custom("Delete"), .custom("Share")])
-        XCTAssertEqual(encodedActions.count, 3)
-        XCTAssertEqual(encodedActions[0] as? String, "activate")
-        XCTAssertEqual((encodedActions[1] as? [String: Any])?["custom"] as? String, "Delete")
-        XCTAssertEqual((encodedActions[2] as? [String: Any])?["custom"] as? String, "Share")
+        XCTAssertEqual(encodedProjection.actions, [.activate, .custom("Delete"), .custom("Share")])
     }
 
     // MARK: - Helpers
@@ -145,5 +142,9 @@ final class HeistElementTests: XCTestCase {
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
+    }
+
+    private struct EncodedElementActionsProjection: Decodable {
+        let actions: [ElementAction]
     }
 }

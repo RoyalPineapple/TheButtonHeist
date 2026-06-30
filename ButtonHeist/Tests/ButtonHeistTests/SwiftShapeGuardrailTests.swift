@@ -277,7 +277,8 @@ import Testing
             anyAPIMatches.isEmpty,
             """
             Public/package production APIs should use typed model/runtime pipeline surfaces rather than \
-            Any or [String: Any]. Raw Any is only allowed inside named Foundation boundary concepts:
+            raw type erasure or untyped Foundation JSON dictionaries. Raw type erasure is only allowed \
+            inside named Foundation boundary concepts:
             \(rawAnyBoundaryConcepts.map(\.name).sorted().joined(separator: ", "))
             \(anyAPIMatches.sorted().joined(separator: "\n"))
             """
