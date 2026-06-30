@@ -90,10 +90,11 @@ do not decide what a semantic action means or whether a predicate is true.
 
 ## Pipeline
 
-All executable routes enter the same machine:
+All public executable routes enter the same machine:
 
-1. Direct CLI/MCP command, Swift DSL, `.json` plan IR, or `.heist` artifact
-   produces either a single command or a `HeistPlan`.
+1. A supported typed CLI/MCP command, ButtonHeist DSL source, trusted local
+   Swift DSL authoring input, or generated `.heist` artifact produces either a
+   single command or a `HeistPlan`.
 2. The runtime observes settled before-state when the route performs an action
    or evaluates a wait.
 3. Element inflation resolves the target, reveals it if needed, acquires fresh
@@ -101,6 +102,9 @@ All executable routes enter the same machine:
 4. The runtime waits for settled semantic evidence.
 5. Reports, JSON, compact output, and later repair artifacts project
    from the resulting trace and execution result.
+
+Raw generated JSON plan IR is internal/runtime tooling data. It is not a public
+user-authored execution route.
 
 No public route asks callers to manage ordinary viewport mechanics for semantic
 commands. Viewport and mechanical commands are explicit when viewport state or
