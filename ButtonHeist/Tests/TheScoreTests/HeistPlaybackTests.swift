@@ -270,10 +270,9 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testHeistExecutionStepThatStopsHeistIsFailure() {
-        let result = HeistExecutionStepResult(
+        let result = HeistExecutionStepResult.failed(
             path: "$.body[0]",
             kind: .conditional,
-            status: .failed,
             durationMs: 0,
             failure: HeistFailureDetail(
                 category: .runtimeUnavailable,
@@ -511,10 +510,9 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testForEachExecutionResultWithFailureIsFailure() {
-        let result = HeistExecutionStepResult(
+        let result = HeistExecutionStepResult.failed(
             path: "$.body[0]",
             kind: .forEachElement,
-            status: .failed,
             durationMs: 100,
             evidence: .forEachElement(HeistForEachElementEvidence(
                 parameter: "target",
@@ -535,10 +533,9 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testForEachExecutionResultWithoutFailureIsNotFailure() {
-        let result = HeistExecutionStepResult(
+        let result = HeistExecutionStepResult.passed(
             path: "$.body[0]",
             kind: .forEachElement,
-            status: .passed,
             durationMs: 100,
             evidence: .forEachElement(HeistForEachElementEvidence(
                 parameter: "target",

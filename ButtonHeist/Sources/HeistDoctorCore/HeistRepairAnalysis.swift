@@ -6,12 +6,6 @@ enum HeistRepairAnalysis {
     case eligible(HeistEligibleRepairAnalysis)
 
     static func analyze(_ request: HeistRepairRequest) -> HeistRepairAnalysis {
-        guard request.lastSuccess.result.succeeded else {
-            return .ineligible(.lastReceiptStepDidNotPass)
-        }
-        guard !request.currentFailure.result.succeeded else {
-            return .ineligible(.currentReceiptStepDidNotFail)
-        }
         guard request.lastSuccess.stepPath == request.currentFailure.stepPath else {
             return .ineligible(.differentStepPaths)
         }
@@ -78,8 +72,6 @@ enum HeistRepairAnalysis {
 }
 
 enum HeistRepairIneligibility {
-    case lastReceiptStepDidNotPass
-    case currentReceiptStepDidNotFail
     case differentStepPaths
     case incompatibleHeistFingerprints
     case oldTargetDidNotResolveExactlyOnce

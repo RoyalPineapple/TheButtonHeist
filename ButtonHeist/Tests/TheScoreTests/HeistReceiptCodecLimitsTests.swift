@@ -105,10 +105,9 @@ import Testing
     private func sampleReceipt(message: String) -> HeistExecutionResult {
         HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .fail,
-                    status: .failed,
                     durationMs: 1,
                     intent: .fail(message: message),
                     failure: HeistFailureDetail(

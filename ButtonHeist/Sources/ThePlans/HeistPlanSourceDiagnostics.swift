@@ -13,15 +13,74 @@ public enum HeistBuildPhase: String, Sendable, Equatable {
     case planning
 }
 
-public struct HeistBuildDiagnosticCode: RawRepresentable, Sendable, Hashable, ExpressibleByStringLiteral, CustomStringConvertible {
+public enum HeistKnownBuildDiagnosticCode: String, Sendable, Hashable, CaseIterable {
+    case dslInvalidActionExpectation = "heist.dsl.invalid_action_expectation"
+    case dslInvalidActionUntil = "heist.dsl.invalid_action_until"
+    case dslInvalidDefinition = "heist.dsl.invalid_definition"
+    case dslInvalidForEachElement = "heist.dsl.invalid_for_each_element"
+    case dslInvalidForEachString = "heist.dsl.invalid_for_each_string"
+    case dslInvalidInvocationExpectation = "heist.dsl.invalid_invocation_expectation"
+    case dslInvalidInvocationPath = "heist.dsl.invalid_invocation_path"
+    case dslInvalidRepeatUntil = "heist.dsl.invalid_repeat_until"
+
+    case sourceInvalidSyntax = "heist.source.invalid_syntax"
+    case sourceWaitForGate = "heist.source.wait_for_gate"
+    case nonDurableAction = "heist.plan.non_durable_action"
+    case planRuntimeSafety = "heist.plan.runtime_safety"
+
+    case planningMissingPlanSource = "heist.planning.missing_plan_source"
+    case planningMultiplePlanSources = "heist.planning.multiple_plan_sources"
+    case planningInlineSourceNotAccepted = "heist.planning.inline_source_not_accepted"
+    case planningEmptyPath = "heist.planning.empty_path"
+    case planningUnsupportedPath = "heist.planning.unsupported_path"
+    case planningEmptyInlineSource = "heist.planning.empty_inline_source"
+    case planningRawJSONIRFields = "heist.planning.raw_json_ir_fields"
+    case planningInvalidPlanSource = "heist.planning.invalid_plan_source"
+    case planningInvalidArtifact = "heist.planning.invalid_artifact"
+    case planningInvalidArgument = "heist.planning.invalid_argument"
+    case planningInvalidRootArgument = "heist.planning.invalid_root_argument"
+
+    case performWrongStepCount = "heist.perform.wrong_step_count"
+    case performUnsupportedStep = "heist.perform.unsupported_step"
+
+    case swiftCompilationFailed = "heist.swift_compilation.failed"
+    case swiftCompilationUnsupportedPlatform = "heist.swift_compilation.unsupported_platform"
+    case swiftCompilationCancelled = "heist.swift_compilation.cancelled"
+    case swiftCompilationInvalidEntry = "heist.swift_compilation.invalid_entry"
+    case swiftCompilationSourceNotFound = "heist.swift_compilation.source_not_found"
+    case swiftCompilationPackageRootNotFound = "heist.swift_compilation.package_root_not_found"
+    case swiftCompilationBuildArtifactsNotFound = "heist.swift_compilation.build_artifacts_not_found"
+    case swiftCompilationCompileFailed = "heist.swift_compilation.compile_failed"
+    case swiftCompilationExecutionFailed = "heist.swift_compilation.execution_failed"
+    case swiftCompilationInvalidOutput = "heist.swift_compilation.invalid_output"
+
+    case directoryNoSources = "heist.directory.no_sources"
+    case directoryCancelled = "heist.directory.cancelled"
+    case directoryNotDirectory = "heist.directory.not_directory"
+    case directoryUnsupportedSourceFile = "heist.directory.unsupported_source_file"
+
+    case catalogAnonymousCapability = "heist.catalog.anonymous_capability"
+    case catalogDuplicateCapability = "heist.catalog.duplicate_capability"
+    case catalogInvalidEntry = "heist.catalog.invalid_entry"
+}
+
+public struct HeistBuildDiagnosticCode: Sendable, Hashable, CustomStringConvertible {
     public let rawValue: String
 
-    public init(rawValue: String) {
+    private init(_ rawValue: String) {
         self.rawValue = rawValue
     }
 
-    public init(stringLiteral value: String) {
-        self.init(rawValue: value)
+    public init(_ knownCode: HeistKnownBuildDiagnosticCode) {
+        self.init(knownCode.rawValue)
+    }
+
+    public static func externalBoundaryRawCode(_ rawValue: String) -> Self {
+        Self(rawValue)
+    }
+
+    public var knownCode: HeistKnownBuildDiagnosticCode? {
+        HeistKnownBuildDiagnosticCode(rawValue: rawValue)
     }
 
     public var description: String {
@@ -30,34 +89,34 @@ public struct HeistBuildDiagnosticCode: RawRepresentable, Sendable, Hashable, Ex
 }
 
 public extension HeistBuildDiagnosticCode {
-    static let dslInvalidActionExpectation: Self = "heist.dsl.invalid_action_expectation"
-    static let dslInvalidActionUntil: Self = "heist.dsl.invalid_action_until"
-    static let dslInvalidDefinition: Self = "heist.dsl.invalid_definition"
-    static let dslInvalidForEachElement: Self = "heist.dsl.invalid_for_each_element"
-    static let dslInvalidForEachString: Self = "heist.dsl.invalid_for_each_string"
-    static let dslInvalidInvocationExpectation: Self = "heist.dsl.invalid_invocation_expectation"
-    static let dslInvalidInvocationPath: Self = "heist.dsl.invalid_invocation_path"
-    static let dslInvalidRepeatUntil: Self = "heist.dsl.invalid_repeat_until"
+    static let dslInvalidActionExpectation = Self(HeistKnownBuildDiagnosticCode.dslInvalidActionExpectation)
+    static let dslInvalidActionUntil = Self(HeistKnownBuildDiagnosticCode.dslInvalidActionUntil)
+    static let dslInvalidDefinition = Self(HeistKnownBuildDiagnosticCode.dslInvalidDefinition)
+    static let dslInvalidForEachElement = Self(HeistKnownBuildDiagnosticCode.dslInvalidForEachElement)
+    static let dslInvalidForEachString = Self(HeistKnownBuildDiagnosticCode.dslInvalidForEachString)
+    static let dslInvalidInvocationExpectation = Self(HeistKnownBuildDiagnosticCode.dslInvalidInvocationExpectation)
+    static let dslInvalidInvocationPath = Self(HeistKnownBuildDiagnosticCode.dslInvalidInvocationPath)
+    static let dslInvalidRepeatUntil = Self(HeistKnownBuildDiagnosticCode.dslInvalidRepeatUntil)
 
-    static let sourceInvalidSyntax: Self = "heist.source.invalid_syntax"
-    static let sourceWaitForGate: Self = "heist.source.wait_for_gate"
-    static let nonDurableAction: Self = "heist.plan.non_durable_action"
-    static let planRuntimeSafety: Self = "heist.plan.runtime_safety"
+    static let sourceInvalidSyntax = Self(HeistKnownBuildDiagnosticCode.sourceInvalidSyntax)
+    static let sourceWaitForGate = Self(HeistKnownBuildDiagnosticCode.sourceWaitForGate)
+    static let nonDurableAction = Self(HeistKnownBuildDiagnosticCode.nonDurableAction)
+    static let planRuntimeSafety = Self(HeistKnownBuildDiagnosticCode.planRuntimeSafety)
 
-    static let planningMissingPlanSource: Self = "heist.planning.missing_plan_source"
-    static let planningMultiplePlanSources: Self = "heist.planning.multiple_plan_sources"
-    static let planningInlineSourceNotAccepted: Self = "heist.planning.inline_source_not_accepted"
-    static let planningEmptyPath: Self = "heist.planning.empty_path"
-    static let planningUnsupportedPath: Self = "heist.planning.unsupported_path"
-    static let planningEmptyInlineSource: Self = "heist.planning.empty_inline_source"
-    static let planningRawJSONIRFields: Self = "heist.planning.raw_json_ir_fields"
-    static let planningInvalidPlanSource: Self = "heist.planning.invalid_plan_source"
-    static let planningInvalidArtifact: Self = "heist.planning.invalid_artifact"
-    static let planningInvalidArgument: Self = "heist.planning.invalid_argument"
-    static let planningInvalidRootArgument: Self = "heist.planning.invalid_root_argument"
+    static let planningMissingPlanSource = Self(HeistKnownBuildDiagnosticCode.planningMissingPlanSource)
+    static let planningMultiplePlanSources = Self(HeistKnownBuildDiagnosticCode.planningMultiplePlanSources)
+    static let planningInlineSourceNotAccepted = Self(HeistKnownBuildDiagnosticCode.planningInlineSourceNotAccepted)
+    static let planningEmptyPath = Self(HeistKnownBuildDiagnosticCode.planningEmptyPath)
+    static let planningUnsupportedPath = Self(HeistKnownBuildDiagnosticCode.planningUnsupportedPath)
+    static let planningEmptyInlineSource = Self(HeistKnownBuildDiagnosticCode.planningEmptyInlineSource)
+    static let planningRawJSONIRFields = Self(HeistKnownBuildDiagnosticCode.planningRawJSONIRFields)
+    static let planningInvalidPlanSource = Self(HeistKnownBuildDiagnosticCode.planningInvalidPlanSource)
+    static let planningInvalidArtifact = Self(HeistKnownBuildDiagnosticCode.planningInvalidArtifact)
+    static let planningInvalidArgument = Self(HeistKnownBuildDiagnosticCode.planningInvalidArgument)
+    static let planningInvalidRootArgument = Self(HeistKnownBuildDiagnosticCode.planningInvalidRootArgument)
 
-    static let performWrongStepCount: Self = "heist.perform.wrong_step_count"
-    static let performUnsupportedStep: Self = "heist.perform.unsupported_step"
+    static let performWrongStepCount = Self(HeistKnownBuildDiagnosticCode.performWrongStepCount)
+    static let performUnsupportedStep = Self(HeistKnownBuildDiagnosticCode.performUnsupportedStep)
 }
 
 public struct HeistBuildSourceSpan: Sendable, Equatable, CustomStringConvertible {
@@ -96,7 +155,7 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
     public let hint: String?
 
     public init(
-        code: HeistBuildDiagnosticCode,
+        code: HeistKnownBuildDiagnosticCode,
         kind: HeistBuildDiagnosticKind = .error,
         phase: HeistBuildPhase,
         sourceSpan: HeistBuildSourceSpan? = nil,
@@ -104,7 +163,7 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
         message: String,
         hint: String? = nil
     ) {
-        self.code = code
+        self.code = HeistBuildDiagnosticCode(code)
         self.kind = kind
         self.phase = phase
         self.sourceSpan = sourceSpan
@@ -114,7 +173,7 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
     }
 
     public init(
-        code: String,
+        externalBoundaryRawCode rawCode: String,
         kind: HeistBuildDiagnosticKind = .error,
         phase: HeistBuildPhase,
         sourceSpan: HeistBuildSourceSpan? = nil,
@@ -122,15 +181,31 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
         message: String,
         hint: String? = nil
     ) {
-        self.init(
-            code: HeistBuildDiagnosticCode(rawValue: code),
-            kind: kind,
-            phase: phase,
-            sourceSpan: sourceSpan,
-            path: path,
-            message: message,
-            hint: hint
-        )
+        self.code = .externalBoundaryRawCode(rawCode)
+        self.kind = kind
+        self.phase = phase
+        self.sourceSpan = sourceSpan
+        self.path = path
+        self.message = message
+        self.hint = hint
+    }
+
+    fileprivate init(
+        preservingCode code: HeistBuildDiagnosticCode,
+        kind: HeistBuildDiagnosticKind,
+        phase: HeistBuildPhase,
+        sourceSpan: HeistBuildSourceSpan?,
+        path: String?,
+        message: String,
+        hint: String?
+    ) {
+        self.code = code
+        self.kind = kind
+        self.phase = phase
+        self.sourceSpan = sourceSpan
+        self.path = path
+        self.message = message
+        self.hint = hint
     }
 
     public var severity: Severity {
@@ -175,20 +250,66 @@ public struct HeistBuildDiagnostic: Sendable, Equatable, CustomStringConvertible
 
 public extension HeistBuildDiagnosticCode {
     var title: String {
-        if self == .dslInvalidActionExpectation { return "Invalid action expectation" }
-        if self == .dslInvalidActionUntil { return "Invalid action until clause" }
-        if self == .dslInvalidDefinition { return "Invalid heist definition" }
-        if self == .dslInvalidForEachElement { return "Invalid element loop" }
-        if self == .dslInvalidForEachString { return "Invalid string loop" }
-        if self == .dslInvalidInvocationExpectation { return "Invalid RunHeist expectation" }
-        if self == .dslInvalidInvocationPath { return "Invalid RunHeist path" }
-        if self == .dslInvalidRepeatUntil { return "Invalid repeat-until" }
-        if self == .sourceInvalidSyntax { return "Invalid ButtonHeist source" }
-        if self == .sourceWaitForGate { return "Invalid WaitFor source" }
-        if self == .nonDurableAction { return "Non-durable action" }
-        if self == .planRuntimeSafety { return "Plan semantic validation failed" }
-        if self == .performWrongStepCount { return "Invalid perform step count" }
-        if self == .performUnsupportedStep { return "Unsupported perform step" }
+        switch knownCode {
+        case .dslInvalidActionExpectation:
+            return "Invalid action expectation"
+        case .dslInvalidActionUntil:
+            return "Invalid action until clause"
+        case .dslInvalidDefinition:
+            return "Invalid heist definition"
+        case .dslInvalidForEachElement:
+            return "Invalid element loop"
+        case .dslInvalidForEachString:
+            return "Invalid string loop"
+        case .dslInvalidInvocationExpectation:
+            return "Invalid RunHeist expectation"
+        case .dslInvalidInvocationPath:
+            return "Invalid RunHeist path"
+        case .dslInvalidRepeatUntil:
+            return "Invalid repeat-until"
+        case .sourceInvalidSyntax:
+            return "Invalid ButtonHeist source"
+        case .sourceWaitForGate:
+            return "Invalid WaitFor source"
+        case .nonDurableAction:
+            return "Non-durable action"
+        case .planRuntimeSafety:
+            return "Plan semantic validation failed"
+        case .performWrongStepCount:
+            return "Invalid perform step count"
+        case .performUnsupportedStep:
+            return "Unsupported perform step"
+        case .planningMissingPlanSource,
+             .planningMultiplePlanSources,
+             .planningInlineSourceNotAccepted,
+             .planningEmptyPath,
+             .planningUnsupportedPath,
+             .planningEmptyInlineSource,
+             .planningRawJSONIRFields,
+             .planningInvalidPlanSource,
+             .planningInvalidArtifact,
+             .planningInvalidArgument,
+             .planningInvalidRootArgument,
+             .swiftCompilationFailed,
+             .swiftCompilationUnsupportedPlatform,
+             .swiftCompilationCancelled,
+             .swiftCompilationInvalidEntry,
+             .swiftCompilationSourceNotFound,
+             .swiftCompilationPackageRootNotFound,
+             .swiftCompilationBuildArtifactsNotFound,
+             .swiftCompilationCompileFailed,
+             .swiftCompilationExecutionFailed,
+             .swiftCompilationInvalidOutput,
+             .directoryNoSources,
+             .directoryCancelled,
+             .directoryNotDirectory,
+             .directoryUnsupportedSourceFile,
+             .catalogAnonymousCapability,
+             .catalogDuplicateCapability,
+             .catalogInvalidEntry,
+             .none:
+            break
+        }
         return rawValue
             .split(separator: ".")
             .last
@@ -310,7 +431,7 @@ extension HeistBuildDiagnostic {
         "Use a non-empty dot-separated heist capability name with Swift-style identifier components."
 
     static func dslBuild(
-        code: HeistBuildDiagnosticCode,
+        code: HeistKnownBuildDiagnosticCode,
         path: String? = nil,
         message: String,
         hint: String? = nil
@@ -358,7 +479,7 @@ extension HeistBuildDiagnostic {
 
     func withPath(_ path: String) -> HeistBuildDiagnostic {
         HeistBuildDiagnostic(
-            code: code,
+            preservingCode: code,
             kind: kind,
             phase: phase,
             sourceSpan: sourceSpan,
@@ -388,12 +509,12 @@ extension HeistPlanRuntimeSafetyError {
 }
 
 public extension HeistPlanning {
-    static func rejectRawStructuredJSONIRFieldsResult(
+    static func rejectRawStructuredJSONIRSourceFieldsResult(
         commandName: String,
-        fields: Set<String>
+        fields: Set<HeistPlanRejectedPublicSourceField>
     ) -> ValidationResult<Void, HeistBuildDiagnostic> {
         do {
-            try rejectRawStructuredJSONIRFields(commandName: commandName, fields: fields)
+            try rejectRawStructuredJSONIRSourceFields(commandName: commandName, fields: fields)
             return .success((), diagnostics: [])
         } catch let error as HeistPlanningError {
             return .failure(error.diagnostics)
@@ -517,7 +638,7 @@ public extension HeistPlanningError {
     }
 
     private func planningDiagnostic(
-        code: HeistBuildDiagnosticCode,
+        code: HeistKnownBuildDiagnosticCode,
         path: String? = nil,
         message: String
     ) -> HeistBuildDiagnostic {
@@ -592,7 +713,7 @@ private extension HeistPlanRuntimeSafetyFailure {
         )
     }
 
-    var diagnosticCode: HeistBuildDiagnosticCode {
+    var diagnosticCode: HeistKnownBuildDiagnosticCode {
         contract == Self.durableHeistActionContract ? .nonDurableAction : .planRuntimeSafety
     }
 }

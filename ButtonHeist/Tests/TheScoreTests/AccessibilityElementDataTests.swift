@@ -1,5 +1,6 @@
 import XCTest
- import TheScore
+import ThePlans
+import TheScore
 
 final class HeistElementTests: XCTestCase {
 
@@ -88,6 +89,48 @@ final class HeistElementTests: XCTestCase {
         XCTAssertEqual(decoded.rotors, element.rotors)
     }
 
+    func testActionsCanonicalizeAtConstructionBoundary() {
+        let element = HeistElement(
+            description: "Actions",
+            label: "Actions",
+            value: nil,
+            identifier: nil,
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: [.custom("Share"), .activate, .custom("Delete"), .activate, .decrement, .increment]
+        )
+
+        XCTAssertEqual(element.actions, [.activate, .increment, .decrement, .custom("Delete"), .custom("Share")])
+    }
+
+    func testActionsCanonicalizeAtDecodeBoundaryAndEncodeDeterministically() throws {
+        let json = """
+        {
+          "description": "Actions",
+          "label": "Actions",
+          "traits": [],
+          "frameX": 0,
+          "frameY": 0,
+          "frameWidth": 100,
+          "frameHeight": 44,
+          "activationPointX": 50,
+          "activationPointY": 22,
+          "respondsToUserInteraction": true,
+          "actions": [
+            {"custom": "Share"},
+            "activate",
+            {"custom": "Delete"},
+            "activate"
+          ]
+        }
+        """
+        let decoded = try JSONDecoder().decode(HeistElement.self, from: Data(json.utf8))
+        let encoded = try JSONEncoder().encode(decoded)
+        let encodedProjection = try JSONDecoder().decode(EncodedElementActionsProjection.self, from: encoded)
+
+        XCTAssertEqual(decoded.actions, [.activate, .custom("Delete"), .custom("Share")])
+        XCTAssertEqual(encodedProjection.actions, [.activate, .custom("Delete"), .custom("Share")])
+    }
+
     // MARK: - Helpers
 
     private func makeElement(label: String) -> HeistElement {
@@ -99,5 +142,9 @@ final class HeistElementTests: XCTestCase {
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
+    }
+
+    private struct EncodedElementActionsProjection: Decodable {
+        let actions: [ElementAction]
     }
 }

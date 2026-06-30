@@ -103,9 +103,9 @@ final class TheGetaway {
     private func executeDirectRuntimeAction(_ command: HeistActionCommand) async -> ActionResult {
         let method = actionMethod(for: command)
         guard command.durableHeistActionFailure != nil else {
-            var builder = ActionResultBuilder(method: method)
+            var builder = ActionResultBuilder()
             builder.message = "Direct runtimeAction accepts only transient non-durable commands; durable commands must run as heistPlan"
-            return builder.failure(errorKind: .validationError)
+            return builder.failure(method: method, errorKind: .validationError)
         }
         guard brains.semanticObservationIsActive else {
             return brains.runtimeInactiveResult(method: method)
@@ -113,9 +113,9 @@ final class TheGetaway {
         do {
             return await brains.executeRuntimeAction(try command.resolveForRuntimeDispatch(in: .empty))
         } catch {
-            var builder = ActionResultBuilder(method: method)
+            var builder = ActionResultBuilder()
             builder.message = "Could not resolve direct runtime action: \(error)"
-            return builder.failure(errorKind: .validationError)
+            return builder.failure(method: method, errorKind: .validationError)
         }
     }
 
@@ -196,16 +196,13 @@ final class TheGetaway {
     func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         insideJobLogger.debug("Screen requested")
 
-        let result = await brains.captureScreenPayload()
-        guard case .success(let payload) = result else {
-            if case .failure(let message) = result {
-                sendMessage(.error(ServerError(kind: .general, message: message)), requestId: requestId, respond: respond)
-            }
-            return
+        switch await brains.captureScreenPayload() {
+        case .success(let payload):
+            sendMessage(.screen(payload), requestId: requestId, respond: respond)
+            insideJobLogger.debug("Screen sent: \(payload.pngData.count) base64 characters")
+        case .failure(let failure):
+            sendMessage(.error(ServerError(kind: .general, message: failure.message)), requestId: requestId, respond: respond)
         }
-
-        sendMessage(.screen(payload), requestId: requestId, respond: respond)
-        insideJobLogger.debug("Screen sent: \(payload.pngData.count) base64 characters")
     }
 }
 

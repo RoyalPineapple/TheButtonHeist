@@ -401,23 +401,6 @@ final class PostActionObservation {
         case none
         case immediate(ActionResultPayload)
         case afterState((BeforeState) -> ActionResultPayload?)
-        case afterStateWithFallback((BeforeState) -> ActionResultPayload?, fallback: ActionResultPayload)
-
-        init(
-            immediate: ActionResultPayload?,
-            afterState: ((BeforeState) -> ActionResultPayload?)?
-        ) {
-            switch (immediate, afterState) {
-            case (nil, nil):
-                self = .none
-            case (.some(let payload), nil):
-                self = .immediate(payload)
-            case (nil, .some(let afterState)):
-                self = .afterState(afterState)
-            case (.some(let payload), .some(let afterState)):
-                self = .afterStateWithFallback(afterState, fallback: payload)
-            }
-        }
     }
 
     struct ActionOutcomeSuccess {
@@ -538,7 +521,7 @@ extension ActionResult {
         settled: Bool? = nil,
         settleTimeMs: Int? = nil
     ) -> Self {
-        var builder = ActionResultBuilder(method: method, capture: capture)
+        var builder = ActionResultBuilder(capture: capture)
         builder.message = message
         if let accessibilityTrace {
             builder.accessibilityTrace = accessibilityTrace
@@ -549,11 +532,11 @@ extension ActionResult {
         builder.activationTrace = activationTrace
         switch (outcome, payload) {
         case (.success, .none):
-            return builder.success()
+            return builder.success(method: method)
         case (.success, .payload(let payload)):
             return builder.success(payload: payload)
         case (.failure(let errorKind), .none):
-            return builder.failure(errorKind: errorKind)
+            return builder.failure(method: method, errorKind: errorKind)
         case (.failure(let errorKind), .payload(let payload)):
             return builder.failure(errorKind: errorKind, payload: payload)
         }
@@ -639,7 +622,7 @@ private extension PostActionObservation.ActionOutcomePayload {
         switch self {
         case .none, .afterState:
             return .none
-        case .immediate(let payload), .afterStateWithFallback(_, fallback: let payload):
+        case .immediate(let payload):
             return .payload(payload)
         }
     }
@@ -653,8 +636,6 @@ private extension PostActionObservation.ActionOutcomePayload {
         case .afterState(let resolve):
             guard let payload = resolve(state) else { return .none }
             return .payload(payload)
-        case .afterStateWithFallback(let resolve, fallback: let fallback):
-            return .payload(resolve(state) ?? fallback)
         }
     }
 }

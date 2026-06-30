@@ -8,8 +8,8 @@ enum RepairCandidateGenerator {
         preferredCandidates: Set<PredicateSelectionElementId>,
         failureKind: HeistRepairFailureKind,
         actionFamily: RepairActionFamily,
-        lastSuccess: HeistStepRepairEvidence,
-        currentFailure: HeistStepRepairEvidence
+        lastSuccess: HeistPassedStepRepairEvidence,
+        currentFailure: HeistFailedStepRepairEvidence
     ) -> [ScoredCandidate] {
         let old = oldResolved.element
         let context = CandidateScoringContext(

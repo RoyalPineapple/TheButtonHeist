@@ -84,6 +84,40 @@ import Testing
         )
     }
 
+    @Test func `heist wait receipt is the single typed wait result source`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/TheBrains+HeistWaitExecution.swift")
+        let receipt = try #require(
+            try source.firstBlock(matching: #"\bstruct\s+HeistWaitReceipt\b"#),
+            "The wait pipeline should expose one canonical typed receipt"
+        )
+        let predicateWait = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PredicateWait.swift")
+
+        #expect(
+            !source.contents.contains("struct HeistWaitOutcome"),
+            "HeistWaitReceipt should be the canonical typed wait result; do not add a parallel outcome wrapper"
+        )
+        #expect(receipt.contents.contains("enum Status"))
+        #expect(receipt.contents.contains("case matched"))
+        #expect(receipt.contents.contains("case timedOut"))
+        #expect(receipt.contents.contains("case failed("))
+        #expect(
+            try !receipt.containsMatch(#"\blet\s+actionResult\s*:"#),
+            "HeistWaitReceipt must derive ActionResult at the output boundary, not store it"
+        )
+        #expect(
+            try !receipt.containsMatch(#"\blet\s+waitOutcome\s*:"#),
+            "HeistWaitReceipt must not store a second wait outcome source of truth"
+        )
+        #expect(
+            try receipt.containsMatch(#"\bvar\s+actionResult\s*:\s*ActionResult\b"#),
+            "ActionResult should remain a computed output projection for wait callers"
+        )
+        #expect(
+            try !predicateWait.containsMatch(#"\bActionResult\s*\("#),
+            "PredicateWait should reduce typed evidence to HeistWaitReceipt, then project ActionResult at callers"
+        )
+    }
+
     @Test func `post action receipts use explicit observation outcome`() throws {
         let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/PostActionObservation.swift")
         let observationOutcome = try #require(
@@ -157,6 +191,52 @@ import Testing
             duplicate helper call sites:
             \(retiredFailureCallSites.joined(separator: "\n"))
             """
+        )
+    }
+
+    @Test func `text input focus result is a sum type with targeted success evidence`() throws {
+        let source = try repository.requiredFile(relativePath: "\(Self.brainsRoot)/Actions+TextInputActions.swift")
+        let focusResult = try #require(
+            try source.firstBlock(matching: #"\bprivate\s+enum\s+TextInputFocusResult\b"#),
+            "TextInputFocusResult should be an enum, not an optional product bag"
+        )
+        let focusedInput = try #require(
+            try source.firstBlock(matching: #"\bprivate\s+struct\s+FocusedTextInput\b"#),
+            "Targeted focus success should carry a dedicated payload"
+        )
+        let executeTypeText = try #require(
+            try source.firstBlock(matching: #"\bfunc\s+executeTypeText\s*\(\s*\n\s*_\s+target:\s+TypeTextTarget\b"#),
+            "type text dispatch should switch over TextInputFocusResult"
+        )
+
+        #expect(focusResult.contents.contains("case alreadyFocused"))
+        #expect(focusResult.contents.contains("case focused(FocusedTextInput)"))
+        #expect(focusResult.contents.contains("case failed(TheSafecracker.InteractionResult)"))
+        #expect(try executeTypeText.containsMatch(#"\bswitch\s+focusResult\b"#))
+        #expect(executeTypeText.contents.contains("case .alreadyFocused"))
+        #expect(executeTypeText.contents.contains("case .focused(let input)"))
+        #expect(executeTypeText.contents.contains("case .failed(let failure)"))
+
+        #expect(focusedInput.contents.contains("let subjectEvidence: ActionSubjectEvidence"))
+        #expect(focusedInput.contents.contains("let resolvedElementId: HeistId"))
+        #expect(focusedInput.contents.contains("let resolvedObject: NSObject"))
+        #expect(focusedInput.contents.contains("let currentValue: String?"))
+        #expect(
+            !focusedInput.contents.contains("TheSafecracker.InteractionResult"),
+            "FocusedTextInput should contain only targeted success data"
+        )
+
+        #expect(
+            try !source.containsMatch(#"\bstruct\s+TextInputFocusResult\b"#),
+            "TextInputFocusResult should not be constructible as a loose optional product"
+        )
+        #expect(
+            try !source.containsMatch(#"\bfocusResult[.]failure\b"#),
+            "call sites should switch over TextInputFocusResult instead of branching on failure"
+        )
+        #expect(
+            try !focusResult.containsMatch(#"\blet\s+(failure|subjectEvidence|resolvedElementId|resolvedObject|currentValue)\s*:"#),
+            "TextInputFocusResult enum should not store old optional-bag fields"
         )
     }
 }

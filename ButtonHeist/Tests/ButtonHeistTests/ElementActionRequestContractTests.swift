@@ -78,6 +78,39 @@ final class ElementActionRequestContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testSwipeRejectsNestedObjectMissingRequiredCoordinateThroughTypedSchema() async {
+        await assertExecutionError(
+            command: .swipe,
+            arguments: [
+                "pointToPoint": .object([
+                    "start": .object(["x": .double(0.1)]),
+                    "end": .object([
+                        "x": .double(0.8),
+                        "y": .double(0.9),
+                    ]),
+                ]),
+            ],
+            contains: "schema validation failed for pointToPoint.start.y: observed missing; expected number"
+        )
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceRejectsArrayItemUnknownPropertyThroughTypedSchema() async {
+        await assertExecutionError(
+            command: .getInterface,
+            arguments: [
+                "checks": .array([
+                    .object([
+                        "kind": .string("label"),
+                        "extra": .string("unexpected"),
+                    ]),
+                ]),
+            ],
+            contains: "schema validation failed for checks[0].extra"
+        )
+    }
+
+    @ButtonHeistActor
     private func assertExecutionError(
         command: TheFence.Command,
         arguments: [String: HeistValue] = [:],

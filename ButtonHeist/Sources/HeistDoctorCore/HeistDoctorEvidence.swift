@@ -2,10 +2,47 @@ import ThePlans
 import TheScore
 
 extension HeistDoctor {
-    static func repairEvidence(
-        from step: HeistExecutionStepResult,
-        expectedStatus: HeistExecutionStepStatus
-    ) throws -> HeistStepRepairEvidence {
+    static func passedRepairEvidence(from step: HeistExecutionStepResult) throws -> HeistPassedStepRepairEvidence {
+        guard step.status == .passed else {
+            throw HeistDoctorError.stepStatus(path: step.path, expected: .passed, actual: step.status)
+        }
+        let evidence = try repairEvidenceFields(from: step)
+        return HeistPassedStepRepairEvidence(
+            stepPath: evidence.stepPath,
+            actionIdentity: evidence.actionIdentity,
+            target: evidence.target,
+            beforeSnapshot: evidence.beforeSnapshot,
+            afterDelta: evidence.afterDelta,
+            afterSnapshot: evidence.afterSnapshot,
+            result: RepairPassEvidence(
+                method: evidence.actionResult.method,
+                expectation: evidence.expectation
+            )
+        )
+    }
+
+    static func failedRepairEvidence(from step: HeistExecutionStepResult) throws -> HeistFailedStepRepairEvidence {
+        guard step.status == .failed else {
+            throw HeistDoctorError.stepStatus(path: step.path, expected: .failed, actual: step.status)
+        }
+        let evidence = try repairEvidenceFields(from: step)
+        return HeistFailedStepRepairEvidence(
+            stepPath: evidence.stepPath,
+            actionIdentity: evidence.actionIdentity,
+            target: evidence.target,
+            beforeSnapshot: evidence.beforeSnapshot,
+            afterDelta: evidence.afterDelta,
+            afterSnapshot: evidence.afterSnapshot,
+            result: RepairFailureEvidence(
+                method: evidence.actionResult.method,
+                errorKind: repairErrorKind(evidence.actionEvidence),
+                message: repairMessage(step: step, evidence: evidence.actionEvidence),
+                expectation: evidence.expectation
+            )
+        )
+    }
+
+    private static func repairEvidenceFields(from step: HeistExecutionStepResult) throws -> RepairEvidenceFields {
         guard let actionEvidence = step.actionEvidence else {
             throw HeistDoctorError.missingActionEvidence(path: step.path)
         }
@@ -24,25 +61,16 @@ extension HeistDoctor {
             throw HeistDoctorError.missingActionEvidence(path: step.path)
         }
 
-        let result = HeistStepRepairResult(
-            succeeded: step.status == .passed,
-            method: actionResult.method,
-            errorKind: repairErrorKind(actionEvidence),
-            message: repairMessage(step: step, evidence: actionEvidence),
-            expectation: actionEvidence.expectation
-        )
-        guard step.status == expectedStatus else {
-            throw HeistDoctorError.stepStatus(path: step.path, expected: expectedStatus, actual: step.status)
-        }
-
-        return HeistStepRepairEvidence(
+        return RepairEvidenceFields(
             stepPath: step.path,
             actionIdentity: HeistRepairActionIdentity(command: command),
             target: target,
             beforeSnapshot: before,
             afterDelta: trace.meaningfulEndpointDelta,
             afterSnapshot: trace.captures.last?.interface,
-            result: result
+            actionResult: actionResult,
+            actionEvidence: actionEvidence,
+            expectation: actionEvidence.expectation
         )
     }
 
@@ -59,4 +87,16 @@ extension HeistDoctor {
             ?? evidence.expectationActionResult?.message
             ?? evidence.expectation?.actual
     }
+}
+
+private struct RepairEvidenceFields {
+    let stepPath: String
+    let actionIdentity: HeistRepairActionIdentity
+    let target: ElementTarget
+    let beforeSnapshot: Interface
+    let afterDelta: AccessibilityTrace.Delta?
+    let afterSnapshot: Interface?
+    let actionResult: ActionResult
+    let actionEvidence: HeistActionEvidence
+    let expectation: ExpectationResult?
 }

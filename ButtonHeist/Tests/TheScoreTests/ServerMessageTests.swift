@@ -408,8 +408,7 @@ final class ServerMessageTests: XCTestCase {
             ]
         )
         let trace = AccessibilityTrace(first: interface).appending(interface)
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             accessibilityTrace: trace
         )
@@ -421,8 +420,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultHasNoTraceProjectionWithoutTrace() throws {
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate
         )
 
@@ -440,8 +438,7 @@ final class ServerMessageTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "trace_screen")
         )
 
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             accessibilityTrace: trace
         )
@@ -457,8 +454,7 @@ final class ServerMessageTests: XCTestCase {
             after,
             context: AccessibilityTrace.Context(screenId: "trace_screen")
         )
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             accessibilityTrace: trace
         )
@@ -476,8 +472,7 @@ final class ServerMessageTests: XCTestCase {
     func testActionResultScreenContextDoesNotFallbackWhenTraceProjectsNil() throws {
         let before = interfaceWithHeader("Before")
         let trace = AccessibilityTrace(first: before).appending(interfaceWithoutHeader(timestamp: 1))
-        let result = ActionResult(
-            success: true,
+        let result = ActionResult.success(
             method: .activate,
             accessibilityTrace: trace
         )
@@ -551,11 +546,10 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultWithErrorKind() throws {
-        let result = ActionResult(
-            success: false,
+        let result = ActionResult.failure(
             method: .syntheticTap,
+            errorKind: .elementNotFound,
             message: "Element not found",
-            errorKind: .elementNotFound
         )
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)

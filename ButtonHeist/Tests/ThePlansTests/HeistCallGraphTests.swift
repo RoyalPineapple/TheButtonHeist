@@ -1,4 +1,5 @@
 import Foundation
+import ButtonHeistTestSupport
 import Testing
 @_spi(ButtonHeistInternals) @testable import ThePlans
 
@@ -204,6 +205,10 @@ private struct EncodedInvocationStepContract: Decodable {
         .binding(target: target, to: "button")
 
     #expect(context.invariantFailures.isEmpty)
+    #expect(context.bindings == [
+        HeistReferenceBinding(reference: "query", value: .string("milk")),
+        HeistReferenceBinding(reference: "button", value: .elementTarget(target)),
+    ])
     #expect(context.scope.stringRefs == ["query"])
     #expect(context.scope.targetRefs == ["button"])
     #expect(context.environment.strings["query"] == "milk")
@@ -211,15 +216,43 @@ private struct EncodedInvocationStepContract: Decodable {
 
     let rootParameter = HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: .string(name: "term"))
     #expect(rootParameter.invariantFailures.isEmpty)
+    #expect(rootParameter.bindings == [
+        HeistReferenceBinding(
+            reference: "term",
+            value: .string(HeistReferenceBinding.runtimeSafetyStringPlaceholder)
+        ),
+    ])
     #expect(rootParameter.scope.stringRefs == ["term"])
-    #expect(rootParameter.environment.strings["term"] == "__heist_parameter__")
+    #expect(rootParameter.environment.strings["term"] == HeistReferenceBinding.runtimeSafetyStringPlaceholder)
 
     let invocation = try context.binding(argument: .string(.ref("query")), to: .string(name: "copy"))
     #expect(invocation.invariantFailures.isEmpty)
+    #expect(invocation.bindings.last == HeistReferenceBinding(reference: "copy", value: .string("milk")))
     #expect(invocation.scope.stringRefs == ["copy", "query"])
     #expect(invocation.scope.targetRefs == ["button"])
     #expect(invocation.environment.strings["copy"] == "milk")
     #expect(invocation.environment.targets["button"] == target)
+}
+
+@Test func `reference binding context is the traversal placeholder source of truth`() throws {
+    let repository = SourceShapeRepository(filePath: #filePath)
+    let environment = try repository.requiredFile(
+        relativePath: "ButtonHeist/Sources/ThePlans/HeistExpressionEnvironment.swift"
+    )
+    let traversal = try repository.requiredFile(
+        relativePath: "ButtonHeist/Sources/ThePlans/HeistPlanTraversal.swift"
+    )
+    let binding = try #require(try environment.firstBlock(matching: #"struct HeistReferenceBinding\b"#))
+    let context = try #require(try environment.firstBlock(matching: #"struct HeistReferenceBindingContext\b"#))
+    let walkDefinitions = try #require(try traversal.firstBlock(matching: #"private func walkDefinitions\b"#))
+
+    #expect(binding.contents.contains("case string(String)"))
+    #expect(binding.contents.contains("case elementTarget(ElementTarget)"))
+    #expect(context.contents.contains("let bindings: [HeistReferenceBinding]"))
+    #expect(!context.contents.contains("let scope: HeistReferenceScope"))
+    #expect(!context.contents.contains("let environment: HeistExecutionEnvironment"))
+    #expect(!walkDefinitions.contents.contains("runtimeSafetyPlaceholder"))
+    #expect(walkDefinitions.contents.contains("definition.parameterReferenceBindings"))
 }
 
 @Test func `definition resolution preserves typed invocation identity`() throws {

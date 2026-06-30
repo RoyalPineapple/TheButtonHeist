@@ -112,10 +112,9 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
     }
 
     private static var rootArgumentParameter: FenceParameterSpec {
-        param(
+        objectParam(
             .argument,
-            .object,
-            objectProperties: [
+            properties: [
                 param(
                     .type,
                     .string,
@@ -124,13 +123,12 @@ enum HeistRuntimeCommand: String, CaseIterable, FenceCommand {
                 ),
                 param(.value, .string),
                 param(.valueRef, .string),
-                param(
+                objectParam(
                     .target,
-                    .object,
-                    objectProperties: FenceParameterBlocks.inlineElementTargetFields
+                    properties: FenceParameterBlocks.inlineElementTargetFields
                 ),
             ],
-            objectAdditionalProperties: false
+            additionalProperties: false
         )
     }
 }

@@ -109,14 +109,14 @@ extension TheBrains {
 
     func executePasteboardRead() -> ActionResult {
         let result = actions.executeGetPasteboard()
-        var builder = ActionResultBuilder(method: result.method)
+        var builder = ActionResultBuilder()
         builder.message = result.message
         switch result.outcome {
         case .success(let success):
-            guard let payload = success.payload else { return builder.success() }
+            guard let payload = success.payload else { return builder.success(method: result.method) }
             return builder.success(payload: payload)
         case .failure(let failure):
-            return builder.failure(errorKind: Self.actionErrorKind(for: failure.kind))
+            return builder.failure(method: result.method, errorKind: Self.actionErrorKind(for: failure.kind))
         }
     }
 
@@ -150,18 +150,21 @@ extension TheBrains {
         let postActionOutcome: PostActionObservation.ActionOutcome
         switch result.outcome {
         case .success(let success):
+            let payload: PostActionObservation.ActionOutcomePayload
+            if let afterStatePayload {
+                payload = .afterState { afterState in
+                    afterStatePayload(PostActionPayloadContext(
+                        afterState: afterState,
+                        resolvedElementId: success.resolvedElementId
+                    ))
+                }
+            } else if let immediatePayload = success.payload {
+                payload = .immediate(immediatePayload)
+            } else {
+                payload = .none
+            }
             postActionOutcome = .success(.init(
-                payload: .init(
-                    immediate: success.payload,
-                    afterState: afterStatePayload.map { payload in
-                        { afterState in
-                            payload(PostActionPayloadContext(
-                                afterState: afterState,
-                                resolvedElementId: success.resolvedElementId
-                            ))
-                        }
-                    }
-                ),
+                payload: payload,
                 subjectEvidence: success.subjectEvidence,
                 activationTrace: success.activationTrace
             ))

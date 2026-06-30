@@ -15,23 +15,283 @@ import ThePlans
     }
 
     public let key: String
-    public let type: ParamType
+    let schema: FenceParameterSchema
     public let required: Bool
-    public let enumValues: [String]?
-    public let defaultValue: HeistValue?
+
+    init(
+        key: String,
+        schema: FenceParameterSchema,
+        required: Bool
+    ) {
+        self.key = key
+        self.schema = schema
+        self.required = required
+    }
+
+    public var type: ParamType {
+        schema.type
+    }
+
+    public var enumValues: [String]? {
+        guard case .scalar(let scalar) = schema else { return nil }
+        return scalar.constraints.enumValues
+    }
+
+    public var defaultValue: HeistValue? {
+        guard case .scalar(let scalar) = schema else { return nil }
+        return scalar.constraints.defaultValue
+    }
+
+    var minimum: Double? {
+        guard case .scalar(let scalar) = schema else { return nil }
+        return scalar.constraints.minimum
+    }
+
+    var maximum: Double? {
+        guard case .scalar(let scalar) = schema else { return nil }
+        return scalar.constraints.maximum
+    }
+
+    var exclusiveMinimum: Double? {
+        guard case .scalar(let scalar) = schema else { return nil }
+        return scalar.constraints.exclusiveMinimum
+    }
+
+    var minLength: Int? {
+        guard case .scalar(let scalar) = schema else { return nil }
+        return scalar.constraints.minLength
+    }
+
+    var minItems: Int? {
+        guard case .array(let array) = schema else { return nil }
+        return array.constraints.minItems
+    }
+
+    var maxItems: Int? {
+        guard case .array(let array) = schema else { return nil }
+        return array.constraints.maxItems
+    }
+
+    var jsonSchema: FenceParameterJSONSchema {
+        schema.jsonSchema
+    }
+
+    public var objectProperties: [FenceParameterSpec] {
+        guard case .object(let object) = schema,
+              let properties = object.properties else {
+            return []
+        }
+        return properties
+    }
+
+    var objectAdditionalProperties: Bool {
+        guard case .object(let object) = schema else { return false }
+        return object.additionalProperties ?? false
+    }
+
+    var arrayItemType: ParamType? {
+        guard case .array(let array) = schema else { return nil }
+        return array.items?.type
+    }
+
+    public var arrayItemProperties: [FenceParameterSpec] {
+        guard case .array(let array) = schema,
+              case .object(let object)? = array.items,
+              let properties = object.properties else {
+            return []
+        }
+        return properties
+    }
+
+    var arrayItemAdditionalProperties: Bool {
+        guard case .array(let array) = schema,
+              case .object(let object)? = array.items else {
+            return false
+        }
+        return object.additionalProperties ?? false
+    }
+
+}
+
+indirect enum FenceParameterSchema: Sendable, Equatable {
+    case scalar(FenceParameterScalarSpec)
+    case object(FenceParameterObjectSpec)
+    case array(FenceParameterArraySpec)
+
+    var type: FenceParameterSpec.ParamType {
+        switch self {
+        case .scalar(let scalar):
+            return scalar.kind.type
+        case .object:
+            return .object
+        case .array(let array):
+            return array.kind.type
+        }
+    }
+
+    var jsonSchema: FenceParameterJSONSchema {
+        switch self {
+        case .scalar(let scalar):
+            return scalar.jsonSchema
+        case .object(let object):
+            return .object(
+                properties: object.properties?.map(FenceParameterJSONSchemaProperty.init),
+                additionalProperties: object.additionalProperties
+            )
+        case .array(let array):
+            return .array(
+                items: array.items?.jsonSchema,
+                constraints: array.constraints.jsonSchemaConstraints
+            )
+        }
+    }
+
+    static func scalar(
+        _ kind: FenceParameterScalarKind,
+        constraints: FenceParameterScalarConstraints = .empty
+    ) -> Self {
+        .scalar(FenceParameterScalarSpec(kind: kind, constraints: constraints))
+    }
+
+    static func object(
+        properties: [FenceParameterSpec]? = nil,
+        additionalProperties: Bool? = nil
+    ) -> Self {
+        .object(FenceParameterObjectSpec(
+            properties: properties,
+            additionalProperties: additionalProperties
+        ))
+    }
+
+    static func array(
+        kind: FenceParameterArrayKind = .array,
+        items: FenceParameterSchema? = nil,
+        constraints: FenceParameterArrayConstraints = .empty
+    ) -> Self {
+        .array(FenceParameterArraySpec(kind: kind, items: items, constraints: constraints))
+    }
+}
+
+enum FenceParameterScalarKind: Sendable, Equatable {
+    case string
+    case integer
+    case number
+    case boolean
+    case stringMatch(modeValues: [String], description: String)
+
+    var type: FenceParameterSpec.ParamType {
+        switch self {
+        case .string:
+            return .string
+        case .integer:
+            return .integer
+        case .number:
+            return .number
+        case .boolean:
+            return .boolean
+        case .stringMatch:
+            return .stringMatch
+        }
+    }
+}
+
+struct FenceParameterScalarSpec: Sendable, Equatable {
+    let kind: FenceParameterScalarKind
+    let constraints: FenceParameterScalarConstraints
+
+    var jsonSchema: FenceParameterJSONSchema {
+        switch kind {
+        case .string, .integer, .number, .boolean:
+            return .scalar(kind.type, constraints: constraints.jsonSchemaConstraints)
+        case .stringMatch(let modeValues, let description):
+            return .stringMatch(modeValues: modeValues, description: description)
+        }
+    }
+}
+
+struct FenceParameterObjectSpec: Sendable, Equatable {
+    let properties: [FenceParameterSpec]?
+    let additionalProperties: Bool?
+}
+
+struct FenceParameterArraySpec: Sendable, Equatable {
+    let kind: FenceParameterArrayKind
+    let items: FenceParameterSchema?
+    let constraints: FenceParameterArrayConstraints
+}
+
+enum FenceParameterArrayKind: Sendable, Equatable {
+    case array
+    case stringArray
+
+    var type: FenceParameterSpec.ParamType {
+        switch self {
+        case .array:
+            return .array
+        case .stringArray:
+            return .stringArray
+        }
+    }
+}
+
+struct FenceParameterScalarConstraints: Sendable, Equatable {
+    static let empty = Self()
+
+    let enumValues: [String]?
+    let defaultValue: HeistValue?
     let minimum: Double?
     let maximum: Double?
     let exclusiveMinimum: Double?
     let minLength: Int?
+
+    init(
+        enumValues: [String]? = nil,
+        defaultValue: HeistValue? = nil,
+        minimum: Double? = nil,
+        maximum: Double? = nil,
+        exclusiveMinimum: Double? = nil,
+        minLength: Int? = nil
+    ) {
+        self.enumValues = enumValues
+        self.defaultValue = defaultValue
+        self.minimum = minimum
+        self.maximum = maximum
+        self.exclusiveMinimum = exclusiveMinimum
+        self.minLength = minLength
+    }
+
+    var jsonSchemaConstraints: FenceParameterJSONSchemaConstraints {
+        FenceParameterJSONSchemaConstraints(
+            enumValues: enumValues,
+            defaultValue: defaultValue,
+            minimum: minimum,
+            maximum: maximum,
+            exclusiveMinimum: exclusiveMinimum,
+            minLength: minLength
+        )
+    }
+}
+
+struct FenceParameterArrayConstraints: Sendable, Equatable {
+    static let empty = Self()
+
     let minItems: Int?
     let maxItems: Int?
-    let jsonSchema: FenceParameterJSONSchema
-    public let objectProperties: [FenceParameterSpec]
-    let objectAdditionalProperties: Bool
-    let arrayItemType: ParamType?
-    public let arrayItemProperties: [FenceParameterSpec]
-    let arrayItemAdditionalProperties: Bool
 
+    init(
+        minItems: Int? = nil,
+        maxItems: Int? = nil
+    ) {
+        self.minItems = minItems
+        self.maxItems = maxItems
+    }
+
+    var jsonSchemaConstraints: FenceParameterJSONSchemaConstraints {
+        FenceParameterJSONSchemaConstraints(
+            minItems: minItems,
+            maxItems: maxItems
+        )
+    }
 }
 
 indirect enum FenceParameterJSONSchema: Sendable, Equatable {
@@ -306,122 +566,86 @@ func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawR
 
 func param(
     _ key: FenceParameterKey,
-    _ type: FenceParameterSpec.ParamType,
+    _ kind: FenceParameterScalarKind,
     required: Bool = false,
     enumValues: [String]? = nil,
     defaultValue: HeistValue? = nil,
     minimum: Double? = nil,
     maximum: Double? = nil,
     exclusiveMinimum: Double? = nil,
-    minLength: Int? = nil,
-    minItems: Int? = nil,
-    maxItems: Int? = nil,
-    objectProperties: [FenceParameterSpec] = [],
-    objectAdditionalProperties: Bool = false,
-    arrayItemType: FenceParameterSpec.ParamType? = nil,
-    arrayItemProperties: [FenceParameterSpec] = [],
-    arrayItemAdditionalProperties: Bool = false
+    minLength: Int? = nil
 ) -> FenceParameterSpec {
-    let constraints = FenceParameterJSONSchemaConstraints(
+    let constraints = FenceParameterScalarConstraints(
         enumValues: enumValues,
         defaultValue: defaultValue,
         minimum: minimum,
         maximum: maximum,
         exclusiveMinimum: exclusiveMinimum,
-        minLength: minLength,
-        minItems: minItems,
-        maxItems: maxItems
+        minLength: minLength
     )
-    let jsonSchema = parameterJSONSchema(
-        type,
-        constraints: constraints,
-        objectProperties: objectProperties,
-        objectAdditionalProperties: objectAdditionalProperties,
-        arrayItemType: arrayItemType,
-        arrayItemProperties: arrayItemProperties,
-        arrayItemAdditionalProperties: arrayItemAdditionalProperties
-    )
-
     return FenceParameterSpec(
         key: key.rawValue,
-        type: type,
-        required: required,
-        enumValues: enumValues,
-        defaultValue: defaultValue,
-        minimum: minimum,
-        maximum: maximum,
-        exclusiveMinimum: exclusiveMinimum,
-        minLength: minLength,
-        minItems: minItems,
-        maxItems: maxItems,
-        jsonSchema: jsonSchema,
-        objectProperties: objectProperties,
-        objectAdditionalProperties: objectAdditionalProperties,
-        arrayItemType: arrayItemType,
-        arrayItemProperties: arrayItemProperties,
-        arrayItemAdditionalProperties: arrayItemAdditionalProperties
+        schema: .scalar(kind, constraints: constraints),
+        required: required
     )
 }
 
-private func parameterJSONSchema(
-    _ type: FenceParameterSpec.ParamType,
-    constraints: FenceParameterJSONSchemaConstraints,
-    objectProperties: [FenceParameterSpec],
-    objectAdditionalProperties: Bool,
-    arrayItemType: FenceParameterSpec.ParamType?,
-    arrayItemProperties: [FenceParameterSpec],
-    arrayItemAdditionalProperties: Bool
-) -> FenceParameterJSONSchema {
-    switch type {
-    case .stringArray:
-        return .array(items: .scalar(.string), constraints: constraints)
-    case .object:
-        guard !objectProperties.isEmpty else {
-            return .object(constraints: constraints)
-        }
-        return .object(
-            properties: objectProperties.map(FenceParameterJSONSchemaProperty.init),
-            additionalProperties: objectAdditionalProperties,
-            constraints: constraints
-        )
-    case .array:
-        return .array(
-            items: arrayItemType.map {
-                arrayItemJSONSchema(
-                    $0,
-                    objectProperties: arrayItemProperties,
-                    objectAdditionalProperties: arrayItemAdditionalProperties
-                )
-            },
-            constraints: constraints
-        )
-    case .stringMatch:
-        return .object(constraints: constraints)
-    case .string, .integer, .number, .boolean:
-        return .scalar(type, constraints: constraints)
-    }
+func objectParam(
+    _ key: FenceParameterKey,
+    required: Bool = false
+) -> FenceParameterSpec {
+    FenceParameterSpec(
+        key: key.rawValue,
+        schema: .object(),
+        required: required
+    )
 }
 
-private func arrayItemJSONSchema(
-    _ type: FenceParameterSpec.ParamType,
-    objectProperties: [FenceParameterSpec],
-    objectAdditionalProperties: Bool
-) -> FenceParameterJSONSchema {
-    switch type {
-    case .stringArray:
-        return .array(items: .scalar(.string))
-    case .object:
-        return .object(
-            properties: objectProperties.map(FenceParameterJSONSchemaProperty.init),
-            additionalProperties: objectAdditionalProperties
-        )
-    case .array:
-        return .array()
-    case .stringMatch:
-        return .object()
-    case .string, .integer, .number, .boolean:
-        return .scalar(type)
-    }
+func objectParam(
+    _ key: FenceParameterKey,
+    required: Bool = false,
+    properties: [FenceParameterSpec],
+    additionalProperties: Bool = false
+) -> FenceParameterSpec {
+    FenceParameterSpec(
+        key: key.rawValue,
+        schema: .object(properties: properties, additionalProperties: additionalProperties),
+        required: required
+    )
+}
+
+func arrayParam(
+    _ key: FenceParameterKey,
+    required: Bool = false,
+    items: FenceParameterSchema? = nil,
+    minItems: Int? = nil,
+    maxItems: Int? = nil
+) -> FenceParameterSpec {
+    FenceParameterSpec(
+        key: key.rawValue,
+        schema: .array(
+            items: items,
+            constraints: FenceParameterArrayConstraints(minItems: minItems, maxItems: maxItems)
+        ),
+        required: required
+    )
+}
+
+func stringArrayParam(
+    _ key: FenceParameterKey,
+    required: Bool = false,
+    minItems: Int? = nil,
+    maxItems: Int? = nil
+) -> FenceParameterSpec {
+    FenceParameterSpec(
+        key: key.rawValue,
+        schema: .array(
+            kind: .stringArray,
+            items: .scalar(.string),
+            constraints: FenceParameterArrayConstraints(minItems: minItems, maxItems: maxItems)
+        ),
+        required: required
+    )
 }
 
 private func jsonSchemaNumber(_ value: Double) -> HeistValue {
@@ -507,11 +731,11 @@ enum FenceParameterBlocks: Sendable {
     static let inlineElementTargetFields = ElementTarget.inlineSchemaFields.map(elementTargetFieldSpec)
 
     static let elementTarget: [FenceParameterSpec] = [
-        param(.target, .object, objectProperties: inlineElementTargetFields),
+        objectParam(.target, properties: inlineElementTargetFields),
     ]
-    static let gestureElement = param(.element, .object, objectProperties: inlineElementTargetFields)
-    static let gestureUnitPoint = param(.unitPoint, .object, objectProperties: unitPoint)
-    static let gesturePoint = param(.point, .object, objectProperties: screenPoint)
+    static let gestureElement = objectParam(.element, properties: inlineElementTargetFields)
+    static let gestureUnitPoint = objectParam(.unitPoint, properties: unitPoint)
+    static let gesturePoint = objectParam(.point, properties: screenPoint)
 
     static let gesturePointSelection: [FenceParameterSpec] = [
         gestureElement,
@@ -519,39 +743,35 @@ enum FenceParameterBlocks: Sendable {
         gesturePoint,
     ]
 
-    static let swipeElementDirection = param(
+    static let swipeElementDirection = objectParam(
         .elementDirection,
-        .object,
-        objectProperties: [
+        properties: [
             gestureElement,
             param(.direction, .string, required: true, enumValues: fenceEnumValues(SwipeDirection.self)),
         ]
     )
 
-    static let swipeElementUnitPoints = param(
+    static let swipeElementUnitPoints = objectParam(
         .elementUnitPoints,
-        .object,
-        objectProperties: [
+        properties: [
             gestureElement,
-            param(.start, .object, required: true, objectProperties: unitPoint),
-            param(.end, .object, required: true, objectProperties: unitPoint),
+            objectParam(.start, required: true, properties: unitPoint),
+            objectParam(.end, required: true, properties: unitPoint),
         ]
     )
 
-    static let swipePointToPoint = param(
+    static let swipePointToPoint = objectParam(
         .pointToPoint,
-        .object,
-        objectProperties: [
-            param(.start, .object, required: true, objectProperties: screenPoint),
-            param(.end, .object, required: true, objectProperties: screenPoint),
+        properties: [
+            objectParam(.start, required: true, properties: screenPoint),
+            objectParam(.end, required: true, properties: screenPoint),
         ]
     )
 
-    static let swipePointDirection = param(
+    static let swipePointDirection = objectParam(
         .pointDirection,
-        .object,
-        objectProperties: [
-            param(.start, .object, required: true, objectProperties: screenPoint),
+        properties: [
+            objectParam(.start, required: true, properties: screenPoint),
             param(.direction, .string, required: true, enumValues: fenceEnumValues(SwipeDirection.self)),
         ]
     )
@@ -563,22 +783,20 @@ enum FenceParameterBlocks: Sendable {
         swipePointDirection,
     ]
 
-    static let dragElementToPoint = param(
+    static let dragElementToPoint = objectParam(
         .elementToPoint,
-        .object,
-        objectProperties: [
+        properties: [
             gestureElement,
-            param(.start, .object, objectProperties: unitPoint),
-            param(.end, .object, required: true, objectProperties: screenPoint),
+            objectParam(.start, properties: unitPoint),
+            objectParam(.end, required: true, properties: screenPoint),
         ]
     )
 
-    static let dragPointToPoint = param(
+    static let dragPointToPoint = objectParam(
         .pointToPoint,
-        .object,
-        objectProperties: [
-            param(.start, .object, required: true, objectProperties: screenPoint),
-            param(.end, .object, required: true, objectProperties: screenPoint),
+        properties: [
+            objectParam(.start, required: true, properties: screenPoint),
+            objectParam(.end, required: true, properties: screenPoint),
         ]
     )
 
@@ -602,16 +820,15 @@ enum FenceParameterBlocks: Sendable {
     // (OpenAI) tool input schemas reject JSON Schema combinators, so this must
     // never emit `oneOf`/`anyOf`/`allOf`. Pass the container name as
     // `{ "container": { "containerName": "main_scroll" } }`.
-    private static let subtreeContainer = param(
+    private static let subtreeContainer = objectParam(
         .container,
-        .object,
-        objectProperties: subtreeContainerProperties
+        properties: subtreeContainerProperties
     )
 
-    static let interfaceSubtree: FenceParameterSpec = param(
-        .subtree, .object,
-        objectProperties: [
-            param(.element, .object, objectProperties: subtreeElementProperties),
+    static let interfaceSubtree: FenceParameterSpec = objectParam(
+        .subtree,
+        properties: [
+            objectParam(.element, properties: subtreeElementProperties),
             subtreeContainer,
             param(.ordinal, .integer, minimum: 0),
         ]
@@ -628,38 +845,32 @@ enum FenceParameterBlocks: Sendable {
     /// per-type required-field rules.
     private static let stateProperties: [FenceParameterSpec] = [
         param(.type, .string, enumValues: ["exists", "missing", "all"]),
-        param(.element, .object, objectProperties: matcherFields),
-        param(.target, .object, objectProperties: inlineElementTargetFields),
+        objectParam(.element, properties: matcherFields),
+        objectParam(.target, properties: inlineElementTargetFields),
         param(.targetRef, .string),
-        param(.states, .array, arrayItemType: .object, arrayItemProperties: [], arrayItemAdditionalProperties: true),
+        arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
     ]
 
     private static let assertionProperties: [FenceParameterSpec] = [
         param(.type, .string, enumValues: ["exists", "missing", "all", "appeared", "disappeared", "updated"]),
-        param(.element, .object, objectProperties: matcherFields),
-        param(.target, .object, objectProperties: inlineElementTargetFields),
+        objectParam(.element, properties: matcherFields),
+        objectParam(.target, properties: inlineElementTargetFields),
         param(.targetRef, .string),
         param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
-        param(.before, .object, objectProperties: matcherFields),
-        param(.after, .object, objectProperties: matcherFields),
-        param(.states, .array, arrayItemType: .object, arrayItemProperties: [], arrayItemAdditionalProperties: true),
+        objectParam(.before, properties: matcherFields),
+        objectParam(.after, properties: matcherFields),
+        arrayParam(.states, items: .object(properties: [], additionalProperties: true)),
     ]
 
     private static let changeScopeProperties: [FenceParameterSpec] = [
         param(.type, .string, enumValues: ["screen", "elements", "all"]),
-        param(
+        arrayParam(
             .assertions,
-            .array,
-            arrayItemType: .object,
-            arrayItemProperties: assertionProperties,
-            arrayItemAdditionalProperties: true
+            items: .object(properties: assertionProperties, additionalProperties: true)
         ),
-        param(
+        arrayParam(
             .scopes,
-            .array,
-            arrayItemType: .object,
-            arrayItemProperties: [],
-            arrayItemAdditionalProperties: true
+            items: .object(properties: [], additionalProperties: true)
         ),
     ]
 
@@ -669,34 +880,30 @@ enum FenceParameterBlocks: Sendable {
     /// carry `screen` state assertions or `elements` delta assertions.
     private static let accessibilityPredicateProperties: [FenceParameterSpec] = [
         predicateType,
-        param(.element, .object, objectProperties: matcherFields),
-        param(.target, .object, objectProperties: inlineElementTargetFields),
+        objectParam(.element, properties: matcherFields),
+        objectParam(.target, properties: inlineElementTargetFields),
         param(.targetRef, .string),
         param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
-        param(.before, .object, objectProperties: matcherFields),
-        param(.after, .object, objectProperties: matcherFields),
-        param(
-            .states, .array,
-            arrayItemType: .object,
-            arrayItemProperties: stateProperties,
-            arrayItemAdditionalProperties: true
+        objectParam(.before, properties: matcherFields),
+        objectParam(.after, properties: matcherFields),
+        arrayParam(
+            .states,
+            items: .object(properties: stateProperties, additionalProperties: true)
         ),
-        param(
-            .scopes, .array,
-            arrayItemType: .object,
-            arrayItemProperties: changeScopeProperties,
-            arrayItemAdditionalProperties: true
+        arrayParam(
+            .scopes,
+            items: .object(properties: changeScopeProperties, additionalProperties: true)
         ),
     ]
 
-    static let expect: FenceParameterSpec = param(
-        .expect, .object,
-        objectProperties: accessibilityPredicateProperties
+    static let expect: FenceParameterSpec = objectParam(
+        .expect,
+        properties: accessibilityPredicateProperties
     )
 
-    static let predicate: FenceParameterSpec = param(
-        .predicate, .object, required: true,
-        objectProperties: accessibilityPredicateProperties
+    static let predicate: FenceParameterSpec = objectParam(
+        .predicate, required: true,
+        properties: accessibilityPredicateProperties
     )
 
     static let expectationTimeout = param(.timeout, .number, maximum: defaultWaitTimeout, exclusiveMinimum: 0)
@@ -724,22 +931,8 @@ enum FenceParameterBlocks: Sendable {
                 : "")
         return FenceParameterSpec(
             key: key.rawValue,
-            type: .stringMatch,
-            required: false,
-            enumValues: nil,
-            defaultValue: nil,
-            minimum: nil,
-            maximum: nil,
-            exclusiveMinimum: nil,
-            minLength: nil,
-            minItems: nil,
-            maxItems: nil,
-            jsonSchema: .stringMatch(modeValues: modeValues, description: description),
-            objectProperties: [],
-            objectAdditionalProperties: false,
-            arrayItemType: nil,
-            arrayItemProperties: [],
-            arrayItemAdditionalProperties: false
+            schema: .scalar(.stringMatch(modeValues: modeValues, description: description)),
+            required: false
         )
     }
 
@@ -755,25 +948,26 @@ enum FenceParameterBlocks: Sendable {
         case .stringMatch:
             return stringMatchParam(key, allowsArray: true)
         case .stringArray:
-            return param(key, .stringArray)
+            return stringArrayParam(key)
         case .nonNegativeInteger:
             return param(key, .integer, minimum: 0)
         }
     }
 
     private static func predicateChecksParam(_ key: FenceParameterKey) -> FenceParameterSpec {
-        param(
-            key, .array,
-            arrayItemType: .object,
-            arrayItemProperties: [
-                param(
-                    .kind, .string, required: true,
-                    enumValues: ["label", "identifier", "value", "traits", "excludeTraits"]
-                ),
-                stringMatchParam(.match),
-                param(.values, .stringArray),
-            ],
-            arrayItemAdditionalProperties: false
+        arrayParam(
+            key,
+            items: .object(
+                properties: [
+                    param(
+                        .kind, .string, required: true,
+                        enumValues: ["label", "identifier", "value", "traits", "excludeTraits"]
+                    ),
+                    stringMatchParam(.match),
+                    stringArrayParam(.values),
+                ],
+                additionalProperties: false
+            )
         )
     }
 }

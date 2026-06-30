@@ -100,11 +100,10 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testActionResultWithFailureMessage() throws {
-        let result = ActionResult(
-            success: false,
+        let result = ActionResult.failure(
             method: .activate,
+            errorKind: .elementNotFound,
             message: "Element not found",
-            errorKind: .elementNotFound
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)

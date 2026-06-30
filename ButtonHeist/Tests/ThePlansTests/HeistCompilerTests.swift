@@ -5,6 +5,24 @@ import Testing
 @Suite(.serialized)
 struct HeistCompilerTests {
     @Test
+    func `known build diagnostic codes preserve raw output`() {
+        let representativeCodes: [(HeistKnownBuildDiagnosticCode, String)] = [
+            (.dslInvalidActionExpectation, "heist.dsl.invalid_action_expectation"),
+            (.sourceInvalidSyntax, "heist.source.invalid_syntax"),
+            (.planRuntimeSafety, "heist.plan.runtime_safety"),
+            (.swiftCompilationCompileFailed, "heist.swift_compilation.compile_failed"),
+            (.directoryNoSources, "heist.directory.no_sources"),
+            (.catalogDuplicateCapability, "heist.catalog.duplicate_capability"),
+            (.planningRawJSONIRFields, "heist.planning.raw_json_ir_fields"),
+        ]
+
+        for (code, rawValue) in representativeCodes {
+            #expect(HeistBuildDiagnosticCode(code).rawValue == rawValue)
+            #expect(HeistBuildDiagnostic(code: code, phase: .planning, message: "test").code.rawValue == rawValue)
+        }
+    }
+
+    @Test
     func `compileFile compiles a simple named HeistPlan Swift source`() async throws {
         let temp = try CompilerTemporaryDirectory()
         let source = try temp.writeSwiftSource(
@@ -62,7 +80,7 @@ struct HeistCompilerTests {
         let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
         let diagnostic = try #require(diagnostics.first)
 
-        #expect(diagnostic.code == "heist.swift_compilation.compile_failed")
+        #expect(diagnostic.code.rawValue == "heist.swift_compilation.compile_failed")
         #expect(diagnostic.kind == .error)
         #expect(diagnostic.phase == .swiftCompilation)
         #expect(diagnostic.sourceSpan?.sourceName.hasSuffix("Broken.swift") == true)
@@ -89,7 +107,7 @@ struct HeistCompilerTests {
         let diagnostics = try await requireFailure(HeistCompiler().compileFile(source))
         let diagnostic = try #require(diagnostics.first)
 
-        #expect(diagnostic.code == "heist.swift_compilation.invalid_output")
+        #expect(diagnostic.code.rawValue == "heist.swift_compilation.invalid_output")
         #expect(diagnostic.phase == .swiftCompilation)
         #expect(diagnostic.message.contains("valid HeistPlan JSON"))
         #expect(diagnostic.renderedMessage.count < 2_500)
@@ -477,7 +495,7 @@ struct HeistCompilerTests {
         let diagnostics = try await requireFailure(HeistCompiler().compileDirectory(temp.url))
         let diagnostic = try #require(diagnostics.first)
 
-        #expect(diagnostic.code == "heist.catalog.duplicate_capability")
+        #expect(diagnostic.code.rawValue == "heist.catalog.duplicate_capability")
         #expect(diagnostic.phase == .planValidation)
         #expect(diagnostic.sourceSpan?.sourceName.hasSuffix("Second.swift") == true)
     }

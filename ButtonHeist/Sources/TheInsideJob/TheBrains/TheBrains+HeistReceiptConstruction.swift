@@ -42,7 +42,22 @@ extension TheBrains {
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
         let resolvedAbortedAtChildPath = abortedAtChildPath ?? children.firstFailedStep?.path
-        if let failure = failure ?? resolvedAbortedAtChildPath.map({ childFailureDetail(category: .wait, childPath: $0) }) {
+        if let resolvedAbortedAtChildPath {
+            guard let evidence else {
+                preconditionFailure("Child-aborted wait receipt requires wait evidence")
+            }
+            return .childAborted(
+                path: path,
+                kind: .wait,
+                durationMs: durationMs,
+                intent: intent,
+                evidence: .wait(evidence),
+                failure: failure ?? childFailureDetail(category: .wait, childPath: resolvedAbortedAtChildPath),
+                abortedAtChildPath: resolvedAbortedAtChildPath,
+                children: children
+            )
+        }
+        if let failure {
             return .failed(
                 path: path,
                 kind: .wait,
@@ -50,7 +65,6 @@ extension TheBrains {
                 intent: intent,
                 evidence: evidence.map(HeistStepEvidence.wait),
                 failure: failure,
-                abortedAtChildPath: resolvedAbortedAtChildPath,
                 children: children
             )
         }
@@ -117,7 +131,19 @@ extension TheBrains {
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
         let resolvedAbortedAtChildPath = abortedAtChildPath ?? children.firstFailedStep?.path
-        if let failure = failure ?? resolvedAbortedAtChildPath.map({ childFailureDetail(category: .invocation, childPath: $0) }) {
+        if let resolvedAbortedAtChildPath {
+            return .childAborted(
+                path: path,
+                kind: .invoke,
+                durationMs: durationMs,
+                intent: intent,
+                evidence: .invocation(evidence),
+                failure: failure ?? childFailureDetail(category: .invocation, childPath: resolvedAbortedAtChildPath),
+                abortedAtChildPath: resolvedAbortedAtChildPath,
+                children: children
+            )
+        }
+        if let failure {
             return .failed(
                 path: path,
                 kind: .invoke,
@@ -125,7 +151,6 @@ extension TheBrains {
                 intent: intent,
                 evidence: .invocation(evidence),
                 failure: failure,
-                abortedAtChildPath: resolvedAbortedAtChildPath,
                 children: children
             )
         }
@@ -185,7 +210,19 @@ extension TheBrains {
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         let abortedAtChildPath = children.firstFailedStep?.path
-        if let failure = failure ?? abortedAtChildPath.map({ childFailureDetail(category: childFailureCategory, childPath: $0) }) {
+        if let abortedAtChildPath {
+            return .childAborted(
+                path: path,
+                kind: kind,
+                durationMs: durationMs,
+                intent: intent,
+                evidence: evidence,
+                failure: failure ?? childFailureDetail(category: childFailureCategory, childPath: abortedAtChildPath),
+                abortedAtChildPath: abortedAtChildPath,
+                children: children
+            )
+        }
+        if let failure {
             return .failed(
                 path: path,
                 kind: kind,
@@ -193,7 +230,6 @@ extension TheBrains {
                 intent: intent,
                 evidence: evidence,
                 failure: failure,
-                abortedAtChildPath: abortedAtChildPath,
                 children: children
             )
         }
@@ -219,7 +255,19 @@ extension TheBrains {
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
         let resolvedAbortedAtChildPath = abortedAtChildPath ?? children.firstFailedStep?.path
-        if let failure = failure ?? resolvedAbortedAtChildPath.map({ childFailureDetail(category: .loop, childPath: $0) }) {
+        if let resolvedAbortedAtChildPath {
+            return .childAborted(
+                path: path,
+                kind: kind,
+                durationMs: durationMs,
+                intent: intent,
+                evidence: evidence,
+                failure: failure ?? childFailureDetail(category: .loop, childPath: resolvedAbortedAtChildPath),
+                abortedAtChildPath: resolvedAbortedAtChildPath,
+                children: children
+            )
+        }
+        if let failure {
             return .failed(
                 path: path,
                 kind: kind,
@@ -227,7 +275,6 @@ extension TheBrains {
                 intent: intent,
                 evidence: evidence,
                 failure: failure,
-                abortedAtChildPath: resolvedAbortedAtChildPath,
                 children: children
             )
         }
@@ -252,7 +299,7 @@ extension TheBrains {
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
         if let abortedAtChildPath {
-            return .failed(
+            return .childAborted(
                 path: path,
                 kind: kind,
                 durationMs: durationMs,

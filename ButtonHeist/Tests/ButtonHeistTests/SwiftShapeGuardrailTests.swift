@@ -165,6 +165,11 @@ import Testing
             \(rawIRAdmissionFields.sorted().joined(separator: "\n"))
             """
         )
+        #expect(!planningSource.contains("rawStructuredJSONIRFieldNames"))
+        #expect(planningSource.contains("public enum HeistPlanRejectedPublicSourceField"))
+        #expect(planningSource.contains("public enum HeistPlanSource: Sendable, Equatable"))
+        #expect(planningSource.contains("case artifactPath(String)"))
+        #expect(planningSource.contains("case inlineDSL(String)"))
     }
 
     @Test func `public action payload projections explicitly surface screenshot and heist execution data`() throws {
@@ -228,6 +233,88 @@ import Testing
         #expect(fenceSource.matches(of: #"(?m)^\s*let\s+connected\s*:\s*Bool\b"#).isEmpty)
         #expect(fenceSource.matches(of: #"(?m)^\s*let\s+phase\s*:\s*SessionConnectionPhase\b"#).isEmpty)
     }
+
+    @Test func `public and package production APIs do not expose named tuple surfaces`() throws {
+        let root = repositoryRoot()
+        let productionFiles = try productionSwiftFiles(root: root)
+        let namedTupleAPIMatches = try publicOrPackageDeclarationMatches(
+            in: productionFiles,
+            root: root,
+            matching: #"(?:->|:)\s*\((?=[^)\n]*\b[A-Za-z_][A-Za-z0-9_]*\s*:)[^)\n]*\)"#
+        )
+
+        #expect(
+            namedTupleAPIMatches.isEmpty,
+            """
+            Public/package production API surfaces should expose named domain types, not named tuples. \
+            Local tuple destructuring and private helpers are allowed; public/package declarations are not:
+            \(namedTupleAPIMatches.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    @Test func `raw Any is confined to named Foundation boundary concepts and not public APIs`() throws {
+        let root = repositoryRoot()
+        let productionFiles = try productionSwiftFiles(root: root)
+        let rawAnyBoundaryConcepts = [
+            SourceBoundaryConcept(
+                name: "FoundationInfoPlistBridge",
+                relativePath: "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
+            ),
+            SourceBoundaryConcept(
+                name: "FoundationFileAttributeDictionary",
+                relativePath: "ButtonHeist/Sources/TheButtonHeist/Storage/PrivateStorage.swift"
+            ),
+        ]
+
+        let anyAPIMatches = try publicOrPackageDeclarationMatches(
+            in: productionFiles,
+            root: root,
+            matching: #"\[String\s*:\s*Any\]|\bAny\b"#
+        )
+
+        #expect(
+            anyAPIMatches.isEmpty,
+            """
+            Public/package production APIs should use typed model/runtime pipeline surfaces rather than \
+            raw type erasure or untyped Foundation JSON dictionaries. Raw type erasure is only allowed \
+            inside named Foundation boundary concepts:
+            \(rawAnyBoundaryConcepts.map(\.name).sorted().joined(separator: ", "))
+            \(anyAPIMatches.sorted().joined(separator: "\n"))
+            """
+        )
+
+        let rawAnyMatches = try rawAnyMatchesOutsideBoundaryConcepts(
+            in: productionFiles,
+            root: root,
+            allowedBoundaries: rawAnyBoundaryConcepts
+        )
+
+        #expect(
+            rawAnyMatches.isEmpty,
+            """
+            Raw Any in production code should stay inside explicitly named Foundation boundary concepts, \
+            not model or runtime pipeline surfaces:
+            \(rawAnyMatches.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    @Test func `production result models do not use optional bag success failure payload shape`() throws {
+        let root = repositoryRoot()
+        let productionFiles = try productionSwiftFiles(root: root)
+        let optionalBagMatches = try optionalBagResultStructMatches(in: productionFiles, root: root)
+
+        #expect(
+            optionalBagMatches.isEmpty,
+            """
+            Production result models should encode mutually exclusive states with enums or typed outcomes, \
+            not optional bags mixing success/status, errorKind/failure, and payload/evidence stored fields. \
+            Decoded boundary models should be named explicitly before adding an exception:
+            \(optionalBagMatches.sorted().joined(separator: "\n"))
+            """
+        )
+    }
 }
 
 private extension String {
@@ -248,6 +335,221 @@ private extension String {
             return false
         }
         return regex.firstMatch(in: self, range: NSRange(startIndex..<endIndex, in: self)) != nil
+    }
+
+    var singleLineSourceShapeDescription: String {
+        split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    var prefixBeforeFirstOpeningBrace: String {
+        guard let brace = firstIndex(of: "{") else { return self }
+        return String(self[..<brace])
+    }
+
+    var sourceShapeParenBalance: Int {
+        reduce(0) { balance, character in
+            switch character {
+            case "(":
+                return balance + 1
+            case ")":
+                return max(0, balance - 1)
+            default:
+                return balance
+            }
+        }
+    }
+
+    func splitIntoNumberedLines() -> [(lineNumber: Int, line: String)] {
+        split(separator: "\n", omittingEmptySubsequences: false)
+            .enumerated()
+            .map { (lineNumber: $0.offset + 1, line: String($0.element)) }
+    }
+
+    func removingCommentsAndStringLiteralContents() -> String {
+        var result = ""
+        var index = startIndex
+        var state = SourceLexicalState.code
+        while index < endIndex {
+            let character = self[index]
+            let nextIndex = self.index(after: index)
+            let nextCharacter = nextIndex < endIndex ? self[nextIndex] : nil
+
+            switch state {
+            case .code:
+                if character == "/", nextCharacter == "/" {
+                    result.append("  ")
+                    index = self.index(after: nextIndex)
+                    state = .lineComment
+                } else if character == "/", nextCharacter == "*" {
+                    result.append("  ")
+                    index = self.index(after: nextIndex)
+                    state = .blockComment(depth: 1)
+                } else if character == #"""# {
+                    result.append(character)
+                    index = nextIndex
+                    state = .string
+                } else {
+                    result.append(character)
+                    index = nextIndex
+                }
+            case .lineComment:
+                if character == "\n" {
+                    result.append("\n")
+                    state = .code
+                } else {
+                    result.append(" ")
+                }
+                index = nextIndex
+            case .blockComment(let depth):
+                if character == "/", nextCharacter == "*" {
+                    result.append("  ")
+                    index = self.index(after: nextIndex)
+                    state = .blockComment(depth: depth + 1)
+                } else if character == "*", nextCharacter == "/" {
+                    result.append("  ")
+                    index = self.index(after: nextIndex)
+                    if depth == 1 {
+                        state = .code
+                    } else {
+                        state = .blockComment(depth: depth - 1)
+                    }
+                } else {
+                    result.append(character == "\n" ? "\n" : " ")
+                    index = nextIndex
+                }
+            case .string:
+                if character == "\\" {
+                    result.append(" ")
+                    if nextIndex < endIndex {
+                        result.append(" ")
+                        index = self.index(after: nextIndex)
+                    } else {
+                        index = nextIndex
+                    }
+                } else if character == #"""# {
+                    result.append(character)
+                    state = .code
+                    index = nextIndex
+                } else {
+                    result.append(character == "\n" ? "\n" : " ")
+                    index = nextIndex
+                }
+            }
+        }
+        return result
+    }
+
+    func namedDeclarationRanges(named name: String) throws -> [ClosedRange<Int>] {
+        let escapedName = NSRegularExpression.escapedPattern(for: name)
+        let declarationRegex = try NSRegularExpression(
+            pattern: "\\b(?:typealias|struct|enum|class|actor|protocol)\\s+\(escapedName)\\b"
+        )
+        let fullRange = NSRange(startIndex..<endIndex, in: self)
+        return declarationRegex.matches(in: self, range: fullRange).compactMap { match in
+            guard let range = Range(match.range, in: self) else { return nil }
+            return declarationLineRange(startingAt: range.lowerBound)
+        }
+    }
+
+    func structBlocks() throws -> [SourceStructBlock] {
+        let regex = try NSRegularExpression(
+            pattern: #"(?m)^\s*(?:(?:public|package|internal|fileprivate|private)\s+)?(?:final\s+)?struct\s+([A-Za-z_][A-Za-z0-9_]*)\b"#
+        )
+        let fullRange = NSRange(startIndex..<endIndex, in: self)
+        return regex.matches(in: self, range: fullRange).compactMap { match in
+            guard let matchRange = Range(match.range, in: self),
+                  let nameRange = Range(match.range(at: 1), in: self),
+                  let bodyRange = declarationCharacterRange(startingAt: matchRange.lowerBound)
+            else {
+                return nil
+            }
+            return SourceStructBlock(
+                name: String(self[nameRange]),
+                lineNumber: lineNumber(at: matchRange.lowerBound),
+                contents: String(self[bodyRange])
+            )
+        }
+    }
+
+    private func declarationLineRange(startingAt declarationStart: String.Index) -> ClosedRange<Int>? {
+        guard let characterRange = declarationCharacterRange(startingAt: declarationStart) else {
+            let line = lineNumber(at: declarationStart)
+            return line...line
+        }
+        return lineNumber(at: characterRange.lowerBound)...lineNumber(at: characterRange.upperBound)
+    }
+
+    private func declarationCharacterRange(startingAt declarationStart: String.Index) -> Range<String.Index>? {
+        guard let openingBrace = self[declarationStart...].firstIndex(of: "{") else {
+            return nil
+        }
+        var depth = 0
+        var index = openingBrace
+        while index < endIndex {
+            switch self[index] {
+            case "{":
+                depth += 1
+            case "}":
+                depth -= 1
+                if depth == 0 {
+                    return declarationStart..<self.index(after: index)
+                }
+            default:
+                break
+            }
+            formIndex(after: &index)
+        }
+        return declarationStart..<endIndex
+    }
+
+    private func lineNumber(at index: String.Index) -> Int {
+        self[..<index].reduce(1) { lineNumber, character in
+            character == "\n" ? lineNumber + 1 : lineNumber
+        }
+    }
+}
+
+private enum SourceLexicalState {
+    case code
+    case lineComment
+    case blockComment(depth: Int)
+    case string
+}
+
+private struct SourceStructBlock: Sendable {
+    let name: String
+    let lineNumber: Int
+    let contents: String
+
+    var isResultStateModelCandidate: Bool {
+        guard name.contains("Result")
+            || name.contains("Outcome")
+            || name.contains("Receipt")
+            || name.contains("State")
+        else {
+            return false
+        }
+        return !name.hasPrefix("Public") && !name.hasSuffix("Projection")
+    }
+
+    var storedFieldTypes: [String: String] {
+        let pattern = #"^\s*(?:(?:public|package|internal|fileprivate|private)\s+)?(?:let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^=\n{]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [:] }
+        return contents.split(separator: "\n", omittingEmptySubsequences: false).reduce(into: [:]) { fields, rawLine in
+            let line = String(rawLine)
+            guard !line.contains("{") else { return }
+            let range = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard let match = regex.firstMatch(in: line, range: range),
+                  let nameRange = Range(match.range(at: 1), in: line),
+                  let typeRange = Range(match.range(at: 2), in: line)
+            else {
+                return
+            }
+            fields[String(line[nameRange])] = String(line[typeRange]).trimmingCharacters(in: .whitespaces)
+        }
     }
 }
 
@@ -288,6 +590,143 @@ private func sourceMatches(in files: [URL], root: URL, pattern: String) throws -
         }
     }
     return matches
+}
+
+private func productionSwiftFiles(root: URL) throws -> [URL] {
+    try swiftFiles(in: root.appendingPathComponent("ButtonHeist/Sources", isDirectory: true))
+}
+
+private struct SourceBoundaryConcept: Equatable, Sendable {
+    let name: String
+    let relativePath: String
+}
+
+private struct SourceDeclarationMatch: Hashable, Sendable {
+    let relativePath: String
+    let lineNumber: Int
+    let text: String
+
+    var description: String {
+        "\(relativePath):\(lineNumber):\(text)"
+    }
+}
+
+private func publicOrPackageDeclarationMatches(
+    in files: [URL],
+    root: URL,
+    matching pattern: String
+) throws -> Set<String> {
+    let regex = try NSRegularExpression(pattern: pattern)
+    var matches: Set<String> = []
+    for file in files {
+        let relativePath = repositoryRelativePath(file, root: root)
+        let source = try String(contentsOf: file, encoding: .utf8).removingCommentsAndStringLiteralContents()
+        for declaration in publicOrPackageDeclarationSpans(in: source) {
+            let range = NSRange(declaration.text.startIndex..<declaration.text.endIndex, in: declaration.text)
+            guard regex.firstMatch(in: declaration.text, range: range) != nil else { continue }
+            matches.insert(
+                SourceDeclarationMatch(
+                    relativePath: relativePath,
+                    lineNumber: declaration.lineNumber,
+                    text: declaration.text.singleLineSourceShapeDescription
+                ).description
+            )
+        }
+    }
+    return matches
+}
+
+private func rawAnyMatchesOutsideBoundaryConcepts(
+    in files: [URL],
+    root: URL,
+    allowedBoundaries: [SourceBoundaryConcept]
+) throws -> Set<String> {
+    let anyRegex = try NSRegularExpression(pattern: #"\[String\s*:\s*Any\]|\bAny\b"#)
+    var matches: Set<String> = []
+    for file in files {
+        let relativePath = repositoryRelativePath(file, root: root)
+        let allowedNames = Set(allowedBoundaries.filter { $0.relativePath == relativePath }.map(\.name))
+        let source = try String(contentsOf: file, encoding: .utf8).removingCommentsAndStringLiteralContents()
+        let boundaryRanges = try allowedNames.flatMap { name in
+            try source.namedDeclarationRanges(named: name)
+        }
+        for (lineNumber, line) in source.splitIntoNumberedLines() {
+            let lineRange = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard anyRegex.firstMatch(in: line, range: lineRange) != nil else { continue }
+            guard !boundaryRanges.contains(where: { $0.contains(lineNumber) }) else { continue }
+            matches.insert("\(relativePath):\(lineNumber):\(line.trimmingCharacters(in: .whitespaces))")
+        }
+    }
+    return matches
+}
+
+private func optionalBagResultStructMatches(in files: [URL], root: URL) throws -> Set<String> {
+    var matches: Set<String> = []
+    for file in files {
+        let relativePath = repositoryRelativePath(file, root: root)
+        let source = try String(contentsOf: file, encoding: .utf8).removingCommentsAndStringLiteralContents()
+        for block in try source.structBlocks() {
+            guard block.isResultStateModelCandidate else { continue }
+            let storedFields = block.storedFieldTypes
+            let hasStatusField = storedFields.keys.contains("success") || storedFields.keys.contains("status")
+            let hasFailureField = storedFields.keys.contains("errorKind") || storedFields.keys.contains("failure")
+            let hasPayloadField = storedFields.keys.contains("payload") || storedFields.keys.contains("evidence")
+            let hasOptionalFailureOrPayload = ["errorKind", "failure", "payload", "evidence"].contains { fieldName in
+                storedFields[fieldName]?.contains("?") == true
+            }
+            guard hasStatusField, hasFailureField, hasPayloadField, hasOptionalFailureOrPayload else { continue }
+            matches.insert("\(relativePath):\(block.lineNumber):\(block.name)")
+        }
+    }
+    return matches
+}
+
+private struct SourceDeclarationSpan: Sendable {
+    let lineNumber: Int
+    let text: String
+}
+
+private func publicOrPackageDeclarationSpans(in source: String) -> [SourceDeclarationSpan] {
+    let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    let accessPattern = #"^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:public|package)\s+"#
+    let modifierPattern = #"(?:(?:static|class|final|mutating|nonmutating|async|throws)\s+)*"#
+    let declarationPattern = accessPattern + modifierPattern + #"(?:func|var|let|subscript|init)\b"#
+    var spans: [SourceDeclarationSpan] = []
+    var lineIndex = 0
+    while lineIndex < lines.count {
+        let line = lines[lineIndex]
+        if line.range(
+            of: declarationPattern,
+            options: .regularExpression
+        ) != nil {
+            let startLine = lineIndex + 1
+            var declarationLines = [line]
+            var cursor = lineIndex
+            let isStoredValueDeclaration = line.range(
+                of: #"\b(?:var|let)\b"#,
+                options: .regularExpression
+            ) != nil
+            while !declarationLines.joined(separator: "\n").contains("{"),
+                  cursor + 1 < lines.count,
+                  declarationLines.count < 20 {
+                if isStoredValueDeclaration,
+                   declarationLines.joined(separator: "\n").sourceShapeParenBalance == 0 {
+                    break
+                }
+                cursor += 1
+                declarationLines.append(lines[cursor])
+                if isStoredValueDeclaration,
+                   declarationLines.joined(separator: "\n").sourceShapeParenBalance == 0 {
+                    break
+                }
+            }
+            let declaration = declarationLines.joined(separator: "\n").prefixBeforeFirstOpeningBrace
+            spans.append(SourceDeclarationSpan(lineNumber: startLine, text: declaration))
+            lineIndex = cursor
+        }
+        lineIndex += 1
+    }
+    return spans
 }
 
 private func sourceLines(in file: URL) throws -> [String] {

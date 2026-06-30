@@ -236,9 +236,21 @@ public struct HeistDef<Input>: Sendable {
     public let parameter: HeistParameter
     private let definitionResult: ValidationResult<HeistPlan, HeistBuildDiagnostic>
 
-    private struct DottedPathDefinitionBuild: Sendable {
-        let components: [String]
-        let definition: ValidationResult<HeistPlan, HeistBuildDiagnostic>
+    private struct DottedPathDefinitionBuild: Sendable, Equatable {
+        let pathComponents: [String]
+        let definitionResult: ValidationResult<HeistPlan, HeistBuildDiagnostic>
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            guard lhs.pathComponents == rhs.pathComponents else { return false }
+            switch (lhs.definitionResult, rhs.definitionResult) {
+            case let (.success(lhsPlan, lhsDiagnostics), .success(rhsPlan, rhsDiagnostics)):
+                return lhsPlan == rhsPlan && lhsDiagnostics == rhsDiagnostics
+            case let (.failure(lhsDiagnostics), .failure(rhsDiagnostics)):
+                return lhsDiagnostics == rhsDiagnostics
+            case (.success, .failure), (.failure, .success):
+                return false
+            }
+        }
     }
 
     public init<Content: HeistContent>(
@@ -249,8 +261,8 @@ public struct HeistDef<Input>: Sendable {
         let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
             try content()
         }
-        self.path = result.components
-        self.definitionResult = result.definition
+        self.path = result.pathComponents
+        self.definitionResult = result.definitionResult
     }
 
     public init<Content: HeistContent>(
@@ -274,8 +286,8 @@ public struct HeistDef<Input>: Sendable {
         let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
             try content(try StringExpr(ref: reference))
         }
-        self.path = result.components
-        self.definitionResult = result.definition
+        self.path = result.pathComponents
+        self.definitionResult = result.definitionResult
     }
 
     public init<Content: HeistContent>(
@@ -301,8 +313,8 @@ public struct HeistDef<Input>: Sendable {
         let result = Self.buildDefinitionFromDottedPath(path: path, parameter: self.parameter) {
             try content(try ElementTargetExpr(ref: reference))
         }
-        self.path = result.components
-        self.definitionResult = result.definition
+        self.path = result.pathComponents
+        self.definitionResult = result.definitionResult
     }
 
     public init<Content: HeistContent>(
@@ -326,11 +338,11 @@ public struct HeistDef<Input>: Sendable {
         switch pathComponents(path) {
         case .success(let components, _):
             return DottedPathDefinitionBuild(
-                components: components,
-                definition: buildDefinition(path: components, parameter: parameter, content)
+                pathComponents: components,
+                definitionResult: buildDefinition(path: components, parameter: parameter, content)
             )
         case .failure(let diagnostics):
-            return DottedPathDefinitionBuild(components: [], definition: .failure(diagnostics))
+            return DottedPathDefinitionBuild(pathComponents: [], definitionResult: .failure(diagnostics))
         }
     }
 

@@ -3,6 +3,66 @@ import Foundation
 import CoreGraphics
 import AccessibilitySnapshotModel
 
+// MARK: - Element Action Set
+
+/// Set-shaped element actions with deterministic boundary projection.
+public struct ElementActionSet: Codable, Equatable, Hashable, Sendable, ExpressibleByArrayLiteral {
+    public let actions: Set<ElementAction>
+
+    public init<S: Sequence>(_ actions: S) where S.Element == ElementAction {
+        self.actions = Set(actions)
+    }
+
+    public init(arrayLiteral elements: ElementAction...) {
+        self.init(elements)
+    }
+
+    public var orderedActions: [ElementAction] {
+        actions.sorted { lhs, rhs in
+            lhs.canonicalSortKey < rhs.canonicalSortKey
+        }
+    }
+
+    public var displayText: String {
+        orderedActions.map(\.description).joined(separator: ", ")
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(try container.decode([ElementAction].self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(orderedActions)
+    }
+}
+
+extension Sequence where Element == ElementAction {
+    var elementActionSet: ElementActionSet {
+        ElementActionSet(self)
+    }
+
+    var canonicalElementActionArray: [ElementAction] {
+        elementActionSet.orderedActions
+    }
+}
+
+private extension ElementAction {
+    var canonicalSortKey: String {
+        switch self {
+        case .activate:
+            return "0:activate"
+        case .increment:
+            return "1:increment"
+        case .decrement:
+            return "2:decrement"
+        case .custom(let name):
+            return "3:\(name)"
+        }
+    }
+}
+
 // MARK: - Heist Element
 
 /// A UI element captured from the accessibility hierarchy.
@@ -61,7 +121,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.respondsToUserInteraction = respondsToUserInteraction
         self.customContent = customContent
         self.rotors = rotors
-        self.actions = actions
+        self.actions = actions.canonicalElementActionArray
     }
 
 }
@@ -96,7 +156,7 @@ extension HeistElement {
         self.respondsToUserInteraction = try container.decode(Bool.self, forKey: .respondsToUserInteraction)
         self.customContent = try container.decodeIfPresent([HeistCustomContent].self, forKey: .customContent)
         self.rotors = try container.decodeIfPresent([HeistRotor].self, forKey: .rotors)
-        self.actions = try container.decode([ElementAction].self, forKey: .actions)
+        self.actions = try container.decode(ElementActionSet.self, forKey: .actions).orderedActions
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -116,7 +176,7 @@ extension HeistElement {
         try container.encode(respondsToUserInteraction, forKey: .respondsToUserInteraction)
         try container.encodeIfPresent(customContent, forKey: .customContent)
         try container.encodeIfPresent(rotors, forKey: .rotors)
-        try container.encode(actions, forKey: .actions)
+        try container.encode(ElementActionSet(actions), forKey: .actions)
     }
 }
 

@@ -1,14 +1,6 @@
 import Foundation
 
 public enum HeistPlanning {
-    public static let rawStructuredJSONIRFieldNames: Set<String> = [
-        "version",
-        "name",
-        "parameter",
-        "definitions",
-        "body",
-    ]
-
     public static func readPlan(from url: URL) throws -> HeistPlan {
         try loadValidatedPlan(from: HeistPlanLoadRequest(
             commandName: "heist-plan",
@@ -71,14 +63,14 @@ public enum HeistPlanning {
         }
     }
 
-    public static func rejectRawStructuredJSONIRFields(
+    public static func rejectRawStructuredJSONIRSourceFields(
         commandName: String,
-        fields: Set<String>
+        fields: Set<HeistPlanRejectedPublicSourceField>
     ) throws {
         guard fields.isEmpty else {
             throw HeistPlanningError.rawStructuredJSONIRFields(
                 commandName: commandName,
-                fields: fields.sorted()
+                fields: fields.sorted { $0.rawValue < $1.rawValue }
             )
         }
     }
@@ -149,6 +141,18 @@ public enum HeistPlanSource: Sendable, Equatable {
     case inlineDSL(String)
 }
 
+public enum HeistPlanRejectedPublicSourceField: String, CaseIterable, Sendable, Hashable {
+    case version
+    case name
+    case parameter
+    case definitions
+    case body
+
+    public static func sourceFields<S: Sequence>(in fieldNames: S) -> Set<Self> where S.Element == String {
+        Set(fieldNames.compactMap(Self.init(rawValue:)))
+    }
+}
+
 public struct HeistPlanLoadRequest: Sendable, Equatable {
     public let commandName: String
     public let source: HeistPlanSource
@@ -196,7 +200,7 @@ public enum HeistPlanningError: Error, Sendable, Equatable, CustomStringConverti
     case emptyPath(commandName: String)
     case unsupportedPath(commandName: String, path: String)
     case emptyInlineSource(commandName: String)
-    case rawStructuredJSONIRFields(commandName: String, fields: [String])
+    case rawStructuredJSONIRFields(commandName: String, fields: [HeistPlanRejectedPublicSourceField])
     case invalidPlanSource(String)
     case invalidArgument(source: String, reason: String)
     case invalidRootArgument(String)
@@ -226,8 +230,9 @@ public enum HeistPlanningError: Error, Sendable, Equatable, CustomStringConverti
         case .emptyInlineSource(let commandName):
             return "\(commandName) ButtonHeist DSL source must not be empty."
         case .rawStructuredJSONIRFields(let commandName, let fields):
+            let fieldNames = fields.map(\.rawValue).joined(separator: ", ")
             return """
-            \(commandName) received raw JSON HeistPlan IR field(s): \(fields.joined(separator: ", ")). \
+            \(commandName) received raw JSON HeistPlan IR field(s): \(fieldNames). \
             Raw JSON IR and `plan.json` are internal generated artifact content. Use ButtonHeist DSL \
             source in `plan` or a generated `.heist` package artifact in `path`.
             """

@@ -269,7 +269,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+            result: ActionResult.success(method: .activate, accessibilityTrace: trace)
         )
 
         let delta = try publicJSONProbe(response).object("delta")
@@ -306,7 +306,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 actionReceiptStep(
                     command: command,
-                    result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+                    result: ActionResult.success(method: .activate, accessibilityTrace: trace)
                 ),
             ],
             durationMs: 8
@@ -389,7 +389,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 steps: [
                     actionReceiptStep(
                         command: command,
-                        result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+                        result: ActionResult.success(method: .activate, accessibilityTrace: trace)
                     ),
                 ],
                 durationMs: 8
@@ -476,7 +476,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 steps: [
                     actionReceiptStep(
                         command: command,
-                        result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+                        result: ActionResult.success(method: .activate, accessibilityTrace: trace)
                     ),
                 ],
                 durationMs: 8
@@ -545,11 +545,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 actionReceiptStep(
                     command: command,
-                    result: ActionResult(
-                        success: false,
+                    result: ActionResult.failure(
                         method: .activate,
-                        message: "target stopped responding",
                         errorKind: .actionFailed,
+                        message: "target stopped responding",
                         accessibilityTrace: trace
                     ),
                     failure: HeistFailureDetail(
@@ -573,7 +572,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testExpectationSuccessStaysSuccessfulAcrossPublicFormats() throws {
         let response = FenceResponse.action(
             command: .activate,
-            result: ActionResult(success: true, method: .activate),
+            result: ActionResult.success(method: .activate),
             expectation: ExpectationResult(
                 met: true,
                 predicate: .state(.exists(ElementPredicate(label: "Done"))),
@@ -605,8 +604,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let plan = try HeistPlan(body: [.conditional(conditional)])
         let childResult = actionReceiptStep(
             path: "$.body[0].conditional.cases[0].body[0]",
-            result: ActionResult(success: true, method: .activate),
-            expectationActionResult: ActionResult(success: true, method: .wait),
+            result: ActionResult.success(method: .activate),
+            expectationActionResult: ActionResult.success(method: .wait),
             expectation: ExpectationResult(met: true, predicate: expected)
         )
         let result = HeistExecutionResult(steps: [
@@ -650,8 +649,8 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 actionReceiptStep(
                     path: "$.body[1]",
                     command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
-                    result: ActionResult(success: true, method: .activate),
-                    expectationActionResult: ActionResult(success: true, method: .wait),
+                    result: ActionResult.success(method: .activate),
+                    expectationActionResult: ActionResult.success(method: .wait),
                     expectation: ExpectationResult(met: true, predicate: expected, actual: "matched")
                 ),
             ],
@@ -687,7 +686,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             steps: [
                 actionReceiptStep(
                     command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
-                    result: ActionResult(success: true, method: .activate)
+                    result: ActionResult.success(method: .activate)
                 ),
             ],
             durationMs: 3
@@ -714,7 +713,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 steps: [
                     actionReceiptStep(
                         command: .activate(.target(.predicate(ElementPredicate(label: "Pay")))),
-                        result: ActionResult(success: true, method: .activate)
+                        result: ActionResult.success(method: .activate)
                     ),
                 ],
                 durationMs: 3
@@ -784,10 +783,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let result = HeistExecutionResult(
             steps: [
                 warnReceiptStep(path: "$.body[0]", message: "before"),
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[1]",
                     kind: .fail,
-                    status: .failed,
                     durationMs: 1,
                     intent: .fail(message: "stop"),
                     failure: HeistFailureDetail(
@@ -796,10 +794,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                         observed: "stop"
                     )
                 ),
-                HeistExecutionStepResult(
+                .skipped(
                     path: "$.body[2]",
                     kind: .warn,
-                    status: .skipped,
                     durationMs: 0
                 ),
             ],
@@ -847,12 +844,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let childResult = actionReceiptStep(
             path: childPath,
             command: .activate(.target(.predicate(ElementPredicate(label: "Continue")))),
-            result: ActionResult(
-                success: false,
+            result: ActionResult.failure(
                 method: .activate,
-                message: "nested button failed",
-                errorKind: .actionFailed
-            ),
+                errorKind: .actionFailed,
+                message: "nested button failed"),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "activate command succeeds",
@@ -932,7 +927,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let childResult = actionReceiptStep(
             path: childPath,
             command: .activate(.target(.predicate(ElementPredicate(label: "Fallback")))),
-            result: ActionResult(success: true, method: .activate)
+            result: ActionResult.success(method: .activate)
         )
         let result = HeistExecutionResult(
             steps: [
@@ -987,7 +982,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
                 actionReceiptStep(
                     path: "$.body[0].for_each_string.iterations[0].body[0]",
                     command: .typeText(text: .ref("item"), target: nil),
-                    result: ActionResult(success: true, method: .typeText)
+                    result: ActionResult.success(method: .typeText)
                 ),
             ]
         )
@@ -995,12 +990,10 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let failedAction = actionReceiptStep(
             path: failedActionPath,
             command: .typeText(text: .ref("item"), target: nil),
-            result: ActionResult(
-                success: false,
+            result: ActionResult.failure(
                 method: .typeText,
-                message: "field missing",
-                errorKind: .elementNotFound
-            ),
+                errorKind: .elementNotFound,
+                message: "field missing"),
             failure: HeistFailureDetail(
                 category: .action,
                 contract: "type_text command succeeds",
@@ -1016,10 +1009,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         )
         let result = HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .childAborted(
                     path: "$.body[0]",
                     kind: .forEachString,
-                    status: .failed,
                     durationMs: 30,
                     intent: .forEachString(parameter: "item", count: 2),
                     evidence: .forEachString(HeistForEachStringEvidence(
@@ -1765,24 +1757,33 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             evidence = .dispatch(command: command, actionResult: result)
         }
 
-        return HeistExecutionStepResult(
+        let intent = command.map {
+            HeistStepIntent.action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
+        }
+        let receiptEvidence = HeistStepEvidence.action(evidence)
+        if let failure {
+            return .failed(
+                path: path,
+                kind: .action,
+                durationMs: 1,
+                intent: intent,
+                evidence: receiptEvidence,
+                failure: failure
+            )
+        }
+        return .passed(
             path: path,
             kind: .action,
-            status: failure == nil ? .passed : .failed,
             durationMs: 1,
-            intent: command.map {
-                .action(command: $0.wireType.rawValue, target: $0.reportTarget.map(String.init(describing:)))
-            },
-            evidence: .action(evidence),
-            failure: failure
+            intent: intent,
+            evidence: receiptEvidence
         )
     }
 
     private func warnReceiptStep(path: String, message: String) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        .passed(
             path: path,
             kind: .warn,
-            status: .passed,
             durationMs: 1,
             intent: .warn(message: message),
             evidence: .warning(HeistExecutionWarning(path: path, message: message))
@@ -1790,10 +1791,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     private func failReceiptStep(message: String) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        .failed(
             path: "$.body[0]",
             kind: .fail,
-            status: .failed,
             durationMs: 1,
             intent: .fail(message: message),
             failure: HeistFailureDetail(
@@ -1811,15 +1811,44 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         failure: HeistFailureDetail? = nil,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
+        let evidence = HeistStepEvidence.caseSelection(HeistCaseSelectionEvidence(selection: selection))
+        if let abortedAtChildPath = children.firstFailedStep?.path {
+            return .childAborted(
+                path: "$.body[0]",
+                kind: kind,
+                durationMs: 3,
+                intent: .conditional,
+                evidence: evidence,
+                failure: failure ?? HeistFailureDetail(
+                    category: .invocation,
+                    contract: "selected case body completes without failure",
+                    observed: "child failed at \(abortedAtChildPath)"
+                ),
+                abortedAtChildPath: abortedAtChildPath,
+                children: children
+            )
+        }
+        if status == .failed {
+            return .failed(
+                path: "$.body[0]",
+                kind: kind,
+                durationMs: 3,
+                intent: .conditional,
+                evidence: evidence,
+                failure: failure ?? HeistFailureDetail(
+                    category: .validation,
+                    contract: "conditional branch completes",
+                    observed: "conditional failed"
+                ),
+                children: children
+            )
+        }
+        return .passed(
             path: "$.body[0]",
             kind: kind,
-            status: status,
             durationMs: 3,
             intent: .conditional,
-            evidence: .caseSelection(HeistCaseSelectionEvidence(selection: selection)),
-            failure: failure,
-            abortedAtChildPath: children.firstFailedStep?.path,
+            evidence: evidence,
             children: children
         )
     }
@@ -1831,27 +1860,56 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         failureReason: String? = nil,
         children: [HeistExecutionStepResult]
     ) -> HeistExecutionStepResult {
-        HeistExecutionStepResult(
-            path: "$.body[0].for_each_string.iterations[\(ordinal)]",
-            kind: .forEachIteration,
-            status: status,
-            durationMs: 1,
-            evidence: .forEachString(HeistForEachStringEvidence(
-                parameter: "item",
-                count: 2,
-                iterationCount: 2,
-                iterationOrdinal: ordinal,
-                value: value,
-                failureReason: failureReason
-            )),
-            failure: failureReason.map {
-                HeistFailureDetail(
+        let path = "$.body[0].for_each_string.iterations[\(ordinal)]"
+        let evidence = HeistStepEvidence.forEachString(HeistForEachStringEvidence(
+            parameter: "item",
+            count: 2,
+            iterationCount: 2,
+            iterationOrdinal: ordinal,
+            value: value,
+            failureReason: failureReason
+        ))
+        let failure = failureReason.map {
+            HeistFailureDetail(
+                category: .loop,
+                contract: "iteration \(ordinal) completes",
+                observed: $0
+            )
+        }
+        if let abortedAtChildPath = children.firstFailedStep?.path {
+            return .childAborted(
+                path: path,
+                kind: .forEachIteration,
+                durationMs: 1,
+                evidence: evidence,
+                failure: failure ?? HeistFailureDetail(
                     category: .loop,
                     contract: "iteration \(ordinal) completes",
-                    observed: $0
-                )
-            },
-            abortedAtChildPath: children.firstFailedStep?.path,
+                    observed: "child failed at \(abortedAtChildPath)"
+                ),
+                abortedAtChildPath: abortedAtChildPath,
+                children: children
+            )
+        }
+        if status == .failed {
+            return .failed(
+                path: path,
+                kind: .forEachIteration,
+                durationMs: 1,
+                evidence: evidence,
+                failure: failure ?? HeistFailureDetail(
+                    category: .loop,
+                    contract: "iteration \(ordinal) completes",
+                    observed: "iteration failed"
+                ),
+                children: children
+            )
+        }
+        return .passed(
+            path: path,
+            kind: .forEachIteration,
+            durationMs: 1,
+            evidence: evidence,
             children: children
         )
     }

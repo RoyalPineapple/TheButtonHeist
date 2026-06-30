@@ -245,9 +245,9 @@ extension TheBrains {
         do {
             environment = try HeistExecutionEnvironment.empty.binding(argument: argument, to: plan.parameter)
         } catch {
-            var builder = ActionResultBuilder(method: .heistPlan)
+            var builder = ActionResultBuilder()
             builder.message = "Could not bind root heist argument: \(error)"
-            return builder.failure(errorKind: .validationError)
+            return builder.failure(method: .heistPlan, errorKind: .validationError)
         }
         let execution = await executeHeistStepAccumulator(
             plan.body,
@@ -280,7 +280,7 @@ extension TheBrains {
             )
         }
 
-        var builder = ActionResultBuilder(method: .heistPlan)
+        var builder = ActionResultBuilder()
         builder.message = heistExecutionMessage(
             completedCount: stepResults.count,
             abortedAtPath: abortedAtPath
@@ -784,9 +784,9 @@ extension TheBrains {
         error: Error
     ) -> HeistExecutionStepResult {
         let observed = "could not resolve heist run expectation: \(error)"
-        var builder = ActionResultBuilder(method: .wait)
+        var builder = ActionResultBuilder()
         builder.message = observed
-        let expectationActionResult = builder.failure(errorKind: .actionFailed)
+        let expectationActionResult = builder.failure(method: .wait, errorKind: .actionFailed)
         let expectationResult = ExpectationResult(
             met: false,
             predicate: nil,

@@ -120,7 +120,7 @@ struct HeistPlanTraversal {
         visitor: inout V
     ) {
         let callGraph = callGraph ?? HeistCallGraph(plan: plan)
-        let rootBindings = HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: plan.parameter)
+        let rootBindings = plan.parameterReferenceBindings
         let rootDefinitionScope = HeistDefinitionScope(definitions: plan.definitions)
         let context = HeistTraversalContext(
             path: .root,
@@ -459,7 +459,7 @@ struct HeistPlanTraversal {
         for (index, definition) in definitions.enumerated() {
             let currentDefinitionPath = definitionScope.pathPrefix + [definition.name ?? ""]
             let currentDefinitionNode = HeistCallGraph.Node(namePath: currentDefinitionPath)
-            let referenceBindings = HeistReferenceBindingContext.runtimeSafetyPlaceholder(for: definition.parameter)
+            let referenceBindings = definition.parameterReferenceBindings
             let definitionContext = HeistTraversalContext(
                 path: path.index(index),
                 depth: depth,

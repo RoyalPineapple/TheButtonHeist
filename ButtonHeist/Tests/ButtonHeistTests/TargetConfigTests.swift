@@ -410,7 +410,7 @@ final class TargetConfigTests: XCTestCase {
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(), tree: []))
             default:
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
         }
 
@@ -435,7 +435,7 @@ final class TargetConfigTests: XCTestCase {
                         session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                     ))
                 }
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
             return probe
         }
@@ -524,7 +524,7 @@ final class TargetConfigTests: XCTestCase {
                         session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                     ))
                 }
-                return .actionResult(ActionResult(success: true, method: .activate))
+                return .actionResult(ActionResult.success(method: .activate))
             }
             return probe
         }

@@ -65,7 +65,7 @@ public actor HeistCompiler {
 #else
             return .failure([
                 Self.diagnostic(
-                    code: "heist.swift_compilation.unsupported_platform",
+                    code: .swiftCompilationUnsupportedPlatform,
                     "Swift heist source compilation is only supported on macOS and Linux.",
                     source: source
                 ),
@@ -73,7 +73,7 @@ public actor HeistCompiler {
 #endif
         } catch is CancellationError {
             return .failure([Self.diagnostic(
-                code: "heist.swift_compilation.cancelled",
+                code: .swiftCompilationCancelled,
                 "Swift heist compilation was cancelled.",
                 source: source
             )])
@@ -92,7 +92,7 @@ public actor HeistCompiler {
             guard !sources.isEmpty else {
                 return .failure([
                     Self.diagnostic(
-                        code: "heist.directory.no_sources",
+                        code: .directoryNoSources,
                         "Directory contains no Swift heist source files.",
                         phase: .planning,
                         source: directory
@@ -125,7 +125,7 @@ public actor HeistCompiler {
             }
         } catch is CancellationError {
             return .failure([Self.diagnostic(
-                code: "heist.directory.cancelled",
+                code: .directoryCancelled,
                 "Swift heist directory compilation was cancelled.",
                 phase: .planning,
                 source: directory
@@ -195,7 +195,7 @@ private extension HeistCompiler {
             let source = sources[index]
             if plans.count > 1, plan.name?.isEmpty != false {
                 diagnostics.append(diagnostic(
-                    code: "heist.catalog.anonymous_capability",
+                    code: .catalogAnonymousCapability,
                     "Directory heist source compiled an anonymous capability. Name directory capabilities in the authored HeistPlan.",
                     phase: .planValidation,
                     source: source
@@ -207,7 +207,7 @@ private extension HeistCompiler {
                 for entry in catalog.heists {
                     if let previous = seen[entry.name] {
                         diagnostics.append(diagnostic(
-                            code: "heist.catalog.duplicate_capability",
+                            code: .catalogDuplicateCapability,
                             "Duplicate capability name \"\(entry.name)\" also compiled from \(previous.lastPathComponent).",
                             phase: .planValidation,
                             source: source
@@ -218,14 +218,14 @@ private extension HeistCompiler {
                 }
             } catch let error as HeistCatalogError {
                 diagnostics.append(diagnostic(
-                    code: "heist.catalog.invalid_entry",
+                    code: .catalogInvalidEntry,
                     error.description,
                     phase: .planValidation,
                     source: source
                 ))
             } catch {
                 diagnostics.append(diagnostic(
-                    code: "heist.catalog.invalid_entry",
+                    code: .catalogInvalidEntry,
                     "Invalid compiled catalog entry: \(bounded(errorDescription: error))",
                     phase: .planValidation,
                     source: source
@@ -262,49 +262,49 @@ private extension HeistCompiler {
         switch error {
         case .invalidEntry(let invalidEntry):
             return [diagnostic(
-                code: "heist.swift_compilation.invalid_entry",
+                code: .swiftCompilationInvalidEntry,
                 "Invalid Swift heist entry symbol \"\(invalidEntry)\".",
                 source: source
             )]
         case .sourceFileNotFound(let path):
             return [diagnostic(
-                code: "heist.swift_compilation.source_not_found",
+                code: .swiftCompilationSourceNotFound,
                 "Swift heist source file not found: \(path).",
                 source: source
             )]
         case .packageRootNotFound:
             return [diagnostic(
-                code: "heist.swift_compilation.package_root_not_found",
+                code: .swiftCompilationPackageRootNotFound,
                 bounded(errorDescription: error),
                 source: source
             )]
         case .buildArtifactsNotFound:
             return [diagnostic(
-                code: "heist.swift_compilation.build_artifacts_not_found",
+                code: .swiftCompilationBuildArtifactsNotFound,
                 bounded(errorDescription: error),
                 source: source
             )]
         case .compileFailed(_, let output):
             return [diagnostic(
-                code: "heist.swift_compilation.compile_failed",
+                code: .swiftCompilationCompileFailed,
                 "Failed to compile Swift heist source\(entrySuffix): \(bounded(output))",
                 source: source
             )]
         case .executionFailed(_, let output):
             return [diagnostic(
-                code: "heist.swift_compilation.execution_failed",
+                code: .swiftCompilationExecutionFailed,
                 "Compiled Swift heist source\(entrySuffix) failed while evaluating the entry: \(bounded(output))",
                 source: source
             )]
         case .invalidCompilerOutput(let output):
             return [diagnostic(
-                code: "heist.swift_compilation.invalid_output",
+                code: .swiftCompilationInvalidOutput,
                 "Compiled Swift heist source\(entrySuffix) did not emit valid HeistPlan JSON: \(bounded(output))",
                 source: source
             )]
         case .runtimeSafetyFailed(let output):
             return [diagnostic(
-                code: "heist.plan.runtime_safety",
+                code: .planRuntimeSafety,
                 "Compiled Swift heist source\(entrySuffix) failed runtime safety: \(bounded(output))",
                 phase: .planValidation,
                 source: source
@@ -317,7 +317,7 @@ private extension HeistCompiler {
         switch error {
         case .notDirectory(let url):
             return [diagnostic(
-                code: "heist.directory.not_directory",
+                code: .directoryNotDirectory,
                 "Heist catalog source is not a directory.",
                 phase: .planning,
                 source: url
@@ -325,7 +325,7 @@ private extension HeistCompiler {
         case .unsupportedHeistSourceFiles(let urls):
             return urls.map {
                 diagnostic(
-                    code: "heist.directory.unsupported_source_file",
+                    code: .directoryUnsupportedSourceFile,
                     "Unsupported heist source file. Directory compilation only accepts .swift files.",
                     phase: .planning,
                     source: $0
@@ -335,7 +335,7 @@ private extension HeistCompiler {
     }
 
     static func diagnostic(
-        code: String = "heist.swift_compilation.failed",
+        code: HeistKnownBuildDiagnosticCode = .swiftCompilationFailed,
         _ message: String,
         severity: Severity = .error,
         phase: HeistBuildPhase = .swiftCompilation,

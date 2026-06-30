@@ -353,8 +353,8 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     }
 
     private static func message(for step: HeistExecutionStepResult) -> String? {
-        if case .failed(let outcome) = step.outcome {
-            return outcome.failure.observed
+        if let failure = step.failure {
+            return failure.observed
         }
         if let warning = step.warningEvidence {
             return warning.message
@@ -418,7 +418,7 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
     }
 
     private static func failureMessage(for step: HeistExecutionStepResult) -> String? {
-        guard case .failed(let outcome) = step.outcome else { return nil }
+        guard let failure = step.failure else { return nil }
         if step.children.contains(where: { $0.status == .failed }) {
             switch step.kind {
             case .conditional, .forEachIteration, .repeatUntilIteration, .heist, .invoke:
@@ -427,7 +427,7 @@ package struct HeistExecutionStepReportFacts: Sendable, Equatable {
                 break
             }
         }
-        return outcome.failure.observed
+        return failure.observed
     }
 }
 
@@ -445,7 +445,7 @@ public extension HeistExecutionStepResult {
 
     var isFailure: Bool {
         switch outcome {
-        case .failed:
+        case .failed, .childAborted:
             return true
         case .passed, .skipped:
             return children.contains(where: \.isFailure)

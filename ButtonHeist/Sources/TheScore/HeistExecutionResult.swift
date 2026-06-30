@@ -245,11 +245,12 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         HeistExecutionStepResult(
             path: path,
             kind: kind,
-            status: .passed,
             durationMs: durationMs,
             intent: intent,
-            evidence: evidence,
-            children: children
+            outcome: .passed(HeistExecutionStepPassedOutcome(
+                evidence: evidence,
+                children: children
+            ))
         )
     }
 
@@ -259,21 +260,85 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         durationMs: Int,
         intent: HeistStepIntent? = nil,
         evidence: HeistStepEvidence? = nil,
-        failure: HeistFailureDetail? = nil,
-        abortedAtChildPath: String? = nil,
+        failure: HeistFailureDetail,
         children: [HeistExecutionStepResult] = []
     ) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
             path: path,
             kind: kind,
-            status: .failed,
+            durationMs: durationMs,
+            intent: intent,
+            outcome: .failed(HeistExecutionStepFailedOutcome(
+                evidence: evidence,
+                failure: failure,
+                children: children
+            ))
+        )
+    }
+
+    public static func childAborted(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: HeistStepEvidence,
+        failure: HeistFailureDetail,
+        abortedAtChildPath: String,
+        children: [HeistExecutionStepResult]
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            path: path,
+            kind: kind,
+            durationMs: durationMs,
+            intent: intent,
+            outcome: .childAborted(HeistExecutionStepChildAbortedOutcome(
+                evidence: evidence,
+                failure: failure,
+                abortedAtChildPath: abortedAtChildPath,
+                children: children
+            ))
+        )
+    }
+
+    public static func childAborted(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        evidence: HeistStepEvidence,
+        failure: HeistFailureDetail,
+        child: HeistExecutionStepResult,
+        remainingChildren: [HeistExecutionStepResult] = []
+    ) -> HeistExecutionStepResult {
+        childAborted(
+            path: path,
+            kind: kind,
             durationMs: durationMs,
             intent: intent,
             evidence: evidence,
             failure: failure,
-            abortedAtChildPath: abortedAtChildPath,
-            children: children
+            abortedAtChildPath: child.path,
+            children: [child] + remainingChildren
         )
+    }
+
+    package init(
+        path: String,
+        kind: HeistExecutionStepKind,
+        durationMs: Int,
+        intent: HeistStepIntent? = nil,
+        outcome: HeistExecutionStepOutcome
+    ) {
+        self.path = path
+        self.kind = kind
+        self.durationMs = durationMs
+        self.intent = intent
+        self.outcome = outcome
+        do {
+            try Self.validateOutcome(kind: kind, outcome: outcome, codingPath: [])
+        } catch {
+            preconditionFailure("Invalid heist execution step result at \(path): \(error)")
+        }
     }
 
     public static func skipped(
@@ -286,47 +351,10 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         HeistExecutionStepResult(
             path: path,
             kind: kind,
-            status: .skipped,
             durationMs: durationMs,
             intent: intent,
-            children: children
+            outcome: .skipped(HeistExecutionStepSkippedOutcome(children: children))
         )
-    }
-
-    package init(
-        path: String,
-        kind: HeistExecutionStepKind,
-        status: HeistExecutionStepStatus,
-        durationMs: Int,
-        intent: HeistStepIntent? = nil,
-        evidence: HeistStepEvidence? = nil,
-        failure: HeistFailureDetail? = nil,
-        abortedAtChildPath: String? = nil,
-        children: [HeistExecutionStepResult] = []
-    ) {
-        self.path = path
-        self.kind = kind
-        self.durationMs = durationMs
-        self.intent = intent
-        let failedChildPath = children.lazy.compactMap(\.firstFailedStepPathForReceiptValidation).first
-        do {
-            outcome = try Self.validatedOutcome(
-                kind: kind,
-                status: status,
-                evidence: evidence,
-                failure: failure ?? (status == .failed ? Self.inferredFailure(
-                    kind: kind,
-                    intent: intent,
-                    evidence: evidence,
-                    failedChildPath: failedChildPath
-                ) : nil),
-                abortedAtChildPath: abortedAtChildPath ?? failedChildPath,
-                children: children,
-                codingPath: []
-            )
-        } catch {
-            preconditionFailure("Invalid heist execution step result at \(path): \(error)")
-        }
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -412,10 +440,23 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
                     codingPath: codingPath + [CodingKeys.failure]
                 )
             }
+            if let abortedAtChildPath {
+                guard let evidence else {
+                    throw receiptError(
+                        "child-aborted heist execution step must include evidence",
+                        codingPath: codingPath + [CodingKeys.evidence]
+                    )
+                }
+                return .childAborted(HeistExecutionStepChildAbortedOutcome(
+                    evidence: evidence,
+                    failure: failure,
+                    abortedAtChildPath: abortedAtChildPath,
+                    children: children
+                ))
+            }
             return .failed(HeistExecutionStepFailedOutcome(
                 evidence: evidence,
                 failure: failure,
-                abortedAtChildPath: abortedAtChildPath,
                 children: children
             ))
         case .skipped:
@@ -439,6 +480,22 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
             }
             return .skipped(HeistExecutionStepSkippedOutcome(children: children))
         }
+    }
+
+    private static func validateOutcome(
+        kind: HeistExecutionStepKind,
+        outcome: HeistExecutionStepOutcome,
+        codingPath: [CodingKey]
+    ) throws {
+        _ = try validatedOutcome(
+            kind: kind,
+            status: outcome.status,
+            evidence: outcome.evidence,
+            failure: outcome.failure,
+            abortedAtChildPath: outcome.abortedAtChildPath,
+            children: outcome.children,
+            codingPath: codingPath
+        )
     }
 
     private static func validateEvidence(
@@ -636,156 +693,19 @@ public struct HeistExecutionStepResult: Codable, Sendable, Equatable {
         .dataCorrupted(.init(codingPath: codingPath, debugDescription: message))
     }
 
-    private static func inferredFailure(
-        kind: HeistExecutionStepKind,
-        intent: HeistStepIntent?,
-        evidence: HeistStepEvidence?,
-        failedChildPath: String?
-    ) -> HeistFailureDetail? {
-        if let failedChildPath {
-            return HeistFailureDetail(
-                category: inferredChildFailureCategory(for: kind),
-                contract: "child execution completes without failure",
-                observed: "child failed at \(failedChildPath)",
-                expected: "all executed child steps pass"
-            )
-        }
-        switch evidence {
-        case .action(let evidence):
-            return inferredActionFailure(evidence)
-        case .wait(let evidence):
-            return inferredWaitFailure(evidence)
-        case .forEachString(let evidence):
-            return inferredLoopFailure(evidence.failureReason, contract: "for_each_string completes all values")
-        case .forEachElement(let evidence):
-            return inferredLoopFailure(
-                evidence.failureReason,
-                contract: "for_each_element completes all matched iterations"
-            )
-        case .repeatUntil(let evidence):
-            return inferredRepeatUntilFailure(evidence)
-        case .invocation(let evidence):
-            return evidence.childFailedPath.map {
-                HeistFailureDetail(
-                    category: .invocation,
-                    contract: "child execution completes without failure",
-                    observed: "child failed at \($0)",
-                    expected: "all executed child steps pass"
-                )
-            }
-        case .caseSelection, .warning, .none:
-            break
-        }
-        if case .fail(let message) = intent {
-            return HeistFailureDetail(
-                category: .explicitFailure,
-                contract: "explicit heist failure",
-                observed: message
-            )
-        }
-        return HeistFailureDetail(
-            category: .validation,
-            contract: "\(kind.rawValue) step completes without failure",
-            observed: "heist step failed"
-        )
-    }
-
-    private static func inferredChildFailureCategory(for kind: HeistExecutionStepKind) -> HeistFailureCategory {
-        switch kind {
-        case .wait:
-            return .wait
-        case .forEachElement, .forEachString, .forEachIteration, .repeatUntil, .repeatUntilIteration:
-            return .loop
-        case .action:
-            return .action
-        case .conditional, .heist, .invoke:
-            return .invocation
-        case .warn, .fail:
-            return .validation
-        }
-    }
-
-    private static func inferredActionFailure(_ evidence: HeistActionEvidence) -> HeistFailureDetail? {
-        if let result = evidence.actionResult, !result.success {
-            return HeistFailureDetail(
-                category: result.errorKind == .elementNotFound ? .targetResolution : .action,
-                contract: "action dispatch succeeds",
-                observed: result.message ?? "action failed",
-                expected: evidence.command?.reportTarget.map(String.init(describing:))
-            )
-        }
-        if let expectation = evidence.expectation, !expectation.met {
-            return HeistFailureDetail(
-                category: .expectation,
-                contract: "action expectation is met",
-                observed: expectation.actual ?? "expectation not met",
-                expected: expectation.predicate?.description
-            )
-        }
-        if let result = evidence.expectationActionResult, !result.success {
-            return HeistFailureDetail(
-                category: .expectation,
-                contract: "action expectation wait succeeds",
-                observed: result.message ?? "expectation wait failed",
-                expected: evidence.expectation?.predicate?.description
-            )
-        }
-        return nil
-    }
-
-    private static func inferredWaitFailure(_ evidence: HeistWaitEvidence) -> HeistFailureDetail? {
-        if !evidence.expectation.met {
-            return HeistFailureDetail(
-                category: .wait,
-                contract: "wait predicate is met before timeout",
-                observed: evidence.expectation.actual ?? evidence.actionResult.message ?? "expectation not met",
-                expected: evidence.expectation.predicate?.description
-            )
-        }
-        guard !evidence.actionResult.success else { return nil }
-        return HeistFailureDetail(
-            category: .wait,
-            contract: "wait action succeeds",
-            observed: evidence.actionResult.message ?? "wait failed",
-            expected: evidence.expectation.predicate?.description
-        )
-    }
-
-    private static func inferredLoopFailure(_ reason: String?, contract: String) -> HeistFailureDetail? {
-        reason.map {
-            HeistFailureDetail(
-                category: .loop,
-                contract: contract,
-                observed: $0
-            )
-        }
-    }
-
-    private static func inferredRepeatUntilFailure(_ evidence: HeistRepeatUntilEvidence) -> HeistFailureDetail? {
-        let observed = evidence.failureReason
-            ?? (!evidence.expectation.met ? evidence.expectation.actual : nil)
-            ?? evidence.actionResult?.message
-        return observed.map {
-            HeistFailureDetail(
-                category: .loop,
-                contract: "repeat_until predicate is met before timeout",
-                observed: $0,
-                expected: evidence.predicate.description
-            )
-        }
-    }
 }
 
 public enum HeistExecutionStepOutcome: Sendable, Equatable {
     case passed(HeistExecutionStepPassedOutcome)
     case failed(HeistExecutionStepFailedOutcome)
+    case childAborted(HeistExecutionStepChildAbortedOutcome)
     case skipped(HeistExecutionStepSkippedOutcome)
 
     public var status: HeistExecutionStepStatus {
         switch self {
         case .passed:
             return .passed
-        case .failed:
+        case .failed, .childAborted:
             return .failed
         case .skipped:
             return .skipped
@@ -798,6 +718,8 @@ public enum HeistExecutionStepOutcome: Sendable, Equatable {
             return outcome.evidence
         case .failed(let outcome):
             return outcome.evidence
+        case .childAborted(let outcome):
+            return outcome.evidence
         case .skipped:
             return nil
         }
@@ -809,14 +731,16 @@ public enum HeistExecutionStepOutcome: Sendable, Equatable {
             return nil
         case .failed(let outcome):
             return outcome.failure
+        case .childAborted(let outcome):
+            return outcome.failure
         }
     }
 
     public var abortedAtChildPath: String? {
         switch self {
-        case .passed, .skipped:
+        case .passed, .failed, .skipped:
             return nil
-        case .failed(let outcome):
+        case .childAborted(let outcome):
             return outcome.abortedAtChildPath
         }
     }
@@ -826,6 +750,8 @@ public enum HeistExecutionStepOutcome: Sendable, Equatable {
         case .passed(let outcome):
             return outcome.children
         case .failed(let outcome):
+            return outcome.children
+        case .childAborted(let outcome):
             return outcome.children
         case .skipped(let outcome):
             return outcome.children
@@ -849,13 +775,29 @@ public struct HeistExecutionStepPassedOutcome: Sendable, Equatable {
 public struct HeistExecutionStepFailedOutcome: Sendable, Equatable {
     public let evidence: HeistStepEvidence?
     public let failure: HeistFailureDetail
-    public let abortedAtChildPath: String?
     public let children: [HeistExecutionStepResult]
 
     fileprivate init(
         evidence: HeistStepEvidence?,
         failure: HeistFailureDetail,
-        abortedAtChildPath: String?,
+        children: [HeistExecutionStepResult]
+    ) {
+        self.evidence = evidence
+        self.failure = failure
+        self.children = children
+    }
+}
+
+public struct HeistExecutionStepChildAbortedOutcome: Sendable, Equatable {
+    public let evidence: HeistStepEvidence
+    public let failure: HeistFailureDetail
+    public let abortedAtChildPath: String
+    public let children: [HeistExecutionStepResult]
+
+    fileprivate init(
+        evidence: HeistStepEvidence,
+        failure: HeistFailureDetail,
+        abortedAtChildPath: String,
         children: [HeistExecutionStepResult]
     ) {
         self.evidence = evidence

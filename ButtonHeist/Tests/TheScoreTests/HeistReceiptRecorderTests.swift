@@ -74,10 +74,9 @@ import Testing
     private func failedResult() -> HeistExecutionResult {
         HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .failed(
                     path: "$.body[0]",
                     kind: .fail,
-                    status: .failed,
                     durationMs: 3,
                     intent: .fail(message: "boom"),
                     failure: HeistFailureDetail(
@@ -95,10 +94,9 @@ import Testing
     private func passedResult() -> HeistExecutionResult {
         HeistExecutionResult(
             steps: [
-                HeistExecutionStepResult(
+                .passed(
                     path: "$.body[0]",
                     kind: .warn,
-                    status: .passed,
                     durationMs: 2,
                     intent: .warn(message: "record receipt"),
                     evidence: .warning(HeistExecutionWarning(path: "$.body[0]", message: "record receipt"))

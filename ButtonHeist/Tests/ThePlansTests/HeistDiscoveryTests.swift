@@ -198,6 +198,11 @@ private func validatedPlan(_ raw: HeistPlanAdmissionCandidate) throws -> HeistPl
         "var semanticSurfaces: [String]",
         ".wireType.rawValue",
         "to: &semanticSurfaces",
+        #""label="#,
+        #""identifier="#,
+        #""value="#,
+        #""traits="#,
+        #""excludeTraits="#,
     ] {
         #expect(!builderSource.contains(forbidden), "Builder collected early string state: \(forbidden)")
     }
